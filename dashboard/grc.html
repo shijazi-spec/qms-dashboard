@@ -904,7 +904,7 @@
                             <div class="text-xs text-gray-500">${_gtd("grc.modules", e.source_module)} → ${_gtd("grc.modules", e.target_module)}</div>
                         </div>
                     </div>
-                    <div class="text-right">
+                    <div class="text-end">
                         <span class="text-xs px-2 py-1 rounded-full ${e.status === "completed" ? "bg-green-100 text-green-700" : e.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}">${_gt("grc.status_" + e.status) || e.status}</span>
                         <div class="text-xs text-gray-400 mt-1">${new Date(e.created_at).toLocaleString((window.WalaPlusI18n && window.WalaPlusI18n.currentLang && window.WalaPlusI18n.currentLang() === 'ar') ? 'ar-SA' : 'en-US')}</div>
                     </div>
@@ -938,7 +938,7 @@
                             <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                                 <div class="${score >= 80 ? "bg-green-500" : score >= 60 ? "bg-amber-500" : "bg-red-500"} h-full rounded-full" data-style="width: ${score}%"></div>
                             </div>
-                            <span class="text-sm font-semibold w-10 text-right">${score}%</span>
+                            <span class="text-sm font-semibold w-10 text-end">${score}%</span>
                         </div>
                     </div>
                 `;

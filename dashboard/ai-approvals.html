@@ -625,7 +625,7 @@
         if (a.status === 'pending') {
             actionsHtml =
                 '<button data-code="' + a.action_code + '" data-act="approve" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">Approve</button>' +
-                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ml-1">Reject</button>';
+                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-1">Reject</button>';
         } else if (a.status === 'executed') {
             actionsHtml = '<span class="text-xs text-green-700">' + (a.result_entity_id ? '→ ' + escapeHtml(a.result_entity_id) : 'Done') + '</span>';
         } else if (a.status === 'rejected') {

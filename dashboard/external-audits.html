@@ -356,7 +356,7 @@
             <td class="px-4 py-2 text-xs">${esc(r.standard || '')}${r.certification_body ? ' <span class="text-gray-400">·</span> ' + esc(r.certification_body) : ''}</td>
             <td class="px-4 py-2 text-center text-xs">${r.planned_start ? new Date(r.planned_start).toLocaleDateString() : '—'}</td>
             <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium status-${esc(r.status)}">${esc(r.status)}</span></td>
-            <td class="px-4 py-2 text-right">
+            <td class="px-4 py-2 text-end">
               <button data-on-click="openAudit" data-args="[${r.id}]" class="text-purple-700 hover:text-purple-900 text-sm">Open &rarr;</button>
             </td>
           </tr>

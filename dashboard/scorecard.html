@@ -223,21 +223,21 @@
             
             document.getElementById('kpiStatusSummary').innerHTML = `
                 <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center gap-2">
                         <div class="w-4 h-4 rounded-full bg-green-500"></div>
                         <span class="text-sm text-gray-600">On Track</span>
                     </div>
                     <span class="font-bold text-green-600">${summary.green}</span>
                 </div>
                 <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center gap-2">
                         <div class="w-4 h-4 rounded-full bg-amber-500"></div>
                         <span class="text-sm text-gray-600">At Risk</span>
                     </div>
                     <span class="font-bold text-amber-600">${summary.amber}</span>
                 </div>
                 <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center gap-2">
                         <div class="w-4 h-4 rounded-full bg-red-500"></div>
                         <span class="text-sm text-gray-600">Critical</span>
                     </div>
@@ -261,14 +261,14 @@
                         <div class="p-6">
                             <div class="flex items-start justify-between mb-4">
                                 <div class="flex-1">
-                                    <div class="flex items-center space-x-2 mb-2">
+                                    <div class="flex items-center gap-2 mb-2">
                                         <span class="px-2 py-1 rounded-full text-xs font-medium ${colors.text} ${colors.bg}">${kpi.weight}% Weight</span>
                                         <span class="text-xs text-gray-500">${kpi.kpi_id}</span>
                                     </div>
                                     <h3 class="text-lg font-bold text-gray-900">${kpi.kpi_name}</h3>
                                     <p class="text-sm text-gray-600 mt-1">${kpi.description}</p>
                                 </div>
-                                <div class="text-right ml-4">
+                                <div class="text-end ms-4">
                                     <div class="text-3xl font-bold ${colors.text}">${kpi.current_value}%</div>
                                     <div class="text-xs text-gray-500">Target: ${kpi.target}%</div>
                                 </div>
@@ -290,7 +290,7 @@
                                         <span class="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">${src}</span>
                                     `).join('')}
                                 </div>
-                                <button data-on-click="openNavigationMap" data-args="[${index}]" class="flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                <button data-on-click="openNavigationMap" data-args="[${index}]" class="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium">
                                     <i data-lucide="map" class="w-4 h-4"></i>
                                     <span>View Steps</span>
                                 </button>
@@ -321,8 +321,8 @@
                 
                 <div class="space-y-4">
                     ${kpi.navigation_map.map(step => `
-                        <div class="nav-step border-l-4 ${statusColors[kpi.status]} bg-white rounded-lg shadow p-4">
-                            <div class="flex items-start space-x-4">
+                        <div class="nav-step border-s-4 ${statusColors[kpi.status]} bg-white rounded-lg shadow p-4">
+                            <div class="flex items-start gap-4">
                                 <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
                                     ${step.step}
                                 </div>

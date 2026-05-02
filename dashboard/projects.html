@@ -1357,7 +1357,7 @@
                     </td>
                     <td class="px-4 py-3 text-sm">${p.end_date ? new Date(p.end_date).toLocaleDateString() : '-'}</td>
                     <td class="px-4 py-3">
-                        <button data-on-click="editProcurement" data-args="[&quot;${p.procurement_id}&quot;]" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="editProcurement" data-args="[&quot;${p.procurement_id}&quot;]" class="text-blue-600 hover:text-blue-800 me-2"><i class="fas fa-edit"></i></button>
                         <button data-on-click="deleteProcurement" data-args="[&quot;${p.procurement_id}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
@@ -1410,7 +1410,7 @@
                         </span>
                     </td>
                     <td class="px-4 py-3">
-                        <button data-on-click="editChangeRequest" data-args="[&quot;${c.change_request_id}&quot;]" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="editChangeRequest" data-args="[&quot;${c.change_request_id}&quot;]" class="text-blue-600 hover:text-blue-800 me-2"><i class="fas fa-edit"></i></button>
                         <button data-on-click="deleteChangeRequest" data-args="[&quot;${c.change_request_id}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
@@ -1480,15 +1480,15 @@
                     </div>
                     <div class="grid grid-cols-2 gap-2 text-xs">
                         <div class="flex items-center">
-                            <i class="fas fa-clock text-green-500 mr-1"></i>
+                            <i class="fas fa-clock text-green-500 me-1"></i>
                             <span>SPI: ${(p.schedule_performance_index || 1).toFixed(2)}</span>
                         </div>
                         <div class="flex items-center">
-                            <i class="fas fa-dollar-sign text-blue-500 mr-1"></i>
+                            <i class="fas fa-dollar-sign text-blue-500 me-1"></i>
                             <span>CPI: ${(p.cost_performance_index || 1).toFixed(2)}</span>
                         </div>
                     </div>
-                    ${p.planned_end_date ? `<div class="mt-2 text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>Due: ${new Date(p.planned_end_date).toLocaleDateString()}</div>` : ''}
+                    ${p.planned_end_date ? `<div class="mt-2 text-xs text-gray-500"><i class="fas fa-calendar me-1"></i>Due: ${new Date(p.planned_end_date).toLocaleDateString()}</div>` : ''}
                 </div>
             `).join('');
 
@@ -1510,7 +1510,7 @@
                     </td>
                     <td class="px-4 py-3">
                         <div class="flex items-center">
-                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                            <div class="w-16 bg-gray-200 rounded-full h-2 me-2">
                                 <div class="bg-blue-600 h-2 rounded-full" data-style="width: ${p.percent_complete || 0}%"></div>
                             </div>
                             <span class="text-sm">${p.percent_complete || 0}%</span>
@@ -1520,8 +1520,8 @@
                     <td class="px-4 py-3 text-sm ${p.cost_performance_index < 0.9 ? 'text-red-600' : 'text-green-600'}">${(p.cost_performance_index || 1).toFixed(2)}</td>
                     <td class="px-4 py-3 text-sm text-gray-500">${p.planned_end_date ? new Date(p.planned_end_date).toLocaleDateString() : '-'}</td>
                     <td class="px-4 py-3">
-                        <button data-on-click="viewProject" data-args="[&quot;${p.project_id}&quot;]" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-eye"></i></button>
-                        <button data-on-click="editProject" data-args="[&quot;${p.project_id}&quot;]" class="text-amber-600 hover:text-amber-800 mr-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="viewProject" data-args="[&quot;${p.project_id}&quot;]" class="text-blue-600 hover:text-blue-800 me-2"><i class="fas fa-eye"></i></button>
+                        <button data-on-click="editProject" data-args="[&quot;${p.project_id}&quot;]" class="text-amber-600 hover:text-amber-800 me-2"><i class="fas fa-edit"></i></button>
                         <button data-on-click="deleteProject" data-args="[&quot;${p.project_id}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
@@ -1549,7 +1549,7 @@
                         <td class="px-4 py-3 capitalize text-sm">${r.status}</td>
                         <td class="px-4 py-3 text-sm">${r.risk_owner_name || '-'}</td>
                         <td class="px-4 py-3">
-                            <button data-on-click="editRisk" data-args="[&quot;${r.risk_id}&quot;]" class="text-amber-600 hover:text-amber-800 mr-2"><i class="fas fa-edit"></i></button>
+                            <button data-on-click="editRisk" data-args="[&quot;${r.risk_id}&quot;]" class="text-amber-600 hover:text-amber-800 me-2"><i class="fas fa-edit"></i></button>
                             <button data-on-click="deleteRisk" data-args="[&quot;${r.risk_id}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
@@ -1624,7 +1624,7 @@
             const statusColors = { pending: '#9CA3AF', in_progress: '#3B82F6', completed: '#10B981', delayed: '#EF4444', at_risk: '#F59E0B' };
 
             let html = '<div class="relative" data-style="height: ' + (milestones.length * 40 + 40) + 'px;">';
-            html += '<div class="absolute top-0 left-0 right-0 h-8 flex border-b border-gray-200">';
+            html += '<div class="absolute top-0 start-0 end-0 h-8 flex border-b border-gray-200">';
             for (let i = 0; i <= totalDays; i += 7) {
                 const d = new Date(minDate);
                 d.setDate(d.getDate() + i);
@@ -1639,7 +1639,7 @@
 
                 html += `
                     <div class="absolute flex items-center" data-style="top: ${idx * 40 + 40}px; left: 0; right: 0; height: 36px;">
-                        <div class="w-40 text-sm text-gray-700 truncate pr-2">${m.name}</div>
+                        <div class="w-40 text-sm text-gray-700 truncate pe-2">${m.name}</div>
                         <div class="flex-1 relative h-6">
                             <div class="gantt-bar absolute h-6 rounded flex items-center justify-center text-xs text-white font-medium" 
                                  data-style="left: ${leftPercent}%; width: 80px; background-color: ${color};">
@@ -1675,7 +1675,7 @@
                         <span class="px-2 py-1 text-xs rounded-full bg-${engagementColors[s.engagement_level]}-100 text-${engagementColors[s.engagement_level]}-700 capitalize">${s.engagement_level}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <button data-on-click="editStakeholder" data-args="[&quot;${s.stakeholder_id}&quot;]" class="text-amber-600 hover:text-amber-800 mr-2"><i class="fas fa-edit"></i></button>
+                        <button data-on-click="editStakeholder" data-args="[&quot;${s.stakeholder_id}&quot;]" class="text-amber-600 hover:text-amber-800 me-2"><i class="fas fa-edit"></i></button>
                         <button data-on-click="deleteStakeholder" data-args="[&quot;${s.stakeholder_id}&quot;]" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
@@ -1920,7 +1920,7 @@
             const type = document.getElementById('wizProjectType').value;
             if (!desc) { alert(_t('dyn.projects.enter_description_first')); return; }
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>' + _t('dyn.projects.btn_generating');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>' + _t('dyn.projects.btn_generating');
             try {
                 const res = await fetch('/api/pmp/generate-charter', {
                     method: 'POST',
@@ -1945,7 +1945,7 @@
                 }
             } catch (err) { console.error('AI generation error:', err); alert(_t('dyn.projects.failed_generate_scope')); }
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-magic mr-2"></i>' + _t('dyn.projects.btn_ai_scope');
+            btn.innerHTML = '<i class="fas fa-magic me-2"></i>' + _t('dyn.projects.btn_ai_scope');
         }
 
         async function submitScopeWizard() {
@@ -2164,7 +2164,7 @@
                 el.innerHTML = '<span class="text-gray-400 text-sm">' + _t('dyn.projects.none_defined') + '</span>';
                 return;
             }
-            el.innerHTML = items.map(item => `<div class="flex items-center text-sm"><i class="fas fa-check-circle text-green-500 mr-2"></i>${item}</div>`).join('');
+            el.innerHTML = items.map(item => `<div class="flex items-center text-sm"><i class="fas fa-check-circle text-green-500 me-2"></i>${item}</div>`).join('');
         }
 
         function renderResourcePlan(resources) {
@@ -2178,7 +2178,7 @@
                 const role = r.role || r.name || r;
                 const count = r.count || 1;
                 return `<div class="flex items-center justify-between bg-indigo-50 px-3 py-2 rounded-lg">
-                    <span class="text-sm text-indigo-800"><i class="fas fa-user-tie text-indigo-600 mr-2"></i>${role}</span>
+                    <span class="text-sm text-indigo-800"><i class="fas fa-user-tie text-indigo-600 me-2"></i>${role}</span>
                     <span class="text-xs bg-indigo-200 text-indigo-700 px-2 py-1 rounded-full">${count} FTE</span>
                 </div>`;
             }).join('');
@@ -2191,7 +2191,7 @@
             el.innerHTML = miles.map(m => `
                 <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
                     <div class="flex items-center">
-                        <i class="fas fa-flag text-${statusColors[m.status] || 'gray'}-500 mr-3"></i>
+                        <i class="fas fa-flag text-${statusColors[m.status] || 'gray'}-500 me-3"></i>
                         <div>
                             <div class="font-medium">${m.name}</div>
                             <div class="text-sm text-gray-500">${m.planned_date ? new Date(m.planned_date).toLocaleDateString() : 'No date'}</div>
@@ -2334,7 +2334,7 @@
         async function generateCharter() {
             const btn = document.getElementById('generateCharterBtn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>' + _t('dyn.projects.btn_generating');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>' + _t('dyn.projects.btn_generating');
 
             try {
                 const res = await fetch('/api/pmp/generate-charter', {
@@ -2362,13 +2362,13 @@
                             <div class="space-y-3">
                                 <div><strong>Purpose:</strong> ${data.charter.project_purpose || 'N/A'}</div>
                                 <div><strong>Business Case:</strong> ${data.charter.business_case || 'N/A'}</div>
-                                <div><strong>Objectives:</strong><ul class="list-disc ml-5">${(data.charter.project_objectives || []).map(o => `<li>${o}</li>`).join('')}</ul></div>
+                                <div><strong>Objectives:</strong><ul class="list-disc ms-5">${(data.charter.project_objectives || []).map(o => `<li>${o}</li>`).join('')}</ul></div>
                                 <div><strong>Scope:</strong> ${data.charter.scope_statement || 'N/A'}</div>
-                                <div><strong>Deliverables:</strong><ul class="list-disc ml-5">${(data.charter.deliverables || []).map(d => `<li>${d}</li>`).join('')}</ul></div>
-                                <div><strong>Assumptions:</strong><ul class="list-disc ml-5">${(data.charter.assumptions || []).map(a => `<li>${a}</li>`).join('')}</ul></div>
-                                <div><strong>Constraints:</strong><ul class="list-disc ml-5">${(data.charter.constraints || []).map(c => `<li>${c}</li>`).join('')}</ul></div>
-                                <div><strong>High-Level Risks:</strong><ul class="list-disc ml-5">${(data.charter.high_level_risks || []).map(r => `<li>${r}</li>`).join('')}</ul></div>
-                                <div><strong>Success Criteria:</strong><ul class="list-disc ml-5">${(data.charter.success_criteria || []).map(s => `<li>${s}</li>`).join('')}</ul></div>
+                                <div><strong>Deliverables:</strong><ul class="list-disc ms-5">${(data.charter.deliverables || []).map(d => `<li>${d}</li>`).join('')}</ul></div>
+                                <div><strong>Assumptions:</strong><ul class="list-disc ms-5">${(data.charter.assumptions || []).map(a => `<li>${a}</li>`).join('')}</ul></div>
+                                <div><strong>Constraints:</strong><ul class="list-disc ms-5">${(data.charter.constraints || []).map(c => `<li>${c}</li>`).join('')}</ul></div>
+                                <div><strong>High-Level Risks:</strong><ul class="list-disc ms-5">${(data.charter.high_level_risks || []).map(r => `<li>${r}</li>`).join('')}</ul></div>
+                                <div><strong>Success Criteria:</strong><ul class="list-disc ms-5">${(data.charter.success_criteria || []).map(s => `<li>${s}</li>`).join('')}</ul></div>
                             </div>
                         `;
                     }
@@ -2382,7 +2382,7 @@
                 alert(_t('dyn.projects.failed_generate_charter'));
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-magic mr-2"></i>' + _t('dyn.projects.btn_generate_charter');
+                btn.innerHTML = '<i class="fas fa-magic me-2"></i>' + _t('dyn.projects.btn_generate_charter');
             }
         }
 

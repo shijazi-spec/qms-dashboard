@@ -129,7 +129,7 @@
                                     (t.action_required ? '<p class="text-sm text-amber-700 mt-2"><strong>Action Required:</strong> ' + escapeHtml(t.action_required) + '</p>' : '') +
                                     '<p class="text-xs text-gray-500 mt-2">Assigned to: ' + escapeHtml(t.assigned_role || 'N/A') + ' | Created: ' + escapeHtml(new Date(t.created_at).toLocaleString()) + '</p>' +
                                 '</div>' +
-                                '<div class="flex flex-wrap gap-2 ml-4 justify-end max-w-xs">' +
+                                '<div class="flex flex-wrap gap-2 ms-4 justify-end max-w-xs">' +
                                     '<button data-on-click="acknowledgeTrigger" data-args="[' + Number(t.id) + ']" class="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 border border-blue-300 rounded">Acknowledge</button>' +
                                     (t.severity === 'critical' ? '<button data-on-click="proposeTriggerHITL" data-args="[' + Number(t.id) + ']" title="Send this decision to /ai-approvals" class="text-purple-700 hover:text-purple-900 text-sm px-2 py-1 border border-purple-300 rounded bg-purple-50">Propose via HITL</button>' : '') +
                                     (t.trigger_type === 'DECISION_PENDING'

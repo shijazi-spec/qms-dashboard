@@ -1510,7 +1510,7 @@
                     return;
                 }
                 container.innerHTML = data.checklists.slice(0, 5).map(function(cl) {
-                    return '<button class="w-full text-left p-2 rounded-md hover:bg-indigo-50 transition text-xs group" data-on-click="sendQuickMessage" data-args="' + escAttr(JSON.stringify(['Run checklist #' + cl.id + ': ' + cl.name])) + '">' +
+                    return '<button class="w-full text-start p-2 rounded-md hover:bg-indigo-50 transition text-xs group" data-on-click="sendQuickMessage" data-args="' + escAttr(JSON.stringify(['Run checklist #' + cl.id + ': ' + cl.name])) + '">' +
                         '<div class="font-medium text-gray-700 group-hover:text-indigo-700 truncate">' + escapeHtml(cl.name) + '</div>' +
                         '<div class="text-gray-400 mt-0.5">' + escapeHtml(cl.standard) + '</div>' +
                     '</button>';
@@ -1884,9 +1884,9 @@
                 var doc = docLinks[code];
                 var label = doc ? (code + ' · v' + (doc.version || '1.0')) : code;
                 var title = doc ? doc.title : ref;
-                return '<a href="/policies?policy_number=' + code + '" target="_blank" title="' + title.replace(/"/g, '&quot;') + '" class="inline-block px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 rounded text-xs font-medium mr-1 mb-1">' + label + '</a>';
+                return '<a href="/policies?policy_number=' + code + '" target="_blank" title="' + title.replace(/"/g, '&quot;') + '" class="inline-block px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 rounded text-xs font-medium me-1 mb-1">' + label + '</a>';
             }
-            return '<span class="inline-block px-2 py-0.5 bg-gray-50 border border-gray-200 text-gray-700 rounded text-xs mr-1 mb-1">' + escapeHtml(ref) + '</span>';
+            return '<span class="inline-block px-2 py-0.5 bg-gray-50 border border-gray-200 text-gray-700 rounded text-xs me-1 mb-1">' + escapeHtml(ref) + '</span>';
         }).join('');
 
         var previewHtml = renderMarkdown(a.payload_preview || '_(no preview)_');
@@ -1896,7 +1896,7 @@
             if (data.can_approve) {
                 actionsHtml =
                     '<button data-action="approve" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">Approve ✓</button>' +
-                    '<button data-action="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ml-2">Reject ✗</button>';
+                    '<button data-action="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-2">Reject ✗</button>';
             } else {
                 actionsHtml = '<div class="text-xs text-gray-600 italic">' +
                     (data.can_approve_blocker || 'Only approved reviewers can action this.') +

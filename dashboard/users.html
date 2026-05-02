@@ -438,7 +438,7 @@
                         <td class="px-4 py-3 text-sm">${u.team}</td>
                         <td class="px-4 py-3 text-sm text-gray-500">${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
                         <td class="px-4 py-3">
-                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm mr-2">Edit</button>
+                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm me-2">Edit</button>
                             <button data-on-click="disableUser" data-args="[${u.id}]" class="text-red-600 hover:text-red-800 text-sm">Disable</button>
                         </td>
                     </tr>
@@ -467,7 +467,7 @@
                         <td class="px-4 py-3 text-sm">${u.team}</td>
                         <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded status-${u.status}">${u.status.replace('_', ' ')}</span></td>
                         <td class="px-4 py-3">
-                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm mr-2">View</button>
+                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm me-2">View</button>
                             ${u.status === 'disabled' ? `<button data-on-click="enableUser" data-args="[${u.id}]" class="text-green-600 hover:text-green-800 text-sm">Enable</button>` : ''}
                             ${u.status === 'active' ? `<button data-on-click="disableUser" data-args="[${u.id}]" class="text-red-600 hover:text-red-800 text-sm">Disable</button>` : ''}
                         </td>
@@ -765,7 +765,7 @@
                                 <table class="w-full text-sm">
                                     <thead class="bg-gray-50 sticky top-0">
                                         <tr>
-                                            <th class="px-2 py-1 text-left">Screen</th>
+                                            <th class="px-2 py-1 text-start">Screen</th>
                                             <th class="px-2 py-1 text-center">View</th>
                                             <th class="px-2 py-1 text-center">Create</th>
                                             <th class="px-2 py-1 text-center">Edit</th>

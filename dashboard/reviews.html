@@ -225,7 +225,7 @@
                 <td class="px-4 py-3 text-sm">${Array.isArray(r.action_items) ? r.action_items.length : '-'}</td>
                 <td class="px-4 py-3 text-sm">${r.next_review_date ? new Date(r.next_review_date).toLocaleDateString() : '-'}</td>
                 <td class="px-4 py-3">
-                    <button data-on-click="event.stopPropagation,editReview" data-args="[[],[${r.id}]]" class="text-indigo-600 hover:text-indigo-800 text-sm mr-2">Edit</button>
+                    <button data-on-click="event.stopPropagation,editReview" data-args="[[],[${r.id}]]" class="text-indigo-600 hover:text-indigo-800 text-sm me-2">Edit</button>
                     <button data-on-click="event.stopPropagation,gatherInputs" data-args="[[],[${r.id}]]" class="text-green-600 hover:text-green-800 text-sm" title="Auto-gather QMS data as review inputs">Gather Data</button>
                 </td>
             </tr>
@@ -330,7 +330,7 @@
                 actionsHtml = `<div class="mt-4">
                     <h4 class="font-semibold text-sm mb-2">Action Items (${actions.length})</h4>
                     <table class="w-full text-xs border">
-                        <thead><tr class="bg-gray-50"><th class="px-2 py-1 text-left">#</th><th class="px-2 py-1 text-left">Description</th><th class="px-2 py-1 text-left">Assigned To</th><th class="px-2 py-1 text-left">Due</th><th class="px-2 py-1 text-left">Status</th><th class="px-2 py-1"></th></tr></thead>
+                        <thead><tr class="bg-gray-50"><th class="px-2 py-1 text-start">#</th><th class="px-2 py-1 text-start">Description</th><th class="px-2 py-1 text-start">Assigned To</th><th class="px-2 py-1 text-start">Due</th><th class="px-2 py-1 text-start">Status</th><th class="px-2 py-1"></th></tr></thead>
                         <tbody>${actions.map(a => `
                             <tr class="border-t"><td class="px-2 py-1">${a.action_number}</td><td class="px-2 py-1">${esc(a.description)}</td><td class="px-2 py-1">${esc(a.assigned_to)}</td>
                             <td class="px-2 py-1">${a.due_date ? new Date(a.due_date).toLocaleDateString() : '-'}</td>

@@ -994,7 +994,7 @@
               <div class="flex-1 bg-gray-100 rounded-full h-2">
                 <div class="bg-red-400 h-2 rounded-full" data-style="width: ${pct}%"></div>
               </div>
-              <span class="text-xs text-gray-500 w-6 text-right">${c.count}</span>
+              <span class="text-xs text-gray-500 w-6 text-end">${c.count}</span>
             </div>`;
           }).join('');
         } else {
@@ -1028,21 +1028,21 @@
               }
               return `<tr class="border-t" data-testid="row-feedback-prompt-version-${aiOpsEscapeHtml(v.prompt_version)}">
                 <td class="px-3 py-2 font-mono text-xs" title="${aiOpsEscapeHtml(v.prompt_version)}">${label}</td>
-                <td class="px-3 py-2 text-right text-xs">${Number(v.total) || 0}</td>
-                <td class="px-3 py-2 text-right text-xs text-emerald-700">👍 ${Number(v.thumbs_up) || 0}</td>
-                <td class="px-3 py-2 text-right text-xs text-red-700">👎 ${Number(v.thumbs_down) || 0}</td>
-                <td class="px-3 py-2 text-right text-xs ${ratioClass}" data-testid="text-feedback-prompt-version-ratio-${aiOpsEscapeHtml(v.prompt_version)}">${Number(v.total) > 0 ? `${ratio}%` : '<span class="text-gray-400">—</span>'}</td>
+                <td class="px-3 py-2 text-end text-xs">${Number(v.total) || 0}</td>
+                <td class="px-3 py-2 text-end text-xs text-emerald-700">👍 ${Number(v.thumbs_up) || 0}</td>
+                <td class="px-3 py-2 text-end text-xs text-red-700">👎 ${Number(v.thumbs_down) || 0}</td>
+                <td class="px-3 py-2 text-end text-xs ${ratioClass}" data-testid="text-feedback-prompt-version-ratio-${aiOpsEscapeHtml(v.prompt_version)}">${Number(v.total) > 0 ? `${ratio}%` : '<span class="text-gray-400">—</span>'}</td>
               </tr>`;
             }).join('');
             promptVersionsEl.innerHTML = `
-              <table class="min-w-full text-left text-sm" data-testid="table-feedback-prompt-versions">
+              <table class="min-w-full text-start text-sm" data-testid="table-feedback-prompt-versions">
                 <thead class="text-xs text-gray-500 uppercase">
                   <tr>
                     <th class="px-3 py-2">Prompt version</th>
-                    <th class="px-3 py-2 text-right">Ratings</th>
-                    <th class="px-3 py-2 text-right">Up</th>
-                    <th class="px-3 py-2 text-right">Down</th>
-                    <th class="px-3 py-2 text-right">Up ratio</th>
+                    <th class="px-3 py-2 text-end">Ratings</th>
+                    <th class="px-3 py-2 text-end">Up</th>
+                    <th class="px-3 py-2 text-end">Down</th>
+                    <th class="px-3 py-2 text-end">Up ratio</th>
                   </tr>
                 </thead>
                 <tbody>${rows}</tbody>
@@ -1076,21 +1076,21 @@
               }
               return `<tr class="border-t" data-testid="row-feedback-client-surface-${aiOpsEscapeHtml(s.client_surface)}">
                 <td class="px-3 py-2 text-xs" title="${aiOpsEscapeHtml(s.client_surface)}">${label}</td>
-                <td class="px-3 py-2 text-right text-xs">${Number(s.total) || 0}</td>
-                <td class="px-3 py-2 text-right text-xs text-emerald-700">👍 ${Number(s.thumbs_up) || 0}</td>
-                <td class="px-3 py-2 text-right text-xs text-red-700">👎 ${Number(s.thumbs_down) || 0}</td>
-                <td class="px-3 py-2 text-right text-xs ${ratioClass}" data-testid="text-feedback-client-surface-ratio-${aiOpsEscapeHtml(s.client_surface)}">${Number(s.total) > 0 ? `${ratio}%` : '<span class="text-gray-400">—</span>'}</td>
+                <td class="px-3 py-2 text-end text-xs">${Number(s.total) || 0}</td>
+                <td class="px-3 py-2 text-end text-xs text-emerald-700">👍 ${Number(s.thumbs_up) || 0}</td>
+                <td class="px-3 py-2 text-end text-xs text-red-700">👎 ${Number(s.thumbs_down) || 0}</td>
+                <td class="px-3 py-2 text-end text-xs ${ratioClass}" data-testid="text-feedback-client-surface-ratio-${aiOpsEscapeHtml(s.client_surface)}">${Number(s.total) > 0 ? `${ratio}%` : '<span class="text-gray-400">—</span>'}</td>
               </tr>`;
             }).join('');
             clientSurfacesEl.innerHTML = `
-              <table class="min-w-full text-left text-sm" data-testid="table-feedback-client-surfaces">
+              <table class="min-w-full text-start text-sm" data-testid="table-feedback-client-surfaces">
                 <thead class="text-xs text-gray-500 uppercase">
                   <tr>
                     <th class="px-3 py-2">Client surface</th>
-                    <th class="px-3 py-2 text-right">Ratings</th>
-                    <th class="px-3 py-2 text-right">Up</th>
-                    <th class="px-3 py-2 text-right">Down</th>
-                    <th class="px-3 py-2 text-right">Up ratio</th>
+                    <th class="px-3 py-2 text-end">Ratings</th>
+                    <th class="px-3 py-2 text-end">Up</th>
+                    <th class="px-3 py-2 text-end">Down</th>
+                    <th class="px-3 py-2 text-end">Up ratio</th>
                   </tr>
                 </thead>
                 <tbody>${rows}</tbody>
@@ -1912,7 +1912,7 @@
                 <p class="text-sm font-semibold text-gray-900 truncate" data-testid="text-history-title-${a.id}">${esc(a.title)}</p>
                 ${noteLine}
               </div>
-              <div class="shrink-0 text-right text-xs text-gray-500 whitespace-nowrap">
+              <div class="shrink-0 text-end text-xs text-gray-500 whitespace-nowrap">
                 <p data-testid="text-history-when-${a.id}">${when}</p>
                 <p class="mt-0.5" data-testid="text-history-who-${a.id}">by ${who}</p>
                 ${openForLine}
@@ -2608,16 +2608,16 @@
       const rows = Object.entries(pt).map(([model, p]) =>
         `<tr class="border-t">
           <td class="px-3 py-2 text-sm font-mono text-gray-800">${model}</td>
-          <td class="px-3 py-2 text-sm text-right">$${p.inputPer1k.toFixed(5)}</td>
-          <td class="px-3 py-2 text-sm text-right">$${p.outputPer1k.toFixed(5)}</td>
+          <td class="px-3 py-2 text-sm text-end">$${p.inputPer1k.toFixed(5)}</td>
+          <td class="px-3 py-2 text-sm text-end">$${p.outputPer1k.toFixed(5)}</td>
         </tr>`
       ).join('');
       document.getElementById('price-table-content').innerHTML = `
-        <table class="min-w-full text-left text-sm">
+        <table class="min-w-full text-start text-sm">
           <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
             <th class="px-3 py-2" data-i18n="ai_ops.col_model">Model</th>
-            <th class="px-3 py-2 text-right">Input / 1k tokens</th>
-            <th class="px-3 py-2 text-right">Output / 1k tokens</th>
+            <th class="px-3 py-2 text-end">Input / 1k tokens</th>
+            <th class="px-3 py-2 text-end">Output / 1k tokens</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
@@ -2676,31 +2676,31 @@
         const { data } = await apiFetch('/api/ai-ops/agent-latency');
         if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + _t('dyn.ai_ops.no_data_7_days') + '</p>'; return; }
         el.innerHTML = `
-          <table class="min-w-full text-left text-sm" data-testid="table-agent-latency">
+          <table class="min-w-full text-start text-sm" data-testid="table-agent-latency">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
               <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
-              <th class="px-3 py-2 text-right">Calls</th>
-              <th class="px-3 py-2 text-right">p50 (ms)</th>
-              <th class="px-3 py-2 text-right">p95 (ms)</th>
-              <th class="px-3 py-2 text-right">Avg (ms)</th>
-              <th class="px-3 py-2 text-right">Error %</th>
-              <th class="px-3 py-2 text-right">👍 Feedback Rate</th>
-              <th class="px-3 py-2 text-right">Total Cost</th>
+              <th class="px-3 py-2 text-end">Calls</th>
+              <th class="px-3 py-2 text-end">p50 (ms)</th>
+              <th class="px-3 py-2 text-end">p95 (ms)</th>
+              <th class="px-3 py-2 text-end">Avg (ms)</th>
+              <th class="px-3 py-2 text-end">Error %</th>
+              <th class="px-3 py-2 text-end">👍 Feedback Rate</th>
+              <th class="px-3 py-2 text-end">Total Cost</th>
             </tr></thead>
             <tbody>${data.map((r, i) => `
               <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-agent-${i}">
                 <td class="px-3 py-2 font-medium text-gray-900">${esc(r.agent_name)}</td>
-                <td class="px-3 py-2 text-right">${fmtNum(r.call_count)}</td>
-                <td class="px-3 py-2 text-right">${fmtMs(r.p50_ms)}</td>
-                <td class="px-3 py-2 text-right">${fmtMs(r.p95_ms)}</td>
-                <td class="px-3 py-2 text-right">${fmtMs(r.avg_ms)}</td>
-                <td class="px-3 py-2 text-right ${parseFloat(r.error_rate_pct||0)>5?'text-red-600 font-semibold':''}">${parseFloat(r.error_rate_pct||0).toFixed(1)}%</td>
-                <td class="px-3 py-2 text-right" data-testid="text-feedback-rate-${i}">
+                <td class="px-3 py-2 text-end">${fmtNum(r.call_count)}</td>
+                <td class="px-3 py-2 text-end">${fmtMs(r.p50_ms)}</td>
+                <td class="px-3 py-2 text-end">${fmtMs(r.p95_ms)}</td>
+                <td class="px-3 py-2 text-end">${fmtMs(r.avg_ms)}</td>
+                <td class="px-3 py-2 text-end ${parseFloat(r.error_rate_pct||0)>5?'text-red-600 font-semibold':''}">${parseFloat(r.error_rate_pct||0).toFixed(1)}%</td>
+                <td class="px-3 py-2 text-end" data-testid="text-feedback-rate-${i}">
                   ${r.feedback_rate_pct != null
                     ? `<span title="${r.total_feedback} response(s) rated">${parseFloat(r.feedback_rate_pct).toFixed(0)}%</span>`
                     : '<span class="text-gray-400">—</span>'}
                 </td>
-                <td class="px-3 py-2 text-right">$${parseFloat(r.total_cost||0).toFixed(4)}</td>
+                <td class="px-3 py-2 text-end">$${parseFloat(r.total_cost||0).toFixed(4)}</td>
               </tr>`).join('')}
             </tbody>
           </table>`;
@@ -2900,7 +2900,7 @@
             if (!showArchived && archivedCount > 0) {
               parts.push(`<span class="text-xs text-gray-400" data-testid="text-archived-hidden-${esc(agent)}">${archivedCount} archived hidden</span>`);
             }
-            return parts.length ? ` <span class="ml-2">${parts.join(' · ')}</span>` : '';
+            return parts.length ? ` <span class="ms-2">${parts.join(' · ')}</span>` : '';
           })();
 
           const body = rows.length
@@ -2950,14 +2950,14 @@
                 return `
                   <tr class="border-t ${isCurrent ? 'bg-green-50' : (i % 2 === 1 ? 'bg-gray-50' : '')}" data-testid="row-prompt-${esc(agent)}-${esc(r.prompt_version)}" data-prompt-status="${isCurrent ? 'current' : 'archived'}" data-prompt-window-activity="${noWindowActivity ? 'none' : 'present'}">
                     <td class="px-3 py-2 font-mono text-xs text-gray-800">${esc(r.prompt_version)}${currentPill}</td>
-                    <td class="px-3 py-2 text-right">${callCountCell}</td>
-                    <td class="px-3 py-2 text-right" data-testid="text-prompt-feedback-rate-${esc(r.prompt_version)}">${rateCell}</td>
-                    <td class="px-3 py-2 text-right text-xs text-gray-500">
+                    <td class="px-3 py-2 text-end">${callCountCell}</td>
+                    <td class="px-3 py-2 text-end" data-testid="text-prompt-feedback-rate-${esc(r.prompt_version)}">${rateCell}</td>
+                    <td class="px-3 py-2 text-end text-xs text-gray-500">
                       ${r.total_feedback > 0 ? `👍 ${r.thumbs_up} / 👎 ${r.thumbs_down}` : '<span class="text-gray-400">—</span>'}
                     </td>
-                    <td class="px-3 py-2 text-right">${fmtMs(r.p50_ms)}</td>
-                    <td class="px-3 py-2 text-right">${fmtMs(r.avg_ms)}</td>
-                    <td class="px-3 py-2 text-right">${errorCell}</td>
+                    <td class="px-3 py-2 text-end">${fmtMs(r.p50_ms)}</td>
+                    <td class="px-3 py-2 text-end">${fmtMs(r.avg_ms)}</td>
+                    <td class="px-3 py-2 text-end">${errorCell}</td>
                     <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${lastSeenCell}</td>
                   </tr>`;
               }).join('')
@@ -2968,15 +2968,15 @@
           return `
             <div class="mb-6" data-testid="block-prompt-agent-${esc(agent)}">
               <h3 class="text-sm font-semibold text-gray-800 mb-2">${esc(agent)}${headerExtras}</h3>
-              <table class="min-w-full text-left text-sm" data-testid="table-prompt-versions">
+              <table class="min-w-full text-start text-sm" data-testid="table-prompt-versions">
                 <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
                   <th class="px-3 py-2">Prompt Version</th>
-                  <th class="px-3 py-2 text-right">Calls</th>
-                  <th class="px-3 py-2 text-right">👍 Feedback Rate</th>
-                  <th class="px-3 py-2 text-right">Ratings</th>
-                  <th class="px-3 py-2 text-right">p50 (ms)</th>
-                  <th class="px-3 py-2 text-right">Avg (ms)</th>
-                  <th class="px-3 py-2 text-right">Error %</th>
+                  <th class="px-3 py-2 text-end">Calls</th>
+                  <th class="px-3 py-2 text-end">👍 Feedback Rate</th>
+                  <th class="px-3 py-2 text-end">Ratings</th>
+                  <th class="px-3 py-2 text-end">p50 (ms)</th>
+                  <th class="px-3 py-2 text-end">Avg (ms)</th>
+                  <th class="px-3 py-2 text-end">Error %</th>
                   <th class="px-3 py-2">Last seen</th>
                 </tr></thead>
                 <tbody>${body}</tbody>
@@ -3006,23 +3006,23 @@
           return;
         }
         el.innerHTML = `
-          <table class="min-w-full text-left text-sm" data-testid="table-top-tools">
+          <table class="min-w-full text-start text-sm" data-testid="table-top-tools">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
               <th class="px-3 py-2" data-i18n="ai_ops.col_tool">Tool</th>
               <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
-              <th class="px-3 py-2 text-right">Calls</th>
-              <th class="px-3 py-2 text-right">Avg Latency</th>
-              <th class="px-3 py-2 text-right">Error %</th>
-              <th class="px-3 py-2 text-right">Total Cost</th>
+              <th class="px-3 py-2 text-end">Calls</th>
+              <th class="px-3 py-2 text-end">Avg Latency</th>
+              <th class="px-3 py-2 text-end">Error %</th>
+              <th class="px-3 py-2 text-end">Total Cost</th>
             </tr></thead>
             <tbody>${data.map((r, i) => `
               <tr class="border-t cursor-pointer hover:bg-blue-50 transition-colors ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-tool-${i}" data-tool-name="${esc(r.tool_name)}" data-on-click="openToolParentsPanel" data-args='[${JSON.stringify(r.tool_name)}]' title="Click to see parent agent calls for this tool">
                 <td class="px-3 py-2 font-medium text-blue-700 font-mono text-xs underline decoration-dotted">${esc(r.tool_name)}</td>
                 <td class="px-3 py-2 text-gray-600 text-xs">${esc(r.agent_name)}</td>
-                <td class="px-3 py-2 text-right">${fmtNum(r.call_count)}</td>
-                <td class="px-3 py-2 text-right">${fmtMs(r.avg_latency_ms)}</td>
-                <td class="px-3 py-2 text-right ${parseFloat(r.error_rate_pct||0)>5?'text-red-600 font-semibold':''}">${parseFloat(r.error_rate_pct||0).toFixed(1)}%</td>
-                <td class="px-3 py-2 text-right">$${parseFloat(r.total_cost||0).toFixed(6)}</td>
+                <td class="px-3 py-2 text-end">${fmtNum(r.call_count)}</td>
+                <td class="px-3 py-2 text-end">${fmtMs(r.avg_latency_ms)}</td>
+                <td class="px-3 py-2 text-end ${parseFloat(r.error_rate_pct||0)>5?'text-red-600 font-semibold':''}">${parseFloat(r.error_rate_pct||0).toFixed(1)}%</td>
+                <td class="px-3 py-2 text-end">$${parseFloat(r.total_cost||0).toFixed(6)}</td>
               </tr>`).join('')}
             </tbody>
           </table>`;
@@ -3053,7 +3053,7 @@
               </h3>
               <p class="text-xs text-gray-500 mt-0.5">Most expensive agent runs that invoked this tool — last 7 days</p>
             </div>
-            <button class="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-4 flex-shrink-0"
+            <button class="text-gray-400 hover:text-gray-600 text-2xl leading-none ms-4 flex-shrink-0"
                     data-on-click="closeToolParentsPanel"
                     aria-label="Close panel"
                     data-testid="button-close-tool-parents">&times;</button>
@@ -3073,15 +3073,15 @@
           return;
         }
         body.innerHTML = `
-          <table class="min-w-full text-left text-sm" data-testid="table-tool-parents">
+          <table class="min-w-full text-start text-sm" data-testid="table-tool-parents">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
               <th class="px-3 py-2">Call ID</th>
               <th class="px-3 py-2">Agent</th>
               <th class="px-3 py-2">When</th>
-              <th class="px-3 py-2 text-right">Invocations</th>
-              <th class="px-3 py-2 text-right">Tool Cost</th>
-              <th class="px-3 py-2 text-right">Latency</th>
-              <th class="px-3 py-2 text-right">Status</th>
+              <th class="px-3 py-2 text-end">Invocations</th>
+              <th class="px-3 py-2 text-end">Tool Cost</th>
+              <th class="px-3 py-2 text-end">Latency</th>
+              <th class="px-3 py-2 text-end">Status</th>
             </tr></thead>
             <tbody>${data.map((r, i) => `
               <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''} cursor-pointer hover:bg-blue-50 transition-colors"
@@ -3091,10 +3091,10 @@
                 <td class="px-3 py-2 font-mono text-xs text-blue-600 underline decoration-dotted">#${esc(r.id)}</td>
                 <td class="px-3 py-2 font-medium text-gray-900 text-xs">${esc(r.agent_name)}</td>
                 <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${fmtDate(r.started_at)}</td>
-                <td class="px-3 py-2 text-right">${fmtNum(r.tool_invocations)}</td>
-                <td class="px-3 py-2 text-right">$${parseFloat(r.tool_cost || 0).toFixed(6)}</td>
-                <td class="px-3 py-2 text-right">${fmtMs(r.latency_ms)}</td>
-                <td class="px-3 py-2 text-right">
+                <td class="px-3 py-2 text-end">${fmtNum(r.tool_invocations)}</td>
+                <td class="px-3 py-2 text-end">$${parseFloat(r.tool_cost || 0).toFixed(6)}</td>
+                <td class="px-3 py-2 text-end">${fmtMs(r.latency_ms)}</td>
+                <td class="px-3 py-2 text-end">
                   ${r.success
                     ? '<span class="inline-block px-1.5 py-0.5 rounded text-xs bg-green-100 text-green-700">ok</span>'
                     : '<span class="inline-block px-1.5 py-0.5 rounded text-xs bg-red-100 text-red-700">failed</span>'}
@@ -3240,13 +3240,13 @@
         return;
       }
       el.innerHTML = `
-          <table class="min-w-full text-left text-sm" data-testid="table-recent-issues">
+          <table class="min-w-full text-start text-sm" data-testid="table-recent-issues">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
               <th class="px-3 py-2 w-6"></th>
               <th class="px-3 py-2" data-i18n="ai_ops.col_time">Time</th>
               <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
               <th class="px-3 py-2" data-i18n="ai_ops.col_tool">Tool</th>
-              <th class="px-3 py-2 text-right" data-i18n="ai_ops.col_latency">Latency</th>
+              <th class="px-3 py-2 text-end" data-i18n="ai_ops.col_latency">Latency</th>
               <th class="px-3 py-2">Status</th>
               <th class="px-3 py-2">Error / Prompt / Tool I/O preview</th>
             </tr></thead>
@@ -3273,7 +3273,7 @@
                 <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${fmtDate(r.started_at)}</td>
                 <td class="px-3 py-2 font-medium text-gray-900 text-xs">${esc(r.agent_name)}</td>
                 <td class="px-3 py-2 text-gray-600 font-mono text-xs">${esc(r.tool_name || '—')}</td>
-                <td class="px-3 py-2 text-right ${parseInt(r.latency_ms||0)>60000?'text-red-600 font-semibold':''}">
+                <td class="px-3 py-2 text-end ${parseInt(r.latency_ms||0)>60000?'text-red-600 font-semibold':''}">
                   ${fmtMs(r.latency_ms)}
                 </td>
                 <td class="px-3 py-2">
@@ -3359,11 +3359,11 @@
 
     function renderChildrenTable(rows) {
       return `
-        <table class="min-w-full text-left text-xs" data-testid="table-child-tools">
+        <table class="min-w-full text-start text-xs" data-testid="table-child-tools">
           <thead><tr class="text-gray-500 uppercase">
             <th class="px-2 py-1">Time</th>
             <th class="px-2 py-1">Tool</th>
-            <th class="px-2 py-1 text-right">Latency</th>
+            <th class="px-2 py-1 text-end">Latency</th>
             <th class="px-2 py-1">Status</th>
             <th class="px-2 py-1">Error</th>
           </tr></thead>
@@ -3371,7 +3371,7 @@
             <tr class="border-t border-blue-100" data-testid="row-child-${c.id}">
               <td class="px-2 py-1 text-gray-500 whitespace-nowrap">${fmtDate(c.started_at)}</td>
               <td class="px-2 py-1 font-mono text-gray-800">${esc(c.tool_name || '—')}</td>
-              <td class="px-2 py-1 text-right ${parseInt(c.latency_ms||0)>10000?'text-red-600 font-semibold':''}">${fmtMs(c.latency_ms)}</td>
+              <td class="px-2 py-1 text-end ${parseInt(c.latency_ms||0)>10000?'text-red-600 font-semibold':''}">${fmtMs(c.latency_ms)}</td>
               <td class="px-2 py-1">
                 ${c.success
                   ? '<span class="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px]">OK</span>'
@@ -3416,7 +3416,7 @@
         const tooltip = `${toolLabel} — ${fmtMs(c.latency_ms)}${errorTip}`;
         return `
           <div class="flex items-center gap-2 mb-1" data-testid="waterfall-row-${c.id}">
-            <div class="w-28 flex-shrink-0 text-right text-gray-600 font-mono truncate text-[10px]" title="${toolLabel}">${toolLabel}</div>
+            <div class="w-28 flex-shrink-0 text-end text-gray-600 font-mono truncate text-[10px]" title="${toolLabel}">${toolLabel}</div>
             <div class="relative flex-1 h-5">
               <div class="absolute h-full rounded ${color} ${hoverColor} cursor-default transition-colors"
                    data-style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%"
@@ -3425,7 +3425,7 @@
                 <span class="sr-only">${tooltip}</span>
               </div>
             </div>
-            <div class="w-14 flex-shrink-0 text-right text-[10px] ${parseInt(c.latency_ms||0)>10000?'text-red-600 font-semibold':'text-gray-500'}">${fmtMs(c.latency_ms)}</div>
+            <div class="w-14 flex-shrink-0 text-end text-[10px] ${parseInt(c.latency_ms||0)>10000?'text-red-600 font-semibold':'text-gray-500'}">${fmtMs(c.latency_ms)}</div>
           </div>`;
       }).join('');
 
@@ -3451,7 +3451,7 @@
           <div class="mt-2 flex items-center gap-3 text-[10px] text-gray-500">
             <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-green-500 inline-block"></span> Success</span>
             <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-red-500 inline-block"></span> Error</span>
-            <span class="ml-auto">Hover bars for details</span>
+            <span class="ms-auto">Hover bars for details</span>
           </div>
         </div>`;
     }
@@ -3504,14 +3504,14 @@
         const { data } = await apiFetch('/api/ai-ops/negative-feedback?limit=50');
         if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + _t('dyn.ai_ops.no_neg_feedback') + '</p>'; return; }
         el.innerHTML = `
-          <table class="min-w-full text-left text-sm" data-testid="table-negative-feedback">
+          <table class="min-w-full text-start text-sm" data-testid="table-negative-feedback">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
               <th class="px-3 py-2">When</th>
               <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
               <th class="px-3 py-2">Call</th>
               <th class="px-3 py-2">Comment</th>
               <th class="px-3 py-2">Original Prompt</th>
-              <th class="px-3 py-2 text-right" data-i18n="ai_ops.col_latency">Latency</th>
+              <th class="px-3 py-2 text-end" data-i18n="ai_ops.col_latency">Latency</th>
             </tr></thead>
             <tbody>${data.map((r, i) => `
               <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-negative-${r.feedback_id}">
@@ -3535,7 +3535,7 @@
                     ? `<div class="truncate italic" title="${esc(r.prompt_preview)}">&ldquo;${esc(r.prompt_preview.slice(0,120))}&rdquo;</div>`
                     : '<span class="text-gray-400">—</span>'}
                 </td>
-                <td class="px-3 py-2 text-right text-xs">${fmtMs(r.latency_ms)}</td>
+                <td class="px-3 py-2 text-end text-xs">${fmtMs(r.latency_ms)}</td>
               </tr>`).join('')}
             </tbody>
           </table>`;
@@ -3953,7 +3953,7 @@
              <button type="button" data-on-click="saveMetricsRetention" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700" data-testid="button-metrics-retention-save">Save retention</button>
              <button type="button" data-on-click="clearMetricsRetentionOverride" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-metrics-retention-clear">Clear override</button>
              <button type="button" data-on-click="requestPruneMetricsNow" class="px-4 py-2 bg-white border border-red-300 text-red-700 text-sm font-medium rounded hover:bg-red-50" data-testid="button-metrics-retention-prune-now" title="Run pruneOldAiMetrics() against the current effective retention window without waiting for the next daily cron pass.">Prune now</button>
-             <span id="metrics-retention-save-status" class="text-sm ml-2" data-testid="text-metrics-retention-save-status"></span>
+             <span id="metrics-retention-save-status" class="text-sm ms-2" data-testid="text-metrics-retention-save-status"></span>
            </div>
            <div id="metrics-retention-confirm-panel" class="hidden mt-3 px-4 py-3 rounded border border-amber-300 bg-amber-50 text-amber-900" role="alertdialog" aria-labelledby="metrics-retention-confirm-title" data-testid="panel-metrics-retention-confirm">
              <div class="flex items-start gap-2">
@@ -3989,7 +3989,7 @@
            </div>
            <div id="metrics-retention-prune-result" class="hidden mt-3 px-4 py-3 rounded border text-sm" role="status" aria-live="polite" data-testid="banner-metrics-retention-prune-result"></div>`
         : `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
-             <span id="metrics-retention-save-status" class="text-sm ml-2" data-testid="text-metrics-retention-save-status"></span>
+             <span id="metrics-retention-save-status" class="text-sm ms-2" data-testid="text-metrics-retention-save-status"></span>
            </div>`;
 
       formEl.innerHTML = lockBanner + readonlyBanner + rows + scheduledPreviewLine + noteRow + buttons;
@@ -4058,14 +4058,14 @@
               ? `<div class="text-xs text-gray-500 mt-1 italic">${esc(pruneInfo.operatorNote)}</div>`
               : '';
             const drift = pruneInfo.deletedRows !== pruneInfo.previewedRows
-              ? `<span class="text-xs text-amber-700 ml-2" data-testid="text-metrics-retention-audit-drift-${esc(r.id)}">drift ${pruneInfo.deletedRows - pruneInfo.previewedRows >= 0 ? '+' : ''}${esc(String(pruneInfo.deletedRows - pruneInfo.previewedRows))}</span>`
+              ? `<span class="text-xs text-amber-700 ms-2" data-testid="text-metrics-retention-audit-drift-${esc(r.id)}">drift ${pruneInfo.deletedRows - pruneInfo.previewedRows >= 0 ? '+' : ''}${esc(String(pruneInfo.deletedRows - pruneInfo.previewedRows))}</span>`
               : '';
             return `<div class="border border-red-200 rounded p-3 bg-red-50" data-testid="row-metrics-retention-audit-${esc(r.id)}" data-audit-kind="prune-now">
               <div class="flex items-center justify-between flex-wrap gap-2">
                 <div class="text-sm text-gray-800">
                   <span class="inline-block px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs font-semibold uppercase tracking-wide" data-testid="badge-metrics-retention-audit-prune-now-${esc(r.id)}">Manual prune</span>
-                  <span class="ml-2 font-mono text-gray-700">${esc(pruneInfo.retentionDays)}d</span>
-                  <span class="text-xs text-gray-500 ml-2">by ${who}</span>
+                  <span class="ms-2 font-mono text-gray-700">${esc(pruneInfo.retentionDays)}d</span>
+                  <span class="text-xs text-gray-500 ms-2">by ${who}</span>
                 </div>
                 <div class="text-xs text-gray-500">${when}</div>
               </div>
@@ -4085,7 +4085,7 @@
                 <span class="font-mono">${before}</span>
                 <span class="text-gray-400 mx-1">→</span>
                 <span class="font-mono font-semibold">${after}</span>
-                <span class="text-xs text-gray-500 ml-2">by ${who}</span>
+                <span class="text-xs text-gray-500 ms-2">by ${who}</span>
               </div>
               <div class="text-xs text-gray-500">${when}</div>
             </div>
@@ -4214,7 +4214,7 @@
       const el = document.getElementById('metrics-retention-save-status');
       if (!el) return;
       el.textContent = text;
-      el.className = 'text-sm ml-2 ' + (
+      el.className = 'text-sm ms-2 ' + (
         kind === 'error' ? 'text-red-600'
         : kind === 'ok'  ? 'text-green-700'
         : kind === 'info' ? 'text-gray-600'
@@ -5046,11 +5046,11 @@
              ${previewBtn}
              <button type="button" data-on-click="resetThresholdInputs" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-thresholds-reset">Discard edits</button>
              <button type="button" data-on-click="clearAllThresholdOverrides" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-thresholds-clear-all">Clear all overrides</button>
-             <span id="thresholds-save-status" class="text-sm ml-2" data-testid="text-thresholds-save-status"></span>
+             <span id="thresholds-save-status" class="text-sm ms-2" data-testid="text-thresholds-save-status"></span>
            </div>`
         : `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
              ${previewBtn}
-             <span id="thresholds-save-status" class="text-sm ml-2" data-testid="text-thresholds-save-status"></span>
+             <span id="thresholds-save-status" class="text-sm ms-2" data-testid="text-thresholds-save-status"></span>
            </div>`;
 
       // Empty preview-result panel; populated lazily on click. Sits between
@@ -5095,7 +5095,7 @@
       const el = document.getElementById('thresholds-save-status');
       if (!el) return;
       el.textContent = text;
-      el.className = 'text-sm ml-2 ' + (
+      el.className = 'text-sm ms-2 ' + (
         kind === 'error' ? 'text-red-600'
         : kind === 'ok'  ? 'text-green-700'
         : kind === 'info' ? 'text-gray-600'
@@ -5237,7 +5237,7 @@
           <span class="px-2 py-0.5 rounded text-xs font-semibold border ${sevClass}" data-testid="badge-preview-severity-${esc(sev)}">${esc(sev)}</span>
           <span class="font-mono text-gray-900 break-all">${esc(b?.tool_name || '?')}</span>
           <span class="text-gray-500">${esc(reasonLabel)}${agent}</span>
-          <span class="text-gray-700 ml-auto font-mono">${esc(b?.detail || '')}</span>
+          <span class="text-gray-700 ms-auto font-mono">${esc(b?.detail || '')}</span>
         </div>`;
     }
 
@@ -5280,7 +5280,7 @@
         <div class="flex flex-wrap items-center gap-3 px-4 py-3 border-b bg-gray-50 rounded-t-lg">
           <div class="text-sm font-semibold text-gray-900" data-testid="text-preview-headline">Impact preview</div>
           <div class="text-xs text-gray-600" data-testid="text-preview-window">${windowText}</div>
-          <div class="ml-auto text-sm">
+          <div class="ms-auto text-sm">
             <span class="text-gray-700" data-testid="text-preview-current-total">Currently: ${esc(cur.total)} breach${cur.total === 1 ? '' : 'es'}</span>
             <span class="mx-2 text-gray-400">→</span>
             <span class="text-gray-900 font-semibold" data-testid="text-preview-proposed-total">After save: ${esc(prop.total)} breach${prop.total === 1 ? '' : 'es'}</span>
@@ -5339,7 +5339,7 @@
                  <span class="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800">SHIFTED</span>
                  <span class="font-mono text-gray-900 break-all">${esc(s.tool_name)}</span>
                  <span class="text-gray-500">${esc(s.reason === 'p95_latency' ? 'p95 latency' : 'error rate')}</span>
-                 <span class="ml-auto text-gray-700"><span class="font-semibold">${esc(s.from_severity)}</span> → <span class="font-semibold">${esc(s.to_severity)}</span></span>
+                 <span class="ms-auto text-gray-700"><span class="font-semibold">${esc(s.from_severity)}</span> → <span class="font-semibold">${esc(s.to_severity)}</span></span>
                </div>`).join('')}</div>
            </div>`
         : '';
@@ -5410,7 +5410,7 @@
             for (const b of (bd.severity_changes || [])) {
               detailRows.push(`<li class="text-amber-700">Severity: ${esc(b.tool_name)} — ${esc(b.reason)} ${esc(b.from_severity)} → ${esc(b.to_severity)}</li>`);
             }
-            detailHtml = `<ul id="${detailId}" class="hidden mt-1 ml-2 space-y-0.5 list-disc list-inside">${detailRows.join('')}</ul>`;
+            detailHtml = `<ul id="${detailId}" class="hidden mt-1 ms-2 space-y-0.5 list-disc list-inside">${detailRows.join('')}</ul>`;
           }
           const expandBtn = hasDetail
             ? ` <button data-toggle-target="${detailId}" class="underline text-blue-500 hover:text-blue-700 cursor-pointer" data-testid="button-breach-detail-toggle-${i}">details</button>`

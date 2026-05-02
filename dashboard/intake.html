@@ -202,7 +202,7 @@
             </td>
             <td class="px-4 py-2 text-center">${r.findings_count ?? '—'}</td>
             <td class="px-4 py-2 text-center text-xs text-gray-500">${r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
-            <td class="px-4 py-2 text-right">
+            <td class="px-4 py-2 text-end">
               <button data-on-click="event.stopPropagation,openDetail" data-args="[[],[${r.id}]]"
                       class="text-indigo-700 hover:text-indigo-900 text-sm">Review &rarr;</button>
             </td>
@@ -318,7 +318,7 @@
               <h3 class="mt-2 font-semibold text-gray-900" contenteditable="true" data-field="title" data-id="${f.id}">${escHtml(f.title)}</h3>
               <p class="mt-1 text-sm text-gray-700 whitespace-pre-wrap" contenteditable="true" data-field="description" data-id="${f.id}">${escHtml(f.description || '')}</p>
               ${f.source_quote ? `
-                <div class="mt-2 p-2 bg-gray-50 border-l-4 border-gray-300 text-xs text-gray-600 italic">
+                <div class="mt-2 p-2 bg-gray-50 border-s-4 border-gray-300 text-xs text-gray-600 italic">
                   <div class="font-semibold text-gray-500 mb-1">Source quote (click-to-source):</div>
                   ${escHtml(f.source_quote)}
                 </div>

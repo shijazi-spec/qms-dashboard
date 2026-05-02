@@ -866,7 +866,7 @@
             }
 
             container.innerHTML = performers.map((p, i) => `
-                <div class="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                <div class="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
                     <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
                         ${i + 1}
                     </div>
@@ -874,7 +874,7 @@
                         <p class="font-medium text-gray-900">${p.full_name}</p>
                         <p class="text-sm text-gray-500">${p.role} - ${p.department}</p>
                     </div>
-                    <div class="text-right">
+                    <div class="text-end">
                         <p class="text-2xl font-bold text-green-600">${Math.round(p.performance_score || 0)}%</p>
                     </div>
                 </div>
@@ -906,7 +906,7 @@
                     tbody.innerHTML = allMembers.map(m => `
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4">
-                                <div class="flex items-center space-x-3">
+                                <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-medium">
                                         ${m.full_name.split(' ').map(n => n[0]).join('').substring(0,2)}
                                     </div>
@@ -922,7 +922,7 @@
                                 <span class="badge-${m.status} px-2 py-1 rounded-full text-xs font-medium capitalize">${m.status.replace('_', ' ')}</span>
                             </td>
                             <td class="px-6 py-4">
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center gap-2">
                                     <div class="w-24 bg-gray-200 rounded-full h-2">
                                         <div class="bg-green-500 h-2 rounded-full progress-bar" data-style="width: ${m.performance_score || 0}%"></div>
                                     </div>
@@ -930,7 +930,7 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center gap-2">
                                     <div class="w-24 bg-gray-200 rounded-full h-2">
                                         <div class="bg-indigo-500 h-2 rounded-full progress-bar" data-style="width: ${m.training_compliance_rate || 0}%"></div>
                                     </div>
@@ -1025,10 +1025,10 @@
                     <table class="w-full text-sm">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500">Team Member</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500">Department</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500">Training Courses</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500">Compliance</th>
+                                <th class="px-4 py-3 text-start font-medium text-gray-500">Team Member</th>
+                                <th class="px-4 py-3 text-start font-medium text-gray-500">Department</th>
+                                <th class="px-4 py-3 text-start font-medium text-gray-500">Training Courses</th>
+                                <th class="px-4 py-3 text-start font-medium text-gray-500">Compliance</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
@@ -1038,7 +1038,7 @@
                                     <td class="px-4 py-3 text-gray-600">${m.department}</td>
                                     <td class="px-4 py-3">
                                         ${m.training_assignments.length ? m.training_assignments.map(t => `
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mr-1 mb-1
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium me-1 mb-1
                                                 ${t.status === 'completed' ? 'bg-green-100 text-green-800' : 
                                                   t.status === 'overdue' ? 'bg-red-100 text-red-800' : 
                                                   'bg-amber-100 text-amber-800'}">
@@ -1047,7 +1047,7 @@
                                         `).join('') : '<span class="text-gray-400">No training assigned</span>'}
                                     </td>
                                     <td class="px-4 py-3">
-                                        <div class="flex items-center space-x-2">
+                                        <div class="flex items-center gap-2">
                                             <div class="w-24 bg-gray-200 rounded-full h-2">
                                                 <div class="bg-indigo-500 h-2 rounded-full" data-style="width: ${m.compliance_rate}%"></div>
                                             </div>

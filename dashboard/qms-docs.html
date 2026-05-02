@@ -201,7 +201,7 @@
                 const count = cachedCounts[c.id] || 0;
                 const active = selectedCategory === c.id ? ' ring-2 ' + cc.ring : ' ring-1 ring-gray-200';
                 return '<button type="button" data-on-click="selectCategory" data-args=\'["' + c.id + '"]\' ' +
-                    'class="cat-card text-left bg-white rounded-xl p-5 ' + active + ' hover:bg-gray-50" ' +
+                    'class="cat-card text-start bg-white rounded-xl p-5 ' + active + ' hover:bg-gray-50" ' +
                     'data-testid="card-category-' + c.id + '">' +
                         '<div class="flex items-center justify-between">' +
                             '<span class="' + cc.bg + ' ' + cc.text + ' text-xs font-semibold px-2 py-1 rounded">' + c.label + '</span>' +
@@ -259,13 +259,13 @@
                     '<table class="min-w-full text-sm">' +
                         '<thead class="bg-gray-50">' +
                             '<tr>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Title</th>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">File</th>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Size</th>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Mapped to</th>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Uploaded by</th>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">When</th>' +
-                                '<th class="text-right px-3 py-2 font-medium text-gray-600">Actions</th>' +
+                                '<th class="text-start px-3 py-2 font-medium text-gray-600">Title</th>' +
+                                '<th class="text-start px-3 py-2 font-medium text-gray-600">File</th>' +
+                                '<th class="text-start px-3 py-2 font-medium text-gray-600">Size</th>' +
+                                '<th class="text-start px-3 py-2 font-medium text-gray-600">Mapped to</th>' +
+                                '<th class="text-start px-3 py-2 font-medium text-gray-600">Uploaded by</th>' +
+                                '<th class="text-start px-3 py-2 font-medium text-gray-600">When</th>' +
+                                '<th class="text-end px-3 py-2 font-medium text-gray-600">Actions</th>' +
                             '</tr>' +
                         '</thead>' +
                         '<tbody class="divide-y divide-gray-100">' +
@@ -282,8 +282,8 @@
                                     '<td class="px-3 py-2 text-gray-600">' + mapped + '</td>' +
                                     '<td class="px-3 py-2 text-gray-600">' + escapeHtml(d.uploaded_by || '') + '</td>' +
                                     '<td class="px-3 py-2 text-gray-600">' + escapeHtml(new Date(d.uploaded_at).toLocaleString()) + '</td>' +
-                                    '<td class="px-3 py-2 text-right">' +
-                                        '<a href="/api/qms-docs/' + Number(d.id) + '/download" class="text-blue-600 hover:underline text-sm mr-3" data-testid="link-download-' + Number(d.id) + '">Download</a>' +
+                                    '<td class="px-3 py-2 text-end">' +
+                                        '<a href="/api/qms-docs/' + Number(d.id) + '/download" class="text-blue-600 hover:underline text-sm me-3" data-testid="link-download-' + Number(d.id) + '">Download</a>' +
                                         '<button data-on-click="deleteDoc" data-args="[' + Number(d.id) + ']" class="text-red-600 hover:underline text-sm" data-testid="button-delete-' + Number(d.id) + '">Delete</button>' +
                                     '</td>' +
                                 '</tr>';

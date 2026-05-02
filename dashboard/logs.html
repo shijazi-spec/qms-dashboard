@@ -698,7 +698,7 @@
         function renderSweepBreakdownRow(label, info) {
             if (info && typeof info === 'object' && 'skipped' in info) {
                 return '<tr>' +
-                    '<td class="py-1 pr-4 text-gray-600">' + escapeHtml(label) + '</td>' +
+                    '<td class="py-1 pe-4 text-gray-600">' + escapeHtml(label) + '</td>' +
                     '<td class="py-1 text-gray-400 italic">skipped (' + escapeHtml(info.skipped) + ')</td>' +
                     '</tr>';
             }
@@ -707,7 +707,7 @@
             let value = escapeHtml(updated == null ? 0 : updated);
             if (scanned !== null) value += ' <span class="text-gray-400">(scanned ' + escapeHtml(scanned) + ')</span>';
             return '<tr>' +
-                '<td class="py-1 pr-4 text-gray-600">' + escapeHtml(label) + '</td>' +
+                '<td class="py-1 pe-4 text-gray-600">' + escapeHtml(label) + '</td>' +
                 '<td class="py-1 text-gray-900 font-medium">' + value + '</td>' +
                 '</tr>';
         }
@@ -740,7 +740,7 @@
                     '</span>';
             }
             return '<tr data-testid="row-flagged-action-codes">' +
-                '<td class="py-1 pr-4 text-gray-500 align-top">  ↳ flagged approvals</td>' +
+                '<td class="py-1 pe-4 text-gray-500 align-top">  ↳ flagged approvals</td>' +
                 '<td class="py-1 text-gray-900">' +
                     '<div class="flex flex-wrap gap-x-2 gap-y-1 items-center">' + links + suffix + '</div>' +
                 '</td>' +
@@ -1037,7 +1037,7 @@
                         : 'Per-table counts unavailable for this alert.');
 
                 const mainRow = '<tr class="align-top hover:bg-gray-50" data-testid="row-post-restore-alert-' + escapeHtml(id) + '">' +
-                    '<td class="py-3 pr-2 align-top">' +
+                    '<td class="py-3 pe-2 align-top">' +
                         '<button type="button" ' +
                             'class="text-gray-400 hover:text-gray-700 text-xs px-1" ' +
                             'aria-label="Toggle alert details" ' +
@@ -1048,16 +1048,16 @@
                             '▸' +
                         '</button>' +
                     '</td>' +
-                    '<td class="py-3 pr-4 text-sm text-gray-900 whitespace-nowrap" data-testid="text-post-restore-alert-time-' + escapeHtml(id) + '">' +
+                    '<td class="py-3 pe-4 text-sm text-gray-900 whitespace-nowrap" data-testid="text-post-restore-alert-time-' + escapeHtml(id) + '">' +
                         escapeHtml(formatPostRestoreTimestamp(createdAt)) +
                     '</td>' +
-                    '<td class="py-3 pr-4">' +
+                    '<td class="py-3 pe-4">' +
                         '<span class="px-2 py-1 rounded-full text-xs font-medium ' + postRestoreSweepPriorityClass(priority) + '" ' +
                             'data-testid="badge-post-restore-alert-priority-' + escapeHtml(id) + '">' +
                             escapeHtml(String(priority).toUpperCase()) +
                         '</span>' +
                     '</td>' +
-                    '<td class="py-3 pr-4">' +
+                    '<td class="py-3 pe-4">' +
                         '<div class="flex flex-col gap-1">' +
                             '<span class="px-2 py-1 rounded-full text-xs font-medium self-start ' + postRestoreSweepStatusClass(status) + '" ' +
                                 'data-testid="badge-post-restore-alert-status-' + escapeHtml(id) + '">' +
@@ -1070,13 +1070,13 @@
                             recipientHtml +
                         '</div>' +
                     '</td>' +
-                    '<td class="py-3 pr-4">' +
+                    '<td class="py-3 pe-4">' +
                         '<div class="flex flex-wrap gap-1" data-testid="group-post-restore-alert-counts-' + escapeHtml(id) + '">' +
                             triggerBadgesHtml +
                         '</div>' +
                         zeroRowBanner +
                     '</td>' +
-                    '<td class="py-3 pr-4 text-sm text-gray-900">' +
+                    '<td class="py-3 pe-4 text-sm text-gray-900">' +
                         '<div class="font-medium" data-testid="text-post-restore-alert-title-' + escapeHtml(id) + '">' +
                             escapeHtml(title) +
                         '</div>' +
@@ -1084,7 +1084,7 @@
                             ? '<div class="text-xs text-gray-500 mt-1 max-w-md line-clamp-2 overflow-hidden" data-testid="text-post-restore-alert-message-' + escapeHtml(id) + '">' + escapeHtml(message) + '</div>'
                             : '') +
                     '</td>' +
-                    '<td class="py-3 text-right whitespace-nowrap">' +
+                    '<td class="py-3 text-end whitespace-nowrap">' +
                         '<button type="button" ' +
                             'class="px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition" ' +
                             'data-on-click="viewPostRestoreSweepEventLog" ' +
@@ -1097,7 +1097,7 @@
 
                 const detailRow = '<tr class="hidden bg-gray-50" data-testid="row-post-restore-alert-detail-' + escapeHtml(id) + '">' +
                     '<td></td>' +
-                    '<td colspan="6" class="py-3 pr-4">' +
+                    '<td colspan="6" class="py-3 pe-4">' +
                         '<div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Full message</div>' +
                         '<pre class="text-xs text-gray-800 whitespace-pre-wrap font-mono bg-white border border-gray-200 rounded p-2 max-w-3xl" ' +
                             'data-testid="text-post-restore-alert-full-message-' + escapeHtml(id) + '">' +
@@ -1129,14 +1129,14 @@
 
             body.innerHTML =
                 '<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-post-restore-alerts">' +
-                    '<thead><tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
-                        '<th class="py-2 pr-2 w-6"></th>' +
-                        '<th class="py-2 pr-4">When</th>' +
-                        '<th class="py-2 pr-4">Priority</th>' +
-                        '<th class="py-2 pr-4">Status / channel</th>' +
-                        '<th class="py-2 pr-4">Per-table counts</th>' +
-                        '<th class="py-2 pr-4">Alert</th>' +
-                        '<th class="py-2 text-right">Action</th>' +
+                    '<thead><tr class="text-start text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
+                        '<th class="py-2 pe-2 w-6"></th>' +
+                        '<th class="py-2 pe-4">When</th>' +
+                        '<th class="py-2 pe-4">Priority</th>' +
+                        '<th class="py-2 pe-4">Status / channel</th>' +
+                        '<th class="py-2 pe-4">Per-table counts</th>' +
+                        '<th class="py-2 pe-4">Alert</th>' +
+                        '<th class="py-2 text-end">Action</th>' +
                     '</tr></thead>' +
                     '<tbody class="divide-y divide-gray-100">' + rows + '</tbody>' +
                 '</table></div>' +
@@ -1397,10 +1397,10 @@
                 recipientRows = recipients.map(function (r) {
                     const emailEsc = escapeHtml(r.email || '');
                     return '<tr data-testid="row-alert-recipient-' + emailEsc + '">' +
-                        '<td class="py-2 pr-4 font-mono text-gray-900" data-testid="text-alert-recipient-email-' + emailEsc + '">' + emailEsc + '</td>' +
-                        '<td class="py-2 pr-4 text-gray-500">' + escapeHtml(r.added_by || '—') + '</td>' +
-                        '<td class="py-2 pr-4 text-gray-500">' + escapeHtml(formatAlertTimestamp(r.added_at)) + '</td>' +
-                        '<td class="py-2 text-right">' +
+                        '<td class="py-2 pe-4 font-mono text-gray-900" data-testid="text-alert-recipient-email-' + emailEsc + '">' + emailEsc + '</td>' +
+                        '<td class="py-2 pe-4 text-gray-500">' + escapeHtml(r.added_by || '—') + '</td>' +
+                        '<td class="py-2 pe-4 text-gray-500">' + escapeHtml(formatAlertTimestamp(r.added_at)) + '</td>' +
+                        '<td class="py-2 text-end">' +
                             '<button class="text-red-600 hover:text-red-800 text-xs font-medium" ' +
                                 'data-on-click="removeAlertRecipient" data-args=\'["' + emailEsc + '"]\' ' +
                                 'data-testid="button-remove-alert-recipient-' + emailEsc + '">Remove</button>' +
@@ -1421,9 +1421,9 @@
                 auditRows = audit.map(function (a) {
                     const colour = a.action === 'remove' ? 'text-red-700' : 'text-green-700';
                     return '<tr>' +
-                        '<td class="py-1 pr-4 text-xs text-gray-500">' + escapeHtml(formatAlertTimestamp(a.changed_at)) + '</td>' +
-                        '<td class="py-1 pr-4 text-xs ' + colour + ' font-medium">' + escapeHtml(a.action) + '</td>' +
-                        '<td class="py-1 pr-4 text-xs font-mono text-gray-900">' + escapeHtml(a.email) + '</td>' +
+                        '<td class="py-1 pe-4 text-xs text-gray-500">' + escapeHtml(formatAlertTimestamp(a.changed_at)) + '</td>' +
+                        '<td class="py-1 pe-4 text-xs ' + colour + ' font-medium">' + escapeHtml(a.action) + '</td>' +
+                        '<td class="py-1 pe-4 text-xs font-mono text-gray-900">' + escapeHtml(a.email) + '</td>' +
                         '<td class="py-1 text-xs text-gray-500">' + escapeHtml(a.changed_by) + '</td>' +
                     '</tr>';
                 }).join('');
@@ -1431,10 +1431,10 @@
 
             body.innerHTML =
                 '<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-alert-recipients">' +
-                    '<thead><tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
-                        '<th class="py-2 pr-4">Email</th>' +
-                        '<th class="py-2 pr-4">Added by</th>' +
-                        '<th class="py-2 pr-4">Added at</th>' +
+                    '<thead><tr class="text-start text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
+                        '<th class="py-2 pe-4">Email</th>' +
+                        '<th class="py-2 pe-4">Added by</th>' +
+                        '<th class="py-2 pe-4">Added at</th>' +
                         '<th class="py-2"></th>' +
                     '</tr></thead>' +
                     '<tbody class="divide-y divide-gray-100">' + recipientRows + '</tbody>' +
@@ -1454,10 +1454,10 @@
                 '<details class="mt-4">' +
                     '<summary class="text-xs text-gray-500 cursor-pointer">Recent changes (audit log)</summary>' +
                     '<div class="overflow-x-auto mt-2"><table class="w-full" data-testid="table-alert-recipients-audit">' +
-                        '<thead><tr class="text-left text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">' +
-                            '<th class="py-1 pr-4">When</th>' +
-                            '<th class="py-1 pr-4">Action</th>' +
-                            '<th class="py-1 pr-4">Email</th>' +
+                        '<thead><tr class="text-start text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">' +
+                            '<th class="py-1 pe-4">When</th>' +
+                            '<th class="py-1 pe-4">Action</th>' +
+                            '<th class="py-1 pe-4">Email</th>' +
                             '<th class="py-1">By</th>' +
                         '</tr></thead>' +
                         '<tbody class="divide-y divide-gray-50">' + auditRows + '</tbody>' +

@@ -900,7 +900,7 @@
                             <p class="font-medium text-sm">${e.deal_name || "Unknown"}</p>
                             <p class="text-xs text-gray-500">${new Date(e.evaluation_date).toLocaleDateString()}</p>
                         </div>
-                        <div class="text-right">
+                        <div class="text-end">
                             <span class="inline-block px-2 py-1 rounded text-xs font-medium ${e.overall_score >= 70 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}">
                                 ${Math.round(e.overall_score)}%
                             </span>
@@ -1087,7 +1087,7 @@
                     <div class="mb-4">
                         <h4 class="font-semibold text-lg">${framework.name}</h4>
                         <p class="text-sm text-gray-500">${framework.description}</p>
-                        <div class="flex space-x-2 mt-2">
+                        <div class="flex gap-2 mt-2">
                             ${(framework.standards || []).map((s) => `<span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">${s}</span>`).join("")}
                         </div>
                     </div>
@@ -1222,7 +1222,7 @@
                                         ${t.action_required ? `<p class="text-sm text-amber-700 mt-2"><strong>Action Required:</strong> ${t.action_required}</p>` : ''}
                                         <p class="text-xs text-gray-500 mt-2">Assigned to: ${t.assigned_role || 'N/A'} | Created: ${new Date(t.created_at).toLocaleString()}</p>
                                     </div>
-                                    <div class="flex flex-wrap gap-2 ml-4 justify-end max-w-xs">
+                                    <div class="flex flex-wrap gap-2 ms-4 justify-end max-w-xs">
                                         <button data-on-click="acknowledgeTrigger" data-args="[${t.id}]" class="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 border border-blue-300 rounded">
                                             Acknowledge
                                         </button>
@@ -1496,7 +1496,7 @@
                         ${isClosable ? `
                         <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
                             <h4 class="font-semibold text-amber-800 mb-2">Approve Closure</h4>
-                            <div class="flex items-center space-x-2">
+                            <div class="flex items-center gap-2">
                                 <input type="text" id="capaApprover" placeholder="Your name/email" class="border rounded px-3 py-1 text-sm flex-1">
                                 <button data-on-click="approveCapaClosure" data-args="[${c.id}]" class="bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700">Approve</button>
                             </div>
@@ -1521,11 +1521,11 @@
                             <h4 class="font-semibold text-gray-800 mb-2">Evidence (${evidence.length})</h4>
                             ${evidence.length ? evidence.map(e => `
                                 <div class="flex items-center justify-between border rounded p-2 mb-1">
-                                    <div><span class="text-sm font-medium">${e.original_filename||e.filename}</span><span class="text-xs text-gray-500 ml-2">${e.uploaded_by}</span></div>
+                                    <div><span class="text-sm font-medium">${e.original_filename||e.filename}</span><span class="text-xs text-gray-500 ms-2">${e.uploaded_by}</span></div>
                                     <button data-on-click="deleteEvidence" data-args="[${e.id}]" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
                                 </div>
                             `).join('') : '<p class="text-sm text-gray-500">No evidence attached</p>'}
-                            <div class="flex items-center space-x-2 mt-2">
+                            <div class="flex items-center gap-2 mt-2">
                                 <input type="text" id="evidenceFilename" placeholder="Filename" class="border rounded px-3 py-1 text-sm flex-1">
                                 <input type="text" id="evidenceUploader" placeholder="Your name" class="border rounded px-3 py-1 text-sm flex-1">
                                 <button data-on-click="addEvidence" data-args="[&quot;capa&quot;,${c.id}]" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">Attach</button>
@@ -1535,7 +1535,7 @@
                         <div>
                             <h4 class="font-semibold text-gray-800 mb-2">Change History</h4>
                             ${history.length ? `<div class="space-y-2 max-h-48 overflow-y-auto">${history.map(h => `
-                                <div class="border-l-2 border-blue-300 pl-3 py-1">
+                                <div class="border-s-2 border-blue-300 ps-3 py-1">
                                     <p class="text-xs text-gray-500">${new Date(h.changed_at).toLocaleString()} by ${h.changed_by||'System'}</p>
                                     <p class="text-sm"><span class="font-medium">${h.field_name}</span>: <span class="text-red-500 line-through">${h.old_value||'(empty)'}</span> → <span class="text-green-600">${h.new_value||'(empty)'}</span></p>
                                 </div>
@@ -1582,7 +1582,7 @@
                         ${isClosable ? `
                         <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
                             <h4 class="font-semibold text-amber-800 mb-2">Approve Closure</h4>
-                            <div class="flex items-center space-x-2">
+                            <div class="flex items-center gap-2">
                                 <input type="text" id="ncApprover" placeholder="Your name/email" class="border rounded px-3 py-1 text-sm flex-1">
                                 <button data-on-click="approveNcClosure" data-args="[${n.id}]" class="bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700">Approve</button>
                             </div>
@@ -1592,11 +1592,11 @@
                             <h4 class="font-semibold text-gray-800 mb-2">Evidence (${evidence.length})</h4>
                             ${evidence.length ? evidence.map(e => `
                                 <div class="flex items-center justify-between border rounded p-2 mb-1">
-                                    <div><span class="text-sm font-medium">${e.original_filename||e.filename}</span><span class="text-xs text-gray-500 ml-2">${e.uploaded_by}</span></div>
+                                    <div><span class="text-sm font-medium">${e.original_filename||e.filename}</span><span class="text-xs text-gray-500 ms-2">${e.uploaded_by}</span></div>
                                     <button data-on-click="deleteEvidence" data-args="[${e.id}]" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
                                 </div>
                             `).join('') : '<p class="text-sm text-gray-500">No evidence attached</p>'}
-                            <div class="flex items-center space-x-2 mt-2">
+                            <div class="flex items-center gap-2 mt-2">
                                 <input type="text" id="evidenceFilename" placeholder="Filename" class="border rounded px-3 py-1 text-sm flex-1">
                                 <input type="text" id="evidenceUploader" placeholder="Your name" class="border rounded px-3 py-1 text-sm flex-1">
                                 <button data-on-click="addEvidence" data-args="[&quot;nc&quot;,${n.id}]" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">Attach</button>
@@ -1606,7 +1606,7 @@
                         <div>
                             <h4 class="font-semibold text-gray-800 mb-2">Change History</h4>
                             ${history.length ? `<div class="space-y-2 max-h-48 overflow-y-auto">${history.map(h => `
-                                <div class="border-l-2 border-red-300 pl-3 py-1">
+                                <div class="border-s-2 border-red-300 ps-3 py-1">
                                     <p class="text-xs text-gray-500">${new Date(h.changed_at).toLocaleString()} by ${h.changed_by||'System'}</p>
                                     <p class="text-sm"><span class="font-medium">${h.field_name}</span>: <span class="text-red-500 line-through">${h.old_value||'(empty)'}</span> → <span class="text-green-600">${h.new_value||'(empty)'}</span></p>
                                 </div>

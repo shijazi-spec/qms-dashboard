@@ -834,7 +834,7 @@
             const container = document.getElementById('platformToolsList');
             container.innerHTML = platformTools.map((tool, index) => `
                 <div class="bg-gray-50 rounded-lg p-4 relative">
-                    <button type="button" data-on-click="removePlatformTool" data-args="[${index}]" class="absolute top-2 right-2 text-red-500 hover:text-red-700">
+                    <button type="button" data-on-click="removePlatformTool" data-args="[${index}]" class="absolute top-2 end-2 text-red-500 hover:text-red-700">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -857,7 +857,7 @@
                             <input type="number" value="${tool.vendorSupport}" data-on-change="updatePlatformTool" data-args="[${index},&quot;vendorSupport&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div class="flex items-center">
-                            <label class="flex items-center space-x-2 text-sm text-gray-700">
+                            <label class="flex items-center gap-2 text-sm text-gray-700">
                                 <input type="checkbox" ${tool.toBeRemoved ? 'checked' : ''} data-on-change="updatePlatformTool" data-args="[${index},&quot;toBeRemoved&quot;,&quot;@this.checked&quot;]" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                 <span>To Be Removed</span>
                             </label>
@@ -972,17 +972,17 @@
                             <div class="text-sm text-gray-500">${i.owner}</div>
                         </td>
                         <td class="px-6 py-4 text-sm text-gray-600">${i.department}</td>
-                        <td class="px-6 py-4 text-right">
+                        <td class="px-6 py-4 text-end">
                             <span class="${parseFloat(i.roi_percentage) >= 0 ? 'text-green-600' : 'text-red-600'} font-semibold">
                                 ${parseFloat(i.roi_percentage).toFixed(1)}%
                             </span>
                         </td>
-                        <td class="px-6 py-4 text-right">
+                        <td class="px-6 py-4 text-end">
                             <span class="${parseFloat(i.npv) >= 0 ? 'text-indigo-600' : 'text-red-600'} font-semibold">
                                 ${parseFloat(i.npv).toLocaleString()}
                             </span>
                         </td>
-                        <td class="px-6 py-4 text-right text-gray-600">${parseFloat(i.payback_period_months).toFixed(1)} mo</td>
+                        <td class="px-6 py-4 text-end text-gray-600">${parseFloat(i.payback_period_months).toFixed(1)} mo</td>
                         <td class="px-6 py-4 text-center">
                             <span class="px-3 py-1 rounded-full text-xs font-medium badge-${i.ai_recommendation}">
                                 ${i.ai_recommendation?.charAt(0).toUpperCase() + i.ai_recommendation?.slice(1)}
@@ -994,7 +994,7 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 text-center">
-                            <button data-on-click="viewInitiative" data-args="[${i.id}]" class="text-indigo-600 hover:text-indigo-800 mr-2">View</button>
+                            <button data-on-click="viewInitiative" data-args="[${i.id}]" class="text-indigo-600 hover:text-indigo-800 me-2">View</button>
                             <button data-on-click="deleteInitiative" data-args="[${i.id}]" class="text-red-600 hover:text-red-800">Delete</button>
                         </td>
                     </tr>
@@ -1028,7 +1028,7 @@
             const validateBtn = document.getElementById('validateBtn');
             validateBtn.disabled = true;
             validateBtn.innerHTML = `
-                <svg class="w-4 h-4 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4 me-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
                 Validating...
@@ -1139,7 +1139,7 @@
                              r.type === 'success' ? '✅' : 'ℹ️';
                 return `
                     <div class="${bgColor} border rounded-lg p-3 flex items-start">
-                        <span class="mr-2 text-lg">${icon}</span>
+                        <span class="me-2 text-lg">${icon}</span>
                         <div>
                             <span class="font-semibold ${textColor}">${r.field}:</span>
                             <span class="${textColor}">${r.message}</span>
@@ -1153,7 +1153,7 @@
             
             validateBtn.disabled = false;
             validateBtn.innerHTML = `
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                 </svg>
                 AI Validate Inputs

@@ -61,6 +61,25 @@
  * grandfather the pages that violate today; new dashboard files land
  * under the full rule.
  *
+ * Companion script-block scan (Task #742)
+ * --------------------------------------
+ * Many dashboard pages render their tables, action buttons, and stat
+ * cards from JavaScript template strings (e.g. ``return `<button class="…
+ * mr-2">…`;``). The static-HTML scanner above deliberately skips
+ * `<script>` bodies, so physical-direction classes living inside those
+ * template strings would silently break the Arabic experience without
+ * tripping the gate.
+ *
+ * To plug that hole, this script also runs a SECOND pass that scans the
+ * body of every `<script>` block for the same Tailwind physical-direction
+ * tokens (`text-left`, `text-right`, `ml-*`, `mr-*`, `pl-*`, `pr-*`,
+ * `border-l-*`, `border-r-*`, `space-x-*`, `rounded-l-*`, `rounded-r-*`,
+ * `left-*`, `right-*`, `float-left`, `float-right`). Findings from this
+ * pass are reported as **warnings** and do NOT change the exit code.
+ * Per Task #742's "out of scope" clause, CI enforcement of the JS rule is
+ * tracked separately as Task #686; flipping the warnings into hard
+ * failures is a one-line change there.
+ *
  * Allowlists
  * ----------
  * The pre-existing dashboard pages that already ship with these patterns
@@ -731,6 +750,101 @@ function scanFile(absPath) {
   return violations;
 }
 
+// ---------------------------------------------------------------------------
+// Companion pass: scan inside <script> bodies for the same Tailwind
+// physical-direction tokens as the static-HTML rules. Findings here are
+// reported as WARNINGS only — the exit code is not affected. See the
+// "Companion script-block scan (Task #742)" section in the file header
+// for the full motivation.
+// ---------------------------------------------------------------------------
+
+const SCRIPT_RULES = [
+  {
+    id: "scriptTextLR",
+    label: "physical text-left/text-right in JS template",
+    regex: /(?<=^|[\s"'`])(text-(?:left|right))(?=[\s"'`]|$)/g,
+    fix: "Use `text-start` / `text-end` so the text alignment mirrors in Arabic RTL.",
+  },
+  {
+    id: "scriptFloatLR",
+    label: "physical float-left/float-right in JS template",
+    regex: /(?<=^|[\s"'`])(float-(?:left|right))(?=[\s"'`]|$)/g,
+    fix: "Use `float-start` / `float-end` so the float side mirrors in Arabic RTL.",
+  },
+  {
+    id: "scriptMlMr",
+    label: "physical ml-/mr- margin in JS template",
+    regex: /(?<=^|[\s"'`])(m[lr]-(?:[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?|px|auto|full|reverse|\[[^\]]+\]))(?=[\s"'`]|$)/g,
+    fix: "Use `ms-…` / `me-…` so the margin flips with writing direction.",
+  },
+  {
+    id: "scriptPlPr",
+    label: "physical pl-/pr- padding in JS template",
+    regex: /(?<=^|[\s"'`])(p[lr]-(?:[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?|px|auto|full|\[[^\]]+\]))(?=[\s"'`]|$)/g,
+    fix: "Use `ps-…` / `pe-…` so the padding flips with writing direction.",
+  },
+  {
+    id: "scriptBorderLR",
+    label: "physical border-l-/border-r- in JS template",
+    regex: /(?<=^|[\s"'`])(border-[lr]-(?:[0-9]+|none|sm|md|lg|xl|2xl|3xl|4xl|\[[^\]]+\]))(?=[\s"'`]|$)/g,
+    fix: "Use `border-s-…` / `border-e-…` so the accent border lands on the inline-start / inline-end edge in Arabic RTL.",
+  },
+  {
+    id: "scriptSpaceX",
+    label: "physical space-x- (margin-left between children) in JS template",
+    regex: /(?<=^|[\s"'`])(space-x-(?:[0-9]+(?:\.[0-9]+)?|px|reverse|\[[^\]]+\]))(?=[\s"'`]|$)/g,
+    fix: "Use `gap-…` on a flex/grid container — `space-x-*` compiles to physical `margin-left` and does not flip in RTL.",
+  },
+  {
+    id: "scriptRoundedLR",
+    label: "physical rounded-l-/rounded-r- corner radius in JS template",
+    regex: /(?<=^|[\s"'`])(rounded-[lr](?:-(?:none|sm|md|lg|xl|2xl|3xl|full|[0-9]+(?:\.[0-9]+)?|\[[^\]]+\]))?)(?=[\s"'`]|$)/g,
+    fix: "Use `rounded-s-…` / `rounded-e-…` so the rounded edge lands on the inline-start / inline-end side in Arabic RTL.",
+  },
+  {
+    id: "scriptInsetLR",
+    label: "physical left-/right- positional inset in JS template",
+    regex: /(?<=^|[\s"'`])((?:left|right)-(?:[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?|px|auto|full|\[[^\]]+\]))(?=[\s"'`]|$)/g,
+    fix: "Use `start-…` / `end-…` so the absolute/fixed offset mirrors in Arabic RTL.",
+  },
+];
+
+const SCRIPT_BLOCK_RE = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+
+function scanFileScripts(absPath) {
+  const rel = path.relative(ROOT, absPath).split(path.sep).join("/");
+  const html = fs.readFileSync(absPath, "utf8");
+  const warnings = [];
+
+  let blockMatch;
+  while ((blockMatch = SCRIPT_BLOCK_RE.exec(html)) !== null) {
+    const body = blockMatch[1];
+    const bodyOffset = blockMatch.index + blockMatch[0].indexOf(">") + 1;
+    for (const rule of SCRIPT_RULES) {
+      // Reset regex state for safety (we use /g)
+      rule.regex.lastIndex = 0;
+      let m;
+      while ((m = rule.regex.exec(body)) !== null) {
+        const absOffset = bodyOffset + m.index;
+        const lineText = lineTextAt(html, absOffset);
+        if (lineText.includes(OPT_OUT_MARKER)) continue;
+        const { line, col } = lineColAt(html, absOffset);
+        warnings.push({
+          file: rel,
+          line,
+          col,
+          ruleId: rule.id,
+          message: `<script> body ${rule.label} (\`${m[1]}\`).`,
+          fix: rule.fix,
+          snippet: lineText.trim().length > 200 ? lineText.trim().slice(0, 197) + "…" : lineText.trim(),
+        });
+      }
+    }
+  }
+
+  return warnings;
+}
+
 function main() {
   const files = listHtmlFiles();
   if (files.length === 0) {
@@ -739,9 +853,11 @@ function main() {
   }
 
   const allViolations = [];
+  const allScriptWarnings = [];
   for (const f of files) {
     try {
       allViolations.push(...scanFile(f));
+      allScriptWarnings.push(...scanFileScripts(f));
     } catch (err) {
       console.error(
         `✗ Failed to scan ${path.relative(ROOT, f)}: ${err && err.message ? err.message : err}`,
@@ -750,10 +866,43 @@ function main() {
     }
   }
 
+  // Emit script-block findings as warnings (do not affect exit code).
+  // Per Task #742 / Task #686, CI enforcement is intentionally separate
+  // from detection; flipping this to a hard fail is a one-line change.
+  if (allScriptWarnings.length > 0) {
+    console.error("");
+    console.error(
+      `⚠ RTL physical-direction guardrail (script-block companion) — ${allScriptWarnings.length} warning(s):`,
+    );
+    console.error("");
+    for (const w of allScriptWarnings) {
+      console.error(`  ${w.file}:${w.line}:${w.col}  [${w.ruleId}]  ${w.message}`);
+      console.error(`      → ${w.snippet.replace(/\s+/g, " ").trim()}`);
+      console.error(`      Fix: ${w.fix}`);
+    }
+    console.error("");
+    console.error(
+      "These are reported as warnings only — CI enforcement of the JS scanning",
+    );
+    console.error(
+      "rule is tracked separately as Task #686 and does not affect this exit code.",
+    );
+    console.error("");
+  }
+
   if (allViolations.length === 0) {
     console.log(
       `✓ RTL physical-direction guardrail PASS — scanned ${files.length} dashboard HTML file(s) (HTML tags + JS template strings inside <script> bodies); no forbidden physical-direction classes found (text-left/right on <th> or other tags, border-l-4/r-4, <button> ml-/mr-, space-x-, or rounded-l-/r-).`,
     );
+    if (allScriptWarnings.length === 0) {
+      console.log(
+        `✓ RTL script-block companion scan: clean — no physical-direction classes found in any <script> body across ${files.length} dashboard HTML file(s).`,
+      );
+    } else {
+      console.log(
+        `  (Script-block companion scan reported ${allScriptWarnings.length} warning(s); see above. Exit code unaffected per Task #686.)`,
+      );
+    }
     process.exit(0);
   }
 

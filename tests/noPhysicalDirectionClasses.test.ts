@@ -148,8 +148,22 @@ try {
       // (the rules are mutually exclusive on the tag axis).
       '<table><tr><th class="text-left">Header-only</th></tr></table>',
       // Sentinel B: a JS string that mentions the patterns inside <script>',
-      // must NOT trigger (tokeniser skips script bodies).
+      // must NOT trigger any of the static-HTML rule IDs (the tokeniser
+      // skips script bodies on the static-HTML pass). Per Task #742 the
+      // companion script-block pass DOES inspect this body and reports
+      // its findings as warnings under the `script*` rule IDs, which is
+      // verified separately below.
       "<script>const s = 'border-l-4 mr-2 text-left space-x-2 rounded-l-lg';</script>",
+      // Sentinel B2 (Task #742): a JS template string with physical-
+      // direction Tailwind tokens — must trigger the companion script-
+      // block pass (warnings only, exit code unchanged).
+      "<script>",
+      "  function row(label) {",
+      "    return `<tr><td class=\"py-1 pr-4 text-right\">${label}</td>` +",
+      "           `<td class=\"border-l-4 ml-2\"><button class=\"mr-2 rounded-l-lg\">x</button></td>` +",
+      "           `<td class=\"flex space-x-2 left-0 right-0 float-left\"></td></tr>`;",
+      "  }",
+      "</script>",
       // Sentinel C: opt-out marker should suppress the violation on its line.
       '<button class="text-red-600 ml-2">Cancel</button> <!-- rtl-safe-physical: docked in a fixed LTR utility row -->',
       // Sentinel D: `rounded-lg` (radius-large, NOT a directional class)
@@ -206,10 +220,49 @@ try {
     !out.includes("rtl-safe-physical: docked"),
     "rtl-safe-physical opt-out marker suppresses the violation on its line",
   );
-  // Script bodies MUST NOT be scanned.
+  // Script bodies MUST NOT be scanned by any of the STATIC-HTML rule IDs
+  // (the tokeniser still skips them on that pass — only the companion
+  // script-block pass added in Task #742 inspects them).
   assert(
     !/script.*\[(thTextAlign|borderLR4|buttonMlMr|spaceX|roundedLR|textLRNonTh)\]/.test(out),
-    "<script> body contents are not scanned",
+    "<script> body contents are not scanned by the static-HTML rule pass",
+  );
+  // Companion script-block pass (Task #742) MUST report findings for the
+  // physical-direction tokens inside Sentinel B2's JS template strings.
+  // These appear under the `script*` rule IDs and are warnings only —
+  // they do not affect the exit code (which is still 1, driven by the
+  // static-HTML violations above).
+  assert(
+    out.includes("[scriptTextLR]"),
+    "script-block companion pass surfaces text-left/text-right inside JS templates",
+  );
+  assert(
+    out.includes("[scriptMlMr]"),
+    "script-block companion pass surfaces ml-/mr- inside JS templates",
+  );
+  assert(
+    out.includes("[scriptPlPr]"),
+    "script-block companion pass surfaces pl-/pr- inside JS templates",
+  );
+  assert(
+    out.includes("[scriptBorderLR]"),
+    "script-block companion pass surfaces border-l-/border-r- inside JS templates",
+  );
+  assert(
+    out.includes("[scriptSpaceX]"),
+    "script-block companion pass surfaces space-x- inside JS templates",
+  );
+  assert(
+    out.includes("[scriptRoundedLR]"),
+    "script-block companion pass surfaces rounded-l-/rounded-r- inside JS templates",
+  );
+  assert(
+    out.includes("[scriptInsetLR]"),
+    "script-block companion pass surfaces left-/right- positional insets inside JS templates",
+  );
+  assert(
+    out.includes("[scriptFloatLR]"),
+    "script-block companion pass surfaces float-left/float-right inside JS templates",
   );
   // `rounded-lg` (radius-large) MUST NOT be flagged as a directional class.
   assert(

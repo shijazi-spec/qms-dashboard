@@ -397,7 +397,7 @@
             }
             
             document.getElementById('aiInsights').innerHTML = insights.map(i => `
-                <div class="flex items-start space-x-2 p-3 bg-purple-50 rounded-lg">
+                <div class="flex items-start gap-2 p-3 bg-purple-50 rounded-lg">
                     <svg class="w-5 h-5 text-purple-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
@@ -490,7 +490,7 @@
                                 <div class="font-medium text-gray-900">${r.period_name}</div>
                                 <div class="text-sm text-gray-500">${_rpDyn('executive.report_types', r.report_type)} | ${new Date(r.created_at).toLocaleDateString(_rpLocale === 'ar' ? 'ar-SA' : 'en-US')}</div>
                             </div>
-                            <div class="flex items-center space-x-2">
+                            <div class="flex items-center gap-2">
                                 <span class="px-2 py-1 rounded text-xs ${r.status === 'published' ? 'bg-green-100 text-green-700' : r.status === 'approved' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}">${_rpDyn('executive.report_statuses', r.status)}</span>
                                 <span class="text-lg font-bold text-gray-900">${r.overall_health_score || '--'}%</span>
                             </div>
@@ -517,14 +517,14 @@
                     const kpiNameLabel = _kdDyn('executive.kpi_names', k.kpi_code, k.kpi_name);
                     return `
                         <div class="flex items-center justify-between p-3 border rounded-lg">
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-3">
                                 <div class="w-3 h-3 rounded-full ${statusColor}"></div>
                                 <div>
                                     <div class="font-medium text-gray-900">${kpiNameLabel}</div>
                                     <div class="text-xs text-gray-500">${ownerLabel} | ${_kdDyn('executive.kpi_categories', k.category, k.category)}</div>
                                 </div>
                             </div>
-                            <div class="text-right">
+                            <div class="text-end">
                                 <div class="font-bold text-gray-900">${k.latestValue !== null ? k.latestValue + (k.unit || '%') : '--'}</div>
                                 <div class="text-xs text-gray-500">${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.target') : 'Target'}: ${k.target_value || '--'}${k.unit || '%'}</div>
                             </div>
@@ -581,7 +581,7 @@
                                 <div class="font-medium text-gray-900">${f.framework_name}</div>
                                 <div class="text-sm text-gray-500">${f.framework_code}</div>
                             </div>
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-3">
                                 <div class="w-32 bg-gray-200 rounded-full h-2">
                                     <div class="${color} h-2 rounded-full" data-style="width: ${score}%"></div>
                                 </div>
