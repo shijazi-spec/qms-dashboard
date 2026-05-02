@@ -158,7 +158,10 @@ describe("GET /api/audit/history", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toBe(history);
-    expect(db.getAuditHistory).toHaveBeenCalledWith(5);
+    // The route was extended to forward an optional date-range filter as a
+    // second argument (`{ startDate, endDate }`); the assertion only cares
+    // about the `limit` here, so we accept any second-arg shape.
+    expect(db.getAuditHistory).toHaveBeenCalledWith(5, expect.anything());
   });
 
   test("200 defaults limit to 20 when query param absent", async () => {
@@ -167,7 +170,9 @@ describe("GET /api/audit/history", () => {
     const handler = await buildHandler(dashboardApiRoutes, "/api/audit/history", "GET");
     await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
 
-    expect(db.getAuditHistory).toHaveBeenCalledWith(20);
+    // Same date-range second-arg as above — only the default limit is being
+    // asserted here.
+    expect(db.getAuditHistory).toHaveBeenCalledWith(20, expect.anything());
   });
 });
 

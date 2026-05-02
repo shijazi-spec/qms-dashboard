@@ -42,6 +42,7 @@
     "express-session": "^1.19.0",
     "inngest": "^3.52.0",
     "inngest-cli": "^1.17.0",
+    "jsdom": "^29.1.1",
     "mastra": "^0.18.9",
     "memoizee": "^0.4.17",
     "openai": "^6.22.0",
