@@ -976,6 +976,14 @@ async function drainResponseBodyToFile(
   response: Response,
   filePath: string,
 ): Promise<number> {
+  // mode 0o600 — owner-only read/write. Staged exports may contain sensitive
+  // data (risk registers, audit findings, vendor records, PDPL data); on a
+  // shared host the default umask (typically 0o022) would leave them
+  // world-readable for up to a TTL window. The `mode` option on
+  // open()/writeFile() is only honoured when the file is *created*, so
+  // existing files keep their mode — but staged files are minted with a
+  // fresh per-generation suffix in `mintStagedFilePath`, so every drain
+  // path here creates a brand-new file.
   if (!response.body) {
     // Empty body — write a 0-byte file so `serveFromStagedEntry` can still
     // open it for a Range read without an ENOENT race. Mode 0o600 so the
