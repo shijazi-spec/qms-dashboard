@@ -97,9 +97,14 @@ export function getSessionUser(c: any): SessionUser | null {
       picture: session.picture,
     };
   }
-  const adminKeyHeader = c.req.header("X-Admin-Key");
   const expectedKey = process.env.ADMIN_API_KEY;
-  if (expectedKey && adminKeyHeader === expectedKey) {
+  // Accept the admin key from EITHER the X-Admin-Key header (server-to-server
+  // / curl) OR the admin_key cookie (browser sessions opened via the
+  // /dashboard/login.html admin-key form). `getAdminKey` already covers both
+  // sources and percent-decodes cookie values, so reuse it instead of
+  // re-implementing header-only matching here.
+  const presentedKey = getAdminKey(c);
+  if (expectedKey && presentedKey && presentedKey === expectedKey) {
     return {
       userId: 0,
       email: "admin-key@system",
