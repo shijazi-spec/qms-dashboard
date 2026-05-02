@@ -72,7 +72,7 @@ const WalaPlusNav = {
         // Policies, Forms, Security Controls and SOPs. Files uploaded here
         // are staged for future mapping to the regulations tracked in the
         // Compliance module (PDPL, ISO 9001, ISO 27001, PCI DSS, …).
-        { label: 'Documentations', href: '/qms-docs', icon: 'document-text', id: 'qms-docs' },
+        { label: 'Documents Library', href: '/qms-docs', icon: 'document-text', id: 'qms-docs' },
         { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
         { label: 'External Audits', href: '/external-audits', icon: 'clipboard-check', id: 'external-audits' },
         { label: 'Vendors', href: '/vendors', icon: 'users', id: 'vendors' },
