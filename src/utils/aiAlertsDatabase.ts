@@ -690,6 +690,47 @@ export async function getOpenAlertsByType(
  * the rolling window length here so a tool is only auto-resolved once the
  * entire window of fresh metrics is post-recovery.
  */
+/**
+ * Fetch every still-unresolved alert (status `open` or `acknowledged`) of the
+ * given `alertType`s that was *created* inside the half-open time range
+ * `[fromMs, toMs)`.
+ *
+ * Used by the storage-health morning digest cron (Task #604): once the
+ * configured quiet-hours window closes, the digest needs to enumerate every
+ * alert that fired during that window so it can summarise them in a single
+ * Slack/email push instead of relying on the operator to open `/ai-ops` first
+ * thing in the morning. Alerts that were already auto-resolved by the next
+ * cron pass before the digest runs are intentionally excluded — they are no
+ * longer actionable.
+ *
+ * `alertTypes` is an array so the digest can grow to cover prompt-regression /
+ * tool-health alerts later without a second helper. The implementation uses
+ * `ANY($1::text[])` so a single round-trip handles 1..N types.
+ */
+export async function getUnresolvedAlertsCreatedBetween(
+  alertTypes: AlertType[],
+  fromMs: number,
+  toMs: number,
+): Promise<AIAlert[]> {
+  if (alertTypes.length === 0) return [];
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) {
+    return [];
+  }
+  const result = await pool.query(
+    `SELECT *
+       FROM ai_alerts
+      WHERE alert_type = ANY($1::text[])
+        AND status IN ('open', 'acknowledged')
+        AND created_at >= TO_TIMESTAMP($2 / 1000.0)
+        AND created_at <  TO_TIMESTAMP($3 / 1000.0)
+      ORDER BY
+        CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+        created_at ASC`,
+    [alertTypes, fromMs, toMs],
+  );
+  return result.rows;
+}
+
 export async function getOpenAlertsByKey(
   alertType: AlertType,
   relatedRecordId: string,

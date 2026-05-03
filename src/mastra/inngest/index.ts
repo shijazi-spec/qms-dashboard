@@ -1109,6 +1109,65 @@ inngestFunctions.push(toolHealthAlertsCronFunction);
 // ──────────────────────────────────────────────────────────────────────────────
 inngestFunctions.push(promptRegressionAlertsCronFunction);
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Storage-health morning digest (Task #604)
+//
+// Once per day, shortly after the configured quiet-hours window ends, push a
+// single Slack/email digest summarising every still-unresolved storage_health
+// alert that fired while pushes were suppressed. Closes the gap that Task
+// #579 introduced — ops who don't open /ai-ops first thing could miss a
+// breach that fired at 02:00 because the next storage-health cron pass
+// dedupes against the existing open alert and never re-pages.
+//
+// The digest is opt-out via STORAGE_HEALTH_MORNING_DIGEST_DISABLED for sites
+// that prefer pure in-app surfacing. When STORAGE_HEALTH_QUIET_HOURS_START/
+// END are unset the cron is a no-op (nothing to digest).
+//
+// Schedule: defaults to 05 07 * * * UTC (a few minutes after the default
+// 22→07 quiet-hours window ends). Overridable via
+// STORAGE_HEALTH_MORNING_DIGEST_CRON so deployments using a non-default
+// quiet-hours window can re-align the digest with their own end time.
+// ──────────────────────────────────────────────────────────────────────────────
+const storageHealthMorningDigestFunction = inngest.createFunction(
+  { id: "storage-health-morning-digest" },
+  { cron: process.env.STORAGE_HEALTH_MORNING_DIGEST_CRON || "5 7 * * *" },
+  async ({ step }) => {
+    return await step.run("send-storage-health-morning-digest", async () => {
+      const { runStorageHealthMorningDigest } = await import(
+        "../../utils/storageHealthMorningDigest"
+      );
+      const { getUnresolvedAlertsCreatedBetween } = await import(
+        "../../utils/aiAlertsDatabase"
+      );
+      const { sendResendEmail } = await import("../../utils/resendMail");
+
+      const result = await runStorageHealthMorningDigest({
+        getUnresolvedAlertsCreatedBetween,
+        sendSlack: async (webhookUrl, text) => {
+          try {
+            const resp = await fetch(webhookUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+            return resp.ok;
+          } catch {
+            return false;
+          }
+        },
+        sendEmail: async ({ to, subject, html }) => {
+          const sendResult = await sendResendEmail({ to, subject, html });
+          return Boolean(sendResult?.success);
+        },
+      });
+
+      logger.info("[StorageHealthMorningDigest] Cron pass complete", result);
+      return result;
+    });
+  },
+);
+inngestFunctions.push(storageHealthMorningDigestFunction);
+
 const executiveDigestFunction = inngest.createFunction(
   { id: "weekly-executive-digest" },
   { cron: process.env.DIGEST_CRON || "0 7 * * 1" },
