@@ -39,6 +39,18 @@ export const STORAGE_HEALTH_DEDUPE_KEY = 'ai_call_metrics' as const;
 /** Module label written to `ai_alerts.related_module` and notifications. */
 export const STORAGE_HEALTH_MODULE = 'ai_ops' as const;
 
+/**
+ * Default re-page cadence (Task #679). When a storage_health alert has been
+ * "open" for at least this many minutes AND its last on-call notification
+ * is at least this many minutes old, the daily cron will re-send the
+ * Slack/email page so a stuck prune cannot sit in open state without
+ * anyone being paged. Mirrors the tool-health re-notify pattern.
+ *
+ * Override with the `STORAGE_HEALTH_REPAGE_AFTER_MIN` env var. A value of
+ * `0` (or any non-positive number) disables the sweep entirely.
+ */
+export const STORAGE_HEALTH_REPAGE_DEFAULT_MIN = 24 * 60;
+
 export interface StorageHealthAlertResult {
   /** True when an open alert was newly created on this pass. */
   alertCreated: boolean;
@@ -500,6 +512,341 @@ export async function evaluateAndAlertStorageHealth(
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  return result;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Re-page sweep (Task #679)
+//
+// The /ai-ops storage-health banner surfaces an open alert as soon as the
+// daily prune leaves rows outside the retention window. But if no operator
+// happens to be looking at the dashboard, the alert can sit "open" for days
+// without anyone being paged again — `evaluateAndAlertStorageHealth` only
+// pages on the *first* breach (dedupe), so a stuck prune slowly drifts out
+// of incident response.
+//
+// `repageStaleStorageHealthAlerts` closes that gap by re-sending the Slack
+// /email page for any storage_health alert whose `notified_at` is older
+// than the configured threshold (default 24 h). Mirrors the tool-health
+// re-notify cadence:
+//   • throttle keyed on `notified_at` so we don't spam channels every cron
+//     tick — at most one re-page per `STORAGE_HEALTH_REPAGE_AFTER_MIN`
+//     minutes per alert,
+//   • respects the existing quiet-hours window so we don't page on-call at
+//     3 a.m. about a backlog they cannot act on until morning,
+//   • configurable / disable-able via env (`STORAGE_HEALTH_REPAGE_AFTER_MIN
+//     =0` switches the sweep off without a code change).
+// ──────────────────────────────────────────────────────────────────────────────
+
+export interface StorageHealthRepageDeps {
+  /**
+   * Returns every open / acknowledged storage_health alert for the dedupe
+   * key. Production callers pass `getOpenAlertsByKey` from
+   * `aiAlertsDatabase`. Each row must include `id`, `created_at`, and
+   * `notified_at` so the sweep can decide which alerts are stale enough
+   * to re-page.
+   */
+  getOpenAlertsByKey: (
+    alertType: 'storage_health',
+    relatedRecordId: string,
+  ) => Promise<AIAlert[]>;
+  /**
+   * Persists the re-page attempt timestamp on the alert row so subsequent
+   * sweeps respect the throttle window. Production callers pass
+   * `recordAlertNotificationResult` from `aiAlertsDatabase`.
+   */
+  recordAlertNotified: (
+    alertId: number,
+    channel: string,
+    whenMs: number,
+  ) => Promise<void>;
+  sendSlack: (webhookUrl: string, text: string) => Promise<boolean>;
+  sendEmail: (input: {
+    to: string[];
+    subject: string;
+    html: string;
+  }) => Promise<boolean>;
+  env?: NodeJS.ProcessEnv;
+  now?: () => Date;
+}
+
+export interface StorageHealthRepageResult {
+  /** True when the sweep is disabled via env (`*_REPAGE_AFTER_MIN<=0`). */
+  disabled: boolean;
+  /** Total open storage_health alerts inspected on this pass. */
+  alertsConsidered: number;
+  /**
+   * Alerts skipped because they have already been acknowledged by an
+   * operator. Once triaged, the alert is no longer "ignored" so the sweep
+   * stops re-paging — the operator has signalled they are looking.
+   */
+  alertsSkippedAcknowledged: number;
+  /** Alerts skipped because they are not yet older than the threshold. */
+  alertsSkippedYoung: number;
+  /** Alerts skipped because notified_at is inside the throttle window. */
+  alertsThrottled: number;
+  /** Alerts that would have been re-paged but quiet hours suppressed it. */
+  alertsQuietHoursSuppressed: number;
+  /** Alerts where we attempted a re-page (Slack and/or email). */
+  alertsRepaged: number;
+  /** Slack webhook calls that returned ok. */
+  slackSent: number;
+  /** Email sends that returned success. */
+  emailSent: number;
+  /**
+   * True when the cron tick fell inside quiet-hours and the sweep
+   * intentionally suppressed Slack/email. The alerts are still counted as
+   * "considered" so the cron log line shows the sweep ran.
+   */
+  quietHoursActive: boolean;
+}
+
+/**
+ * Resolve the re-page threshold (in minutes) from env. Returns `null` when
+ * the sweep is disabled (operator set `*_REPAGE_AFTER_MIN<=0`). Invalid
+ * values fall back to the built-in default so a typo cannot silently
+ * disable on-call paging.
+ *
+ * Exported for unit tests.
+ */
+export function resolveRepageAfterMinutes(env: NodeJS.ProcessEnv): number | null {
+  const raw = env.STORAGE_HEALTH_REPAGE_AFTER_MIN;
+  if (raw == null || raw.trim() === '') return STORAGE_HEALTH_REPAGE_DEFAULT_MIN;
+  const n = Number(raw.trim());
+  if (!Number.isFinite(n)) {
+    logger.warn(
+      '[StorageHealthAlerts] Invalid STORAGE_HEALTH_REPAGE_AFTER_MIN; using default',
+      { provided: raw, defaultMin: STORAGE_HEALTH_REPAGE_DEFAULT_MIN },
+    );
+    return STORAGE_HEALTH_REPAGE_DEFAULT_MIN;
+  }
+  if (n <= 0) return null;
+  return Math.floor(n);
+}
+
+function buildRepageMessages(
+  alert: AIAlert,
+  ageMinutes: number,
+  appBaseUrl: string,
+): { slackText: string; emailSubject: string; emailHtml: string } {
+  const ageHours = Math.round((ageMinutes / 60) * 10) / 10;
+  const slackText =
+    `:rotating_light: *AI Storage Health — alert still OPEN after ${ageHours}h* ` +
+    `(re-page).\n` +
+    `${alert.title}\n` +
+    `Severity: ${alert.severity}. ` +
+    `No-one has acknowledged the storage_health alert opened by the daily ` +
+    `prune cron. ${alert.description ?? ''}\n` +
+    `<${appBaseUrl}/ai-ops|Open AI Operations panel>`;
+  const emailSubject =
+    `🚨 WalaPlus AI Storage Alert STILL OPEN after ${ageHours}h — please triage`;
+  const emailHtml =
+    `<h2>AI Usage Table Storage Alert — re-page</h2>` +
+    `<p><strong>${alert.title}</strong></p>` +
+    `<p>This alert has been in the OPEN state for ${ageHours} hours and ` +
+    `nobody has acknowledged it on /ai-ops yet. The daily prune cron is ` +
+    `re-paging on-call so the backlog does not silently grow.</p>` +
+    (alert.description ? `<p>${alert.description}</p>` : '') +
+    `<p><a href="${appBaseUrl}/ai-ops">View AI Operations panel</a></p>` +
+    `<p><em>Re-pages will continue every ` +
+    `STORAGE_HEALTH_REPAGE_AFTER_MIN minutes until the alert is ` +
+    `acknowledged or resolved.</em></p>`;
+  return { slackText, emailSubject, emailHtml };
+}
+
+/**
+ * Re-page on-call for any storage_health alert that has been "open" too
+ * long without acknowledgement. Idempotent: safe to call once per cron
+ * pass — the throttle (notified_at within `repageAfterMin`) ensures at
+ * most one re-page per alert per window.
+ *
+ * Notification failures are logged but never thrown so a transient Slack
+ * /Resend outage cannot abort the surrounding cron pass.
+ */
+export async function repageStaleStorageHealthAlerts(
+  deps: StorageHealthRepageDeps,
+): Promise<StorageHealthRepageResult> {
+  const env = deps.env ?? process.env;
+  const nowFn = deps.now ?? (() => new Date());
+  const now = nowFn();
+  const repageAfterMin = resolveRepageAfterMinutes(env);
+  const quietHours = resolveQuietHoursWindow(env);
+  const inQuietHours = quietHours.enabled && isInQuietHours(quietHours, now);
+
+  const result: StorageHealthRepageResult = {
+    disabled: repageAfterMin == null,
+    alertsConsidered: 0,
+    alertsSkippedAcknowledged: 0,
+    alertsSkippedYoung: 0,
+    alertsThrottled: 0,
+    alertsQuietHoursSuppressed: 0,
+    alertsRepaged: 0,
+    slackSent: 0,
+    emailSent: 0,
+    quietHoursActive: inQuietHours,
+  };
+
+  if (repageAfterMin == null) {
+    logger.info(
+      '[StorageHealthAlerts] Re-page sweep disabled via STORAGE_HEALTH_REPAGE_AFTER_MIN<=0',
+    );
+    return result;
+  }
+
+  let openAlerts: AIAlert[] = [];
+  try {
+    openAlerts = await deps.getOpenAlertsByKey(
+      'storage_health',
+      STORAGE_HEALTH_DEDUPE_KEY,
+    );
+  } catch (err) {
+    logger.warn('[StorageHealthAlerts] Re-page sweep: failed to list open alerts', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return result;
+  }
+
+  result.alertsConsidered = openAlerts.length;
+  if (openAlerts.length === 0) return result;
+
+  const slackWebhook = env.SLACK_WEBHOOK_URL;
+  const emailRaw = env.AI_COST_ALERT_EMAIL;
+  const emailRecipients = emailRaw
+    ? emailRaw
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean)
+    : [];
+  const appBaseUrl = env.APP_BASE_URL ?? '';
+  const nowMs = now.getTime();
+  const thresholdMs = repageAfterMin * 60_000;
+
+  for (const alert of openAlerts) {
+    if (alert.id == null) continue;
+
+    // Skip acknowledged alerts — once an operator has triaged the row, it
+    // is no longer "ignored". `getOpenAlertsByKey` returns both 'open' and
+    // 'acknowledged' for dedupe/auto-resolve symmetry, so we filter here.
+    if (alert.status !== 'open') {
+      result.alertsSkippedAcknowledged++;
+      continue;
+    }
+
+    // Stale-enough check: prefer notified_at (last paging attempt) so the
+    // first re-page fires repageAfterMin after the initial page, NOT
+    // repageAfterMin after the alert was created. Falls back to created_at
+    // for legacy rows that pre-date Task #284's notified_at column.
+    const lastPagedAt =
+      (alert.notified_at != null
+        ? new Date(alert.notified_at as unknown as string).getTime()
+        : null) ??
+      (alert.created_at != null
+        ? new Date(alert.created_at as unknown as string).getTime()
+        : null);
+    if (lastPagedAt == null) {
+      // No timestamps at all — extremely unlikely, but treat as not-yet-stale
+      // so we don't re-page on a malformed row.
+      result.alertsSkippedYoung++;
+      continue;
+    }
+    const ageMs = nowMs - lastPagedAt;
+    if (ageMs < thresholdMs) {
+      // The alert was created or last paged inside the throttle window.
+      // Both situations mean "skip" but we count them separately so cron
+      // logs distinguish "alert is fresh" from "alert is stale but the
+      // last re-page is still inside the cooldown".
+      if (alert.notified_at != null) {
+        result.alertsThrottled++;
+      } else {
+        result.alertsSkippedYoung++;
+      }
+      continue;
+    }
+
+    if (inQuietHours) {
+      result.alertsQuietHoursSuppressed++;
+      logger.info(
+        '[StorageHealthAlerts] Re-page suppressed: quiet hours active',
+        {
+          alertId: alert.id,
+          ageMinutes: Math.round(ageMs / 60_000),
+          startHour: quietHours.startHour,
+          endHour: quietHours.endHour,
+          tz: quietHours.tz,
+        },
+      );
+      continue;
+    }
+
+    const ageMinutes = Math.round(ageMs / 60_000);
+    const { slackText, emailSubject, emailHtml } = buildRepageMessages(
+      alert,
+      ageMinutes,
+      appBaseUrl,
+    );
+
+    let slackOk = false;
+    let emailOk = false;
+
+    if (slackWebhook) {
+      try {
+        slackOk = await deps.sendSlack(slackWebhook, slackText);
+        if (slackOk) result.slackSent++;
+      } catch (err) {
+        logger.warn('[StorageHealthAlerts] Re-page Slack send failed', {
+          alertId: alert.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (emailRecipients.length > 0) {
+      try {
+        emailOk = await deps.sendEmail({
+          to: emailRecipients,
+          subject: emailSubject,
+          html: emailHtml,
+        });
+        if (emailOk) result.emailSent++;
+      } catch (err) {
+        logger.warn('[StorageHealthAlerts] Re-page email send failed', {
+          alertId: alert.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // Stamp notified_at even when both channels were unconfigured so the
+    // sweep doesn't loop forever logging "stale" with no channel to send
+    // on. The channel label captures the actual delivery outcome so the
+    // AI Ops "Notified" column reflects reality.
+    const channel =
+      slackOk && emailOk
+        ? 'slack+email_repage'
+        : slackOk
+          ? 'slack_repage'
+          : emailOk
+            ? 'email_repage'
+            : !slackWebhook && emailRecipients.length === 0
+              ? 'not_configured_repage'
+              : 'failed_repage';
+
+    try {
+      await deps.recordAlertNotified(alert.id, channel, nowMs);
+    } catch (err) {
+      logger.warn('[StorageHealthAlerts] Re-page notified_at write failed', {
+        alertId: alert.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    result.alertsRepaged++;
+    logger.warn(
+      `[StorageHealthAlerts] Re-paged stale storage_health alert #${alert.id} ` +
+        `(open ${ageMinutes}m, channel=${channel})`,
+    );
   }
 
   return result;

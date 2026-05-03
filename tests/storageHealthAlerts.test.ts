@@ -23,9 +23,13 @@ import {
   buildStorageHealthMessage,
   evaluateAndAlertStorageHealth,
   isInQuietHours,
+  repageStaleStorageHealthAlerts,
   resolveQuietHoursWindow,
+  resolveRepageAfterMinutes,
   STORAGE_HEALTH_DEDUPE_KEY,
+  STORAGE_HEALTH_REPAGE_DEFAULT_MIN,
   type StorageHealthAlertDeps,
+  type StorageHealthRepageDeps,
 } from '../src/utils/storageHealthAlerts';
 import type { AiMetricsTableStats } from '../src/utils/aiTelemetry';
 import type { AIAlert } from '../src/utils/aiAlertsDatabase';
@@ -609,6 +613,391 @@ await suite.test(
     suite.expect(
       msg.description.includes('unavailable'),
       `description should mention unavailable — got: ${msg.description}`,
+    );
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Re-page sweep (Task #679)
+// ──────────────────────────────────────────────────────────────────────────────
+
+interface RepageHarness {
+  deps: StorageHealthRepageDeps;
+  slacks: SlackRecord[];
+  emails: EmailRecord[];
+  notified: Array<{ alertId: number; channel: string; whenMs: number }>;
+  setOpenAlerts: (alerts: AIAlert[]) => void;
+  setSlackOk: (ok: boolean) => void;
+  setEmailOk: (ok: boolean) => void;
+  setNow: (now: Date) => void;
+  setListFailure: (err: Error | null) => void;
+}
+
+function makeRepageHarness(
+  env: NodeJS.ProcessEnv,
+  initialNow?: Date,
+): RepageHarness {
+  const slacks: SlackRecord[] = [];
+  const emails: EmailRecord[] = [];
+  const notified: Array<{ alertId: number; channel: string; whenMs: number }> = [];
+  let openAlerts: AIAlert[] = [];
+  let slackOk = true;
+  let emailOk = true;
+  let now = initialNow ?? new Date('2026-04-25T12:00:00.000Z');
+  let listFailure: Error | null = null;
+
+  const deps: StorageHealthRepageDeps = {
+    getOpenAlertsByKey: async (alertType, relatedRecordId) => {
+      if (alertType !== 'storage_health') {
+        throw new Error(`unexpected alertType ${alertType}`);
+      }
+      if (relatedRecordId !== STORAGE_HEALTH_DEDUPE_KEY) {
+        throw new Error(`unexpected relatedRecordId ${relatedRecordId}`);
+      }
+      if (listFailure) throw listFailure;
+      return openAlerts;
+    },
+    recordAlertNotified: async (alertId, channel, whenMs) => {
+      notified.push({ alertId, channel, whenMs });
+    },
+    sendSlack: async (webhookUrl, text) => {
+      slacks.push({ webhookUrl, text });
+      return slackOk;
+    },
+    sendEmail: async ({ to, subject, html }) => {
+      emails.push({ to, subject, html });
+      return emailOk;
+    },
+    env,
+    now: () => now,
+  };
+
+  return {
+    deps,
+    slacks,
+    emails,
+    notified,
+    setOpenAlerts: (a) => {
+      openAlerts = a;
+    },
+    setSlackOk: (ok) => {
+      slackOk = ok;
+    },
+    setEmailOk: (ok) => {
+      emailOk = ok;
+    },
+    setNow: (n) => {
+      now = n;
+    },
+    setListFailure: (err) => {
+      listFailure = err;
+    },
+  };
+}
+
+await suite.test(
+  'resolveRepageAfterMinutes: default when env is unset, disabled when <=0',
+  async () => {
+    suite.expectEqual(
+      resolveRepageAfterMinutes({}),
+      STORAGE_HEALTH_REPAGE_DEFAULT_MIN,
+      'default when unset',
+    );
+    suite.expectEqual(
+      resolveRepageAfterMinutes({ STORAGE_HEALTH_REPAGE_AFTER_MIN: '60' }),
+      60,
+      '60 min override',
+    );
+    suite.expectEqual(
+      resolveRepageAfterMinutes({ STORAGE_HEALTH_REPAGE_AFTER_MIN: '0' }),
+      null,
+      '0 disables',
+    );
+    suite.expectEqual(
+      resolveRepageAfterMinutes({ STORAGE_HEALTH_REPAGE_AFTER_MIN: '-5' }),
+      null,
+      'negative disables',
+    );
+    suite.expectEqual(
+      resolveRepageAfterMinutes({ STORAGE_HEALTH_REPAGE_AFTER_MIN: 'banana' }),
+      STORAGE_HEALTH_REPAGE_DEFAULT_MIN,
+      'invalid falls back to default',
+    );
+  },
+);
+
+await suite.test(
+  're-page sweep: alert older than threshold gets a Slack/email page and notified_at is stamped',
+  async () => {
+    const now = new Date('2026-04-25T12:00:00.000Z');
+    // 30h since last page → past 24h threshold.
+    const lastPagedAt = new Date(now.getTime() - 30 * 60 * 60_000);
+    const harness = makeRepageHarness(
+      {
+        SLACK_WEBHOOK_URL: 'https://hooks.example/abc',
+        AI_COST_ALERT_EMAIL: 'ops@example.com',
+      },
+      now,
+    );
+    harness.setOpenAlerts([
+      {
+        id: 42,
+        alert_type: 'storage_health',
+        severity: 'high',
+        title: 'AI usage table outgrowing prune window',
+        description: 'oldest row is 130d old',
+        status: 'open',
+        notified_at: lastPagedAt,
+        created_at: lastPagedAt,
+      } as unknown as AIAlert,
+    ]);
+
+    const result = await repageStaleStorageHealthAlerts(harness.deps);
+
+    suite.expect(!result.disabled, 'sweep is enabled');
+    suite.expectEqual(result.alertsConsidered, 1, 'one alert considered');
+    suite.expectEqual(result.alertsRepaged, 1, 'one re-page sent');
+    suite.expectEqual(result.slackSent, 1, 'one Slack call ok');
+    suite.expectEqual(result.emailSent, 1, 'one email call ok');
+    suite.expectEqual(harness.slacks.length, 1, 'slack invoked once');
+    suite.expectEqual(harness.emails.length, 1, 'email invoked once');
+    suite.expect(
+      harness.slacks[0].text.includes('still OPEN'),
+      `slack text — got: ${harness.slacks[0].text}`,
+    );
+    suite.expectEqual(harness.notified.length, 1, 'notified_at stamped once');
+    suite.expectEqual(harness.notified[0].alertId, 42, 'stamp on alert id 42');
+    suite.expectEqual(
+      harness.notified[0].channel,
+      'slack+email_repage',
+      'channel reflects both sent',
+    );
+  },
+);
+
+await suite.test(
+  're-page sweep: alert with recent notified_at is throttled (no Slack/email)',
+  async () => {
+    const now = new Date('2026-04-25T12:00:00.000Z');
+    // 2h since last page — well inside 24h throttle window.
+    const lastPagedAt = new Date(now.getTime() - 2 * 60 * 60_000);
+    const harness = makeRepageHarness(
+      { SLACK_WEBHOOK_URL: 'https://hooks.example/abc' },
+      now,
+    );
+    harness.setOpenAlerts([
+      {
+        id: 7,
+        status: 'open',
+        notified_at: lastPagedAt,
+        created_at: new Date(now.getTime() - 5 * 24 * 60 * 60_000),
+      } as AIAlert,
+    ]);
+
+    const result = await repageStaleStorageHealthAlerts(harness.deps);
+
+    suite.expectEqual(result.alertsConsidered, 1, 'one considered');
+    suite.expectEqual(result.alertsThrottled, 1, 'one throttled');
+    suite.expectEqual(result.alertsRepaged, 0, 'zero re-pages');
+    suite.expectEqual(harness.slacks.length, 0, 'no Slack calls');
+    suite.expectEqual(harness.notified.length, 0, 'no notified_at writes');
+  },
+);
+
+await suite.test(
+  're-page sweep: alert with no notified_at uses created_at as fallback',
+  async () => {
+    const now = new Date('2026-04-25T12:00:00.000Z');
+    // Alert created 30h ago, never paged.
+    const createdAt = new Date(now.getTime() - 30 * 60 * 60_000);
+    const harness = makeRepageHarness(
+      { SLACK_WEBHOOK_URL: 'https://hooks.example/abc' },
+      now,
+    );
+    harness.setOpenAlerts([
+      {
+        id: 99,
+        status: 'open',
+        notified_at: null,
+        created_at: createdAt,
+      } as AIAlert,
+    ]);
+
+    const result = await repageStaleStorageHealthAlerts(harness.deps);
+
+    suite.expectEqual(result.alertsRepaged, 1, 'fallback path re-pages');
+    suite.expectEqual(harness.slacks.length, 1, 'slack invoked');
+    suite.expectEqual(harness.notified[0].channel, 'slack_repage', 'slack-only label');
+  },
+);
+
+await suite.test(
+  're-page sweep: young alert (created recently) is not re-paged',
+  async () => {
+    const now = new Date('2026-04-25T12:00:00.000Z');
+    // 6h ago — well inside the 24h threshold.
+    const createdAt = new Date(now.getTime() - 6 * 60 * 60_000);
+    const harness = makeRepageHarness(
+      { SLACK_WEBHOOK_URL: 'https://hooks.example/abc' },
+      now,
+    );
+    harness.setOpenAlerts([
+      {
+        id: 1,
+        status: 'open',
+        notified_at: null,
+        created_at: createdAt,
+      } as AIAlert,
+    ]);
+
+    const result = await repageStaleStorageHealthAlerts(harness.deps);
+    suite.expectEqual(result.alertsSkippedYoung, 1, 'one skipped (young)');
+    suite.expectEqual(result.alertsRepaged, 0, 'no re-page');
+    suite.expectEqual(harness.slacks.length, 0, 'no Slack');
+  },
+);
+
+await suite.test(
+  're-page sweep: STORAGE_HEALTH_REPAGE_AFTER_MIN=0 disables the sweep entirely',
+  async () => {
+    const harness = makeRepageHarness({
+      STORAGE_HEALTH_REPAGE_AFTER_MIN: '0',
+      SLACK_WEBHOOK_URL: 'https://hooks.example/abc',
+    });
+    harness.setOpenAlerts([
+      {
+        id: 1,
+        status: 'open',
+        notified_at: null,
+        created_at: new Date('2025-01-01T00:00:00.000Z'),
+      } as AIAlert,
+    ]);
+
+    const result = await repageStaleStorageHealthAlerts(harness.deps);
+    suite.expect(result.disabled, 'sweep is disabled');
+    suite.expectEqual(result.alertsRepaged, 0, 'no re-page');
+    suite.expectEqual(harness.slacks.length, 0, 'no Slack');
+    suite.expectEqual(harness.notified.length, 0, 'no notified_at writes');
+  },
+);
+
+await suite.test(
+  're-page sweep: quiet hours suppresses Slack/email but still counts as considered',
+  async () => {
+    const now = new Date('2026-04-25T03:00:00.000Z');
+    const lastPagedAt = new Date(now.getTime() - 30 * 60 * 60_000);
+    const harness = makeRepageHarness(
+      {
+        SLACK_WEBHOOK_URL: 'https://hooks.example/abc',
+        STORAGE_HEALTH_QUIET_HOURS_START: '22',
+        STORAGE_HEALTH_QUIET_HOURS_END: '7',
+      },
+      now,
+    );
+    harness.setOpenAlerts([
+      {
+        id: 5,
+        status: 'open',
+        notified_at: lastPagedAt,
+        created_at: lastPagedAt,
+      } as AIAlert,
+    ]);
+
+    const result = await repageStaleStorageHealthAlerts(harness.deps);
+    suite.expect(result.quietHoursActive, 'quiet hours active');
+    suite.expectEqual(result.alertsQuietHoursSuppressed, 1, 'one suppressed');
+    suite.expectEqual(result.alertsRepaged, 0, 'no re-page during quiet hours');
+    suite.expectEqual(harness.slacks.length, 0, 'no Slack call');
+    suite.expectEqual(harness.notified.length, 0, 'no notified_at write');
+  },
+);
+
+await suite.test(
+  're-page sweep: no open alerts → no Slack, no notified_at writes',
+  async () => {
+    const harness = makeRepageHarness({
+      SLACK_WEBHOOK_URL: 'https://hooks.example/abc',
+    });
+    harness.setOpenAlerts([]);
+    const result = await repageStaleStorageHealthAlerts(harness.deps);
+    suite.expectEqual(result.alertsConsidered, 0, 'zero considered');
+    suite.expectEqual(result.alertsRepaged, 0, 'zero re-pages');
+    suite.expectEqual(harness.slacks.length, 0, 'no Slack');
+  },
+);
+
+await suite.test(
+  're-page sweep: list failure is non-fatal',
+  async () => {
+    const harness = makeRepageHarness({
+      SLACK_WEBHOOK_URL: 'https://hooks.example/abc',
+    });
+    harness.setListFailure(new Error('connection refused'));
+    const result = await repageStaleStorageHealthAlerts(harness.deps);
+    suite.expectEqual(result.alertsConsidered, 0, 'considered=0 on failure');
+    suite.expectEqual(result.alertsRepaged, 0, 'no re-page');
+    suite.expectEqual(harness.slacks.length, 0, 'no Slack');
+  },
+);
+
+await suite.test(
+  're-page sweep: acknowledged alerts are NOT re-paged (operator already triaged)',
+  async () => {
+    const now = new Date('2026-04-25T12:00:00.000Z');
+    const lastPagedAt = new Date(now.getTime() - 30 * 60 * 60_000);
+    const harness = makeRepageHarness(
+      { SLACK_WEBHOOK_URL: 'https://hooks.example/abc' },
+      now,
+    );
+    harness.setOpenAlerts([
+      {
+        id: 88,
+        status: 'acknowledged',
+        notified_at: lastPagedAt,
+        created_at: lastPagedAt,
+      } as unknown as AIAlert,
+    ]);
+
+    const result = await repageStaleStorageHealthAlerts(harness.deps);
+    suite.expectEqual(result.alertsConsidered, 1, 'one considered');
+    suite.expectEqual(
+      result.alertsSkippedAcknowledged,
+      1,
+      'acknowledged alert skipped',
+    );
+    suite.expectEqual(result.alertsRepaged, 0, 'no re-page');
+    suite.expectEqual(harness.slacks.length, 0, 'no Slack call');
+    suite.expectEqual(
+      harness.notified.length,
+      0,
+      'no notified_at write — operator already triaged',
+    );
+  },
+);
+
+await suite.test(
+  're-page sweep: stamps not_configured_repage when no Slack/email is wired',
+  async () => {
+    const now = new Date('2026-04-25T12:00:00.000Z');
+    const lastPagedAt = new Date(now.getTime() - 30 * 60 * 60_000);
+    const harness = makeRepageHarness({}, now);
+    harness.setOpenAlerts([
+      {
+        id: 17,
+        status: 'open',
+        notified_at: lastPagedAt,
+        created_at: lastPagedAt,
+      } as AIAlert,
+    ]);
+    const result = await repageStaleStorageHealthAlerts(harness.deps);
+    suite.expectEqual(result.alertsRepaged, 1, 'still counts as a sweep pass');
+    suite.expectEqual(result.slackSent, 0, 'no slack sent');
+    suite.expectEqual(result.emailSent, 0, 'no email sent');
+    suite.expectEqual(harness.notified.length, 1, 'notified_at stamped');
+    suite.expectEqual(
+      harness.notified[0].channel,
+      'not_configured_repage',
+      'channel reflects no config',
     );
   },
 );

@@ -467,13 +467,16 @@ const aiCostSummaryFunction = inngest.createFunction(
       try {
         const { getAiMetricsTableStats } =
           await import("../../utils/aiTelemetry");
-        const { evaluateAndAlertStorageHealth } =
-          await import("../../utils/storageHealthAlerts");
+        const {
+          evaluateAndAlertStorageHealth,
+          repageStaleStorageHealthAlerts,
+        } = await import("../../utils/storageHealthAlerts");
         const {
           openAlertExistsByKey,
           createAIAlert,
           getOpenAlertsByKey,
           resolveAlert,
+          recordAlertNotificationResult,
         } = await import("../../utils/aiAlertsDatabase");
         const { createNotification } =
           await import("../../utils/notificationHub");
@@ -525,6 +528,52 @@ const aiCostSummaryFunction = inngest.createFunction(
         } else if (storageResult.alertsResolved > 0) {
           logger.info(
             `[AI-Cost] Storage-health auto-resolved ${storageResult.alertsResolved} alert(s)`,
+          );
+        }
+
+        // Task #679: re-page on-call when a storage_health alert has sat
+        // in the open state past the configured threshold (default 24 h).
+        // The /ai-ops banner already surfaces it, but if no operator is
+        // looking, the dedupe in evaluateAndAlertStorageHealth means we
+        // never re-page. This sweep closes that gap.
+        const repageResult = await repageStaleStorageHealthAlerts({
+          getOpenAlertsByKey,
+          recordAlertNotified: (alertId, channel, whenMs) =>
+            recordAlertNotificationResult(alertId, channel, whenMs),
+          sendSlack: async (webhookUrl, text) => {
+            try {
+              const resp = await fetch(webhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text }),
+              });
+              return resp.ok;
+            } catch {
+              return false;
+            }
+          },
+          sendEmail: async ({ to, subject, html }) => {
+            const sendResult = await sendResendEmail({ to, subject, html });
+            return Boolean(sendResult?.success);
+          },
+        });
+        if (repageResult.alertsRepaged > 0) {
+          logger.warn(
+            `[AI-Cost] Storage-health re-paged ${repageResult.alertsRepaged} ` +
+              `stale alert(s) (slack=${repageResult.slackSent}, ` +
+              `email=${repageResult.emailSent}, ` +
+              `throttled=${repageResult.alertsThrottled}, ` +
+              `quietHours=${repageResult.alertsQuietHoursSuppressed})`,
+          );
+        } else if (repageResult.alertsConsidered > 0) {
+          logger.info(
+            `[AI-Cost] Storage-health re-page sweep: ` +
+              `considered=${repageResult.alertsConsidered}, ` +
+              `young=${repageResult.alertsSkippedYoung}, ` +
+              `acknowledged=${repageResult.alertsSkippedAcknowledged}, ` +
+              `throttled=${repageResult.alertsThrottled}, ` +
+              `quietHours=${repageResult.alertsQuietHoursSuppressed}, ` +
+              `disabled=${repageResult.disabled}`,
           );
         }
       } catch (storageErr) {
