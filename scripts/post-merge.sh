@@ -138,3 +138,33 @@ npx tsx tests/safeLoggerRedaction.test.ts
 echo ""
 echo "▶ CI gate: dashboard RTL physical-direction class guard (Tasks #315 / #628 / #743)"
 node scripts/check-rtl-classes.cjs
+
+# ----------------------------------------------------------------------------
+# CI gate — dashboard <th scope> accessibility guardrail (Task #757)
+#
+# Hardens Task #46 / Task #263 (which added `scope="col|row"` by hand to
+# every existing `<th>` in dashboard/*.html). Without `scope`, screen
+# readers (NVDA, JAWS, VoiceOver, TalkBack) fall back to a positional
+# heuristic that silently mis-associates headers with cells in any table
+# that has a corner spacer cell, multiple header rows, or row headers —
+# making the table unusable for assistive-tech users.
+#
+# This gate runs two passes against `dashboard/*.html`:
+#   1. HTML pass — every `<th …>` opening tag must carry a valid
+#      `scope="col|row|colgroup|rowgroup"` attribute.
+#   2. JS-string pass — every `<th …>` rendered from a JS template
+#      string inside an inline `<script>` block must carry the same
+#      (the dashboard renders many tables this way: crm.html,
+#      duplicates.html, ai-ops.html, …).
+#
+# All currently-shipping pages pass both passes (Task #263 finished the
+# migration). Adding a new dashboard HTML file or a new `<th>` without
+# `scope` fails the build. Per-line opt-out marker `th-scope-safe: <reason>`
+# is available for the rare presentational <th> in a non-data table.
+#
+# Also covered by `tests/thScopeAccessibility.test.ts` (auto-discovered by
+# the integration-test runner).
+# ----------------------------------------------------------------------------
+echo ""
+echo "▶ CI gate: dashboard <th scope> accessibility guardrail (Task #757)"
+node scripts/check-th-scope.cjs
