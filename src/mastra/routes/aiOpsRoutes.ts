@@ -713,8 +713,9 @@ export const aiOpsRoutes = [
             return c.json({ error: "Tool name is required" }, 400);
           }
           const limit = safeInt(c.req.query("limit"), 20, 1, 50);
-          const data = await getParentCallsForTool(toolName, limit);
-          return c.json({ data });
+          const days = safeInt(c.req.query("days"), 7, 1, 90);
+          const data = await getParentCallsForTool(toolName, limit, days);
+          return c.json({ data, days });
         } catch (error) {
           logger.error("[AI-Ops] tool parents error:", error);
           return c.json(

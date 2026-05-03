@@ -3295,27 +3295,47 @@
       if (existing) existing.remove();
     }
 
+    // Allowed look-back windows for the tool-parents panel (Task #305).
+    // Mirrors the server-side clamp in the /parents endpoint (1..90).
+    const TOOL_PARENTS_DAY_OPTIONS = [7, 30, 90];
+
+    function changeToolParentsDays(toolName, days) {
+      const parsed = parseInt(days, 10);
+      const safe = TOOL_PARENTS_DAY_OPTIONS.includes(parsed) ? parsed : 7;
+      reloadToolParentsPanel(toolName, safe);
+    }
+
     async function openToolParentsPanel(toolName) {
       closeToolParentsPanel();
 
+      const initialDays = 7;
       const panel = document.createElement('div');
       panel.id = 'tool-parents-panel';
       panel.className = 'fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40';
       panel.setAttribute('data-testid', 'panel-tool-parents');
       panel.innerHTML = `
         <div class="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full sm:max-w-3xl mx-0 sm:mx-4 max-h-[80vh] flex flex-col">
-          <div class="flex items-center justify-between px-5 py-3 border-b flex-shrink-0">
-            <div>
+          <div class="flex items-center justify-between px-5 py-3 border-b flex-shrink-0 gap-3">
+            <div class="min-w-0">
               <h3 class="font-semibold text-gray-900 text-sm">
                 Parent agent calls for
                 <span class="font-mono text-blue-600" data-testid="text-tool-parents-name">${esc(toolName)}</span>
               </h3>
-              <p class="text-xs text-gray-500 mt-0.5">Most expensive agent runs that invoked this tool — last 7 days</p>
+              <p id="tool-parents-subtitle" class="text-xs text-gray-500 mt-0.5">Most expensive agent runs that invoked this tool — last ${initialDays} days</p>
             </div>
-            <button class="text-gray-400 hover:text-gray-600 text-2xl leading-none ms-4 flex-shrink-0"
-                    data-on-click="closeToolParentsPanel"
-                    aria-label="Close panel"
-                    data-testid="button-close-tool-parents">&times;</button>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <label for="tool-parents-days" class="text-xs text-gray-500">Range</label>
+              <select id="tool-parents-days"
+                      class="text-xs border rounded px-2 py-1 bg-white"
+                      data-testid="select-tool-parents-days"
+                      data-on-change="changeToolParentsDays" data-args='[${JSON.stringify(toolName)}, "@this.value"]'>
+                ${TOOL_PARENTS_DAY_OPTIONS.map((d) => `<option value="${d}"${d === initialDays ? ' selected' : ''}>Last ${d} days</option>`).join('')}
+              </select>
+              <button class="text-gray-400 hover:text-gray-600 text-2xl leading-none ms-2"
+                      data-on-click="closeToolParentsPanel"
+                      aria-label="Close panel"
+                      data-testid="button-close-tool-parents">&times;</button>
+            </div>
           </div>
           <div id="tool-parents-body" class="overflow-y-auto p-4 text-sm flex-1">
             <p class="text-gray-400 text-sm">Loading…</p>
@@ -3324,11 +3344,19 @@
       panel.addEventListener('click', (e) => { if (e.target === panel) closeToolParentsPanel(); });
       document.body.appendChild(panel);
 
+      await reloadToolParentsPanel(toolName, initialDays);
+    }
+
+    async function reloadToolParentsPanel(toolName, days) {
       const body = document.getElementById('tool-parents-body');
+      const subtitle = document.getElementById('tool-parents-subtitle');
+      if (!body) return;
+      if (subtitle) subtitle.textContent = `Most expensive agent runs that invoked this tool — last ${days} days`;
+      body.innerHTML = '<p class="text-gray-400 text-sm">Loading…</p>';
       try {
-        const { data } = await apiFetch(`/api/ai-ops/tools/${encodeURIComponent(toolName)}/parents?limit=20`);
+        const { data } = await apiFetch(`/api/ai-ops/tools/${encodeURIComponent(toolName)}/parents?limit=20&days=${days}`);
         if (!data.length) {
-          body.innerHTML = `<p class="text-gray-400 text-sm" data-testid="text-tool-parents-empty">No parent agent calls found for <span class="font-mono">${esc(toolName)}</span> in the last 7 days.</p>`;
+          body.innerHTML = `<p class="text-gray-400 text-sm" data-testid="text-tool-parents-empty">No parent agent calls found for <span class="font-mono">${esc(toolName)}</span> in the last ${days} days.</p>`;
           return;
         }
         body.innerHTML = `

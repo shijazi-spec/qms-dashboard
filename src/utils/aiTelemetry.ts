@@ -1638,8 +1638,15 @@ export interface ParentCallForTool {
 export async function getParentCallsForTool(
   toolName: string,
   limit = 20,
+  windowDays = 7,
 ): Promise<ParentCallForTool[]> {
   await ensureAiMetricsTable();
+  // windowDays is interpolated (not a $-param) because PostgreSQL does not
+  // accept bind parameters inside an INTERVAL literal. The route layer
+  // already clamps the value via safeInt(..., 1, 90), and the function
+  // signature defaults to 7, so the value is always a small bounded
+  // integer — never user-controlled free-form text.
+  const safeDays = Math.max(1, Math.min(90, Math.floor(windowDays) || 7));
   const result = await pool.query(
     `SELECT
        p.id,
@@ -1654,7 +1661,7 @@ export async function getParentCallsForTool(
      FROM ai_call_metrics p
      JOIN ai_call_metrics c ON c.parent_call_id = p.id
      WHERE c.tool_name = $1
-       AND p.started_at >= NOW() - INTERVAL '7 days'
+       AND p.started_at >= NOW() - (INTERVAL '1 day' * ${safeDays})
      GROUP BY p.id, p.agent_name, p.model, p.started_at, p.latency_ms,
               p.estimated_cost_usd, p.success
      ORDER BY tool_cost DESC, p.started_at DESC
