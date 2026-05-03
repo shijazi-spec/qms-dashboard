@@ -376,6 +376,8 @@ export const userAccessRoutes = [
               success: true,
               invitation: maskedInvitation,
               email_sent: emailStatus.sent,
+              email_error: emailStatus.sent ? undefined : emailStatus.error,
+              invite_link: emailStatus.sent ? undefined : inviteLink,
               message: emailStatus.sent
                 ? `Invitation created and email sent to ${body.email}`
                 : `Invitation created but email could not be sent. The invite link has been generated for manual sharing.`,

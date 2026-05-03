@@ -319,6 +319,23 @@
         </div>
     </div>
 
+    <div id="invite-fallback-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold" data-i18n="dyn.users.invite_fallback_title" data-testid="text-invite-fallback-title">Invitation created — email not sent</h3>
+                <button data-on-click="hideInviteFallbackModal" class="text-gray-400 hover:text-gray-600" data-testid="button-close-invite-fallback">&times;</button>
+            </div>
+            <p class="text-sm text-gray-700 mb-3" data-i18n="dyn.users.invite_fallback_body">The invitation was created successfully, but the invitation email could not be delivered. Copy the link below and share it with the user manually.</p>
+            <p id="invite-fallback-reason" class="hidden text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3" data-testid="text-invite-fallback-reason"></p>
+            <label for="invite-fallback-link" class="block text-sm font-medium mb-1" data-i18n="dyn.users.invite_link_label">Invite link</label>
+            <input id="invite-fallback-link" type="text" readonly class="w-full border rounded px-3 py-2 text-sm bg-gray-50 mb-4" data-testid="input-invite-fallback-link" />
+            <div class="flex justify-end gap-3">
+                <button type="button" data-on-click="hideInviteFallbackModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50" data-i18n="dyn.users.close_btn" data-testid="button-close-invite-fallback-done">Close</button>
+                <button type="button" data-on-click="copyInviteFallbackLink" id="invite-fallback-copy-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="dyn.users.copy_link_btn" data-testid="button-copy-invite-fallback-link">Copy link</button>
+            </div>
+        </div>
+    </div>
+
     <div id="user-detail-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
         <div class="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
@@ -599,6 +616,52 @@
             document.getElementById('invite-form').reset();
         }
 
+        function showInviteFallbackModal(inviteLink, emailError) {
+            const modal = document.getElementById('invite-fallback-modal');
+            const linkInput = document.getElementById('invite-fallback-link');
+            const reasonEl = document.getElementById('invite-fallback-reason');
+            const copyBtn = document.getElementById('invite-fallback-copy-btn');
+            linkInput.value = inviteLink || '';
+            if (emailError) {
+                reasonEl.textContent = WalaPlusI18n.t('dyn.users.reason_prefix') + emailError;
+                reasonEl.classList.remove('hidden');
+            } else {
+                reasonEl.textContent = '';
+                reasonEl.classList.add('hidden');
+            }
+            copyBtn.textContent = WalaPlusI18n.t('dyn.users.copy_link_btn');
+            modal.classList.add('active');
+        }
+
+        function hideInviteFallbackModal() {
+            document.getElementById('invite-fallback-modal').classList.remove('active');
+            document.getElementById('invite-fallback-link').value = '';
+        }
+
+        function copyInviteFallbackLink() {
+            const linkInput = document.getElementById('invite-fallback-link');
+            const copyBtn = document.getElementById('invite-fallback-copy-btn');
+            const value = linkInput.value;
+            const showCopied = () => {
+                const original = WalaPlusI18n.t('dyn.users.copy_link_btn');
+                copyBtn.textContent = WalaPlusI18n.t('dyn.users.copy_link_done');
+                setTimeout(() => { copyBtn.textContent = original; }, 1500);
+            };
+            const fallbackSelect = () => {
+                try {
+                    linkInput.removeAttribute('readonly');
+                    linkInput.focus();
+                    linkInput.select();
+                    linkInput.setAttribute('readonly', 'readonly');
+                } catch (_) {}
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(value).then(showCopied).catch(fallbackSelect);
+            } else {
+                fallbackSelect();
+            }
+        }
+
         async function sendInvitation(e) {
             e.preventDefault();
             const form = e.target;
@@ -628,15 +691,7 @@
                     if (result.email_sent) {
                         alert(WalaPlusI18n.t('dyn.users.invite_sent', { email: data.email }));
                     } else {
-                        // Email failed - show the link to copy
-                        const copyLink = confirm(WalaPlusI18n.t('dyn.users.confirm_copy_invite', { error: result.email_error ? WalaPlusI18n.t('dyn.users.reason_prefix') + result.email_error + '\n\n' : '\n' }));
-                        if (copyLink && result.invite_link) {
-                            navigator.clipboard.writeText(result.invite_link).then(() => {
-                                alert(WalaPlusI18n.t('dyn.users.link_copied', { email: data.email }));
-                            }).catch(() => {
-                                prompt(WalaPlusI18n.t('dyn.users.prompt_copy_link'), result.invite_link);
-                            });
-                        }
+                        showInviteFallbackModal(result.invite_link, result.email_error);
                     }
                 } else {
                     alert(WalaPlusI18n.t('dyn.users.error_prefix', { msg: result.error || WalaPlusI18n.t('dyn.users.failed_send_invite') }));

@@ -1251,7 +1251,13 @@
       "prompt_admin_api_key": "Enter Admin API Key:",
       "prompt_copy_link": "Copy this invite link:",
       "prompt_denial_reason": "Enter reason for denial (optional):",
-      "reason_prefix": "Reason: "
+      "reason_prefix": "Reason: ",
+      "invite_fallback_title": "Invitation created — email not sent",
+      "invite_fallback_body": "The invitation was created successfully, but the invitation email could not be delivered. Copy the link below and share it with the user manually.",
+      "invite_link_label": "Invite link",
+      "copy_link_btn": "Copy link",
+      "copy_link_done": "Copied!",
+      "close_btn": "Close"
     },
     "projects": {
       "procurement_coming_soon": "Procurement modal - Coming soon",

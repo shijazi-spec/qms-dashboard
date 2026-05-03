@@ -1251,7 +1251,13 @@
       "prompt_admin_api_key": "أدخل مفتاح API المسؤول:",
       "prompt_copy_link": "انسخ رابط الدعوة هذا:",
       "prompt_denial_reason": "أدخل سبب الرفض (اختياري):",
-      "reason_prefix": "السبب: "
+      "reason_prefix": "السبب: ",
+      "invite_fallback_title": "تم إنشاء الدعوة — لم يتم إرسال البريد",
+      "invite_fallback_body": "تم إنشاء الدعوة بنجاح، ولكن تعذّر تسليم بريد الدعوة الإلكتروني. انسخ الرابط أدناه وشاركه مع المستخدم يدوياً.",
+      "invite_link_label": "رابط الدعوة",
+      "copy_link_btn": "نسخ الرابط",
+      "copy_link_done": "تم النسخ!",
+      "close_btn": "إغلاق"
     },
     "projects": {
       "procurement_coming_soon": "نافذة المشتريات - قريبًا",
