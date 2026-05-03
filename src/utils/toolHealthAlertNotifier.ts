@@ -1015,12 +1015,19 @@ export interface NotifyOverrideExpiredResult {
 export interface ToolHealthOverrideNotifierDeps {
   /** Defaults to `sendSlackNotification`. */
   sendSlack?: typeof sendSlackNotification;
+  /**
+   * Fetches the most recent N audit entries, newest first. Defaults to
+   * `getToolHealthConfigAudit` from `toolHealthConfigDatabase`. Tests can
+   * inject a stub so no real DB connection is required (Task #384).
+   */
+  getAudit?: (limit: number) => Promise<ToolHealthConfigAuditEntry[]>;
 }
 
 function buildOverrideExpiredSlackBlocks(
   n: ToolHealthOverrideExpiredNotification,
   link: string,
   linkIsAbsolute: boolean,
+  recentAudit: ToolHealthConfigAuditEntry[] = [],
 ): any[] {
   const setBy = n.previous_updated_by?.trim() || "_unknown_";
   const expiredAtIso =
@@ -1058,6 +1065,19 @@ function buildOverrideExpiredSlackBlocks(
       },
     },
   ];
+  // "Recent changes" — same pattern as the threshold-tuning notifier
+  // (Task #205). Surfaces the last few audit entries so on-call can see
+  // "what's been tuned recently?" without leaving Slack (Task #384).
+  if (recentAudit.length > 0) {
+    const lines = recentAudit.map(formatAuditEntrySummary);
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Recent changes (last ${recentAudit.length}):*\n${lines.join("\n")}`,
+      },
+    });
+  }
   // Slack rejects relative URLs in `actions.button.url`, so degrade to a
   // plain mrkdwn link when no public origin is configured (mirrors the
   // breach notifier's behavior — see buildSlackBlocks).
@@ -1155,11 +1175,33 @@ export async function notifyToolHealthOverrideExpired(
     `${setBy} just auto-reverted; alerts now using env baseline ` +
     `again. Cleared: ${describeClearedOverridesPlain(notification.cleared_overrides)}.`;
 
+  // Best-effort: pull the last 3 audit entries so the Slack message gives
+  // on-call the same "what's changed recently?" view the manual tune
+  // notification provides (Task #205 / Task #384). A DB hiccup must not
+  // block the Slack send — swallow the error and post without the block.
+  let recentAudit: ToolHealthConfigAuditEntry[] = [];
+  try {
+    const getAuditFn =
+      depsOverride.getAudit ??
+      (await import("./toolHealthConfigDatabase")).getToolHealthConfigAudit;
+    recentAudit = await getAuditFn(3);
+  } catch (auditErr) {
+    logger.error(
+      "[ToolHealthNotifier] Failed to load recent audit entries for override-expired Slack block (best-effort):",
+      auditErr,
+    );
+  }
+
   try {
     result.slackSent = await sendSlack(
       cfg.slackChannel,
       fallback,
-      buildOverrideExpiredSlackBlocks(notification, link, cfg.linkIsAbsolute),
+      buildOverrideExpiredSlackBlocks(
+        notification,
+        link,
+        cfg.linkIsAbsolute,
+        recentAudit,
+      ),
     );
   } catch (err) {
     logger.error(

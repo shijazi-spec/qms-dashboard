@@ -1096,11 +1096,17 @@ await suite.test(
 // ──────────────────────────────────────────────────────────────────────────────
 // Task #213 — override auto-revert Slack notification
 // ──────────────────────────────────────────────────────────────────────────────
-function makeOverrideStubs(opts: { slackResult?: boolean | Error } = {}): {
+function makeOverrideStubs(opts: {
+  slackResult?: boolean | Error;
+  auditEntries?: ToolHealthConfigAuditEntry[];
+  auditError?: Error;
+} = {}): {
   deps: ToolHealthOverrideNotifierDeps;
   slackCalls: SlackCall[];
+  auditCalls: number[];
 } {
   const slackCalls: SlackCall[] = [];
+  const auditCalls: number[] = [];
   return {
     deps: {
       sendSlack: async (channel, text, blocks) => {
@@ -1108,8 +1114,14 @@ function makeOverrideStubs(opts: { slackResult?: boolean | Error } = {}): {
         if (opts.slackResult instanceof Error) throw opts.slackResult;
         return opts.slackResult ?? true;
       },
+      getAudit: async (limit) => {
+        auditCalls.push(limit);
+        if (opts.auditError) throw opts.auditError;
+        return opts.auditEntries ?? [];
+      },
     },
     slackCalls,
+    auditCalls,
   };
 }
 
@@ -1246,6 +1258,70 @@ await suite.test(
     } finally {
       console.error = origErr;
     }
+  },
+);
+
+await suite.test(
+  "override-expired: appends 'Recent changes' block from getAudit (Task #384)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls, auditCalls } = makeOverrideStubs({
+      auditEntries: makeSampleAuditEntries(3),
+    });
+    const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
+    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(auditCalls.length, 1, "getAudit called exactly once");
+    suite.expectEqual(auditCalls[0], 3, "getAudit called with limit=3");
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      blocks.includes("Recent changes (last 3)"),
+      `blocks include the Recent changes header (got: ${blocks.slice(0, 400)}...)`,
+    );
+    suite.expect(
+      blocks.includes("Alice Admin") && blocks.includes("Bob Ops"),
+      "blocks include the recent changers",
+    );
+  },
+);
+
+await suite.test(
+  "override-expired: getAudit error is swallowed; Slack still posts without the block (Task #384)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeOverrideStubs({
+      auditError: new Error("db down"),
+    });
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
+      suite.expectEqual(result.slackSent, true, "slack still posts");
+      suite.expectEqual(slackCalls.length, 1, "one slack call");
+      const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+      suite.expect(
+        !blocks.includes("Recent changes"),
+        "no Recent changes block when audit fetch failed",
+      );
+    } finally {
+      console.error = origErr;
+    }
+  },
+);
+
+await suite.test(
+  "override-expired: empty audit list → no Recent changes block",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeOverrideStubs({ auditEntries: [] });
+    await notifyToolHealthOverrideExpired(sampleOverride(), deps);
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      !blocks.includes("Recent changes"),
+      "no Recent changes block when audit list is empty",
+    );
   },
 );
 
