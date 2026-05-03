@@ -1118,6 +1118,356 @@ const aiFeedbackDigestFunction = inngest.createFunction(
 );
 inngestFunctions.push(aiFeedbackDigestFunction);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Fraud Management Module — scheduled jobs (PRD-FRD-001 §9)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * fraud-rule-review-reminder — daily at 08:00 UTC.
+ *
+ * Notifies the rule owner (in-app) when a fraud rule's `next_review` date is
+ * within the next 14 days, so reviews are scheduled proactively rather than
+ * being chased after they go overdue. Re-running the cron is idempotent at
+ * the data level (we use createNotification, which is allowed to enqueue
+ * duplicates; if dedup becomes important we can add a `last_reminded_at`
+ * column to fraud_rules in a follow-up).
+ */
+const fraudRuleReviewReminderFunction = inngest.createFunction(
+  { id: "fraud-rule-review-reminder" },
+  { cron: process.env.FRAUD_RULE_REVIEW_REMINDER_CRON || "0 8 * * *" },
+  async ({ step }) => {
+    return await step.run("notify-rule-owners-of-upcoming-reviews", async () => {
+      const { getFraudRulesNeedingReviewSoon, initFraudTables } = await import(
+        "../../utils/fraudDatabase"
+      );
+      const { createNotification } = await import("../../utils/notificationHub");
+
+      await initFraudTables();
+      const due = await getFraudRulesNeedingReviewSoon(14);
+      if (due.length === 0) {
+        logger.info("[FraudRuleReviewReminder] No rules due for review in next 14 days");
+        return { notified: 0 };
+      }
+
+      let notified = 0;
+      for (const rule of due) {
+        try {
+          await createNotification({
+            title: `Fraud rule review due: ${rule.rule_id}`,
+            message: `Rule "${rule.rule_name}" (${rule.rule_id}) needs review by ${String(rule.next_review).slice(0, 10)}. Owner: ${rule.owner}.`,
+            module: "fraud",
+            priority: "medium",
+            channel: "in_app",
+            recipient: rule.owner,
+            related_entity_type: "fraud_rule",
+            related_entity_id: String(rule.id ?? rule.rule_id),
+            action_url: "/fraud-rules",
+          });
+          notified++;
+        } catch (err) {
+          logger.error(
+            `[FraudRuleReviewReminder] Failed to notify for rule ${rule.rule_id}:`,
+            err,
+          );
+        }
+      }
+      logger.info(
+        `[FraudRuleReviewReminder] Notified ${notified}/${due.length} rule owners`,
+      );
+      return { notified, total_due: due.length };
+    });
+  },
+);
+inngestFunctions.push(fraudRuleReviewReminderFunction);
+
+/**
+ * fraud-sama-deadline-check — hourly.
+ *
+ * P1 incidents must be reported to SAMA within 72 hours of detection. This
+ * cron alerts the Head of GRQ + admin recipients when an open P1 hits the
+ * 12-hour-remaining threshold (i.e. >=60h elapsed and sama_reported is
+ * still null/false). Re-runs are safe — same dedup posture as the rule
+ * review reminder.
+ */
+const fraudSamaDeadlineCheckFunction = inngest.createFunction(
+  { id: "fraud-sama-deadline-check" },
+  { cron: process.env.FRAUD_SAMA_DEADLINE_CRON || "5 * * * *" },
+  async ({ step }) => {
+    return await step.run("notify-on-sama-deadline-approaching", async () => {
+      const { getSamaDeadlineApproaching, initFraudTables } = await import(
+        "../../utils/fraudDatabase"
+      );
+      const { createNotification } = await import("../../utils/notificationHub");
+      await initFraudTables();
+      const candidates = await getSamaDeadlineApproaching(60);
+      if (candidates.length === 0) {
+        return { notified: 0 };
+      }
+      const recipients = (
+        process.env.FRAUD_SAMA_NOTIFY_EMAILS ||
+        "head.grq@walaplus.com,admin@walaplus.com"
+      )
+        .split(",")
+        .map((e) => e.trim())
+        .filter(Boolean);
+      let notified = 0;
+      for (const inc of candidates) {
+        for (const recipient of recipients) {
+          try {
+            await createNotification({
+              title: `URGENT — SAMA 72h deadline approaching: ${inc.incident_code}`,
+              message: `P1 incident ${inc.incident_code} detected ${String(inc.date_detected).slice(0, 10)} is not yet SAMA-reported. Take action within 12 hours.`,
+              module: "fraud",
+              priority: "critical",
+              channel: "in_app",
+              recipient,
+              related_entity_type: "fraud_incident",
+              related_entity_id: String(inc.id),
+              action_url: "/fraud-incidents",
+            });
+            notified++;
+          } catch (err) {
+            logger.error(
+              `[FraudSamaDeadline] Failed to notify ${recipient} for ${inc.incident_code}:`,
+              err,
+            );
+          }
+        }
+      }
+      logger.info(
+        `[FraudSamaDeadline] ${candidates.length} P1 incidents approaching deadline; ${notified} notifications dispatched`,
+      );
+      return { notified, candidates: candidates.length };
+    });
+  },
+);
+inngestFunctions.push(fraudSamaDeadlineCheckFunction);
+
+/**
+ * fraud-incident-overdue-check — daily 09:00 UTC.
+ *
+ * Incidents older than 30 days without a `resolution_date` violate the
+ * SAMA consumer-protection 30-day resolution requirement. Notify the
+ * Head of GRQ so escalation can be triggered.
+ */
+const fraudIncidentOverdueCheckFunction = inngest.createFunction(
+  { id: "fraud-incident-overdue-check" },
+  { cron: process.env.FRAUD_INCIDENT_OVERDUE_CRON || "0 9 * * *" },
+  async ({ step }) => {
+    return await step.run("notify-on-overdue-incidents", async () => {
+      const { getOverdueFraudIncidents, initFraudTables } = await import(
+        "../../utils/fraudDatabase"
+      );
+      const { createNotification } = await import("../../utils/notificationHub");
+      await initFraudTables();
+      const overdue = await getOverdueFraudIncidents(30);
+      if (overdue.length === 0) {
+        return { notified: 0 };
+      }
+      const recipient =
+        process.env.FRAUD_OVERDUE_NOTIFY_EMAIL || "head.grq@walaplus.com";
+      let notified = 0;
+      for (const inc of overdue) {
+        try {
+          await createNotification({
+            title: `Fraud incident overdue (>30 days): ${inc.incident_code}`,
+            message: `Incident ${inc.incident_code} (${inc.severity}) detected ${String(inc.date_detected).slice(0, 10)} has no resolution_date. Status: ${inc.status}.`,
+            module: "fraud",
+            priority: "high",
+            channel: "in_app",
+            recipient,
+            related_entity_type: "fraud_incident",
+            related_entity_id: String(inc.id),
+            action_url: "/fraud-incidents",
+          });
+          notified++;
+        } catch (err) {
+          logger.error(
+            `[FraudIncidentOverdue] Failed to notify for ${inc.incident_code}:`,
+            err,
+          );
+        }
+      }
+      logger.info(
+        `[FraudIncidentOverdue] ${overdue.length} overdue; ${notified} notifications dispatched`,
+      );
+      return { notified, overdue: overdue.length };
+    });
+  },
+);
+inngestFunctions.push(fraudIncidentOverdueCheckFunction);
+
+/**
+ * fraud-incident-sla-check — hourly.
+ *
+ * Surfaces open incidents that have no `contained_at` after the severity-
+ * based SLA window has elapsed. SLA is defined per severity; this function
+ * uses inline thresholds matching the escalation matrix Excel
+ * (P1=4h, P2=24h, P3=72h, P4=168h) until Feature 4 wires the matrix as
+ * the canonical source.
+ */
+const fraudIncidentSlaCheckFunction = inngest.createFunction(
+  { id: "fraud-incident-sla-check" },
+  { cron: process.env.FRAUD_INCIDENT_SLA_CRON || "10 * * * *" },
+  async ({ step }) => {
+    return await step.run("notify-on-sla-breach", async () => {
+      const { getOpenFraudIncidents, initFraudTables } = await import(
+        "../../utils/fraudDatabase"
+      );
+      const { createNotification } = await import("../../utils/notificationHub");
+      await initFraudTables();
+      const open = await getOpenFraudIncidents();
+
+      const SLA_HOURS: Record<string, number> = {
+        P1: 4,
+        P2: 24,
+        P3: 72,
+        P4: 168,
+      };
+      const now = Date.now();
+      const breaches = open.filter((inc: any) => {
+        if (inc.contained_at) return false;
+        const detected = new Date(inc.created_at ?? inc.date_detected).getTime();
+        const sla = SLA_HOURS[inc.severity] ?? 168;
+        return now - detected > sla * 3600 * 1000;
+      });
+
+      if (breaches.length === 0) {
+        return { notified: 0, open: open.length };
+      }
+      const recipient =
+        process.env.FRAUD_SLA_NOTIFY_EMAIL || "head.grq@walaplus.com";
+      let notified = 0;
+      for (const inc of breaches as any[]) {
+        try {
+          await createNotification({
+            title: `SLA breach — ${inc.severity} incident ${inc.incident_code}`,
+            message: `Incident ${inc.incident_code} (${inc.severity}) is open past its containment SLA. Status: ${inc.status}.`,
+            module: "fraud",
+            priority: inc.severity === "P1" ? "critical" : "high",
+            channel: "in_app",
+            recipient,
+            related_entity_type: "fraud_incident",
+            related_entity_id: String(inc.id),
+            action_url: "/fraud-incidents",
+          });
+          notified++;
+        } catch (err) {
+          logger.error(
+            `[FraudSlaCheck] Failed to notify for ${inc.incident_code}:`,
+            err,
+          );
+        }
+      }
+      logger.info(
+        `[FraudSlaCheck] ${breaches.length} SLA breaches; ${notified} notifications dispatched`,
+      );
+      return { notified, breaches: breaches.length, open: open.length };
+    });
+  },
+);
+inngestFunctions.push(fraudIncidentSlaCheckFunction);
+
+/**
+ * fraud-country-review-reminder — twice a year on Feb 1 and Oct 1 at 09:00.
+ *
+ * FATF publishes plenary updates 3x/year (typically Feb, Jun, Oct); this
+ * cron prompts the GRQ team to refresh the country-risk register against
+ * the latest FATF black/grey lists and any sanctions changes. Single
+ * notification to the head of GRQ — the team owns the data refresh.
+ */
+const fraudCountryReviewReminderFunction = inngest.createFunction(
+  { id: "fraud-country-review-reminder" },
+  { cron: process.env.FRAUD_COUNTRY_REVIEW_CRON || "0 9 1 2,10 *" },
+  async ({ step }) => {
+    return await step.run("notify-grq-of-country-review-due", async () => {
+      const { initFraudTables, getBlackListedCountryCount } = await import(
+        "../../utils/fraudDatabase"
+      );
+      const { createNotification } = await import("../../utils/notificationHub");
+      await initFraudTables();
+      const blacklisted = await getBlackListedCountryCount();
+      const recipient =
+        process.env.FRAUD_COUNTRY_NOTIFY_EMAIL || "head.grq@walaplus.com";
+      await createNotification({
+        title: "Country Risk Register — semi-annual review due",
+        message: `FATF publishes updates 3x/year. Refresh country-risk ratings against the latest plenary outcomes. Currently ${blacklisted} country/countries are on the FATF black-list.`,
+        module: "fraud",
+        priority: "medium",
+        channel: "in_app",
+        recipient,
+        related_entity_type: "fraud_country_risk",
+        related_entity_id: "review",
+        action_url: "/fraud-country-risk",
+      });
+      return { notified: 1, blacklisted };
+    });
+  },
+);
+inngestFunctions.push(fraudCountryReviewReminderFunction);
+
+/**
+ * fraud-kpi-monthly-reminder — 1st business day of each month at 09:00 UTC.
+ *
+ * On the 1st of each month, auto-calculate the *previous* month's KPIs
+ * from incidents data (so the dashboard shows real numbers immediately)
+ * and notify the GRQ team to fill in the manual fields
+ * (total_transactions, total_rejections, customer_complaints).
+ *
+ * Cron is "0 9 1 * *" (1st of every month). Calling this on a Sunday is
+ * fine; the notification just lands in inboxes ahead of business hours.
+ */
+const fraudKpiMonthlyReminderFunction = inngest.createFunction(
+  { id: "fraud-kpi-monthly-reminder" },
+  { cron: process.env.FRAUD_KPI_MONTHLY_CRON || "0 9 1 * *" },
+  async ({ step }) => {
+    return await step.run("auto-calc-and-remind", async () => {
+      const { initFraudTables, autoCalculateKpisForMonth, upsertFraudKpi } =
+        await import("../../utils/fraudDatabase");
+      const { createNotification } = await import("../../utils/notificationHub");
+      await initFraudTables();
+
+      // Compute previous month YYYY-MM-01.
+      const today = new Date();
+      const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-01`;
+
+      let result: any = null;
+      try {
+        const calc = await autoCalculateKpisForMonth(prevMonth);
+        result = await upsertFraudKpi(prevMonth, calc, "system:monthly-cron");
+      } catch (err) {
+        logger.error(
+          `[FraudKpiMonthly] auto-calc failed for ${prevMonth}:`,
+          err,
+        );
+      }
+
+      const recipient =
+        process.env.FRAUD_KPI_NOTIFY_EMAIL || "head.grq@walaplus.com";
+      try {
+        await createNotification({
+          title: `Fraud KPI snapshot ready: ${prevMonth.slice(0, 7)}`,
+          message: `Previous-month KPIs auto-calculated from incidents data. Please fill in total_transactions, total_rejections, and customer_complaints in the dashboard.`,
+          module: "fraud",
+          priority: "medium",
+          channel: "in_app",
+          recipient,
+          related_entity_type: "fraud_kpi",
+          related_entity_id: prevMonth,
+          action_url: "/fraud-dashboard",
+        });
+      } catch (err) {
+        logger.error(`[FraudKpiMonthly] notify failed:`, err);
+      }
+
+      logger.info(`[FraudKpiMonthly] processed ${prevMonth}`);
+      return { month: prevMonth, kpi_id: result?.id ?? null };
+    });
+  },
+);
+inngestFunctions.push(fraudKpiMonthlyReminderFunction);
+
 export function inngestServe({
   mastra,
   inngest,

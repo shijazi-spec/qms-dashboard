@@ -473,6 +473,58 @@ export const staticPageRoutes = [
         `To access the Risk Register, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
+  // /fraud-rules → /api/fraud/rules GET — Fraud Management Module
+  // (PRD-FRD-001 Feature 1). Read allowlist mirrors the GRC governance set.
+  {
+    path: "/fraud-rules",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "fraud-rules.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Fraud Rules Setup Required",
+        `To access the Fraud Rules Register, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
+  // /fraud-incidents → /api/fraud/incidents GET — Fraud Management Module
+  // (PRD-FRD-001 Feature 2). Same governance allowlist as fraud-rules.
+  {
+    path: "/fraud-incidents",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "fraud-incidents.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Fraud Incidents Setup Required",
+        `To access the Fraud Incident Register, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
+  // /fraud-country-risk → /api/fraud/countries GET — Fraud Management
+  // (PRD-FRD-001 Feature 3).
+  {
+    path: "/fraud-country-risk",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "fraud-country-risk.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Country Risk Setup Required",
+        `To access the Country Risk Assessment, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
+  // /fraud-dashboard → /api/fraud/kpis* — Fraud KPI Dashboard
+  // (PRD-FRD-001 Feature 5).
+  {
+    path: "/fraud-dashboard",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "fraud-dashboard.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Fraud KPI Dashboard Setup Required",
+        `To access the Fraud KPI Dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /grc → cross-module GRC dashboard (audits, compliance, risks, etc.).
   {
     path: "/grc",
@@ -774,6 +826,26 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
     path: "/risks",
     allowedRoles: GOVERNANCE_AND_EXECUTIVE,
     backingApiPath: "/api/risks",
+  },
+  {
+    path: "/fraud-rules",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/fraud/rules",
+  },
+  {
+    path: "/fraud-incidents",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/fraud/incidents",
+  },
+  {
+    path: "/fraud-country-risk",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/fraud/countries",
+  },
+  {
+    path: "/fraud-dashboard",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/fraud/kpis",
   },
   // /grc aggregates audits + compliance + risks + reviews; all share the
   // same governance+executive read allowlist, so /api/audits is a faithful

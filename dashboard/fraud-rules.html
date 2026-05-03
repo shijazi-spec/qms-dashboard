@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WalaPlus - Fraud Rules Register</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .badge-passed { background-color: #D1FAE5; color: #047857; }
+        .badge-pending { background-color: #FEF3C7; color: #92400E; }
+        .badge-warning { background-color: #FFEDD5; color: #C2410C; }
+        .badge-danger { background-color: #FEE2E2; color: #B91C1C; }
+        .badge-info { background-color: #DBEAFE; color: #1E40AF; }
+        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
+    <script src="/js/navigation.js?v=4.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            WalaPlusNav.init('fraud-rules');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="fraud_rules.title">Fraud Rules Register</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="fraud_rules.subtitle">PRD-FRD-001 Feature 1 — Centralized fraud rule inventory with threshold tracking and review scheduling</p>
+            </div>
+            <div class="flex gap-3 items-center">
+                <button data-on-click="loadFraudRules" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span data-i18n="common.refresh">Refresh</span>
+                </button>
+                <button data-on-click="openAddRuleModal" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <span data-i18n="fraud_rules.add_rule">Add Rule</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm text-gray-500" data-i18n="fraud_rules.total">Total Rules</div>
+                <div id="cardTotal" class="text-2xl font-bold text-gray-900">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-green-600">
+                <div class="text-sm text-gray-500" data-i18n="fraud_rules.passed">Passed</div>
+                <div id="cardPassed" class="text-2xl font-bold text-green-600">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-amber-500">
+                <div class="text-sm text-gray-500" data-i18n="fraud_rules.pending">Pending Testing</div>
+                <div id="cardPending" class="text-2xl font-bold text-amber-500">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-orange-500">
+                <div class="text-sm text-gray-500" data-i18n="fraud_rules.needs_attention">Needs Attention</div>
+                <div id="cardNeedsAttention" class="text-2xl font-bold text-orange-500">—</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-red-600">
+                <div class="text-sm text-gray-500" data-i18n="fraud_rules.misconfigured">Misconfiguration</div>
+                <div id="cardMisconfig" class="text-2xl font-bold text-red-600">—</div>
+            </div>
+        </div>
+
+        <!-- Urgent items panel — visible only if misconfigurations exist -->
+        <div id="urgentPanel" class="hidden mb-6 bg-red-50 border-s-4 border-red-600 rounded-lg p-4">
+            <div class="flex items-start gap-3">
+                <svg class="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <div class="flex-1">
+                    <h3 class="text-sm font-semibold text-red-900" data-i18n="fraud_rules.urgent_title">Urgent — Misconfigured Rules</h3>
+                    <p class="text-sm text-red-800 mt-1" data-i18n="fraud_rules.urgent_desc">These rules are currently in MISCONFIGURATION state. Fix within 48 hours per PRD §5.1.</p>
+                    <ul id="urgentList" class="mt-2 text-sm text-red-900 list-disc list-inside"></ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-4 items-end">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1" data-i18n="fraud_rules.filter_owner">Owner</label>
+                <select id="filterOwner" data-on-change="applyFilters" class="border rounded-lg px-3 py-1.5 text-sm">
+                    <option value="" data-i18n="common.all">All</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1" data-i18n="fraud_rules.filter_status">Test Status</label>
+                <select id="filterStatus" data-on-change="applyFilters" class="border rounded-lg px-3 py-1.5 text-sm">
+                    <option value="">All</option>
+                    <option value="passed">Passed</option>
+                    <option value="pending_testing">Pending Testing</option>
+                    <option value="not_tested">Not Tested</option>
+                    <option value="not_defined">Not Defined</option>
+                    <option value="active_being_modified">Active – Being Modified</option>
+                    <option value="misconfiguration">Misconfiguration</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1" data-i18n="fraud_rules.filter_type">Transaction Type</label>
+                <select id="filterType" data-on-change="applyFilters" class="border rounded-lg px-3 py-1.5 text-sm">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <button data-on-click="clearFilters" class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50" data-i18n="common.clear">Clear</button>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_id">ID</th>
+                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_name">Rule</th>
+                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_type">Type</th>
+                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_owner">Owner</th>
+                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_status">Status</th>
+                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_alert">Alert Threshold</th>
+                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_block">Block Threshold</th>
+                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_setting">Current → Target</th>
+                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_last_tested">Last Tested</th>
+                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_next_review">Next Review</th>
+                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rulesTableBody" class="divide-y divide-gray-200 text-sm"></tbody>
+                </table>
+            </div>
+            <div id="emptyState" class="hidden p-12 text-center text-gray-400">
+                <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <p data-i18n="fraud_rules.empty">No rules match the current filters.</p>
+            </div>
+            <div id="loadingState" class="p-12 text-center text-gray-400">
+                <p data-i18n="common.loading">Loading…</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add / Edit modal -->
+    <div id="ruleModal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 id="modalTitle" class="text-lg font-bold text-gray-900">Add Rule</h2>
+                <button data-on-click="closeRuleModal" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <form id="ruleForm" data-on-submit="submitRuleForm" class="p-6 space-y-4">
+                <input type="hidden" id="ruleEditId" value="">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Rule ID *</label>
+                        <input type="text" id="formRuleId" required class="w-full border rounded-lg px-3 py-2" placeholder="FR-018">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Test Status *</label>
+                        <select id="formTestStatus" required class="w-full border rounded-lg px-3 py-2">
+                            <option value="not_tested">Not Tested</option>
+                            <option value="pending_testing">Pending Testing</option>
+                            <option value="passed">Passed</option>
+                            <option value="not_defined">Not Defined</option>
+                            <option value="active_being_modified">Active – Being Modified</option>
+                            <option value="misconfiguration">Misconfiguration</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Rule Name *</label>
+                    <input type="text" id="formRuleName" required class="w-full border rounded-lg px-3 py-2">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Transaction Type *</label>
+                        <input type="text" id="formTxType" required class="w-full border rounded-lg px-3 py-2" placeholder="Wallet Top-Up">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Owner *</label>
+                        <input type="text" id="formOwner" required class="w-full border rounded-lg px-3 py-2" placeholder="IT + GRQ">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Alert Threshold</label>
+                        <input type="text" id="formAlertThreshold" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Block Threshold</label>
+                        <input type="text" id="formBlockThreshold" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Current Setting</label>
+                        <input type="text" id="formCurrentSetting" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Target Setting</label>
+                        <input type="text" id="formTargetSetting" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Last Tested</label>
+                        <input type="date" id="formLastTested" class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Next Review *</label>
+                        <input type="date" id="formNextReview" required class="w-full border rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                    <textarea id="formNotes" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
+                </div>
+                <div id="formError" class="hidden text-sm text-red-600"></div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" data-on-click="closeRuleModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ─────────────────────────────────────────────────────────────────────
+        // Fraud Rules Register — page state and handlers
+        // PRD-FRD-001 Feature 1.
+        // Style: vanilla JS, CSP-friendly (no inline onclick — uses
+        // data-on-click handled by safe-actions.js).
+        // ─────────────────────────────────────────────────────────────────────
+        let allRules = [];
+
+        const STATUS_BADGE = {
+            passed: { cls: 'badge-passed', label: 'Passed' },
+            pending_testing: { cls: 'badge-pending', label: 'Pending Testing' },
+            not_tested: { cls: 'badge-warning', label: 'Not Tested' },
+            not_defined: { cls: 'badge-warning', label: 'Not Defined' },
+            active_being_modified: { cls: 'badge-info', label: 'Being Modified' },
+            misconfiguration: { cls: 'badge-danger', label: 'Misconfiguration' },
+        };
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function fmtDate(s) {
+            if (!s) return '—';
+            try { return new Date(s).toISOString().slice(0, 10); }
+            catch { return String(s); }
+        }
+
+        async function loadFraudRules() {
+            const empty = document.getElementById('emptyState');
+            const loading = document.getElementById('loadingState');
+            const tbody = document.getElementById('rulesTableBody');
+            empty.classList.add('hidden');
+            loading.classList.remove('hidden');
+            tbody.innerHTML = '';
+
+            try {
+                const res = await fetch('/api/fraud/rules', { credentials: 'include' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                allRules = Array.isArray(data.rules) ? data.rules : [];
+                populateFilterOptions();
+                applyFilters();
+                renderSummary();
+                renderUrgentPanel();
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="11" class="p-6 text-center text-red-600">Failed to load rules: ' + escapeHtml(err.message) + '</td></tr>';
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        function populateFilterOptions() {
+            const ownerSel = document.getElementById('filterOwner');
+            const typeSel = document.getElementById('filterType');
+            const owners = Array.from(new Set(allRules.map(r => r.owner).filter(Boolean))).sort();
+            const types = Array.from(new Set(allRules.map(r => r.transaction_type).filter(Boolean))).sort();
+            ownerSel.innerHTML = '<option value="">All</option>' + owners.map(o => '<option value="' + escapeHtml(o) + '">' + escapeHtml(o) + '</option>').join('');
+            typeSel.innerHTML = '<option value="">All</option>' + types.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+        }
+
+        function applyFilters() {
+            const owner = document.getElementById('filterOwner').value;
+            const status = document.getElementById('filterStatus').value;
+            const txType = document.getElementById('filterType').value;
+            const filtered = allRules.filter(r =>
+                (!owner || r.owner === owner) &&
+                (!status || r.test_status === status) &&
+                (!txType || r.transaction_type === txType)
+            );
+            renderTable(filtered);
+        }
+
+        function clearFilters() {
+            document.getElementById('filterOwner').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterType').value = '';
+            applyFilters();
+        }
+
+        function renderTable(rules) {
+            const tbody = document.getElementById('rulesTableBody');
+            const empty = document.getElementById('emptyState');
+            if (rules.length === 0) {
+                tbody.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+            tbody.innerHTML = rules.map(r => {
+                const badge = STATUS_BADGE[r.test_status] || { cls: 'badge-warning', label: r.test_status || '—' };
+                const pendingChange = r.target_setting && r.current_setting && r.target_setting !== r.current_setting;
+                const settingCell = pendingChange
+                    ? escapeHtml(r.current_setting || '') + ' <span class="badge-info text-xs px-2 py-0.5 rounded ms-1">Pending Change</span><br><span class="text-xs text-gray-500">→ ' + escapeHtml(r.target_setting) + '</span>'
+                    : escapeHtml(r.current_setting || '—');
+                const reviewSoon = r.next_review && (new Date(r.next_review).getTime() - Date.now()) < 14 * 86400000;
+                const reviewCell = '<span class="' + (reviewSoon ? 'text-orange-600 font-semibold' : '') + '">' + fmtDate(r.next_review) + '</span>';
+                return '<tr class="hover:bg-gray-50">' +
+                    '<td class="px-3 py-2 font-mono text-xs">' + escapeHtml(r.rule_id) + '</td>' +
+                    '<td class="px-3 py-2"><div class="font-medium text-gray-900">' + escapeHtml(r.rule_name) + '</div>' +
+                        (r.notes ? '<div class="text-xs text-gray-500 mt-0.5">' + escapeHtml(r.notes) + '</div>' : '') + '</td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(r.transaction_type) + '</td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(r.owner) + '</td>' +
+                    '<td class="px-3 py-2"><span class="' + badge.cls + ' text-xs px-2 py-1 rounded font-medium">' + escapeHtml(badge.label) + '</span></td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(r.alert_threshold || '—') + '</td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(r.block_threshold || '—') + '</td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-700">' + settingCell + '</td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-700">' + fmtDate(r.last_tested) + '</td>' +
+                    '<td class="px-3 py-2 text-xs">' + reviewCell + '</td>' +
+                    '<td class="px-3 py-2 text-end">' +
+                        '<button data-on-click="editRule" data-args=\'["' + escapeHtml(r.public_id || r.rule_id) + '"]\' class="text-blue-600 hover:underline text-xs me-2">Edit</button>' +
+                        '<button data-on-click="deleteRule" data-args=\'["' + escapeHtml(r.public_id || r.rule_id) + '","' + escapeHtml(r.rule_id) + '"]\' class="text-red-600 hover:underline text-xs">Delete</button>' +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        function renderSummary() {
+            document.getElementById('cardTotal').textContent = String(allRules.length);
+            const passed = allRules.filter(r => r.test_status === 'passed').length;
+            const pending = allRules.filter(r => r.test_status === 'pending_testing' || r.test_status === 'active_being_modified').length;
+            const needsAttn = allRules.filter(r => r.test_status === 'not_tested' || r.test_status === 'not_defined').length;
+            const misc = allRules.filter(r => r.test_status === 'misconfiguration').length;
+            document.getElementById('cardPassed').textContent = String(passed);
+            document.getElementById('cardPending').textContent = String(pending);
+            document.getElementById('cardNeedsAttention').textContent = String(needsAttn);
+            document.getElementById('cardMisconfig').textContent = String(misc);
+        }
+
+        function renderUrgentPanel() {
+            const panel = document.getElementById('urgentPanel');
+            const list = document.getElementById('urgentList');
+            const misc = allRules.filter(r => r.test_status === 'misconfiguration');
+            if (misc.length === 0) {
+                panel.classList.add('hidden');
+                return;
+            }
+            panel.classList.remove('hidden');
+            list.innerHTML = misc.map(r => '<li><span class="font-mono text-xs">' + escapeHtml(r.rule_id) + '</span> — ' + escapeHtml(r.rule_name) + (r.notes ? ' (' + escapeHtml(r.notes) + ')' : '') + '</li>').join('');
+        }
+
+        // ── Modal helpers ───────────────────────────────────────────────────
+        function openAddRuleModal() {
+            document.getElementById('modalTitle').textContent = 'Add Rule';
+            document.getElementById('ruleEditId').value = '';
+            document.getElementById('ruleForm').reset();
+            document.getElementById('formError').classList.add('hidden');
+            document.getElementById('ruleModal').classList.add('active');
+        }
+
+        function editRule(idOrPublic) {
+            const r = allRules.find(x => String(x.public_id) === String(idOrPublic) || String(x.rule_id) === String(idOrPublic));
+            if (!r) { alert('Rule not found'); return; }
+            document.getElementById('modalTitle').textContent = 'Edit Rule ' + r.rule_id;
+            document.getElementById('ruleEditId').value = r.public_id || r.rule_id;
+            document.getElementById('formRuleId').value = r.rule_id || '';
+            document.getElementById('formRuleId').disabled = true;
+            document.getElementById('formRuleName').value = r.rule_name || '';
+            document.getElementById('formTxType').value = r.transaction_type || '';
+            document.getElementById('formOwner').value = r.owner || '';
+            document.getElementById('formTestStatus').value = r.test_status || 'not_tested';
+            document.getElementById('formAlertThreshold').value = r.alert_threshold || '';
+            document.getElementById('formBlockThreshold').value = r.block_threshold || '';
+            document.getElementById('formCurrentSetting').value = r.current_setting || '';
+            document.getElementById('formTargetSetting').value = r.target_setting || '';
+            document.getElementById('formLastTested').value = r.last_tested ? String(r.last_tested).slice(0, 10) : '';
+            document.getElementById('formNextReview').value = r.next_review ? String(r.next_review).slice(0, 10) : '';
+            document.getElementById('formNotes').value = r.notes || '';
+            document.getElementById('formError').classList.add('hidden');
+            document.getElementById('ruleModal').classList.add('active');
+        }
+
+        function closeRuleModal() {
+            document.getElementById('ruleModal').classList.remove('active');
+            document.getElementById('formRuleId').disabled = false;
+        }
+
+        async function submitRuleForm(event) {
+            event.preventDefault();
+            const editId = document.getElementById('ruleEditId').value;
+            const payload = {
+                rule_id: document.getElementById('formRuleId').value.trim(),
+                rule_name: document.getElementById('formRuleName').value.trim(),
+                transaction_type: document.getElementById('formTxType').value.trim(),
+                owner: document.getElementById('formOwner').value.trim(),
+                test_status: document.getElementById('formTestStatus').value,
+                alert_threshold: document.getElementById('formAlertThreshold').value.trim() || null,
+                block_threshold: document.getElementById('formBlockThreshold').value.trim() || null,
+                current_setting: document.getElementById('formCurrentSetting').value.trim() || null,
+                target_setting: document.getElementById('formTargetSetting').value.trim() || null,
+                last_tested: document.getElementById('formLastTested').value || null,
+                next_review: document.getElementById('formNextReview').value,
+                notes: document.getElementById('formNotes').value.trim() || null,
+            };
+            const errBox = document.getElementById('formError');
+            errBox.classList.add('hidden');
+            try {
+                let res;
+                if (editId) {
+                    res = await fetch('/api/fraud/rules/' + encodeURIComponent(editId), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify(payload),
+                    });
+                } else {
+                    res = await fetch('/api/fraud/rules', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify(payload),
+                    });
+                }
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    throw new Error(body.error || ('HTTP ' + res.status));
+                }
+                closeRuleModal();
+                await loadFraudRules();
+            } catch (err) {
+                errBox.textContent = 'Save failed: ' + err.message;
+                errBox.classList.remove('hidden');
+            }
+        }
+
+        async function deleteRule(idOrPublic, ruleCode) {
+            if (!confirm('Delete rule ' + ruleCode + '? (soft delete; can be restored from DB)')) return;
+            try {
+                const res = await fetch('/api/fraud/rules/' + encodeURIComponent(idOrPublic), {
+                    method: 'DELETE',
+                    credentials: 'include',
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                await loadFraudRules();
+            } catch (err) {
+                alert('Delete failed: ' + err.message);
+            }
+        }
+
+        // Expose handlers globally for safe-actions.js dispatcher
+        window.loadFraudRules = loadFraudRules;
+        window.applyFilters = applyFilters;
+        window.clearFilters = clearFilters;
+        window.openAddRuleModal = openAddRuleModal;
+        window.closeRuleModal = closeRuleModal;
+        window.editRule = editRule;
+        window.deleteRule = deleteRule;
+        window.submitRuleForm = submitRuleForm;
+
+        document.addEventListener('DOMContentLoaded', loadFraudRules);
+    </script>
+</body>
+</html>
