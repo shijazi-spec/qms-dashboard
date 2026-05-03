@@ -485,22 +485,35 @@ export async function getToolHealthAlertHistory(
   limit = 20,
   severity?: string,
   resolution?: 'auto' | 'manual',
+  options?: { includeDismissed?: boolean },
 ): Promise<AIAlert[]> {
-  // Build the WHERE/params dynamically so the new optional `resolution`
-  // filter (Task #417) can stack on top of the existing severity filter
-  // without an explosion of query string permutations. The resolution
-  // clause mirrors getAIAlerts(): 'auto' requires a resolved row whose
-  // resolution_note starts with 'auto-resolved'; 'manual' requires an
-  // acknowledged or resolved row whose note does NOT start with that
-  // prefix (acknowledged rows are always treated as manual triage since
-  // the cron auto-resolve path skips the acknowledge step).
+  // Build the WHERE/params dynamically so the optional `resolution` filter
+  // (Task #417) can stack on top of the severity filter and the Task #324
+  // `includeDismissed` opt-in without an explosion of query permutations.
+  //
+  // - Task #324: when `includeDismissed` is set, the status whitelist also
+  //   admits 'dismissed' rows so the AI Ops "Recently triaged" panel can
+  //   show every closed alert (and its resolution_note) in one place.
+  //   Default stays acknowledged + resolved to preserve the historical
+  //   wire shape for any consumer that hasn't opted in.
+  // - Task #417: the resolution clause mirrors getAIAlerts(): 'auto'
+  //   requires a resolved row whose resolution_note starts with
+  //   'auto-resolved'; 'manual' requires an acknowledged or resolved row
+  //   whose note does NOT start with that prefix (acknowledged rows are
+  //   always treated as manual triage since the cron auto-resolve path
+  //   skips the acknowledge step).
+  const includeDismissed = options?.includeDismissed === true;
+  const statusList = includeDismissed
+    ? ['acknowledged', 'resolved', 'dismissed']
+    : ['acknowledged', 'resolved'];
   const conditions: string[] = [
     `alert_type = 'tool_health'`,
-    `status IN ('acknowledged', 'resolved')`,
     `COALESCE(resolved_at, acknowledged_at, created_at) >= NOW() - ($1 || ' days')::INTERVAL`,
   ];
   const params: any[] = [days, limit];
   let paramIdx = 3;
+  conditions.push(`status = ANY($${paramIdx++}::text[])`);
+  params.push(statusList);
   if (severity) {
     conditions.push(`severity = $${paramIdx++}`);
     params.push(severity);
@@ -511,7 +524,7 @@ export async function getToolHealthAlertHistory(
     );
   } else if (resolution === 'manual') {
     conditions.push(
-      `(status = 'acknowledged' OR (status = 'resolved' AND (resolution_note IS NULL OR resolution_note NOT ILIKE 'auto-resolved%')))`,
+      `(status = 'acknowledged' OR status = 'dismissed' OR (status = 'resolved' AND (resolution_note IS NULL OR resolution_note NOT ILIKE 'auto-resolved%')))`,
     );
   }
   const result = await pool.query(

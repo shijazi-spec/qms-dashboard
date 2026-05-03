@@ -639,7 +639,27 @@ export const consultantRoutes = [
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid alert ID" }, 400);
 
-          const alert = await resolveAlert(id);
+          // Task #324: capture the optional resolution note posted by the
+          // manual-resolve popover and the resolver's identity so the
+          // resolved-alerts feed can render WHO closed it and WHY. Empty /
+          // non-string values fall through as `undefined` so resolveAlert()
+          // preserves any prior note via COALESCE.
+          let note: string | undefined;
+          try {
+            const body = await c.req.json().catch(() => null);
+            const raw = body?.note;
+            if (typeof raw === "string") {
+              const trimmed = raw.trim();
+              if (trimmed.length > 0) {
+                note = trimmed.slice(0, 1000);
+              }
+            }
+          } catch {
+            // No body / invalid JSON — legacy clients that POST without a
+            // body still work; just no note attached.
+          }
+          const resolvedBy = user.name || user.email;
+          const alert = await resolveAlert(id, note, resolvedBy);
           if (!alert) return c.json({ error: "Alert not found" }, 404);
 
           return c.json({ success: true, alert });

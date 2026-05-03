@@ -284,6 +284,7 @@
     "status_skipped": "Skipped"
   },
   "consultant": {
+    "resolve_note_prompt": "Optional: add a resolution note (why/how this alert was closed). Leave blank to skip.",
     "title": "QMS AI Consultant",
     "subtitle": "Powered by WalaPlus Intelligence",
     "quick_actions": "Quick Actions",
@@ -2576,6 +2577,8 @@
     "sort_label": "Sort",
     "sort_recently_triaged": "Most recently triaged",
     "sort_open_for_desc": "Open the longest",
+    "include_dismissed": "Include dismissed",
+    "resolve_note_prompt": "Optional: add a resolution note (why/how this alert was closed). Leave blank to skip.",
     "range": "Range",
     "fired": "Fired",
     "resolved": "Resolved",

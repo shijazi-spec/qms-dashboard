@@ -713,6 +713,236 @@ if (!HAS_DB) {
       await pool.end().catch(() => {});
     }
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Task #324 — Resolution-note coverage for manual resolves and the
+  // dismissed-alerts surface in the AI Ops "Recently triaged" history.
+  //
+  // Two integration tests:
+  //   1) POST /api/ai-ops/alerts/:id/resolve with `{ note: "…" }` persists
+  //      the note onto ai_alerts.resolution_note (visible to the All Alerts
+  //      modal + history feed alongside the "Manually resolved" badge).
+  //   2) GET  /api/ai-ops/tool-health-alerts/history?includeDismissed=1
+  //      returns dismissed rows (with their resolution_note) in addition to
+  //      acknowledged + resolved; omitting the flag preserves the legacy
+  //      behaviour of excluding dismissed.
+  // ─────────────────────────────────────────────────────────────────────────
+  await suite.test("happy: POST /api/ai-ops/alerts/:id/resolve persists the resolution note (Task #324)", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    let seedId: number | null = null;
+    try {
+      const seeded = await createAIAlert({
+        alert_type: "tool_health",
+        severity: "high",
+        title: `Task324 manual-resolve note seed ${Date.now()}`,
+        description: "Task #324 manual-resolve note persistence test seed",
+        suggestion: "n/a",
+        related_record_type: "tool_health",
+        related_record_id: `task324_resolve_note_${Date.now()}:error_rate`,
+        metadata: { tool_name: "task324_resolve_note", reason: "error_rate" },
+      });
+      seedId = seeded.id ?? null;
+      suite.expect(seedId != null, "seed alert created with id");
+
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/alerts/:id/resolve",
+        "POST",
+      );
+      const NOTE = "Confirmed root cause: stale tool config — refreshed cache.";
+      const res = await handler(
+        makeContext({
+          method: "POST",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          params: { id: String(seedId) },
+          body: { note: NOTE },
+        }),
+      );
+      suite.expectEqual(res.status, 200, "status");
+      suite.expect(res.body?.success === true, "success=true");
+      suite.expectEqual(res.body?.alert?.id, seedId, "echoes alert id");
+      suite.expectEqual(res.body?.alert?.status, "resolved", "status flipped");
+      suite.expectEqual(
+        res.body?.alert?.resolution_note,
+        NOTE,
+        "resolution_note persisted from POST body",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      if (seedId != null) {
+        try { await resolveAlert(seedId, "task324-cleanup", "cleanup"); }
+        catch { /* best-effort */ }
+      }
+    }
+  });
+
+  await suite.test("happy: GET /api/ai-ops/tool-health-alerts/history honours includeDismissed (Task #324)", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    const { dismissAlert } = await import("../src/utils/aiAlertsDatabase");
+    const { sharedPool } = await import("../src/utils/sharedPool");
+    let dismissedId: number | null = null;
+    try {
+      const dismissed = await createAIAlert({
+        alert_type: "tool_health",
+        severity: "medium",
+        title: `Task324 dismissed-history seed ${Date.now()}`,
+        description: "Task #324 dismissed-history visibility test seed",
+        suggestion: "n/a",
+        related_record_type: "tool_health",
+        related_record_id: `task324_dismissed_${Date.now()}:p95_latency`,
+        metadata: { tool_name: "task324_dismissed", reason: "p95_latency" },
+      });
+      dismissedId = dismissed.id ?? null;
+      suite.expect(dismissedId != null, "dismissed seed created");
+      await dismissAlert(dismissedId as number);
+      const NOTE = "False positive — flapping latency probe, ignoring.";
+      await sharedPool.query(
+        `UPDATE ai_alerts SET resolution_note = $2 WHERE id = $1`,
+        [dismissedId, NOTE],
+      );
+
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-alerts/history",
+        "GET",
+      );
+
+      // Default (no flag) — dismissed row is excluded.
+      const noFlag = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100" },
+        }),
+      );
+      suite.expectEqual(noFlag.status, 200, "no-flag status");
+      const noFlagIds = (noFlag.body?.data ?? []).map((a: any) => a.id);
+      suite.expect(
+        !noFlagIds.includes(dismissedId),
+        "dismissed row excluded by default",
+      );
+
+      // includeDismissed=1 — dismissed row appears with its note.
+      const withFlag = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", includeDismissed: "1" },
+        }),
+      );
+      suite.expectEqual(withFlag.status, 200, "with-flag status");
+      const withFlagRows = (withFlag.body?.data ?? []) as any[];
+      const dismissedRow = withFlagRows.find((a) => a.id === dismissedId);
+      suite.expect(dismissedRow != null, "dismissed row included with flag");
+      suite.expectEqual(
+        dismissedRow?.status,
+        "dismissed",
+        "row carries dismissed status",
+      );
+      suite.expectEqual(
+        dismissedRow?.resolution_note,
+        NOTE,
+        "resolution_note surfaced for dismissed row",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      if (dismissedId != null) {
+        try {
+          await sharedPool.query(`DELETE FROM ai_alerts WHERE id = $1`, [
+            dismissedId,
+          ]);
+        } catch { /* best-effort */ }
+      }
+    }
+  });
+
+  await suite.test("happy: GET /api/ai-ops/tool-health-alerts/resolved honours includeDismissed (Task #324)", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    const { dismissAlert } = await import("../src/utils/aiAlertsDatabase");
+    const { sharedPool } = await import("../src/utils/sharedPool");
+    let dismissedId: number | null = null;
+    try {
+      const dismissed = await createAIAlert({
+        alert_type: "tool_health",
+        severity: "medium",
+        title: `Task324 resolved-endpoint dismissed seed ${Date.now()}`,
+        description: "Task #324 resolved-endpoint dismissed visibility seed",
+        suggestion: "n/a",
+        related_record_type: "tool_health",
+        related_record_id: `task324_resolved_dismissed_${Date.now()}:error_rate`,
+        metadata: {
+          tool_name: "task324_resolved_dismissed",
+          reason: "error_rate",
+        },
+      });
+      dismissedId = dismissed.id ?? null;
+      suite.expect(dismissedId != null, "dismissed seed created");
+      await dismissAlert(dismissedId as number);
+      const NOTE = "Dismissed: maintenance window — known noise.";
+      await sharedPool.query(
+        `UPDATE ai_alerts SET resolution_note = $2 WHERE id = $1`,
+        [dismissedId, NOTE],
+      );
+
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-alerts/resolved",
+        "GET",
+      );
+
+      // Default — dismissed excluded.
+      const noFlag = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { limit: "50" },
+        }),
+      );
+      suite.expectEqual(noFlag.status, 200, "no-flag status");
+      const noFlagIds = (noFlag.body?.data ?? []).map((a: any) => a.id);
+      suite.expect(
+        !noFlagIds.includes(dismissedId),
+        "/resolved excludes dismissed by default",
+      );
+
+      // includeDismissed=1 — dismissed appears with note.
+      const withFlag = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { limit: "50", includeDismissed: "1" },
+        }),
+      );
+      suite.expectEqual(withFlag.status, 200, "with-flag status");
+      const withFlagRows = (withFlag.body?.data ?? []) as any[];
+      const row = withFlagRows.find((a) => a.id === dismissedId);
+      suite.expect(
+        row != null,
+        "/resolved includes dismissed when flag set",
+      );
+      suite.expectEqual(row?.status, "dismissed", "row status=dismissed");
+      suite.expectEqual(
+        row?.resolution_note,
+        NOTE,
+        "/resolved surfaces dismissed resolution_note",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      if (dismissedId != null) {
+        try {
+          await sharedPool.query(`DELETE FROM ai_alerts WHERE id = $1`, [
+            dismissedId,
+          ]);
+        } catch { /* best-effort */ }
+      }
+    }
+  });
 }
 
 // ───────────────────────────────────────────────────────────────────────────

@@ -936,18 +936,36 @@ export const aiOpsRoutes = [
             resolutionRaw === "auto" || resolutionRaw === "manual"
               ? (resolutionRaw as "auto" | "manual")
               : undefined;
+          // Task #324: opt-in flag so the "Recently triaged" panel can also
+          // surface dismissed tool-health alerts (and their resolution_note)
+          // alongside acknowledged + resolved rows. Accept the common truthy
+          // spellings so both `?includeDismissed=1` and `?includeDismissed=true`
+          // work from the dashboard URL params.
+          const includeDismissedRaw = (c.req.query("includeDismissed") || "")
+            .toString()
+            .toLowerCase();
+          const includeDismissed =
+            includeDismissedRaw === "1" ||
+            includeDismissedRaw === "true" ||
+            includeDismissedRaw === "yes";
           const alerts = await getToolHealthAlertHistory(
             days,
             limit,
             severity,
             resolution,
+            { includeDismissed },
           );
           const data = alerts.map((a: AIAlert) => {
             const parsed = parseToolHealthRelatedId(a.related_record_id);
+            // Dismissed rows (Task #324) don't have a `resolved_at` and
+            // typically lack `acknowledged_at` too — fall through to
+            // `created_at` so the dashboard always has a timestamp to render.
             const triagedAt =
               a.status === "resolved"
-                ? (a.resolved_at ?? null)
-                : (a.acknowledged_at ?? null);
+                ? (a.resolved_at ?? a.acknowledged_at ?? a.created_at ?? null)
+                : a.status === "dismissed"
+                  ? (a.acknowledged_at ?? a.created_at ?? null)
+                  : (a.acknowledged_at ?? null);
             return {
               id: a.id,
               severity: a.severity,
@@ -1066,7 +1084,25 @@ export const aiOpsRoutes = [
             return c.json({ error: "Invalid alert id" }, 400);
           }
           const resolvedBy = user.name || user.email;
-          const alert = await resolveAlert(id, undefined, resolvedBy);
+          // Task #324: optional resolution note from the manual-resolve
+          // popover. Trim and clamp so the UI can't push an unbounded
+          // blob into the column; treat empty / non-string as "no note"
+          // so resolveAlert() preserves any prior value via COALESCE.
+          let note: string | undefined;
+          try {
+            const body = await c.req.json().catch(() => null);
+            const raw = body?.note;
+            if (typeof raw === "string") {
+              const trimmed = raw.trim();
+              if (trimmed.length > 0) {
+                note = trimmed.slice(0, 1000);
+              }
+            }
+          } catch {
+            // No body / invalid JSON — fall through with no note. The
+            // legacy clients that POST without a body must still work.
+          }
+          const alert = await resolveAlert(id, note, resolvedBy);
           if (!alert) return c.json({ error: "Alert not found" }, 404);
           return c.json({ success: true, alert });
         } catch (error) {
@@ -1240,12 +1276,46 @@ export const aiOpsRoutes = [
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const limit = safeInt(c.req.query("limit"), 10, 1, 50);
-          const { alerts } = await getAIAlerts({
-            alert_type: "tool_health",
-            status: "resolved",
+          // Task #324: opt-in flag mirroring the history endpoint so callers
+          // can also surface dismissed tool-health alerts (and their
+          // resolution_note) in the resolved-alerts feed. Defaults off so
+          // legacy consumers keep getting just status='resolved'.
+          const includeDismissedRaw = (c.req.query("includeDismissed") || "")
+            .toString()
+            .toLowerCase();
+          const includeDismissed =
+            includeDismissedRaw === "1" ||
+            includeDismissedRaw === "true" ||
+            includeDismissedRaw === "yes";
+          const baseFilter = {
+            alert_type: "tool_health" as const,
             limit,
+          };
+          const { alerts: resolved } = await getAIAlerts({
+            ...baseFilter,
+            status: "resolved",
           });
-          const data = alerts.map((a: AIAlert) => {
+          let combined: AIAlert[] = resolved;
+          if (includeDismissed) {
+            const { alerts: dismissed } = await getAIAlerts({
+              ...baseFilter,
+              status: "dismissed",
+            });
+            // Merge + sort by closure time (resolved_at for resolved rows,
+            // acknowledged_at then created_at for dismissed) descending so
+            // the most recently closed entries surface first, then clamp
+            // back to `limit`.
+            const closureTime = (a: AIAlert): number => {
+              const t = a.resolved_at ?? a.acknowledged_at ?? a.created_at;
+              if (!t) return 0;
+              const ms = t instanceof Date ? t.getTime() : new Date(t).getTime();
+              return Number.isFinite(ms) ? ms : 0;
+            };
+            combined = [...resolved, ...dismissed]
+              .sort((a, b) => closureTime(b) - closureTime(a))
+              .slice(0, limit);
+          }
+          const data = combined.map((a: AIAlert) => {
             const parsed = parseToolHealthRelatedId(a.related_record_id);
             return {
               id: a.id,

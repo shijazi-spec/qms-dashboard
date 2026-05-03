@@ -307,6 +307,13 @@
                 <option value="open-for-desc" data-i18n="ai_ops.sort_open_for_desc">Open the longest</option>
               </select>
             </div>
+            <label class="flex items-center gap-1.5 text-xs text-gray-700 self-center mb-1 cursor-pointer">
+              <input type="checkbox"
+                     id="tool-health-history-include-dismissed"
+                     class="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-400"
+                     data-testid="checkbox-tool-health-history-include-dismissed">
+              <span data-i18n="ai_ops.include_dismissed">Include dismissed</span>
+            </label>
             <button type="button"
                     id="tool-health-history-reset"
                     class="text-xs font-medium text-gray-600 hover:text-gray-900 underline self-center mb-1"
@@ -2246,11 +2253,15 @@
       }
     }
 
-    async function postToolHealthAlertAction(id, action) {
+    async function postToolHealthAlertAction(id, action, body) {
       const r = await fetch(`/api/ai-ops/alerts/${encodeURIComponent(id)}/${action}`, {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
+        // Task #324: optional body so the manual-resolve popover can attach
+        // a `note` payload. Older callers pass undefined and continue to
+        // POST an empty body, which the route handlers tolerate.
+        body: body ? JSON.stringify(body) : undefined,
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
@@ -2281,10 +2292,21 @@
     }
 
     async function resolveToolHealthAlert(id, btn) {
+      // Task #324: capture an optional resolution note before firing the
+      // resolve POST so the "Recently triaged" feed and All Alerts modal
+      // surface WHY an operator closed the alert. Cancel aborts entirely;
+      // an empty submission resolves with no note attached.
+      const promptMsg = (typeof WalaPlusI18n !== 'undefined')
+        ? WalaPlusI18n.t('ai_ops.resolve_note_prompt')
+        : 'Optional: add a resolution note (why/how this alert was closed). Leave blank to skip.';
+      const noteInput = window.prompt(promptMsg, '');
+      if (noteInput === null) return; // cancelled
+      const trimmed = (noteInput || '').trim();
+      const body = trimmed.length > 0 ? { note: trimmed.slice(0, 1000) } : undefined;
       const card = btn?.closest('[data-alert-id]');
       disableAlertButtons(card);
       try {
-        await postToolHealthAlertAction(id, 'resolve');
+        await postToolHealthAlertAction(id, 'resolve', body);
         await loadToolHealthAlerts();
         await loadToolHealthAlertsHistory();
       } catch (e) {
@@ -2307,15 +2329,21 @@
       const sevSel  = document.getElementById('tool-health-history-severity');
       const toolInp = document.getElementById('tool-health-history-tool');
       const sortSel = document.getElementById('tool-health-history-sort');
+      const dismissedChk = document.getElementById('tool-health-history-include-dismissed');
       const days     = daysSel ? (parseInt(daysSel.value, 10) || 7) : 7;
       const severity = sevSel  ? sevSel.value : '';
       const toolText = toolInp ? toolInp.value.trim().toLowerCase() : '';
       const sortKey  = sortSel ? sortSel.value : 'triaged-desc';
+      // Task #324: opt-in toggle that asks the backend to also return
+      // status='dismissed' rows (with their resolution_note) so reviewers
+      // can see every closed alert in one panel rather than two.
+      const includeDismissed = !!(dismissedChk && dismissedChk.checked);
       if (windowLabel) {
         windowLabel.textContent = days === 1 ? '(last 1 day)' : `(last ${days} days)`;
       }
       const params = new URLSearchParams({ days: String(days), limit: '20' });
       if (severity) params.set('severity', severity);
+      if (includeDismissed) params.set('includeDismissed', '1');
       try {
         const { data } = await apiFetch(`/api/ai-ops/tool-health-alerts/history?${params.toString()}`);
         const allAlerts = Array.isArray(data) ? data : [];
@@ -2382,6 +2410,10 @@
         const STATUS_BADGE = {
           acknowledged: 'bg-yellow-100 text-yellow-800',
           resolved:     'bg-green-100 text-green-800',
+          // Task #324: dismissed rows render with a neutral gray pill so
+          // they're visually distinct from resolved (green) without
+          // implying an unresolved problem.
+          dismissed:    'bg-gray-200 text-gray-700',
         };
         const REASON_LABEL = { error_rate: 'Error rate', p95_latency: 'p95 latency' };
         // Per-row resolution category (Task #346) — recovered /
@@ -2525,6 +2557,10 @@
           toolDebounce = setTimeout(() => loadToolHealthAlertsHistory(), 200);
         });
       }
+      const dismissedChk = document.getElementById('tool-health-history-include-dismissed');
+      if (dismissedChk) {
+        dismissedChk.addEventListener('change', () => loadToolHealthAlertsHistory());
+      }
       if (reset) {
         reset.addEventListener('click', resetToolHealthHistoryFilters);
       }
@@ -2538,10 +2574,12 @@
       const sevSel  = document.getElementById('tool-health-history-severity');
       const toolInp = document.getElementById('tool-health-history-tool');
       const sortSel = document.getElementById('tool-health-history-sort');
+      const dismissedChk = document.getElementById('tool-health-history-include-dismissed');
       if (daysSel) daysSel.value = '7';
       if (sevSel)  sevSel.value  = '';
       if (toolInp) toolInp.value = '';
       if (sortSel) sortSel.value = 'triaged-desc';
+      if (dismissedChk) dismissedChk.checked = false;
       loadToolHealthAlertsHistory();
     }
 

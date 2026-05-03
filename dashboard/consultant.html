@@ -1236,9 +1236,25 @@
 
         window.alertAction = async function(id, action) {
             try {
+                // Task #324: capture an optional resolution note when the
+                // operator clicks Resolve so reviewers later get context
+                // beyond the bare "Manually resolved" badge. Cancelling
+                // the prompt aborts the action entirely; an empty string
+                // submits a no-note resolve (server treats it as none).
+                var bodyPayload = { acknowledgedBy: 'user' };
+                if (action === 'resolve') {
+                    var i18n = window.WalaPlusI18n;
+                    var promptMsg = i18n
+                        ? i18n.t('consultant.resolve_note_prompt')
+                        : 'Optional: add a resolution note (why/how this alert was closed). Leave blank to skip.';
+                    var noteInput = window.prompt(promptMsg, '');
+                    if (noteInput === null) return; // cancelled
+                    var trimmed = (noteInput || '').trim();
+                    if (trimmed.length > 0) bodyPayload.note = trimmed.slice(0, 1000);
+                }
                 var res = await fetch('/api/consultant/alerts/' + id + '/' + action, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin', body: JSON.stringify({ acknowledgedBy: 'user' })
+                    credentials: 'same-origin', body: JSON.stringify(bodyPayload)
                 });
                 if (res.ok) { loadAlerts(); updateAlertBadge(); }
             } catch(e) {}
