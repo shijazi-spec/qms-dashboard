@@ -1589,19 +1589,18 @@ export async function getAgentLatencyPercentiles(): Promise<any[]> {
   return result.rows;
 }
 
-export async function getTopToolsByCost(
-  limit = 10,
-  agentName?: string,
-): Promise<any[]> {
-  await ensureAiMetricsTable();
-  const params: any[] = [limit];
-  let agentFilter = "";
-  if (agentName && agentName.trim()) {
-    params.push(agentName.trim());
-    agentFilter = `AND agent_name = $${params.length}`;
-  }
-  const result = await pool.query(
-    `SELECT
+/**
+ * Builds the SQL for getTopToolsByCost. Exported (along with the helper) so
+ * the EXPLAIN-based regression test in
+ * tests/aiTelemetryDashboardIndexes.test.ts can assert that the
+ * agent-filtered variant uses `idx_ai_call_metrics_agent_started`. Keep the
+ * two callers (getTopToolsByCost + the test) in lock-step by routing both
+ * through this builder so a future SQL tweak can never silently drift past
+ * the test.
+ */
+export function buildTopToolsByCostSql(hasAgentFilter: boolean): string {
+  const agentFilter = hasAgentFilter ? "AND agent_name = $2" : "";
+  return `SELECT
        tool_name,
        agent_name,
        COUNT(*)                                                              AS call_count,
@@ -1617,7 +1616,20 @@ export async function getTopToolsByCost(
        ${agentFilter}
      GROUP BY tool_name, agent_name
      ORDER BY total_cost DESC, call_count DESC
-     LIMIT $1`,
+     LIMIT $1`;
+}
+
+export async function getTopToolsByCost(
+  limit = 10,
+  agentName?: string,
+): Promise<any[]> {
+  await ensureAiMetricsTable();
+  const params: any[] = [limit];
+  const trimmedAgent =
+    agentName && agentName.trim() ? agentName.trim() : null;
+  if (trimmedAgent) params.push(trimmedAgent);
+  const result = await pool.query(
+    buildTopToolsByCostSql(!!trimmedAgent),
     params,
   );
   return result.rows;
@@ -1739,6 +1751,18 @@ export interface ToolWindowAggregate {
  * Intentionally does NOT apply a `minCalls` filter — a tool that had just
  * one call is still active; we only want tools with truly zero activity.
  */
+/**
+ * SQL for the silent-tool auto-resolve sweep's "which tools have had any
+ * activity in the last N minutes?" probe. Exported so the EXPLAIN-based
+ * regression test in tests/aiTelemetryDashboardIndexes.test.ts can assert
+ * the partial index `idx_ai_call_metrics_tool_started` is used and the
+ * sweep cannot silently fall back to a Seq Scan in production.
+ */
+export const TOOLS_WITH_CALLS_IN_WINDOW_SQL = `SELECT DISTINCT tool_name
+       FROM ai_call_metrics
+      WHERE tool_name IS NOT NULL
+        AND started_at >= NOW() - MAKE_INTERVAL(mins => $1)`;
+
 export async function getToolsWithCallsInWindow(
   windowMinutes: number,
 ): Promise<Set<string>> {
@@ -1751,10 +1775,7 @@ export async function getToolsWithCallsInWindow(
   // aborts the sweep on any error, so failing loudly here is the safe
   // (fail-closed) behavior.
   const result = await pool.query(
-    `SELECT DISTINCT tool_name
-       FROM ai_call_metrics
-      WHERE tool_name IS NOT NULL
-        AND started_at >= NOW() - MAKE_INTERVAL(mins => $1)`,
+    TOOLS_WITH_CALLS_IN_WINDOW_SQL,
     [windowMinutes],
   );
   return new Set<string>(
@@ -1803,6 +1824,26 @@ export async function getToolWindowAggregates(
   }));
 }
 
+/**
+ * SQL for the global "recent slow/failed calls" time-scrubber query on the
+ * AI Operations dashboard. Exported so the EXPLAIN-based regression test
+ * in tests/aiTelemetryDashboardIndexes.test.ts can assert the
+ * `idx_ai_call_metrics_started_at` index drives the ORDER BY started_at
+ * DESC LIMIT N pattern and the dashboard cannot silently regress to a
+ * Seq Scan.
+ */
+export const RECENT_SLOW_FAILED_CALLS_SQL = `SELECT
+       id, agent_name, tool_name, model,
+       latency_ms, estimated_cost_usd,
+       success, error_class, error_message,
+       prompt_preview, tool_input_preview, tool_output_preview,
+       started_at, prompt_tokens, completion_tokens
+     FROM ai_call_metrics
+     WHERE (NOT success OR latency_ms > 30000)
+       AND started_at >= NOW() - INTERVAL '7 days'
+     ORDER BY started_at DESC
+     LIMIT $1`;
+
 export async function getRecentSlowFailedCalls(limit = 20): Promise<
   {
     id: string;
@@ -1823,20 +1864,7 @@ export async function getRecentSlowFailedCalls(limit = 20): Promise<
   }[]
 > {
   await ensureAiMetricsTable();
-  const result = await pool.query(
-    `SELECT
-       id, agent_name, tool_name, model,
-       latency_ms, estimated_cost_usd,
-       success, error_class, error_message,
-       prompt_preview, tool_input_preview, tool_output_preview,
-       started_at, prompt_tokens, completion_tokens
-     FROM ai_call_metrics
-     WHERE (NOT success OR latency_ms > 30000)
-       AND started_at >= NOW() - INTERVAL '7 days'
-     ORDER BY started_at DESC
-     LIMIT $1`,
-    [limit],
-  );
+  const result = await pool.query(RECENT_SLOW_FAILED_CALLS_SQL, [limit]);
   return result.rows;
 }
 
@@ -1887,7 +1915,7 @@ export async function getCallById(callId: number): Promise<{
 // ──────────────────────────────────────────────────────────────────────────────
 let feedbackTableReady: Promise<void> | null = null;
 
-async function ensureFeedbackTable(): Promise<void> {
+export async function ensureFeedbackTable(): Promise<void> {
   if (feedbackTableReady) return feedbackTableReady;
   feedbackTableReady = (async () => {
     try {
@@ -2187,7 +2215,27 @@ export async function getFeedbackRateByPromptVersion(
       await ensureFeedbackTable();
     }
     const result = await queryPool.query(
-      `WITH windowed AS (
+      FEEDBACK_RATE_BY_PROMPT_VERSION_SQL,
+      [days, floor],
+    );
+    return result.rows;
+  } catch (err) {
+    logger.error("[aiTelemetry] getFeedbackRateByPromptVersion failed:", err);
+    return [];
+  }
+}
+
+/**
+ * SQL for the AI Operations dashboard's Prompt Version comparison view.
+ * Exported so the EXPLAIN-based regression test in
+ * tests/aiTelemetryDashboardIndexes.test.ts can assert that the partial
+ * index `idx_ai_call_metrics_agent_prompt_version` is used by at least one
+ * scan in the plan and the (expensive) per-prompt-version aggregate cannot
+ * silently regress to a Seq Scan on `ai_call_metrics`.
+ *
+ * Bind parameters: $1 = days window, $2 = min_feedback floor.
+ */
+export const FEEDBACK_RATE_BY_PROMPT_VERSION_SQL = `WITH windowed AS (
          SELECT
            m.agent_name,
            COALESCE(m.metadata ->> 'prompt_version', '(unknown)')            AS prompt_version,
@@ -2283,15 +2331,7 @@ export async function getFeedbackRateByPromptVersion(
          ON w.agent_name = g.agent_name AND w.prompt_version = g.prompt_version
        LEFT JOIN surface_breakdown sb
          ON sb.agent_name = g.agent_name AND sb.prompt_version = g.prompt_version
-       ORDER BY g.agent_name, g.last_seen_at DESC`,
-      [days, floor],
-    );
-    return result.rows;
-  } catch (err) {
-    logger.error("[aiTelemetry] getFeedbackRateByPromptVersion failed:", err);
-    return [];
-  }
-}
+       ORDER BY g.agent_name, g.last_seen_at DESC`;
 
 export async function getRecentNegativeFeedback(limit = 25): Promise<
   {
