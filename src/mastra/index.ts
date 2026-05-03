@@ -40,6 +40,7 @@ import { migrationRoutes } from "./routes/migrationRoutes";
 import { handoffRoutes } from "./routes/handoffRoutes";
 import { kpiRoutes } from "./routes/kpiRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
+import { zohoAgingRoutes } from "./routes/zohoAgingRoutes";
 import { infographicRoutes } from "./routes/infographicRoutes";
 import { rbacRoutes } from "./routes/rbacRoutes";
 import { scorecardRoutes } from "./routes/scorecardRoutes";
@@ -232,6 +233,7 @@ export const mastra = new Mastra({
       ...handoffRoutes,
       ...kpiRoutes,
       ...duplicateRadarRoutes,
+      ...zohoAgingRoutes,
       ...rbacRoutes,
       ...scorecardRoutes,
       ...pdplRoutes,

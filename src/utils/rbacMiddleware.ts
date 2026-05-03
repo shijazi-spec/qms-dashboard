@@ -1729,6 +1729,48 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     ],
   },
 
+  // Pipeline Aging (Task #825) — mirrors Duplicate Radar read set; handlers
+  // also enforce the same allowlist via `requirePipelineAgingAccess`.
+  {
+    pattern: /^\/api\/zoho\/(deals|leads)\/[^/]+\/(stage|status)-aging$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "grc_manager",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "bu_owner",
+      "executive",
+    ],
+  },
+  {
+    pattern: /^\/api\/zoho\/(deals|leads)\/aging$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "grc_manager",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "bu_owner",
+      "executive",
+    ],
+  },
+  {
+    pattern: /^\/api\/zoho\/aging\/config$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "grc_manager",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "bu_owner",
+      "executive",
+    ],
+  },
+
   // External Audit reads — handler uses `getSessionUser` only (any auth).
   {
     pattern: /^\/api\/external-audits/,
