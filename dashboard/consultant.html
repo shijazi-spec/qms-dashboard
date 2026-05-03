@@ -156,6 +156,7 @@
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
     <script src="/js/navigation.js?v=5.0"></script>
+    <script src="/js/alert-resolution.js?v=1"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('consultant');
@@ -1348,13 +1349,31 @@
         // An alert is "auto-resolved" when the recovery cron closed it on
         // the system's behalf rather than a human clicking Resolve. Both
         // the prompt-regression and tool-health crons stamp the
-        // resolution_note with an "auto-resolved" prefix when they do so;
-        // we centralize the detection here so the badge, filter, and any
-        // future surfaces stay in sync.
+        // resolution_note with an "auto-resolved" prefix when they do so.
+        // The shared categoriser in /js/alert-resolution.js owns the
+        // canonical prefix table and the 4-way bucketing; this thin
+        // wrapper preserves the historical isAutoResolved() entry point
+        // for any code that only needs the auto/manual binary view.
         function isAutoResolved(a) {
-            if (!a || a.status !== 'resolved') return false;
-            var note = (a.resolution_note || '').toString().trim().toLowerCase();
-            return note.indexOf('auto-resolved') === 0;
+            var R = window.WalaPlusAlertResolution;
+            if (!R) return false;
+            return R.isAutoResolved(a);
+        }
+        function categorizeResolution(a) {
+            var R = window.WalaPlusAlertResolution;
+            return R ? R.categorize(a) : null;
+        }
+        // Short, locale-aware "YYYY-MM-DD HH:MM UTC" so the inline
+        // recovery-event timestamp is unambiguous across operator
+        // locales. Falls back to the raw string on parse failure.
+        function formatResolvedTimestamp(ts) {
+            try {
+                var d = new Date(ts);
+                if (isNaN(d.getTime())) return String(ts);
+                return d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+            } catch (_e) {
+                return String(ts);
+            }
         }
 
         window.loadAllAlerts = async function() {
@@ -1400,6 +1419,7 @@
                 var i18n = window.WalaPlusI18n;
                 var autoLabel = i18n ? i18n.t('consultant.alert_badge_auto_resolved') : 'Auto-resolved';
                 var manualLabel = i18n ? i18n.t('consultant.alert_badge_manual_resolved') : 'Manually resolved';
+                var R = window.WalaPlusAlertResolution || null;
 
                 content.innerHTML = alerts.map(function(a) {
                     var icon = severityIcons[a.severity] || severityIcons.info;
@@ -1408,26 +1428,52 @@
                         resolved: 'bg-green-100 text-green-700', dismissed: 'bg-gray-100 text-gray-500'
                     }[a.status] || 'bg-gray-100 text-gray-500';
 
-                    // Resolution-source badge — only meaningful for resolved
-                    // alerts. Auto-resolved gets a distinct purple pill so
-                    // it stands out from the green "resolved" status pill.
+                    // Resolution-category badge (Task #346) — only meaningful
+                    // for resolved alerts. 4 distinct visual treatments per
+                    // bucket (recovered / went_silent / prompt_regression_auto
+                    // / manual). Recovery buckets get a green/teal pill so
+                    // operators can spot self-healing events at a glance.
                     var resolutionBadge = '';
-                    if (a.status === 'resolved') {
-                        var auto = isAutoResolved(a);
-                        var pillCls = auto
-                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-                        var pillText = auto ? autoLabel : manualLabel;
-                        var pillTip = a.resolution_note
-                            ? escAttr(a.resolution_note)
-                            : (auto ? escAttr('Closed automatically by the recovery cron.')
-                                    : escAttr('Closed by an operator.'));
-                        resolutionBadge =
-                            '<span class="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ' + pillCls + '" ' +
-                                'title="' + pillTip + '" ' +
-                                'data-testid="badge-resolution-' + (auto ? 'auto' : 'manual') + '-' + Number(a.id) + '">' +
-                                escapeHtml(pillText) +
-                            '</span>';
+                    var resolvedAtLine = '';
+                    if (a.status === 'resolved' && R) {
+                        var category = R.categorize(a);
+                        var spec = R.getBadgeSpec(category);
+                        var auto = category !== null && category !== 'manual';
+                        if (spec) {
+                            var pillTip = a.resolution_note
+                                ? escAttr(a.resolution_note)
+                                : escAttr(spec.defaultTooltip);
+                            // Override the per-spec text with the existing
+                            // i18n labels for the legacy auto/manual split
+                            // so the consultant copy stays translatable.
+                            // Recovery / went_silent / prompt_regression_auto
+                            // also map to "Auto-resolved" in the binary
+                            // copy, but their pill colour and category
+                            // testid are still distinct.
+                            var pillText = auto ? autoLabel : manualLabel;
+                            // Backwards-compatible "auto/manual" testid kept
+                            // alongside the new category-specific testid so
+                            // existing tests / saved selectors keep working.
+                            var compatTestid = 'badge-resolution-' + (auto ? 'auto' : 'manual') + '-' + Number(a.id);
+                            resolutionBadge =
+                                '<span class="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ' + spec.classes + '" ' +
+                                    'title="' + pillTip + '" ' +
+                                    'data-resolution-category="' + spec.slug + '" ' +
+                                    'data-testid="badge-resolution-' + spec.slug + '-' + Number(a.id) + '">' +
+                                    escapeHtml(pillText) +
+                                '</span>' +
+                                '<span class="sr-only" data-testid="' + compatTestid + '">' + escapeHtml(pillText) + '</span>';
+                            // Inline resolved-at timestamp for recovery
+                            // events — green text so a self-healed alert is
+                            // obvious without hovering the badge.
+                            if (R.isRecoveryCategory(category) && a.resolved_at) {
+                                resolvedAtLine =
+                                    '<p class="text-[11px] text-emerald-700 font-medium mt-1" ' +
+                                        'data-testid="text-resolution-resolved-at-' + Number(a.id) + '">' +
+                                        'Resolved ' + escapeHtml(formatResolvedTimestamp(a.resolved_at)) +
+                                    '</p>';
+                            }
+                        }
                     }
 
                     // Inline resolution-note line — shown for any closed
@@ -1452,6 +1498,7 @@
                             '</div>' +
                             '<p class="text-xs text-gray-500 line-clamp-2">' + escapeHtml(a.description || '') + '</p>' +
                             noteLine +
+                            resolvedAtLine +
                             '<div class="flex items-center gap-2 mt-2">' +
                                 '<span class="text-[10px] text-gray-400">' + timeAgo(a.created_at) + '</span>' +
                                 (a.status === 'open' ? '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200" data-on-click="alertAction,loadAllAlerts" data-args="' + escAttr(JSON.stringify([[a.id, 'acknowledge'], []])) + '">Acknowledge</button>' +

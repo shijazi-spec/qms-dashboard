@@ -28,6 +28,7 @@ import {
   acknowledgeAlert,
   resolveAlert,
   dismissAlert,
+  getSilentToolAutoResolutionCounts,
   type AIAlert,
 } from "../../utils/aiAlertsDatabase";
 import { STORAGE_HEALTH_DEDUPE_KEY } from "../../utils/storageHealthAlerts";
@@ -376,6 +377,38 @@ export const aiOpsRoutes = [
         } catch (error) {
           logger.error("[AI-Ops] metrics-table-stats error:", error);
           return c.json({ error: "Failed to fetch metrics table stats" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Silent-tool auto-resolutions tile (Task #346).
+   *
+   * Counts ai_alerts rows whose `resolution_note` starts with the canonical
+   * silent-tool sweep prefix (`auto-resolved: tool went silent`). Returns
+   * counts for the last 24 hours and the last 7 days so the AI Ops summary
+   * tile can show both windows at a glance. Authenticated callers only.
+   */
+  {
+    path: "/api/ai-ops/silent-tool-auto-resolutions",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const data = await getSilentToolAutoResolutionCounts();
+          return c.json({ data });
+        } catch (error) {
+          logger.error(
+            "[AI-Ops] silent-tool-auto-resolutions error:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to fetch silent-tool auto-resolution counts" },
+            500,
+          );
         }
       };
     },

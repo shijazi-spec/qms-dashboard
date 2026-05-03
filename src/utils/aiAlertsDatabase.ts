@@ -644,6 +644,45 @@ export async function getToolHealthAlertTrend(
 }
 
 /**
+ * Count ai_alerts rows that the tool-health silent-tool sweep auto-resolved
+ * within the last 24 hours and the last 7 days. Powers the
+ * "Silent-tool auto-resolutions" tile on /ai-ops (Task #346).
+ *
+ * Match criterion mirrors the canonical resolution_note prefix the sweep
+ * stamps (`auto-resolved: tool went silent`); see
+ * src/mastra/workflows/toolHealthAlertsCron.ts → runSilentToolSweep.
+ *
+ * Both windows are computed in a single round-trip via FILTER clauses so the
+ * tile costs one query regardless of dashboard refresh frequency.
+ */
+export interface SilentToolAutoResolutionCounts {
+  last24h: number;
+  last7d: number;
+}
+
+export async function getSilentToolAutoResolutionCounts(): Promise<SilentToolAutoResolutionCounts> {
+  const result = await pool.query(
+    `SELECT
+       COUNT(*) FILTER (
+         WHERE resolved_at >= NOW() - INTERVAL '24 hours'
+       )::int AS last_24h,
+       COUNT(*) FILTER (
+         WHERE resolved_at >= NOW() - INTERVAL '7 days'
+       )::int AS last_7d
+     FROM ai_alerts
+     WHERE alert_type = 'tool_health'
+       AND status = 'resolved'
+       AND resolved_at IS NOT NULL
+       AND resolution_note ILIKE 'auto-resolved: tool went silent%'`,
+  );
+  const row = result.rows[0] || {};
+  return {
+    last24h: Number(row.last_24h ?? 0),
+    last7d: Number(row.last_7d ?? 0),
+  };
+}
+
+/**
  * Fetch every open / acknowledged alert for a given `alert_type`. Used by
  * the tool-health "silent tool" sweep so the cron can find alerts whose
  * associated tool has stopped being called and resolve them.

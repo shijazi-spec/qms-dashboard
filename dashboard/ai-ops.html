@@ -28,6 +28,7 @@
   <div id="walaplus-nav"></div>
   <script src="/js/safe-actions.js?v=1"></script>
   <script src="/js/navigation.js?v=5.0"></script>
+  <script src="/js/alert-resolution.js?v=1"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       WalaPlusNav.init('ai-ops');
@@ -361,6 +362,23 @@
         <p class="text-xs text-gray-500 uppercase tracking-wide" data-i18n="ai_ops.kpi_latency">Avg Latency</p>
         <p class="text-2xl font-bold text-gray-900 mt-1" id="kpi-latency">—</p>
         <p class="text-xs text-gray-400 mt-1" data-i18n="ai_ops.past_24h_ms">Past 24 hours (ms)</p>
+      </div>
+      <!-- Silent-tool auto-resolutions tile (Task #346).
+           Counts ai_alerts rows whose resolution_note starts with
+           "auto-resolved: tool went silent" — i.e. the silent-tool sweep
+           closed a tool-health alert because the tool stopped being called.
+           Ops use this to spot deprecated/abandoned tools that the recovery
+           cron is silently cleaning up after. -->
+      <div class="stat-card" data-testid="card-silent-tool-auto-resolutions">
+        <p class="text-xs text-gray-500 uppercase tracking-wide">Silent-tool auto-resolutions</p>
+        <p class="text-2xl font-bold text-gray-900 mt-1">
+          <span id="silent-tool-auto-24h" data-testid="text-silent-tool-auto-24h">—</span>
+          <span class="text-sm text-gray-400 font-normal">/ 24h</span>
+        </p>
+        <p class="text-xs text-gray-400 mt-1">
+          <span id="silent-tool-auto-7d" data-testid="text-silent-tool-auto-7d">—</span>
+          <span>in last 7 days</span>
+        </p>
       </div>
     </div>
 
@@ -1694,6 +1712,23 @@
       }
     }
 
+    // Silent-tool auto-resolutions tile (Task #346). Best-effort: any error
+    // leaves the placeholder dashes in place so a transient API blip
+    // doesn't make the rest of the summary look broken.
+    async function loadSilentToolAutoResolutions() {
+      const el24 = document.getElementById('silent-tool-auto-24h');
+      const el7 = document.getElementById('silent-tool-auto-7d');
+      if (!el24 || !el7) return;
+      try {
+        const { data } = await apiFetch('/api/ai-ops/silent-tool-auto-resolutions');
+        const stats = data || {};
+        el24.textContent = (stats.last24h != null ? Number(stats.last24h) : 0).toLocaleString();
+        el7.textContent = (stats.last7d != null ? Number(stats.last7d) : 0).toLocaleString();
+      } catch (e) {
+        console.error('Silent-tool auto-resolutions load error', e);
+      }
+    }
+
     // Storage Health KPI tile group (Task #505).
     //
     // Hits /api/ai-ops/metrics-table-stats for total row count, the age in
@@ -2244,39 +2279,66 @@
           resolved:     'bg-green-100 text-green-800',
         };
         const REASON_LABEL = { error_rate: 'Error rate', p95_latency: 'p95 latency' };
-        // The tool-health auto-resolve sweep stamps `resolution_note` with
-        // an "auto-resolved" prefix when it closes an alert. Surface that
-        // distinction so reviewers can tell which entries were closed by
-        // the system vs by an operator clicking Resolve.
-        const isAutoResolvedHistory = (a) => {
-          if (!a || a.status !== 'resolved') return false;
-          const note = String(a.resolution_note || '').trim().toLowerCase();
-          return note.indexOf('auto-resolved') === 0;
-        };
+        // Per-row resolution category (Task #346) — recovered /
+        // went_silent / prompt_regression_auto / manual. Categorisation
+        // logic lives in /js/alert-resolution.js so the consultant
+        // dashboard renders the same buckets from the same prefix table.
+        const RESOLUTION = window.WalaPlusAlertResolution || null;
         list.innerHTML = alerts.map(a => {
           const sevClass   = SEVERITY_BADGE[a.severity] || SEVERITY_BADGE.info;
           const statusCls  = STATUS_BADGE[a.status] || 'bg-gray-100 text-gray-700';
           const reasonText = REASON_LABEL[a.reason] || 'Tool health';
           const when       = a.triaged_at ? fmtDate(a.triaged_at) : (a.created_at ? fmtDate(a.created_at) : '—');
-          const auto       = isAutoResolvedHistory(a);
+          const category   = RESOLUTION ? RESOLUTION.categorize(a) : null;
+          const isAuto     = category !== null && category !== 'manual';
+          const isRecovery = RESOLUTION ? RESOLUTION.isRecoveryCategory(category) : false;
           // For auto-resolved rows the operator field is meaningless
           // (`acknowledged_by` is left null by the cron). Show "system"
           // explicitly so the column doesn't read as an unknown human.
-          const who        = auto
+          const who        = isAuto
             ? '<span class="italic text-gray-400" data-testid="text-history-who-system-' + a.id + '">system (auto)</span>'
             : (a.acknowledged_by ? esc(a.acknowledged_by) : '<span class="italic text-gray-400">system</span>');
           // Resolution-source pill — only meaningful for resolved rows.
-          // Auto-resolved gets a distinct purple pill so it doesn't blur
-          // into the green status badge.
-          const resolutionPill = a.status === 'resolved'
-            ? (auto
-                ? `<span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200" title="${esc(a.resolution_note || 'Closed automatically by the recovery cron.')}" data-testid="badge-history-auto-${a.id}">Auto-resolved</span>`
-                : `<span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200" title="${esc(a.resolution_note || 'Closed by an operator.')}" data-testid="badge-history-manual-${a.id}">Manual</span>`)
-            : '';
+          // 4 distinct visual treatments per category (recovered / silent /
+          // prompt regression cleared / manual). The recovery categories
+          // get a green pill so the "good news" auto-closes are obviously
+          // benign at a glance.
+          let resolutionPill = '';
+          if (a.status === 'resolved' && RESOLUTION) {
+            const spec = RESOLUTION.getBadgeSpec(category);
+            if (spec) {
+              const tip = a.resolution_note ? esc(a.resolution_note) : esc(spec.defaultTooltip);
+              // Backwards-compatible "auto/manual" testids are kept
+              // alongside the category-specific testid so existing tests
+              // (and any saved Slack deeplinks) continue to find a pill.
+              const compatTestid = isAuto
+                ? `badge-history-auto-${a.id}`
+                : `badge-history-manual-${a.id}`;
+              resolutionPill =
+                `<span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded ${spec.classes}" ` +
+                  `title="${tip}" ` +
+                  `data-resolution-category="${spec.slug}" ` +
+                  `data-testid="badge-history-${spec.slug}-${a.id}">` +
+                  `${esc(spec.text)}` +
+                `</span>` +
+                // Hidden compat marker — same testid as before, zero
+                // visual footprint, so the legacy auto/manual pill
+                // selectors keep resolving without colliding with the
+                // new category-specific pill.
+                `<span class="sr-only" data-testid="${compatTestid}">${esc(spec.text)}</span>`;
+            }
+          }
           // Inline resolution note — small italic line so reviewers can
           // see WHY an alert was closed without hovering the badge.
           const noteLine = a.resolution_note
             ? `<p class="text-[11px] text-gray-500 italic mt-1" data-testid="text-history-note-${a.id}">${esc(a.resolution_note)}</p>`
+            : '';
+          // Inline resolved-at timestamp for recovery events (Task #346).
+          // Recovery events get a prominent green resolve timestamp so
+          // operators can spot at a glance when the system self-healed
+          // without having to read the right-aligned metadata column.
+          const resolvedAtLine = (isRecovery && a.resolved_at)
+            ? `<p class="text-[11px] text-emerald-700 font-medium mt-1" data-testid="text-history-resolved-at-${a.id}">Resolved ${esc(fmtDate(a.resolved_at))}</p>`
             : '';
           // "Open for: X" — how long the alert stayed open. Shown for
           // resolved rows when both timestamps are available so on-call
@@ -2307,6 +2369,7 @@
                 </div>
                 <p class="text-sm font-semibold text-gray-900 truncate" data-testid="text-history-title-${a.id}">${esc(a.title)}</p>
                 ${noteLine}
+                ${resolvedAtLine}
                 ${notifiedBlock}
               </div>
               <div class="shrink-0 text-end text-xs text-gray-500 whitespace-nowrap">
@@ -6687,6 +6750,7 @@
 
     function refreshAll() {
       loadSummary();
+      loadSilentToolAutoResolutions();
       loadMetricsTableStats();
       loadStorageHealthAlerts();
       loadToolHealthAlerts();
@@ -6890,6 +6954,7 @@
         if (!insideDetail) closeAllWaterfallDetailsOutside(null);
       });
       loadSummary();
+      loadSilentToolAutoResolutions();
       loadMetricsTableStats();
       loadStorageHealthAlerts();
       loadToolHealthAlerts();
