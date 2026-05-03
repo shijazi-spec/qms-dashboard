@@ -158,6 +158,12 @@ export const mastra = new Mastra({
       // ── Admin API ────────────────────────────────────────────────────────
       ...adminApiRoutes,
 
+      // ── QMS Enhanced (registered BEFORE qmsApiRoutes & kpiRoutes so that
+      //     literal export segments like `/api/qms/capa/export` and
+      //     `/api/kpis/export` are matched before the dynamic `:id` handlers
+      //     defined in qmsApiRoutes / kpiRoutes — see task-670).
+      ...qmsEnhancedRoutes,
+
       // ── QMS API ──────────────────────────────────────────────────────────
       ...qmsApiRoutes,
 
@@ -203,7 +209,7 @@ export const mastra = new Mastra({
       ...consultantRoutes,
       ...aiApprovalRoutes,
       ...aiOpsRoutes,
-      ...qmsEnhancedRoutes,
+      // qmsEnhancedRoutes was hoisted above qmsApiRoutes — see comment there.
       ...qmsDocsRoutes,
       ...notificationRoutes,
       ...knowledgeRoutes,
