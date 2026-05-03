@@ -501,9 +501,42 @@
         } catch (_) { /* ignore */ }
     }
 
-    // Fetch server-side entries and merge them into local storage, then push
-    // the merged result back so both sides stay in sync. Called once per
-    // setHistoryUser() invocation, i.e. on login / page load with a known user.
+    // Pick the "newer" of two entries that share an id. Prefers the side
+    // with a real `finishedAt` (a final status), falling back to the latest
+    // `startedAt`. Used by both the initial server merge and the polling
+    // sync so a status flip on another device is reflected here.
+    function pickNewerEntry(localEntry, serverEntry) {
+        if (!localEntry) return serverEntry || null;
+        if (!serverEntry) return localEntry || null;
+        var localFin = Date.parse((localEntry && localEntry.finishedAt) || '') || 0;
+        var serverFin = Date.parse((serverEntry && serverEntry.finishedAt) || '') || 0;
+        if (localFin || serverFin) return serverFin > localFin ? serverEntry : localEntry;
+        var localStart = Date.parse((localEntry && localEntry.startedAt) || '') || 0;
+        var serverStart = Date.parse((serverEntry && serverEntry.startedAt) || '') || 0;
+        return serverStart > localStart ? serverEntry : localEntry;
+    }
+
+    // Shallow signature of an entry's user-visible state. Used by the
+    // poller to detect "real" changes (new ids, status flips, finished
+    // timestamps) instead of re-rendering on every tick.
+    function entrySignature(arr) {
+        if (!Array.isArray(arr) || !arr.length) return '';
+        var parts = [];
+        for (var i = 0; i < arr.length; i++) {
+            var e = arr[i];
+            if (!e || !e.id) continue;
+            parts.push(e.id + ':' + (e.status || '') + ':' + (e.finishedAt || ''));
+        }
+        parts.sort();
+        return parts.join('|');
+    }
+
+    // Fetch server-side entries and merge them into local storage. Called
+    // once per setHistoryUser() invocation (login / page load) and again
+    // every poll tick. Picks the newer of each pair by finishedAt/startedAt
+    // so status flips from another device propagate. Pushes the merged
+    // result back only when we actually contributed new ids the server
+    // hadn't seen, to avoid feedback loops between polling tabs.
     function fetchAndMergeFromServer() {
         if (!currentHistoryUserKey || !isServerSyncEnabled()) return;
         try {
@@ -514,31 +547,114 @@
                 if (!res.ok) return null;
                 return res.json();
             }).then(function (data) {
-                if (!data || !Array.isArray(data.entries) || !data.entries.length) return;
+                if (!data || !Array.isArray(data.entries)) return;
                 var serverEntries = data.entries;
                 var local = loadHistory();
-                var seen = Object.create(null);
-                local.forEach(function (e) { if (e && e.id) seen[e.id] = true; });
-                var merged = local.slice();
+                var byId = Object.create(null);
+                local.forEach(function (e) { if (e && e.id) byId[e.id] = e; });
+                var serverIds = Object.create(null);
+                var localGainedIds = false;
                 serverEntries.forEach(function (e) {
-                    if (e && e.id && !seen[e.id]) {
-                        merged.push(e);
-                        seen[e.id] = true;
-                    }
+                    if (!e || !e.id) return;
+                    serverIds[e.id] = true;
+                    byId[e.id] = pickNewerEntry(byId[e.id], e);
                 });
+                // Anything purely local that the server hasn't seen yet
+                // counts as "we have new ids to push back".
+                Object.keys(byId).forEach(function (id) {
+                    if (!serverIds[id]) localGainedIds = true;
+                });
+                var merged = Object.keys(byId).map(function (k) { return byId[k]; });
                 merged.sort(function (a, b) {
                     var aT = Date.parse((a && (a.startedAt || a.finishedAt)) || '') || 0;
                     var bT = Date.parse((b && (b.startedAt || b.finishedAt)) || '') || 0;
                     return bT - aT;
                 });
                 var pruned = pruneEntries(merged).slice(0, HISTORY_LIMIT);
-                if (pruned.length > local.length) {
-                    saveHistory(pruned);
-                    pushToServer(pruned);
-                    try { renderHistoryTray(); } catch (_) { /* ignore */ }
-                }
+                var beforeSig = entrySignature(local);
+                var afterSig = entrySignature(pruned);
+                if (beforeSig === afterSig) return;
+                saveHistory(pruned);
+                if (localGainedIds) pushToServer(pruned);
+                try { renderHistoryTray(); } catch (_) { /* ignore */ }
             }).catch(function () { /* ignore network errors */ });
         } catch (_) { /* ignore */ }
+    }
+
+    // --- Cross-device polling ---------------------------------------------
+    // When a user is signed in, periodically re-pull the server snapshot
+    // so a download that finishes on another device shows up here without
+    // a page reload. Pauses while the page is hidden (Page Visibility API)
+    // and while no user is wired up.
+    var DEFAULT_POLL_INTERVAL_MS = 30 * 1000;
+    var MIN_POLL_INTERVAL_MS = 5 * 1000;
+    var serverPollTimer = null;
+    var serverPollVisibilityHandler = null;
+
+    function serverPollIntervalMs() {
+        var override = global.STREAMING_DOWNLOAD_POLL_INTERVAL_MS;
+        if (typeof override === 'number' && isFinite(override) && override > 0) {
+            return Math.max(MIN_POLL_INTERVAL_MS, Math.floor(override));
+        }
+        return DEFAULT_POLL_INTERVAL_MS;
+    }
+
+    function pageIsVisible() {
+        if (typeof document === 'undefined') return true;
+        // Treat 'prerender' / unknown as visible — the only state we want
+        // to actively pause for is an explicitly-hidden tab.
+        return document.visibilityState !== 'hidden';
+    }
+
+    function stopServerPoller() {
+        if (serverPollTimer) {
+            try { clearInterval(serverPollTimer); } catch (_) { /* ignore */ }
+            serverPollTimer = null;
+        }
+    }
+
+    function startServerPollerIfVisible() {
+        if (serverPollTimer) return;
+        if (!currentHistoryUserKey || !isServerSyncEnabled()) return;
+        if (!pageIsVisible()) return;
+        var interval = serverPollIntervalMs();
+        serverPollTimer = setInterval(function () {
+            if (!currentHistoryUserKey || !isServerSyncEnabled()) {
+                stopServerPoller();
+                return;
+            }
+            if (!pageIsVisible()) return;
+            try { fetchAndMergeFromServer(); } catch (_) { /* ignore */ }
+        }, interval);
+    }
+
+    function ensureServerPoller() {
+        if (typeof window === 'undefined') return;
+        if (!currentHistoryUserKey || !isServerSyncEnabled()) {
+            stopServerPoller();
+            return;
+        }
+        if (!serverPollVisibilityHandler && typeof document !== 'undefined' &&
+            typeof document.addEventListener === 'function') {
+            serverPollVisibilityHandler = function () {
+                if (!currentHistoryUserKey || !isServerSyncEnabled()) {
+                    stopServerPoller();
+                    return;
+                }
+                if (pageIsVisible()) {
+                    // Catch up immediately on tab refocus so the user
+                    // doesn't have to wait a full interval to see updates.
+                    try { fetchAndMergeFromServer(); } catch (_) { /* ignore */ }
+                    startServerPollerIfVisible();
+                } else {
+                    stopServerPoller();
+                }
+            };
+            try {
+                document.addEventListener('visibilitychange', serverPollVisibilityHandler);
+            } catch (_) { /* ignore */ }
+        }
+        startServerPollerIfVisible();
     }
 
     function ensureProgressContainer() {
@@ -1176,6 +1292,9 @@
             try { migrateAnonymousHistoryToUser(); } catch (_) { /* ignore */ }
             try { ensureCrossTabListener(); } catch (_) { /* ignore */ }
             try { fetchAndMergeFromServer(); } catch (_) { /* ignore */ }
+            try { ensureServerPoller(); } catch (_) { /* ignore */ }
+        } else {
+            try { stopServerPoller(); } catch (_) { /* ignore */ }
         }
         try { reconcileHistoryOnLoad(); } catch (_) { /* ignore */ }
         try { renderHistoryTray(); } catch (_) { /* ignore */ }
