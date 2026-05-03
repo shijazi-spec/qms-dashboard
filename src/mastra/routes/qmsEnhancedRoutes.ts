@@ -65,7 +65,11 @@ function qmsGate<
   let roles: UserRole[];
   const p = route.path;
   const m = route.method;
-  if (p === "/api/pdpl/export" || p === "/api/pdpl/export/estimate") {
+  if (
+    p === "/api/pdpl/export" ||
+    p === "/api/pdpl/export/estimate" ||
+    p === "/api/pdpl/export-xlsx/estimate"
+  ) {
     roles = ["admin"];
   } else if (
     p.startsWith("/api/qms/nc/export") ||
@@ -396,6 +400,51 @@ const _qmsEnhancedRoutesRaw = [
         );
       } catch (e) {
         logger.error("PDPL estimate error:", e);
+        return c.json({ error: "Failed to estimate export size" }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/compliance/export-xlsx/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse } =
+          await import("../../utils/rbacMiddleware");
+        if (!(await requireAdminOrKey(c))) return unauthorizedResponse(c);
+        const { initComplianceTables } =
+          await import("../../utils/complianceDatabase");
+        await initComplianceTables();
+        return await qmsEstimateResponse(
+          `SELECT COUNT(*)::int AS total FROM obligations`,
+          [],
+          "xlsx",
+          200,
+        );
+      } catch (e) {
+        logger.error("Compliance XLSX estimate error:", e);
+        return c.json({ error: "Failed to estimate export size" }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/pdpl/export-xlsx/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse } =
+          await import("../../utils/rbacMiddleware");
+        if (!(await requireAdminOrKey(c))) return unauthorizedResponse(c);
+        const { initPdplTables } = await import("../../utils/pdplDatabase");
+        await initPdplTables();
+        return await qmsEstimateResponse(
+          `SELECT COUNT(*)::int AS total FROM data_inventory`,
+          [],
+          "xlsx",
+          200,
+        );
+      } catch (e) {
+        logger.error("PDPL XLSX estimate error:", e);
         return c.json({ error: "Failed to estimate export size" }, 500);
       }
     },
