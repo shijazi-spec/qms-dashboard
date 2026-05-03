@@ -411,11 +411,11 @@
                             <div>
                                 <label class="block text-xs font-medium text-gray-600 mb-1">Category</label>
                                 <select id="clauseBulkCategory" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                                    <option value="documents">Documents</option>
-                                    <option value="policies">Policies</option>
-                                    <option value="forms">Forms</option>
-                                    <option value="security_controls">Security Controls</option>
-                                    <option value="sops">SOPs</option>
+                                    <option value="documents" data-i18n="compliance.cat_documents">Documents</option>
+                                    <option value="policies" data-i18n="compliance.cat_policies">Policies</option>
+                                    <option value="forms" data-i18n="compliance.cat_forms">Forms</option>
+                                    <option value="security_controls" data-i18n="compliance.cat_security_controls">Security Controls</option>
+                                    <option value="sops" data-i18n="compliance.cat_sops">SOPs</option>
                                 </select>
                             </div>
                             <div>
@@ -1152,6 +1152,10 @@
             loadDeadlines();
             loadGapAnalysis();
         }
+
+        document.addEventListener('walaPlusLanguageChange', function () {
+            try { loadAll(); } catch (_) {}
+        });
 
         document.addEventListener('DOMContentLoaded', function () {
             loadAll();

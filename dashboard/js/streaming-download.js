@@ -1485,7 +1485,12 @@
         if (c) return c;
         c = document.createElement('div');
         c.id = TRAY_CONTAINER_ID;
-        c.className = 'fixed bottom-4 left-4 z-50 w-80 max-w-[calc(100vw-2rem)]';
+        // Use logical-direction positioning so the tray pins to the
+        // inline-start corner in both LTR (left) and RTL (right) layouts.
+        // Tailwind's compiled bundle here doesn't ship `start-*` utilities,
+        // so set the inset via inline style.
+        c.className = 'fixed bottom-4 z-50 w-80 max-w-[calc(100vw-2rem)]';
+        c.style.insetInlineStart = '1rem';
         c.setAttribute('aria-label', 'Recent downloads');
         c.setAttribute('data-testid', 'tray-recent-downloads');
         document.body.appendChild(c);

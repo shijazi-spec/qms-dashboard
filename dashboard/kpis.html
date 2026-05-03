@@ -296,6 +296,7 @@
 
                 if (!owner) {
                     updateStats(data);
+                    window._lastKPIChartData = data;
                     renderCharts(data);
                 } else {
                     updateStats({ kpiDetails: allKPIs.map(k => ({ ...k, status: 'no_data' })) });
@@ -397,7 +398,7 @@
                                 <p class="text-sm text-gray-600 mt-1">${kpi.description || ''}</p>
                                 <div class="flex items-center gap-4 mt-2 text-xs text-gray-500">
                                     <span>${WalaPlusI18n.t('dyn.kpis.owner_label', { name: ownerLabel })}</span>
-                                    <span>${WalaPlusI18n.t('dyn.kpis.category_label', { name: kpi.category })}</span>
+                                    <span>${WalaPlusI18n.t('dyn.kpis.category_label', { name: _kpiCategoryLabel(kpi.category, kpi.category) })}</span>
                                     <span>${WalaPlusI18n.t('dyn.kpis.frequency_label', { name: kpi.frequency })}</span>
                                     ${hasNavMap ? `<span class="text-cyan-600 font-medium">📋 ${WalaPlusI18n.t('dyn.kpis.has_steps')}</span>` : ''}
                                 </div>
@@ -682,6 +683,20 @@
         }
 
         _runWhenI18nReady(loadKPIs);
+
+        // Re-render the catalog list and rebuild Chart.js doughnuts/bars when
+        // the operator switches language so localized labels appear without
+        // waiting on the page reload that follows. Safe even when the reload
+        // is fast — destroy() guards against duplicate canvases.
+        document.addEventListener('walaPlusLanguageChange', function () {
+            try {
+                const statusFilter = document.getElementById('statusFilter')?.value || '';
+                let filtered = allKPIs;
+                if (statusFilter) filtered = allKPIs.filter(k => k.status === statusFilter);
+                renderKPIList(filtered);
+                if (window._lastKPIChartData) renderCharts(window._lastKPIChartData);
+            } catch (_) {}
+        });
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>

@@ -381,9 +381,30 @@ const WalaPlusNav = {
   },
 
   setLang(lang) {
-    if (window.WalaPlusI18n && typeof window.WalaPlusI18n.setLang === 'function') {
-      window.WalaPlusI18n.setLang(lang);
-    }
+    if (!(window.WalaPlusI18n && typeof window.WalaPlusI18n.setLang === 'function')) return;
+    // Disable both language buttons and replace the clicked button's label
+    // with a spinner so operators get immediate feedback while the server
+    // persists the new preference (and the page reloads).
+    var btnEn = document.querySelector('[data-testid="button-lang-en"]');
+    var btnAr = document.querySelector('[data-testid="button-lang-ar"]');
+    var clicked = lang === 'ar' ? btnAr : btnEn;
+    var setBusy = function (busy) {
+      [btnEn, btnAr].forEach(function (b) {
+        if (!b) return;
+        b.disabled = !!busy;
+        b.setAttribute('aria-busy', busy ? 'true' : 'false');
+        if (busy) b.classList.add('opacity-60', 'cursor-wait');
+        else b.classList.remove('opacity-60', 'cursor-wait');
+      });
+      if (busy && clicked && !clicked.querySelector('[data-lang-spinner]')) {
+        var spinner = document.createElement('span');
+        spinner.setAttribute('data-lang-spinner', '1');
+        spinner.className = 'inline-block w-3 h-3 ms-1 align-middle border-2 border-current border-t-transparent rounded-full animate-spin';
+        spinner.setAttribute('aria-hidden', 'true');
+        clicked.appendChild(spinner);
+      }
+    };
+    window.WalaPlusI18n.setLang(lang, setBusy);
   },
 
   setNumerals(useEastern, btnEl) {

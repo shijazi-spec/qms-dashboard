@@ -331,6 +331,13 @@
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
+        document.addEventListener('walaPlusLanguageChange', function () {
+            try {
+                if (typeof loadSummary === 'function') loadSummary();
+                if (typeof loadHeatmap === 'function') loadHeatmap();
+                if (typeof loadRisks === 'function') loadRisks();
+            } catch (_) {}
+        });
         function _rlbl(group, key) {
             let t;
             if (group === 'level') {
