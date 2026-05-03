@@ -511,6 +511,19 @@ export const globalMiddleware = [
     if (isApi && !publicPath && !mastraInternal) {
       const apiAuthResult = await checkApiAuth(c, urlPath, method);
       if (apiAuthResult) return apiAuthResult;
+    } else if (isApi && mastraInternal && !publicPath) {
+      const session = getSessionFromCookie(c.req.header('Cookie'));
+      const hasAdminKey = hasValidAdminApiKey(c);
+      if (!session && !hasAdminKey) {
+        return c.json({ error: 'Authentication required' }, 401);
+      }
+      if (session && !hasAdminKey) {
+        const { checkPlatformUserActive } = await import('../../utils/rbacMiddleware');
+        const isActive = await checkPlatformUserActive(session.email);
+        if (!isActive) {
+          return c.json({ error: 'Account is not active or has been disabled' }, 403);
+        }
+      }
     } else if (isApi && publicPath) {
       const ip = parseClientIp(c.req.header('x-forwarded-for'), c.req.header('x-real-ip'));
       const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
