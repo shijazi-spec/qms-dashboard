@@ -120,12 +120,6 @@ const WalaPlusNav = {
         { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
         { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
         { label: 'Risk Mgmt', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
-        // Fraud Management Module (PRD-FRD-001) — added incrementally.
-        // Subsequent features add: Country Risk, Fraud KPI Dashboard.
-        { label: 'Fraud Rules', href: '/fraud-rules', icon: 'shield-check', id: 'fraud-rules' },
-        { label: 'Fraud Incidents', href: '/fraud-incidents', icon: 'exclamation-triangle', id: 'fraud-incidents' },
-        { label: 'Country Risk', href: '/fraud-country-risk', icon: 'globe', id: 'fraud-country-risk' },
-        { label: 'Fraud KPIs', href: '/fraud-dashboard', icon: 'chart-bar', id: 'fraud-dashboard' },
         // QMS document library — categorised upload boxes for Documents,
         // Policies, Forms, Security Controls and SOPs. Files uploaded here
         // are staged for future mapping to the regulations tracked in the
@@ -135,6 +129,22 @@ const WalaPlusNav = {
         { label: 'External Audits', href: '/external-audits', icon: 'clipboard-check', id: 'external-audits' },
         { label: 'Vendors', href: '/vendors', icon: 'users', id: 'vendors' },
         { label: 'Mgmt Review', href: '/reviews', icon: 'clipboard-list', id: 'reviews' }
+      ]
+    },
+    {
+      // Fraud Management Module (PRD-FRD-001) — surfaced as its own
+      // top-level sidebar section directly under GRC. Items were
+      // previously listed inside GRC; moved here per user request so
+      // fraud workflows have a dedicated home.
+      id: 'fraud',
+      label: 'Fraud Module',
+      icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`,
+      color: 'red',
+      items: [
+        { label: 'Fraud Rules', href: '/fraud-rules', icon: 'shield-check', id: 'fraud-rules' },
+        { label: 'Fraud Incidents', href: '/fraud-incidents', icon: 'exclamation-triangle', id: 'fraud-incidents' },
+        { label: 'Fraud KPIs', href: '/fraud-dashboard', icon: 'chart-bar', id: 'fraud-dashboard' },
+        { label: 'Country Risk', href: '/fraud-country-risk', icon: 'globe', id: 'fraud-country-risk' }
       ]
     },
     {
@@ -215,7 +225,8 @@ const WalaPlusNav = {
       amber: { bg: 'bg-amber-700', hover: 'hover:bg-amber-800', text: 'text-amber-800', lightBg: 'bg-amber-50' },
       green: { bg: 'bg-green-600', hover: 'hover:bg-green-700', text: 'text-green-600', lightBg: 'bg-green-50' },
       purple: { bg: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-600', lightBg: 'bg-purple-50' },
-      teal: { bg: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-600', lightBg: 'bg-teal-50' }
+      teal: { bg: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-600', lightBg: 'bg-teal-50' },
+      red: { bg: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-600', lightBg: 'bg-red-50' }
     };
     return colors[color] || colors.blue;
   },
