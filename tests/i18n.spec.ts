@@ -189,6 +189,16 @@ test.describe('Language preference API', () => {
 // --- Login page localStorage Arabic persistence (no auth required) ---
 
 test.describe('Login page — localStorage Arabic preference persists without auth', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ authenticated: false }),
+      }),
+    );
+  });
+
   test('Arabic set in localStorage is not overridden by server when unauthenticated', async ({ page }) => {
     // Pre-set Arabic in localStorage before any page load
     await page.goto(`${BASE_URL}/login`);
@@ -233,6 +243,16 @@ test.describe('Login page — localStorage Arabic preference persists without au
 //     with the (stale) server value.
 
 test.describe('Language preference — offline retry & reconciliation', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ authenticated: false }),
+      }),
+    );
+  });
+
   test('init() keeps localStorage when a pending marker disagrees with the (stale) server, then retries the persist', async ({ page }) => {
     // Stub fetch BEFORE the page loads so i18n.js sees our mock during init().
     await page.addInitScript(() => {
@@ -370,6 +390,16 @@ test.describe('Language preference — offline retry & reconciliation', () => {
 // --- RTL layout ---
 
 test.describe('RTL layout checks', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ authenticated: false }),
+      }),
+    );
+  });
+
   test('html[dir="rtl"] is set when Arabic is active', async ({ page }) => {
     await setLanguage(page, 'ar');
     await page.goto(`${BASE_URL}/login`);
@@ -402,6 +432,16 @@ test.describe('RTL layout checks', () => {
 // --- i18n module presence ---
 
 test.describe('i18n module availability', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ authenticated: false }),
+      }),
+    );
+  });
+
   test('WalaPlusI18n is available on pages that load i18n.js', async ({ page }) => {
     await page.goto(`${BASE_URL}/login`);
     await page.waitForLoadState('networkidle');
@@ -983,6 +1023,13 @@ test.describe('Numeral format toggle — user menu', () => {
   });
 
   test('setUseEasternNumerals(false) switches to Western numerals', async ({ page }) => {
+    await page.route('**/api/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ authenticated: false }),
+      }),
+    );
     await setLanguage(page, 'ar');
     await page.goto(`${BASE_URL}/login`);
     await page.waitForLoadState('networkidle');

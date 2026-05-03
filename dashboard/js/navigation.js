@@ -459,6 +459,17 @@ const WalaPlusNav = {
                       data-testid="button-lang-ar">العربية</button>
                   </div>
                 </div>` : ''}
+                ${isAr ? `<div class="px-4 py-2 border-b border-gray-100">
+                  <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.numerals">الأرقام</p>
+                  <div class="flex gap-2">
+                    <button data-on-click="WalaPlusNav.setNumerals" data-args='[true]'
+                      class="flex-1 text-xs px-2 py-1 rounded border transition border-indigo-500 bg-indigo-50 text-indigo-700 font-medium"
+                      data-testid="button-numerals-eastern">١٢٣</button>
+                    <button data-on-click="WalaPlusNav.setNumerals" data-args='[false]'
+                      class="flex-1 text-xs px-2 py-1 rounded border transition border-gray-200 text-gray-600 hover:bg-gray-50"
+                      data-testid="button-numerals-western">123</button>
+                  </div>
+                </div>` : ''}
                 <button data-on-click="WalaPlusNav.signOut" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                   <span data-i18n="common.sign_out">${this._t('common.sign_out')}</span>

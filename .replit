@@ -105,10 +105,11 @@ ZOHO_ACCOUNTS_URL = "https://accounts.zoho.com"
 ZOHO_API_DOMAIN = "https://www.zohoapis.com"
 DATA_MODE = "REAL"
 MANUAL_INTAKE_DIR = "./data/manual-intake"
-ADMIN_API_KEY = "WalaPlus-QMS-Admin-Rotates-April-2026!"
 
 [userenv.development]
 TEST_ADMIN_KEY = "a1b2c3d4e5f60718293a4b5c6d7e8f90fedcba0987654321abcdef0123456789"
+ADMIN_API_KEY = "a1b2c3d4e5f60718293a4b5c6d7e8f90fedcba0987654321abcdef0123456789"
+RATE_LIMIT_DISABLED = "true"
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
