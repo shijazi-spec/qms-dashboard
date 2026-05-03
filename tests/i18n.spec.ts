@@ -54,6 +54,25 @@ async function clearLanguage(page: Page) {
 // --- Login page ---
 
 test.describe('Login page — i18n', () => {
+  // The Playwright config sets `X-Admin-Key` on every request when
+  // TEST_ADMIN_KEY is exported (see playwright.config.ts). That makes
+  // `/api/auth/me` report `authenticated: true`, and the inline script in
+  // dashboard/login.html (`if (data.authenticated) window.location.href = '/'`)
+  // bounces the browser straight off the login page before the i18n strings
+  // are ever applied. Stub the auth-probe to "unauthenticated" so the page
+  // we're testing actually renders. We also clear cookies for belt-and-
+  // suspenders against any session left over from other suites.
+  test.beforeEach(async ({ page, context }) => {
+    await context.clearCookies();
+    await page.route('**/api/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ authenticated: false }),
+      }),
+    );
+  });
+
   test('shows English content by default', async ({ page }) => {
     await clearLanguage(page);
     await page.goto(`${BASE_URL}/login`);
