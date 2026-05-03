@@ -968,7 +968,12 @@
       "resolve_label_cross": "تحديد كمحلول (دمج نفس الوحدة + ربط العابر في Zoho)",
       "resolve_label_simple": "تحديد كمحلول (تم الدمج في Zoho)",
       "ignore_label": "تجاهل (نتيجة خاطئة)",
-      "post_merge_hint": "بعد الدمج أو الربط في Zoho، انقر على «مسح من Zoho» للتحديث الفوري — وإلا سيلتقطه المزامن التلقائي خلال ~6 ساعات."
+      "post_merge_hint": "بعد الدمج أو الربط في Zoho، انقر على «مسح من Zoho» للتحديث الفوري — وإلا سيلتقطه المزامن التلقائي خلال ~6 ساعات.",
+      "badge_match": "{score}% تطابق",
+      "badge_records": "{n} سجل",
+      "badge_inflation": "{value} تضخم",
+      "badge_primary": "الأساسي: {type}",
+      "record_n_header": "السجل {n}"
     },
     "calls": {
       "no_calls": "لا توجد سجلات مكالمات",

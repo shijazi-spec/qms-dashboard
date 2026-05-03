@@ -1008,10 +1008,10 @@
             (recommendations || []).forEach(r => { recMap[r.record_id] = r; });
 
             let html = `<div class="mb-4 flex flex-wrap gap-2 items-center">
-                <span class="confidence-${['high','medium','low'].includes(cluster.confidence_level)?cluster.confidence_level:'low'} px-3 py-1 rounded-full text-sm font-medium">${cluster.confidence_score}% match</span>
-                <span class="px-3 py-1 rounded-full text-sm bg-gray-100">${records.length} records</span>
-                <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">${formatCurrency(cluster.estimated_pipeline_value||0)} inflation</span>
-                ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">Primary: ${escapeHtml(primary_type)}</span>` : ''}
+                <span class="confidence-${['high','medium','low'].includes(cluster.confidence_level)?cluster.confidence_level:'low'} px-3 py-1 rounded-full text-sm font-medium">${_t('dyn.duplicates.badge_match', { score: _fn(cluster.confidence_score) })}</span>
+                <span class="px-3 py-1 rounded-full text-sm bg-gray-100">${_t('dyn.duplicates.badge_records', { n: _fn(records.length) })}</span>
+                <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">${_t('dyn.duplicates.badge_inflation', { value: formatCurrency(cluster.estimated_pipeline_value||0) })}</span>
+                ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">${_t('dyn.duplicates.badge_primary', { type: escapeHtml(primary_type) })}</span>` : ''}
                 ${is_cross_module ? `<span data-testid="badge-cross-module" class="px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-800 font-medium">Cross-module cluster (${(record_types||[]).map(t => escapeHtml(t)).join(' + ')})</span>` : ''}
             </div>`;
 
@@ -1057,7 +1057,7 @@
             html += `<div class="overflow-x-auto mb-6"><table class="min-w-full text-sm border"><thead class="bg-gray-50"><tr>
                 <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500">${_t('dyn.duplicates.col_field')}</th>`;
             records.forEach((r, i) => {
-                html += `<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 border-l">${r.is_primary ? '★ ' : ''}Record ${i+1} (${escapeHtml(r.record_type)})</th>`;
+                html += `<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 border-l">${r.is_primary ? '★ ' : ''}${_t('dyn.duplicates.record_n_header', { n: _fn(i+1) })} (${escapeHtml(r.record_type)})</th>`;
             });
             html += '</tr></thead><tbody>';
 

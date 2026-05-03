@@ -968,7 +968,12 @@
       "resolve_label_cross": "Mark Resolved (merge same-module + link cross-module in Zoho)",
       "resolve_label_simple": "Mark Resolved (Merged in Zoho)",
       "ignore_label": "Ignore (false positive)",
-      "post_merge_hint": "After merging or linking inside Zoho, click Scan from Zoho for an immediate refresh — otherwise the auto-sync picks it up within ~6 hours."
+      "post_merge_hint": "After merging or linking inside Zoho, click Scan from Zoho for an immediate refresh — otherwise the auto-sync picks it up within ~6 hours.",
+      "badge_match": "{score}% match",
+      "badge_records": "{n} records",
+      "badge_inflation": "{value} inflation",
+      "badge_primary": "Primary: {type}",
+      "record_n_header": "Record {n}"
     },
     "calls": {
       "no_calls": "No call records found",
