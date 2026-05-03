@@ -433,7 +433,7 @@
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b">
-                                    <th scope="col" class="py-2 px-3 w-8" aria-label="Select"><input type="checkbox" data-on-click="toggleAllCheckboxes" data-args="[&quot;capa&quot;,&quot;@this&quot;]"></th>
+                                    <th scope="col" class="py-2 px-3 w-8" aria-label="Select"><input type="checkbox" aria-label="Select all CAPAs" data-on-click="toggleAllCheckboxes" data-args="[&quot;capa&quot;,&quot;@this&quot;]"></th>
                                     <th scope="col" class="text-left py-2 px-3">CAPA #</th>
                                     <th scope="col" class="text-left py-2 px-3">Title</th>
                                     <th scope="col" class="text-left py-2 px-3">Type</th>
@@ -496,7 +496,7 @@
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b">
-                                    <th scope="col" class="py-2 px-3 w-8" aria-label="Select"><input type="checkbox" data-on-click="toggleAllCheckboxes" data-args="[&quot;nc&quot;,&quot;@this&quot;]"></th>
+                                    <th scope="col" class="py-2 px-3 w-8" aria-label="Select"><input type="checkbox" aria-label="Select all non-conformances" data-on-click="toggleAllCheckboxes" data-args="[&quot;nc&quot;,&quot;@this&quot;]"></th>
                                     <th scope="col" class="text-left py-2 px-3">NC #</th>
                                     <th scope="col" class="text-left py-2 px-3">Title</th>
                                     <th scope="col" class="text-left py-2 px-3">Type</th>
@@ -986,7 +986,7 @@
                             .map(
                                 (c) => `
                     <tr class="border-b hover:bg-gray-50 cursor-pointer">
-                        <td class="py-2 px-3"><input type="checkbox" class="capa-checkbox" value="${c.id}" data-on-click="event.stopPropagation,updateBulkToolbar" data-args="[[],[&quot;capa&quot;]]"></td>
+                        <td class="py-2 px-3"><input type="checkbox" class="capa-checkbox" value="${c.id}" aria-label="Select CAPA ${c.capa_number}" data-on-click="event.stopPropagation,updateBulkToolbar" data-args="[[],[&quot;capa&quot;]]"></td>
                         <td class="py-2 px-3 font-mono text-xs" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.capa_number}</td>
                         <td class="py-2 px-3" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.title}</td>
                         <td class="py-2 px-3 capitalize" data-on-click="showCapaDetail" data-args="[${c.id}]">${c.capa_type}</td>
@@ -1015,7 +1015,7 @@
                             .map(
                                 (n) => `
                     <tr class="border-b hover:bg-gray-50 cursor-pointer">
-                        <td class="py-2 px-3"><input type="checkbox" class="nc-checkbox" value="${n.id}" data-on-click="event.stopPropagation,updateBulkToolbar" data-args="[[],[&quot;nc&quot;]]"></td>
+                        <td class="py-2 px-3"><input type="checkbox" class="nc-checkbox" value="${n.id}" aria-label="Select non-conformance ${n.nc_number}" data-on-click="event.stopPropagation,updateBulkToolbar" data-args="[[],[&quot;nc&quot;]]"></td>
                         <td class="py-2 px-3 font-mono text-xs" data-on-click="showNcDetail" data-args="[${n.id}]">${n.nc_number}</td>
                         <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]">${n.title}</td>
                         <td class="py-2 px-3" data-on-click="showNcDetail" data-args="[${n.id}]">${n.nc_type}</td>

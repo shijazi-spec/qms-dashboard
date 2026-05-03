@@ -186,7 +186,7 @@
                 if (line.match(/^\|.*\|/)) {
                     if (line.match(/^\|\s*[-:]+/)) continue;
                     var cells = line.split('|').filter(function(c, idx, arr) { return idx > 0 && idx < arr.length - 1; });
-                    if (!inTable) { html += '<table><thead><tr>'; cells.forEach(function(c) { html += '<th>' + inlineFormat(c.trim()) + '</th>'; }); html += '</tr></thead><tbody>'; inTable = true; }
+                    if (!inTable) { html += '<table><thead><tr>'; cells.forEach(function(c) { html += '<th scope="col">' + inlineFormat(c.trim()) + '</th>'; }); html += '</tr></thead><tbody>'; inTable = true; }
                     else { html += '<tr>'; cells.forEach(function(c) { html += '<td>' + inlineFormat(c.trim()) + '</td>'; }); html += '</tr>'; }
                     continue;
                 } else if (inTable) { html += '</tbody></table>'; inTable = false; }

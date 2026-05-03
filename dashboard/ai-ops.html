@@ -924,11 +924,11 @@
             <table class="min-w-full text-sm" data-testid="table-metrics-prune-history">
               <thead>
                 <tr class="border-b text-xs text-gray-500 uppercase tracking-wide">
-                  <th class="py-1.5 pe-3 text-start">When</th>
-                  <th class="py-1.5 pe-3 text-end">Retention</th>
-                  <th class="py-1.5 pe-3 text-end">Rows deleted</th>
-                  <th class="py-1.5 pe-3 text-end">Duration</th>
-                  <th class="py-1.5 text-start">Status</th>
+                  <th scope="col" class="py-1.5 pe-3 text-start">When</th>
+                  <th scope="col" class="py-1.5 pe-3 text-end">Retention</th>
+                  <th scope="col" class="py-1.5 pe-3 text-end">Rows deleted</th>
+                  <th scope="col" class="py-1.5 pe-3 text-end">Duration</th>
+                  <th scope="col" class="py-1.5 text-start">Status</th>
                 </tr>
               </thead>
               <tbody id="metrics-prune-history-tbody" data-testid="tbody-metrics-prune-history">
@@ -1267,11 +1267,11 @@
               <table class="min-w-full text-start text-sm" data-testid="table-feedback-prompt-versions">
                 <thead class="text-xs text-gray-500 uppercase">
                   <tr>
-                    <th class="px-3 py-2">Prompt version</th>
-                    <th class="px-3 py-2 text-end">Ratings</th>
-                    <th class="px-3 py-2 text-end">Up</th>
-                    <th class="px-3 py-2 text-end">Down</th>
-                    <th class="px-3 py-2 text-end">Up ratio</th>
+                    <th scope="col" class="px-3 py-2">Prompt version</th>
+                    <th scope="col" class="px-3 py-2 text-end">Ratings</th>
+                    <th scope="col" class="px-3 py-2 text-end">Up</th>
+                    <th scope="col" class="px-3 py-2 text-end">Down</th>
+                    <th scope="col" class="px-3 py-2 text-end">Up ratio</th>
                   </tr>
                 </thead>
                 <tbody>${rows}</tbody>
@@ -1315,11 +1315,11 @@
               <table class="min-w-full text-start text-sm" data-testid="table-feedback-client-surfaces">
                 <thead class="text-xs text-gray-500 uppercase">
                   <tr>
-                    <th class="px-3 py-2">Client surface</th>
-                    <th class="px-3 py-2 text-end">Ratings</th>
-                    <th class="px-3 py-2 text-end">Up</th>
-                    <th class="px-3 py-2 text-end">Down</th>
-                    <th class="px-3 py-2 text-end">Up ratio</th>
+                    <th scope="col" class="px-3 py-2">Client surface</th>
+                    <th scope="col" class="px-3 py-2 text-end">Ratings</th>
+                    <th scope="col" class="px-3 py-2 text-end">Up</th>
+                    <th scope="col" class="px-3 py-2 text-end">Down</th>
+                    <th scope="col" class="px-3 py-2 text-end">Up ratio</th>
                   </tr>
                 </thead>
                 <tbody>${rows}</tbody>
@@ -2844,9 +2844,9 @@
       document.getElementById('price-table-content').innerHTML = `
         <table class="min-w-full text-start text-sm">
           <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-            <th class="px-3 py-2" data-i18n="ai_ops.col_model">Model</th>
-            <th class="px-3 py-2 text-end">Input / 1k tokens</th>
-            <th class="px-3 py-2 text-end">Output / 1k tokens</th>
+            <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_model">Model</th>
+            <th scope="col" class="px-3 py-2 text-end">Input / 1k tokens</th>
+            <th scope="col" class="px-3 py-2 text-end">Output / 1k tokens</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
@@ -2907,14 +2907,14 @@
         el.innerHTML = `
           <table class="min-w-full text-start text-sm" data-testid="table-agent-latency">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-              <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
-              <th class="px-3 py-2 text-end">Calls</th>
-              <th class="px-3 py-2 text-end">p50 (ms)</th>
-              <th class="px-3 py-2 text-end">p95 (ms)</th>
-              <th class="px-3 py-2 text-end">Avg (ms)</th>
-              <th class="px-3 py-2 text-end">Error %</th>
-              <th class="px-3 py-2 text-end">👍 Feedback Rate</th>
-              <th class="px-3 py-2 text-end">Total Cost</th>
+              <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
+              <th scope="col" class="px-3 py-2 text-end">Calls</th>
+              <th scope="col" class="px-3 py-2 text-end">p50 (ms)</th>
+              <th scope="col" class="px-3 py-2 text-end">p95 (ms)</th>
+              <th scope="col" class="px-3 py-2 text-end">Avg (ms)</th>
+              <th scope="col" class="px-3 py-2 text-end">Error %</th>
+              <th scope="col" class="px-3 py-2 text-end">👍 Feedback Rate</th>
+              <th scope="col" class="px-3 py-2 text-end">Total Cost</th>
             </tr></thead>
             <tbody>${data.map((r, i) => `
               <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-agent-${i}">
@@ -3228,15 +3228,15 @@
               <h3 class="text-sm font-semibold text-gray-800 mb-2">${esc(agent)}${headerExtras}</h3>
               <table class="min-w-full text-start text-sm" data-testid="table-prompt-versions">
                 <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-                  <th class="px-3 py-2">Prompt Version</th>
-                  <th class="px-3 py-2 text-end">Calls</th>
-                  <th class="px-3 py-2 text-end">👍 Feedback Rate</th>
-                  <th class="px-3 py-2 text-end">Ratings</th>
-                  <th class="px-3 py-2 text-end">p50 (ms)</th>
-                  <th class="px-3 py-2 text-end">Avg (ms)</th>
-                  <th class="px-3 py-2 text-end">Error %</th>
-                  <th class="px-3 py-2" title="Per-surface call breakdown within the selected window (web / slack / mobile / unknown)">Surfaces</th>
-                  <th class="px-3 py-2">Last seen</th>
+                  <th scope="col" class="px-3 py-2">Prompt Version</th>
+                  <th scope="col" class="px-3 py-2 text-end">Calls</th>
+                  <th scope="col" class="px-3 py-2 text-end">👍 Feedback Rate</th>
+                  <th scope="col" class="px-3 py-2 text-end">Ratings</th>
+                  <th scope="col" class="px-3 py-2 text-end">p50 (ms)</th>
+                  <th scope="col" class="px-3 py-2 text-end">Avg (ms)</th>
+                  <th scope="col" class="px-3 py-2 text-end">Error %</th>
+                  <th scope="col" class="px-3 py-2" title="Per-surface call breakdown within the selected window (web / slack / mobile / unknown)">Surfaces</th>
+                  <th scope="col" class="px-3 py-2">Last seen</th>
                 </tr></thead>
                 <tbody>${body}</tbody>
               </table>
@@ -3267,12 +3267,12 @@
         el.innerHTML = `
           <table class="min-w-full text-start text-sm" data-testid="table-top-tools">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-              <th class="px-3 py-2" data-i18n="ai_ops.col_tool">Tool</th>
-              <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
-              <th class="px-3 py-2 text-end">Calls</th>
-              <th class="px-3 py-2 text-end">Avg Latency</th>
-              <th class="px-3 py-2 text-end">Error %</th>
-              <th class="px-3 py-2 text-end">Total Cost</th>
+              <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_tool">Tool</th>
+              <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
+              <th scope="col" class="px-3 py-2 text-end">Calls</th>
+              <th scope="col" class="px-3 py-2 text-end">Avg Latency</th>
+              <th scope="col" class="px-3 py-2 text-end">Error %</th>
+              <th scope="col" class="px-3 py-2 text-end">Total Cost</th>
             </tr></thead>
             <tbody>${data.map((r, i) => `
               <tr class="border-t cursor-pointer hover:bg-blue-50 transition-colors ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-tool-${i}" data-tool-name="${esc(r.tool_name)}" data-on-click="openToolParentsPanel" data-args='[${JSON.stringify(r.tool_name)}]' title="Click to see parent agent calls for this tool">
@@ -3334,13 +3334,13 @@
         body.innerHTML = `
           <table class="min-w-full text-start text-sm" data-testid="table-tool-parents">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-              <th class="px-3 py-2">Call ID</th>
-              <th class="px-3 py-2">Agent</th>
-              <th class="px-3 py-2">When</th>
-              <th class="px-3 py-2 text-end">Invocations</th>
-              <th class="px-3 py-2 text-end">Tool Cost</th>
-              <th class="px-3 py-2 text-end">Latency</th>
-              <th class="px-3 py-2 text-end">Status</th>
+              <th scope="col" class="px-3 py-2">Call ID</th>
+              <th scope="col" class="px-3 py-2">Agent</th>
+              <th scope="col" class="px-3 py-2">When</th>
+              <th scope="col" class="px-3 py-2 text-end">Invocations</th>
+              <th scope="col" class="px-3 py-2 text-end">Tool Cost</th>
+              <th scope="col" class="px-3 py-2 text-end">Latency</th>
+              <th scope="col" class="px-3 py-2 text-end">Status</th>
             </tr></thead>
             <tbody>${data.map((r, i) => `
               <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''} cursor-pointer hover:bg-blue-50 transition-colors"
@@ -3501,13 +3501,13 @@
       el.innerHTML = `
           <table class="min-w-full text-start text-sm" data-testid="table-recent-issues">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-              <th class="px-3 py-2 w-6"></th>
-              <th class="px-3 py-2" data-i18n="ai_ops.col_time">Time</th>
-              <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
-              <th class="px-3 py-2" data-i18n="ai_ops.col_tool">Tool</th>
-              <th class="px-3 py-2 text-end" data-i18n="ai_ops.col_latency">Latency</th>
-              <th class="px-3 py-2">Status</th>
-              <th class="px-3 py-2">Error / Prompt / Tool I/O preview</th>
+              <th scope="col" class="px-3 py-2 w-6"></th>
+              <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_time">Time</th>
+              <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
+              <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_tool">Tool</th>
+              <th scope="col" class="px-3 py-2 text-end" data-i18n="ai_ops.col_latency">Latency</th>
+              <th scope="col" class="px-3 py-2">Status</th>
+              <th scope="col" class="px-3 py-2">Error / Prompt / Tool I/O preview</th>
             </tr></thead>
             <tbody>${data.map((r, i) => {
               const isParent = !r.tool_name;
@@ -3620,11 +3620,11 @@
       return `
         <table class="min-w-full text-start text-xs" data-testid="table-child-tools">
           <thead><tr class="text-gray-500 uppercase">
-            <th class="px-2 py-1">Time</th>
-            <th class="px-2 py-1">Tool</th>
-            <th class="px-2 py-1 text-end">Latency</th>
-            <th class="px-2 py-1">Status</th>
-            <th class="px-2 py-1">Error</th>
+            <th scope="col" class="px-2 py-1">Time</th>
+            <th scope="col" class="px-2 py-1">Tool</th>
+            <th scope="col" class="px-2 py-1 text-end">Latency</th>
+            <th scope="col" class="px-2 py-1">Status</th>
+            <th scope="col" class="px-2 py-1">Error</th>
           </tr></thead>
           <tbody>${rows.map(c => `
             <tr class="border-t border-blue-100" data-testid="row-child-${c.id}">
@@ -3765,13 +3765,13 @@
         el.innerHTML = `
           <table class="min-w-full text-start text-sm" data-testid="table-negative-feedback">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-              <th class="px-3 py-2">When</th>
-              <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
-              <th class="px-3 py-2">Surface</th>
-              <th class="px-3 py-2">Call</th>
-              <th class="px-3 py-2">Comment</th>
-              <th class="px-3 py-2">Original Prompt</th>
-              <th class="px-3 py-2 text-end" data-i18n="ai_ops.col_latency">Latency</th>
+              <th scope="col" class="px-3 py-2">When</th>
+              <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
+              <th scope="col" class="px-3 py-2">Surface</th>
+              <th scope="col" class="px-3 py-2">Call</th>
+              <th scope="col" class="px-3 py-2">Comment</th>
+              <th scope="col" class="px-3 py-2">Original Prompt</th>
+              <th scope="col" class="px-3 py-2 text-end" data-i18n="ai_ops.col_latency">Latency</th>
             </tr></thead>
             <tbody>${data.map((r, i) => {
               // Surface badge (Task #749) — `client_surface` is hoisted from

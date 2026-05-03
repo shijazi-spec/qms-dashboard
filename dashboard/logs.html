@@ -284,15 +284,15 @@
                 <table class="w-full">
                     <thead class="bg-gray-50 border-b border-gray-200">
                         <tr>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">User</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Role</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Action</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity Type</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Description</th>
-                            <th class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">AI</th>
-                            <th class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Severity</th>
+                            <th scope="col" class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
+                            <th scope="col" class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">User</th>
+                            <th scope="col" class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Role</th>
+                            <th scope="col" class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Action</th>
+                            <th scope="col" class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity Type</th>
+                            <th scope="col" class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity</th>
+                            <th scope="col" class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Description</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">AI</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Severity</th>
                         </tr>
                     </thead>
                     <tbody id="logsTable" class="divide-y divide-gray-200">
@@ -1130,13 +1130,13 @@
             body.innerHTML =
                 '<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-post-restore-alerts">' +
                     '<thead><tr class="text-start text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
-                        '<th class="py-2 pe-2 w-6"></th>' +
-                        '<th class="py-2 pe-4">When</th>' +
-                        '<th class="py-2 pe-4">Priority</th>' +
-                        '<th class="py-2 pe-4">Status / channel</th>' +
-                        '<th class="py-2 pe-4">Per-table counts</th>' +
-                        '<th class="py-2 pe-4">Alert</th>' +
-                        '<th class="py-2 text-end">Action</th>' +
+                        '<th scope="col" class="py-2 pe-2 w-6"></th>' +
+                        '<th scope="col" class="py-2 pe-4">When</th>' +
+                        '<th scope="col" class="py-2 pe-4">Priority</th>' +
+                        '<th scope="col" class="py-2 pe-4">Status / channel</th>' +
+                        '<th scope="col" class="py-2 pe-4">Per-table counts</th>' +
+                        '<th scope="col" class="py-2 pe-4">Alert</th>' +
+                        '<th scope="col" class="py-2 text-end">Action</th>' +
                     '</tr></thead>' +
                     '<tbody class="divide-y divide-gray-100">' + rows + '</tbody>' +
                 '</table></div>' +
@@ -1432,10 +1432,10 @@
             body.innerHTML =
                 '<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-alert-recipients">' +
                     '<thead><tr class="text-start text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
-                        '<th class="py-2 pe-4">Email</th>' +
-                        '<th class="py-2 pe-4">Added by</th>' +
-                        '<th class="py-2 pe-4">Added at</th>' +
-                        '<th class="py-2"></th>' +
+                        '<th scope="col" class="py-2 pe-4">Email</th>' +
+                        '<th scope="col" class="py-2 pe-4">Added by</th>' +
+                        '<th scope="col" class="py-2 pe-4">Added at</th>' +
+                        '<th scope="col" class="py-2"></th>' +
                     '</tr></thead>' +
                     '<tbody class="divide-y divide-gray-100">' + recipientRows + '</tbody>' +
                 '</table></div>' +
@@ -1455,10 +1455,10 @@
                     '<summary class="text-xs text-gray-500 cursor-pointer">Recent changes (audit log)</summary>' +
                     '<div class="overflow-x-auto mt-2"><table class="w-full" data-testid="table-alert-recipients-audit">' +
                         '<thead><tr class="text-start text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">' +
-                            '<th class="py-1 pe-4">When</th>' +
-                            '<th class="py-1 pe-4">Action</th>' +
-                            '<th class="py-1 pe-4">Email</th>' +
-                            '<th class="py-1">By</th>' +
+                            '<th scope="col" class="py-1 pe-4">When</th>' +
+                            '<th scope="col" class="py-1 pe-4">Action</th>' +
+                            '<th scope="col" class="py-1 pe-4">Email</th>' +
+                            '<th scope="col" class="py-1">By</th>' +
                         '</tr></thead>' +
                         '<tbody class="divide-y divide-gray-50">' + auditRows + '</tbody>' +
                     '</table></div>' +

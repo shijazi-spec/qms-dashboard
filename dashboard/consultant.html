@@ -902,7 +902,7 @@
                 var rows = bodyRows.trim().split('\n').map(function(row) {
                     return row.split('|').map(function(c) { return c.trim(); }).filter(Boolean);
                 });
-                var table = '<table><thead><tr>' + headers.map(function(h) { return '<th>' + escapeHtml(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
+                var table = '<table><thead><tr>' + headers.map(function(h) { return '<th scope="col">' + escapeHtml(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
                 rows.forEach(function(row) {
                     table += '<tr>' + row.map(function(c) { return '<td>' + escapeHtml(c) + '</td>'; }).join('') + '</tr>';
                 });

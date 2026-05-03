@@ -443,9 +443,9 @@
             var allCols = extraCols.concat(columns);
 
             headerRow.innerHTML = allCols.map(function(col) {
-                if (col === '_quality') return '<th class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider min-w-80">' + escapeHtml(_t('dyn.crm.quality_header')) + '</th>';
-                if (col === '_duplicates') return '<th class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider min-w-90">' + escapeHtml(_t('dyn.crm.duplicates_header')) + '</th>';
-                return '<th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">' + escapeHtml(formatColumnName(col)) + '</th>';
+                if (col === '_quality') return '<th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider min-w-80">' + escapeHtml(_t('dyn.crm.quality_header')) + '</th>';
+                if (col === '_duplicates') return '<th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider min-w-90">' + escapeHtml(_t('dyn.crm.duplicates_header')) + '</th>';
+                return '<th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">' + escapeHtml(formatColumnName(col)) + '</th>';
             }).join('');
 
             tbody.innerHTML = allRecords.map(function(record) {

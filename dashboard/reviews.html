@@ -91,14 +91,14 @@
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_review_no">Review #</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.date">Date</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_chair">Chair</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_next_review">Next Review</th>
-                        <th class="px-4 py-3"></th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_review_no">Review #</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.date">Date</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_chair">Chair</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_next_review">Next Review</th>
+                        <th scope="col" class="px-4 py-3"></th>
                     </tr>
                 </thead>
                 <tbody id="reviewsBody" class="divide-y divide-gray-200">
@@ -330,7 +330,7 @@
                 actionsHtml = `<div class="mt-4">
                     <h4 class="font-semibold text-sm mb-2">Action Items (${actions.length})</h4>
                     <table class="w-full text-xs border">
-                        <thead><tr class="bg-gray-50"><th class="px-2 py-1 text-start">#</th><th class="px-2 py-1 text-start">Description</th><th class="px-2 py-1 text-start">Assigned To</th><th class="px-2 py-1 text-start">Due</th><th class="px-2 py-1 text-start">Status</th><th class="px-2 py-1"></th></tr></thead>
+                        <thead><tr class="bg-gray-50"><th scope="col" class="px-2 py-1 text-start">#</th><th scope="col" class="px-2 py-1 text-start">Description</th><th scope="col" class="px-2 py-1 text-start">Assigned To</th><th scope="col" class="px-2 py-1 text-start">Due</th><th scope="col" class="px-2 py-1 text-start">Status</th><th scope="col" class="px-2 py-1"></th></tr></thead>
                         <tbody>${actions.map(a => `
                             <tr class="border-t"><td class="px-2 py-1">${a.action_number}</td><td class="px-2 py-1">${esc(a.description)}</td><td class="px-2 py-1">${esc(a.assigned_to)}</td>
                             <td class="px-2 py-1">${a.due_date ? new Date(a.due_date).toLocaleDateString() : '-'}</td>
