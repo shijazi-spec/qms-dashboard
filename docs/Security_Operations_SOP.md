@@ -1100,6 +1100,51 @@ Operational guarantees:
 
 ---
 
+### 5.14 Streaming-Export Cache Location Health Check
+
+The platform stages streaming XLSX/CSV exports to a per-job temp file under
+`${tmpdir}/walaplus-export-cache` (or the override path in
+`STREAMING_EXPORT_CACHE_DIR`) so interrupted multi-GB downloads can resume
+via HTTP Range. The cache directory itself is locked down to mode `0o700`
+and every staged file to `0o600`, but those modes only protect the *contents*
+of the directory — the file *names* (which embed tenant + report identifiers
+via the cache key) are still discoverable through parent-directory traversal
+when an ancestor grants group/other read or execute.
+
+To catch the misconfiguration on day one rather than during an audit, the
+worker runs a one-shot health check at boot
+(`checkStagedExportCacheLocation()` in `src/utils/excelExport.ts`).
+
+| Aspect | Behaviour |
+|--------|-----------|
+| When it runs | Once during Mastra startup, alongside the ADMIN_API_KEY strength gate. The probe first calls `ensureStagedExportDir()` so the resolved path actually exists on disk before the ancestor walk — this materialises any missing segments at mode `0o700` (Node's `mkdir(recursive: true, mode: 0o700)` applies the mode to every newly-created intermediate, not just the leaf), so the worker hardens the operator's path on its own behalf. The walk then runs against the now-existing chain. |
+| When it stays silent | `STREAMING_EXPORT_CACHE_DIR` is unset (default `/tmp`-based path on a single-tenant box; `/tmp` is intentionally sticky-bit world-traversable). Also silent on `win32` where Node ignores fs modes, and silent whenever the operator-controlled portion of the configured path has any single owner-only (`0o700`) ancestor between the cache dir and the system boundary — that tight barrier blocks non-owners from traversing past it, so anything above it is irrelevant. Crucially: when the worker is the one that creates a missing parent segment, that segment comes out at `0o700` and contributes no findings. |
+| What the walk does | Walks parents upward from the resolved cache directory, reporting each ancestor whose mode has group/other read or execute (`mode & 0o055 ≠ 0`). The walk stops at the first owner-only ancestor (tight barrier) **and** at well-known system roots the operator cannot meaningfully `chmod` (`/`, the resolved `os.tmpdir()`, and the FHS roots `/var`, `/srv`, `/opt`, `/usr`, `/home`, `/mnt`, `/run`). Only the operator-controlled segments below those boundaries are scanned. |
+| When it warns | An ancestor of the cache dir was created out-of-band (by ops provisioning, `install -d`, an older build, a sibling service, etc.) at `0o755` (or otherwise group/other r+x) and the worker does not own it tightly enough to silently fix it. Example: env override `/srv/shared/exports` where `/srv/shared` was pre-provisioned by ops at `0o755 root:deploy`. The structured warning lists each offending ancestor with its octal mode and a recommended fix. |
+
+#### Recommended fix when the warning fires
+
+Pick whichever is simpler in your environment:
+
+1. **Tighten the offending ancestor.** `chmod o-rx,g-rx /srv/shared` (or
+   whichever path the warning lists). The worker should normally be the
+   owner — if not, `chown` it to the worker user as well. Re-run the worker;
+   the warning should disappear.
+2. **Re-point the cache under a tight parent.** Set
+   `STREAMING_EXPORT_CACHE_DIR` to a path whose immediate (or any) parent is
+   owned by the worker user and `chmod 0o700` — e.g.
+   `/var/lib/walaplus/export-cache` with `/var/lib/walaplus` chmod `0o700`.
+   The tight `0o700` barrier short-circuits the walk before it ever reaches
+   `/var/lib`, so no findings are produced.
+
+#### Implementation Files
+
+- `src/utils/excelExport.ts` — `checkStagedExportCacheLocation()` and the
+  `ExportCacheLocationCheckResult` shape it returns for tests.
+- `src/mastra/index.ts` — calls the check during the boot sequence.
+
+---
+
 ## 6. Cross-Reference Table — All 39 Findings
 
 | # | Finding ID | Title | Severity | CVSS | Domain | Status | Primary Files Modified |

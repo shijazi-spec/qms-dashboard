@@ -1040,6 +1040,214 @@ export async function lockDownStagedExportCacheDirAtStartup(): Promise<void> {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Startup health check — warn when the cache dir lives on a shared volume
+// ---------------------------------------------------------------------------
+//
+// Background (Task #770):
+//   The staged export cache directory itself is created with mode 0o700, but
+//   that only protects the *contents* of the directory — file names are still
+//   exposed via parent-directory traversal. If an operator points
+//   STREAMING_EXPORT_CACHE_DIR at e.g. `/srv/shared/exports` and the worker
+//   creates the missing `shared/` segment via `mkdir -p` with the default
+//   umask (0o022 → 0o755 mode), any user with execute on the chain can
+//   `ls /srv/shared` and harvest the staged file names (which embed tenant
+//   and report identifiers via the cache key) without ever reading a single
+//   file. A startup health check catches the misconfiguration on day one
+//   rather than during an audit.
+//
+// Scope of the walk (designed to avoid false positives on universal
+// system-default permissions):
+//
+//   We walk *upward from the cache dir* and report ancestors that grant
+//   group/other read or execute, but we deliberately stop:
+//
+//     1. At the first ancestor whose mode is tight (no g/o r+x). A tight
+//        barrier blocks everyone outside the owner from reading or
+//        traversing the chain above it — anything further up is protected
+//        regardless of how loose those higher ancestors are. So if a
+//        single 0o700 directory exists between the cache dir and root,
+//        we stay silent.
+//
+//     2. At well-known system roots we cannot meaningfully advise the
+//        operator to chmod: `/`, the resolved `os.tmpdir()`, and the
+//        single-segment FHS roots (`/var`, `/srv`, `/opt`, `/usr`,
+//        `/home`, `/mnt`, `/run`). These are universally g/o-traversable
+//        on a stock POSIX install; reporting them produces non-actionable
+//        noise on every boot. The operator-controlled portion of the
+//        configured path is below this boundary and is what we actually
+//        scan.
+//
+// Combined, these two rules mean a properly-configured custom path like
+// `/var/lib/walaplus/export-cache` (with `/var/lib/walaplus` chmod 0o700
+// and owned by the worker) produces zero findings, while the misconfig
+// the task targets (`/srv/shared/exports` with `/srv/shared` left at the
+// umask default 0o755) produces a single actionable finding for
+// `/srv/shared`.
+//
+// Behaviour:
+//   - No-op when STREAMING_EXPORT_CACHE_DIR is unset (default `/tmp`-based
+//     path on a single-tenant box; `/tmp` is intentionally sticky-bit
+//     world-traversable so warning on it would be noise on every boot).
+//   - POSIX-only. Skipped on win32 where Node ignores fs modes.
+
+export interface ExportCacheLocationFinding {
+  /** Ancestor path that triggered the warning. */
+  path: string;
+  /** Mode bits as stat'd (full `st.mode & 0o777`). */
+  mode: number;
+  /** Subset of group/other read+execute bits set on the path. */
+  permissiveBits: number;
+}
+
+export interface ExportCacheLocationCheckResult {
+  /** Resolved cache directory path the worker would use. */
+  cacheDir: string;
+  /** Whether the check actually ran (false on win32 or when env unset). */
+  checked: boolean;
+  /** Ancestor permission findings. Empty when the chain is tight. */
+  findings: ExportCacheLocationFinding[];
+}
+
+/**
+ * System paths the walk treats as a boundary — present on every POSIX host,
+ * universally g/o-traversable, and not something the operator can be
+ * advised to chmod. We stop at (and do not report) any of these.
+ */
+function exportCacheScanStopBoundaries(): Set<string> {
+  const stops = new Set<string>([
+    "/",
+    path.resolve(os.tmpdir()),
+    // Standard FHS roots one segment below `/`. Anything *under* these
+    // (e.g. `/var/lib/walaplus`) is operator-controlled and still scanned;
+    // the roots themselves are stock-installation defaults out of scope.
+    "/var",
+    "/srv",
+    "/opt",
+    "/usr",
+    "/home",
+    "/mnt",
+    "/run",
+  ]);
+  return stops;
+}
+
+/**
+ * Walk the parent chain of the configured staged-export cache directory and
+ * report ancestors that grant group/other read or execute. Intended to be
+ * called once at process boot so a permissive misconfiguration is logged
+ * before any sensitive export is staged.
+ *
+ * See the block comment above for the scope of the walk.
+ *
+ * Silent (no log) when:
+ *   - STREAMING_EXPORT_CACHE_DIR is not explicitly set,
+ *   - process.platform === "win32", or
+ *   - every operator-controlled ancestor between the cache dir and the
+ *     first tight barrier (or the system boundary) is owner-only.
+ */
+export async function checkStagedExportCacheLocation(): Promise<ExportCacheLocationCheckResult> {
+  const cacheDir = stagedExportCacheDir();
+
+  if (process.platform === "win32" || !process.env.STREAMING_EXPORT_CACHE_DIR) {
+    return { cacheDir, checked: false, findings: [] };
+  }
+
+  // Materialise the cache directory (and any missing parent segments) before
+  // we scan. This is what makes the check actually catch the misconfiguration
+  // the task targets: when an operator points STREAMING_EXPORT_CACHE_DIR at
+  // e.g. `/srv/shared/exports` and `/srv/shared` does not yet exist, the
+  // worker's `mkdir -p` here creates `/srv/shared` with the *current process
+  // umask* (typically 0o022 → 0o755). Without this preflight call the
+  // ancestor walk would just see ENOENT for `/srv/shared` and report
+  // nothing — exactly the false-negative the task is designed to prevent.
+  // ensureStagedExportDir is idempotent and also tightens the leaf to 0o700.
+  try {
+    await ensureStagedExportDir();
+  } catch (err) {
+    // If we can't even create the dir, the check is moot — the export
+    // pipeline will fail loudly on the first request with the same error.
+    // Surface the failure but don't throw out of the boot probe.
+    logger.warn(
+      "[stagedExport] healthcheck: could not ensure cache dir, skipping ancestor scan",
+      { cacheDir, err: String(err) },
+    );
+    return { cacheDir, checked: true, findings: [] };
+  }
+
+  const resolved = path.resolve(cacheDir);
+  const findings: ExportCacheLocationFinding[] = [];
+  const stopBoundaries = exportCacheScanStopBoundaries();
+
+  // Walk parents from the immediate parent upward. Skip the cache dir
+  // itself — that's locked down to 0o700 by ensureStagedExportDir; the
+  // threat model here is parent-directory traversal.
+  let current = path.dirname(resolved);
+  let previous = "";
+  while (current && current !== previous) {
+    if (stopBoundaries.has(current)) {
+      // Reached a system boundary the operator can't reasonably alter.
+      // Anything above is out of scope for this check.
+      break;
+    }
+
+    let mode: number | null = null;
+    try {
+      const st = await fsPromises.stat(current);
+      if (st.isDirectory()) {
+        mode = st.mode & 0o777;
+      }
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      // ENOENT/EACCES on an ancestor is not actionable here — surface
+      // anything else at warn so we don't silently swallow real disk
+      // errors during the boot probe.
+      if (code !== "ENOENT" && code !== "EACCES") {
+        logger.warn(
+          "[stagedExport] healthcheck: stat failed on ancestor",
+          { path: current, err: String(err) },
+        );
+      }
+    }
+
+    if (mode !== null) {
+      const permissiveBits = mode & 0o055; // g+o read | g+o execute
+      if (permissiveBits === 0) {
+        // Tight barrier — anything above is unreachable to non-owners
+        // regardless of those higher ancestors' modes. Stop and stay
+        // silent for the rest of the chain.
+        break;
+      }
+      findings.push({ path: current, mode, permissiveBits });
+    }
+
+    previous = current;
+    current = path.dirname(current);
+  }
+
+  if (findings.length > 0) {
+    logger.warn(
+      "[stagedExport] cache directory has world-traversable ancestors — staged export filenames may leak via parent listing. See docs/Security_Operations_SOP.md §5.14.",
+      {
+        cacheDir: resolved,
+        ancestors: findings.map((f) => ({
+          path: f.path,
+          mode: `0o${f.mode.toString(8).padStart(3, "0")}`,
+          permissiveBits: `0o${f.permissiveBits.toString(8).padStart(3, "0")}`,
+        })),
+        recommendedFix:
+          "chmod the offending ancestor(s) to remove group/other r+x " +
+          "(e.g. `chmod o-rx,g-rx /srv/shared`), or re-point " +
+          "STREAMING_EXPORT_CACHE_DIR at a path under a 0o700 parent " +
+          "owned by the worker user.",
+      },
+    );
+  }
+
+  return { cacheDir: resolved, checked: true, findings };
+}
+
 async function unlinkStagedFile(filePath: string): Promise<void> {
   try {
     await fsPromises.unlink(filePath);

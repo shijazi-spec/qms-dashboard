@@ -66,7 +66,10 @@ import { i18nRoutes } from "./routes/i18nRoutes";
 import { onBootRedactionSweep } from "../utils/redactHistoricalLogs";
 import { exportDownloadRoutes } from "./routes/exportDownloadRoutes";
 import { assertAdminApiKeyStrengthOrThrow } from "../utils/rbacMiddleware";
-import { lockDownStagedExportCacheDirAtStartup } from "../utils/excelExport";
+import {
+  lockDownStagedExportCacheDirAtStartup,
+  checkStagedExportCacheLocation,
+} from "../utils/excelExport";
 
 import { logger as safeLogger } from "../utils/logger";
 // ─── ADMIN_API_KEY strength gate ──────────────────────────────────────────────
@@ -88,6 +91,22 @@ assertAdminApiKeyStrengthOrThrow();
 // top level (ESM) so the cache dir is guaranteed to be 0o700 before
 // `new Mastra({...})` below registers any export route.
 await lockDownStagedExportCacheDirAtStartup();
+
+// ─── Streaming-export cache location health check (Task #770) ────────────────
+// One-shot fs.stat walk over the configured STREAMING_EXPORT_CACHE_DIR's
+// ancestor chain. Silent in the default `/tmp`-based single-tenant
+// configuration; logs a structured warning when an operator override points
+// the cache at a path with a group/other-readable parent (filenames would
+// leak via parent traversal even though the leaf dir itself is 0o700). See
+// docs/Security_Operations_SOP.md §5.14. Best-effort — never blocks boot.
+// Runs after the lockdown above so the cache dir is materialised before the
+// ancestor walk (any segments the worker created are 0o700 by construction).
+void checkStagedExportCacheLocation().catch((err) => {
+  safeLogger.warn(
+    "[stagedExport] cache-location healthcheck threw unexpectedly",
+    { err: String(err) },
+  );
+});
 
 registerCronTrigger({
   cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "0 8 * * 1",
