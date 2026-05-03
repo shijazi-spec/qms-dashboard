@@ -727,10 +727,19 @@ export async function withAiTelemetry<T>(
 // { success: false, queued: true }). Queued calls are NOT counted as
 // errors in the dashboard; only true exceptions or non-queued failures are.
 // ──────────────────────────────────────────────────────────────────────────────
+// Mastra's current Tool<...> emits an `execute` whose first argument is a
+// strongly-typed context object (e.g. `{ context: Input, runtimeContext, ... }`)
+// and which optionally takes a second `MastraToolInvocationOptions` argument.
+// We don't care about the exact shape at the telemetry layer — we only need to
+// forward whatever arguments the LLM runtime hands us. Using `any[]` for the
+// parameter list (instead of `unknown` / a fixed-arity tuple) lets this type
+// stay assignable from any concrete `Tool<...>` instance regardless of how
+// narrowly Mastra has typed its input/output schemas. Behavior is unchanged.
 type WrappableTool = {
   id?: string;
   description?: string;
-  execute?: (args: unknown) => Promise<unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  execute?: (...args: any[]) => Promise<any>;
 };
 
 function describeToolFailure(result: unknown): string | null {
@@ -751,7 +760,10 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(
   const toolId = tool.id;
   if (!originalExecute || !toolId) return tool;
 
-  const wrappedExecute = async (args: unknown): Promise<unknown> => {
+  const wrappedExecute = async (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...args: any[]
+  ): Promise<unknown> => {
     const startedAt = Date.now();
     const parentCallId = getCurrentParentCallId();
     let success = true;
@@ -761,11 +773,11 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(
     // output so ops teams can reproduce a failing tool call without us
     // ever persisting raw secrets / PII. Both are ≤300 chars after the
     // same PII redaction rules used for prompt_preview.
-    const toolInputPreview = redactToolPayloadPreview(args);
+    const toolInputPreview = redactToolPayloadPreview(args[0]);
     let toolOutputPreview: string | undefined;
 
     try {
-      const result = await originalExecute(args);
+      const result = await originalExecute(...args);
       toolOutputPreview = redactToolPayloadPreview(result);
 
       // Tools standardize on { success: boolean, ...}.
