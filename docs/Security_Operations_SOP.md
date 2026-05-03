@@ -184,7 +184,7 @@ This document serves as:
 #### QMS-019 — Client-Side Admin Key in localStorage
 - **Severity:** MEDIUM (CVSS 5.3)
 - **Issue:** Admin API key stored in browser localStorage, accessible to XSS attacks.
-- **Remediation:** Admin key migrated from localStorage to HttpOnly cookie. New POST /api/admin/auth endpoint sets `admin_key` cookie with HttpOnly, SameSite=Lax, 8-hour expiry. POST /api/admin/auth/logout clears the cookie. All dashboard files updated to cookie-based auth. `getAdminKey()` helper reads from both header and cookie.
+- **Remediation:** Admin key migrated from localStorage to HttpOnly cookie. New POST /api/admin/auth endpoint sets `admin_key` cookie with HttpOnly, Secure, SameSite=Strict, 8-hour expiry (subsequently tightened from the initial `SameSite=Lax` setting; see §5.7 Secrets Rotation Log for the precautionary `ADMIN_API_KEY` rotation that followed). POST /api/admin/auth/logout clears the cookie. All dashboard files updated to cookie-based auth. `getAdminKey()` helper reads from both header and cookie.
 - **Files Modified:** `src/mastra/index.ts`, `src/utils/rbacMiddleware.ts`, `dashboard/admin.html`, `dashboard/users.html`, `dashboard/login.html`, `dashboard/calls.html`, `dashboard/qms.html`
 - **Control:** HttpOnly cookie storage; no client-side JavaScript access to admin key.
 
@@ -770,7 +770,7 @@ env exports the flag with a truthy value.
 | Primary method | Google OAuth 2.0 |
 | Secondary method | Admin API Key (X-Admin-Key header or admin_key HttpOnly cookie) |
 | Session token | HMAC-SHA256 signed, 7-day expiry |
-| Cookie flags | HttpOnly, Secure (production), SameSite=Lax, Path=/ |
+| Cookie flags | HttpOnly, Secure (production), SameSite=Strict, Path=/ |
 | Admin key storage | HttpOnly cookie (migrated from localStorage) |
 | OAuth CSRF protection | state parameter validated against oauth_state cookie |
 | Logout | POST only (no GET-based logout) |
@@ -1239,6 +1239,7 @@ Pick whichever is simpler in your environment:
 | 4.3 | April 25, 2026 | WalaPlus Platform Engineering | §5.7 Authentication Policy: added **Secrets Rotation Log** subsection with rotation procedure and table; recorded the April 25, 2026 precautionary rotation of `ADMIN_API_KEY` following the `admin_key` cookie tightening from `SameSite=Lax` to `SameSite=Strict`. New high-entropy value (≥ 256 bits) installed in the platform secrets store; prior key no longer accepted by `/api/admin/auth`. |
 | 4.5 | April 26, 2026 | WalaPlus Platform Engineering | §5.7 Secrets Rotation Log: recorded the April 26, 2026 operator-usability rotation of `ADMIN_API_KEY` from the April 25 high-entropy 64-hex value to a memorable mnemonic passphrase (38 chars / 25 distinct — clears the startup strength gate). Workflow restarted; prior value verified rejected, new value verified accepted. |
 | 4.6 | April 26, 2026 | WalaPlus Platform Engineering | §5.13 Vendored Dependency Patches expanded with a second patch entry: `lazystream/lib/lazystream.js` (transitive via `exceljs` → `archiver` → `archiver-utils`) calls `require('readable-stream/passthrough')`, a subpath that only exists in `readable-stream@2.x`. Local Repl resolves it via lazystream's nested `readable-stream@2.3.8`; the production deploy bundle flattens to top-level `readable-stream@3.6.2` (no `passthrough.js` at root) and crash-loops with `ERR_MODULE_NOT_FOUND`. Patch rewrites the require to use the public `PassThrough` named export from `readable-stream`'s main entry — identical behaviour on v2 and v3. Applied via the existing `scripts/patch-mastra-core.mjs` postinstall hook (now multi-patch); idempotency reverified. Local app boot, admin auth, and export-route gate confirmed unaffected. |
+| 4.7 | May 3, 2026 | WalaPlus Platform Engineering | Documentation correction: synced stale `admin_key` cookie wording with the production code (`src/mastra/routes/adminApiRoutes.ts`). Updated the §5.7 Authentication Policy "Cookie flags" row from `SameSite=Lax` to `SameSite=Strict`, and rewrote the §4.2 QMS-019 remediation note to reflect the current Strict setting and cross-link the §5.7 Secrets Rotation Log entry for the precautionary `ADMIN_API_KEY` rotation. No code changes; SOP-only fix to remove the last stale `SameSite=Lax` references for the admin cookie. |
 | 4.4 | April 26, 2026 | WalaPlus Platform Engineering | Added §5.10 Storage Health Monitoring & Quiet Hours (`STORAGE_HEALTH_QUIET_HOURS_START/END/TZ`, critical-severity override, fail-open on misconfiguration); §5.11 AI Metrics Retention Pruning & Notifier (`AI_METRICS_RETENTION_PRUNE_NOTIFY`, manual-only gating, operator-identity capture, fail-open notifier); §5.12 Post-Restore Verification Alerts (per-table row-count deltas, amber/red thresholds, runbook deep links, baseline-required policy); §5.13 Vendored Dependency Patches (`scripts/patch-mastra-core.mjs` postinstall hook, idempotency + bounded-scope guarantees). Extended §5.6 with a Testing & validation subsection covering `RUN_RATE_LIMITER_INTEGRATION_E2E` and the `RATE_LIMIT_DISABLED` operational caveat. Added the corresponding implementation files to §7 References. |
 
 **Next Review:** June 2026 (Quarterly)
