@@ -42,10 +42,10 @@
                     <i class="fas fa-magic me-2"></i>AI Charter Generator
                 </button>
                 <button data-on-click="openScopeWizard" class="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                    <i class="fas fa-clipboard-list me-2"></i>Define Full Scope
+                    <i class="fas fa-clipboard-list me-2"></i><span data-i18n="projects.define_full_scope">Define Full Scope</span>
                 </button>
                 <button data-on-click="openProjectModal" class="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                    <i class="fas fa-plus me-2"></i>Quick Project
+                    <i class="fas fa-plus me-2"></i><span data-i18n="projects.quick_project">Quick Project</span>
                 </button>
             </div>
         </div>
@@ -54,7 +54,7 @@
             <div class="bg-white rounded-xl shadow-sm p-4 border-s-4 border-blue-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">Total Projects</p>
+                        <p class="text-sm text-gray-500" data-i18n="projects.total_projects">Total Projects</p>
                         <p class="text-2xl font-bold text-gray-900" id="totalProjects">0</p>
                     </div>
                     <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
@@ -65,7 +65,7 @@
             <div class="bg-white rounded-xl shadow-sm p-4 border-s-4 border-green-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">Avg SPI</p>
+                        <p class="text-sm text-gray-500" data-i18n="projects.avg_spi">Avg SPI</p>
                         <p class="text-2xl font-bold text-gray-900" id="avgSPI">1.00</p>
                     </div>
                     <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
@@ -76,7 +76,7 @@
             <div class="bg-white rounded-xl shadow-sm p-4 border-s-4 border-emerald-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">Avg CPI</p>
+                        <p class="text-sm text-gray-500" data-i18n="projects.avg_cpi">Avg CPI</p>
                         <p class="text-2xl font-bold text-gray-900" id="avgCPI">1.00</p>
                     </div>
                     <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
@@ -98,7 +98,7 @@
             <div class="bg-white rounded-xl shadow-sm p-4 border-s-4 border-red-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">High Risks</p>
+                        <p class="text-sm text-gray-500" data-i18n="projects.high_risks">High Risks</p>
                         <p class="text-2xl font-bold text-red-600" id="highRisks">0</p>
                     </div>
                     <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
@@ -112,25 +112,25 @@
             <div class="border-b border-gray-200">
                 <nav class="flex gap-4 px-6 overflow-x-auto" id="mainTabs">
                     <button data-on-click="switchMainTab" data-args="[&quot;portfolio&quot;]" class="py-4 px-1 text-sm font-medium tab-active whitespace-nowrap" data-tab="portfolio">
-                        <i class="fas fa-th-large me-2"></i>Portfolio
+                        <i class="fas fa-th-large me-2"></i><span data-i18n="projects.tab_portfolio">Portfolio</span>
                     </button>
                     <button data-on-click="switchMainTab" data-args="[&quot;analytics&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="analytics">
-                        <i class="fas fa-chart-pie me-2"></i>Analytics
+                        <i class="fas fa-chart-pie me-2"></i><span data-i18n="projects.tab_analytics">Analytics</span>
                     </button>
                     <button data-on-click="switchMainTab" data-args="[&quot;risks&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="risks">
-                        <i class="fas fa-shield-alt me-2"></i>Risks
+                        <i class="fas fa-shield-alt me-2"></i><span data-i18n="projects.tab_risks2">Risks</span>
                     </button>
                     <button data-on-click="switchMainTab" data-args="[&quot;milestones&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="milestones">
-                        <i class="fas fa-flag-checkered me-2"></i>Milestones
+                        <i class="fas fa-flag-checkered me-2"></i><span data-i18n="projects.tab_milestones">Milestones</span>
                     </button>
                     <button data-on-click="switchMainTab" data-args="[&quot;stakeholders&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="stakeholders">
-                        <i class="fas fa-user-tie me-2"></i>Stakeholders
+                        <i class="fas fa-user-tie me-2"></i><span data-i18n="projects.tab_stakeholders">Stakeholders</span>
                     </button>
                     <button data-on-click="switchMainTab" data-args="[&quot;procurement&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="procurement">
-                        <i class="fas fa-file-contract me-2"></i>Procurement
+                        <i class="fas fa-file-contract me-2"></i><span data-i18n="projects.tab_procurement">Procurement</span>
                     </button>
                     <button data-on-click="switchMainTab" data-args="[&quot;changes&quot;]" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap" data-tab="changes">
-                        <i class="fas fa-exchange-alt me-2"></i>Change Control
+                        <i class="fas fa-exchange-alt me-2"></i><span data-i18n="projects.tab_change_control">Change Control</span>
                     </button>
                 </nav>
             </div>
@@ -139,27 +139,27 @@
                 <div class="flex justify-between items-center mb-4">
                     <div class="flex gap-3">
                         <select id="statusFilter" data-on-change="loadProjects" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
-                            <option value="">All Status</option>
-                            <option value="initiation">Initiation</option>
-                            <option value="planning">Planning</option>
-                            <option value="execution">Execution</option>
-                            <option value="monitoring">Monitoring</option>
-                            <option value="closing">Closing</option>
-                            <option value="completed">Completed</option>
+                            <option value="" data-i18n="common.all_status">All Status</option>
+                            <option value="initiation" data-i18n="projects.opt_initiation">Initiation</option>
+                            <option value="planning" data-i18n="projects.opt_planning">Planning</option>
+                            <option value="execution" data-i18n="projects.opt_execution">Execution</option>
+                            <option value="monitoring" data-i18n="projects.opt_monitoring">Monitoring</option>
+                            <option value="closing" data-i18n="projects.opt_closing">Closing</option>
+                            <option value="completed" data-i18n="projects.opt_completed">Completed</option>
                             <option value="on_hold">On Hold</option>
                         </select>
                         <select id="priorityFilter" data-on-change="loadProjects" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
-                            <option value="">All Priorities</option>
-                            <option value="critical">Critical</option>
-                            <option value="high">High</option>
-                            <option value="medium">Medium</option>
-                            <option value="low">Low</option>
+                            <option value="" data-i18n="projects.all_priorities">All Priorities</option>
+                            <option value="critical" data-i18n="common.critical">Critical</option>
+                            <option value="high" data-i18n="common.high">High</option>
+                            <option value="medium" data-i18n="common.medium">Medium</option>
+                            <option value="low" data-i18n="common.low">Low</option>
                         </select>
                         <select id="deptFilter" data-on-change="loadProjects" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
-                            <option value="">All Departments</option>
-                            <option value="Quality Assurance">Quality Assurance</option>
-                            <option value="Operations">Operations</option>
-                            <option value="Sales">Sales</option>
+                            <option value="" data-i18n="projects.all_departments">All Departments</option>
+                            <option value="Quality Assurance" data-i18n="projects.dept_qa">Quality Assurance</option>
+                            <option value="Operations" data-i18n="projects.dept_operations">Operations</option>
+                            <option value="Sales" data-i18n="projects.dept_sales">Sales</option>
                             <option value="IT">IT</option>
                         </select>
                     </div>
@@ -178,13 +178,13 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_project">Project</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.priority">Priority</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_progress">Progress</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_spi">SPI</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_cpi">CPI</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Due Date</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.due_date">Due Date</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions_label">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="projectsTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -207,7 +207,7 @@
                         <canvas id="budgetChart" height="200"></canvas>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4">
-                        <h3 class="text-lg font-semibold mb-4">Milestone Metrics</h3>
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="projects.milestone_metrics">Milestone Metrics</h3>
                         <canvas id="milestoneChart" height="200"></canvas>
                     </div>
                 </div>
@@ -217,7 +217,7 @@
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold" data-i18n="projects.sec_risk_register">Risk Register</h3>
                     <button data-on-click="openRiskModal" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-                        <i class="fas fa-plus me-2"></i>Add Risk
+                        <i class="fas fa-plus me-2"></i><span data-i18n="projects.add_risk">Add Risk</span>
                     </button>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -229,9 +229,9 @@
                                         <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_risk">Risk</th>
                                         <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.category">Category</th>
                                         <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_score">Score</th>
-                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
                                         <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.owner">Owner</th>
-                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions_label">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="risksTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -240,7 +240,7 @@
                     </div>
                     <div>
                         <div class="bg-gray-50 rounded-lg p-4">
-                            <h4 class="font-semibold mb-3">Risk Matrix</h4>
+                            <h4 class="font-semibold mb-3" data-i18n="projects.risk_matrix">Risk Matrix</h4>
                             <div id="riskMatrix" class="grid grid-cols-6 gap-1"></div>
                         </div>
                     </div>
@@ -251,7 +251,7 @@
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold" data-i18n="projects.sec_milestones">Project Milestones Timeline</h3>
                     <button data-on-click="openMilestoneModal" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                        <i class="fas fa-plus me-2"></i>Add Milestone
+                        <i class="fas fa-plus me-2"></i><span data-i18n="projects.add_milestone">Add Milestone</span>
                     </button>
                 </div>
                 <div id="ganttContainer" class="bg-gray-50 rounded-lg p-4 overflow-x-auto">
@@ -267,7 +267,7 @@
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_planned">Planned</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_actual">Actual</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_variance">Variance</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
                             </tr>
                         </thead>
                         <tbody id="milestonesTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -294,7 +294,7 @@
                                         <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_influence">Influence</th>
                                         <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_interest">Interest</th>
                                         <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_engagement">Engagement</th>
-                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions_label">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="stakeholdersTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -303,22 +303,22 @@
                     </div>
                     <div>
                         <div class="bg-gray-50 rounded-lg p-4">
-                            <h4 class="font-semibold mb-3">Power/Interest Grid</h4>
+                            <h4 class="font-semibold mb-3" data-i18n="projects.power_interest">Power/Interest Grid</h4>
                             <div id="powerInterestGrid" class="grid grid-cols-2 gap-2">
                                 <div class="bg-red-100 p-3 rounded-lg text-center">
-                                    <p class="text-xs font-semibold text-red-700">Manage Closely</p>
+                                    <p class="text-xs font-semibold text-red-700" data-i18n="projects.manage_closely">Manage Closely</p>
                                     <p class="text-lg font-bold text-red-800" id="manageClosely">0</p>
                                 </div>
                                 <div class="bg-amber-100 p-3 rounded-lg text-center">
-                                    <p class="text-xs font-semibold text-amber-700">Keep Satisfied</p>
+                                    <p class="text-xs font-semibold text-amber-700" data-i18n="projects.keep_satisfied">Keep Satisfied</p>
                                     <p class="text-lg font-bold text-amber-800" id="keepSatisfied">0</p>
                                 </div>
                                 <div class="bg-blue-100 p-3 rounded-lg text-center">
-                                    <p class="text-xs font-semibold text-blue-700">Keep Informed</p>
+                                    <p class="text-xs font-semibold text-blue-700" data-i18n="projects.keep_informed">Keep Informed</p>
                                     <p class="text-lg font-bold text-blue-800" id="keepInformed">0</p>
                                 </div>
                                 <div class="bg-green-100 p-3 rounded-lg text-center">
-                                    <p class="text-xs font-semibold text-green-700">Monitor</p>
+                                    <p class="text-xs font-semibold text-green-700" data-i18n="projects.monitor">Monitor</p>
                                     <p class="text-lg font-bold text-green-800" id="monitorStakeholders">0</p>
                                 </div>
                             </div>
@@ -337,19 +337,19 @@
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
                     <div class="bg-blue-50 rounded-lg p-4 text-center">
-                        <p class="text-xs font-semibold text-blue-700">Total Contracts</p>
+                        <p class="text-xs font-semibold text-blue-700" data-i18n="projects.total_contracts">Total Contracts</p>
                         <p class="text-2xl font-bold text-blue-800" id="totalContracts">0</p>
                     </div>
                     <div class="bg-green-50 rounded-lg p-4 text-center">
-                        <p class="text-xs font-semibold text-green-700">Active</p>
+                        <p class="text-xs font-semibold text-green-700" data-i18n="projects.active">Active</p>
                         <p class="text-2xl font-bold text-green-800" id="activeContracts">0</p>
                     </div>
                     <div class="bg-amber-50 rounded-lg p-4 text-center">
-                        <p class="text-xs font-semibold text-amber-700">Pending Approval</p>
+                        <p class="text-xs font-semibold text-amber-700" data-i18n="projects.pending_approval">Pending Approval</p>
                         <p class="text-2xl font-bold text-amber-800" id="pendingContracts">0</p>
                     </div>
                     <div class="bg-purple-50 rounded-lg p-4 text-center">
-                        <p class="text-xs font-semibold text-purple-700">Total Value</p>
+                        <p class="text-xs font-semibold text-purple-700" data-i18n="projects.total_value">Total Value</p>
                         <p class="text-xl font-bold text-purple-800" id="totalContractValue">$0</p>
                     </div>
                 </div>
@@ -361,9 +361,9 @@
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_vendor">Vendor</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_value">Value</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">End Date</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions_label">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="procurementTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -374,30 +374,30 @@
             <!-- Change Control Tab -->
             <div id="changesTab" class="p-6 hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Change Control Board (CCB)</h3>
+                    <h3 class="text-lg font-semibold" data-i18n="projects.ccb">Change Control Board (CCB)</h3>
                     <button data-on-click="openChangeRequestModal" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
-                        <i class="fas fa-plus me-2"></i>Submit Change Request
+                        <i class="fas fa-plus me-2"></i><span data-i18n="projects.submit_change_request">Submit Change Request</span>
                     </button>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
                     <div class="bg-blue-50 rounded-lg p-4 text-center">
-                        <p class="text-xs font-semibold text-blue-700">Total Requests</p>
+                        <p class="text-xs font-semibold text-blue-700" data-i18n="projects.total_requests">Total Requests</p>
                         <p class="text-2xl font-bold text-blue-800" id="totalChangeRequests">0</p>
                     </div>
                     <div class="bg-amber-50 rounded-lg p-4 text-center">
-                        <p class="text-xs font-semibold text-amber-700">Pending Review</p>
+                        <p class="text-xs font-semibold text-amber-700" data-i18n="projects.pending_review">Pending Review</p>
                         <p class="text-2xl font-bold text-amber-800" id="pendingChanges">0</p>
                     </div>
                     <div class="bg-green-50 rounded-lg p-4 text-center">
-                        <p class="text-xs font-semibold text-green-700">Approved</p>
+                        <p class="text-xs font-semibold text-green-700" data-i18n="projects.approved">Approved</p>
                         <p class="text-2xl font-bold text-green-800" id="approvedChanges">0</p>
                     </div>
                     <div class="bg-red-50 rounded-lg p-4 text-center">
-                        <p class="text-xs font-semibold text-red-700">Rejected</p>
+                        <p class="text-xs font-semibold text-red-700" data-i18n="projects.rejected">Rejected</p>
                         <p class="text-2xl font-bold text-red-800" id="rejectedChanges">0</p>
                     </div>
                     <div class="bg-purple-50 rounded-lg p-4 text-center">
-                        <p class="text-xs font-semibold text-purple-700">Impact Cost</p>
+                        <p class="text-xs font-semibold text-purple-700" data-i18n="projects.impact_cost">Impact Cost</p>
                         <p class="text-xl font-bold text-purple-800" id="totalChangeImpact">$0</p>
                     </div>
                 </div>
@@ -410,10 +410,10 @@
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.priority">Priority</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Cost Impact</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Schedule Impact</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.schedule_impact">Schedule Impact</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">CCB Decision</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions_label">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="changesTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -427,7 +427,7 @@
         <div class="bg-white rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200">
                 <div class="flex justify-between items-center">
-                    <h2 class="text-xl font-bold text-gray-900" id="projectModalTitle">New PMP Project</h2>
+                    <h2 class="text-xl font-bold text-gray-900" id="projectModalTitle" data-i18n="projects.new_pmp_project">New PMP Project</h2>
                     <button data-on-click="closeProjectModal" class="text-gray-400 hover:text-gray-600">
                         <i class="fas fa-times text-xl"></i>
                     </button>
@@ -437,7 +437,7 @@
                 <input type="hidden" id="projectId">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_name_req">Project Name *</label>
                         <input type="text" id="projectName" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     </div>
                     <div>
@@ -445,29 +445,29 @@
                         <input type="text" id="projectCode" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., QA-2024-001">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Project Type</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_type">Project Type</label>
                         <select id="projectType" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="quality_improvement">Quality Improvement</option>
-                            <option value="governance">Governance</option>
-                            <option value="audit">Audit</option>
-                            <option value="capa">CAPA</option>
-                            <option value="rca">Root Cause Analysis</option>
-                            <option value="six_sigma">Six Sigma</option>
-                            <option value="process">Process Improvement</option>
-                            <option value="compliance">Compliance</option>
-                            <option value="training">Training</option>
-                            <option value="other">Other</option>
+                            <option value="quality_improvement" data-i18n="projects.pt_quality_improvement">Quality Improvement</option>
+                            <option value="governance" data-i18n="projects.pt_governance">Governance</option>
+                            <option value="audit" data-i18n="projects.pt_audit">Audit</option>
+                            <option value="capa" data-i18n="projects.pt_capa">CAPA</option>
+                            <option value="rca" data-i18n="projects.pt_rca">Root Cause Analysis</option>
+                            <option value="six_sigma" data-i18n="projects.pt_six_sigma">Six Sigma</option>
+                            <option value="process" data-i18n="projects.pt_process">Process Improvement</option>
+                            <option value="compliance" data-i18n="common.compliance_label">Compliance</option>
+                            <option value="training" data-i18n="common.training_label">Training</option>
+                            <option value="other" data-i18n="projects.pt_other">Other</option>
                         </select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Department *</label>
                         <select id="projectDept" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="Quality Assurance">Quality Assurance</option>
-                            <option value="Operations">Operations</option>
-                            <option value="Sales">Sales</option>
+                            <option value="Quality Assurance" data-i18n="projects.dept_qa">Quality Assurance</option>
+                            <option value="Operations" data-i18n="projects.dept_operations">Operations</option>
+                            <option value="Sales" data-i18n="projects.dept_sales">Sales</option>
                             <option value="IT">IT</option>
                             <option value="HR">HR</option>
-                            <option value="Finance">Finance</option>
+                            <option value="Finance" data-i18n="projects.dept_finance">Finance</option>
                         </select>
                     </div>
                     <div>
@@ -475,26 +475,26 @@
                         <input type="text" id="projectManager" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Sponsor</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.sponsor">Sponsor</label>
                         <input type="text" id="projectSponsor" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
                         <select id="projectPriority" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="medium">Medium</option>
-                            <option value="low">Low</option>
-                            <option value="high">High</option>
-                            <option value="critical">Critical</option>
+                            <option value="medium" data-i18n="common.medium">Medium</option>
+                            <option value="low" data-i18n="common.low">Low</option>
+                            <option value="high" data-i18n="common.high">High</option>
+                            <option value="critical" data-i18n="common.critical">Critical</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.status_label">Status</label>
                         <select id="projectStatus" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="initiation">Initiation</option>
-                            <option value="planning">Planning</option>
-                            <option value="execution">Execution</option>
+                            <option value="initiation" data-i18n="projects.opt_initiation">Initiation</option>
+                            <option value="planning" data-i18n="projects.opt_planning">Planning</option>
+                            <option value="execution" data-i18n="projects.opt_execution">Execution</option>
                             <option value="monitoring">Monitoring & Control</option>
-                            <option value="closing">Closing</option>
+                            <option value="closing" data-i18n="projects.opt_closing">Closing</option>
                         </select>
                     </div>
                     <div>
@@ -515,7 +515,7 @@
                     </div>
                 </div>
                 <div class="mt-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Scope Statement</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.scope_statement">Scope Statement</label>
                     <textarea id="scopeStatement" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
                 </div>
                 <div class="mt-4">
@@ -523,8 +523,8 @@
                     <textarea id="qualityCriteria" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
                 </div>
                 <div class="mt-6 flex justify-end gap-3">
-                    <button type="button" data-on-click="closeProjectModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Project</button>
+                    <button type="button" data-on-click="closeProjectModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50" data-i18n="projects.cancel">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="projects.save_project">Save Project</button>
                 </div>
             </form>
         </div>
@@ -543,25 +543,25 @@
             <div class="p-6">
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_name_req">Project Name *</label>
                         <input type="text" id="charterProjectName" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Project Type</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_type">Project Type</label>
                         <select id="charterProjectType" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="Quality Improvement">Quality Improvement</option>
-                            <option value="Process Optimization">Process Optimization</option>
-                            <option value="Compliance">Compliance</option>
-                            <option value="Six Sigma">Six Sigma</option>
-                            <option value="CAPA">CAPA</option>
+                            <option value="Quality Improvement" data-i18n="projects.pt_quality_improvement">Quality Improvement</option>
+                            <option value="Process Optimization" data-i18n="projects.pt_process_opt">Process Optimization</option>
+                            <option value="Compliance" data-i18n="common.compliance_label">Compliance</option>
+                            <option value="Six Sigma" data-i18n="projects.pt_six_sigma">Six Sigma</option>
+                            <option value="CAPA" data-i18n="projects.pt_capa">CAPA</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.department">Department</label>
                         <input type="text" id="charterDepartment" class="w-full border border-gray-300 rounded-lg px-3 py-2" value="Quality Assurance">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Brief Description</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.brief_desc">Brief Description</label>
                         <textarea id="charterDescription" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Describe the project objectives and expected outcomes..."></textarea>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -570,19 +570,19 @@
                             <input type="number" id="charterBudget" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Duration (Months)</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.duration_months">Duration (Months)</label>
                             <input type="number" id="charterDuration" class="w-full border border-gray-300 rounded-lg px-3 py-2" value="3">
                         </div>
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end gap-3">
-                    <button type="button" data-on-click="closeCharterModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeCharterModal" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50" data-i18n="projects.cancel">Cancel</button>
                     <button data-on-click="generateCharter" id="generateCharterBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
-                        <i class="fas fa-magic me-2"></i>Generate Charter
+                        <i class="fas fa-magic me-2"></i><span data-i18n="projects.generate_charter">Generate Charter</span>
                     </button>
                 </div>
                 <div id="charterResult" class="mt-6 hidden">
-                    <h3 class="font-semibold text-gray-900 mb-3">Generated Project Charter</h3>
+                    <h3 class="font-semibold text-gray-900 mb-3" data-i18n="projects.generated_charter">Generated Project Charter</h3>
                     <div id="charterContent" class="bg-gray-50 rounded-lg p-4 text-sm max-h-80 overflow-y-auto"></div>
                     <div class="mt-4 flex justify-end">
                         <button data-on-click="applyCharterToProject" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
@@ -600,8 +600,8 @@
             <div class="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-indigo-600">
                 <div class="flex justify-between items-center">
                     <div>
-                        <h2 class="text-xl font-bold text-white"><i class="fas fa-clipboard-list me-2"></i>Project Scope Wizard</h2>
-                        <p class="text-blue-100 text-sm mt-1">Define your complete project scope from A to Z</p>
+                        <h2 class="text-xl font-bold text-white"><i class="fas fa-clipboard-list me-2"></i><span data-i18n="projects.scope_wizard">Project Scope Wizard</span></h2>
+                        <p class="text-blue-100 text-sm mt-1" data-i18n="projects.scope_wizard_subtitle">Define your complete project scope from A to Z</p>
                     </div>
                     <button data-on-click="closeScopeWizard" class="text-white hover:text-gray-200">
                         <i class="fas fa-times text-xl"></i>
@@ -611,32 +611,32 @@
                 <div class="flex items-center justify-between mt-4">
                     <div class="flex items-center gap-2 wizard-step" data-step="1">
                         <div class="w-8 h-8 rounded-full bg-white text-blue-600 flex items-center justify-center font-bold text-sm">1</div>
-                        <span class="text-white text-sm hidden md:inline">Basics</span>
+                        <span class="text-white text-sm hidden md:inline" data-i18n="projects.step_basics">Basics</span>
                     </div>
                     <div class="flex-1 h-1 bg-blue-400 mx-2"></div>
                     <div class="flex items-center gap-2 wizard-step opacity-60" data-step="2">
                         <div class="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">2</div>
-                        <span class="text-blue-100 text-sm hidden md:inline">Scope</span>
+                        <span class="text-blue-100 text-sm hidden md:inline" data-i18n="projects.step_scope">Scope</span>
                     </div>
                     <div class="flex-1 h-1 bg-blue-400 mx-2"></div>
                     <div class="flex items-center gap-2 wizard-step opacity-60" data-step="3">
                         <div class="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">3</div>
-                        <span class="text-blue-100 text-sm hidden md:inline">Deliverables</span>
+                        <span class="text-blue-100 text-sm hidden md:inline" data-i18n="projects.step_deliverables">Deliverables</span>
                     </div>
                     <div class="flex-1 h-1 bg-blue-400 mx-2"></div>
                     <div class="flex items-center gap-2 wizard-step opacity-60" data-step="4">
                         <div class="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">4</div>
-                        <span class="text-blue-100 text-sm hidden md:inline">Constraints</span>
+                        <span class="text-blue-100 text-sm hidden md:inline" data-i18n="projects.step_constraints">Constraints</span>
                     </div>
                     <div class="flex-1 h-1 bg-blue-400 mx-2"></div>
                     <div class="flex items-center gap-2 wizard-step opacity-60" data-step="5">
                         <div class="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">5</div>
-                        <span class="text-blue-100 text-sm hidden md:inline">Resources</span>
+                        <span class="text-blue-100 text-sm hidden md:inline" data-i18n="projects.step_resources">Resources</span>
                     </div>
                     <div class="flex-1 h-1 bg-blue-400 mx-2"></div>
                     <div class="flex items-center gap-2 wizard-step opacity-60" data-step="6">
                         <div class="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-bold text-sm">6</div>
-                        <span class="text-blue-100 text-sm hidden md:inline">Review</span>
+                        <span class="text-blue-100 text-sm hidden md:inline" data-i18n="projects.step_review">Review</span>
                     </div>
                 </div>
             </div>
@@ -646,7 +646,7 @@
                     <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fas fa-info-circle text-blue-600 me-2"></i>Project Basics</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_name_req">Project Name *</label>
                             <input type="text" id="wizProjectName" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Enter project name">
                         </div>
                         <div>
@@ -654,28 +654,28 @@
                             <input type="text" id="wizProjectCode" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., QA-2024-001">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Project Type</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_type">Project Type</label>
                             <select id="wizProjectType" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                <option value="quality_improvement">Quality Improvement</option>
-                                <option value="process">Process Improvement</option>
-                                <option value="governance">Governance</option>
-                                <option value="audit">Audit</option>
-                                <option value="capa">CAPA</option>
-                                <option value="six_sigma">Six Sigma</option>
-                                <option value="compliance">Compliance</option>
-                                <option value="training">Training</option>
-                                <option value="other">Other</option>
+                                <option value="quality_improvement" data-i18n="projects.pt_quality_improvement">Quality Improvement</option>
+                                <option value="process" data-i18n="projects.pt_process">Process Improvement</option>
+                                <option value="governance" data-i18n="projects.pt_governance">Governance</option>
+                                <option value="audit" data-i18n="projects.pt_audit">Audit</option>
+                                <option value="capa" data-i18n="projects.pt_capa">CAPA</option>
+                                <option value="six_sigma" data-i18n="projects.pt_six_sigma">Six Sigma</option>
+                                <option value="compliance" data-i18n="common.compliance_label">Compliance</option>
+                                <option value="training" data-i18n="common.training_label">Training</option>
+                                <option value="other" data-i18n="projects.pt_other">Other</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Department *</label>
                             <select id="wizDepartment" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                <option value="Quality Assurance">Quality Assurance</option>
-                                <option value="Operations">Operations</option>
-                                <option value="Sales">Sales</option>
+                                <option value="Quality Assurance" data-i18n="projects.dept_qa">Quality Assurance</option>
+                                <option value="Operations" data-i18n="projects.dept_operations">Operations</option>
+                                <option value="Sales" data-i18n="projects.dept_sales">Sales</option>
                                 <option value="IT">IT</option>
                                 <option value="HR">HR</option>
-                                <option value="Finance">Finance</option>
+                                <option value="Finance" data-i18n="projects.dept_finance">Finance</option>
                             </select>
                         </div>
                         <div>
@@ -683,26 +683,26 @@
                             <input type="text" id="wizProjectManager" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Name of project manager">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Project Sponsor</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="projects.project_sponsor">Project Sponsor</label>
                             <input type="text" id="wizSponsor" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Name of executive sponsor">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
                             <select id="wizPriority" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                <option value="medium">Medium</option>
-                                <option value="low">Low</option>
-                                <option value="high">High</option>
-                                <option value="critical">Critical</option>
+                                <option value="medium" data-i18n="common.medium">Medium</option>
+                                <option value="low" data-i18n="common.low">Low</option>
+                                <option value="high" data-i18n="common.high">High</option>
+                                <option value="critical" data-i18n="common.critical">Critical</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Current Phase</label>
                             <select id="wizStatus" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                <option value="initiation">Initiation</option>
-                                <option value="planning">Planning</option>
-                                <option value="execution">Execution</option>
+                                <option value="initiation" data-i18n="projects.opt_initiation">Initiation</option>
+                                <option value="planning" data-i18n="projects.opt_planning">Planning</option>
+                                <option value="execution" data-i18n="projects.opt_execution">Execution</option>
                                 <option value="monitoring">Monitoring & Control</option>
-                                <option value="closing">Closing</option>
+                                <option value="closing" data-i18n="projects.opt_closing">Closing</option>
                             </select>
                         </div>
                     </div>
@@ -774,7 +774,7 @@
                                 <input type="text" id="newMilestoneName" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2" placeholder="Milestone name">
                                 <input type="date" id="newMilestoneDate" class="border border-gray-300 rounded-lg px-3 py-2">
                             </div>
-                            <button data-on-click="addMilestone" class="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 w-full"><i class="fas fa-plus me-2"></i>Add Milestone</button>
+                            <button data-on-click="addMilestone" class="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 w-full"><i class="fas fa-plus me-2"></i><span data-i18n="projects.add_milestone">Add Milestone</span></button>
                         </div>
                     </div>
                     <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1114,7 +1114,7 @@
                                     <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Probability</th>
                                     <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Impact</th>
                                     <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_score">Score</th>
-                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
                                 </tr>
                             </thead>
                             <tbody id="detailRisksTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -1149,7 +1149,7 @@
                                     <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Contract</th>
                                     <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_vendor">Vendor</th>
                                     <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="projects.col_value">Value</th>
-                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
                                     <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">End Date</th>
                                 </tr>
                             </thead>
@@ -1168,7 +1168,7 @@
                                     <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
                                     <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Cost Impact</th>
                                     <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">CCB Decision</th>
-                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status_label">Status</th>
                                 </tr>
                             </thead>
                             <tbody id="detailChangeTable" class="bg-white divide-y divide-gray-200"></tbody>

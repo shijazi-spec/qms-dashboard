@@ -94,28 +94,28 @@
                         id="tab-documents"
                         class="py-3 px-1 tab-active font-medium text-sm"
                     >
-                        Governance Documents
+                        <span data-i18n="admin.tab_documents">Governance Documents</span>
                     </button>
                     <button
                         data-on-click="switchTab" data-args="[&quot;scorecard&quot;]"
                         id="tab-scorecard"
                         class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
                     >
-                        Evaluation Scorecard
+                        <span data-i18n="admin.tab_scorecard">Evaluation Scorecard</span>
                     </button>
                     <button
                         data-on-click="switchTab" data-args="[&quot;settings&quot;]"
                         id="tab-settings"
                         class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
                     >
-                        Settings
+                        <span data-i18n="admin.tab_settings">Settings</span>
                     </button>
                     <button
                         data-on-click="switchTab" data-args="[&quot;audit&quot;]"
                         id="tab-audit"
                         class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
                     >
-                        Audit Trail
+                        <span data-i18n="admin.tab_audit_trail">Audit Trail</span>
                     </button>
                     <button
                         data-on-click="switchTab" data-args='["rate-limits"]'
@@ -123,7 +123,7 @@
                         class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
                         data-testid="button-tab-rate-limits"
                     >
-                        Rate Limits
+                        <span data-i18n="admin.tab_rate_limits">Rate Limits</span>
                     </button>
                 </nav>
             </div>
@@ -132,10 +132,10 @@
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
                     <div class="flex items-center justify-between mb-6">
                         <div>
-                            <h2 class="text-lg font-semibold text-gray-900">
+                            <h2 class="text-lg font-semibold text-gray-900" data-i18n="admin.tab_documents">
                                 Governance Documents
                             </h2>
-                            <p class="text-sm text-gray-500">
+                            <p class="text-sm text-gray-500" data-i18n="admin.gov_docs_subtitle">
                                 Upload and manage governance documents for
                                 quality audits
                             </p>
@@ -157,26 +157,26 @@
                                     d="M12 4v16m8-8H4"
                                 />
                             </svg>
-                            <span>Upload New Version</span>
+                            <span data-i18n="admin.upload_new_version">Upload New Version</span>
                         </button>
                     </div>
 
                     <div id="documents-list" class="space-y-4">
-                        <div class="text-center py-8 text-gray-500">
+                        <div class="text-center py-8 text-gray-500" data-i18n="admin.loading_documents">
                             Loading documents...
                         </div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.active_doc_preview">
                         Active Document Preview
                     </h3>
                     <div
                         id="document-preview"
                         class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"
                     >
-                        <p class="text-gray-500">
+                        <p class="text-gray-500" data-i18n="admin.select_doc_preview">
                             Select a document to preview its rules
                         </p>
                     </div>
@@ -186,15 +186,15 @@
             <div id="content-scorecard" class="hidden fade-in">
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-gray-900">Department Scorecard Selection</h3>
+                        <h3 class="text-lg font-semibold text-gray-900" data-i18n="admin.dept_scorecard_selection">Department Scorecard Selection</h3>
                         <div class="flex items-center gap-2">
                             <button data-on-click="showCreateScorecardModal" class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                                <span>Create New</span>
+                                <span data-i18n="admin.create_new">Create New</span>
                             </button>
                             <button data-on-click="cloneCurrentScorecard" id="clone-scorecard-btn" class="bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 text-sm flex items-center gap-1 hidden">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                                <span>Clone</span>
+                                <span data-i18n="admin.clone">Clone</span>
                             </button>
                         </div>
                     </div>
@@ -202,45 +202,45 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="admin.crm_module">CRM Module</label>
                             <select id="scorecard-crm-module" data-on-change="onModuleChange" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                <option value="Leads">Leads (SDR Team)</option>
-                                <option value="Deals">Deals (Sales Team)</option>
-                                <option value="Contacts">Contacts</option>
-                                <option value="Accounts">Accounts</option>
+                                <option value="Leads" data-i18n="admin.opt_leads_sdr">Leads (SDR Team)</option>
+                                <option value="Deals" data-i18n="admin.opt_deals_sales">Deals (Sales Team)</option>
+                                <option value="Contacts" data-i18n="admin.opt_contacts">Contacts</option>
+                                <option value="Accounts" data-i18n="admin.opt_accounts">Accounts</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="common.team">Team</label>
                             <select id="scorecard-team" data-on-change="loadScorecardsList" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                <option value="SDR">SDR Team</option>
-                                <option value="Sales">Sales Team</option>
-                                <option value="CS">CS Team</option>
-                                <option value="Marketplace">Marketplace Team</option>
+                                <option value="SDR" data-i18n="admin.opt_sdr_team">SDR Team</option>
+                                <option value="Sales" data-i18n="admin.opt_sales_team">Sales Team</option>
+                                <option value="CS" data-i18n="admin.opt_cs_team">CS Team</option>
+                                <option value="Marketplace" data-i18n="admin.opt_marketplace_team">Marketplace Team</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="admin.scorecard_name">Scorecard Name</label>
                             <select id="scorecard-name-select" data-on-change="onScorecardSelect" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                <option value="">Select scorecard...</option>
+                                <option value="" data-i18n="admin.opt_select_scorecard">Select scorecard...</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="admin.linked_doc">Linked Governance Doc</label>
                             <select id="scorecard-gov-doc" data-on-change="linkGovernanceDoc" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                <option value="">Select document...</option>
+                                <option value="" data-i18n="admin.opt_select_document">Select document...</option>
                             </select>
                         </div>
                     </div>
                     <div class="flex items-center justify-between mt-3">
-                        <p id="scorecard-dept-status" class="text-sm text-gray-500">Select a department to manage its scorecard</p>
+                        <p id="scorecard-dept-status" class="text-sm text-gray-500" data-i18n="admin.select_dept_scorecard_msg">Select a department to manage its scorecard</p>
                         <div id="scorecard-actions" class="hidden flex items-center gap-3">
                             <span id="scorecard-version" class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">v1.0</span>
                             <label class="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" id="scorecard-active-toggle" data-on-change="toggleScorecardActive" class="w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500">
-                                <span class="text-sm font-medium text-gray-700">Set as Active</span>
+                                <span class="text-sm font-medium text-gray-700" data-i18n="admin.set_as_active">Set as Active</span>
                             </label>
                             <button data-on-click="deleteCurrentScorecard" class="text-red-600 hover:text-red-800 text-sm flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                <span>Delete</span>
+                                <span data-i18n="admin.delete">Delete</span>
                             </button>
                         </div>
                     </div>
@@ -248,7 +248,7 @@
                 
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                     <div class="bg-white rounded-xl shadow-sm border p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.dimension_weights">
                             Dimension Weights
                         </h3>
                         <div class="space-y-4">
@@ -256,7 +256,7 @@
                                 <label
                                     class="flex justify-between text-sm font-medium text-gray-700 mb-1"
                                 >
-                                    <span>People</span>
+                                    <span data-i18n="admin.dim_people">People</span>
                                     <span id="people-weight-value">25%</span>
                                 </label>
                                 <input
@@ -273,7 +273,7 @@
                                 <label
                                     class="flex justify-between text-sm font-medium text-gray-700 mb-1"
                                 >
-                                    <span>Process</span>
+                                    <span data-i18n="admin.dim_process">Process</span>
                                     <span id="process-weight-value">35%</span>
                                 </label>
                                 <input
@@ -290,7 +290,7 @@
                                 <label
                                     class="flex justify-between text-sm font-medium text-gray-700 mb-1"
                                 >
-                                    <span>Governance</span>
+                                    <span data-i18n="admin.dim_governance">Governance</span>
                                     <span id="governance-weight-value"
                                         >40%</span
                                     >
@@ -309,14 +309,14 @@
                                 id="weight-warning"
                                 class="hidden text-amber-600 text-sm mt-2"
                             >
-                                Total must equal 100%
+                                <span data-i18n="admin.total_must_100">Total must equal 100%</span>
                             </div>
                             <button
                                 data-on-click="saveWeights"
                                 id="save-weights-btn"
                                 class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mt-4"
                             >
-                                Save Weights
+                                <span data-i18n="admin.save_weights">Save Weights</span>
                             </button>
                         </div>
                     </div>
@@ -325,7 +325,7 @@
                         class="lg:col-span-2 bg-white rounded-xl shadow-sm border p-6"
                     >
                         <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-lg font-semibold text-gray-900">
+                            <h3 class="text-lg font-semibold text-gray-900" data-i18n="admin.scorecard_attributes">
                                 Scorecard Attributes
                             </h3>
                             <button
@@ -345,14 +345,14 @@
                                         d="M12 4v16m8-8H4"
                                     />
                                 </svg>
-                                <span>Add Attribute</span>
+                                <span data-i18n="admin.add_attribute">Add Attribute</span>
                             </button>
                         </div>
                         <div
                             id="attributes-list"
                             class="space-y-2 max-h-96 overflow-y-auto"
                         >
-                            <div class="text-center py-8 text-gray-500">
+                            <div class="text-center py-8 text-gray-500" data-i18n="admin.loading_attributes">
                                 Loading attributes...
                             </div>
                         </div>
@@ -360,10 +360,10 @@
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.scorecard_config">
                         Scorecard Configuration
                     </h3>
-                    <div id="scorecard-info" class="text-gray-600">
+                    <div id="scorecard-info" class="text-gray-600" data-i18n="admin.loading_scorecard_info">
                         Loading scorecard information...
                     </div>
                 </div>
@@ -371,14 +371,14 @@
 
             <div id="content-settings" class="hidden fade-in">
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.audit_schedule">
                         Audit Schedule
                     </h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-2"
-                                >Cron Expression</label
+                                data-i18n="admin.cron_expression">Cron Expression</label
                             >
                             <input
                                 type="text"
@@ -386,14 +386,14 @@
                                 placeholder="0 8 * * 1"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
-                            <p class="text-sm text-gray-500 mt-1">
+                            <p class="text-sm text-gray-500 mt-1" data-i18n="admin.cron_current">
                                 Current: Mondays at 8 AM UTC
                             </p>
                         </div>
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-2"
-                                >Email Recipients</label
+                                data-i18n="admin.email_recipients">Email Recipients</label
                             >
                             <input
                                 type="text"
@@ -401,7 +401,7 @@
                                 placeholder="email@example.com"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
-                            <p class="text-sm text-gray-500 mt-1">
+                            <p class="text-sm text-gray-500 mt-1" data-i18n="admin.email_csv">
                                 Comma-separated email addresses
                             </p>
                         </div>
@@ -410,12 +410,12 @@
                         data-on-click="saveSettings"
                         class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                     >
-                        Save Settings
+                        <span data-i18n="admin.save_settings">Save Settings</span>
                     </button>
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.integration_status">
                         Integration Status
                     </h3>
                     <div class="space-y-3">
@@ -573,7 +573,7 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                             </svg>
-                            <span>Refresh</span>
+                            <span data-i18n="common.refresh">Refresh</span>
                         </button>
                     </div>
 
@@ -581,44 +581,44 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">Active entries</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.active_entries">Active entries</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-entry-count" data-testid="text-export-cache-entry-count">—</p>
-                            <p class="text-xs text-gray-500 mt-1" id="export-cache-active-reads" data-testid="text-export-cache-active-reads">No active reads</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-active-reads" data-testid="text-export-cache-active-reads" data-i18n="admin.no_active_reads">No active reads</p>
                         </div>
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">Disk usage</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.disk_usage">Disk usage</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-bytes" data-testid="text-export-cache-bytes">—</p>
-                            <p class="text-xs text-gray-500 mt-1" id="export-cache-ondisk" data-testid="text-export-cache-ondisk">On disk: —</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-ondisk" data-testid="text-export-cache-ondisk" data-i18n="admin.on_disk">On disk: —</p>
                         </div>
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">Hits / misses</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.hits_misses">Hits / misses</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-hitmiss" data-testid="text-export-cache-hitmiss">—</p>
-                            <p class="text-xs text-gray-500 mt-1" id="export-cache-hitrate" data-testid="text-export-cache-hitrate">No requests yet</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-hitrate" data-testid="text-export-cache-hitrate" data-i18n="admin.no_requests_yet">No requests yet</p>
                         </div>
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">Janitor last run</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.janitor_last_run">Janitor last run</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-janitor-time" data-testid="text-export-cache-janitor-time">—</p>
-                            <p class="text-xs text-gray-500 mt-1" id="export-cache-janitor-detail" data-testid="text-export-cache-janitor-detail">Not yet run</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-janitor-detail" data-testid="text-export-cache-janitor-detail" data-i18n="admin.not_yet_run">Not yet run</p>
                         </div>
                     </div>
 
                     <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-500">
                         <div>
-                            <span class="font-medium text-gray-600">Cache directory:</span>
+                            <span class="font-medium text-gray-600" data-i18n="admin.cache_directory">Cache directory:</span>
                             <span class="font-mono break-all" id="export-cache-dir" data-testid="text-export-cache-dir">—</span>
                         </div>
                         <div>
-                            <span class="font-medium text-gray-600">TTL:</span>
+                            <span class="font-medium text-gray-600" data-i18n="admin.ttl">TTL:</span>
                             <span id="export-cache-ttl" data-testid="text-export-cache-ttl">—</span>
-                            <span class="ms-3 font-medium text-gray-600">Expired waiting:</span>
+                            <span class="ms-3 font-medium text-gray-600" data-i18n="admin.expired_waiting">Expired waiting:</span>
                             <span id="export-cache-expired" data-testid="text-export-cache-expired">—</span>
                         </div>
                     </div>
-                    <p class="text-xs text-gray-400 mt-3" id="export-cache-updated" data-testid="text-export-cache-updated">Not yet refreshed</p>
+                    <p class="text-xs text-gray-400 mt-3" id="export-cache-updated" data-testid="text-export-cache-updated" data-i18n="admin.not_yet_refreshed">Not yet refreshed</p>
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.quick_actions">
                         Quick Actions
                     </h3>
                     <div class="flex flex-wrap gap-3">
@@ -646,7 +646,7 @@
                                     d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                                 />
                             </svg>
-                            <span>Run Audit Now</span>
+                            <span data-i18n="admin.run_audit_now">Run Audit Now</span>
                         </button>
                         <button
                             data-on-click="seedDefaultData"
@@ -665,7 +665,7 @@
                                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                                 />
                             </svg>
-                            <span>Reset to Defaults</span>
+                            <span data-i18n="admin.reset_defaults">Reset to Defaults</span>
                         </button>
                     </div>
                 </div>
@@ -676,23 +676,23 @@
                     <div class="flex items-center justify-between mb-6">
                         <div>
                             <h2 class="text-lg font-semibold text-gray-900" data-i18n="admin.tab_audit">System Audit Trail</h2>
-                            <p class="text-sm text-gray-500">Complete activity log across all modules</p>
+                            <p class="text-sm text-gray-500" data-i18n="admin.audit_trail_subtitle">Complete activity log across all modules</p>
                         </div>
                         <div class="flex items-center gap-3">
                             <select id="auditModuleFilter" data-on-change="loadAuditTrail" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
-                                <option value="">All Modules</option>
-                                <option value="team">Team</option>
-                                <option value="training">Training</option>
-                                <option value="project">Projects</option>
-                                <option value="roi">ROI</option>
-                                <option value="qms">QMS</option>
-                                <option value="calls">Calls</option>
+                                <option value="" data-i18n="common.all_modules">All Modules</option>
+                                <option value="team" data-i18n="admin.team_label">Team</option>
+                                <option value="training" data-i18n="common.training_label">Training</option>
+                                <option value="project" data-i18n="common.projects_label">Projects</option>
+                                <option value="roi" data-i18n="common.roi_label">ROI</option>
+                                <option value="qms" data-i18n="common.qms_label">QMS</option>
+                                <option value="calls" data-i18n="common.calls_label">Calls</option>
                             </select>
                             <select id="auditActionFilter" data-on-change="loadAuditTrail" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
-                                <option value="">All Actions</option>
-                                <option value="create">Create</option>
-                                <option value="update">Update</option>
-                                <option value="delete">Delete</option>
+                                <option value="" data-i18n="common.all_actions">All Actions</option>
+                                <option value="create" data-i18n="admin.opt_create">Create</option>
+                                <option value="update" data-i18n="admin.opt_update">Update</option>
+                                <option value="delete" data-i18n="admin.opt_delete">Delete</option>
                             </select>
                             <button data-on-click="loadAuditTrail" class="px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -702,13 +702,13 @@
                         </div>
                     </div>
                     <div id="audit-trail-list" class="space-y-3">
-                        <div class="text-center py-8 text-gray-500">Loading audit trail...</div>
+                        <div class="text-center py-8 text-gray-500" data-i18n="admin.loading_audit_trail">Loading audit trail...</div>
                     </div>
                     <div class="mt-4 flex items-center justify-between">
-                        <p id="auditPagination" class="text-sm text-gray-500">Showing 0 entries</p>
+                        <p id="auditPagination" class="text-sm text-gray-500" data-i18n="admin.showing_0_entries">Showing 0 entries</p>
                         <div class="flex gap-2">
-                            <button data-on-click="loadAuditTrail" data-args="[${Math.max(0, currentAuditOffset - 20)}]" class="px-3 py-1 text-sm border rounded hover:bg-gray-50">Previous</button>
-                            <button data-on-click="loadAuditTrail" data-args="[${currentAuditOffset + 20}]" class="px-3 py-1 text-sm border rounded hover:bg-gray-50">Next</button>
+                            <button data-on-click="loadAuditTrail" data-args="[${Math.max(0, currentAuditOffset - 20)}]" class="px-3 py-1 text-sm border rounded hover:bg-gray-50" data-i18n="admin.previous">Previous</button>
+                            <button data-on-click="loadAuditTrail" data-args="[${currentAuditOffset + 20}]" class="px-3 py-1 text-sm border rounded hover:bg-gray-50" data-i18n="admin.next">Next</button>
                         </div>
                     </div>
                 </div>
@@ -718,19 +718,19 @@
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
                     <div class="flex items-center justify-between mb-6">
                         <div>
-                            <h2 class="text-lg font-semibold text-gray-900">Rate Limit Monitor</h2>
-                            <p class="text-sm text-gray-500">Live view of the distributed rate limiter — top offenders, fail-open events, and recent 429s.</p>
+                            <h2 class="text-lg font-semibold text-gray-900" data-i18n="admin.rate_limit_monitor">Rate Limit Monitor</h2>
+                            <p class="text-sm text-gray-500" data-i18n="admin.rate_limit_subtitle">Live view of the distributed rate limiter — top offenders, fail-open events, and recent 429s.</p>
                         </div>
                         <div class="flex items-center gap-3">
                             <label class="flex items-center gap-2 text-sm text-gray-600">
                                 <input type="checkbox" id="rate-limits-autorefresh" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" data-testid="input-rate-limits-autorefresh"/>
-                                <span>Auto-refresh (10s)</span>
+                                <span data-i18n="admin.auto_refresh_10s">Auto-refresh (10s)</span>
                             </label>
                             <button data-on-click="loadRateLimitStats" class="px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm" data-testid="button-refresh-rate-limits">
                                 <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                                 </svg>
-                                <span class="ms-1">Refresh</span>
+                                <span class="ms-1" data-i18n="common.refresh">Refresh</span>
                             </button>
                         </div>
                     </div>
@@ -739,24 +739,24 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">Top key (current window)</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.top_key_window">Top key (current window)</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-top-count" data-testid="text-rate-limits-top-count">—</p>
-                            <p class="text-xs text-gray-500 mt-1 truncate" id="rate-limits-top-key" data-testid="text-rate-limits-top-key">No traffic in window</p>
+                            <p class="text-xs text-gray-500 mt-1 truncate" id="rate-limits-top-key" data-testid="text-rate-limits-top-key"><span data-i18n="admin.no_traffic_window">No traffic in window</span></p>
                         </div>
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">429s (last 5 min)</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.429s_last_5min">429s (last 5 min)</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-429-count" data-testid="text-rate-limits-429-count">—</p>
-                            <p class="text-xs text-gray-500 mt-1">From system_events</p>
+                            <p class="text-xs text-gray-500 mt-1" data-i18n="admin.from_system_events">From system_events</p>
                         </div>
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">Fail-open count</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.fail_open_count">Fail-open count</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-failopen" data-testid="text-rate-limits-failopen">—</p>
-                            <p class="text-xs text-gray-500 mt-1">Cumulative since last process start</p>
+                            <p class="text-xs text-gray-500 mt-1" data-i18n="admin.cumulative_since_start">Cumulative since last process start</p>
                         </div>
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">Bucket rows total</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.bucket_rows_total">Bucket rows total</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-rows" data-testid="text-rate-limits-rows">—</p>
-                            <p class="text-xs text-gray-500 mt-1">All windows in rate_limit_buckets</p>
+                            <p class="text-xs text-gray-500 mt-1" data-i18n="admin.all_windows_buckets">All windows in rate_limit_buckets</p>
                         </div>
                     </div>
 
@@ -771,61 +771,61 @@
                             <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/></svg>
                             <div>
                                 <p class="font-semibold" id="spike24h-alert-title" data-testid="text-spike24h-alert-title">24h spike threshold exceeded</p>
-                                <p class="text-xs mt-0.5" id="spike24h-alert-detail" data-testid="text-spike24h-alert-detail">Ops have been notified.</p>
+                                <p class="text-xs mt-0.5" id="spike24h-alert-detail" data-testid="text-spike24h-alert-detail" data-i18n="admin.ops_notified">Ops have been notified.</p>
                             </div>
                         </div>
                         <div class="flex items-center justify-between px-4 py-3 bg-amber-50 border-b border-amber-100">
                             <div class="flex items-center gap-2">
                                 <span id="spike24h-badge" data-testid="badge-spike24h" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">24h Spike</span>
-                                <h3 class="text-sm font-semibold text-gray-700">Last 24 h — rate-limit spike summary</h3>
+                                <h3 class="text-sm font-semibold text-gray-700" data-i18n="admin.spike_summary_title">Last 24 h — rate-limit spike summary</h3>
                             </div>
                             <p class="text-xs text-gray-500" id="spike24h-threshold-hint" data-testid="text-spike24h-threshold-hint">From <code class="text-xs">system_events</code> audit rows</p>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-white">
                             <div class="bg-gray-50 rounded-lg p-4 border">
-                                <p class="text-xs uppercase tracking-wide text-gray-500">Total 429 events (24h)</p>
+                                <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.total_429_24h">Total 429 events (24h)</p>
                                 <p class="text-2xl font-semibold text-gray-900 mt-1" id="spike24h-total" data-testid="text-spike24h-total">—</p>
-                                <p class="text-xs text-gray-500 mt-1">Logged audit rows in the last 24 hours</p>
+                                <p class="text-xs text-gray-500 mt-1" data-i18n="admin.audit_logged_24h">Logged audit rows in the last 24 hours</p>
                             </div>
                             <div class="bg-gray-50 rounded-lg p-4 border">
-                                <p class="text-xs uppercase tracking-wide text-gray-500">Total suppressed (24h)</p>
+                                <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.total_suppressed_24h">Total suppressed (24h)</p>
                                 <p class="text-2xl font-semibold text-gray-900 mt-1" id="spike24h-suppressed" data-testid="text-spike24h-suppressed">—</p>
                                 <p class="text-xs text-gray-500 mt-1">Sum of <code class="text-xs">suppressed_in_previous_minute</code></p>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 px-4 pb-4 bg-white">
                             <div>
-                                <p class="text-xs font-semibold text-gray-600 mb-2">Top 5 offending IPs (24h)</p>
+                                <p class="text-xs font-semibold text-gray-600 mb-2" data-i18n="admin.top5_ips_24h">Top 5 offending IPs (24h)</p>
                                 <div class="overflow-x-auto border rounded-lg">
                                     <table class="min-w-full text-sm">
                                         <thead class="bg-gray-50 text-gray-600">
                                             <tr>
                                                 <th scope="col" class="px-4 py-2 text-start font-medium">#</th>
-                                                <th scope="col" class="px-4 py-2 text-start font-medium">IP</th>
-                                                <th scope="col" class="px-4 py-2 text-end font-medium">Events</th>
-                                                <th scope="col" class="px-4 py-2 text-end font-medium">Suppressed</th>
+                                                <th scope="col" class="px-4 py-2 text-start font-medium" data-i18n="admin.col_ip">IP</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium" data-i18n="admin.col_events">Events</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium" data-i18n="admin.col_suppressed">Suppressed</th>
                                             </tr>
                                         </thead>
                                         <tbody id="spike24h-top-ips" data-testid="table-spike24h-top-ips">
-                                            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+                                            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500" data-i18n="admin.loading">Loading…</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                             <div>
-                                <p class="text-xs font-semibold text-gray-600 mb-2">Top 5 hammered paths (24h)</p>
+                                <p class="text-xs font-semibold text-gray-600 mb-2" data-i18n="admin.top5_paths_24h">Top 5 hammered paths (24h)</p>
                                 <div class="overflow-x-auto border rounded-lg">
                                     <table class="min-w-full text-sm">
                                         <thead class="bg-gray-50 text-gray-600">
                                             <tr>
                                                 <th scope="col" class="px-4 py-2 text-start font-medium">#</th>
-                                                <th scope="col" class="px-4 py-2 text-start font-medium">Path</th>
-                                                <th scope="col" class="px-4 py-2 text-end font-medium">Events</th>
-                                                <th scope="col" class="px-4 py-2 text-end font-medium">Suppressed</th>
+                                                <th scope="col" class="px-4 py-2 text-start font-medium" data-i18n="admin.col_path">Path</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium" data-i18n="admin.col_events">Events</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium" data-i18n="admin.col_suppressed">Suppressed</th>
                                             </tr>
                                         </thead>
                                         <tbody id="spike24h-top-paths" data-testid="table-spike24h-top-paths">
-                                            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+                                            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500" data-i18n="admin.loading">Loading…</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -834,25 +834,25 @@
                     </div>
 
                     <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-sm font-semibold text-gray-700">Top 10 keys this window</h3>
-                        <p class="text-xs text-gray-500" id="rate-limits-window">Window: —</p>
+                        <h3 class="text-sm font-semibold text-gray-700" data-i18n="admin.top10_keys_window">Top 10 keys this window</h3>
+                        <p class="text-xs text-gray-500" id="rate-limits-window" data-i18n="admin.window_label">Window: —</p>
                     </div>
                     <div class="overflow-x-auto border rounded-lg">
                         <table class="min-w-full text-sm">
                             <thead class="bg-gray-50 text-gray-600">
                                 <tr>
                                     <th scope="col" class="px-4 py-2 text-start font-medium">#</th>
-                                    <th scope="col" class="px-4 py-2 text-start font-medium">Key</th>
-                                    <th scope="col" class="px-4 py-2 text-end font-medium">Count</th>
+                                    <th scope="col" class="px-4 py-2 text-start font-medium" data-i18n="admin.col_key">Key</th>
+                                    <th scope="col" class="px-4 py-2 text-end font-medium" data-i18n="admin.col_count">Count</th>
                                 </tr>
                             </thead>
                             <tbody id="rate-limits-top-keys" data-testid="table-rate-limits-top-keys">
-                                <tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+                                <tr><td colspan="3" class="px-4 py-6 text-center text-gray-500" data-i18n="admin.loading">Loading…</td></tr>
                             </tbody>
                         </table>
                     </div>
 
-                    <p class="text-xs text-gray-400 mt-3" id="rate-limits-updated" data-testid="text-rate-limits-updated">Not yet refreshed</p>
+                    <p class="text-xs text-gray-400 mt-3" id="rate-limits-updated" data-testid="text-rate-limits-updated" data-i18n="admin.not_yet_refreshed">Not yet refreshed</p>
                 </div>
             </div>
         </div>
@@ -863,7 +863,7 @@
         >
             <div class="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 p-6">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-gray-900">
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="admin.upload_governance_document">
                         Upload Governance Document
                     </h3>
                     <button
@@ -890,7 +890,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Document Name</label
+                                data-i18n="admin.document_name">Document Name</label
                             >
                             <input
                                 type="text"
@@ -903,7 +903,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Version</label
+                                data-i18n="admin.version">Version</label
                             >
                             <input
                                 type="text"
@@ -916,32 +916,32 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Document Type</label
+                                data-i18n="admin.document_type">Document Type</label
                             >
                             <select
                                 id="doc-type"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             >
-                                <option value="sales">Sales</option>
-                                <option value="operations">Operations</option>
-                                <option value="governance">Governance</option>
-                                <option value="compliance">Compliance</option>
+                                <option value="sales" data-i18n="projects.dept_sales">Sales</option>
+                                <option value="operations" data-i18n="projects.dept_operations">Operations</option>
+                                <option value="governance" data-i18n="common.governance_label">Governance</option>
+                                <option value="compliance" data-i18n="common.compliance_label">Compliance</option>
                             </select>
                         </div>
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >CRM Module (AI Evaluation Target)</label
+                                data-i18n="admin.crm_module_target">CRM Module (AI Evaluation Target)</label
                             >
                             <select
                                 id="doc-crm-module"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             >
-                                <option value="">-- Select Module --</option>
-                                <option value="Leads">Leads (SDR Team)</option>
-                                <option value="Deals">Deals (Sales Team)</option>
-                                <option value="Contacts">Contacts</option>
-                                <option value="Accounts">Accounts</option>
+                                <option value="" data-i18n="admin.opt_select_module">-- Select Module --</option>
+                                <option value="Leads" data-i18n="admin.opt_leads_sdr">Leads (SDR Team)</option>
+                                <option value="Deals" data-i18n="admin.opt_deals_sales">Deals (Sales Team)</option>
+                                <option value="Contacts" data-i18n="admin.opt_contacts">Contacts</option>
+                                <option value="Accounts" data-i18n="admin.opt_accounts">Accounts</option>
                             </select>
                             <p class="text-sm text-gray-500 mt-1">
                                 AI will use this document when evaluating records from the selected CRM module
@@ -950,7 +950,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Team Name (Optional)</label
+                                data-i18n="admin.team_name_optional">Team Name (Optional)</label
                             >
                             <input
                                 type="text"
@@ -962,7 +962,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Governance Rules (JSON or Text)</label
+                                data-i18n="admin.governance_rules">Governance Rules (JSON or Text)</label
                             >
                             <textarea
                                 id="doc-content"
@@ -986,7 +986,7 @@
                             <label
                                 for="doc-active"
                                 class="ms-2 text-sm text-gray-700"
-                                >Set as active document</label
+                                data-i18n="admin.set_active_document">Set as active document</label
                             >
                         </div>
                     </div>
@@ -1002,7 +1002,7 @@
                             type="submit"
                             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                         >
-                            Upload Document
+                            <span data-i18n="admin.upload_document">Upload Document</span>
                         </button>
                     </div>
                 </form>
@@ -1046,7 +1046,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Attribute Name</label
+                                data-i18n="admin.attribute_name">Attribute Name</label
                             >
                             <input
                                 type="text"
@@ -1059,7 +1059,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Description</label
+                                data-i18n="common.brief_desc">Description</label
                             >
                             <textarea
                                 id="attr-description"
@@ -1071,21 +1071,21 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Dimension</label
+                                data-i18n="admin.dimension">Dimension</label
                             >
                             <select
                                 id="attr-dimension"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             >
-                                <option value="people">People</option>
-                                <option value="process">Process</option>
-                                <option value="governance">Governance</option>
+                                <option value="people" data-i18n="admin.dim_people">People</option>
+                                <option value="process" data-i18n="admin.dim_process">Process</option>
+                                <option value="governance" data-i18n="common.governance_label">Governance</option>
                             </select>
                         </div>
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Weight (within dimension)</label
+                                data-i18n="admin.weight_within_dim">Weight (within dimension)</label
                             >
                             <input
                                 type="number"
@@ -1125,11 +1125,11 @@
                         </div>
                         <div class="flex items-center">
                             <input type="checkbox" id="attr-is-active" checked class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                            <label for="attr-is-active" class="ms-2 text-sm text-gray-700">Active (include in evaluations)</label>
+                            <label for="attr-is-active" class="ms-2 text-sm text-gray-700" data-i18n="admin.active_in_eval">Active (include in evaluations)</label>
                         </div>
                     </div>
                     <div class="flex justify-end gap-3 mt-6">
-                        <button type="button" data-on-click="closeAttributeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="button" data-on-click="closeAttributeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="projects.cancel">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="admin.save_attribute">Save Attribute</button>
                     </div>
                 </form>
@@ -1139,7 +1139,7 @@
         <div id="create-scorecard-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
             <div class="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 p-6">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-gray-900">Create New Scorecard</h3>
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="admin.create_new_scorecard">Create New Scorecard</h3>
                     <button data-on-click="closeCreateScorecardModal" class="text-gray-400 hover:text-gray-600">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
@@ -1160,19 +1160,19 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.crm_module">CRM Module</label>
                                 <select id="new-scorecard-crm-module" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                    <option value="Leads">Leads</option>
-                                    <option value="Deals">Deals</option>
-                                    <option value="Contacts">Contacts</option>
-                                    <option value="Accounts">Accounts</option>
+                                    <option value="Leads" data-i18n="admin.opt_leads">Leads</option>
+                                    <option value="Deals" data-i18n="admin.opt_deals">Deals</option>
+                                    <option value="Contacts" data-i18n="admin.opt_contacts">Contacts</option>
+                                    <option value="Accounts" data-i18n="admin.opt_accounts">Accounts</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.team">Team</label>
                                 <select id="new-scorecard-team" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                    <option value="SDR">SDR Team</option>
-                                    <option value="Sales">Sales Team</option>
-                                    <option value="CS">CS Team</option>
-                                    <option value="Marketplace">Marketplace Team</option>
+                                    <option value="SDR" data-i18n="admin.opt_sdr_team">SDR Team</option>
+                                    <option value="Sales" data-i18n="admin.opt_sales_team">Sales Team</option>
+                                    <option value="CS" data-i18n="admin.opt_cs_team">CS Team</option>
+                                    <option value="Marketplace" data-i18n="admin.opt_marketplace_team">Marketplace Team</option>
                                 </select>
                             </div>
                         </div>
@@ -1183,7 +1183,7 @@
                         </div>
                     </div>
                     <div class="flex justify-end gap-3 mt-6">
-                        <button type="button" data-on-click="closeCreateScorecardModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="button" data-on-click="closeCreateScorecardModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="projects.cancel">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700" data-i18n="admin.create_scorecard">Create Scorecard</button>
                     </div>
                 </form>
@@ -1581,19 +1581,19 @@
                 document.getElementById("scorecard-info").innerHTML = `
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <p class="text-sm text-gray-500">Name</p>
+                        <p class="text-sm text-gray-500" data-i18n="admin.lbl_name">Name</p>
                         <p class="font-medium">${scorecard.name || "Quality Scorecard"}</p>
                     </div>
                     <div>
-                        <p class="text-sm text-gray-500">Framework</p>
+                        <p class="text-sm text-gray-500" data-i18n="admin.lbl_framework">Framework</p>
                         <p class="font-medium">${dims.framework || "ISO 9001 + COPC"}</p>
                     </div>
                     <div>
-                        <p class="text-sm text-gray-500">Total Attributes</p>
+                        <p class="text-sm text-gray-500" data-i18n="admin.lbl_total_attributes">Total Attributes</p>
                         <p class="font-medium">${allAttributes.length}</p>
                     </div>
                     <div>
-                        <p class="text-sm text-gray-500">Last Updated</p>
+                        <p class="text-sm text-gray-500" data-i18n="admin.lbl_last_updated">Last Updated</p>
                         <p class="font-medium">${scorecard.created_at ? new Date(scorecard.created_at).toLocaleDateString() : "N/A"}</p>
                     </div>
                 </div>
@@ -2533,7 +2533,7 @@
                 document.getElementById("rate-limits-top-count").textContent =
                     top ? String(top.count) : "0";
                 document.getElementById("rate-limits-top-key").textContent =
-                    top ? top.key : "No traffic in window";
+                    top ? top.key : (window.WalaPlusI18n ? window.WalaPlusI18n.t("admin.no_traffic_window") : "No traffic in window");
                 document.getElementById("rate-limits-429-count").textContent =
                     String(data.recent429Count ?? 0);
                 document.getElementById("rate-limits-failopen").textContent =

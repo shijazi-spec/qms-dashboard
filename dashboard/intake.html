@@ -40,20 +40,18 @@
     <div class="mb-6 flex items-start justify-between flex-wrap gap-3">
       <div>
         <div class="text-xs text-gray-400 mb-1">
-          <a href="/audits" class="hover:underline">Internal Audits</a>
+          <a href="/audits" class="hover:underline" data-i18n="nav.items.audits">Internal Audits</a>
           <span class="mx-1">/</span>
-          <span class="text-gray-600">Manual Intake</span>
+          <span class="text-gray-600" data-i18n="intake.breadcrumb_manual">Manual Intake</span>
         </div>
         <h1 class="text-2xl font-bold text-gray-900" data-i18n="intake.title">Manual Audit Intake Workspace</h1>
         <p class="text-sm text-gray-500 mt-1 max-w-3xl">
-          Central single-point intake for off-platform audit reports (ISO 19011 §6.6).
-          Uploads go to GPT-4o for structured extraction; every finding is reviewed
-          by the Quality Manager before it enters the audit register.
-          Ref: <a href="/policies" class="text-purple-700 hover:underline">WP-SOP-041</a>.
+          <span data-i18n="intake.subtitle">Central single-point intake for off-platform audit reports (ISO 19011 §6.6). Uploads go to GPT-4o for structured extraction; every finding is reviewed by the Quality Manager before it enters the audit register.</span>
+          <span data-i18n="intake.ref">Ref</span>: <a href="/policies" class="text-purple-700 hover:underline">WP-SOP-041</a>.
         </p>
       </div>
       <button id="newIntakeBtn" data-on-click="removeClass" data-args="[&quot;uploadDrawer&quot;,&quot;hidden&quot;]"
-              class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 font-medium">
+              class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 font-medium" data-i18n="intake.new_intake">
         + New Intake
       </button>
     </div>
@@ -67,37 +65,37 @@
       </div>
       <form id="uploadForm" data-on-submit="submitIntake" data-pass-event="true" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
         <div>
-          <label class="block text-gray-700 font-medium">Audit Title *</label>
+          <label class="block text-gray-700 font-medium" data-i18n="intake.f_audit_title">Audit Title *</label>
           <input name="title" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block text-gray-700 font-medium">Source Department *</label>
+          <label class="block text-gray-700 font-medium" data-i18n="intake.f_source_dept">Source Department *</label>
           <input name="source_department" required class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
-                 placeholder="HR, Finance, IT, Operations...">
+                 placeholder="HR, Finance, IT, Operations..." data-i18n-placeholder="intake.f_source_dept_ph">
         </div>
         <div>
-          <label class="block text-gray-700 font-medium">Audit Date</label>
+          <label class="block text-gray-700 font-medium" data-i18n="intake.f_audit_date">Audit Date</label>
           <input name="audit_date" type="date" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
         </div>
         <div>
-          <label class="block text-gray-700 font-medium">Auditor (External / Department)</label>
+          <label class="block text-gray-700 font-medium" data-i18n="intake.f_auditor">Auditor (External / Department)</label>
           <input name="auditor" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
-                 placeholder="e.g. Internal HR audit team">
+                 placeholder="e.g. Internal HR audit team" data-i18n-placeholder="intake.f_auditor_ph">
         </div>
         <div class="md:col-span-2">
-          <label class="block text-gray-700 font-medium">Report File *</label>
+          <label class="block text-gray-700 font-medium" data-i18n="intake.f_report_file">Report File *</label>
           <input name="file" type="file" required accept=".pdf,.txt,.md,.doc,.docx" class="mt-1 w-full">
-          <p class="text-xs text-gray-500 mt-1">
+          <p class="text-xs text-gray-500 mt-1" data-i18n="intake.f_file_help">
             PDF, Word, TXT or Markdown (&lt;10 MB).
-            PDF/DOCX native text extraction requires <code>pdf-parse</code>/<code>mammoth</code>;
+            PDF/DOCX native text extraction requires pdf-parse/mammoth;
             until those are installed you can paste the raw text at extraction time.
           </p>
         </div>
         <div class="md:col-span-2 flex justify-end gap-2 pt-2">
           <button type="button" data-on-click="addClass" data-args="[&quot;uploadDrawer&quot;,&quot;hidden&quot;]"
-                  class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+                  class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg" data-i18n="common.cancel">Cancel</button>
           <button type="submit"
-                  class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 font-medium">
+                  class="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 font-medium" data-i18n="intake.upload_btn">
             Upload
           </button>
         </div>
@@ -108,7 +106,7 @@
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
       <div class="p-4 border-b border-gray-200 flex justify-between items-center">
         <h2 class="font-semibold text-gray-900" data-i18n="intake.sec_intakes">Intakes</h2>
-        <button data-on-click="loadIntakes" class="text-sm text-indigo-700 hover:text-indigo-900">Refresh</button>
+        <button data-on-click="loadIntakes" class="text-sm text-indigo-700 hover:text-indigo-900" data-i18n="common.refresh">Refresh</button>
       </div>
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -124,7 +122,7 @@
             </tr>
           </thead>
           <tbody id="intakesTbody" class="bg-white divide-y divide-gray-100">
-            <tr><td colspan="7" class="text-center text-gray-400 py-8">Loading intakes...</td></tr>
+            <tr><td colspan="7" class="text-center text-gray-400 py-8" data-i18n="intake.loading_intakes">Loading intakes...</td></tr>
           </tbody>
         </table>
       </div>
@@ -139,13 +137,13 @@
           <p class="text-xs text-gray-500 mt-1" id="detailMeta">—</p>
         </div>
         <div class="flex gap-2 flex-wrap">
-          <a id="detailFileLink" href="#" target="_blank" class="hidden text-sm text-indigo-700 hover:text-indigo-900 underline self-center">Open source file</a>
+          <a id="detailFileLink" href="#" target="_blank" class="hidden text-sm text-indigo-700 hover:text-indigo-900 underline self-center" data-i18n="intake.open_source_file">Open source file</a>
           <button id="detailExtractBtn" data-on-click="runExtraction"
-                  class="px-3 py-1.5 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 hidden">
+                  class="px-3 py-1.5 text-sm bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 hidden" data-i18n="intake.run_extraction">
             Run AI Extraction
           </button>
           <button id="detailFinalizeBtn" data-on-click="finalizeIntake"
-                  class="px-3 py-1.5 text-sm bg-green-700 text-white rounded-lg hover:bg-green-800 hidden">
+                  class="px-3 py-1.5 text-sm bg-green-700 text-white rounded-lg hover:bg-green-800 hidden" data-i18n="intake.promote_findings">
             Promote Accepted to Findings
           </button>
           <button data-on-click="closeDetail" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
@@ -154,18 +152,16 @@
 
       <!-- Optional text-paste fallback when PDF/DOCX parsing is not available -->
       <div id="pasteFallback" class="hidden p-4 bg-amber-50 border-b border-amber-200">
-        <p class="text-sm text-amber-800 mb-2">
-          Binary file type detected. Paste the report text below and click
-          <strong>Run AI Extraction</strong>. (Native PDF parsing will be added in a
-          future release.)
+        <p class="text-sm text-amber-800 mb-2" data-i18n="intake.paste_warning">
+          Binary file type detected. Paste the report text below and click Run AI Extraction. (Native PDF parsing will be added in a future release.)
         </p>
         <textarea id="pasteText" rows="8"
                   class="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm font-mono"
-                  placeholder="Paste the extracted report text here..."></textarea>
+                  placeholder="Paste the extracted report text here..." data-i18n-placeholder="intake.paste_placeholder"></textarea>
       </div>
 
       <div id="findingsList" class="divide-y divide-gray-100">
-        <div class="text-center text-gray-400 py-12">Select an intake to begin review.</div>
+        <div class="text-center text-gray-400 py-12" data-i18n="intake.select_to_review">Select an intake to begin review.</div>
       </div>
     </div>
   </main>
@@ -204,7 +200,7 @@
             <td class="px-4 py-2 text-center text-xs text-gray-500">${r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
             <td class="px-4 py-2 text-end">
               <button data-on-click="event.stopPropagation,openDetail" data-args="[[],[${r.id}]]"
-                      class="text-indigo-700 hover:text-indigo-900 text-sm">Review &rarr;</button>
+                      class="text-indigo-700 hover:text-indigo-900 text-sm">${_t('intake.review_arrow','Review →')}</button>
             </td>
           </tr>
         `).join('');

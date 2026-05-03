@@ -42,10 +42,10 @@
                     </a>
                 </div>
                 <div class="flex items-center gap-4">
-                    <a href="/" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100">Dashboard</a>
-                    <a href="/qms" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100">QMS</a>
-                    <a href="/grc" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100">GRC</a>
-                    <a href="/kpis" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100">KPIs</a>
+                    <a href="/" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100" data-i18n="nav.items.dashboard">Dashboard</a>
+                    <a href="/qms" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100" data-i18n="nav.items.qms">QMS</a>
+                    <a href="/grc" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100" data-i18n="nav.items.grc">GRC</a>
+                    <a href="/kpis" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100" data-i18n="nav.items.kpis">KPIs</a>
                 </div>
             </div>
         </div>
@@ -55,7 +55,7 @@
         <div id="loading" class="flex items-center justify-center min-h-96">
             <div class="text-center">
                 <div class="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                <p class="mt-4 text-gray-600">Loading scorecard...</p>
+                <p class="mt-4 text-gray-600" data-i18n="scorecard.loading">Loading scorecard...</p>
             </div>
         </div>
 
@@ -64,17 +64,17 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <h1 id="employeeName" class="text-3xl font-bold text-gray-900" data-i18n="scorecard.title">Mohammed Al Muzaini</h1>
-                        <p id="employeeRole" class="text-lg text-gray-600 mt-1">Quality & GRC Governance Officer</p>
-                        <p id="employeeMission" class="text-sm text-blue-600 mt-2 italic">"Ensure governance discipline, visibility & readiness — NOT execution"</p>
+                        <p id="employeeRole" class="text-lg text-gray-600 mt-1" data-i18n="scorecard.emp_role">Quality & GRC Governance Officer</p>
+                        <p id="employeeMission" class="text-sm text-blue-600 mt-2 italic" data-i18n="scorecard.emp_mission">"Ensure governance discipline, visibility & readiness — NOT execution"</p>
                     </div>
                     <div class="flex items-center gap-4">
                         <button data-on-click="refreshScorecard" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
                             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                            <span>Refresh</span>
+                            <span data-i18n="common.refresh">Refresh</span>
                         </button>
                         <button data-on-click="saveSnapshot" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
                             <i data-lucide="save" class="w-4 h-4"></i>
-                            <span>Save Snapshot</span>
+                            <span data-i18n="scorecard.save_snapshot">Save Snapshot</span>
                         </button>
                     </div>
                 </div>
@@ -110,7 +110,7 @@
                 </div>
 
                 <div class="bg-white rounded-2xl shadow-lg p-6 col-span-1">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-4">KPI Status Summary</h3>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-4" data-i18n="scorecard.kpi_status_summary">KPI Status Summary</h3>
                     <div id="kpiStatusSummary" class="space-y-3">
                     </div>
                     <div class="mt-4 pt-4 border-t border-gray-200">
@@ -120,8 +120,8 @@
             </div>
 
             <div class="mb-6">
-                <h2 class="text-xl font-bold text-gray-900 mb-4">Mohammed's 6 KPIs (2026 Framework)</h2>
-                <p class="text-sm text-gray-600 mb-4">All KPIs measure TRACKING & READINESS, not execution or decision-making</p>
+                <h2 class="text-xl font-bold text-gray-900 mb-4" data-i18n="scorecard.six_kpis_title">Mohammed's 6 KPIs (2026 Framework)</h2>
+                <p class="text-sm text-gray-600 mb-4" data-i18n="scorecard.six_kpis_subtitle">All KPIs measure TRACKING & READINESS, not execution or decision-making</p>
             </div>
 
             <div id="kpiCards" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -143,7 +143,7 @@
     </main>
 
     <script>
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+        const _t = (k, v) => (window.WalaPlusI18n && WalaPlusI18n.t) ? (WalaPlusI18n.t(k) || v || k) : (v || k);
         const API_BASE = '/api/scorecard';
         let scorecardData = null;
 
@@ -168,7 +168,7 @@
                             <i data-lucide="alert-circle" class="w-8 h-8 text-red-600"></i>
                         </div>
                         <p class="text-red-600">${error.message}</p>
-                        <button data-on-click="loadScorecard" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
+                        <button data-on-click="loadScorecard" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">${_t('scorecard.retry','Retry')}</button>
                     </div>
                 `;
                 lucide.createIcons();
@@ -225,21 +225,21 @@
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-4 h-4 rounded-full bg-green-500"></div>
-                        <span class="text-sm text-gray-600">On Track</span>
+                        <span class="text-sm text-gray-600">${_t('scorecard.on_track','On Track')}</span>
                     </div>
                     <span class="font-bold text-green-600">${summary.green}</span>
                 </div>
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-4 h-4 rounded-full bg-amber-500"></div>
-                        <span class="text-sm text-gray-600">At Risk</span>
+                        <span class="text-sm text-gray-600">${_t('scorecard.at_risk','At Risk')}</span>
                     </div>
                     <span class="font-bold text-amber-600">${summary.amber}</span>
                 </div>
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-4 h-4 rounded-full bg-red-500"></div>
-                        <span class="text-sm text-gray-600">Critical</span>
+                        <span class="text-sm text-gray-600">${_t('scorecard.critical','Critical')}</span>
                     </div>
                     <span class="font-bold text-red-600">${summary.red}</span>
                 </div>
@@ -270,13 +270,13 @@
                                 </div>
                                 <div class="text-end ms-4">
                                     <div class="text-3xl font-bold ${colors.text}">${kpi.current_value}%</div>
-                                    <div class="text-xs text-gray-500">Target: ${kpi.target}%</div>
+                                    <div class="text-xs text-gray-500">${_t('scorecard.target_label','Target')}: ${kpi.target}%</div>
                                 </div>
                             </div>
                             
                             <div class="mb-4">
                                 <div class="flex justify-between text-xs text-gray-500 mb-1">
-                                    <span>Progress</span>
+                                    <span>${_t('scorecard.progress','Progress')}</span>
                                     <span>${kpi.current_value}% / ${kpi.target}%</span>
                                 </div>
                                 <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -292,7 +292,7 @@
                                 </div>
                                 <button data-on-click="openNavigationMap" data-args="[${index}]" class="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium">
                                     <i data-lucide="map" class="w-4 h-4"></i>
-                                    <span>View Steps</span>
+                                    <span>${_t('scorecard.view_steps','View Steps')}</span>
                                 </button>
                             </div>
                         </div>
@@ -315,8 +315,8 @@
             
             document.getElementById('modalContent').innerHTML = `
                 <div class="mb-6 p-4 bg-blue-50 rounded-xl">
-                    <p class="text-sm text-blue-800"><strong>Measurement:</strong> ${kpi.measurement}</p>
-                    <p class="text-sm text-blue-800 mt-1"><strong>Current Value:</strong> ${kpi.current_value}% | <strong>Target:</strong> ${kpi.target}%</p>
+                    <p class="text-sm text-blue-800"><strong>${_t('scorecard.measurement','Measurement')}:</strong> ${kpi.measurement}</p>
+                    <p class="text-sm text-blue-800 mt-1"><strong>${_t('scorecard.current_value','Current Value')}:</strong> ${kpi.current_value}% | <strong>${_t('scorecard.target_label','Target')}:</strong> ${kpi.target}%</p>
                 </div>
                 
                 <div class="space-y-4">
@@ -329,21 +329,21 @@
                                 <div class="flex-1">
                                     <h4 class="font-semibold text-gray-900">${step.action}</h4>
                                     <p class="text-sm text-gray-600 mt-1">
-                                        <span class="font-medium">Screen:</span> 
+                                        <span class="font-medium">${_t('scorecard.screen_label','Screen')}:</span> 
                                         <a href="${step.route}" class="text-blue-600 hover:underline">${step.screen}</a>
                                     </p>
                                     <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div class="bg-gray-50 rounded-lg p-3">
-                                            <p class="text-xs text-gray-500 uppercase font-medium mb-1">What to Check</p>
+                                            <p class="text-xs text-gray-500 uppercase font-medium mb-1">${_t('scorecard.what_to_check','What to Check')}</p>
                                             <p class="text-sm text-gray-700">${step.what_to_check}</p>
                                         </div>
                                         <div class="bg-amber-50 rounded-lg p-3">
-                                            <p class="text-xs text-amber-600 uppercase font-medium mb-1">If Result</p>
+                                            <p class="text-xs text-amber-600 uppercase font-medium mb-1">${_t('scorecard.if_result','If Result')}</p>
                                             <p class="text-sm text-gray-700">${step.if_result}</p>
                                         </div>
                                     </div>
                                     <div class="mt-3 bg-green-50 rounded-lg p-3">
-                                        <p class="text-xs text-green-600 uppercase font-medium mb-1">Then Action</p>
+                                        <p class="text-xs text-green-600 uppercase font-medium mb-1">${_t('scorecard.then_action','Then Action')}</p>
                                         <p class="text-sm text-gray-700">${step.then_action}</p>
                                     </div>
                                 </div>
@@ -353,7 +353,7 @@
                 </div>
                 
                 <div class="mt-6 p-4 bg-gray-100 rounded-xl">
-                    <h4 class="font-semibold text-gray-700 mb-2">Data Sources</h4>
+                    <h4 class="font-semibold text-gray-700 mb-2">${_t('scorecard.data_sources','Data Sources')}</h4>
                     <div class="flex flex-wrap gap-2">
                         ${kpi.data_sources.map(src => `
                             <span class="px-3 py-1 bg-white rounded-full text-sm text-gray-700 shadow-sm">${src}</span>
@@ -376,7 +376,7 @@
             document.getElementById('loading').innerHTML = `
                 <div class="text-center">
                     <div class="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p class="mt-4 text-gray-600">Refreshing scorecard...</p>
+                    <p class="mt-4 text-gray-600">${_t('scorecard.refreshing','Refreshing scorecard...')}</p>
                 </div>
             `;
             await loadScorecard();

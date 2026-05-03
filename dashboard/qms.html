@@ -95,49 +95,49 @@
         </script>
 
         <div class="max-w-7xl mx-auto px-4 py-6">
-            <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title">Audit Reports</h1>
+            <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="qms.title_audit_reports">Audit Reports</h1>
             <div class="flex gap-2 mb-6 border-b border-gray-200">
                 <button
                     data-on-click="showTab" data-args="[&quot;overview&quot;]"
                     id="tab-overview"
                     class="px-4 py-2 font-medium rounded-t-lg tab-active"
                 >
-                    Overview
+                    <span data-i18n="qms.tab_overview">Overview</span>
                 </button>
                 <button
                     data-on-click="showTab" data-args="[&quot;evaluations&quot;]"
                     id="tab-evaluations"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
-                    Deal Evaluations
+                    <span data-i18n="qms.tab_deal_evaluations">Deal Evaluations</span>
                 </button>
                 <button
                     data-on-click="showTab" data-args="[&quot;capa&quot;]"
                     id="tab-capa"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
-                    CAPA
+                    <span data-i18n="qms.tab_capa_short">CAPA</span>
                 </button>
                 <button
                     data-on-click="showTab" data-args="[&quot;nc&quot;]"
                     id="tab-nc"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
-                    Nonconformances
+                    <span data-i18n="qms.tab_nc">Nonconformances</span>
                 </button>
                 <button
                     data-on-click="showTab" data-args="[&quot;training&quot;]"
                     id="tab-training"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
-                    Training
+                    <span data-i18n="qms.tab_training">Training</span>
                 </button>
                 <button
                     data-on-click="showTab" data-args="[&quot;framework&quot;]"
                     id="tab-framework"
                     class="px-4 py-2 font-medium rounded-t-lg hover:bg-gray-100"
                 >
-                    Framework
+                    <span data-i18n="qms.tab_framework">Framework</span>
                 </button>
             </div>
 
@@ -303,7 +303,7 @@
                     <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl shadow p-6 text-white">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm text-blue-100">Audit KPI Score</p>
+                                <p class="text-sm text-blue-100" data-i18n="qms.audit_kpi_score">Audit KPI Score</p>
                                 <p class="text-3xl font-bold" id="stat-audit-kpi">-</p>
                             </div>
                             <div class="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
@@ -317,12 +317,12 @@
                     <div class="bg-white rounded-xl shadow p-6 border-s-4 border-green-500">
                         <p class="text-sm text-gray-500" data-i18n="qms.kpi_fpy">First Pass Yield</p>
                         <p class="text-3xl font-bold text-green-600" id="stat-fpy">-</p>
-                        <p class="text-sm text-gray-500 mt-2">Process effectiveness rate</p>
+                        <p class="text-sm text-gray-500 mt-2" data-i18n="qms.process_eff_rate">Process effectiveness rate</p>
                     </div>
                     <div class="bg-white rounded-xl shadow p-6 border-s-4 border-purple-500">
                         <p class="text-sm text-gray-500" data-i18n="qms.kpi_capa_eff">CAPA Effectiveness</p>
                         <p class="text-3xl font-bold text-purple-600" id="stat-capa-effectiveness">-</p>
-                        <p class="text-sm text-gray-500 mt-2">Closed within target</p>
+                        <p class="text-sm text-gray-500 mt-2" data-i18n="qms.closed_within_target">Closed within target</p>
                     </div>
                 </div>
 
@@ -338,7 +338,7 @@
                         </div>
                     </div>
                     <div class="bg-white rounded-xl shadow p-6">
-                        <h3 class="text-lg font-semibold mb-4">Recent CAPA</h3>
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="qms.recent_capa">Recent CAPA</h3>
                         <div id="recent-capa" class="space-y-2">
                             <p class="text-gray-500 text-center py-4">
                                 Loading...
@@ -351,25 +351,25 @@
             <div id="content-evaluations" class="tab-content hidden">
                 <div class="bg-white rounded-xl shadow p-6">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold">Deal Evaluations</h3>
+                        <h3 class="text-lg font-semibold" data-i18n="qms.deal_evaluations">Deal Evaluations</h3>
                         <button
                             data-on-click="triggerEvaluation"
                             class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                         >
-                            Run Evaluation
+                            <span data-i18n="qms.run_evaluation">Run Evaluation</span>
                         </button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b">
-                                    <th scope="col" class="text-start py-2 px-3">Deal</th>
-                                    <th scope="col" class="text-start py-2 px-3">Score</th>
-                                    <th scope="col" class="text-start py-2 px-3">Status</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="qms.deal_col">Deal</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="qms.score_col">Score</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="common.status_label">Status</th>
                                     <th scope="col" class="text-start py-2 px-3">
                                         Critical
                                     </th>
-                                    <th scope="col" class="text-start py-2 px-3">Date</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="common.date">Date</th>
                                 </tr>
                             </thead>
                             <tbody id="evaluations-table">
@@ -396,9 +396,9 @@
                         <div class="flex gap-2">
                             <button data-on-click="exportCSV" data-args="[&quot;capa&quot;]" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                <span>Export CSV</span>
+                                <span data-i18n="common.export_csv">Export CSV</span>
                             </button>
-                            <button data-on-click="showCapaModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">New CAPA</button>
+                            <button data-on-click="showCapaModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" data-i18n="qms.new_capa_btn">New CAPA</button>
                         </div>
                     </div>
                     <div class="flex gap-2 mb-4">
@@ -407,26 +407,26 @@
                             data-on-change="loadCapa"
                             class="border rounded px-3 py-1 text-sm"
                         >
-                            <option value="">All Status</option>
-                            <option value="open">Open</option>
-                            <option value="investigation">Investigation</option>
-                            <option value="action_plan">Action Plan</option>
+                            <option value="" data-i18n="common.all_status">All Status</option>
+                            <option value="open" data-i18n="common.open">Open</option>
+                            <option value="investigation" data-i18n="common.investigation">Investigation</option>
+                            <option value="action_plan" data-i18n="common.action_plan">Action Plan</option>
                             <option value="implementation">
                                 Implementation
                             </option>
-                            <option value="verification">Verification</option>
-                            <option value="closed">Closed</option>
+                            <option value="verification" data-i18n="common.verification">Verification</option>
+                            <option value="closed" data-i18n="common.closed">Closed</option>
                         </select>
                         <select
                             id="capa-severity-filter"
                             data-on-change="loadCapa"
                             class="border rounded px-3 py-1 text-sm"
                         >
-                            <option value="">All Severity</option>
-                            <option value="critical">Critical</option>
-                            <option value="major">Major</option>
-                            <option value="minor">Minor</option>
-                            <option value="observation">Observation</option>
+                            <option value="" data-i18n="common.all_severity">All Severity</option>
+                            <option value="critical" data-i18n="common.critical">Critical</option>
+                            <option value="major" data-i18n="common.major">Major</option>
+                            <option value="minor" data-i18n="common.minor">Minor</option>
+                            <option value="observation" data-i18n="common.observation">Observation</option>
                         </select>
                     </div>
                     <div class="overflow-x-auto">
@@ -434,13 +434,13 @@
                             <thead>
                                 <tr class="border-b">
                                     <th scope="col" class="py-2 px-3 w-8" aria-label="Select"><input type="checkbox" aria-label="Select all CAPAs" data-on-click="toggleAllCheckboxes" data-args="[&quot;capa&quot;,&quot;@this&quot;]"></th>
-                                    <th scope="col" class="text-start py-2 px-3">CAPA #</th>
-                                    <th scope="col" class="text-start py-2 px-3">Title</th>
-                                    <th scope="col" class="text-start py-2 px-3">Type</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="qms.capa_num">CAPA #</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="common.title_label">Title</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="common.type_label">Type</th>
                                     <th scope="col" class="text-start py-2 px-3">
                                         Severity
                                     </th>
-                                    <th scope="col" class="text-start py-2 px-3">Status</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="common.status_label">Status</th>
                                     <th scope="col" class="text-start py-2 px-3">
                                         Assigned To
                                     </th>
@@ -465,14 +465,14 @@
                         <span class="text-sm text-blue-700"><span id="capa-selected-count">0</span> CAPA(s) selected</span>
                         <div class="flex gap-2">
                             <select id="capa-bulk-status" class="border rounded px-2 py-1 text-sm">
-                                <option value="">Change Status...</option>
-                                <option value="investigation">Investigation</option>
-                                <option value="action_plan">Action Plan</option>
-                                <option value="implementation">Implementation</option>
-                                <option value="verification">Verification</option>
-                                <option value="closed">Closed</option>
+                                <option value="" data-i18n="common.change_status">Change Status...</option>
+                                <option value="investigation" data-i18n="common.investigation">Investigation</option>
+                                <option value="action_plan" data-i18n="common.action_plan">Action Plan</option>
+                                <option value="implementation" data-i18n="common.implementation">Implementation</option>
+                                <option value="verification" data-i18n="common.verification">Verification</option>
+                                <option value="closed" data-i18n="common.closed">Closed</option>
                             </select>
-                            <button data-on-click="bulkUpdateRecords" data-args="[&quot;capa&quot;]" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Apply</button>
+                            <button data-on-click="bulkUpdateRecords" data-args="[&quot;capa&quot;]" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700" data-i18n="common.apply">Apply</button>
                         </div>
                     </div>
                 </div>
@@ -487,9 +487,9 @@
                         <div class="flex gap-2">
                             <button data-on-click="exportCSV" data-args="[&quot;nc&quot;]" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                <span>Export CSV</span>
+                                <span data-i18n="common.export_csv">Export CSV</span>
                             </button>
-                            <button data-on-click="showNcModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">New NC</button>
+                            <button data-on-click="showNcModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" data-i18n="qms.new_nc_btn">New NC</button>
                         </div>
                     </div>
                     <div class="overflow-x-auto">
@@ -498,12 +498,12 @@
                                 <tr class="border-b">
                                     <th scope="col" class="py-2 px-3 w-8" aria-label="Select"><input type="checkbox" aria-label="Select all non-conformances" data-on-click="toggleAllCheckboxes" data-args="[&quot;nc&quot;,&quot;@this&quot;]"></th>
                                     <th scope="col" class="text-start py-2 px-3">NC #</th>
-                                    <th scope="col" class="text-start py-2 px-3">Title</th>
-                                    <th scope="col" class="text-start py-2 px-3">Type</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="common.title_label">Title</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="common.type_label">Type</th>
                                     <th scope="col" class="text-start py-2 px-3">
                                         Severity
                                     </th>
-                                    <th scope="col" class="text-start py-2 px-3">Status</th>
+                                    <th scope="col" class="text-start py-2 px-3" data-i18n="common.status_label">Status</th>
                                     <th scope="col" class="text-start py-2 px-3">
                                         Detected
                                     </th>
@@ -525,13 +525,13 @@
                         <span class="text-sm text-red-700"><span id="nc-selected-count">0</span> NC(s) selected</span>
                         <div class="flex gap-2">
                             <select id="nc-bulk-status" class="border rounded px-2 py-1 text-sm">
-                                <option value="">Change Status...</option>
-                                <option value="open">Open</option>
-                                <option value="investigation">Investigation</option>
-                                <option value="corrective_action">Corrective Action</option>
-                                <option value="closed">Closed</option>
+                                <option value="" data-i18n="common.change_status">Change Status...</option>
+                                <option value="open" data-i18n="common.open">Open</option>
+                                <option value="investigation" data-i18n="common.investigation">Investigation</option>
+                                <option value="corrective_action" data-i18n="qms.opt_corrective_action">Corrective Action</option>
+                                <option value="closed" data-i18n="common.closed">Closed</option>
                             </select>
-                            <button data-on-click="bulkUpdateRecords" data-args="[&quot;nc&quot;]" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">Apply</button>
+                            <button data-on-click="bulkUpdateRecords" data-args="[&quot;nc&quot;]" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700" data-i18n="common.apply">Apply</button>
                         </div>
                     </div>
                 </div>
@@ -568,7 +568,7 @@
                         Evaluation Framework
                     </h3>
                     <div id="framework-content" class="space-y-4">
-                        <p class="text-gray-500 text-center py-4">Loading...</p>
+                        <p class="text-gray-500 text-center py-4" data-i18n="common.loading">Loading...</p>
                     </div>
                 </div>
             </div>
@@ -631,7 +631,7 @@
 
                 <div class="bg-white rounded-xl shadow p-6">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold">Pending Audit Triggers</h3>
+                        <h3 class="text-lg font-semibold" data-i18n="qms.pending_audit_triggers">Pending Audit Triggers</h3>
                         <button data-on-click="loadTriggers" class="text-blue-600 hover:text-blue-800 text-sm flex items-center">
                             <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -640,14 +640,14 @@
                         </button>
                     </div>
                     <div id="triggers-list" class="space-y-3">
-                        <p class="text-gray-500 text-center py-4">Loading...</p>
+                        <p class="text-gray-500 text-center py-4" data-i18n="common.loading">Loading...</p>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-xl shadow p-6 mt-6">
-                    <h3 class="text-lg font-semibold mb-4">Unread Notifications</h3>
+                    <h3 class="text-lg font-semibold mb-4" data-i18n="qms.unread_notifications">Unread Notifications</h3>
                     <div id="notifications-list" class="space-y-3">
-                        <p class="text-gray-500 text-center py-4">Loading...</p>
+                        <p class="text-gray-500 text-center py-4" data-i18n="common.loading">Loading...</p>
                     </div>
                 </div>
             </div>
@@ -658,11 +658,11 @@
             class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50"
         >
             <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
-                <h3 class="text-lg font-semibold mb-4">Create New CAPA</h3>
+                <h3 class="text-lg font-semibold mb-4" data-i18n="qms.create_new_capa">Create New CAPA</h3>
                 <form id="capa-form" data-on-submit="createCapa" data-pass-event="true">
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium mb-1"
+                            <label class="block text-sm font-medium mb-1" data-i18n="common.title_label"
                                 >Title</label
                             >
                             <input
@@ -673,7 +673,7 @@
                             />
                         </div>
                         <div>
-                            <label class="block text-sm font-medium mb-1"
+                            <label class="block text-sm font-medium mb-1" data-i18n="common.brief_desc"
                                 >Description</label
                             >
                             <textarea
@@ -684,7 +684,7 @@
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium mb-1"
+                                <label class="block text-sm font-medium mb-1" data-i18n="common.type_label"
                                     >Type</label
                                 >
                                 <select
@@ -704,7 +704,7 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium mb-1"
+                                <label class="block text-sm font-medium mb-1" data-i18n="qms.severity_label"
                                     >Severity</label
                                 >
                                 <select
@@ -712,9 +712,9 @@
                                     required
                                     class="w-full border rounded px-3 py-2"
                                 >
-                                    <option value="critical">Critical</option>
-                                    <option value="major">Major</option>
-                                    <option value="minor">Minor</option>
+                                    <option value="critical" data-i18n="common.critical">Critical</option>
+                                    <option value="major" data-i18n="common.major">Major</option>
+                                    <option value="minor" data-i18n="common.minor">Minor</option>
                                     <option value="observation">
                                         Observation
                                     </option>
@@ -723,7 +723,7 @@
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium mb-1"
+                                <label class="block text-sm font-medium mb-1" data-i18n="qms.assigned_to"
                                     >Assigned To</label
                                 >
                                 <input
@@ -733,7 +733,7 @@
                                 />
                             </div>
                             <div>
-                                <label class="block text-sm font-medium mb-1"
+                                <label class="block text-sm font-medium mb-1" data-i18n="qms.target_date"
                                     >Target Date</label
                                 >
                                 <input
@@ -756,7 +756,7 @@
                             type="submit"
                             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                         >
-                            Create CAPA
+                            <span data-i18n="qms.create_capa">Create CAPA</span>
                         </button>
                     </div>
                 </form>
@@ -1495,7 +1495,7 @@
 
                         ${isClosable ? `
                         <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                            <h4 class="font-semibold text-amber-800 mb-2">Approve Closure</h4>
+                            <h4 class="font-semibold text-amber-800 mb-2" data-i18n="qms.approve_closure">Approve Closure</h4>
                             <div class="flex items-center gap-2">
                                 <input type="text" id="capaApprover" placeholder="Your name/email" class="border rounded px-3 py-1 text-sm flex-1">
                                 <button data-on-click="approveCapaClosure" data-args="[${c.id}]" class="bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700">Approve</button>
@@ -1504,12 +1504,12 @@
 
                         ${needsEffectiveness ? `
                         <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                            <h4 class="font-semibold text-purple-800 mb-2">Record Effectiveness</h4>
+                            <h4 class="font-semibold text-purple-800 mb-2" data-i18n="qms.record_effectiveness">Record Effectiveness</h4>
                             <div class="space-y-2">
                                 <select id="capaEffResult" class="border rounded px-3 py-1 text-sm w-full">
-                                    <option value="effective">Effective</option>
-                                    <option value="partially_effective">Partially Effective</option>
-                                    <option value="not_effective">Not Effective</option>
+                                    <option value="effective" data-i18n="qms.effective">Effective</option>
+                                    <option value="partially_effective" data-i18n="qms.partially_effective">Partially Effective</option>
+                                    <option value="not_effective" data-i18n="qms.not_effective">Not Effective</option>
                                 </select>
                                 <textarea id="capaEffEvidence" placeholder="Evidence / notes" rows="2" class="border rounded px-3 py-1 text-sm w-full"></textarea>
                                 <input type="text" id="capaEffReviewer" placeholder="Reviewer name/email" class="border rounded px-3 py-1 text-sm w-full">
@@ -1533,7 +1533,7 @@
                         </div>
 
                         <div>
-                            <h4 class="font-semibold text-gray-800 mb-2">Change History</h4>
+                            <h4 class="font-semibold text-gray-800 mb-2" data-i18n="common.change_history">Change History</h4>
                             ${history.length ? `<div class="space-y-2 max-h-48 overflow-y-auto">${history.map(h => `
                                 <div class="border-s-2 border-blue-300 ps-3 py-1">
                                     <p class="text-xs text-gray-500">${new Date(h.changed_at).toLocaleString()} by ${h.changed_by||'System'}</p>
@@ -1581,7 +1581,7 @@
 
                         ${isClosable ? `
                         <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                            <h4 class="font-semibold text-amber-800 mb-2">Approve Closure</h4>
+                            <h4 class="font-semibold text-amber-800 mb-2" data-i18n="qms.approve_closure">Approve Closure</h4>
                             <div class="flex items-center gap-2">
                                 <input type="text" id="ncApprover" placeholder="Your name/email" class="border rounded px-3 py-1 text-sm flex-1">
                                 <button data-on-click="approveNcClosure" data-args="[${n.id}]" class="bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700">Approve</button>
@@ -1604,7 +1604,7 @@
                         </div>
 
                         <div>
-                            <h4 class="font-semibold text-gray-800 mb-2">Change History</h4>
+                            <h4 class="font-semibold text-gray-800 mb-2" data-i18n="common.change_history">Change History</h4>
                             ${history.length ? `<div class="space-y-2 max-h-48 overflow-y-auto">${history.map(h => `
                                 <div class="border-s-2 border-red-300 ps-3 py-1">
                                     <p class="text-xs text-gray-500">${new Date(h.changed_at).toLocaleString()} by ${h.changed_by||'System'}</p>
@@ -1747,14 +1747,14 @@
                 <div class="fixed inset-0 bg-black bg-opacity-50" data-on-click="closeDetailModal"></div>
                 <div class="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 relative z-10">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-gray-900" id="detailModalTitle">Record Details</h3>
+                        <h3 class="text-lg font-semibold text-gray-900" id="detailModalTitle" data-i18n="qms.record_details">Record Details</h3>
                         <button data-on-click="closeDetailModal" class="text-gray-400 hover:text-gray-600">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
                         </button>
                     </div>
-                    <div id="detailModalContent">Loading...</div>
+                    <div id="detailModalContent" data-i18n="common.loading">Loading...</div>
                 </div>
             </div>
         </div>
@@ -1785,31 +1785,31 @@
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="qms.f_nc_type">Type *</label>
                                     <select name="nc_type" required data-testid="select-nc-type" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                        <option value="process">Process</option>
-                                        <option value="product">Product</option>
-                                        <option value="system">System</option>
-                                        <option value="supplier">Supplier</option>
-                                        <option value="customer">Customer Complaint</option>
+                                        <option value="process" data-i18n="qms.opt_process">Process</option>
+                                        <option value="product" data-i18n="qms.opt_product">Product</option>
+                                        <option value="system" data-i18n="qms.opt_system">System</option>
+                                        <option value="supplier" data-i18n="qms.opt_supplier">Supplier</option>
+                                        <option value="customer" data-i18n="qms.opt_customer_complaint">Customer Complaint</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="qms.f_nc_severity">Severity *</label>
                                     <select name="severity" required data-testid="select-nc-severity" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                        <option value="minor">Minor</option>
-                                        <option value="major">Major</option>
-                                        <option value="critical">Critical</option>
-                                        <option value="observation">Observation</option>
+                                        <option value="minor" data-i18n="common.minor">Minor</option>
+                                        <option value="major" data-i18n="common.major">Major</option>
+                                        <option value="critical" data-i18n="common.critical">Critical</option>
+                                        <option value="observation" data-i18n="common.observation">Observation</option>
                                     </select>
                                 </div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="qms.f_nc_source">Source</label>
                                 <select name="source" data-testid="select-nc-source" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                    <option value="internal_audit">Internal Audit</option>
-                                    <option value="external_audit">External Audit</option>
-                                    <option value="customer_complaint">Customer Complaint</option>
-                                    <option value="process_monitoring">Process Monitoring</option>
-                                    <option value="management_review">Management Review</option>
+                                    <option value="internal_audit" data-i18n="qms.src_internal_audit">Internal Audit</option>
+                                    <option value="external_audit" data-i18n="qms.src_external_audit">External Audit</option>
+                                    <option value="customer_complaint" data-i18n="qms.opt_customer_complaint">Customer Complaint</option>
+                                    <option value="process_monitoring" data-i18n="qms.src_process_monitoring">Process Monitoring</option>
+                                    <option value="management_review" data-i18n="qms.src_management_review">Management Review</option>
                                 </select>
                             </div>
                             <div>
@@ -1818,7 +1818,7 @@
                             </div>
                         </div>
                         <div class="flex justify-end gap-3 mt-6">
-                            <button type="button" data-on-click="closeNcModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                            <button type="button" data-on-click="closeNcModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="projects.cancel">Cancel</button>
                             <button type="submit" data-testid="button-submit-nc" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700" data-i18n="qms.create_nc">Create NC</button>
                         </div>
                     </form>
