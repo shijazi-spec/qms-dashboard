@@ -45,7 +45,7 @@
  * throttle map between runs.
  */
 
-import { sendSlackNotification } from "./slackNotifications";
+import { sendSlackNotification, postSlackMessage } from "./slackNotifications";
 import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
 import {
   type AlertSeverity,
@@ -614,7 +614,41 @@ export interface NotifyToolHealthConfigChangeResult {
 }
 
 export interface ToolHealthConfigChangeNotifierDeps {
+  /**
+   * Boolean-returning Slack send dep, kept for back-compat with existing
+   * test stubs. When provided AND `postSlack` is not, threading is
+   * disabled because we have no `ts` to persist — the post still goes
+   * out, it just starts a fresh root every time. Production wiring leaves
+   * both unset and falls through to `postSlackMessage`, which preserves
+   * threading.
+   */
   sendSlack?: typeof sendSlackNotification;
+  /**
+   * Threading-aware Slack send dep that returns the message `ts` so the
+   * notifier can persist a daily root and reply-thread under it on
+   * subsequent posts (Task #383). Defaults to `postSlackMessage`. Takes
+   * precedence over `sendSlack` when both are supplied.
+   */
+  postSlack?: typeof postSlackMessage;
+  /**
+   * Look up today's persisted Slack `ts` for the "config_change" notify
+   * key. Returns `null` when no root has been posted yet today. Defaults
+   * to `getNotifyThreadTs` from `toolHealthConfigDatabase`.
+   */
+  getThreadTs?: (notifyKey: string, day: string) => Promise<string | null>;
+  /**
+   * Persist a freshly-posted root message's `ts` so the next post the
+   * same UTC day folds into a thread reply. Defaults to
+   * `setNotifyThreadTs`.
+   */
+  setThreadTs?: (notifyKey: string, day: string, ts: string) => Promise<void>;
+  /**
+   * Wall-clock supplier used to compute today's UTC date for the thread
+   * key. Defaults to `Date.now`. Tests inject a deterministic clock so a
+   * "second post on the same day" scenario doesn't flap on a midnight
+   * boundary.
+   */
+  now?: () => number;
   /**
    * Fetches the most recent N audit entries, newest first. Defaults to
    * `getToolHealthConfigAudit` from `toolHealthConfigDatabase`. Tests can
@@ -625,6 +659,20 @@ export interface ToolHealthConfigChangeNotifierDeps {
   sendEmail?: (
     opts: ResendEmailOptions,
   ) => Promise<{ success: boolean; id?: string; error?: string }>;
+}
+
+/**
+ * Notify-key for the per-day Slack thread that folds together repeated
+ * threshold-tune messages (Task #383). Exported for tests / observability —
+ * other notification kinds (override expiry, breach, recovery) intentionally
+ * do not thread because each event is operationally meaningful in its own
+ * right.
+ */
+export const TOOL_HEALTH_CONFIG_THREAD_KEY = "config_change";
+
+/** UTC YYYY-MM-DD for the given epoch ms. Stable for use as a DB day key. */
+function utcDayKey(nowMs: number): string {
+  return new Date(nowMs).toISOString().slice(0, 10);
 }
 
 /**
@@ -932,7 +980,51 @@ export async function notifyToolHealthConfigChange(
   const link = `${cfg.link}?tab=thresholds`;
 
   if (cfg.slackChannel) {
-    const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+    // Resolve the Slack send. `postSlack` (returns ts) wins when supplied
+    // so the threading bookkeeping has something to persist. Otherwise fall
+    // through to `sendSlack` (legacy boolean) wrapped into the same shape —
+    // when only the legacy dep is provided we lose the ts and therefore
+    // can't fold the post into a thread, but the message still goes out so
+    // dev/test wiring keeps working unchanged.
+    const postSlack: typeof postSlackMessage =
+      depsOverride.postSlack ??
+      (depsOverride.sendSlack
+        ? async (channel, text, blocks, thread_ts) => ({
+            ok: await depsOverride.sendSlack!(channel, text, blocks, thread_ts),
+            ts: null,
+          })
+        : postSlackMessage);
+
+    // Look up today's persisted root ts (Task #383). Best-effort — a DB
+    // hiccup just means we start a fresh thread root, which is the correct
+    // fallback (channel still gets the message, just unthreaded).
+    const nowFn = depsOverride.now ?? Date.now;
+    const today = utcDayKey(nowFn());
+    const getThreadTs =
+      depsOverride.getThreadTs ??
+      (async (k, d) =>
+        (await import("./toolHealthConfigDatabase")).getNotifyThreadTs(k, d));
+    const setThreadTs =
+      depsOverride.setThreadTs ??
+      (async (k, d, ts) =>
+        (await import("./toolHealthConfigDatabase")).setNotifyThreadTs(
+          k,
+          d,
+          ts,
+        ));
+
+    let existingThreadTs: string | null = null;
+    try {
+      existingThreadTs = await getThreadTs(
+        TOOL_HEALTH_CONFIG_THREAD_KEY,
+        today,
+      );
+    } catch (err) {
+      logger.error(
+        "[ToolHealthNotifier] getThreadTs threw for config change (best-effort):",
+        err,
+      );
+    }
 
     // Fetch the last 3 audit entries from the DB (including the one just
     // written) so on-call can see "what's changed recently?" in a single
@@ -956,7 +1048,7 @@ export async function notifyToolHealthConfigChange(
       `:wrench: Tool-health alert thresholds updated by ${notification.changedBy || "—"} ` +
       `(${changes.length} change${changes.length === 1 ? "" : "s"})`;
     try {
-      result.slackSent = await sendSlack(
+      const r = await postSlack(
         cfg.slackChannel,
         fallback,
         buildConfigChangeBlocks(
@@ -966,7 +1058,24 @@ export async function notifyToolHealthConfigChange(
           cfg.linkIsAbsolute,
           recentAudit,
         ),
+        existingThreadTs ?? undefined,
       );
+      result.slackSent = r.ok;
+
+      // Persist the freshly-posted root only when we successfully posted
+      // a NEW root (no existing thread today) and Slack handed us a ts.
+      // Skipping on a thread reply keeps the row pinned to the original
+      // root so subsequent posts continue to thread under it.
+      if (r.ok && r.ts && !existingThreadTs) {
+        try {
+          await setThreadTs(TOOL_HEALTH_CONFIG_THREAD_KEY, today, r.ts);
+        } catch (err) {
+          logger.error(
+            "[ToolHealthNotifier] setThreadTs threw for config change (best-effort):",
+            err,
+          );
+        }
+      }
     } catch (err) {
       logger.error(
         "[ToolHealthNotifier] Slack send threw for config change notification:",

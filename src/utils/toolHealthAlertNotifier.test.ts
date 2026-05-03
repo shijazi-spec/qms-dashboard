@@ -35,6 +35,7 @@ import {
   _resetToolHealthNotifierThrottleForTests,
   _resetOverrideExpirySoonWarningsForTests,
   _diffToolHealthConfigOverridesForTests,
+  TOOL_HEALTH_CONFIG_THREAD_KEY,
   type ToolHealthBreachNotification,
   type ToolHealthOverrideExpiredNotification,
   type ToolHealthConfigChangeNotification,
@@ -1590,6 +1591,222 @@ async function testConfigChangeOmitsImpactSectionWhenEmpty(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Section 4b — notifyToolHealthConfigChange threading (Task #383)
+//
+// When the same admin (or several admins) tune the thresholds repeatedly on
+// the same UTC day, we want exactly one root message in the channel feed
+// and every subsequent post to fold into a thread reply under it. The
+// notifier persists the root's `ts` via `setThreadTs` and reads it back
+// via `getThreadTs` so threading survives a server restart.
+// ---------------------------------------------------------------------------
+
+async function testConfigChangeFirstPostSavesRootThreadTs(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — first post saves a root ts (no thread_ts forwarded)",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  type Captured = {
+    channel: string;
+    text: string;
+    blocks: any[];
+    thread_ts: string | undefined;
+  };
+  const calls: Captured[] = [];
+  const setCalls: Array<{ key: string; day: string; ts: string }> = [];
+  const result = await notifyToolHealthConfigChange(makeConfigChange(), {
+    postSlack: async (channel, text, blocks, thread_ts) => {
+      calls.push({ channel, text, blocks: blocks ?? [], thread_ts });
+      return { ok: true, ts: "1700000000.000100" };
+    },
+    getThreadTs: async () => null,
+    setThreadTs: async (key, day, ts) => {
+      setCalls.push({ key, day, ts });
+    },
+    getAudit: async () => [],
+    // Pin "now" to a stable UTC noon so the day key is deterministic.
+    now: () => Date.UTC(2026, 4, 3, 12, 0, 0),
+  });
+
+  assertEqual(result.slackSent, true, "slackSent true");
+  assertEqual(calls.length, 1, "postSlack invoked exactly once");
+  assertEqual(
+    calls[0].thread_ts,
+    undefined,
+    "no thread_ts on the first post of the day (root)",
+  );
+  assertEqual(setCalls.length, 1, "setThreadTs invoked exactly once");
+  assertEqual(
+    setCalls[0].key,
+    TOOL_HEALTH_CONFIG_THREAD_KEY,
+    "stored under the config_change notify key",
+  );
+  assertEqual(setCalls[0].day, "2026-05-03", "stored under today's UTC day");
+  assertEqual(
+    setCalls[0].ts,
+    "1700000000.000100",
+    "stored ts matches the Slack response",
+  );
+}
+
+async function testConfigChangeSecondPostThreadsUnderRoot(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — second post forwards thread_ts and does NOT overwrite root",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  type Captured = {
+    thread_ts: string | undefined;
+  };
+  const calls: Captured[] = [];
+  const setCalls: Array<{ key: string; day: string; ts: string }> = [];
+  const ROOT_TS = "1700000000.000100";
+
+  const result = await notifyToolHealthConfigChange(makeConfigChange(), {
+    postSlack: async (_channel, _text, _blocks, thread_ts) => {
+      calls.push({ thread_ts });
+      return { ok: true, ts: "1700000050.000200" };
+    },
+    getThreadTs: async () => ROOT_TS,
+    setThreadTs: async (key, day, ts) => {
+      setCalls.push({ key, day, ts });
+    },
+    getAudit: async () => [],
+    now: () => Date.UTC(2026, 4, 3, 14, 30, 0),
+  });
+
+  assertEqual(result.slackSent, true, "slackSent true");
+  assertEqual(calls.length, 1, "postSlack invoked exactly once");
+  assertEqual(
+    calls[0].thread_ts,
+    ROOT_TS,
+    "second post forwards the persisted root ts as thread_ts",
+  );
+  assertEqual(
+    setCalls.length,
+    0,
+    "thread reply must not overwrite the persisted root ts",
+  );
+}
+
+async function testConfigChangeSetThreadTsThrowsDoesNotPropagate(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — setThreadTs throw is swallowed (slack already posted)",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthConfigChange(makeConfigChange(), {
+      postSlack: async () => ({ ok: true, ts: "1700000099.000999" }),
+      getThreadTs: async () => null,
+      setThreadTs: async () => {
+        throw new Error("simulated DB write failure");
+      },
+      getAudit: async () => [],
+      now: () => Date.UTC(2026, 4, 3, 12, 0, 0),
+    });
+
+    assertEqual(
+      result.slackSent,
+      true,
+      "slackSent stays true — page is independent of bookkeeping",
+    );
+  } finally {
+    console.error = originalError;
+  }
+}
+
+async function testConfigChangeGetThreadTsThrowsFallsBackToRoot(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — getThreadTs throw degrades to a fresh root post",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  const calls: Array<{ thread_ts: string | undefined }> = [];
+  const setCalls: Array<{ ts: string }> = [];
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const result = await notifyToolHealthConfigChange(makeConfigChange(), {
+      postSlack: async (_c, _t, _b, thread_ts) => {
+        calls.push({ thread_ts });
+        return { ok: true, ts: "1700000111.000111" };
+      },
+      getThreadTs: async () => {
+        throw new Error("simulated DB read failure");
+      },
+      setThreadTs: async (_k, _d, ts) => {
+        setCalls.push({ ts });
+      },
+      getAudit: async () => [],
+      now: () => Date.UTC(2026, 4, 3, 12, 0, 0),
+    });
+
+    assertEqual(result.slackSent, true, "slackSent true");
+    assertEqual(
+      calls[0].thread_ts,
+      undefined,
+      "no thread_ts forwarded when the lookup failed",
+    );
+    assertEqual(
+      setCalls.length,
+      1,
+      "fresh root ts is persisted so the next post threads correctly",
+    );
+    assertEqual(setCalls[0].ts, "1700000111.000111", "ts persisted matches");
+  } finally {
+    console.error = originalError;
+  }
+}
+
+async function testConfigChangeLegacySendSlackSkipsThreading(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — legacy sendSlack dep keeps working (threading disabled)",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  let getCalls = 0;
+  let setCalls = 0;
+  let sendCalls = 0;
+  const result = await notifyToolHealthConfigChange(makeConfigChange(), {
+    sendSlack: async () => {
+      sendCalls++;
+      return true;
+    },
+    getThreadTs: async () => {
+      getCalls++;
+      return null;
+    },
+    setThreadTs: async () => {
+      setCalls++;
+    },
+    getAudit: async () => [],
+    now: () => Date.UTC(2026, 4, 3, 12, 0, 0),
+  });
+
+  assertEqual(result.slackSent, true, "slackSent true via legacy sendSlack");
+  assertEqual(sendCalls, 1, "legacy sendSlack invoked exactly once");
+  assertEqual(getCalls, 1, "getThreadTs still consulted (lookup is cheap)");
+  assertEqual(
+    setCalls,
+    0,
+    "setThreadTs not invoked — legacy sendSlack returns no ts to persist",
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Section 5 — notifyToolHealthOverrideExpiringSoon (Task #497)
 // ---------------------------------------------------------------------------
 
@@ -2162,6 +2379,11 @@ async function main(): Promise<void> {
     await testConfigChangeRendersImpactSection();
     await testConfigChangeOmitsImpactSectionWhenNull();
     await testConfigChangeOmitsImpactSectionWhenEmpty();
+    await testConfigChangeFirstPostSavesRootThreadTs();
+    await testConfigChangeSecondPostThreadsUnderRoot();
+    await testConfigChangeSetThreadTsThrowsDoesNotPropagate();
+    await testConfigChangeGetThreadTsThrowsFallsBackToRoot();
+    await testConfigChangeLegacySendSlackSkipsThreading();
     await testExpiringSoonSkippedWithoutChannel();
     await testExpiringSoonSlackOnSuccess();
     await testExpiringSoonDedupedOnSecondCall();

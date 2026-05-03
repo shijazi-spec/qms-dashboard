@@ -170,6 +170,23 @@ export async function initToolHealthConfigTables(): Promise<void> {
       ALTER TABLE tool_health_config_audit
         ADD COLUMN IF NOT EXISTS breach_diff JSONB
     `);
+
+    // Per-day Slack thread roots for repeated tool-health notifications
+    // (Task #383). Keyed on a notification kind + the UTC date so that
+    // every kind (currently just "config_change") gets one root message
+    // per day and all subsequent posts on the same day fold into a thread
+    // reply under that root. Survives server restarts because the cron and
+    // the route handlers both read this row before deciding whether to
+    // post a new root or reply to the existing one.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tool_health_notify_threads (
+        notify_key VARCHAR(64) NOT NULL,
+        day        DATE        NOT NULL,
+        slack_ts   VARCHAR(64) NOT NULL,
+        created_at TIMESTAMP   DEFAULT NOW(),
+        PRIMARY KEY (notify_key, day)
+      )
+    `);
   })().catch((err) => {
     initPromise = null;
     throw err;
@@ -628,6 +645,65 @@ export async function getToolHealthOverrideExpiringSoon(
       err,
     );
     return null;
+  }
+}
+
+/**
+ * Look up the persisted Slack message `ts` for a notification kind on a
+ * given UTC day, or `null` if no root has been posted yet (Task #383).
+ *
+ * The notifier uses this to decide whether the next post should be a new
+ * root message or a thread reply under today's existing root. Failures
+ * resolve to `null` so a transient DB hiccup degrades gracefully into
+ * "post a new root" instead of blocking the page.
+ */
+export async function getNotifyThreadTs(
+  notifyKey: string,
+  day: string,
+): Promise<string | null> {
+  try {
+    await initToolHealthConfigTables();
+    const result = await pool.query(
+      `SELECT slack_ts FROM tool_health_notify_threads
+        WHERE notify_key = $1 AND day = $2`,
+      [notifyKey, day],
+    );
+    const row = result.rows[0];
+    return row?.slack_ts ? String(row.slack_ts) : null;
+  } catch (err) {
+    logger.error("[ToolHealthConfig] getNotifyThreadTs failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Persist the Slack message `ts` for the day's root notification so future
+ * posts on the same UTC day can thread under it (Task #383). Idempotent:
+ * a second call for the same `(notify_key, day)` overwrites the prior row,
+ * which keeps the table self-healing if Slack rotated the ts (e.g. message
+ * deleted and re-posted).
+ *
+ * Failures are logged but never thrown — the page itself has already gone
+ * out and missing the bookkeeping just means tomorrow's first message
+ * starts a fresh thread, which is the correct fallback.
+ */
+export async function setNotifyThreadTs(
+  notifyKey: string,
+  day: string,
+  ts: string,
+): Promise<void> {
+  try {
+    await initToolHealthConfigTables();
+    await pool.query(
+      `INSERT INTO tool_health_notify_threads (notify_key, day, slack_ts)
+            VALUES ($1, $2, $3)
+       ON CONFLICT (notify_key, day) DO UPDATE
+         SET slack_ts = EXCLUDED.slack_ts,
+             created_at = NOW()`,
+      [notifyKey, day, ts],
+    );
+  } catch (err) {
+    logger.error("[ToolHealthConfig] setNotifyThreadTs failed:", err);
   }
 }
 
