@@ -1,0 +1,9 @@
+{
+  "_comment": "Pre-existing dynamic WalaPlusI18n.t(variable) call sites tracked by Task #295. Adding a new call site here is an explicit attestation that the dynamic key cannot be made static. Regenerate with: node scripts/check-i18n.cjs --update-baseline",
+  "entries": [
+    {
+      "snippet": "_t('dyn.health.' + key);",
+      "source": "dashboard/health.html (inline <script>)"
+    }
+  ]
+}

@@ -125,6 +125,19 @@
             background-color: #FEF3C7;
             transition: background-color 1.5s ease-out;
         }
+        /* Read-only mirror of the URL the copy button would copy. Lets
+           admins eyeball the params (e.g. confirm no PII) before pasting
+           the link into an incident channel. */
+        .copy-link-url {
+            flex: 1 1 240px; min-width: 220px; max-width: 520px;
+            padding: 4px 10px; border-radius: 6px;
+            font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            border: 1px solid #D1D5DB; background: #F9FAFB; color: #374151;
+        }
+        .copy-link-url:focus-visible {
+            outline: 2px solid #2563EB; outline-offset: 2px;
+            background: #FFFFFF;
+        }
     </style>
     <script src="/js/i18n.js?v=1.0"></script>
 </head>
@@ -719,6 +732,7 @@
             // ?status query params so it tracks whatever persistFilter() /
             // persistStatusFilter() most recently wrote.
             const filtersActive = selectedCategory !== 'all' || selectedStatus !== 'all';
+            const currentUrl = window.location.href;
             const copyLinkRow = filtersActive
                 ? '<div class="copy-link-row" data-testid="row-copy-filtered-link">'
                     + '<button type="button" class="copy-link-btn"'
@@ -735,6 +749,11 @@
                     + '<span data-testid="text-copy-filtered-link">'
                     + escapeHtml(_t('dyn.health.copy_link')) + '</span>'
                     + '</button>'
+                    + '<input type="text" readonly class="copy-link-url"'
+                    + ' value="' + escapeHtml(currentUrl) + '"'
+                    + ' aria-label="' + escapeHtml(_t('dyn.health.copy_link_url_aria')) + '"'
+                    + ' title="' + escapeHtml(_t('dyn.health.copy_link_url_label')) + '"'
+                    + ' data-testid="input-copy-filtered-link-url">'
                     + '<span class="copy-link-status" hidden role="status"'
                     + ' aria-live="polite"'
                     + ' data-testid="status-copy-filtered-link"></span>'
@@ -780,6 +799,17 @@
             const copyBtn = container.querySelector('[data-testid="button-copy-filtered-link"]');
             if (copyBtn) {
                 copyBtn.addEventListener('click', () => copyFilteredLink(copyBtn));
+            }
+
+            // Select-all on click/focus so keyboard users can review the URL
+            // and then press Ctrl+C without having to drag-select first.
+            const urlInput = container.querySelector('[data-testid="input-copy-filtered-link-url"]');
+            if (urlInput) {
+                const selectAll = () => {
+                    try { urlInput.select(); } catch { /* noop */ }
+                };
+                urlInput.addEventListener('click', selectAll);
+                urlInput.addEventListener('focus', selectAll);
             }
         }
 
