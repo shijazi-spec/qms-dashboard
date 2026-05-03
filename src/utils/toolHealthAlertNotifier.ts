@@ -190,6 +190,43 @@ export function _resetToolHealthNotifierThrottleForTests(): void {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Recovery notification opt-out (Task #347)
+// ──────────────────────────────────────────────────────────────────────────────
+/**
+ * Treat the value as a deliberate "off" for `TOOL_HEALTH_RECOVERY_NOTIFY`.
+ * We accept the common falsy spellings (`0`, `false`, `no`, `off`,
+ * case-insensitive) so operators don't have to remember a single magic
+ * string. Everything else — including unset, empty, `1`, `true` — leaves
+ * recovery pages enabled, preserving the historical default.
+ */
+function isExplicitlyOff(raw: string | undefined): boolean {
+  if (raw == null) return false;
+  const v = raw.trim().toLowerCase();
+  return v === "0" || v === "false" || v === "no" || v === "off";
+}
+
+/**
+ * Returns `true` when recovery notifications must be suppressed for
+ * `toolName`, either because the global `TOOL_HEALTH_RECOVERY_NOTIFY`
+ * gate is off or because the tool appears in the comma-separated
+ * `TOOL_HEALTH_RECOVERY_SKIP_TOOLS` list.
+ *
+ * Exported for unit tests; production callers should go through
+ * {@link notifyToolHealthRecovery} which already consults this helper.
+ */
+export function recoveryNotificationsDisabled(toolName: string): boolean {
+  if (isExplicitlyOff(process.env.TOOL_HEALTH_RECOVERY_NOTIFY)) return true;
+  const skipRaw = (process.env.TOOL_HEALTH_RECOVERY_SKIP_TOOLS || "").trim();
+  if (!skipRaw) return false;
+  const needle = toolName.trim().toLowerCase();
+  if (!needle) return false;
+  return skipRaw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .some((entry) => entry !== "" && entry === needle);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Renderers
 // ──────────────────────────────────────────────────────────────────────────────
 function severityEmoji(sev: AlertSeverity): string {
@@ -1400,8 +1437,26 @@ export interface ToolHealthRecoveryNotification {
 export interface NotifyToolHealthRecoveryResult {
   slackSent: boolean;
   emailSent: boolean;
-  /** True when neither Slack nor email is configured. */
+  /**
+   * True when the recovery page was suppressed for any reason: neither
+   * Slack nor email is configured, OR the operator opted this tool (or
+   * all recoveries) out via `TOOL_HEALTH_RECOVERY_NOTIFY=0` /
+   * `TOOL_HEALTH_RECOVERY_SKIP_TOOLS=<csv>`.
+   *
+   * Callers that need to distinguish "no transport configured" from
+   * "explicitly opted out" should also inspect {@link disabled}.
+   */
   skipped: boolean;
+  /**
+   * True when the suppression was caused by an explicit opt-out
+   * (env-var gate or per-tool skip list). Distinct from the
+   * "no Slack channel & no email recipient" case so dashboards can
+   * surface "operator silenced this tool" separately from "ops needs
+   * to configure a transport".
+   *
+   * Always implies `skipped: true`.
+   */
+  disabled: boolean;
 }
 
 export interface ToolHealthRecoveryNotifierDeps {
@@ -1627,7 +1682,33 @@ export async function notifyToolHealthRecovery(
     slackSent: false,
     emailSent: false,
     skipped: false,
+    disabled: false,
   };
+
+  // Per-tool / global opt-out (Task #347).
+  //
+  // Mirrors the `TOOL_HEALTH_CONFIG_NOTIFY` env-var pattern used by the
+  // config-change notifier, except inverted: recoveries page by default
+  // (preserving today's behavior) and operators can silence them by
+  // setting either:
+  //   • `TOOL_HEALTH_RECOVERY_NOTIFY=0` — silence ALL recovery pages.
+  //     Any explicit "off" value (`0`, `false`, `no`, `off`,
+  //     case-insensitive) disables; everything else, including unset,
+  //     leaves recoveries enabled.
+  //   • `TOOL_HEALTH_RECOVERY_SKIP_TOOLS=tool_a,tool_b` — silence
+  //     recoveries only for the listed tools (matched case-insensitively
+  //     against `notification.tool_name`). Useful for noisy/flapping
+  //     tools whose breach pages remain valuable but whose rapid-fire
+  //     recoveries flood the channel.
+  //
+  // Breach pages are intentionally NOT gated by these flags — operators
+  // who silence recoveries for a flappy tool still want to know when it
+  // breaches.
+  if (recoveryNotificationsDisabled(notification.tool_name)) {
+    result.skipped = true;
+    result.disabled = true;
+    return result;
+  }
 
   if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
     result.skipped = true;

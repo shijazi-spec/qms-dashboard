@@ -132,6 +132,8 @@ const ENV_KEYS = [
   "TOOL_HEALTH_NOTIFY_THROTTLE_MIN",
   "TOOL_HEALTH_APP_URL",
   "TOOL_HEALTH_CONFIG_NOTIFY",
+  "TOOL_HEALTH_RECOVERY_NOTIFY",
+  "TOOL_HEALTH_RECOVERY_SKIP_TOOLS",
   "SLACK_CHANNEL_ID",
 ];
 
@@ -1762,6 +1764,119 @@ await suite.test(
     suite.expectEqual(recordResultCalls.length, 1, "still called");
     suite.expectEqual(recordResultCalls[0]?.alertId, null, "alert_id forwarded as null");
     suite.expectEqual(recordResultCalls[0]?.channel, "slack", "channel reflects the send");
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Task #347 — per-tool / global recovery notification opt-out
+// ──────────────────────────────────────────────────────────────────────────────
+
+await suite.test(
+  "recovery opt-out: TOOL_HEALTH_RECOVERY_NOTIFY=0 silences ALL recoveries (returns skipped+disabled)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    process.env.TOOL_HEALTH_RECOVERY_NOTIFY = "0";
+    const { deps, slackCalls, emailCalls } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+    suite.expectEqual(result.skipped, true, "skipped");
+    suite.expectEqual(result.disabled, true, "disabled flag set");
+    suite.expectEqual(result.slackSent, false, "no slack");
+    suite.expectEqual(result.emailSent, false, "no email");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(emailCalls.length, 0, "no email call");
+  },
+);
+
+await suite.test(
+  "recovery opt-out: TOOL_HEALTH_RECOVERY_NOTIFY accepts false/no/off (case-insensitive)",
+  async () => {
+    for (const off of ["false", "FALSE", "no", "Off"]) {
+      clearEnv();
+      process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+      process.env.TOOL_HEALTH_RECOVERY_NOTIFY = off;
+      const { deps, slackCalls } = makeRecoveryStubs();
+      const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+      suite.expectEqual(result.disabled, true, `disabled for value '${off}'`);
+      suite.expectEqual(slackCalls.length, 0, `no slack call for '${off}'`);
+    }
+  },
+);
+
+await suite.test(
+  "recovery opt-out: TOOL_HEALTH_RECOVERY_NOTIFY=1 (or unset) leaves recoveries enabled",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_RECOVERY_NOTIFY = "1";
+    const { deps, slackCalls } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+    suite.expectEqual(result.disabled, false, "not disabled");
+    suite.expectEqual(result.slackSent, true, "slack sent");
+    suite.expectEqual(slackCalls.length, 1, "one slack call");
+  },
+);
+
+await suite.test(
+  "recovery opt-out: TOOL_HEALTH_RECOVERY_SKIP_TOOLS silences only the listed tools",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_RECOVERY_SKIP_TOOLS =
+      "qms_create_nc, other_noisy_tool";
+
+    // Listed tool → suppressed.
+    const { deps: depsA, slackCalls: slackA } = makeRecoveryStubs();
+    const a = await notifyToolHealthRecovery(
+      sampleRecovery({ tool_name: "qms_create_nc" }),
+      depsA,
+    );
+    suite.expectEqual(a.disabled, true, "listed tool disabled");
+    suite.expectEqual(a.skipped, true, "listed tool skipped");
+    suite.expectEqual(slackA.length, 0, "no slack for listed tool");
+
+    // Unlisted tool → still pages.
+    const { deps: depsB, slackCalls: slackB } = makeRecoveryStubs();
+    const b = await notifyToolHealthRecovery(
+      sampleRecovery({ tool_name: "quiet_tool" }),
+      depsB,
+    );
+    suite.expectEqual(b.disabled, false, "unlisted tool not disabled");
+    suite.expectEqual(b.slackSent, true, "unlisted tool still pages");
+    suite.expectEqual(slackB.length, 1, "one slack for unlisted tool");
+  },
+);
+
+await suite.test(
+  "recovery opt-out: TOOL_HEALTH_RECOVERY_SKIP_TOOLS matches case-insensitively",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_RECOVERY_SKIP_TOOLS = "QMS_Create_NC";
+    const { deps, slackCalls } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(
+      sampleRecovery({ tool_name: "qms_create_nc" }),
+      deps,
+    );
+    suite.expectEqual(result.disabled, true, "case-insensitive match");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+  },
+);
+
+await suite.test(
+  "recovery opt-out: opt-out short-circuits BEFORE the no-transport-configured check",
+  // When the operator explicitly opted out we want `disabled: true` rather
+  // than masquerading as "no Slack/email configured" — dashboards rely on
+  // that distinction to decide whether to nag ops to wire up a transport.
+  async () => {
+    clearEnv();
+    // Note: NO Slack channel and NO email recipient configured.
+    process.env.TOOL_HEALTH_RECOVERY_NOTIFY = "0";
+    const { deps } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+    suite.expectEqual(result.disabled, true, "disabled wins over plain skipped");
+    suite.expectEqual(result.skipped, true, "skipped also true");
   },
 );
 
