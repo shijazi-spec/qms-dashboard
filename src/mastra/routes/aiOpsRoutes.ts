@@ -1509,6 +1509,11 @@ export const aiOpsRoutes = [
               after: result.after,
               note,
               audit_id: result.audit_id,
+              // Forward the breach diff (Task #208) so the Slack message
+              // can render an "Impact" section showing how many alerts
+              // this threshold change opened/resolved. `null` when the
+              // aggregate query failed — notifier omits the section.
+              breach_diff: breachDiff ?? null,
             });
           } catch (notifyErr) {
             logger.error(

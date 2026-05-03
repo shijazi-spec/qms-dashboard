@@ -1461,6 +1461,134 @@ async function testConfigChangeAuditThrowsStillSendsSlack(): Promise<void> {
   }
 }
 
+async function testConfigChangeRendersImpactSection(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — renders Impact section when breach_diff is provided",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  type SlackArgs = { channel: string; text: string; blocks: any[] };
+  const slackCalls: SlackArgs[] = [];
+
+  const result = await notifyToolHealthConfigChange(
+    makeConfigChange({
+      breach_diff: {
+        new_breaches: [
+          { tool_name: "search", reason: "error_rate", severity: "high" },
+          { tool_name: "search", reason: "p95_latency", severity: "medium" },
+        ],
+        resolved_breaches: [
+          { tool_name: "fetch", reason: "error_rate", severity: "high" },
+        ],
+        severity_changes: [],
+      },
+    }),
+    {
+      sendSlack: async (channel, text, blocks) => {
+        slackCalls.push({ channel, text, blocks: blocks as any[] });
+        return true;
+      },
+      getAudit: async () => [],
+    },
+  );
+
+  assertEqual(result.slackSent, true, "Slack send proceeded");
+  assertEqual(slackCalls.length, 1, "sendSlack invoked exactly once");
+  const allSectionText = slackCalls[0].blocks
+    .filter((b: any) => b?.type === "section")
+    .map((b: any) => b?.text?.text ?? "")
+    .join("\n");
+  assert(
+    allSectionText.includes("Impact:"),
+    "Impact section is rendered when breach_diff is non-empty",
+  );
+  assert(
+    allSectionText.includes("New alerts:* 2"),
+    "Impact lists count of new alerts",
+  );
+  assert(
+    allSectionText.includes("Resolved alerts:* 1"),
+    "Impact lists count of resolved alerts",
+  );
+  assert(
+    allSectionText.includes("Severity changes:* 0"),
+    "Impact lists count of severity changes (zero allowed)",
+  );
+}
+
+async function testConfigChangeOmitsImpactSectionWhenNull(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — omits Impact section when breach_diff is null",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  type SlackArgs = { channel: string; text: string; blocks: any[] };
+  const slackCalls: SlackArgs[] = [];
+
+  const result = await notifyToolHealthConfigChange(
+    makeConfigChange({ breach_diff: null }),
+    {
+      sendSlack: async (channel, text, blocks) => {
+        slackCalls.push({ channel, text, blocks: blocks as any[] });
+        return true;
+      },
+      getAudit: async () => [],
+    },
+  );
+
+  assertEqual(result.slackSent, true, "Slack send proceeded");
+  const allSectionText = slackCalls[0].blocks
+    .filter((b: any) => b?.type === "section")
+    .map((b: any) => b?.text?.text ?? "")
+    .join("\n");
+  assert(
+    !allSectionText.includes("Impact:"),
+    "Impact section is omitted when breach_diff is null (graceful fallback)",
+  );
+}
+
+async function testConfigChangeOmitsImpactSectionWhenEmpty(): Promise<void> {
+  console.log(
+    "\nnotifyToolHealthConfigChange — omits Impact section when breach_diff has zero entries across all buckets",
+  );
+  clearEnv();
+  process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
+  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+
+  type SlackArgs = { channel: string; text: string; blocks: any[] };
+  const slackCalls: SlackArgs[] = [];
+
+  await notifyToolHealthConfigChange(
+    makeConfigChange({
+      breach_diff: {
+        new_breaches: [],
+        resolved_breaches: [],
+        severity_changes: [],
+      },
+    }),
+    {
+      sendSlack: async (channel, text, blocks) => {
+        slackCalls.push({ channel, text, blocks: blocks as any[] });
+        return true;
+      },
+      getAudit: async () => [],
+    },
+  );
+
+  const allSectionText = slackCalls[0].blocks
+    .filter((b: any) => b?.type === "section")
+    .map((b: any) => b?.text?.text ?? "")
+    .join("\n");
+  assert(
+    !allSectionText.includes("Impact:"),
+    "Impact section is omitted when all diff buckets are empty (avoid noise)",
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Section 5 — notifyToolHealthOverrideExpiringSoon (Task #497)
 // ---------------------------------------------------------------------------
@@ -2031,6 +2159,9 @@ async function main(): Promise<void> {
     await testConfigChangeSlackAndEmailOnSuccess();
     await testConfigChangeSlackAndEmailFailIndependently();
     await testConfigChangeAuditThrowsStillSendsSlack();
+    await testConfigChangeRendersImpactSection();
+    await testConfigChangeOmitsImpactSectionWhenNull();
+    await testConfigChangeOmitsImpactSectionWhenEmpty();
     await testExpiringSoonSkippedWithoutChannel();
     await testExpiringSoonSlackOnSuccess();
     await testExpiringSoonDedupedOnSecondCall();

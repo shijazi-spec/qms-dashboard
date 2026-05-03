@@ -55,6 +55,7 @@ import {
 import type {
   ToolHealthConfigOverrides,
   ToolHealthConfigAuditEntry,
+  ToolHealthAuditBreachDiff,
 } from "./toolHealthConfigDatabase";
 
 import { logger } from "./logger";
@@ -590,6 +591,15 @@ export interface ToolHealthConfigChangeNotification {
   note?: string | null;
   /** Audit-row id from `tool_health_config_audit` for traceability. */
   audit_id?: number | null;
+  /**
+   * Breach diff computed by the PUT handler comparing currently-open
+   * tool-health breaches under the old vs proposed thresholds (Task #208).
+   * When present, the notifier renders an "Impact" section so on-call can
+   * see at a glance whether tightening/loosening the floor opened or
+   * resolved any alerts. `null`/omitted means the aggregate query failed
+   * (or the diff wasn't computed) — the section is omitted gracefully.
+   */
+  breach_diff?: ToolHealthAuditBreachDiff | null;
 }
 
 export interface NotifyToolHealthConfigChangeResult {
@@ -673,6 +683,29 @@ function formatAuditEntrySummary(entry: ToolHealthConfigAuditEntry): string {
   return `• \`${dateStr}\` — ${who} (${fieldLabel})`;
 }
 
+/**
+ * Render the per-row counts of a breach diff into Slack mrkdwn lines for
+ * the "Impact" section. Returns `null` when the diff has zero entries
+ * across all three buckets so the caller can omit the section entirely
+ * rather than render an empty block.
+ */
+function formatBreachDiffImpactLines(
+  diff: ToolHealthAuditBreachDiff,
+): string | null {
+  const newCount = diff.new_breaches?.length ?? 0;
+  const resolvedCount = diff.resolved_breaches?.length ?? 0;
+  const sevChangeCount = diff.severity_changes?.length ?? 0;
+  if (newCount === 0 && resolvedCount === 0 && sevChangeCount === 0) {
+    return null;
+  }
+  const lines: string[] = [
+    `:rotating_light: *New alerts:* ${newCount}`,
+    `:white_check_mark: *Resolved alerts:* ${resolvedCount}`,
+    `:arrows_counterclockwise: *Severity changes:* ${sevChangeCount}`,
+  ];
+  return lines.join("\n");
+}
+
 function buildConfigChangeBlocks(
   n: ToolHealthConfigChangeNotification,
   changes: ReturnType<typeof _diffToolHealthConfigOverridesForTests>,
@@ -713,6 +746,22 @@ function buildConfigChangeBlocks(
       text: `*Changes (${changes.length}):*\n${diffLines.join("\n")}`,
     },
   });
+
+  // "Impact" section — when the PUT handler computed a breach diff
+  // (Task #208), surface counts so on-call sees at a glance whether this
+  // tightening/loosening of the floor opened or resolved alerts. When the
+  // diff is `null`/omitted (aggregate query failed) we skip the section
+  // entirely so the message degrades gracefully rather than render an
+  // empty or zero-only block.
+  if (n.breach_diff != null) {
+    const impactText = formatBreachDiffImpactLines(n.breach_diff);
+    if (impactText) {
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: `*Impact:*\n${impactText}` },
+      });
+    }
+  }
 
   if (n.note) {
     blocks.push({
