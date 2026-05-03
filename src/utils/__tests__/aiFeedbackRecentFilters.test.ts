@@ -147,6 +147,53 @@ const { getRecentThumbsDown } = await import("../aiFeedbackDatabase");
   );
 }
 
+// (4b) client_surface filter (Task #753) → JSONB extractor against the right
+// key, bound as $2 when it's the only filter. Exercises the same SQLi-safe
+// parameter-binding contract the prompt_version / feature_flag filters obey.
+{
+  const last = await withCapturedCalls(() =>
+    getRecentThumbsDown(20, { clientSurface: "web" }),
+  );
+  check(
+    /metadata->>'client_surface'\s*=\s*\$2/i.test(last.sql),
+    "(4b) client_surface filter binds metadata->>'client_surface' to $2",
+  );
+  check(
+    Array.isArray(last.params) &&
+      last.params.length === 2 &&
+      last.params[1] === "web",
+    "(4b) client_surface filter passes the trimmed value as $2",
+  );
+}
+
+// (4c) All three filters together → AND-ed with ascending $-numbered binds in
+// the order [promptVersion, featureFlag, clientSurface] so the dashboard can
+// rely on a stable parameter layout.
+{
+  const last = await withCapturedCalls(() =>
+    getRecentThumbsDown(50, {
+      promptVersion: "qms@cafef00d",
+      featureFlag: "treatment-1",
+      clientSurface: "mobile",
+    }),
+  );
+  check(
+    /metadata->>'prompt_version'\s*=\s*\$2[\s\S]+AND[\s\S]+metadata->>'feature_flag'\s*=\s*\$3[\s\S]+AND[\s\S]+metadata->>'client_surface'\s*=\s*\$4/i.test(
+      last.sql,
+    ),
+    "(4c) all three filters AND-ed together as $2 / $3 / $4",
+  );
+  check(
+    Array.isArray(last.params) &&
+      last.params.length === 4 &&
+      last.params[0] === 50 &&
+      last.params[1] === "qms@cafef00d" &&
+      last.params[2] === "treatment-1" &&
+      last.params[3] === "mobile",
+    "(4c) all three filters bind [limit, promptVersion, featureFlag, clientSurface] in order",
+  );
+}
+
 // (5) Whitespace-only / empty / null filter values are treated as "no filter"
 // so the dashboard can blindly forward the input box value without trimming.
 {

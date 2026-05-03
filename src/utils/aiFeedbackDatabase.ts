@@ -491,16 +491,18 @@ export interface RecentThumbsDown {
 /**
  * Optional filters for the recent thumbs-down report. Each filter narrows the
  * report down to feedback whose `metadata->>'prompt_version'` (resp.
- * `metadata->>'feature_flag'`) matches the provided value exactly. Used by the
- * AI Operations dashboard so an operator triaging a regression can pivot from
- * the "all recent thumbs-down" list to the rows tied to a specific prompt
- * revision or feature-flag bucket. Empty / whitespace-only strings are treated
- * as "no filter" so the dashboard can blindly forward the input box value
+ * `metadata->>'feature_flag'`, `metadata->>'client_surface'`) matches the
+ * provided value exactly. Used by the AI Operations dashboard so an operator
+ * triaging a regression can pivot from the "all recent thumbs-down" list to
+ * the rows tied to a specific prompt revision, feature-flag bucket, or client
+ * surface (web / slack / mobile). Empty / whitespace-only strings are treated
+ * as "no filter" so the dashboard can blindly forward the input/select value
  * without trimming.
  */
 export interface RecentThumbsDownFilters {
   promptVersion?: string | null;
   featureFlag?: string | null;
+  clientSurface?: string | null;
 }
 
 export async function getFeedbackByMessageId(
@@ -555,6 +557,7 @@ export async function getRecentThumbsDown(
 
   const promptVersion = normalizeMetadataFilter(filters.promptVersion);
   const featureFlag = normalizeMetadataFilter(filters.featureFlag);
+  const clientSurface = normalizeMetadataFilter(filters.clientSurface);
 
   // Build the dynamic WHERE clauses with bind parameters so the
   // operator-supplied filter values can never be interpolated into SQL.
@@ -568,6 +571,10 @@ export async function getRecentThumbsDown(
   if (featureFlag !== null) {
     params.push(featureFlag);
     extraClauses.push(`metadata->>'feature_flag' = $${params.length}`);
+  }
+  if (clientSurface !== null) {
+    params.push(clientSurface);
+    extraClauses.push(`metadata->>'client_surface' = $${params.length}`);
   }
   const extraSql = extraClauses.length
     ? ` AND ${extraClauses.join(" AND ")}`

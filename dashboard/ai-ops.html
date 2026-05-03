@@ -617,14 +617,38 @@
           <div>
             <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
               <h3 class="text-sm font-semibold text-gray-700">Recent Thumbs-Down <span class="text-xs font-normal text-gray-400">(admin only)</span></h3>
+              <!-- Filter row (Task #753).
+                   The prompt-version dropdown is populated dynamically from
+                   the `prompt_versions` breakdown returned by
+                   /api/consultant/feedback/stats so an operator only sees
+                   versions that actually have ratings in the current window.
+                   The client-surface dropdown is hard-coded against the
+                   surfaces emitted by `buildAiCallFeedbackMetadata()`
+                   (web / slack / mobile) so it stays usable even on a fresh
+                   install where the breakdown table is empty. Both
+                   selections are synced to the URL query string via
+                   `syncFeedbackFiltersToUrl` so an operator can share or
+                   bookmark a triaged view. -->
               <div class="flex items-center gap-2 flex-wrap" data-testid="filters-feedback-recent">
-                <input
+                <select
                   id="feedback-prompt-version-filter"
-                  type="text"
-                  placeholder="Prompt version (e.g. qms@deadbeef)"
-                  class="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 w-40"
-                  data-on-input="onFeedbackMetadataFilterInput"
-                  data-testid="input-feedback-prompt-version" />
+                  class="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 w-44"
+                  data-on-change="onFeedbackMetadataSelectChange"
+                  data-testid="select-feedback-prompt-version"
+                  aria-label="Filter by prompt version">
+                  <option value="">All prompt versions</option>
+                </select>
+                <select
+                  id="feedback-client-surface-filter"
+                  class="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 w-36"
+                  data-on-change="onFeedbackMetadataSelectChange"
+                  data-testid="select-feedback-client-surface"
+                  aria-label="Filter by client surface">
+                  <option value="">All surfaces</option>
+                  <option value="web">web</option>
+                  <option value="slack">slack</option>
+                  <option value="mobile">mobile</option>
+                </select>
                 <input
                   id="feedback-feature-flag-filter"
                   type="text"
@@ -956,16 +980,27 @@
       return at >= 0 ? s.slice(at + 1) : s;
     }
 
-    // Debounce timer for the prompt-version / feature-flag inputs in the
-    // Recent Thumbs-Down panel. Refetching on every keystroke would hammer
-    // the feedback-stats endpoint while the operator is still typing
-    // (e.g. typing "qms@deadbeef" would fire 12 requests). 300ms matches the
-    // debounce used elsewhere in this file for similar text-input filters.
+    // Debounce timer for the feature-flag text input in the Recent
+    // Thumbs-Down panel. Refetching on every keystroke would hammer the
+    // feedback-stats endpoint while the operator is still typing (e.g. typing
+    // "treatment-A" would fire several requests). 300ms matches the debounce
+    // used elsewhere in this file for similar text-input filters.
     let feedbackMetadataFilterTimer = null;
 
     function onFeedbackMetadataFilterInput() {
       if (feedbackMetadataFilterTimer) clearTimeout(feedbackMetadataFilterTimer);
       feedbackMetadataFilterTimer = setTimeout(loadAIFeedback, 300);
+    }
+
+    // Dropdown change handler (Task #753). Selects fire `change` only when
+    // the operator commits a new option, so no debounce is needed — fetch
+    // immediately for snappier filtering during incident triage.
+    function onFeedbackMetadataSelectChange() {
+      if (feedbackMetadataFilterTimer) {
+        clearTimeout(feedbackMetadataFilterTimer);
+        feedbackMetadataFilterTimer = null;
+      }
+      loadAIFeedback();
     }
 
     function clearFeedbackMetadataFilters() {
@@ -974,10 +1009,76 @@
         feedbackMetadataFilterTimer = null;
       }
       const pv = document.getElementById('feedback-prompt-version-filter');
+      const cs = document.getElementById('feedback-client-surface-filter');
       const ff = document.getElementById('feedback-feature-flag-filter');
       if (pv) pv.value = '';
+      if (cs) cs.value = '';
       if (ff) ff.value = '';
       loadAIFeedback();
+    }
+
+    // Read shareable filter state from the URL on first render so a deep-link
+    // like /ai-ops?tab=feedback&prompt_version=qms@deadbeef&client_surface=web
+    // lands the operator on the already-filtered view (Task #753).
+    function getFeedbackUrlFilters() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        return {
+          promptVersion: params.get('prompt_version') || '',
+          clientSurface: params.get('client_surface') || '',
+        };
+      } catch (_e) {
+        return { promptVersion: '', clientSurface: '' };
+      }
+    }
+
+    // Mirror the active prompt-version / client-surface filter selections
+    // into the URL query string so the view is shareable and survives a
+    // page refresh. Uses replaceState so we don't pollute the back-button
+    // history with one entry per dropdown change. (Task #753)
+    function syncFeedbackFiltersToUrl(promptVersion, clientSurface) {
+      try {
+        const url = new URL(window.location.href);
+        if (promptVersion) url.searchParams.set('prompt_version', promptVersion);
+        else url.searchParams.delete('prompt_version');
+        if (clientSurface) url.searchParams.set('client_surface', clientSurface);
+        else url.searchParams.delete('client_surface');
+        window.history.replaceState({}, '', url.toString());
+      } catch (_e) { /* no-op on older browsers */ }
+    }
+
+    // Populate the prompt-version dropdown options from the breakdown
+    // returned by /api/consultant/feedback/stats so an operator only sees
+    // versions that actually have ratings in the current window. The
+    // currently-selected value is always preserved as an option (even if it
+    // dropped out of the result set after a window change) so a deep-linked
+    // filter doesn't silently revert to "All". (Task #753)
+    function syncFeedbackPromptVersionOptions(versions, currentValue) {
+      const sel = document.getElementById('feedback-prompt-version-filter');
+      if (!sel) return;
+      const desired = currentValue || '';
+      const seen = new Set();
+      const opts = ['<option value="">All prompt versions</option>'];
+      (Array.isArray(versions) ? versions : []).forEach(v => {
+        if (!v) return;
+        const raw = v.prompt_version;
+        if (raw == null) return;
+        const val = String(raw);
+        if (seen.has(val)) return;
+        seen.add(val);
+        const label = val === 'unknown'
+          ? 'unknown'
+          : aiOpsShortPromptVersion(val);
+        opts.push(`<option value="${aiOpsEscapeHtml(val)}">${aiOpsEscapeHtml(label)}</option>`);
+      });
+      // Keep a deep-linked filter visible even if the breakdown table no
+      // longer contains it (e.g. after the operator widened the date range
+      // and the stats bucket rotated).
+      if (desired && !seen.has(desired)) {
+        opts.push(`<option value="${aiOpsEscapeHtml(desired)}">${aiOpsEscapeHtml(aiOpsShortPromptVersion(desired))}</option>`);
+      }
+      sel.innerHTML = opts.join('');
+      sel.value = desired;
     }
 
     async function loadAIFeedback() {
@@ -988,10 +1089,27 @@
       const clientSurfacesEl = document.getElementById('ai-ops-feedback-client-surfaces');
       try {
         const days = document.getElementById('feedback-days')?.value || '30';
-        const promptVersion = (document.getElementById('feedback-prompt-version-filter')?.value || '').trim();
-        const featureFlag = (document.getElementById('feedback-feature-flag-filter')?.value || '').trim();
+        const promptVersionEl = document.getElementById('feedback-prompt-version-filter');
+        const clientSurfaceEl = document.getElementById('feedback-client-surface-filter');
+        const featureFlagEl = document.getElementById('feedback-feature-flag-filter');
+        // Bootstrap dropdown selections from the URL on first render so a
+        // shared link like ?prompt_version=qms@deadbeef&client_surface=web
+        // lands on the already-filtered view (Task #753). After that the
+        // selects own the state — `.value` is the source of truth.
+        const urlFilters = getFeedbackUrlFilters();
+        let promptVersion = (promptVersionEl?.value || '').trim();
+        if (!promptVersion && urlFilters.promptVersion) {
+          promptVersion = urlFilters.promptVersion;
+        }
+        let clientSurface = (clientSurfaceEl?.value || '').trim();
+        if (!clientSurface && urlFilters.clientSurface) {
+          clientSurface = urlFilters.clientSurface;
+          if (clientSurfaceEl) clientSurfaceEl.value = clientSurface;
+        }
+        const featureFlag = (featureFlagEl?.value || '').trim();
         const params = new URLSearchParams({ days });
         if (promptVersion) params.set('prompt_version', promptVersion);
+        if (clientSurface) params.set('client_surface', clientSurface);
         if (featureFlag) params.set('feature_flag', featureFlag);
         const payload = await apiFetch(`/api/consultant/feedback/stats?${params.toString()}`);
         const data = payload.stats || {};
@@ -1038,6 +1156,16 @@
         } else {
           catsEl.innerHTML = '<div class="text-sm text-gray-400">' + _t('dyn.ai_ops.no_category_data') + '</div>';
         }
+
+        // Refresh the prompt-version filter dropdown options from the
+        // breakdown returned above so an operator only sees versions that
+        // actually have ratings in the current window. Mirror the active
+        // filter selections into the URL so the view is shareable. (Task #753)
+        syncFeedbackPromptVersionOptions(
+          Array.isArray(data.prompt_versions) ? data.prompt_versions : [],
+          promptVersion,
+        );
+        syncFeedbackFiltersToUrl(promptVersion, clientSurface);
 
         // Per-prompt-version breakdown (Task #661). Renders as a compact
         // table so an admin can scan ratios across revisions during an
