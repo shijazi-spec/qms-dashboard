@@ -1424,7 +1424,11 @@
       "sparkline_label": "Last {count} runs",
       "sparkline_aria": "Status sparkline for the last {count} runs of check {id}",
       "sparkline_no_history": "No prior runs recorded for this check yet",
-      "sparkline_one_run": "Only one run recorded — sparkline appears after additional runs"
+      "sparkline_one_run": "Only one run recorded — sparkline appears after additional runs",
+      "copy_link": "Copy filtered link",
+      "copy_link_aria": "Copy a shareable URL of the current filtered Health Pulse view to the clipboard",
+      "copy_link_copied": "Link copied",
+      "copy_link_failed": "Couldn't copy — copy from the address bar instead"
     },
     "admin": {
       "no_audit_entries": "No audit entries found",

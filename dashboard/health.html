@@ -73,6 +73,33 @@
         .sparkline-empty {
             font-size: 11px; color: #9CA3AF; font-style: italic;
         }
+        /* "Copy filtered link" lives next to the filter chips so admins
+           triaging an incident can grab the exact URL with one click. */
+        .copy-link-row {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 12px; flex-wrap: wrap;
+        }
+        .copy-link-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 12px; border-radius: 9999px;
+            font-size: 12px; font-weight: 500; line-height: 1.4;
+            border: 1px solid #2563EB; background: #FFFFFF; color: #1D4ED8;
+            cursor: pointer; transition: background-color 0.15s, color 0.15s;
+        }
+        .copy-link-btn:hover { background: #EFF6FF; }
+        .copy-link-btn:focus-visible {
+            outline: 2px solid #2563EB; outline-offset: 2px;
+        }
+        .copy-link-btn[aria-disabled="true"] {
+            opacity: 0.6; cursor: default;
+        }
+        .copy-link-icon { width: 12px; height: 12px; flex: 0 0 auto; }
+        .copy-link-status {
+            font-size: 12px; font-weight: 500;
+            color: #047857;
+        }
+        .copy-link-status[data-tone="error"] { color: #B91C1C; }
+        .copy-link-status[hidden] { display: none; }
     </style>
     <script src="/js/i18n.js?v=1.0"></script>
 </head>
@@ -628,6 +655,35 @@
                 );
             }
 
+            // The "Copy filtered link" affordance only makes sense when a
+            // filter is active — otherwise the URL is just /dashboard/health
+            // and there's nothing to "share that wouldn't be discoverable
+            // from the nav. Visibility is keyed off the live ?category /
+            // ?status query params so it tracks whatever persistFilter() /
+            // persistStatusFilter() most recently wrote.
+            const filtersActive = selectedCategory !== 'all' || selectedStatus !== 'all';
+            const copyLinkRow = filtersActive
+                ? '<div class="copy-link-row" data-testid="row-copy-filtered-link">'
+                    + '<button type="button" class="copy-link-btn"'
+                    + ' data-testid="button-copy-filtered-link"'
+                    + ' aria-label="' + escapeHtml(_t('dyn.health.copy_link_aria')) + '">'
+                    + '<svg class="copy-link-icon" viewBox="0 0 16 16" fill="none"'
+                    + ' xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+                    + '<rect x="4.5" y="4.5" width="8" height="8" rx="1.5"'
+                    + ' stroke="currentColor" stroke-width="1.3"/>'
+                    + '<path d="M3 10.5V3.5C3 2.94772 3.44772 2.5 4 2.5H10"'
+                    + ' stroke="currentColor" stroke-width="1.3"'
+                    + ' stroke-linecap="round"/>'
+                    + '</svg>'
+                    + '<span data-testid="text-copy-filtered-link">'
+                    + escapeHtml(_t('dyn.health.copy_link')) + '</span>'
+                    + '</button>'
+                    + '<span class="copy-link-status" hidden role="status"'
+                    + ' aria-live="polite"'
+                    + ' data-testid="status-copy-filtered-link"></span>'
+                    + '</div>'
+                : '';
+
             container.innerHTML =
                 '<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"'
                 + ' id="checks-filter-label">'
@@ -644,7 +700,8 @@
                 + ' aria-labelledby="checks-filter-status-label"'
                 + ' data-testid="toolbar-filter-status">'
                 + statusChips.join('')
-                + '</div>';
+                + '</div>'
+                + copyLinkRow;
 
             container.querySelectorAll('.filter-chip').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -662,6 +719,58 @@
                     renderChecksWithFilter();
                 });
             });
+
+            const copyBtn = container.querySelector('[data-testid="button-copy-filtered-link"]');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', () => copyFilteredLink(copyBtn));
+            }
+        }
+
+        // Tracks the most recent confirmation timer so rapid double-clicks
+        // don't leave a stale "Link copied" message lingering after the
+        // status node has been re-rendered with new chip state.
+        let copyLinkResetTimer = null;
+
+        async function copyFilteredLink(btn) {
+            const status = document.querySelector('[data-testid="status-copy-filtered-link"]');
+            const url = window.location.href;
+            const showStatus = (key, tone) => {
+                if (!status) return;
+                status.textContent = _t('dyn.health.' + key);
+                status.dataset.tone = tone;
+                status.hidden = false;
+                if (copyLinkResetTimer) clearTimeout(copyLinkResetTimer);
+                copyLinkResetTimer = setTimeout(() => {
+                    if (status) status.hidden = true;
+                }, 2500);
+            };
+            try {
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    await navigator.clipboard.writeText(url);
+                    showStatus('copy_link_copied', 'success');
+                    return;
+                }
+            } catch (_) { /* fall through to legacy path */ }
+            // Legacy fallback for browsers (or insecure contexts) where the
+            // async Clipboard API isn't available — execCommand('copy') on
+            // a hidden textarea still works and keeps the affordance useful
+            // when navigator.clipboard is gated.
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = url;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'absolute';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (ok) {
+                    showStatus('copy_link_copied', 'success');
+                    return;
+                }
+            } catch (_) { /* noop — fall through to error message */ }
+            showStatus('copy_link_failed', 'error');
         }
 
         function renderHistory(history) {
