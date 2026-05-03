@@ -268,7 +268,12 @@
     "no_events": "No recent handoff events",
     "manual_event": "Manual Event",
     "no_compliance_data": "No compliance data",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "status_completed": "Completed",
+    "status_failed": "Failed",
+    "status_pending": "Pending",
+    "status_running": "Running",
+    "status_skipped": "Skipped"
   },
   "consultant": {
     "title": "QMS AI Consultant",

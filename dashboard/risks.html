@@ -331,7 +331,26 @@
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
-        function _rlbl(group, key) { const t = _t('dyn.risks.' + group + '.' + key); return (t && t !== key) ? t : String(key).replace(/_/g, ' '); }
+        function _rlbl(group, key) {
+            let t;
+            if (group === 'level') {
+                switch (key) {
+                    case 'critical': t = _t('dyn.risks.level.critical'); break;
+                    case 'high':     t = _t('dyn.risks.level.high'); break;
+                    case 'medium':   t = _t('dyn.risks.level.medium'); break;
+                    case 'low':      t = _t('dyn.risks.level.low'); break;
+                }
+            } else if (group === 'status_v') {
+                switch (key) {
+                    case 'open':         t = _t('dyn.risks.status_v.open'); break;
+                    case 'in_treatment': t = _t('dyn.risks.status_v.in_treatment'); break;
+                    case 'monitoring':   t = _t('dyn.risks.status_v.monitoring'); break;
+                    case 'escalated':    t = _t('dyn.risks.status_v.escalated'); break;
+                    case 'closed':       t = _t('dyn.risks.status_v.closed'); break;
+                }
+            }
+            return (t && t !== key) ? t : String(key).replace(/_/g, ' ');
+        }
         const _rct = (k, fb) => (window.WalaPlusI18n && window.WalaPlusI18n.t) ? (window.WalaPlusI18n.t(k) || fb) : fb;
 
         async function loadSummary() {
@@ -453,7 +472,13 @@
 
         function formatTreatment(treatment) {
             if (!treatment) return '-';
-            const t = _t('dyn.risks.treatment.' + treatment);
+            let t;
+            switch (treatment) {
+                case 'mitigate': t = _t('dyn.risks.treatment.mitigate'); break;
+                case 'accept':   t = _t('dyn.risks.treatment.accept'); break;
+                case 'transfer': t = _t('dyn.risks.treatment.transfer'); break;
+                case 'avoid':    t = _t('dyn.risks.treatment.avoid'); break;
+            }
             return (t && t !== treatment) ? t : '-';
         }
 

@@ -630,6 +630,16 @@
         <script>
             let moduleChart = null;
             const _gt = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
+            const _grcStatusLabel = (s) => {
+                switch (s) {
+                    case 'completed': return _gt('grc.status_completed');
+                    case 'failed':    return _gt('grc.status_failed');
+                    case 'pending':   return _gt('grc.status_pending');
+                    case 'running':   return _gt('grc.status_running');
+                    case 'skipped':   return _gt('grc.status_skipped');
+                }
+                return s;
+            };
             const _gtd = (prefix, val) => window.WalaPlusI18n
                 ? window.WalaPlusI18n.tDynamic(prefix, val)
                 : (val ? String(val) : '');
@@ -905,7 +915,7 @@
                         </div>
                     </div>
                     <div class="text-end">
-                        <span class="text-xs px-2 py-1 rounded-full ${e.status === "completed" ? "bg-green-100 text-green-700" : e.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}">${_gt("grc.status_" + e.status) || e.status}</span>
+                        <span class="text-xs px-2 py-1 rounded-full ${e.status === "completed" ? "bg-green-100 text-green-700" : e.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}">${_grcStatusLabel(e.status)}</span>
                         <div class="text-xs text-gray-400 mt-1">${new Date(e.created_at).toLocaleString((window.WalaPlusI18n && window.WalaPlusI18n.currentLang && window.WalaPlusI18n.currentLang() === 'ar') ? 'ar-SA' : 'en-US')}</div>
                     </div>
                 </div>

@@ -494,6 +494,29 @@ function checkSwDictionaryParity(en, ar) {
  * Return the concatenated text of every inline <script> block (i.e. <script>
  * tags WITHOUT a `src` attribute) found in an HTML string.
  */
+/**
+ * Given `src` whose first character is expected to be `open` (or pass an
+ * earlier index via the regex match length), find the index of the matching
+ * `close` character. Returns -1 if unbalanced or open not found at start.
+ * Used to detect whether `WRAPPER(args)` is followed by `{` (method
+ * shorthand declaration) versus a call expression.
+ */
+function findMatchingClose(src, open, close, _unused) {
+  // Caller passes `src` already positioned right after the wrapper name,
+  // i.e. starting with `(`. Walk forward tracking depth.
+  if (src[0] !== open) return -1;
+  let depth = 0;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (c === open) depth++;
+    else if (c === close) {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
 function extractInlineScripts(html) {
   const INLINE_SCRIPT_RE = /<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script>/gi;
   const blocks = [];
@@ -517,6 +540,20 @@ function extractInlineScripts(html) {
 function extractTCalls(source, sourceName) {
   const staticKeys = [];
   const dynamicSnippets = new Set();
+  // Wrapper aliases are local helpers that forward their first argument to
+  // `WalaPlusI18n.t(...)` (or are produced by `WalaPlusI18n.t.bind(...)`).
+  // Once we discover a wrapper name, every `WRAPPER('literal')` call site is
+  // treated as if it were a direct `WalaPlusI18n.t('literal')` call so the
+  // guardrail can statically verify the key. Pre-Task #752, those call sites
+  // were invisible because the script only looked for `WalaPlusI18n.t(`.
+  const wrapperNames = new Set();
+
+  // 1. Detect `.t.bind(...)` aliases first — they are unambiguous forwarders.
+  const BIND_RE = /(?:const|let|var)\s+(\w+)\s*=\s*[^;]*?(?:window\.)?WalaPlusI18n\.t\.bind\s*\(/g;
+  let bm;
+  while ((bm = BIND_RE.exec(source)) !== null) {
+    wrapperNames.add(bm[1]);
+  }
 
   const T_CALL_RE = /(?:window\.)?WalaPlusI18n\.t\s*\(\s*/g;
   let m;
@@ -532,21 +569,138 @@ function extractTCalls(source, sourceName) {
       if (afterStr.startsWith(',') || afterStr.startsWith(')')) {
         // True static literal: the key is fully known at authoring time.
         staticKeys.push({ key: staticMatch[2], source: sourceName });
-      } else {
-        // Dynamic expression: e.g. t('foo.' + bar) — the opening token
-        // happened to be a string but the full argument is not.
-        const snippet = rest.slice(0, 60).split('\n')[0].trimEnd();
-        dynamicSnippets.add(`t(${snippet}`);
+        continue;
       }
-    } else {
-      // Dynamic: capture a short single-line snippet for the warning message.
+      // Fall through to dynamic detection — the leading token was a string
+      // but the full argument is an expression like t('foo.' + bar).
+    }
+
+    // Before flagging as dynamic, check whether this call is the body of a
+    // local wrapper that simply forwards its parameter to WalaPlusI18n.t.
+    // If so, capture the wrapper name and skip — actual key verification
+    // happens via the wrapper-call rescan below.
+    const identMatch = /^([a-zA-Z_$][\w$]*)\s*[,)]/.exec(rest);
+    if (identMatch) {
+      const wrapperName = findEnclosingWrapper(source, m.index, identMatch[1]);
+      if (wrapperName) {
+        wrapperNames.add(wrapperName);
+        continue;
+      }
+    }
+
+    // Genuinely dynamic call (e.g. concatenation, template literal, or
+    // a wrapper we couldn't statically associate with a name).
+    const snippet = rest.slice(0, 60).split('\n')[0].trimEnd();
+    dynamicSnippets.add(`t(${snippet}`);
+  }
+
+  // 2. Rescan for calls to any discovered wrapper alias and validate their
+  //    first-argument key the same way as direct WalaPlusI18n.t() calls.
+  for (const wrapperName of wrapperNames) {
+    const escaped = wrapperName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Match `WRAPPER(`, `this.WRAPPER(`, or `obj.WRAPPER(` — but skip the
+    // wrapper's own declaration (preceded by `const|let|var|function`).
+    const wrapperCallRe = new RegExp(
+      '(?:^|[^\\w$])([\\w$]+\\.)?(' + escaped + ')\\s*(\\()\\s*',
+      'g',
+    );
+    let wm;
+    while ((wm = wrapperCallRe.exec(source)) !== null) {
+      // Skip declarations: `const _t = ...`, `function _t(...)`, etc.
+      const tokenIdx = wm.index + wm[0].search(/\S/);
+      const before = source.slice(Math.max(0, tokenIdx - 40), tokenIdx);
+      if (/(?:const|let|var|function)\s+$/.test(before)) continue;
+
+      const argStart = wm.index + wm[0].length;
+      const rest = source.slice(argStart);
+      // Skip method-shorthand declarations like `_t(key) {` — the parens
+      // are the parameter list, not a call expression. We start the
+      // balanced scan from the `(` (captured as group 3 in the regex).
+      const openParenIdx = wm.index + wm[0].lastIndexOf('(');
+      const fromOpen = source.slice(openParenIdx);
+      const closeParenIdx = findMatchingClose(fromOpen, '(', ')');
+      if (closeParenIdx >= 0) {
+        const afterParen = fromOpen.slice(closeParenIdx + 1).trimStart();
+        if (afterParen.startsWith('{')) continue;
+      }
+      const sm = /^(["'])((?:[^\\]|\\.)*?)\1/.exec(rest);
+      if (sm) {
+        const afterStr = rest.slice(sm[0].length).trimStart();
+        if (afterStr.startsWith(',') || afterStr.startsWith(')')) {
+          staticKeys.push({ key: sm[2], source: sourceName });
+          continue;
+        }
+      }
+      // Dynamic wrapper-alias call: still surface so it can be refactored
+      // into a static lookup.
       const snippet = rest.slice(0, 60).split('\n')[0].trimEnd();
-      dynamicSnippets.add(`t(${snippet}`);
+      dynamicSnippets.add(`${wrapperName}(${snippet}`);
     }
   }
 
   const dynamicRefs = [...dynamicSnippets].map((snippet) => ({ snippet, source: sourceName }));
   return { staticKeys, dynamicRefs };
+}
+
+/**
+ * Given a `WalaPlusI18n.t(<paramName>, ...)` call at `callIdx`, look back up
+ * to ~600 characters in `source` for the enclosing function/arrow/method
+ * declaration whose parameter list contains `paramName`. Returns the
+ * declared name (so the call site can be classified as a wrapper forwarder)
+ * or null if no enclosing declaration matches.
+ */
+function findEnclosingWrapper(source, callIdx, paramName) {
+  const start = Math.max(0, callIdx - 600);
+  const ctx = source.slice(start, callIdx);
+  const escaped = paramName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const paramInList = '(?:[^)]*?\\b' + escaped + '\\b[^)]*?)';
+
+  const patterns = [
+    // const/let/var NAME = ... (params with paramName) =>
+    new RegExp(
+      '(?:const|let|var)\\s+(\\w+)\\s*=\\s*[^;\\n]*?\\(' + paramInList + '\\)\\s*=>',
+      'g',
+    ),
+    // const/let/var NAME = ... function (params with paramName) {
+    new RegExp(
+      '(?:const|let|var)\\s+(\\w+)\\s*=\\s*[^;]*?\\bfunction\\b[^(]*\\(' + paramInList + '\\)\\s*\\{',
+      'g',
+    ),
+    // function NAME(params with paramName) {
+    new RegExp(
+      'function\\s+(\\w+)\\s*\\(' + paramInList + '\\)\\s*\\{',
+      'g',
+    ),
+    // Method shorthand inside an object literal: NAME(params) {
+    new RegExp(
+      '(?:^|[\\s,{])(\\w+)\\s*\\(' + paramInList + '\\)\\s*\\{',
+      'gm',
+    ),
+  ];
+
+  // Reserved JS keywords that must not be misclassified as wrapper names
+  // (the method-shorthand pattern would otherwise match things like
+  // `function(k) {` and capture `function` as the wrapper alias).
+  const RESERVED = new Set([
+    'function', 'if', 'for', 'while', 'switch', 'do', 'return', 'throw',
+    'try', 'catch', 'else', 'case', 'with', 'new', 'typeof', 'instanceof',
+    'in', 'of', 'var', 'let', 'const', 'class', 'async', 'await', 'yield',
+    'delete', 'void', 'this', 'super',
+  ]);
+
+  let bestName = null;
+  let bestIdx = -1;
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(ctx)) !== null) {
+      if (RESERVED.has(m[1])) continue;
+      if (m.index > bestIdx) {
+        bestIdx = m.index;
+        bestName = m[1];
+      }
+    }
+  }
+  return bestName;
 }
 
 /**

@@ -374,15 +374,15 @@
         if (wTitle) wTitle.textContent = _t('consultant.widget_welcome_title', 'WalaPlus QMS Consultant');
         var wSub = widget.querySelector('#ai-widget-welcome p');
         if (wSub) wSub.textContent = _t('consultant.widget_welcome_sub', 'Ask about quality management, compliance, CRM data hygiene, or SOPs.');
-        var qBtns = {
-            'button-quick-quality':    'consultant.quick_quality',
-            'button-quick-compliance': 'consultant.quick_compliance',
-            'button-quick-crm':        'consultant.quick_crm',
-            'button-quick-iso':        'consultant.quick_iso'
-        };
-        Object.keys(qBtns).forEach(function(tid) {
-            var el = widget.querySelector('[data-testid="' + tid + '"]');
-            if (el) el.textContent = _t(qBtns[tid], el.textContent);
+        var qBtnSpecs = [
+            { tid: 'button-quick-quality',    label: function(fb) { return _t('consultant.quick_quality', fb); } },
+            { tid: 'button-quick-compliance', label: function(fb) { return _t('consultant.quick_compliance', fb); } },
+            { tid: 'button-quick-crm',        label: function(fb) { return _t('consultant.quick_crm', fb); } },
+            { tid: 'button-quick-iso',        label: function(fb) { return _t('consultant.quick_iso', fb); } }
+        ];
+        qBtnSpecs.forEach(function(spec) {
+            var el = widget.querySelector('[data-testid="' + spec.tid + '"]');
+            if (el) el.textContent = spec.label(el.textContent);
         });
         var inp = widget.querySelector('#ai-widget-input');
         if (inp) inp.placeholder = _t('consultant.widget_placeholder', 'Ask anything...');

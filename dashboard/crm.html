@@ -298,8 +298,28 @@
         };
 
         function _flagLabel(flag) {
-            const t = _t('dyn.crm.flags.' + flag);
+            let t;
+            switch (flag) {
+                case 'missing_name':       t = _t('dyn.crm.flags.missing_name'); break;
+                case 'garbage_name':       t = _t('dyn.crm.flags.garbage_name'); break;
+                case 'gibberish_name':     t = _t('dyn.crm.flags.gibberish_name'); break;
+                case 'missing_company':    t = _t('dyn.crm.flags.missing_company'); break;
+                case 'gibberish_company':  t = _t('dyn.crm.flags.gibberish_company'); break;
+                case 'missing_email':      t = _t('dyn.crm.flags.missing_email'); break;
+                case 'suspicious_email':   t = _t('dyn.crm.flags.suspicious_email'); break;
+                case 'missing_phone':      t = _t('dyn.crm.flags.missing_phone'); break;
+                case 'missing_owner':      t = _t('dyn.crm.flags.missing_owner'); break;
+                case 'no_business_domain': t = _t('dyn.crm.flags.no_business_domain'); break;
+            }
             return (t && t !== flag) ? t : String(flag).replace(/_/g, ' ');
+        }
+        function _commonLevelLabel(lvl) {
+            switch (lvl) {
+                case 'high':   return _t('dyn.common.high');
+                case 'medium': return _t('dyn.common.medium');
+                case 'low':    return _t('dyn.common.low');
+            }
+            return lvl;
         }
 
         async function checkConnection() {
@@ -502,8 +522,7 @@
             var lvl = cluster.confidenceLevel || 'low';
             var cls = lvl === 'high' ? 'cluster-high' : lvl === 'medium' ? 'cluster-medium' : 'cluster-low';
             var label = _t('dyn.crm.n_recs', { n: _fn(cluster.totalInCluster) });
-            var lvlLabel = _t('dyn.common.' + lvl);
-            if (!lvlLabel || lvlLabel === lvl) lvlLabel = lvl;
+            var lvlLabel = _commonLevelLabel(lvl);
             var tip = _t('dyn.crm.cluster_tip', { label: (cluster.clusterCompany || cluster.clusterDomain), level: lvlLabel, score: _fn(cluster.confidenceScore) });
             return '<td class="px-3 py-3 text-sm">' +
                 '<span class="cluster-badge ' + cls + '" title="' + escapeHtml(tip) + '" data-on-click="openInNewTab" data-args="' + escAttr(JSON.stringify(['/duplicates#cluster-' + cluster.clusterId])) + '">' +
@@ -558,8 +577,7 @@
 
             if (enr && enr.cluster && !enr.cluster.isJunk && enr.cluster.totalInCluster > 1) {
                 var c = enr.cluster;
-                var cLvlLabel = _t('dyn.common.' + c.confidenceLevel);
-                if (!cLvlLabel || cLvlLabel === c.confidenceLevel) cLvlLabel = c.confidenceLevel;
+                var cLvlLabel = _commonLevelLabel(c.confidenceLevel);
                 html += '<div class="mb-4 p-4 rounded-lg bg-purple-50">' +
                     '<div class="flex items-center justify-between mb-2">' +
                     '<span class="font-semibold text-sm">' + escapeHtml(_t('dyn.crm.duplicate_cluster')) + '</span>' +

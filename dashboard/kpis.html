@@ -237,6 +237,37 @@
         let allKPIs = [];
 
         const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+        function _kpiCategoryLabel(cat, fb) {
+            switch (cat) {
+                case 'governance': return _t('kpis.c_governance', fb);
+                case 'risk':       return _t('kpis.c_risk', fb);
+                case 'compliance': return _t('kpis.c_compliance', fb);
+                case 'audit':      return _t('kpis.c_audit', fb);
+                case 'quality':    return _t('kpis.c_quality', fb);
+                case 'vendor':     return _t('kpis.c_vendor', fb);
+                case 'training':   return _t('kpis.c_training', fb);
+                case 'ai':         return _t('kpis.c_ai', fb);
+            }
+            return fb;
+        }
+        function _kpiOwnerLabel(owner) {
+            switch (owner) {
+                case 'quality_manager':    return _t('dyn.kpis.owners.quality_manager');
+                case 'grc_manager':        return _t('dyn.kpis.owners.grc_manager');
+                case 'governance_officer': return _t('dyn.kpis.owners.governance_officer');
+                case 'shared':             return _t('dyn.kpis.owners.shared');
+            }
+            return owner;
+        }
+        function _kpiOwnerFullLabel(owner) {
+            switch (owner) {
+                case 'quality_manager':    return _t('dyn.kpis.owners_full.quality_manager');
+                case 'grc_manager':        return _t('dyn.kpis.owners_full.grc_manager');
+                case 'governance_officer': return _t('dyn.kpis.owners_full.governance_officer');
+                case 'shared':             return _t('dyn.kpis.owners_full.shared');
+            }
+            return owner;
+        }
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
@@ -330,7 +361,7 @@
             charts.category = new Chart(document.getElementById('categoryChart'), {
                 type: 'bar',
                 data: {
-                    labels: cats.map(c => _t('kpis.c_' + c[0], c[0].charAt(0).toUpperCase() + c[0].slice(1))),
+                    labels: cats.map(c => _kpiCategoryLabel(c[0], c[0].charAt(0).toUpperCase() + c[0].slice(1))),
                     datasets: [{
                         label: _t('dyn.kpis.chart_kpis'),
                         data: cats.map(c => c[1]),
@@ -350,7 +381,7 @@
             }
             
             container.innerHTML = kpis.map(kpi => {
-                const ownerLabel = _t('dyn.kpis.owners.' + (kpi.owner_type || 'shared'));
+                const ownerLabel = _kpiOwnerLabel(kpi.owner_type || 'shared');
                 const hasNavMap = kpi.navigation_map && kpi.navigation_map.length > 0;
                 const statusClass = kpi.status || 'no_data';
                 const trendClass = kpi.trend ? `trend-${kpi.trend}` : '';
@@ -399,7 +430,7 @@
                 const res = await fetch(`/api/kpis/${id}`);
                 const kpi = await res.json();
                 
-                const ownerLabel = _t('dyn.kpis.owners_full.' + (kpi.owner_type || 'shared'));
+                const ownerLabel = _kpiOwnerFullLabel(kpi.owner_type || 'shared');
                 const navMap = kpi.navigation_map ? (typeof kpi.navigation_map === 'string' ? JSON.parse(kpi.navigation_map) : kpi.navigation_map) : null;
                 const statusLabel = kpi.latestValue?.status || _t('dyn.kpis.no_data_status');
                 

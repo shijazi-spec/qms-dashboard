@@ -783,6 +783,33 @@
 
     <script>
         const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+        function _momentLabel(key) {
+            switch (key) {
+                case 'greeting':           return _t('dyn.calls.moment_greeting');
+                case 'consent':            return _t('dyn.calls.moment_consent');
+                case 'discovery':          return _t('dyn.calls.moment_discovery');
+                case 'objection_handling': return _t('dyn.calls.moment_objection_handling');
+                case 'closing':            return _t('dyn.calls.moment_closing');
+                case 'next_steps':         return _t('dyn.calls.moment_next_steps');
+            }
+            return key;
+        }
+        function _dimLabel(key) {
+            switch (key) {
+                case 'governance': return _t('dyn.calls.dim_governance');
+                case 'people':     return _t('dyn.calls.dim_people');
+                case 'process':    return _t('dyn.calls.dim_process');
+            }
+            return key;
+        }
+        function _sevLabel(sev) {
+            switch (sev) {
+                case 'critical': return _t('dyn.calls.sev_critical');
+                case 'major':    return _t('dyn.calls.sev_major');
+                case 'minor':    return _t('dyn.calls.sev_minor');
+            }
+            return sev;
+        }
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
@@ -1888,7 +1915,7 @@
                             ${['greeting', 'consent', 'discovery', 'objection_handling', 'closing', 'next_steps'].map(key => {
                                 const moment = keyMoments[key] || { detected: false };
                                 return `<div class="p-2 rounded ${moment.detected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}">
-                                    ${moment.detected ? '✓' : '✗'} ${escapeHtml(_t('dyn.calls.moment_' + key))}
+                                    ${moment.detected ? '✓' : '✗'} ${escapeHtml(_momentLabel(key))}
                                 </div>`;
                             }).join('')}
                         </div>
@@ -2322,11 +2349,11 @@
             let attrsHtml = '';
             Object.entries(dims).forEach(([dimKey, dim]) => {
                 if (dim.attributes?.length) {
-                    const dimLabel = _t('dyn.calls.dim_' + dimKey);
+                    const dimLabel = _dimLabel(dimKey);
                     attrsHtml += `<div class="mb-4"><h5 class="font-medium text-sm text-gray-700 mb-2">${escapeHtml(dimLabel)}</h5>`;
                     dim.attributes.forEach(a => {
                         const sev = a.severityIfFailed || 'minor';
-                        attrsHtml += `<div class="text-sm p-2 bg-gray-50 rounded mb-1"><strong>${escapeHtml(a.name)}</strong> (${escapeHtml(_t('dyn.calls.sev_' + sev))}) - ${escapeHtml(a.description || a.passingCriteria || _t('dyn.calls.no_description'))}</div>`;
+                        attrsHtml += `<div class="text-sm p-2 bg-gray-50 rounded mb-1"><strong>${escapeHtml(a.name)}</strong> (${escapeHtml(_sevLabel(sev))}) - ${escapeHtml(a.description || a.passingCriteria || _t('dyn.calls.no_description'))}</div>`;
                     });
                     attrsHtml += '</div>';
                 }

@@ -385,11 +385,10 @@
             inner.className = 'rounded-xl border p-4 ' + tone.cls;
             icon.className = 'dot mt-1 ' + tone.dot;
 
-            const titleKey = hasFail ? 'dyn.health.alert_failing_title' : 'dyn.health.alert_warning_title';
-            titleEl.textContent = _t(titleKey, {
-                fail: failing.length,
-                warn: warning.length,
-            });
+            const titleParams = { fail: failing.length, warn: warning.length };
+            titleEl.textContent = hasFail
+                ? _t('dyn.health.alert_failing_title', titleParams)
+                : _t('dyn.health.alert_warning_title', titleParams);
 
             const items = [...failing, ...warning].map(c => {
                 const badgeClass = 'badge badge-' + c.status;
@@ -615,12 +614,9 @@
             for (const status of STATUS_VALUES) {
                 const active = selectedStatus === status;
                 const label = statusFilterLabel(status);
-                const ariaKey = status === 'all'
-                    ? 'dyn.health.filter_status_all_aria'
-                    : 'dyn.health.filter_status_aria';
                 const ariaLabel = status === 'all'
-                    ? _t(ariaKey)
-                    : _t(ariaKey, { status: label });
+                    ? _t('dyn.health.filter_status_all_aria')
+                    : _t('dyn.health.filter_status_aria', { status: label });
                 statusChips.push(
                     '<button type="button" class="filter-chip" data-filter="status" data-value="' + escapeHtml(status) + '"'
                     + ' aria-pressed="' + active + '"'

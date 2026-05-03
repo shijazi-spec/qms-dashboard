@@ -96,13 +96,38 @@ if (result.error) {
     "every dashboard/*.html page wires i18n, every data-i18n key resolves in en.json + ar.json, the two trees are identical, the SW dictionary is in sync, every static WalaPlusI18n.t() key resolves in both JSON files, no new dynamic t(variable) call sites have been added without updating the baseline, and no NEW orphan keys have been added to en.json / ar.json (Task #345)",
   );
 
-  // The baselined long-standing dynamic call sites must continue to be reported
-  // as ⚠ warnings rather than disappear, so reviewers don't lose visibility.
+  // Either:
+  //   (a) The baseline file still lists long-standing dynamic call sites, in
+  //       which case the script must continue surfacing them as ⚠ warnings so
+  //       reviewers don't lose visibility; OR
+  //   (b) Task #752 has driven the baselined set to zero (baseline file
+  //       deleted or `{ "entries": [] }`), in which case there is nothing to
+  //       warn about and 100 % of `WalaPlusI18n.t()` calls are statically
+  //       verified.
   // (`console.warn` lands on stderr; check both streams to be safe.)
-  assert(
-    /JS t\(\) dynamic keys \(baselined\) — \d+ long-standing/.test(stdout + stderr),
-    "baselined dynamic WalaPlusI18n.t(variable) call sites are still surfaced as ⚠ warnings",
-  );
+  const dynamicBaselinePath = path.resolve(REPO_ROOT, "scripts", "i18n-dynamic-baseline.json");
+  let baselinedCount = 0;
+  if (fs.existsSync(dynamicBaselinePath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(dynamicBaselinePath, "utf8")) as {
+        entries?: unknown[];
+      };
+      baselinedCount = Array.isArray(parsed.entries) ? parsed.entries.length : 0;
+    } catch {
+      baselinedCount = 0;
+    }
+  }
+  if (baselinedCount > 0) {
+    assert(
+      /JS t\(\) dynamic keys \(baselined\) — \d+ long-standing/.test(stdout + stderr),
+      "baselined dynamic WalaPlusI18n.t(variable) call sites are still surfaced as ⚠ warnings",
+    );
+  } else {
+    assert(
+      !/JS t\(\) dynamic keys \(baselined\) — \d+ long-standing/.test(stdout + stderr),
+      "no baselined dynamic call sites remain (Task #752) — every WalaPlusI18n.t() call is statically verified",
+    );
+  }
 
   // Task #345 — the unused-key scan must be invoked when --report-unused is
   // passed, regardless of whether any orphans are found.

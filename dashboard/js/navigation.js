@@ -31,6 +31,58 @@ const WalaPlusNav = {
     return key.split('.').pop();
   },
 
+  // Static lookups for nav group/item labels. Each known id maps to a literal
+  // translation call (one per case branch) so the i18n guardrail can
+  // statically verify every key resolves in en.json + ar.json.
+  _navGroupLabel(id) {
+    switch (id) {
+      case 'quality':   return this._t('nav.groups.quality');
+      case 'grc':       return this._t('nav.groups.grc');
+      case 'analytics': return this._t('nav.groups.analytics');
+      case 'value':     return this._t('nav.groups.value');
+      case 'support':   return this._t('nav.groups.support');
+      case 'admin':     return this._t('nav.groups.admin');
+    }
+    return '';
+  },
+  _navItemLabel(id) {
+    switch (id) {
+      case 'dashboard':       return this._t('nav.items.dashboard');
+      case 'crm':             return this._t('nav.items.crm');
+      case 'audits':          return this._t('nav.items.audits');
+      case 'calls':           return this._t('nav.items.calls');
+      case 'duplicates':      return this._t('nav.items.duplicates');
+      case 'qms':             return this._t('nav.items.qms');
+      case 'grc':             return this._t('nav.items.grc');
+      case 'tablef':          return this._t('nav.items.tablef');
+      case 'risks':           return this._t('nav.items.risks');
+      case 'qms-docs':        return this._t('nav.items.qms-docs');
+      case 'compliance':      return this._t('nav.items.compliance');
+      case 'external-audits': return this._t('nav.items.external-audits');
+      case 'vendors':         return this._t('nav.items.vendors');
+      case 'reviews':         return this._t('nav.items.reviews');
+      case 'kpis':            return this._t('nav.items.kpis');
+      case 'executive':       return this._t('nav.items.executive');
+      case 'team':            return this._t('nav.items.team');
+      case 'mohammed-sow':    return this._t('nav.items.mohammed-sow');
+      case 'roi':             return this._t('nav.items.roi');
+      case 'projects':        return this._t('nav.items.projects');
+      case 'consultant':      return this._t('nav.items.consultant');
+      case 'guide':           return this._t('nav.items.guide');
+      case 'onboarding':      return this._t('nav.items.onboarding');
+      case 'feedback':        return this._t('nav.items.feedback');
+      case 'scope':           return this._t('nav.items.scope');
+      case 'migration':       return this._t('nav.items.migration');
+      case 'admin':           return this._t('nav.items.admin');
+      case 'users':           return this._t('nav.items.users');
+      case 'ai-approvals':    return this._t('nav.items.ai-approvals');
+      case 'infographic':     return this._t('nav.items.infographic');
+      case 'logs':            return this._t('nav.items.logs');
+      case 'health':          return this._t('nav.items.health');
+    }
+    return '';
+  },
+
   escapeHtml(str) {
     return String(str)
       .replace(/&/g, '&amp;')
@@ -605,7 +657,7 @@ const WalaPlusNav = {
     const colors = this.getColorClasses(group.color);
     const groupActive = this.isInGroup(group.id);
     const open = group.id === this._defaultOpenGroupId;
-    const label = this._t('nav.groups.' + group.id) || group.label;
+    const label = this._navGroupLabel(group.id) || group.label;
     return `
       <div class="wp-rail-group px-2 mb-1" data-group="${this.escapeHtml(group.id)}" data-open="${open ? 'true' : 'false'}">
         <button type="button" class="wp-group-toggle w-full flex items-center px-2 py-2 rounded-lg hover:bg-gray-50 transition relative" aria-expanded="${open ? 'true' : 'false'}" aria-describedby="tooltip-group-${this.escapeHtml(group.id)}" data-testid="button-group-${this.escapeHtml(group.id)}">
@@ -624,7 +676,7 @@ const WalaPlusNav = {
   renderRailItem(item, colors) {
     const isActive = item.id === this.currentPage;
     const target = item.external ? 'target="_blank"' : '';
-    const label = this._t('nav.items.' + item.id) || item.label;
+    const label = this._navItemLabel(item.id) || item.label;
     const tooltipId = `tooltip-nav-${this.escapeHtml(item.id)}`;
     return `
       <a href="${this.escapeHtml(item.href)}" ${target}

@@ -516,7 +516,37 @@
         }
 
         function _vlabel(group, key) {
-            const t = _t('dyn.vendors.' + group + '.' + key);
+            let t;
+            if (group === 'criticality') {
+                switch (key) {
+                    case 'critical': t = _t('dyn.vendors.criticality.critical'); break;
+                    case 'high':     t = _t('dyn.vendors.criticality.high'); break;
+                    case 'medium':   t = _t('dyn.vendors.criticality.medium'); break;
+                    case 'low':      t = _t('dyn.vendors.criticality.low'); break;
+                }
+            } else if (group === 'status') {
+                switch (key) {
+                    case 'active':       t = _t('dyn.vendors.status.active'); break;
+                    case 'under_review': t = _t('dyn.vendors.status.under_review'); break;
+                    case 'suspended':    t = _t('dyn.vendors.status.suspended'); break;
+                    case 'terminated':   t = _t('dyn.vendors.status.terminated'); break;
+                    case 'onboarding':   t = _t('dyn.vendors.status.onboarding'); break;
+                }
+            } else if (group === 'category') {
+                switch (key) {
+                    case 'it_services':           t = _t('dyn.vendors.category.it_services'); break;
+                    case 'cloud':                 t = _t('dyn.vendors.category.cloud'); break;
+                    case 'software':              t = _t('dyn.vendors.category.software'); break;
+                    case 'hardware':              t = _t('dyn.vendors.category.hardware'); break;
+                    case 'consulting':            t = _t('dyn.vendors.category.consulting'); break;
+                    case 'staffing':              t = _t('dyn.vendors.category.staffing'); break;
+                    case 'logistics':             t = _t('dyn.vendors.category.logistics'); break;
+                    case 'marketing':             t = _t('dyn.vendors.category.marketing'); break;
+                    case 'professional_services': t = _t('dyn.vendors.category.professional_services'); break;
+                    case 'utilities':             t = _t('dyn.vendors.category.utilities'); break;
+                    case 'other':                 t = _t('dyn.vendors.category.other'); break;
+                }
+            }
             if (t && t !== key) return t;
             return String(key).replace(/_/g, ' ');
         }

@@ -268,7 +268,12 @@
     "no_events": "لا توجد أحداث تسليم حديثة",
     "manual_event": "حدث يدوي",
     "no_compliance_data": "لا توجد بيانات امتثال",
-    "unknown": "غير معروف"
+    "unknown": "غير معروف",
+    "status_completed": "مكتمل",
+    "status_failed": "فشل",
+    "status_pending": "قيد الانتظار",
+    "status_running": "قيد التشغيل",
+    "status_skipped": "تم تخطيه"
   },
   "consultant": {
     "title": "مستشار نظام إدارة الجودة الذكي",
