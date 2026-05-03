@@ -2052,9 +2052,88 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     ],
   },
 
-  // User access reads — fine-grained (admin-only diagnostics; admin+QM list).
-  // Order matters: more specific patterns must precede the broad
-  // `/api/users(/...)?$ GET` rule below.
+  // ─────────────────────────────────────────────────────────────────────────
+  // Task #436 — coverage backfill for `/api/*` routes that previously fell
+  // through every rule above and were therefore denied by the deny-by-default
+  // fallback. Discovered by `tests/rbacRouteCoverage.test.ts`, which scans
+  // `src/mastra/routes/**` and `src/triggers/**` and asserts every live
+  // route has an explicit ROUTE_PERMISSION_MAP rule.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Consultant feedback by message — handler uses `requireRole(c, CONSULTANT_ROLES)`.
+  {
+    pattern: /^\/api\/consultant\/feedback\/[^/]+$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "grc_manager",
+      "head_of_operations_quality",
+    ],
+  },
+
+  // Recent-downloads tracker — per-user list/insert/clear via `getSessionUser`
+  // (any authenticated caller). Used by the streaming-download UI to surface
+  // each user's own recent export history.
+  {
+    pattern: /^\/api\/exports\/recent-downloads$/,
+    methods: ["GET", "POST", "DELETE"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "auditor",
+      "quality_specialist",
+      "team_lead",
+      "bu_owner",
+      "ai_specialist",
+      "executive",
+      "department_viewer",
+    ],
+  },
+
+  // Health-index aggregated quality metrics — handler enforces
+  // session-or-admin-key (`isAuthorizedForHealthIndex`); any authenticated
+  // caller may read.
+  {
+    pattern: /^\/api\/health-index$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "auditor",
+      "quality_specialist",
+      "team_lead",
+      "bu_owner",
+      "ai_specialist",
+      "executive",
+      "department_viewer",
+    ],
+  },
+
+  // SOP document API + download — handler enforces session-or-admin-key
+  // (`isAuthorizedForSop`); any authenticated caller may read.
+  {
+    pattern: /^\/api\/sop(\/download)?$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "auditor",
+      "quality_specialist",
+      "team_lead",
+      "bu_owner",
+      "ai_specialist",
+      "executive",
+      "department_viewer",
+    ],
+  },
+
   { pattern: /^\/api\/users\/stats$/, methods: ["GET"], roles: ["admin"] },
   { pattern: /^\/api\/users\/\d+$/, methods: ["GET"], roles: ["admin"] },
   {
