@@ -453,6 +453,13 @@
                 data-testid="checkbox-show-archived" />
               <span data-i18n="ai_ops.show_archived">Show archived versions</span>
             </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none" data-testid="label-prompt-only-stuck-toggle"
+              title="Only show archived versions that are still receiving traffic in the selected window — i.e. clients pinned to an old prompt.">
+              <input type="checkbox" id="prompt-only-stuck" data-on-change="loadPromptVersions"
+                class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                data-testid="checkbox-only-stuck" />
+              <span>Only stuck archived</span>
+            </label>
             <select id="prompt-days" data-on-change="loadPromptVersions" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-prompt-days">
               <option value="7" data-i18n="ai_ops.last_7_days">Last 7 days</option>
               <option value="30" selected data-i18n="ai_ops.last_30_days">Last 30 days</option>
@@ -3111,6 +3118,12 @@
       const days = document.getElementById('prompt-days').value;
       const minFeedbackParam = document.getElementById('prompt-min-feedback')?.value || '5';
       const showArchived = !!document.getElementById('prompt-show-archived')?.checked;
+      // "Only stuck archived" is the inverse signal of the show-archived
+      // toggle: surface ONLY archived versions that are still being called
+      // in the selected window (Task #529 — early-warning sign of clients
+      // pinned to a retired prompt). When enabled it implies showArchived
+      // and overrides the current-only default.
+      const onlyStuck = !!document.getElementById('prompt-only-stuck')?.checked;
       // Persist the current filter choices so they survive the next page load.
       try {
         localStorage.setItem(PROMPT_DAYS_STORAGE_KEY, String(days));
@@ -3156,6 +3169,15 @@
           const archivedCount = activeVersion
             ? allRows.filter(r => r.prompt_version !== activeVersion).length
             : 0;
+          // "Stuck": archived (≠ active) but still received calls in the
+          // selected window. These are the early-warning rows for clients
+          // that haven't picked up the new prompt yet (Task #529).
+          const isStuckRow = (r) => activeVersion != null
+            && r.prompt_version !== activeVersion
+            && Number(r.call_count || 0) > 0;
+          const stuckCount = activeVersion
+            ? allRows.filter(isStuckRow).length
+            : 0;
 
           // Sort: current version first, then archived by last_seen_at descending
           // so the most recently retired version appears immediately after the
@@ -3169,9 +3191,11 @@
             return bT - aT;
           });
 
-          const rows = showArchived || !activeVersion
-            ? sortedRows
-            : sortedRows.filter(r => r.prompt_version === activeVersion);
+          const rows = onlyStuck && activeVersion
+            ? sortedRows.filter(isStuckRow)
+            : (showArchived || !activeVersion
+                ? sortedRows
+                : sortedRows.filter(r => r.prompt_version === activeVersion));
 
           // A row is comparable only once it has cleared the small-sample
           // floor — otherwise a brand-new prompt with one thumbs-down would
@@ -3195,8 +3219,13 @@
             if (activeVersion) {
               parts.push(`<span class="text-xs font-normal text-gray-500" data-testid="text-active-version-${esc(agent)}">active: <code class="bg-gray-100 px-1 rounded">${esc(activeVersion)}</code></span>`);
             }
-            if (!showArchived && archivedCount > 0) {
+            if (!showArchived && !onlyStuck && archivedCount > 0) {
               parts.push(`<span class="text-xs text-gray-400" data-testid="text-archived-hidden-${esc(agent)}">${archivedCount} archived hidden</span>`);
+            }
+            if (stuckCount > 0) {
+              parts.push(`<span class="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200"
+                title="Archived versions still receiving traffic in the selected window — clients pinned to an old prompt."
+                data-testid="text-stuck-archived-${esc(agent)}">⚠ ${stuckCount} stuck archived</span>`);
             }
             return parts.length ? ` <span class="ms-2">${parts.join(' · ')}</span>` : '';
           })();
@@ -3226,6 +3255,15 @@
                 }
                 const currentPill = isCurrent
                   ? ` <span class="inline-block bg-green-100 text-green-700 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide align-middle" data-testid="badge-current-${esc(r.prompt_version)}">current</span>`
+                  : '';
+                // Stuck-archived badge (Task #529): row is not the active
+                // version but still received calls in the selected window —
+                // i.e. some client is pinned to an old prompt.
+                const isStuck = isStuckRow(r);
+                const stuckPill = isStuck
+                  ? ` <span class="inline-flex items-center bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide align-middle"
+                      title="Archived but still being called in the selected window — a client is pinned to this old prompt."
+                      data-testid="badge-stuck-archived-${esc(r.prompt_version)}">⚠ still active</span>`
                   : '';
                 // For archived rows use the unbounded last_seen_at so the reviewer
                 // can tell a stale rollback from a version retired yesterday.
@@ -3274,8 +3312,8 @@
                               </span>`;
                     }).join('');
                 return `
-                  <tr class="border-t ${isCurrent ? 'bg-green-50' : (i % 2 === 1 ? 'bg-gray-50' : '')}" data-testid="row-prompt-${esc(agent)}-${esc(r.prompt_version)}" data-prompt-status="${isCurrent ? 'current' : 'archived'}" data-prompt-window-activity="${noWindowActivity ? 'none' : 'present'}">
-                    <td class="px-3 py-2 font-mono text-xs text-gray-800">${esc(r.prompt_version)}${currentPill}</td>
+                  <tr class="border-t ${isCurrent ? 'bg-green-50' : (isStuck ? 'bg-amber-50' : (i % 2 === 1 ? 'bg-gray-50' : ''))}" data-testid="row-prompt-${esc(agent)}-${esc(r.prompt_version)}" data-prompt-status="${isCurrent ? 'current' : 'archived'}" data-prompt-window-activity="${noWindowActivity ? 'none' : 'present'}" data-prompt-stuck="${isStuck ? 'true' : 'false'}">
+                    <td class="px-3 py-2 font-mono text-xs text-gray-800">${esc(r.prompt_version)}${currentPill}${stuckPill}</td>
                     <td class="px-3 py-2 text-end">${callCountCell}</td>
                     <td class="px-3 py-2 text-end" data-testid="text-prompt-feedback-rate-${esc(r.prompt_version)}">${rateCell}</td>
                     <td class="px-3 py-2 text-end text-xs text-gray-500">
@@ -3288,9 +3326,13 @@
                     <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${lastSeenCell}</td>
                   </tr>`;
               }).join('')
-            : `<tr><td colspan="9" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-current-${esc(agent)}">
-                  No traffic on the currently-deployed version yet${archivedCount > 0 ? ` — ${archivedCount} archived version${archivedCount === 1 ? '' : 's'} hidden` : ''}.
-                </td></tr>`;
+            : (onlyStuck && activeVersion
+                ? `<tr><td colspan="9" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-stuck-${esc(agent)}">
+                      No archived versions are still being called in the selected window — every client is on the active prompt.
+                    </td></tr>`
+                : `<tr><td colspan="9" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-current-${esc(agent)}">
+                      No traffic on the currently-deployed version yet${archivedCount > 0 ? ` — ${archivedCount} archived version${archivedCount === 1 ? '' : 's'} hidden` : ''}.
+                    </td></tr>`);
 
           return `
             <div class="mb-6" data-testid="block-prompt-agent-${esc(agent)}">
