@@ -155,6 +155,7 @@ export const ROUTE_MANIFEST = {
     'routes/userAccessRoutes.ts',
     'routes/smokeTestRoutes.ts',
     'routes/consultantRoutes.ts',
+    'routes/mobileRoutes.ts',
     'routes/aiApprovalRoutes.ts',
     'routes/qmsEnhancedRoutes.ts',
     'routes/notificationRoutes.ts',

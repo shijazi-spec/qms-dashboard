@@ -51,6 +51,7 @@ import { externalAuditRoutes } from "./routes/externalAuditRoutes";
 import { userAccessRoutes } from "./routes/userAccessRoutes";
 import { smokeTestRoutes } from "./routes/smokeTestRoutes";
 import { consultantRoutes } from "./routes/consultantRoutes";
+import { mobileRoutes } from "./routes/mobileRoutes";
 import { aiApprovalRoutes } from "./routes/aiApprovalRoutes";
 import "../utils/integrationTestFixtureTools";
 import { aiOpsRoutes } from "./routes/aiOpsRoutes";
@@ -241,6 +242,7 @@ export const mastra = new Mastra({
       ...userAccessRoutes,
       ...smokeTestRoutes,
       ...consultantRoutes,
+      ...mobileRoutes,
       ...aiApprovalRoutes,
       ...aiOpsRoutes,
       // qmsEnhancedRoutes was hoisted above qmsApiRoutes — see comment there.
