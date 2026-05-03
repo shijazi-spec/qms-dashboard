@@ -403,6 +403,11 @@
    * `opts` accepts standard Intl.DateTimeFormat options (year/month/day/hour/minute/...).
    * Returns '-' for falsy or invalid dates so it can be dropped into table cells safely.
    */
+  function _localTimeZone() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; }
+    catch (_) { return undefined; }
+  }
+
   function formatDate(date, opts) {
     if (date == null || date === '') return '-';
     var d = date instanceof Date ? date : new Date(date);
@@ -411,11 +416,25 @@
     var locale = (_lang === 'ar' && useEastern) ? 'ar-SA'
       : (_lang === 'ar' ? 'ar' : 'en-US');
     var options = opts || { year: 'numeric', month: 'short', day: 'numeric' };
+    if (!options.timeZone) options.timeZone = _localTimeZone();
     try {
       return new Intl.DateTimeFormat(locale, options).format(d);
     } catch (_) {
       try { return d.toLocaleDateString(); } catch (__) { return String(date); }
     }
+  }
+
+  function formatDateTime(date, opts) {
+    var options = opts || {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    };
+    return formatDate(date, options);
+  }
+
+  function formatTime(date, opts) {
+    var options = opts || { hour: '2-digit', minute: '2-digit' };
+    return formatDate(date, options);
   }
 
   /**
@@ -466,6 +485,8 @@
     applyToDOM: applyToDOM,
     formatDateBilingual: formatDateBilingual,
     formatDate: formatDate,
+    formatDateTime: formatDateTime,
+    formatTime: formatTime,
     formatNumber: formatNumber,
     setUseEasternNumerals: setUseEasternNumerals,
     getUseEasternNumerals: getUseEasternNumerals,
