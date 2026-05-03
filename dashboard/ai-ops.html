@@ -696,6 +696,39 @@
         </div>
       </div>
 
+      <!-- Prompt-regression alert thresholds (Task #754).
+           Tunes the per-agent thumbs-up regression detector that fires
+           Slack/email when one prompt version's rating drops more than
+           N pp below the best-performing version. Lives next to the
+           tool-health form so admins manage all alert tuning in one
+           place. Same singleton-row + audit-trail pattern. -->
+      <div class="bg-white rounded-xl shadow-sm border p-6 mt-6" data-testid="section-prompt-regression-form">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h3 class="text-base font-semibold text-gray-900">Prompt regression thresholds</h3>
+            <p class="text-sm text-gray-500 mt-1">
+              Tune the sensitivity of the prompt-version thumbs-up regression detector.
+              The cron compares each prompt version's rating to the best-performing version
+              for the same agent and pages on-call when the drop exceeds the threshold below.
+              Changes apply on the next cron pass — no redeploy needed.
+            </p>
+          </div>
+          <div class="text-right text-xs text-gray-500" data-testid="text-prompt-regression-meta">
+            <div id="prompt-regression-updated-meta">—</div>
+          </div>
+        </div>
+        <div id="prompt-regression-load-error" class="hidden mb-4 px-3 py-2 text-sm rounded border border-red-200 bg-red-50 text-red-700" data-testid="text-prompt-regression-load-error"></div>
+        <div id="prompt-regression-form" class="space-y-4" data-testid="form-prompt-regression">
+          <p class="text-sm text-gray-400">Loading current thresholds…</p>
+        </div>
+        <div class="mt-6 border-t pt-4">
+          <h4 class="text-sm font-semibold text-gray-700 mb-3">Recent prompt-regression threshold changes</h4>
+          <div id="prompt-regression-audit" class="space-y-2" data-testid="list-prompt-regression-audit">
+            <p class="text-sm text-gray-400">Loading…</p>
+          </div>
+        </div>
+      </div>
+
       <!-- AI usage history retention (Task #504).
            Lets admins change how long the `ai_call_metrics` telemetry table
            is kept by the daily prune cron, without redeploying. The env
@@ -4901,6 +4934,10 @@
       // the operator sees both in a single round-trip when they open the
       // Alert Thresholds tab. They share a tab but not state.
       loadMetricsRetentionForm();
+      // The prompt-regression threshold form (Task #754) lives on the
+      // same tab — load it in the same kick so opening the tab paints
+      // both forms together.
+      loadPromptRegressionForm();
       const formEl = document.getElementById('thresholds-form');
       const errEl = document.getElementById('thresholds-load-error');
       const auditEl = document.getElementById('thresholds-audit');
@@ -5434,6 +5471,238 @@
             </div>
             <div class="mt-1 text-gray-700 font-mono break-words">${diffStr}</div>
             ${impactHtml}
+            ${r.note ? `<div class="mt-1 text-gray-500 italic">${esc(r.note)}</div>` : ''}
+          </div>`;
+      }).join('');
+    }
+
+    // ── Prompt-regression alert thresholds (Task #754) ──────────────────────
+    // Mirrors the tool-health threshold form just above but tunes the
+    // per-prompt-version regression cron's sensitivity instead. Keeps
+    // labels/help in sync with PROMPT_REGRESSION_BOUNDS on the server so
+    // the form never advertises a value the API would reject.
+    const PROMPT_REGRESSION_FIELDS = [
+      { key: 'dropPctPoints',     label: 'Regression drop threshold (pp)', help: 'Minimum drop in percentage points vs the best-performing version before we open an alert. Lower = more sensitive (more pages), higher = quieter.' },
+      { key: 'minFeedback',       label: 'Minimum feedback samples',        help: 'A prompt version needs at least this many 👍/👎 ratings to be eligible for either side of the comparison. Stops a brand-new version from triggering on a single thumbs-down.' },
+      { key: 'windowDays',        label: 'Evaluation window (days)',        help: 'Rolling window over which feedback is aggregated. Lower = faster reaction, higher = less noise.' },
+      { key: 'notifyThrottleMin', label: 'Notification cooldown (minutes)', help: 'Minimum minutes between repeat Slack/email pages for the same agent + version. Set to 0 to disable the cooldown entirely.' },
+    ];
+
+    let promptRegressionState = null;
+
+    async function loadPromptRegressionForm() {
+      const formEl = document.getElementById('prompt-regression-form');
+      const errEl = document.getElementById('prompt-regression-load-error');
+      const auditEl = document.getElementById('prompt-regression-audit');
+      const metaEl = document.getElementById('prompt-regression-updated-meta');
+      if (!formEl) return;
+      errEl.classList.add('hidden');
+      formEl.innerHTML = '<p class="text-sm text-gray-400">Loading current thresholds…</p>';
+      auditEl.innerHTML = '<p class="text-sm text-gray-400">Loading…</p>';
+      try {
+        const { data } = await apiFetch('/api/ai-ops/prompt-regression-config');
+        promptRegressionState = data;
+        renderPromptRegressionForm(data);
+        renderPromptRegressionAudit(data.audit || []);
+        if (data.updated_at) {
+          const who = data.updated_by ? ' by ' + esc(data.updated_by) : '';
+          metaEl.innerHTML = 'Last edited ' + esc(fmtDate(data.updated_at)) + who;
+        } else {
+          metaEl.textContent = 'No overrides set — using env baseline.';
+        }
+      } catch (e) {
+        console.error('Prompt-regression config load error', e);
+        formEl.innerHTML = '';
+        auditEl.innerHTML = '';
+        metaEl.textContent = '';
+        errEl.textContent = 'Failed to load prompt-regression config: ' + (e?.message || 'unknown error');
+        errEl.classList.remove('hidden');
+      }
+    }
+
+    function renderPromptRegressionForm(data) {
+      const formEl = document.getElementById('prompt-regression-form');
+      if (!formEl) return;
+      const canEdit = !!data.can_edit;
+      const overrides = data.overrides || {};
+      const effective = data.effective || {};
+      const envBaseline = data.env_baseline || {};
+      const defaults = data.defaults || {};
+      const bounds = data.bounds || {};
+
+      const rows = PROMPT_REGRESSION_FIELDS.map(f => {
+        const ovr = overrides[f.key];
+        const eff = effective[f.key];
+        const baseline = envBaseline[f.key];
+        const def = defaults[f.key];
+        const b = bounds[f.key] || {};
+        const placeholder = baseline != null ? `env: ${baseline}` : `default: ${def}`;
+        const fallbackNote = ovr == null
+          ? `<span class="text-xs text-gray-400" data-testid="text-prompt-regression-fallback-${f.key}">Using ${baseline === def ? 'compile-time default' : 'env baseline'} (${baseline ?? def})</span>`
+          : `<span class="text-xs text-blue-600" data-testid="text-prompt-regression-override-${f.key}">Override active — env baseline is ${baseline ?? def}</span>`;
+        return `
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start py-3 border-t first:border-t-0" data-testid="row-prompt-regression-${f.key}">
+            <div class="md:col-span-5">
+              <label for="prompt-regression-${f.key}" class="block text-sm font-medium text-gray-800">${esc(f.label)}</label>
+              <p class="text-xs text-gray-500 mt-1">${esc(f.help)}</p>
+            </div>
+            <div class="md:col-span-3">
+              <input
+                type="number"
+                step="1"
+                min="${b.min ?? ''}"
+                max="${b.max ?? ''}"
+                id="prompt-regression-${f.key}"
+                name="${f.key}"
+                value="${ovr == null ? '' : ovr}"
+                placeholder="${esc(placeholder)}"
+                ${canEdit ? '' : 'disabled'}
+                class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono ${canEdit ? '' : 'bg-gray-100 text-gray-500 cursor-not-allowed'}"
+                data-testid="input-prompt-regression-${f.key}"
+              />
+              <p class="text-xs text-gray-400 mt-1">Allowed: ${b.min ?? '?'}–${b.max ?? '?'}</p>
+            </div>
+            <div class="md:col-span-2 text-sm">
+              <div class="text-xs text-gray-500 uppercase tracking-wide">Effective</div>
+              <div class="font-mono text-gray-900" data-testid="text-prompt-regression-effective-${f.key}">${eff != null ? esc(eff) : '—'}</div>
+            </div>
+            <div class="md:col-span-2 text-xs text-gray-500">${fallbackNote}</div>
+          </div>`;
+      }).join('');
+
+      const noteRow = `
+        <div class="pt-4 border-t">
+          <label for="prompt-regression-note" class="block text-sm font-medium text-gray-800">Change note (optional)</label>
+          <p class="text-xs text-gray-500 mt-1">Captured in the audit log so future-you knows why this was tuned.</p>
+          <input
+            type="text"
+            id="prompt-regression-note"
+            maxlength="500"
+            ${canEdit ? '' : 'disabled'}
+            placeholder="e.g. INC-1234 — relax drop threshold during prompt rollout"
+            class="mt-2 w-full px-3 py-2 border border-gray-300 rounded text-sm ${canEdit ? '' : 'bg-gray-100 text-gray-500 cursor-not-allowed'}"
+            data-testid="input-prompt-regression-note"
+          />
+        </div>`;
+
+      const banner = canEdit
+        ? ''
+        : `<div class="px-3 py-2 mb-3 text-sm rounded border border-amber-200 bg-amber-50 text-amber-800" data-testid="text-prompt-regression-readonly-banner">
+             Read-only view — only admins can edit these thresholds.
+           </div>`;
+
+      const buttons = canEdit
+        ? `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
+             <button type="button" data-on-click="savePromptRegressionForm" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700" data-testid="button-prompt-regression-save">Save changes</button>
+             <button type="button" data-on-click="resetPromptRegressionInputs" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-prompt-regression-reset">Discard edits</button>
+             <button type="button" data-on-click="clearAllPromptRegressionOverrides" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50" data-testid="button-prompt-regression-clear-all">Clear all overrides</button>
+             <span id="prompt-regression-save-status" class="text-sm ml-2" data-testid="text-prompt-regression-save-status"></span>
+           </div>`
+        : `<div class="pt-4 border-t flex flex-wrap gap-2 items-center">
+             <span id="prompt-regression-save-status" class="text-sm ml-2" data-testid="text-prompt-regression-save-status"></span>
+           </div>`;
+
+      formEl.innerHTML = banner + rows + noteRow + buttons;
+    }
+
+    function setPromptRegressionSaveStatus(text, kind) {
+      const el = document.getElementById('prompt-regression-save-status');
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'text-sm ml-2 ' + (
+        kind === 'error' ? 'text-red-600'
+        : kind === 'ok'  ? 'text-green-700'
+        : kind === 'info' ? 'text-gray-600'
+        : ''
+      );
+    }
+
+    function resetPromptRegressionInputs() {
+      if (!promptRegressionState) return;
+      const overrides = promptRegressionState.overrides || {};
+      PROMPT_REGRESSION_FIELDS.forEach(f => {
+        const el = document.getElementById(`prompt-regression-${f.key}`);
+        if (el) el.value = overrides[f.key] == null ? '' : overrides[f.key];
+      });
+      const noteEl = document.getElementById('prompt-regression-note');
+      if (noteEl) noteEl.value = '';
+      setPromptRegressionSaveStatus('', null);
+    }
+
+    function clearAllPromptRegressionOverrides() {
+      PROMPT_REGRESSION_FIELDS.forEach(f => {
+        const el = document.getElementById(`prompt-regression-${f.key}`);
+        if (el) el.value = '';
+      });
+      setPromptRegressionSaveStatus('All inputs cleared — click "Save changes" to drop overrides.', 'info');
+    }
+
+    async function savePromptRegressionForm() {
+      if (!promptRegressionState) return;
+      const overridesPayload = {};
+      for (const f of PROMPT_REGRESSION_FIELDS) {
+        const el = document.getElementById(`prompt-regression-${f.key}`);
+        if (!el) continue;
+        const raw = (el.value ?? '').trim();
+        if (raw === '') {
+          overridesPayload[f.key] = null;
+          continue;
+        }
+        const n = Number(raw);
+        if (!Number.isFinite(n) || !Number.isInteger(n)) {
+          setPromptRegressionSaveStatus(`${f.label} must be an integer.`, 'error');
+          return;
+        }
+        overridesPayload[f.key] = n;
+      }
+      const noteEl = document.getElementById('prompt-regression-note');
+      const note = noteEl?.value?.trim() || '';
+
+      setPromptRegressionSaveStatus('Saving…', 'info');
+      try {
+        const r = await fetch('/api/ai-ops/prompt-regression-config', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ overrides: overridesPayload, note: note || undefined }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          setPromptRegressionSaveStatus(`Save failed: ${body?.error || 'HTTP ' + r.status}`, 'error');
+          return;
+        }
+        setPromptRegressionSaveStatus('Saved. Next cron pass will pick up the new thresholds.', 'ok');
+        await loadPromptRegressionForm();
+      } catch (e) {
+        console.error('Prompt-regression save error', e);
+        setPromptRegressionSaveStatus(`Save failed: ${e?.message || 'unknown error'}`, 'error');
+      }
+    }
+
+    function renderPromptRegressionAudit(rows) {
+      const el = document.getElementById('prompt-regression-audit');
+      if (!el) return;
+      if (!rows || rows.length === 0) {
+        el.innerHTML = '<p class="text-sm text-gray-400" data-testid="text-prompt-regression-audit-empty">No threshold changes yet.</p>';
+        return;
+      }
+      el.innerHTML = rows.map((r, i) => {
+        const before = r.before_values || {};
+        const after = r.after_values || {};
+        const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+        const diffs = keys
+          .filter(k => before[k] !== after[k])
+          .map(k => `${esc(k)}: ${before[k] == null ? '—' : esc(before[k])} → ${after[k] == null ? '—' : esc(after[k])}`);
+        const diffStr = diffs.length
+          ? diffs.join(' · ')
+          : '<span class="text-gray-400 italic">no field changed</span>';
+        return `
+          <div class="px-3 py-2 border border-gray-200 rounded text-xs" data-testid="row-prompt-regression-audit-${i}">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="font-medium text-gray-800">${esc(r.changed_by || 'unknown')}</div>
+              <div class="text-gray-500">${esc(fmtDate(r.changed_at))}</div>
+            </div>
+            <div class="mt-1 text-gray-700 font-mono break-words">${diffStr}</div>
             ${r.note ? `<div class="mt-1 text-gray-500 italic">${esc(r.note)}</div>` : ''}
           </div>`;
       }).join('');

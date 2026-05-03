@@ -1488,6 +1488,246 @@ export const aiOpsRoutes = [
   },
 
   /**
+   * Prompt-regression threshold tuning — read endpoint (Task #754).
+   *
+   * Mirrors the tool-health threshold GET shape so the dashboard can
+   * render the same "currently effective", "your override", "env baseline",
+   * "compile-time default" 4-up the operator already knows. Available to
+   * AI_OPS_ROLES so non-admin ops can verify the live floor while triaging
+   * a prompt-regression alert, even if they can't edit it.
+   */
+  {
+    path: "/api/ai-ops/prompt-regression-config",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const {
+            getPromptRegressionConfigRow,
+            getPromptRegressionConfigAudit,
+            PROMPT_REGRESSION_CONFIG_FIELDS,
+          } = await import("../../utils/promptRegressionConfigDatabase");
+          const {
+            PROMPT_REGRESSION_DEFAULTS,
+            PROMPT_REGRESSION_ENV_BASELINE,
+            PROMPT_REGRESSION_BOUNDS,
+            mergePromptRegressionOverrides,
+          } = await import(
+            "../../mastra/workflows/promptRegressionAlertsCron"
+          );
+
+          const [row, audit] = await Promise.all([
+            getPromptRegressionConfigRow(),
+            getPromptRegressionConfigAudit(25),
+          ]);
+          const effective = mergePromptRegressionOverrides(row.overrides);
+
+          return c.json({
+            data: {
+              defaults: PROMPT_REGRESSION_DEFAULTS,
+              env_baseline: PROMPT_REGRESSION_ENV_BASELINE,
+              overrides: row.overrides,
+              effective,
+              updated_by: row.updated_by,
+              updated_at: row.updated_at,
+              bounds: PROMPT_REGRESSION_BOUNDS,
+              fields: PROMPT_REGRESSION_CONFIG_FIELDS,
+              audit,
+              can_edit: TOOL_HEALTH_CONFIG_WRITE_ROLES.includes(
+                user.role as UserRole,
+              ),
+            },
+          });
+        } catch (error) {
+          logger.error(
+            "[AI-Ops] prompt-regression-config GET error:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to load prompt-regression config" },
+            500,
+          );
+        }
+      };
+    },
+  },
+
+  /**
+   * Prompt-regression threshold tuning — write endpoint (Task #754).
+   *
+   * Body: { overrides: { <field>: number | null, ... }, note?: string }
+   * - A `number` sets/replaces the override for that field.
+   * - `null` clears the override (falls back to env baseline).
+   * - Fields not listed in `overrides` are left as-is.
+   *
+   * Validates each provided field against PROMPT_REGRESSION_BOUNDS. Each
+   * write inserts an audit row capturing before/after JSON and the
+   * operator's name/email. Admin-only (TOOL_HEALTH_CONFIG_WRITE_ROLES) so
+   * the same role gate that protects tool-health thresholds protects this.
+   */
+  {
+    path: "/api/ai-ops/prompt-regression-config",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, TOOL_HEALTH_CONFIG_WRITE_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          let body: any;
+          try {
+            body = await c.req.json();
+          } catch {
+            return c.json({ error: "Request body must be valid JSON" }, 400);
+          }
+          if (!body || typeof body !== "object") {
+            return c.json({ error: "Request body must be a JSON object" }, 400);
+          }
+
+          let note: string | null = null;
+          if (body.note != null) {
+            if (typeof body.note !== "string") {
+              return c.json({ error: "note must be a string" }, 400);
+            }
+            note = body.note.length > 500 ? body.note.slice(0, 500) : body.note;
+          }
+
+          const overridesIn = body.overrides;
+          if (
+            overridesIn == null ||
+            typeof overridesIn !== "object" ||
+            Array.isArray(overridesIn)
+          ) {
+            return c.json(
+              { error: "overrides must be an object" },
+              400,
+            );
+          }
+
+          const {
+            PROMPT_REGRESSION_BOUNDS,
+            PROMPT_REGRESSION_DEFAULTS,
+          } = await import(
+            "../../mastra/workflows/promptRegressionAlertsCron"
+          );
+          const validFields = Object.keys(
+            PROMPT_REGRESSION_DEFAULTS,
+          ) as Array<keyof typeof PROMPT_REGRESSION_DEFAULTS>;
+
+          const cleanOverrides: {
+            [K in keyof typeof PROMPT_REGRESSION_DEFAULTS]?: number | null;
+          } = {};
+          for (const field of validFields) {
+            if (!Object.prototype.hasOwnProperty.call(overridesIn, field)) {
+              continue;
+            }
+            const raw = overridesIn[field];
+            if (raw === null) {
+              cleanOverrides[field] = null;
+              continue;
+            }
+            if (typeof raw !== "number" || !Number.isFinite(raw)) {
+              return c.json(
+                { error: `${field} must be an integer or null` },
+                400,
+              );
+            }
+            const n = Math.floor(raw);
+            if (n !== raw) {
+              return c.json(
+                { error: `${field} must be an integer` },
+                400,
+              );
+            }
+            const bounds = PROMPT_REGRESSION_BOUNDS[field];
+            if (n < bounds.min || n > bounds.max) {
+              return c.json(
+                {
+                  error: `${field} must be between ${bounds.min} and ${bounds.max}`,
+                },
+                400,
+              );
+            }
+            cleanOverrides[field] = n;
+          }
+
+          const {
+            setPromptRegressionConfigOverrides,
+            getPromptRegressionConfigRow,
+          } = await import("../../utils/promptRegressionConfigDatabase");
+          const { mergePromptRegressionOverrides } = await import(
+            "../../mastra/workflows/promptRegressionAlertsCron"
+          );
+
+          const changedBy = user.name || user.email || `user:${user.userId}`;
+          const result = await setPromptRegressionConfigOverrides({
+            overrides: cleanOverrides,
+            changedBy,
+            note,
+          });
+          const refreshed = await getPromptRegressionConfigRow();
+          const effective = mergePromptRegressionOverrides(refreshed.overrides);
+
+          return c.json({
+            success: true,
+            before: result.before,
+            after: result.after,
+            effective,
+            audit_id: result.audit_id,
+          });
+        } catch (error) {
+          logger.error(
+            "[AI-Ops] prompt-regression-config PUT error:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to update prompt-regression config" },
+            500,
+          );
+        }
+      };
+    },
+  },
+
+  /**
+   * Prompt-regression threshold tuning — audit endpoint (Task #754).
+   *
+   * Returns the most recent N change rows, newest first. Same role gate as
+   * the GET endpoint so non-admin ops can audit the change history while
+   * triaging an alert without being able to flip the floor themselves.
+   */
+  {
+    path: "/api/ai-ops/prompt-regression-config/audit",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const limit = safeInt(c.req.query("limit"), 25, 1, 200);
+          const { getPromptRegressionConfigAudit } = await import(
+            "../../utils/promptRegressionConfigDatabase"
+          );
+          const data = await getPromptRegressionConfigAudit(limit);
+          return c.json({ data });
+        } catch (error) {
+          logger.error(
+            "[AI-Ops] prompt-regression-config audit error:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to load prompt-regression config audit" },
+            500,
+          );
+        }
+      };
+    },
+  },
+
+  /**
    * Tool-health threshold tuning — dry-run "Preview impact" endpoint.
    *
    * Lets an admin sanity-check a proposed threshold change BEFORE saving:
