@@ -1228,6 +1228,9 @@
       const clientSurfacesEl = document.getElementById('ai-ops-feedback-client-surfaces');
       try {
         const days = document.getElementById('feedback-days')?.value || '30';
+        // Persist the current window so it survives the next page load. (Task #412)
+        try { localStorage.setItem(FEEDBACK_DAYS_STORAGE_KEY, String(days)); }
+        catch (_e) { /* localStorage unavailable — silently skip */ }
         // Task #423: agent dropdown now narrows the entire feedback tab
         // (KPIs, top-thumbs-down categories, recent thumbs-down list) — not
         // just the trend chart — so the same agent value is forwarded to the
@@ -3082,6 +3085,9 @@
 
     async function loadCostTrend() {
       const days = document.getElementById('cost-days').value;
+      // Persist the current window so it survives the next page load. (Task #412)
+      try { localStorage.setItem(COST_DAYS_STORAGE_KEY, String(days)); }
+      catch (_e) { /* localStorage unavailable — silently skip */ }
       try {
         const { data } = await apiFetch(`/api/ai-ops/cost-trend?days=${days}`);
         const labels = data.map(r => r.day);
@@ -3190,24 +3196,31 @@
     // don't have to re-pick the value every page load. (Task #243)
     const PROMPT_DAYS_STORAGE_KEY = 'aiOps.promptVersions.days';
     const PROMPT_MIN_FEEDBACK_STORAGE_KEY = 'aiOps.promptVersions.minFeedback';
+    // Same pattern extended to the Cost Trend and AI Feedback tabs so admins
+    // who routinely review a non-default window don't have to re-pick it on
+    // every page load. (Task #412, follow-up to #243)
+    const COST_DAYS_STORAGE_KEY = 'aiOps.costTrend.days';
+    const FEEDBACK_DAYS_STORAGE_KEY = 'aiOps.feedback.days';
 
-    function restorePromptVersionPrefs() {
+    function restoreSelectFromStorage(elId, storageKey) {
       try {
-        const daysEl = document.getElementById('prompt-days');
-        if (daysEl) {
-          const savedDays = localStorage.getItem(PROMPT_DAYS_STORAGE_KEY);
-          if (savedDays && Array.from(daysEl.options).some(o => o.value === savedDays)) {
-            daysEl.value = savedDays;
-          }
-        }
-        const minEl = document.getElementById('prompt-min-feedback');
-        if (minEl) {
-          const savedMin = localStorage.getItem(PROMPT_MIN_FEEDBACK_STORAGE_KEY);
-          if (savedMin && Array.from(minEl.options).some(o => o.value === savedMin)) {
-            minEl.value = savedMin;
-          }
+        const el = document.getElementById(elId);
+        if (!el) return;
+        const saved = localStorage.getItem(storageKey);
+        if (saved && Array.from(el.options).some(o => o.value === saved)) {
+          el.value = saved;
         }
       } catch (_e) { /* localStorage unavailable (private mode, etc.) */ }
+    }
+
+    function restorePromptVersionPrefs() {
+      restoreSelectFromStorage('prompt-days', PROMPT_DAYS_STORAGE_KEY);
+      restoreSelectFromStorage('prompt-min-feedback', PROMPT_MIN_FEEDBACK_STORAGE_KEY);
+    }
+
+    function restoreTimeWindowPrefs() {
+      restoreSelectFromStorage('cost-days', COST_DAYS_STORAGE_KEY);
+      restoreSelectFromStorage('feedback-days', FEEDBACK_DAYS_STORAGE_KEY);
     }
 
     // Render the "Last purge" info strip above the prompt-version table.
@@ -6720,6 +6733,11 @@
       // can read their values (deep-link to ?tab=prompts, refreshAll, etc.),
       // so the first data fetch already uses the saved choice. (Task #243)
       restorePromptVersionPrefs();
+      // Same persistence for the Cost Trend / AI Feedback time-window pickers
+      // (Task #412). Restore BEFORE loadCostTrend() runs and BEFORE the user
+      // can switch to the feedback tab so the first fetch on each tab uses
+      // the saved choice.
+      restoreTimeWindowPrefs();
 
       // Delegated listener for breach-detail toggle buttons (Task #208).
       // Buttons are rendered dynamically via renderThresholdsAudit, so
