@@ -1762,4 +1762,203 @@ await suite.test(
   },
 );
 
+// ---------------------------------------------------------------------------
+// Task #745: POST /api/ai-ops/feedback (call-id rating path) must persist the
+// echoed `promptVersion` into ai_call_metrics.metadata.prompt_version when
+// the row predates the always-on telemetry path or otherwise lacks one.
+// Mirrors the message-id path's prompt-version capture so per-version
+// analytics (`getFeedbackRateByPromptVersion`) attribute call-id ratings
+// the same way they already attribute message-id ratings.
+// ---------------------------------------------------------------------------
+if (HAS_DB) {
+  const { insertAiCallMetric, ensureAiMetricsTable } = await import(
+    "../src/utils/aiTelemetry"
+  );
+  const pgMod = await import("pg");
+
+  const TEST_AGENT = `__test_aiops_feedback_pv_${Date.now()}__`;
+  const PROMPT_VERSION = "qms@call-id-test-fbe4";
+
+  await suite.test(
+    "POST /api/ai-ops/feedback — persists promptVersion into ai_call_metrics.metadata when missing",
+    async () => {
+      await ensureAiMetricsTable();
+      // Seed a row WITHOUT prompt_version so the helper has something to
+      // backfill. The unattributed shape mirrors a legacy call recorded
+      // before the consultant span started writing metadata.prompt_version.
+      const callId = await insertAiCallMetric({
+        agent_name: TEST_AGENT,
+        model: "gpt-4o",
+        latency_ms: 600,
+        success: true,
+        // metadata intentionally omitted → JSONB '{}' default applies.
+      });
+      suite.expect(callId != null && callId > 0, "seeded call row with id");
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId,
+              rating: "thumbs_up",
+              promptVersion: PROMPT_VERSION,
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 200, "feedback POST returns 200");
+        suite.expectEqual(res.body?.success, true, "feedback recorded");
+
+        // Inspect the row directly: metadata.prompt_version must now match
+        // the value the client echoed back.
+        const pool = new pgMod.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const row = await pool.query(
+            `SELECT metadata FROM ai_call_metrics WHERE id = $1`,
+            [callId],
+          );
+          const meta = row.rows[0]?.metadata ?? {};
+          suite.expectEqual(
+            meta.prompt_version,
+            PROMPT_VERSION,
+            "metadata.prompt_version backfilled from request",
+          );
+        } finally {
+          await pool.end();
+        }
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  await suite.test(
+    "POST /api/ai-ops/feedback — does NOT overwrite an existing prompt_version",
+    async () => {
+      await ensureAiMetricsTable();
+      const SERVER_VERSION = "qms@server-truth-aaaa";
+      // Seed a row that already carries the authoritative server-side
+      // prompt_version (the consultant span already wrote it). A
+      // client-supplied alternative MUST NOT clobber the source of truth.
+      const callId = await insertAiCallMetric({
+        agent_name: TEST_AGENT,
+        model: "gpt-4o",
+        latency_ms: 700,
+        success: true,
+        metadata: { prompt_version: SERVER_VERSION },
+      });
+      suite.expect(callId != null && callId > 0, "seeded call row with id");
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId,
+              rating: "thumbs_down",
+              promptVersion: "qms@malicious-overwrite",
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 200, "feedback POST returns 200");
+
+        const pool = new pgMod.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const row = await pool.query(
+            `SELECT metadata FROM ai_call_metrics WHERE id = $1`,
+            [callId],
+          );
+          const meta = row.rows[0]?.metadata ?? {};
+          suite.expectEqual(
+            meta.prompt_version,
+            SERVER_VERSION,
+            "existing server-side prompt_version preserved (client cannot overwrite)",
+          );
+        } finally {
+          await pool.end();
+        }
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  await suite.test(
+    "POST /api/ai-ops/feedback — 400 when promptVersion is not a string",
+    async () => {
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId: 1,
+              rating: "thumbs_up",
+              promptVersion: { not: "a string" },
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 400, "rejects non-string promptVersion");
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  await suite.test(
+    "cleanup: remove seeded ai_call_metrics rows for Task #745 test agent",
+    async () => {
+      const pool = new pgMod.default.Pool({
+        connectionString: process.env.DATABASE_URL,
+      });
+      try {
+        await pool.query(
+          `DELETE FROM ai_call_feedback
+            WHERE call_id IN (
+              SELECT id FROM ai_call_metrics WHERE agent_name = $1
+            )`,
+          [TEST_AGENT],
+        );
+        await pool.query(
+          `DELETE FROM ai_call_metrics WHERE agent_name = $1`,
+          [TEST_AGENT],
+        );
+        suite.expect(true, "cleanup query executed without error");
+      } finally {
+        await pool.end();
+      }
+    },
+  );
+}
+
 suite.finishOrExit();

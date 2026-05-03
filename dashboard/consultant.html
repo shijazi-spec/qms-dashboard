@@ -582,6 +582,14 @@
             bar.className = 'feedback-bar';
             if (messageId) bar.setAttribute('data-message-id', messageId);
             if (callId) bar.setAttribute('data-call-id', callId);
+            // Stash the prompt-version on the bar so the call-id rating
+            // path (sendFeedbackByCallId) and the deferred comment-prompt
+            // submit can echo back the exact revision the user saw, even
+            // when their click happens long after the closure that
+            // captured it. Mirrors data-call-id; the backend uses it to
+            // backfill ai_call_metrics.metadata.prompt_version when the
+            // row didn't already carry one.
+            if (promptVersion) bar.setAttribute('data-prompt-version', promptVersion);
 
             bar.innerHTML =
                 '<button class="feedback-thumb" data-rating="up" aria-label="Helpful" title="Helpful" data-testid="button-feedback-up-' + (messageId ? messageId.substring(0,8) : callId) + '">' +
@@ -610,7 +618,7 @@
                     submitFeedback(messageId, 'up', null, null, promptText, responseText, markSelected, promptVersion);
                 }
                 if (callId) {
-                    sendFeedbackByCallId(bar, 'thumbs_up', null, callId, markSelected);
+                    sendFeedbackByCallId(bar, 'thumbs_up', null, callId, markSelected, promptVersion);
                 }
             });
             downBtn.addEventListener('click', function() {
@@ -775,7 +783,7 @@
         }
 
         var FEEDBACK_COMMENT_MAX = 1000;
-        async function sendFeedbackByCallId(row, rating, comment, callId, onDone) {
+        async function sendFeedbackByCallId(row, rating, comment, callId, onDone, promptVersion) {
             if (row.dataset.locked === '1' && rating !== 'thumbs_down') return;
             var cid = callId || parseInt(row.dataset.callId, 10);
             if (!Number.isFinite(cid)) return;
@@ -783,6 +791,19 @@
                 var payload = { callId: cid, rating: rating };
                 if (typeof comment === 'string' && comment.trim()) {
                     payload.comment = comment.trim().slice(0, FEEDBACK_COMMENT_MAX);
+                }
+                // Echo back the prompt revision the user actually saw
+                // (captured from the chat stream's done frame and stashed
+                // on the bar via attachFeedbackUI). Falls back to the
+                // bar's data-prompt-version attribute so the deferred
+                // comment-prompt submit path — which loses the closure
+                // arg — still attributes correctly. Server validates the
+                // value and only writes it when ai_call_metrics.metadata
+                // doesn't already carry one (see
+                // setCallPromptVersionIfMissing).
+                var pv = promptVersion || (row && row.dataset ? row.dataset.promptVersion : null);
+                if (typeof pv === 'string' && pv.trim()) {
+                    payload.promptVersion = pv.trim().slice(0, 100);
                 }
                 var res = await fetch('/api/ai-ops/feedback', {
                     method: 'POST',

@@ -1929,6 +1929,52 @@ export async function insertCallFeedback(
 }
 
 /**
+ * Backfill `prompt_version` into `ai_call_metrics.metadata` for a single
+ * call, but ONLY when the row does not already carry one. The
+ * authoritative writer is the streaming consultant route, which sets
+ * `metadata.prompt_version` at span open via
+ * {@link buildAiCallTelemetryMetadata}; this helper is the call-id rating
+ * path's "echo back what the client saw" safety net so call-id ratings
+ * (POST /api/ai-ops/feedback) are also visible in the per-version
+ * analytics view (`getFeedbackRateByPromptVersion`) when an older row
+ * predates the always-on telemetry path or when a future surface routes
+ * through aiOps without going through the consultant span first.
+ *
+ * Refuses to overwrite an existing prompt_version because the client is
+ * untrusted — the server-side span value (recorded at the moment the
+ * response was generated) is the source of truth. We only fill the
+ * field when it is absent or empty.
+ *
+ * Returns true when the row was updated (i.e. metadata.prompt_version
+ * was missing and is now `version`), false otherwise — including when
+ * the call id is unknown or the value already matched.
+ */
+export async function setCallPromptVersionIfMissing(
+  callId: number,
+  version: string,
+): Promise<boolean> {
+  try {
+    if (!Number.isFinite(callId) || callId <= 0) return false;
+    if (typeof version !== "string") return false;
+    const trimmed = version.trim().slice(0, 100);
+    if (!trimmed) return false;
+    await ensureAiMetricsTable();
+    const result = await pool.query(
+      `UPDATE ai_call_metrics
+          SET metadata = COALESCE(metadata, '{}'::jsonb)
+                         || jsonb_build_object('prompt_version', $2::text)
+        WHERE id = $1
+          AND COALESCE(metadata ->> 'prompt_version', '') = ''`,
+      [callId, trimmed],
+    );
+    return (result.rowCount ?? 0) > 0;
+  } catch (err) {
+    logger.error("[aiTelemetry] Failed to backfill prompt_version on call:", err);
+    return false;
+  }
+}
+
+/**
  * Per-(agent, prompt_version) aggregate that backs the "Prompt Version"
  * comparison view in the AI Operations panel. Joins ai_call_feedback to
  * ai_call_metrics so a regression caused by a prompt edit (lower thumbs-up

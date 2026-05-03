@@ -10,6 +10,7 @@ import {
   getRecentNegativeFeedback,
   getCallById,
   insertCallFeedback,
+  setCallPromptVersionIfMissing,
   getChildToolCallsForParent,
   getParentCallsForTool,
   getKnownAgentNames,
@@ -435,6 +436,12 @@ export const aiOpsRoutes = [
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const body = await c.req.json();
           const { callId, rating, comment } = body;
+          // Accept either camelCase (`promptVersion`, what the consultant
+          // chat client sends) or snake_case (`prompt_version`, the shape
+          // analytics SQL already uses) so future surfaces wiring up to
+          // this endpoint don't have to remember which spelling won.
+          const promptVersionRaw =
+            body.promptVersion ?? body.prompt_version;
           const parsedCallId = parseInt(String(callId ?? ""), 10);
           if (
             !Number.isFinite(parsedCallId) ||
@@ -464,12 +471,41 @@ export const aiOpsRoutes = [
             }
             cleanComment = comment;
           }
+          // Validate the optional prompt-version echo before any DB write
+          // so a malformed value (non-string, multi-MB blob) is rejected
+          // up front instead of silently dropped by the helper. Length cap
+          // matches the consultant-feedback path (`safeMetaString` in
+          // consultantRoutes) so both surfaces enforce the same ceiling.
+          let cleanPromptVersion: string | undefined;
+          if (promptVersionRaw != null) {
+            if (typeof promptVersionRaw !== "string") {
+              return c.json(
+                { error: "promptVersion must be a string" },
+                400,
+              );
+            }
+            const trimmed = promptVersionRaw.trim();
+            if (trimmed) cleanPromptVersion = trimmed.slice(0, 100);
+          }
           const ok = await insertCallFeedback(
             parsedCallId,
             rating as "thumbs_up" | "thumbs_down",
             user.userId,
             cleanComment,
           );
+          // Best-effort: backfill `metadata.prompt_version` on the rated
+          // call when the client echoed the version it actually saw and
+          // the row didn't already carry one (see
+          // setCallPromptVersionIfMissing for the integrity rationale).
+          // A failure here must not flip the feedback insert to a 500 —
+          // the rating itself is recorded; analytics attribution is the
+          // nice-to-have layered on top.
+          if (cleanPromptVersion) {
+            await setCallPromptVersionIfMissing(
+              parsedCallId,
+              cleanPromptVersion,
+            );
+          }
           return c.json({ success: ok });
         } catch (error) {
           logger.error("[AI-Ops] feedback error:", error);
