@@ -309,6 +309,7 @@
                                 <option value="Sales">Sales</option>
                                 <option value="Quality">Quality</option>
                                 <option value="GRC">GRC</option>
+                                <option value="MGMT">MGMT</option>
                                 <option value="Viewer">Viewer</option>
                                 <option value="Other">Other</option>
                             </select>
@@ -962,7 +963,7 @@
                 const u = data.user;
                 const perms = data.permissions || [];
                 const ROLES = ['admin','quality_manager','quality_specialist','grc_manager','team_lead','department_viewer','auditor','ai_specialist','bu_owner','executive','custom'];
-                const TEAMS = ['SDR','Sales','Quality','GRC','Viewer','Other'];
+                const TEAMS = ['SDR','Sales','Quality','GRC','MGMT','Viewer','Other'];
                 if (u.role && !ROLES.includes(u.role)) ROLES.unshift(u.role);
                 const roleOptions = ROLES.map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r}</option>`).join('');
                 const currentTeam = u.team || '';
