@@ -1140,6 +1140,32 @@ export const adminApiRoutes = [
     },
   },
   {
+    // Task #755 — surface the streaming-export per-job temp-file cache to
+    // operators. Returns live entry counts, on-disk byte totals, hit/miss
+    // counters, and the most recent janitor pass timestamp so admins can
+    // catch the cache directory growing unbounded before disk fills.
+    path: "/api/admin/export-cache/stats",
+    method: "GET",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!isAdminAuthorized(c))
+            return c.json({ error: "Insufficient permissions" }, 403);
+          const { getStagedExportCacheStats } =
+            await import("../../utils/excelExport");
+          const stats = await getStagedExportCacheStats();
+          return c.json(stats);
+        } catch (error) {
+          logger.error("Error fetching export cache stats:", error);
+          return c.json(
+            { error: "Failed to fetch export cache stats" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/admin/redaction-sweep/status",
     method: "GET",
     createHandler: async () => {

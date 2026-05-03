@@ -845,6 +845,19 @@ const stagedExportCache = new Map<string, StagedExportEntry>();
 const inFlightStaging = new Map<string, Promise<StagingResult>>();
 let stagedExportJanitorTimer: NodeJS.Timeout | null = null;
 
+// ---------------------------------------------------------------------------
+// Operator-visible counters (Task #755)
+// ---------------------------------------------------------------------------
+//
+// These are intentionally process-local (no DB, no IPC) — the export cache
+// itself is also process-local so a per-process count is the right granularity
+// and avoids paying a network hop on the hot path. Counters reset on every
+// restart, which is fine for a "is the cache doing work?" indicator.
+let stagedExportHitCount = 0;
+let stagedExportMissCount = 0;
+let stagedExportJanitorLastRunAt: number | null = null;
+let stagedExportJanitorLastReaped: number | null = null;
+
 function stagedExportCacheDir(): string {
   return process.env.STREAMING_EXPORT_CACHE_DIR || STAGED_EXPORT_DIR_DEFAULT;
 }
@@ -1039,6 +1052,11 @@ export async function runStagedExportJanitor(): Promise<number> {
   for (const [key, entry] of expired) {
     await reapStagedEntry(key, entry);
   }
+  // Record janitor visibility for the admin stats panel (Task #755).
+  // Stamp the timestamp regardless of how many entries were reaped — a "0
+  // reaped" pass still proves the janitor is running on schedule.
+  stagedExportJanitorLastRunAt = now;
+  stagedExportJanitorLastReaped = expired.length;
   return expired.length;
 }
 
@@ -1067,6 +1085,121 @@ export async function _resetStagedExportCacheForTests(): Promise<void> {
   for (const [, entry] of entries) {
     await unlinkStagedFile(entry.filePath);
   }
+  stagedExportHitCount = 0;
+  stagedExportMissCount = 0;
+  stagedExportJanitorLastRunAt = null;
+  stagedExportJanitorLastReaped = null;
+}
+
+// ---------------------------------------------------------------------------
+// Operator-visible cache stats (Task #755)
+// ---------------------------------------------------------------------------
+
+export interface StagedExportCacheStats {
+  /** Number of in-memory cache entries (each backed by a temp file on disk). */
+  entryCount: number;
+  /** Sum of file sizes for live in-memory entries (bytes). */
+  totalBytes: number;
+  /** Cumulative cache-hit count since process start. */
+  hitCount: number;
+  /** Cumulative cache-miss count since process start. */
+  missCount: number;
+  /** Hit ratio (hits / (hits + misses)) in the [0, 1] range, or null when no
+   *  requests have been served yet. */
+  hitRate: number | null;
+  /** Unix-ms timestamp of the most recent janitor pass, or null if it has not
+   *  run yet (e.g. the process just started). */
+  lastJanitorRunAt: number | null;
+  /** Entries reaped in the most recent janitor pass, or null if not yet run. */
+  lastJanitorReaped: number | null;
+  /** Cache directory path the janitor scans — surfaced so operators can SSH
+   *  in and confirm what they're looking at when disk usage looks wrong. */
+  cacheDir: string;
+  /** TTL applied to newly-staged entries (ms). */
+  ttlMs: number;
+  /** Number of entries currently being streamed by at least one HTTP client.
+   *  These are the entries the janitor will defer-unlink rather than yank. */
+  activeReadCount: number;
+  /** Number of entries past their TTL but not yet reaped (waiting for the
+   *  next janitor pass or a lazy-on-access GC). */
+  expiredEntryCount: number;
+  /** Disk-side scan: the actual files in the cache directory. May exceed
+   *  `entryCount` when a generation roll-over left an older file pinned by
+   *  a slow downloader, or when leftover files from a previous process are
+   *  still on disk waiting for the janitor to notice. */
+  onDiskFileCount: number;
+  onDiskTotalBytes: number;
+}
+
+/**
+ * Snapshot the export cache for the admin stats panel.
+ *
+ * Reads both the in-memory map and the on-disk directory because they can
+ * legitimately diverge: a previous process's leftover files, or a still-
+ * being-read older generation of a re-staged export, will show up on disk
+ * but not in the live map. Operators care about both numbers when sizing
+ * the ephemeral volume.
+ */
+export async function getStagedExportCacheStats(): Promise<StagedExportCacheStats> {
+  const now = Date.now();
+  let totalBytes = 0;
+  let activeReadCount = 0;
+  let expiredEntryCount = 0;
+  for (const entry of stagedExportCache.values()) {
+    totalBytes += entry.size;
+    if (entry.refCount > 0) activeReadCount++;
+    if (entry.expiresAt <= now) expiredEntryCount++;
+  }
+
+  // Best-effort disk scan. The directory may not exist yet (no export has
+  // been served since boot) — treat that as "0 files / 0 bytes" rather
+  // than an error so the panel renders cleanly on a quiet system.
+  let onDiskFileCount = 0;
+  let onDiskTotalBytes = 0;
+  const dir = stagedExportCacheDir();
+  try {
+    const names = await fsPromises.readdir(dir);
+    for (const name of names) {
+      try {
+        const st = await fsPromises.stat(path.join(dir, name));
+        if (st.isFile()) {
+          onDiskFileCount++;
+          onDiskTotalBytes += st.size;
+        }
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException | undefined)?.code;
+        // ENOENT = file vanished between readdir and stat (the janitor or
+        // a release race) — skip it silently. Anything else is logged.
+        if (code !== "ENOENT") {
+          logger.warn("[stagedExport] stat failed during stats scan", name, err);
+        }
+      }
+    }
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "ENOENT") {
+      logger.warn("[stagedExport] readdir failed during stats scan", dir, err);
+    }
+  }
+
+  const totalRequests = stagedExportHitCount + stagedExportMissCount;
+  const hitRate = totalRequests > 0 ? stagedExportHitCount / totalRequests : null;
+
+  return {
+    entryCount: stagedExportCache.size,
+    totalBytes,
+    hitCount: stagedExportHitCount,
+    missCount: stagedExportMissCount,
+    hitRate,
+    lastJanitorRunAt: stagedExportJanitorLastRunAt,
+    lastJanitorReaped: stagedExportJanitorLastReaped,
+    cacheDir: dir,
+    ttlMs: stagedExportTtlMs(),
+    activeReadCount,
+    expiredEntryCount,
+    onDiskFileCount,
+    onDiskTotalBytes,
+  };
 }
 
 /**
@@ -1363,6 +1496,11 @@ export async function stageAndServeStreamingExport(
 
   let entry = stagedExportCache.get(jobKey);
   if (!entry) {
+    // Cache miss — count it once per request, regardless of whether this
+    // call owns the staging or piggy-backs on an in-flight one. Both
+    // paths represent "the cache could not satisfy this request from a
+    // ready entry" from an operator's perspective.
+    stagedExportMissCount++;
     let staging = inFlightStaging.get(jobKey);
     let owns = false;
     if (!staging) {
@@ -1434,6 +1572,12 @@ export async function stageAndServeStreamingExport(
       });
     }
     entry = result.entry;
+  } else {
+    // Cache hit — entry was already in the map and still within TTL after
+    // the lazy GC check above. We do not count a re-served range request
+    // any differently from a fresh GET; from a "did we avoid rebuilding
+    // the body?" perspective, both are wins.
+    stagedExportHitCount++;
   }
 
   return serveFromStagedEntry(entry, reqHeaders);

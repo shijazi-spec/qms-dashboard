@@ -555,6 +555,68 @@
                     </div>
                 </div>
 
+                <div class="bg-white rounded-xl shadow-sm border p-6 mb-6" data-testid="panel-export-cache">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                Export Cache
+                            </h3>
+                            <p class="text-sm text-gray-500">
+                                Per-job temp-file cache backing streaming exports.
+                                Auto-refreshes every 60 seconds.
+                            </p>
+                        </div>
+                        <button
+                            data-on-click="loadExportCacheStats"
+                            class="px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm flex items-center space-x-1"
+                            data-testid="button-refresh-export-cache">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+
+                    <div id="export-cache-error" class="hidden mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700" data-testid="text-export-cache-error"></div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Active entries</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-entry-count" data-testid="text-export-cache-entry-count">—</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-active-reads" data-testid="text-export-cache-active-reads">No active reads</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Disk usage</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-bytes" data-testid="text-export-cache-bytes">—</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-ondisk" data-testid="text-export-cache-ondisk">On disk: —</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Hits / misses</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-hitmiss" data-testid="text-export-cache-hitmiss">—</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-hitrate" data-testid="text-export-cache-hitrate">No requests yet</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Janitor last run</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-janitor-time" data-testid="text-export-cache-janitor-time">—</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-janitor-detail" data-testid="text-export-cache-janitor-detail">Not yet run</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-500">
+                        <div>
+                            <span class="font-medium text-gray-600">Cache directory:</span>
+                            <span class="font-mono break-all" id="export-cache-dir" data-testid="text-export-cache-dir">—</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-600">TTL:</span>
+                            <span id="export-cache-ttl" data-testid="text-export-cache-ttl">—</span>
+                            <span class="ml-3 font-medium text-gray-600">Expired waiting:</span>
+                            <span id="export-cache-expired" data-testid="text-export-cache-expired">—</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-3" id="export-cache-updated" data-testid="text-export-cache-updated">Not yet refreshed</p>
+                </div>
+
                 <div class="bg-white rounded-xl shadow-sm border p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4">
                         Quick Actions
@@ -1230,6 +1292,11 @@
                     startRateLimitAutoRefresh();
                 } else {
                     stopRateLimitAutoRefresh();
+                }
+                if (tab === "settings") {
+                    startExportCacheAutoRefresh();
+                } else {
+                    stopExportCacheAutoRefresh();
                 }
             }
 
@@ -2269,6 +2336,152 @@
             });
 
             let rateLimitRefreshTimer = null;
+            let exportCacheRefreshTimer = null;
+
+            // Task #755 — auto-refresh the Export Cache stats panel only
+            // while the Settings tab is visible. Polling stops the moment
+            // the admin switches tabs so we don't burn CPU/log noise on
+            // a panel nobody is looking at.
+            function startExportCacheAutoRefresh() {
+                loadExportCacheStats();
+                if (exportCacheRefreshTimer) return;
+                exportCacheRefreshTimer = setInterval(loadExportCacheStats, 60000);
+            }
+
+            function stopExportCacheAutoRefresh() {
+                if (exportCacheRefreshTimer) {
+                    clearInterval(exportCacheRefreshTimer);
+                    exportCacheRefreshTimer = null;
+                }
+            }
+
+            function formatBytes(bytes) {
+                const n = Number(bytes);
+                if (!Number.isFinite(n) || n <= 0) return "0 B";
+                const units = ["B", "KB", "MB", "GB", "TB"];
+                let i = 0;
+                let val = n;
+                while (val >= 1024 && i < units.length - 1) {
+                    val /= 1024;
+                    i++;
+                }
+                const fixed = val >= 100 || i === 0 ? Math.round(val) : val.toFixed(1);
+                return fixed + " " + units[i];
+            }
+
+            function formatRelativeTime(ts) {
+                if (!ts) return "—";
+                const diff = Date.now() - Number(ts);
+                if (diff < 0) return "in the future";
+                const secs = Math.round(diff / 1000);
+                if (secs < 60) return secs + "s ago";
+                const mins = Math.round(secs / 60);
+                if (mins < 60) return mins + "m ago";
+                const hours = Math.round(mins / 60);
+                if (hours < 24) return hours + "h ago";
+                const days = Math.round(hours / 24);
+                return days + "d ago";
+            }
+
+            function formatDuration(ms) {
+                const n = Number(ms);
+                if (!Number.isFinite(n) || n <= 0) return "—";
+                const secs = Math.round(n / 1000);
+                if (secs < 60) return secs + "s";
+                const mins = Math.round(secs / 60);
+                if (mins < 60) return mins + "m";
+                const hours = Math.round(mins / 60);
+                return hours + "h";
+            }
+
+            async function loadExportCacheStats() {
+                const errEl = document.getElementById("export-cache-error");
+                if (!errEl) return;
+                try {
+                    const res = await fetch("/api/admin/export-cache/stats", {
+                        headers: getAdminHeaders(),
+                    });
+                    if (handleUnauthorized(res)) return;
+                    if (!res.ok) {
+                        throw new Error(`Request failed (${res.status})`);
+                    }
+                    const data = await res.json();
+                    renderExportCacheStats(data);
+                    errEl.classList.add("hidden");
+                    errEl.textContent = "";
+                } catch (err) {
+                    console.error("Error loading export cache stats:", err);
+                    errEl.textContent = "Failed to load export cache stats: " + (err && err.message ? err.message : err);
+                    errEl.classList.remove("hidden");
+                }
+            }
+
+            function renderExportCacheStats(data) {
+                const setText = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = value;
+                };
+
+                setText("export-cache-entry-count", String(data.entryCount ?? 0));
+                const activeReads = Number(data.activeReadCount ?? 0);
+                setText(
+                    "export-cache-active-reads",
+                    activeReads > 0
+                        ? activeReads + " currently streaming"
+                        : "No active reads",
+                );
+
+                setText("export-cache-bytes", formatBytes(data.totalBytes ?? 0));
+                setText(
+                    "export-cache-ondisk",
+                    "On disk: " +
+                        formatBytes(data.onDiskTotalBytes ?? 0) +
+                        " across " +
+                        String(data.onDiskFileCount ?? 0) +
+                        " file(s)",
+                );
+
+                const hits = Number(data.hitCount ?? 0);
+                const misses = Number(data.missCount ?? 0);
+                setText("export-cache-hitmiss", hits + " / " + misses);
+                if (data.hitRate === null || data.hitRate === undefined) {
+                    setText("export-cache-hitrate", "No requests yet");
+                } else {
+                    const pct = Math.round(Number(data.hitRate) * 1000) / 10;
+                    setText("export-cache-hitrate", "Hit rate " + pct + "%");
+                }
+
+                const lastRun = data.lastJanitorRunAt;
+                setText(
+                    "export-cache-janitor-time",
+                    lastRun ? formatRelativeTime(lastRun) : "Not yet",
+                );
+                if (lastRun) {
+                    const reaped = Number(data.lastJanitorReaped ?? 0);
+                    setText(
+                        "export-cache-janitor-detail",
+                        new Date(lastRun).toLocaleTimeString() +
+                            " — reaped " +
+                            reaped +
+                            " entr" +
+                            (reaped === 1 ? "y" : "ies"),
+                    );
+                } else {
+                    setText("export-cache-janitor-detail", "Janitor has not run since process start");
+                }
+
+                setText("export-cache-dir", String(data.cacheDir ?? "—"));
+                setText("export-cache-ttl", formatDuration(data.ttlMs));
+                setText(
+                    "export-cache-expired",
+                    String(data.expiredEntryCount ?? 0),
+                );
+
+                setText(
+                    "export-cache-updated",
+                    "Updated at " + new Date().toLocaleTimeString(),
+                );
+            }
 
             function startRateLimitAutoRefresh() {
                 loadRateLimitStats();
