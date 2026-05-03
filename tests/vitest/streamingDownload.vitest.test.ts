@@ -2349,6 +2349,72 @@ describe('streamingDownload (browser helper)', () => {
         b.controller.error(Object.assign(new Error('done'), { name: 'AbortError' }));
         await expect(downloadPromise).rejects.toBeDefined();
       });
+
+      it('renders the cancel-confirm modal and progress-card "Waiting…" label in Arabic when WalaPlusI18n is loaded', async () => {
+        env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+        const ar = JSON.parse(
+          readFileSync(resolve(__dirname, '..', '..', 'dashboard', 'i18n', 'ar.json'), 'utf8')
+        );
+        // Both shims are required: A11y to render the styled modal, and i18n
+        // to translate the modal/card strings.
+        installI18nShim(env.win, ar);
+        installA11yShim(env.win);
+
+        // Sanity-check: the four new keys exist in the Arabic dictionary.
+        expect(ar.downloads.cancel_modal_title).toBeTruthy();
+        expect(ar.downloads.cancel_modal_keep).toBeTruthy();
+        expect(ar.downloads.cancel_modal_confirm).toBeTruthy();
+        expect(ar.downloads.cancelling_wait).toBeTruthy();
+
+        const b = makeAbortableBody();
+        installAbortableFetch(env.win, b, {
+          'content-type': 'application/octet-stream',
+          'content-length': '1000',
+        });
+
+        const downloadPromise = env.win.streamingDownload('/api/exports/i18n-modal.bin', {
+          skipEstimate: true,
+          useServiceWorker: false,
+          confirmCancelThresholdMs: Infinity,
+        });
+
+        await new Promise((r) => setTimeout(r, 5));
+        b.controller.enqueue(new Uint8Array(800));
+        await new Promise((r) => setTimeout(r, 5));
+
+        const cancelBtn = env.win.document.querySelector(
+          '[data-testid="button-cancel-download"]'
+        ) as HTMLButtonElement;
+        expect(cancelBtn).not.toBeNull();
+
+        cancelBtn.click();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // While the modal is open the card cancel button switches to the
+        // "Waiting…" label — verify it renders the Arabic translation.
+        expect(cancelBtn.textContent).toBe(ar.downloads.cancelling_wait);
+
+        const modal = env.win.document.querySelector(
+          '[role="dialog"][aria-modal="true"]'
+        ) as HTMLElement;
+        expect(modal).not.toBeNull();
+
+        const title = modal.querySelector('#sd-confirm-cancel-title');
+        expect(title?.textContent).toBe(ar.downloads.cancel_modal_title);
+
+        const keepBtn = modal.querySelector('[data-testid="button-keep-downloading"]');
+        expect(keepBtn?.textContent).toBe(ar.downloads.cancel_modal_keep);
+
+        const confirmBtn = modal.querySelector('[data-testid="button-confirm-cancel-download"]');
+        expect(confirmBtn?.textContent).toBe(ar.downloads.cancel_modal_confirm);
+
+        // Clean up: back out of the modal and end the download.
+        (keepBtn as HTMLElement).click();
+        await new Promise((r) => setTimeout(r, 10));
+        b.controller.error(Object.assign(new Error('done'), { name: 'AbortError' }));
+        await expect(downloadPromise).rejects.toBeDefined();
+      });
     });
   });
 
