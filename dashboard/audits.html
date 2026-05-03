@@ -958,9 +958,18 @@
 
         async function exportAuditPDF(auditId, auditCode, buttonEl) {
             try {
+                // Audit PDF rendering is one of the longest-running exports we
+                // have — server-side report generation plus a large binary
+                // payload — and it's the call site where users have been
+                // hitting the manual Resume button most often. Opt this one
+                // in to autoResume so a flaky connection silently recovers
+                // instead of forcing a click. Other (lighter) exports stay on
+                // the default opt-out so users on metered connections aren't
+                // surprised by background retries.
                 await streamingDownload(`/api/audits/${auditId}/export-pdf`, {
                     filename: `${auditCode}_report.pdf`,
                     button: buttonEl,
+                    autoResume: true,
                 });
             } catch (_) {
                 // streamingDownload already surfaces the error to the user.

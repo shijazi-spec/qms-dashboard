@@ -1437,7 +1437,12 @@
             let url = '/api/duplicates/export-xlsx';
             if (range.from) url += `?start_date=${range.from}`;
             if (range.to) url += (url.includes('?') ? '&' : '?') + `end_date=${range.to}`;
-            return streamingDownloadFromEvent(event, url, { filename: 'duplicates.xlsx' });
+            // Multi-sheet XLSX builds are heavy on both server and client and
+            // are a frequent source of mid-download disconnects, so warm up
+            // autoResume here. Lighter CSV exports below intentionally keep
+            // the default (opt-out) behavior so users on metered/mobile
+            // connections aren't surprised by background retries.
+            return streamingDownloadFromEvent(event, url, { filename: 'duplicates.xlsx', autoResume: true });
         }
 
         function exportData(event) {
