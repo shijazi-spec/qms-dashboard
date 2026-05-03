@@ -649,6 +649,23 @@
                   <option value="slack">slack</option>
                   <option value="mobile">mobile</option>
                 </select>
+                <!-- Rating-source filter (Task #767). Third triage dimension
+                     already surfaced as a per-row badge by Task #661 — adding
+                     a dropdown completes the filter surface so an operator
+                     can narrow the recent thumbs-down list by rating source
+                     (e.g. inline_thumbs vs comment_modal) during incident
+                     triage. Options are populated dynamically from the
+                     distinct rating_source values returned in the current
+                     `recent` payload by `syncFeedbackRatingSourceOptions()`
+                     below — same pattern as the prompt-version dropdown. -->
+                <select
+                  id="feedback-rating-source-filter"
+                  class="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 w-36"
+                  data-on-change="onFeedbackMetadataSelectChange"
+                  data-testid="select-feedback-rating-source"
+                  aria-label="Filter by rating source">
+                  <option value="">All rating sources</option>
+                </select>
                 <input
                   id="feedback-feature-flag-filter"
                   type="text"
@@ -1010,9 +1027,11 @@
       }
       const pv = document.getElementById('feedback-prompt-version-filter');
       const cs = document.getElementById('feedback-client-surface-filter');
+      const rs = document.getElementById('feedback-rating-source-filter');
       const ff = document.getElementById('feedback-feature-flag-filter');
       if (pv) pv.value = '';
       if (cs) cs.value = '';
+      if (rs) rs.value = '';
       if (ff) ff.value = '';
       loadAIFeedback();
     }
@@ -1026,9 +1045,11 @@
         return {
           promptVersion: params.get('prompt_version') || '',
           clientSurface: params.get('client_surface') || '',
+          // Task #767: third triage dimension on the recent thumbs-down list.
+          ratingSource: params.get('rating_source') || '',
         };
       } catch (_e) {
-        return { promptVersion: '', clientSurface: '' };
+        return { promptVersion: '', clientSurface: '', ratingSource: '' };
       }
     }
 
@@ -1036,15 +1057,46 @@
     // into the URL query string so the view is shareable and survives a
     // page refresh. Uses replaceState so we don't pollute the back-button
     // history with one entry per dropdown change. (Task #753)
-    function syncFeedbackFiltersToUrl(promptVersion, clientSurface) {
+    function syncFeedbackFiltersToUrl(promptVersion, clientSurface, ratingSource) {
       try {
         const url = new URL(window.location.href);
         if (promptVersion) url.searchParams.set('prompt_version', promptVersion);
         else url.searchParams.delete('prompt_version');
         if (clientSurface) url.searchParams.set('client_surface', clientSurface);
         else url.searchParams.delete('client_surface');
+        // Task #767: keep the rating-source selection shareable too.
+        if (ratingSource) url.searchParams.set('rating_source', ratingSource);
+        else url.searchParams.delete('rating_source');
         window.history.replaceState({}, '', url.toString());
       } catch (_e) { /* no-op on older browsers */ }
+    }
+
+    // Populate the rating-source dropdown options from the distinct
+    // `rating_source` values present in the current `recent` payload
+    // (Task #767). Mirrors `syncFeedbackPromptVersionOptions()` above:
+    // preserves the currently-selected value as an option even if it
+    // dropped out of the result set after filtering, so a deep-linked
+    // filter doesn't silently revert to "All".
+    function syncFeedbackRatingSourceOptions(recent, currentValue) {
+      const sel = document.getElementById('feedback-rating-source-filter');
+      if (!sel) return;
+      const desired = currentValue || '';
+      const seen = new Set();
+      const opts = ['<option value="">All rating sources</option>'];
+      (Array.isArray(recent) ? recent : []).forEach(r => {
+        if (!r) return;
+        const raw = r.rating_source;
+        if (raw == null) return;
+        const val = String(raw).trim();
+        if (!val || seen.has(val)) return;
+        seen.add(val);
+        opts.push(`<option value="${aiOpsEscapeHtml(val)}">${aiOpsEscapeHtml(val)}</option>`);
+      });
+      if (desired && !seen.has(desired)) {
+        opts.push(`<option value="${aiOpsEscapeHtml(desired)}">${aiOpsEscapeHtml(desired)}</option>`);
+      }
+      sel.innerHTML = opts.join('');
+      sel.value = desired;
     }
 
     // Populate the prompt-version dropdown options from the breakdown
@@ -1091,11 +1143,12 @@
         const days = document.getElementById('feedback-days')?.value || '30';
         const promptVersionEl = document.getElementById('feedback-prompt-version-filter');
         const clientSurfaceEl = document.getElementById('feedback-client-surface-filter');
+        const ratingSourceEl = document.getElementById('feedback-rating-source-filter');
         const featureFlagEl = document.getElementById('feedback-feature-flag-filter');
         // Bootstrap dropdown selections from the URL on first render so a
         // shared link like ?prompt_version=qms@deadbeef&client_surface=web
-        // lands on the already-filtered view (Task #753). After that the
-        // selects own the state — `.value` is the source of truth.
+        // lands on the already-filtered view (Task #753 / #767). After that
+        // the selects own the state — `.value` is the source of truth.
         const urlFilters = getFeedbackUrlFilters();
         let promptVersion = (promptVersionEl?.value || '').trim();
         if (!promptVersion && urlFilters.promptVersion) {
@@ -1106,10 +1159,16 @@
           clientSurface = urlFilters.clientSurface;
           if (clientSurfaceEl) clientSurfaceEl.value = clientSurface;
         }
+        let ratingSource = (ratingSourceEl?.value || '').trim();
+        if (!ratingSource && urlFilters.ratingSource) {
+          ratingSource = urlFilters.ratingSource;
+          if (ratingSourceEl) ratingSourceEl.value = ratingSource;
+        }
         const featureFlag = (featureFlagEl?.value || '').trim();
         const params = new URLSearchParams({ days });
         if (promptVersion) params.set('prompt_version', promptVersion);
         if (clientSurface) params.set('client_surface', clientSurface);
+        if (ratingSource) params.set('rating_source', ratingSource);
         if (featureFlag) params.set('feature_flag', featureFlag);
         const payload = await apiFetch(`/api/consultant/feedback/stats?${params.toString()}`);
         const data = payload.stats || {};
@@ -1165,7 +1224,11 @@
           Array.isArray(data.prompt_versions) ? data.prompt_versions : [],
           promptVersion,
         );
-        syncFeedbackFiltersToUrl(promptVersion, clientSurface);
+        // Task #767: refresh the rating-source filter from the distinct
+        // values present in the current `recent` payload before mirroring
+        // the active selections to the URL.
+        syncFeedbackRatingSourceOptions(recent, ratingSource);
+        syncFeedbackFiltersToUrl(promptVersion, clientSurface, ratingSource);
 
         // Per-prompt-version breakdown (Task #661). Renders as a compact
         // table so an admin can scan ratios across revisions during an

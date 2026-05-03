@@ -503,6 +503,16 @@ export interface RecentThumbsDownFilters {
   promptVersion?: string | null;
   featureFlag?: string | null;
   clientSurface?: string | null;
+  /**
+   * Optional `metadata->>'rating_source'` filter (Task #767). Lets an admin
+   * triaging a regression narrow the recent thumbs-down list down to a
+   * specific rating surface (e.g. `inline_thumbs` vs `comment_modal`) — the
+   * third dimension already surfaced as a per-row badge by Task #661 and as
+   * a metadata chip by Task #580. Mirrors the existing prompt_version /
+   * client_surface filters and obeys the same trim / 200-char cap /
+   * parameterised-binding contract enforced by `normalizeMetadataFilter()`.
+   */
+  ratingSource?: string | null;
 }
 
 export async function getFeedbackByMessageId(
@@ -558,6 +568,7 @@ export async function getRecentThumbsDown(
   const promptVersion = normalizeMetadataFilter(filters.promptVersion);
   const featureFlag = normalizeMetadataFilter(filters.featureFlag);
   const clientSurface = normalizeMetadataFilter(filters.clientSurface);
+  const ratingSource = normalizeMetadataFilter(filters.ratingSource);
 
   // Build the dynamic WHERE clauses with bind parameters so the
   // operator-supplied filter values can never be interpolated into SQL.
@@ -575,6 +586,13 @@ export async function getRecentThumbsDown(
   if (clientSurface !== null) {
     params.push(clientSurface);
     extraClauses.push(`metadata->>'client_surface' = $${params.length}`);
+  }
+  if (ratingSource !== null) {
+    // Task #767: third triage dimension. Same JSONB-extractor pattern as the
+    // sibling prompt_version / client_surface filters above so the
+    // dashboard's filter behaviour stays consistent across all three.
+    params.push(ratingSource);
+    extraClauses.push(`metadata->>'rating_source' = $${params.length}`);
   }
   const extraSql = extraClauses.length
     ? ` AND ${extraClauses.join(" AND ")}`

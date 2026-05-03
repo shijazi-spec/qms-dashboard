@@ -622,6 +622,11 @@ export const consultantRoutes = [
             c.req.query("feature_flag") ?? c.req.query("featureFlag");
           const clientSurface =
             c.req.query("client_surface") ?? c.req.query("clientSurface");
+          // Task #767: third triage dimension on the recent thumbs-down list.
+          // Mirrors the snake_case / camelCase fallback pattern used by the
+          // sibling filters so the dashboard can speak either spelling.
+          const ratingSource =
+            c.req.query("rating_source") ?? c.req.query("ratingSource");
 
           const isAdmin = user.role === "admin";
           const [stats, recent] = await Promise.all([
@@ -634,6 +639,8 @@ export const consultantRoutes = [
                     typeof featureFlag === "string" ? featureFlag : null,
                   clientSurface:
                     typeof clientSurface === "string" ? clientSurface : null,
+                  ratingSource:
+                    typeof ratingSource === "string" ? ratingSource : null,
                 })
               : Promise.resolve([]),
           ]);

@@ -194,6 +194,55 @@ const { getRecentThumbsDown } = await import("../aiFeedbackDatabase");
   );
 }
 
+// (4d) rating_source filter (Task #767) → JSONB extractor against the right
+// key, bound as $2 when it's the only filter. Mirrors (4b) for the third
+// triage dimension surfaced in the Recent Thumbs-Down list.
+{
+  const last = await withCapturedCalls(() =>
+    getRecentThumbsDown(20, { ratingSource: "inline_thumbs" }),
+  );
+  check(
+    /metadata->>'rating_source'\s*=\s*\$2/i.test(last.sql),
+    "(4d) rating_source filter binds metadata->>'rating_source' to $2",
+  );
+  check(
+    Array.isArray(last.params) &&
+      last.params.length === 2 &&
+      last.params[1] === "inline_thumbs",
+    "(4d) rating_source filter passes the trimmed value as $2",
+  );
+}
+
+// (4e) All four filters together → AND-ed with ascending $-numbered binds in
+// the order [promptVersion, featureFlag, clientSurface, ratingSource] so the
+// dashboard can rely on a stable parameter layout.
+{
+  const last = await withCapturedCalls(() =>
+    getRecentThumbsDown(50, {
+      promptVersion: "qms@cafef00d",
+      featureFlag: "treatment-1",
+      clientSurface: "mobile",
+      ratingSource: "comment_modal",
+    }),
+  );
+  check(
+    /metadata->>'prompt_version'\s*=\s*\$2[\s\S]+AND[\s\S]+metadata->>'feature_flag'\s*=\s*\$3[\s\S]+AND[\s\S]+metadata->>'client_surface'\s*=\s*\$4[\s\S]+AND[\s\S]+metadata->>'rating_source'\s*=\s*\$5/i.test(
+      last.sql,
+    ),
+    "(4e) all four filters AND-ed together as $2 / $3 / $4 / $5",
+  );
+  check(
+    Array.isArray(last.params) &&
+      last.params.length === 5 &&
+      last.params[0] === 50 &&
+      last.params[1] === "qms@cafef00d" &&
+      last.params[2] === "treatment-1" &&
+      last.params[3] === "mobile" &&
+      last.params[4] === "comment_modal",
+    "(4e) all four filters bind in [limit, promptVersion, featureFlag, clientSurface, ratingSource] order",
+  );
+}
+
 // (5) Whitespace-only / empty / null filter values are treated as "no filter"
 // so the dashboard can blindly forward the input box value without trimming.
 {
