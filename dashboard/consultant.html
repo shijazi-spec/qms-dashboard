@@ -1661,6 +1661,51 @@
         loadChatHistory();
         updateAlertBadge();
         loadWelcomeData();
+        loadThreadHistory();
+
+        /**
+         * Re-hydrate the chat transcript from the server when the user
+         * returns to the page. Uses the threadId persisted in
+         * sessionStorage (set by sendMessage) so refreshing or navigating
+         * away and back keeps the conversation visible — including the
+         * feedback bars on assistant turns. The bars rely on the
+         * Mastra-stored message id, which the chat endpoints now surface
+         * as `messageId`, so any prior thumbs the user gave will be
+         * pre-applied via attachFeedbackUI's existing per-message rating
+         * lookup.
+         */
+        async function loadThreadHistory() {
+            var tid = sessionStorage.getItem('consultant_threadId');
+            if (!tid) return;
+            try {
+                var res = await fetch('/api/consultant/history/' + encodeURIComponent(tid), {
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) return;
+                var data = await res.json();
+                var msgs = (data && data.messages) || [];
+                if (!msgs.length) return;
+                threadId = tid;
+                var pv = data.promptVersion || null;
+                clearWelcome();
+                msgs.forEach(function(m) {
+                    if (m.role === 'user') {
+                        appendUserMessage(m.content);
+                    } else if (m.role === 'assistant') {
+                        var bubble = createAssistantMessage();
+                        bubble.innerHTML = renderMarkdown(m.content);
+                        if (isArabic(m.content)) bubble.setAttribute('dir', 'rtl');
+                        chatMessages.push({ role: 'assistant', content: m.content, time: m.createdAt || new Date().toISOString() });
+                        if (m.messageId && m.content && m.content.trim()) {
+                            attachFeedbackUI(bubble, m.messageId, '', m.content, null, pv);
+                        }
+                    }
+                });
+                scrollToBottom();
+            } catch (e) {
+                /* history is best-effort; failures fall back to empty welcome */
+            }
+        }
 
         // D1: Use nav-level polling only — no separate consultant polling
         if (!window._consultantAlertPollRegistered) {

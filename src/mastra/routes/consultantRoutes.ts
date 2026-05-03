@@ -40,6 +40,44 @@ interface AgentTextResult {
   text: string;
 }
 
+const CONSULTANT_RESOURCE_ID = "consultant-session";
+
+/**
+ * After an agent turn completes, the assistant message has been persisted to
+ * Mastra memory with a stable id. We surface THAT id to the client as the
+ * messageId (instead of an ephemeral randomUUID) so when the user later
+ * returns to the page and we fetch /api/consultant/history/:threadId, the
+ * messageIds align — letting the existing per-message rating lookup
+ * (GET /api/consultant/feedback/:messageId) pre-apply thumbs on prior
+ * assistant turns. Falls back to a random UUID if memory is unavailable
+ * (e.g. an unexpected query failure) so the client still gets *some* id.
+ */
+async function resolveLatestAssistantMessageId(
+  agent: any,
+  threadId: string,
+): Promise<string> {
+  try {
+    const memory = await agent.getMemory?.();
+    if (!memory) return randomUUID();
+    const result = await memory.query({
+      threadId,
+      resourceId: CONSULTANT_RESOURCE_ID,
+      selectBy: { last: 5 },
+    });
+    const v2: Array<{ id: string; role: string; createdAt: Date | string }> =
+      (result?.messagesV2 as any) || [];
+    for (let i = v2.length - 1; i >= 0; i--) {
+      if (v2[i] && v2[i].role === "assistant" && v2[i].id) return v2[i].id;
+    }
+  } catch (err) {
+    safeLogger.warn(
+      "[ConsultantRoutes] resolveLatestAssistantMessageId failed",
+      err as any,
+    );
+  }
+  return randomUUID();
+}
+
 const CONSULTANT_ROLES: UserRole[] = [
   "admin",
   "ai_specialist",
@@ -87,6 +125,118 @@ export const consultantRoutes = [
           }
         }
         return c.text("Consultant page not found", 404);
+      };
+    },
+  },
+
+  {
+    // Returns the persisted Mastra chat history for a thread so the
+    // consultant page (and embedded widget) can re-render the prior
+    // conversation when the user reloads or comes back later. Each
+    // assistant message carries its Mastra-stored id as `messageId`,
+    // which matches the id surfaced at chat-time — letting the client's
+    // existing per-message rating lookup pre-apply thumbs.
+    path: "/api/consultant/history/:threadId",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const threadId = c.req.param("threadId");
+          if (!threadId || typeof threadId !== "string") {
+            return c.json({ error: "threadId is required" }, 400);
+          }
+
+          const mastra = c.get("mastra");
+          const agent = mastra?.getAgent("qmsConsultantAgent");
+          if (!agent) {
+            return c.json({ error: "QMS Consultant agent not available" }, 503);
+          }
+
+          const memory = await agent.getMemory?.();
+          if (!memory) {
+            return c.json({ messages: [] });
+          }
+
+          // Confirm the thread exists before querying — keeps the
+          // response a clean empty list for unknown / never-used
+          // threadIds (e.g. a stale sessionStorage value from a thread
+          // the user cleared) instead of surfacing a memory error.
+          const thread = await memory.getThreadById({ threadId });
+          if (!thread) {
+            return c.json({ messages: [] });
+          }
+
+          // Sanitize the optional ?limit= query — fall back to the
+          // default when the value is missing, non-numeric, or NaN, then
+          // clamp to [1, 200] so a malformed client cannot ask the
+          // memory layer for an unbounded slice.
+          const limitRaw = parseInt(c.req.query("limit") || "100", 10);
+          const lastN = Math.max(
+            1,
+            Math.min(200, Number.isFinite(limitRaw) ? limitRaw : 100),
+          );
+          const result = await memory.query({
+            threadId,
+            resourceId: CONSULTANT_RESOURCE_ID,
+            selectBy: { last: lastN },
+          });
+
+          // We read V2 messages only — they carry the persisted Mastra
+          // id (needed to align with later feedback rating lookups) and
+          // a real createdAt. Threads created with the current agent
+          // configuration always populate messagesV2; legacy / V1-only
+          // threads are not supported by this rehydration path and will
+          // appear as an empty transcript (the welcome state takes over)
+          // rather than being shown without stable ids. We only surface
+          // user / assistant text turns — tool calls, system messages,
+          // and working-memory injections aren't useful for re-rendering
+          // the chat transcript.
+          const v2: any[] = (result?.messagesV2 as any[]) || [];
+          const messages = v2
+            .filter((m) => m && (m.role === "user" || m.role === "assistant"))
+            .map((m) => {
+              let text = "";
+              const content = m.content;
+              if (typeof content === "string") {
+                text = content;
+              } else if (content && typeof content === "object") {
+                if (typeof content.content === "string") {
+                  text = content.content;
+                } else if (Array.isArray(content.parts)) {
+                  text = content.parts
+                    .map((p: any) =>
+                      p && typeof p === "object" && typeof p.text === "string"
+                        ? p.text
+                        : "",
+                    )
+                    .filter(Boolean)
+                    .join("");
+                }
+              }
+              return {
+                messageId: m.id,
+                role: m.role,
+                content: text,
+                createdAt:
+                  m.createdAt instanceof Date
+                    ? m.createdAt.toISOString()
+                    : m.createdAt || null,
+              };
+            })
+            .filter((m) => m.content && m.content.trim().length > 0);
+
+          return c.json({
+            threadId,
+            promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
+            messages,
+          });
+        } catch (error) {
+          logger.error("[Consultant] History fetch error:", error);
+          return c.json({ error: "Failed to fetch history" }, 500);
+        }
       };
     },
   },
@@ -151,7 +301,7 @@ export const consultantRoutes = [
                     () =>
                       agent.generateLegacy(message, {
                         threadId: resolvedThreadId,
-                        resourceId: "consultant-session",
+                        resourceId: CONSULTANT_RESOURCE_ID,
                         abortSignal: controller.signal,
                       }),
                   );
@@ -159,7 +309,10 @@ export const consultantRoutes = [
                 },
               );
 
-            const messageId = randomUUID();
+            const messageId = await resolveLatestAssistantMessageId(
+              agent,
+              resolvedThreadId,
+            );
             return c.json({
               success: true,
               threadId: resolvedThreadId,
@@ -235,7 +388,6 @@ export const consultantRoutes = [
               promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
             }),
           });
-          const messageId = randomUUID();
           let stream: Awaited<ReturnType<typeof agent.streamLegacy>>;
           try {
             stream = await span.run(() =>
@@ -252,7 +404,7 @@ export const consultantRoutes = [
                 () =>
                   agent.streamLegacy(message, {
                     threadId: resolvedThreadId,
-                    resourceId: "consultant-session",
+                    resourceId: CONSULTANT_RESOURCE_ID,
                     abortSignal: controller.signal,
                   }),
               ),
@@ -299,8 +451,15 @@ export const consultantRoutes = [
                 // inline thumbs / comment feedback (POST /api/ai-ops/feedback)
                 // to this exact response. The span allocates the callId up
                 // front, so it's known here without waiting for finalize().
-                // messageId comes from main and is used by the client to
-                // address an individual assistant turn for editing/threading.
+                // messageId is resolved AFTER streaming completes so it
+                // matches the assistant message Mastra just persisted to
+                // memory. Returning that stable id (instead of a random
+                // UUID) lets the history endpoint pre-apply prior thumbs
+                // when the user revisits the page.
+                const messageId = await resolveLatestAssistantMessageId(
+                  agent,
+                  resolvedThreadId,
+                );
                 streamController.enqueue(
                   encoder.encode(
                     `data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId, callId: span.callId ?? undefined, promptVersion: QMS_CONSULTANT_PROMPT_VERSION })}\n\n`,
