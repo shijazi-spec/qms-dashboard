@@ -2072,6 +2072,22 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     ],
   },
 
+  // Consultant chat history by thread — handler uses
+  // `requireRole(c, CONSULTANT_ROLES)`. Same role set as the sibling
+  // /api/consultant/feedback/:messageId rule above; backfilled here so the
+  // rebac route-coverage gate (Task #436) passes for the route added in
+  // src/mastra/routes/consultantRoutes.ts:139.
+  {
+    pattern: /^\/api\/consultant\/history\/[^/]+$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "grc_manager",
+      "head_of_operations_quality",
+    ],
+  },
+
   // Recent-downloads tracker — per-user list/insert/clear via `getSessionUser`
   // (any authenticated caller). Used by the streaming-download UI to surface
   // each user's own recent export history.

@@ -572,7 +572,7 @@
             <p class="text-sm text-gray-500" data-i18n="ai_ops.thumbs_subtitle">Thumbs up/down ratings on AI Consultant responses</p>
           </div>
           <div class="flex items-center gap-3">
-            <select id="feedback-agent" data-on-change="loadFeedbackTrend" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-feedback-agent">
+            <select id="feedback-agent" data-on-change="loadAIFeedback" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-feedback-agent">
               <option value="all" data-i18n="ai_ops.all_agents">All agents</option>
             </select>
             <select id="feedback-days" data-on-change="loadAIFeedback" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" data-testid="select-feedback-days">
@@ -1164,6 +1164,12 @@
       const clientSurfacesEl = document.getElementById('ai-ops-feedback-client-surfaces');
       try {
         const days = document.getElementById('feedback-days')?.value || '30';
+        // Task #423: agent dropdown now narrows the entire feedback tab
+        // (KPIs, top-thumbs-down categories, recent thumbs-down list) — not
+        // just the trend chart — so the same agent value is forwarded to the
+        // /api/consultant/feedback/stats endpoint here in addition to the
+        // /trend endpoint hit further down by `loadFeedbackTrend()`.
+        const agent = document.getElementById('feedback-agent')?.value || 'all';
         const promptVersionEl = document.getElementById('feedback-prompt-version-filter');
         const clientSurfaceEl = document.getElementById('feedback-client-surface-filter');
         const ratingSourceEl = document.getElementById('feedback-rating-source-filter');
@@ -1189,6 +1195,7 @@
         }
         const featureFlag = (featureFlagEl?.value || '').trim();
         const params = new URLSearchParams({ days });
+        if (agent && agent !== 'all') params.set('agent', agent);
         if (promptVersion) params.set('prompt_version', promptVersion);
         if (clientSurface) params.set('client_surface', clientSurface);
         if (ratingSource) params.set('rating_source', ratingSource);

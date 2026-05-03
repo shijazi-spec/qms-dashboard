@@ -2742,7 +2742,8 @@
     "p50_p95_latency": "p50 / p95 Latency per Agent — last 7 days",
     "calls_over_30s": "Calls taking >30 s or that returned an error. Error messages are truncated to 500 chars.",
     "storage_health_alerts": "Storage health alerts",
-    "tool_health_alerts": "Tool health alerts"
+    "tool_health_alerts": "Tool health alerts",
+    "col_rating_sources": "Rating sources"
   },
   "health": {
     "title": "Platform Health Pulse",

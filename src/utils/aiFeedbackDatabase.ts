@@ -339,10 +339,25 @@ export interface FeedbackStats {
   client_surfaces: FeedbackClientSurfaceBreakdown[];
 }
 
-export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
+export async function getFeedbackStats(
+  days = 30,
+  agent?: string | null,
+): Promise<FeedbackStats> {
   await initAIFeedbackTable();
 
   const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 30)));
+  // Optional agent filter (Task #423). Mirrors the trim/cap used by
+  // `getFeedbackTrend()` so the stats endpoint, recent thumbs-down list,
+  // and the trend chart all narrow on the same agent value when an admin
+  // picks one from the AI Ops dropdown.
+  const agentFilter =
+    agent && typeof agent === "string" && agent.trim()
+      ? agent.trim().substring(0, 100)
+      : null;
+  const agentClause = agentFilter ? ` AND agent = $2` : "";
+  const params: (number | string)[] = agentFilter
+    ? [safeDays, agentFilter]
+    : [safeDays];
 
   const totals = await pool.query(
     `SELECT
@@ -350,8 +365,8 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
        COUNT(*) FILTER (WHERE rating='up')                      AS thumbs_up,
        COUNT(*) FILTER (WHERE rating='down')                    AS thumbs_down
      FROM ai_response_feedback
-     WHERE created_at >= NOW() - make_interval(days => $1)`,
-    [safeDays],
+     WHERE created_at >= NOW() - make_interval(days => $1)${agentClause}`,
+    params,
   );
 
   const cats = await pool.query(
@@ -359,11 +374,11 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
      FROM ai_response_feedback
      WHERE rating='down'
        AND category IS NOT NULL
-       AND created_at >= NOW() - make_interval(days => $1)
+       AND created_at >= NOW() - make_interval(days => $1)${agentClause}
      GROUP BY category
      ORDER BY cnt DESC
      LIMIT 6`,
-    [safeDays],
+    params,
   );
 
   // Per-prompt-version breakdown (Task #661).
@@ -382,11 +397,11 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
        COUNT(*) FILTER (WHERE rating='up')                                 AS thumbs_up,
        COUNT(*) FILTER (WHERE rating='down')                               AS thumbs_down
      FROM ai_response_feedback
-     WHERE created_at >= NOW() - make_interval(days => $1)
+     WHERE created_at >= NOW() - make_interval(days => $1)${agentClause}
      GROUP BY 1
      ORDER BY total DESC, prompt_version ASC
      LIMIT 12`,
-    [safeDays],
+    params,
   );
 
   // Per-client-surface breakdown (Task #726). Same shape and 'unknown'
@@ -402,11 +417,11 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
        COUNT(*) FILTER (WHERE rating='up')                                 AS thumbs_up,
        COUNT(*) FILTER (WHERE rating='down')                               AS thumbs_down
      FROM ai_response_feedback
-     WHERE created_at >= NOW() - make_interval(days => $1)
+     WHERE created_at >= NOW() - make_interval(days => $1)${agentClause}
      GROUP BY 1
      ORDER BY total DESC, client_surface ASC
      LIMIT 12`,
-    [safeDays],
+    params,
   );
 
   const total = parseInt(totals.rows[0].total) || 0;
@@ -513,6 +528,14 @@ export interface RecentThumbsDownFilters {
    * parameterised-binding contract enforced by `normalizeMetadataFilter()`.
    */
   ratingSource?: string | null;
+  /**
+   * Optional `agent` filter (Task #423). Lets the AI Ops feedback tab narrow
+   * the recent thumbs-down list to a single agent — same dimension already
+   * filtered on the trend chart by `getFeedbackTrend()`. Trim/cap is handled
+   * by the call-site so the same value can be threaded into the WHERE clause
+   * via a parameterised binding.
+   */
+  agent?: string | null;
 }
 
 export async function getFeedbackByMessageId(
@@ -569,6 +592,13 @@ export async function getRecentThumbsDown(
   const featureFlag = normalizeMetadataFilter(filters.featureFlag);
   const clientSurface = normalizeMetadataFilter(filters.clientSurface);
   const ratingSource = normalizeMetadataFilter(filters.ratingSource);
+  // Task #423: agent filter shares `normalizeMetadataFilter()`'s trim /
+  // empty-as-null contract even though it targets a top-level column instead
+  // of a JSONB key, so the AI Ops dashboard can blindly forward the
+  // dropdown's "all" sentinel as an empty string.
+  const agentFilterRaw = normalizeMetadataFilter(filters.agent);
+  const agentFilter =
+    agentFilterRaw && agentFilterRaw !== "all" ? agentFilterRaw : null;
 
   // Build the dynamic WHERE clauses with bind parameters so the
   // operator-supplied filter values can never be interpolated into SQL.
@@ -593,6 +623,13 @@ export async function getRecentThumbsDown(
     // dashboard's filter behaviour stays consistent across all three.
     params.push(ratingSource);
     extraClauses.push(`metadata->>'rating_source' = $${params.length}`);
+  }
+  if (agentFilter !== null) {
+    // Task #423: top-level `agent` column rather than a JSONB key, so the
+    // operator can scope the recent thumbs-down list to the same agent
+    // already filtered on the trend chart by `getFeedbackTrend()`.
+    params.push(agentFilter);
+    extraClauses.push(`agent = $${params.length}`);
   }
   const extraSql = extraClauses.length
     ? ` AND ${extraClauses.join(" AND ")}`

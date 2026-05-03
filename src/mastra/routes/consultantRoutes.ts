@@ -786,10 +786,23 @@ export const consultantRoutes = [
           // sibling filters so the dashboard can speak either spelling.
           const ratingSource =
             c.req.query("rating_source") ?? c.req.query("ratingSource");
+          // Task #423: optional `agent` filter so the AI Ops feedback tab can
+          // narrow KPIs, top-thumbs-down categories, and the recent
+          // thumbs-down list down to the same agent already supported by the
+          // trend chart endpoint. The literal "all" sentinel emitted by the
+          // dashboard dropdown is treated as "no filter" so the frontend can
+          // forward the dropdown value verbatim.
+          const agentRaw = c.req.query("agent");
+          const agentNormalized =
+            typeof agentRaw === "string" ? agentRaw.trim() : "";
+          const agent =
+            agentNormalized && agentNormalized !== "all"
+              ? agentNormalized
+              : null;
 
           const isAdmin = user.role === "admin";
           const [stats, recent] = await Promise.all([
-            getFeedbackStats(days),
+            getFeedbackStats(days, agent),
             isAdmin
               ? getRecentThumbsDown(20, {
                   promptVersion:
@@ -800,11 +813,12 @@ export const consultantRoutes = [
                     typeof clientSurface === "string" ? clientSurface : null,
                   ratingSource:
                     typeof ratingSource === "string" ? ratingSource : null,
+                  agent,
                 })
               : Promise.resolve([]),
           ]);
 
-          return c.json({ stats, recent, isAdmin });
+          return c.json({ stats, recent, isAdmin, agent: agent || "all" });
         } catch (error) {
           logger.error("[Consultant] Feedback stats error:", error);
           return c.json({ error: "Failed to fetch feedback stats" }, 500);
