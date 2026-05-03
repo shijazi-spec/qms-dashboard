@@ -66,7 +66,6 @@ const WalaPlusNav = {
       case 'kpis':            return this._t('nav.items.kpis');
       case 'executive':       return this._t('nav.items.executive');
       case 'team':            return this._t('nav.items.team');
-      case 'mohammed-sow':    return this._t('nav.items.mohammed-sow');
       case 'fraud-rules':     return this._t('nav.items.fraud-rules');
       case 'fraud-incidents': return this._t('nav.items.fraud-incidents');
       case 'fraud-dashboard': return this._t('nav.items.fraud-dashboard');
@@ -163,8 +162,7 @@ const WalaPlusNav = {
       items: [
         { label: 'KPIs', href: '/kpis', icon: 'chart-bar', id: 'kpis' },
         { label: 'Board Dashboard', href: '/executive', icon: 'office-building', id: 'executive' },
-        { label: 'Team Performance', href: '/team', icon: 'user-group', id: 'team' },
-        { label: "Mohammed's SOW", href: '/mohammed-sow', icon: 'document', id: 'mohammed-sow' }
+        { label: 'Team Performance', href: '/team', icon: 'user-group', id: 'team' }
       ]
     },
     {
