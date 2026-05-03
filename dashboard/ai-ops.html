@@ -232,139 +232,6 @@
       </div>
     </section>
 
-    <!-- Recently triaged tool-health alerts history -->
-    <section id="tool-health-history-section" class="mb-6" data-testid="section-tool-health-history">
-      <div class="border border-gray-200 rounded-xl shadow-sm">
-        <button type="button"
-          id="tool-health-history-toggle"
-          data-testid="button-tool-health-history-toggle"
-          class="w-full flex items-center justify-between px-5 py-3 text-start bg-white rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          aria-expanded="false"
-          aria-controls="tool-health-history-body">
-          <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <span class="text-sm font-semibold text-gray-700" data-i18n="ai_ops.recent_triaged">Recently triaged tool-health alerts</span>
-            <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-200 text-gray-700" id="tool-health-history-count" data-testid="badge-tool-health-history-count">—</span>
-            <span class="text-xs text-gray-400" id="tool-health-history-window-label" data-testid="text-tool-health-history-window">(last 7 days)</span>
-          </div>
-          <svg id="tool-health-history-chevron" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-          </svg>
-        </button>
-        <div id="tool-health-history-body" class="hidden border-t border-gray-200 bg-gray-50 rounded-b-xl px-5 py-4" data-testid="panel-tool-health-history">
-          <!-- Filter bar (Task #319): lets ops narrow the triage history by
-               date range, severity, and a free-text tool-name match before
-               scanning the list. Server-side filters drive `days` + `severity`
-               on the API; tool-name search is applied client-side over the
-               returned window so it stays responsive. -->
-          <div class="flex flex-wrap items-end gap-3 mb-3 pb-3 border-b border-gray-200" data-testid="filters-tool-health-history">
-            <div class="flex flex-col">
-              <label for="tool-health-history-days" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1" data-i18n="ai_ops.date_range">Date range</label>
-              <select id="tool-health-history-days"
-                      class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                      data-testid="select-tool-health-history-days">
-                <option value="1" data-i18n="ai_ops.last_1_day">Last 1 day</option>
-                <option value="7" selected data-i18n="ai_ops.last_7_days">Last 7 days</option>
-                <option value="30" data-i18n="ai_ops.last_30_days">Last 30 days</option>
-              </select>
-            </div>
-            <div class="flex flex-col">
-              <label for="tool-health-history-severity" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1" data-i18n="ai_ops.severity_label">Severity</label>
-              <select id="tool-health-history-severity"
-                      class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                      data-testid="select-tool-health-history-severity">
-                <option value="" data-i18n="ai_ops.all_severities">All severities</option>
-                <option value="critical" data-i18n="common.critical">Critical</option>
-                <option value="high" data-i18n="common.high">High</option>
-                <option value="medium" data-i18n="common.medium">Medium</option>
-              </select>
-            </div>
-            <div class="flex flex-col flex-1 min-w-[160px]">
-              <label for="tool-health-history-tool" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1" data-i18n="ai_ops.tool_name">Tool name</label>
-              <input type="search"
-                     id="tool-health-history-tool"
-                     placeholder="e.g. searchTool"
-                     class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                     data-testid="input-tool-health-history-tool">
-            </div>
-            <!-- Sort control (Task #417). The default ordering matches what the
-                 backend returns (most-recently-triaged first), but on-call
-                 reviewers often want to find the alerts that stayed open the
-                 longest — those are the post-incident-review candidates. The
-                 "Open the longest" option re-sorts the already-fetched window
-                 client-side using the same created_at→resolved_at delta the
-                 inline "Open for: …" line surfaces. Acknowledged-only rows
-                 (no resolved_at) are pinned to the bottom so they don't
-                 spuriously rank above genuinely long-open resolved ones. -->
-            <div class="flex flex-col min-w-[170px]">
-              <label for="tool-health-history-sort" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1" data-i18n="ai_ops.sort_label">Sort</label>
-              <select id="tool-health-history-sort"
-                      class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                      data-testid="select-tool-health-history-sort">
-                <option value="triaged-desc" data-i18n="ai_ops.sort_recently_triaged">Most recently triaged</option>
-                <option value="open-for-desc" data-i18n="ai_ops.sort_open_for_desc">Open the longest</option>
-              </select>
-            </div>
-            <label class="flex items-center gap-1.5 text-xs text-gray-700 self-center mb-1 cursor-pointer">
-              <input type="checkbox"
-                     id="tool-health-history-include-dismissed"
-                     class="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-400"
-                     data-testid="checkbox-tool-health-history-include-dismissed">
-              <span data-i18n="ai_ops.include_dismissed">Include dismissed</span>
-            </label>
-            <button type="button"
-                    id="tool-health-history-reset"
-                    class="text-xs font-medium text-gray-600 hover:text-gray-900 underline self-center mb-1"
-                    data-testid="button-tool-health-history-reset" data-i18n="common.reset">Reset</button>
-          </div>
-          <!-- Trend chart (Task #320): alerts-fired-per-day stacked by severity,
-               with a median-time-to-resolve line overlay. Lives inside the
-               history panel so it loads only when ops expands the toggle. -->
-          <div id="tool-health-trend-section" class="mb-4 bg-white border border-gray-200 rounded-lg p-4" data-testid="section-tool-health-trend">
-            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <div>
-                <h3 class="text-sm font-semibold text-gray-700" data-testid="text-tool-health-trend-heading" data-i18n="ai_ops.alert_volume_trend">Alert volume &amp; time-to-resolve trend</h3>
-                <p class="text-xs text-gray-500" data-i18n="ai_ops.daily_fire_counts">Daily fire counts by severity (bars) and median resolution time (line).</p>
-              </div>
-              <div class="flex items-center gap-2 text-xs">
-                <label for="tool-health-trend-days" class="text-gray-500" data-i18n="ai_ops.range">Range</label>
-                <select id="tool-health-trend-days" class="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500" data-testid="select-tool-health-trend-days">
-                  <option value="7" data-i18n="ai_ops.last_7_days">Last 7 days</option>
-                  <option value="14" selected data-i18n="ai_ops.last_14_days">Last 14 days</option>
-                  <option value="30" data-i18n="ai_ops.last_30_days">Last 30 days</option>
-                </select>
-              </div>
-            </div>
-            <div id="tool-health-trend-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-xs" data-testid="summary-tool-health-trend">
-              <div class="bg-gray-50 rounded px-3 py-2">
-                <p class="uppercase tracking-wide text-gray-400" data-i18n="ai_ops.fired">Fired</p>
-                <p class="text-base font-semibold text-gray-800" id="tool-health-trend-total-fired" data-testid="text-trend-total-fired">—</p>
-              </div>
-              <div class="bg-gray-50 rounded px-3 py-2">
-                <p class="uppercase tracking-wide text-gray-400" data-i18n="ai_ops.resolved">Resolved</p>
-                <p class="text-base font-semibold text-gray-800" id="tool-health-trend-total-resolved" data-testid="text-trend-total-resolved">—</p>
-              </div>
-              <div class="bg-gray-50 rounded px-3 py-2">
-                <p class="uppercase tracking-wide text-gray-400" data-i18n="ai_ops.median_ttr">Median TTR</p>
-                <p class="text-base font-semibold text-gray-800" id="tool-health-trend-median-ttr" data-testid="text-trend-median-ttr">—</p>
-              </div>
-              <div class="bg-gray-50 rounded px-3 py-2">
-                <p class="uppercase tracking-wide text-gray-400" data-i18n="ai_ops.avg_ttr">Avg TTR</p>
-                <p class="text-base font-semibold text-gray-800" id="tool-health-trend-avg-ttr" data-testid="text-trend-avg-ttr">—</p>
-              </div>
-            </div>
-            <div class="relative">
-              <canvas id="tool-health-trend-chart" height="110" data-testid="chart-tool-health-trend" role="img" aria-label="Tool health alert trend: stacked bar and line chart showing daily alerts fired and median time-to-resolve" aria-describedby="tool-health-trend-chart-summary"></canvas>
-              <table id="tool-health-trend-chart-summary" class="sr-only"><caption>Tool Health Alert Trend</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
-              <p id="tool-health-trend-empty" class="hidden text-xs text-gray-500 italic text-center py-6" data-testid="text-tool-health-trend-empty" data-i18n="ai_ops.no_tool_health_activity">No tool-health alert activity in this window.</p>
-            </div>
-          </div>
-          <div id="tool-health-history-list" class="space-y-2" data-testid="list-tool-health-history"></div>
-        </div>
-      </div>
-    </section>
 
     <!-- Summary KPI cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="summary-cards">
@@ -2279,10 +2146,8 @@
         await postToolHealthAlertAction(id, 'acknowledge');
         // Acknowledged alerts shouldn't keep blocking ops attention at the
         // top of the panel — drop them from this banner and reload the list
-        // so the count badge stays accurate. Also refresh the history toggle
-        // so the newly-acknowledged row appears there immediately.
+        // so the count badge stays accurate.
         await loadToolHealthAlerts();
-        await loadToolHealthAlertsHistory();
       } catch (e) {
         console.error('Acknowledge alert error', e);
         if (card) {
@@ -2308,7 +2173,6 @@
       try {
         await postToolHealthAlertAction(id, 'resolve', body);
         await loadToolHealthAlerts();
-        await loadToolHealthAlertsHistory();
       } catch (e) {
         console.error('Resolve alert error', e);
         if (card) {
@@ -7029,8 +6893,6 @@
       loadMetricsTableStats();
       loadStorageHealthAlerts();
       loadToolHealthAlerts();
-      loadToolHealthAlertsHistory();
-      loadToolHealthAlertsTrend();
       loadToolHealthOverrideBanner();
       loadToolHealthConfigWarnings();
       loadCostTrend();
@@ -7233,13 +7095,6 @@
       loadMetricsTableStats();
       loadStorageHealthAlerts();
       loadToolHealthAlerts();
-      loadToolHealthAlertsHistory();
-      initToolHealthHistoryToggle();
-      loadToolHealthAlertsTrend();
-      const trendDaysSel = document.getElementById('tool-health-trend-days');
-      if (trendDaysSel) {
-        trendDaysSel.addEventListener('change', loadToolHealthAlertsTrend);
-      }
       loadToolHealthOverrideBanner();
       loadToolHealthConfigWarnings();
       loadCostTrend();
