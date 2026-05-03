@@ -6,6 +6,7 @@ import { MCPServer } from "@mastra/mcp";
 
 import { sharedPostgresStorage } from "./storage";
 import { registerCronTrigger } from "../triggers/cronTriggers";
+import { registerSlackConsultantRatingRoutes } from "../triggers/slackConsultantRatingTrigger";
 import { qualitySpecialistAgent } from "./agents/qualitySpecialistAgent";
 import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
 import { qualityAuditWorkflow } from "./workflows/qualityAuditWorkflow";
@@ -265,6 +266,9 @@ export const mastra = new Mastra({
 
       // ── i18n / Language API ──────────────────────────────────────────────
       ...i18nRoutes,
+
+      // ── Slack consultant rating bot (Task #801) ──────────────────────────
+      ...registerSlackConsultantRatingRoutes(),
     ],
   },
   logger:
