@@ -301,66 +301,83 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
   return null;
 }
 
-// Maximum body size we are willing to buffer for JSON sanitization.
-// Requests larger than this skip sanitization (they are not valid JSON anyway).
-const MAX_JSON_SANITIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+/**
+ * Maximum JSON body size that `applyBodySanitization` will buffer into memory.
+ * Multipart requests are skipped entirely — file-size limits are enforced
+ * per-route before `formData()` is called.  1 MB is generous for any
+ * legitimate JSON API call; raise via MAX_JSON_BODY_BYTES env if needed.
+ */
+const MAX_JSON_BODY_BYTES = (() => {
+  const raw = process.env.MAX_JSON_BODY_BYTES;
+  const n = parseInt(raw ?? String(1 * 1024 * 1024), 10);
+  return Number.isFinite(n) && n > 0 ? n : 1 * 1024 * 1024;
+})();
 
-async function applyBodySanitization(c: any, urlPath: string, method: string): Promise<void> {
-  if (!['POST', 'PUT', 'PATCH'].includes(method)) return;
+/**
+ * Read a ReadableStream up to `maxBytes`, aborting mid-stream if the limit
+ * is exceeded.  Returns the decoded text on success or `{ tooLarge: true }`
+ * when the limit is hit.  This is the only safe way to cap body buffering
+ * regardless of whether the client sent a Content-Length header.
+ */
+async function readStreamWithLimit(
+  stream: ReadableStream<Uint8Array> | null | undefined,
+  maxBytes: number,
+): Promise<{ text: string } | { tooLarge: true }> {
+  if (!stream) return { text: '' };
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value && value.byteLength > 0) {
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          // Cancel the stream so the underlying connection is released
+          // promptly rather than waiting for the sender to finish.
+          void reader.cancel().catch(() => { });
+          return { tooLarge: true };
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    try { reader.releaseLock(); } catch { /* noop */ }
+  }
+  let offset = 0;
+  const combined = new Uint8Array(totalBytes);
+  for (const chunk of chunks) { combined.set(chunk, offset); offset += chunk.byteLength; }
+  return { text: new TextDecoder().decode(combined) };
+}
 
-  // Multipart uploads are never JSON — buffering them here would fully
-  // materialise the request body in memory before the handler's per-file size
-  // checks can run (double-buffering).  Skip entirely; each upload route
-  // enforces its own size limits.
-  const contentType = (c.req.header('Content-Type') || '').toLowerCase();
-  if (contentType.includes('multipart/form-data')) return;
+async function applyBodySanitization(c: any, urlPath: string, method: string): Promise<Response | null> {
+  if (!['POST', 'PUT', 'PATCH'].includes(method)) return null;
 
-  // If the client declares a body larger than our JSON sanitization cap, skip
-  // reading it here.  The downstream handler will deal with the oversized body
-  // (or the global Content-Length guard below will have already rejected it).
-  const rawContentLength = c.req.header('Content-Length');
-  if (rawContentLength !== null && rawContentLength !== undefined) {
-    const declaredLength = parseInt(rawContentLength, 10);
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_SANITIZE_BYTES) return;
+  const contentType = c.req.header('Content-Type') || '';
+
+  // Multipart form-data bodies are not JSON and must not be buffered here.
+  // Each upload route enforces Content-Length before calling formData() and
+  // requires the header to be present (411) so there is no need to touch
+  // the stream in the middleware.
+  if (contentType.includes('multipart/')) return null;
+
+  // Fast-path: reject when Content-Length is declared and already exceeds
+  // the cap so we never open the stream at all.
+  const declaredLength = parseInt(c.req.header('Content-Length') || '0', 10);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BODY_BYTES) {
+    return c.json({ error: 'Request body too large' }, 413);
   }
 
   try {
-    // Read the cloned request body with a hard byte cap so that a large
-    // chunked body (no Content-Length) cannot exhaust server memory.  If
-    // bytes read exceed the cap we abort the read and skip sanitization
-    // entirely — the handler will deal with the body, or the 413 guard
-    // in globalMiddleware will have already rejected it.
+    // Use streaming read so the limit is enforced regardless of whether the
+    // client sent Content-Length (chunked TE can omit it).
     const cloned = c.req.raw.clone();
-    let bodyText: string;
-    if (cloned.body) {
-      const reader = cloned.body.getReader();
-      const decoder = new TextDecoder();
-      let chunks = '';
-      let totalBytes = 0;
-      let tooLarge = false;
-      try {
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          if (value) {
-            totalBytes += value.byteLength;
-            if (totalBytes > MAX_JSON_SANITIZE_BYTES) {
-              tooLarge = true;
-              break;
-            }
-            chunks += decoder.decode(value, { stream: true });
-          }
-        }
-        chunks += decoder.decode();
-      } finally {
-        try { reader.cancel(); } catch { /* noop */ }
-      }
-      if (tooLarge) return;
-      bodyText = chunks;
-    } else {
-      bodyText = '';
+    const result = await readStreamWithLimit(cloned.body, MAX_JSON_BODY_BYTES);
+    if ('tooLarge' in result) {
+      return c.json({ error: 'Request body too large' }, 413);
     }
+    const bodyText = result.text;
     let parsedBody: any;
     let isJson = false;
     try {
@@ -382,6 +399,7 @@ async function applyBodySanitization(c: any, urlPath: string, method: string): P
       (c.req as any).cachedBody = undefined;
     }
   } catch (_) { }
+  return null;
 }
 
 /**
@@ -524,7 +542,8 @@ export const globalMiddleware = [
     }
 
     if (isApi) {
-      await applyBodySanitization(c, urlPath, method);
+      const sanitizationError = await applyBodySanitization(c, urlPath, method);
+      if (sanitizationError) return sanitizationError;
     }
 
     try {

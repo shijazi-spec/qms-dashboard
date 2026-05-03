@@ -813,6 +813,50 @@ const STAGED_EXPORT_TTL_MS_DEFAULT = 60 * 60 * 1000; // 1 hour
  *  given the default 1-hour TTL — the lazy-on-access GC catches the rest. */
 const STAGED_EXPORT_JANITOR_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * Hard upper bound on the number of simultaneously cached export files.
+ * When the cache is full a new staging request returns 503 rather than
+ * writing an unbounded number of files to the host's temp volume.
+ * Override via STAGED_EXPORT_MAX_ENTRIES env.
+ */
+const STAGED_EXPORT_MAX_ENTRIES_DEFAULT = 200;
+
+/**
+ * Hard upper bound on the total bytes consumed by in-memory cache entries
+ * (sum of staged file sizes).  Prevents a single authorised user from
+ * filling the temp volume by requesting many large exports.
+ * Override via STAGED_EXPORT_MAX_TOTAL_BYTES env (default 512 MB).
+ */
+const STAGED_EXPORT_MAX_TOTAL_BYTES_DEFAULT = 512 * 1024 * 1024; // 512 MB
+
+/**
+ * Per-user hard cap on simultaneously cached export entries.  Prevents a
+ * single compromised or malicious account from monopolising the cache.
+ * Override via STAGED_EXPORT_MAX_ENTRIES_PER_USER env (default 10).
+ */
+const STAGED_EXPORT_MAX_ENTRIES_PER_USER_DEFAULT = 10;
+
+function stagedExportMaxEntries(): number {
+  const raw = process.env.STAGED_EXPORT_MAX_ENTRIES;
+  if (!raw) return STAGED_EXPORT_MAX_ENTRIES_DEFAULT;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : STAGED_EXPORT_MAX_ENTRIES_DEFAULT;
+}
+
+function stagedExportMaxTotalBytes(): number {
+  const raw = process.env.STAGED_EXPORT_MAX_TOTAL_BYTES;
+  if (!raw) return STAGED_EXPORT_MAX_TOTAL_BYTES_DEFAULT;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : STAGED_EXPORT_MAX_TOTAL_BYTES_DEFAULT;
+}
+
+function stagedExportMaxEntriesPerUser(): number {
+  const raw = process.env.STAGED_EXPORT_MAX_ENTRIES_PER_USER;
+  if (!raw) return STAGED_EXPORT_MAX_ENTRIES_PER_USER_DEFAULT;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : STAGED_EXPORT_MAX_ENTRIES_PER_USER_DEFAULT;
+}
+
 interface StagedExportEntry {
   filePath: string;
   size: number;
@@ -825,6 +869,10 @@ interface StagedExportEntry {
   /** Set by the janitor when refCount > 0 at TTL expiry — file is unlinked
    *  by the last reader's decRef rather than yanked out from under it. */
   pendingDelete: boolean;
+  /** SHA-256 hash of the user identity string — used for per-user quota
+   *  tracking.  Absent for entries staged before the quota feature was added
+   *  or when no identity is available. */
+  userIdentityHash?: string;
 }
 
 /**
@@ -848,6 +896,14 @@ const stagedExportCache = new Map<string, StagedExportEntry>();
 const inFlightStaging = new Map<string, Promise<StagingResult>>();
 let stagedExportJanitorTimer: NodeJS.Timeout | null = null;
 
+/**
+ * Per-user export entry tracking for quota enforcement.
+ * Maps userIdentityHash → Set of active jobKeys owned by that user.
+ * Kept in sync with stagedExportCache: entries are added on staging and
+ * removed in reapStagedEntry so the quota check never counts stale entries.
+ */
+const userExportKeys = new Map<string, Set<string>>();
+
 // ---------------------------------------------------------------------------
 // Cache size limits (Task #811 — disk exhaustion guard)
 // ---------------------------------------------------------------------------
@@ -864,27 +920,10 @@ let stagedExportJanitorTimer: NodeJS.Timeout | null = null;
 // without being cached — the caller still gets their response, we just don't
 // retain the file.
 //
-// Limits are configurable via env so ops can tune for their volume without a
-// code change.  Defaults are deliberately conservative:
-//   STREAMING_EXPORT_CACHE_MAX_ENTRIES — default 200 entries
-//   STREAMING_EXPORT_CACHE_MAX_BYTES   — default 5 GB
-function stagedExportMaxEntries(): number {
-  const raw = process.env.STREAMING_EXPORT_CACHE_MAX_ENTRIES;
-  if (!raw) return 200;
-  const n = parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : 200;
-}
-
-function stagedExportMaxBytes(): number {
-  const raw = process.env.STREAMING_EXPORT_CACHE_MAX_BYTES;
-  if (!raw) return 5 * 1024 * 1024 * 1024; // 5 GB
-  const n = parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : 5 * 1024 * 1024 * 1024;
-}
-
 /**
  * Current total bytes tracked across all in-memory cache entries.
- * Maintained incrementally to avoid a full map scan on every staging.
+ * Maintained by a full map scan; called only during eviction so the cost is
+ * acceptable.
  */
 function stagedExportCurrentBytes(): number {
   let total = 0;
@@ -900,7 +939,7 @@ function stagedExportCurrentBytes(): number {
  */
 async function evictStagedExportEntries(newEntrySize: number): Promise<boolean> {
   const maxEntries = stagedExportMaxEntries();
-  const maxBytes = stagedExportMaxBytes();
+  const maxBytes = stagedExportMaxTotalBytes();
 
   // Collect eviction candidates: entries without active readers, sorted
   // oldest-expiry-first (i.e. the entries that have been in the cache longest).
@@ -922,7 +961,7 @@ async function evictStagedExportEntries(newEntrySize: number): Promise<boolean> 
   // Report whether we have room now.
   return (
     stagedExportCache.size < stagedExportMaxEntries() &&
-    stagedExportCurrentBytes() + newEntrySize <= stagedExportMaxBytes()
+    stagedExportCurrentBytes() + newEntrySize <= stagedExportMaxTotalBytes()
   );
 }
 
@@ -1273,6 +1312,15 @@ async function reapStagedEntry(
   entry: StagedExportEntry,
 ): Promise<void> {
   stagedExportCache.delete(key);
+  // Clean up per-user quota tracking so the slot is reclaimed immediately
+  // rather than waiting for the next quota check.
+  if (entry.userIdentityHash) {
+    const keys = userExportKeys.get(entry.userIdentityHash);
+    if (keys) {
+      keys.delete(key);
+      if (keys.size === 0) userExportKeys.delete(entry.userIdentityHash);
+    }
+  }
   if (entry.refCount > 0) {
     // Defer unlink until the last reader drains.
     entry.pendingDelete = true;
@@ -1336,9 +1384,26 @@ async function computeStagedFileWeakEtag(
   }
 }
 
+/**
+ * Drain a Response body to a file, aborting mid-stream if `maxBytes` is
+ * exceeded.  Throws `ExportSizeExceededError` on overflow so the caller can
+ * delete the partial file and return a 503.
+ *
+ * `maxBytes` should be set to the remaining capacity of the export cache
+ * (total budget minus already-staged bytes) so that a single large export
+ * cannot exceed the global disk quota even when the cache appears empty.
+ */
+class ExportSizeExceededError extends Error {
+  constructor(maxBytes: number) {
+    super(`Export exceeded maximum staging size of ${maxBytes} bytes`);
+    this.name = "ExportSizeExceededError";
+  }
+}
+
 async function drainResponseBodyToFile(
   response: Response,
   filePath: string,
+  maxBytes?: number,
 ): Promise<number> {
   // mode 0o600 — owner-only read/write. Staged exports may contain sensitive
   // data (risk registers, audit findings, vendor records, PDPL data); on a
@@ -1368,13 +1433,19 @@ async function drainResponseBodyToFile(
       const { value, done } = await reader.read();
       if (done) break;
       if (!value || !value.byteLength) continue;
+      size += value.byteLength;
+      // Enforce the per-export byte cap mid-stream so disk is never filled
+      // by a single oversized export, regardless of cache-level pre-checks.
+      if (maxBytes !== undefined && size > maxBytes) {
+        void reader.cancel().catch(() => { });
+        throw new ExportSizeExceededError(maxBytes);
+      }
       const chunk = Buffer.from(
         value.buffer,
         value.byteOffset,
         value.byteLength,
       );
       await fh.write(chunk);
-      size += chunk.byteLength;
     }
   } finally {
     await fh.close();
@@ -1433,6 +1504,7 @@ export async function _resetStagedExportCacheForTests(): Promise<void> {
   inFlightStaging.clear();
   const entries = [...stagedExportCache.entries()];
   stagedExportCache.clear();
+  userExportKeys.clear();
   for (const [, entry] of entries) {
     await unlinkStagedFile(entry.filePath);
   }
@@ -1583,6 +1655,15 @@ export interface StreamingExportStagingOptions {
   /** TTL for the staged file (ms).  Defaults to env `STREAMING_EXPORT_TTL_MS`
    *  or 1 hour. */
   ttlMs?: number;
+  /**
+   * SHA-256 hash of the caller's identity string (cookie / admin key).
+   * When provided, `stageAndServeStreamingExport` tracks how many cache
+   * entries this user owns and enforces the per-user quota configured via
+   * `STAGED_EXPORT_MAX_ENTRIES_PER_USER`.  Callers should hash the raw
+   * credential before passing it here so the value is never stored
+   * in memory in its original form.
+   */
+  userIdentityHash?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1866,6 +1947,8 @@ export async function stageAndServeStreamingExport(
     await reapStagedEntry(jobKey, stale);
   }
 
+  const userHash = options.userIdentityHash;
+
   let entry = stagedExportCache.get(jobKey);
   if (!entry) {
     // Cache miss — count it once per request, regardless of whether this
@@ -1876,6 +1959,63 @@ export async function stageAndServeStreamingExport(
     let staging = inFlightStaging.get(jobKey);
     let owns = false;
     if (!staging) {
+      // ---------------------------------------------------------------
+      // Resource-exhaustion guards — enforced only when we are about to
+      // start a brand-new staging (not when piggybacking on an in-flight
+      // one, since that staging already committed its resources).
+      // ---------------------------------------------------------------
+
+      // Per-user quota: reject early if this user already has too many
+      // cached exports.  A nonce-variation attack (?nonce=1, ?nonce=2 …)
+      // produces distinct jobKeys but the same userIdentityHash, so the
+      // per-user cap bounds total disk consumption per account even when
+      // the global entry cap has not been reached.
+      if (userHash) {
+        const userKeys = userExportKeys.get(userHash);
+        if (userKeys && userKeys.size >= stagedExportMaxEntriesPerUser()) {
+          return new Response(
+            JSON.stringify({
+              error:
+                "Export quota exceeded: too many concurrent exports for this account. " +
+                "Wait for an existing export to expire or download it before requesting a new one.",
+            }),
+            { status: 503, headers: { "Content-Type": "application/json" } },
+          );
+        }
+      }
+
+      // Global entry cap: prevents unbounded file accumulation.
+      if (stagedExportCache.size >= stagedExportMaxEntries()) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Export service temporarily unavailable: cache capacity reached. " +
+              "Please retry after a short wait.",
+          }),
+          { status: 503, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      // Global byte cap: protects the temp volume even when individual
+      // exports are small but there are many of them.
+      let totalBytes = 0;
+      for (const e of stagedExportCache.values()) totalBytes += e.size;
+      const maxTotalBytes = stagedExportMaxTotalBytes();
+      if (totalBytes >= maxTotalBytes) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Export service temporarily unavailable: disk quota exceeded. " +
+              "Please retry after a short wait.",
+          }),
+          { status: 503, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      // The remaining capacity is passed to drainResponseBodyToFile as a hard
+      // per-export byte cap so a single large export cannot exceed the total
+      // disk budget even when the cache is otherwise empty.
+      const remainingCapacity = maxTotalBytes - totalBytes;
+
       owns = true;
       staging = (async (): Promise<StagingResult> => {
         const dir = await ensureStagedExportDir();
@@ -1907,7 +2047,29 @@ export async function stageAndServeStreamingExport(
         const contentDisposition =
           built.headers.get("content-disposition") ||
           'attachment; filename="export.bin"';
-        const size = await drainResponseBodyToFile(built, filePath);
+        let size: number;
+        try {
+          size = await drainResponseBodyToFile(built, filePath, remainingCapacity);
+        } catch (err) {
+          // Delete the partial file so disk space is immediately reclaimed.
+          await unlinkStagedFile(filePath);
+          if (err instanceof ExportSizeExceededError) {
+            return {
+              kind: "passthrough",
+              status: 503,
+              statusText: "Service Unavailable",
+              headers: [["Content-Type", "application/json"]],
+              body: new TextEncoder().encode(
+                JSON.stringify({
+                  error:
+                    "Export too large: the generated file exceeds the server's disk quota. " +
+                    "Narrow your filter criteria and retry.",
+                }),
+              ),
+            };
+          }
+          throw err;
+        }
         const etag = await computeStagedFileWeakEtag(filePath, size);
         const newEntry: StagedExportEntry = {
           filePath,
@@ -1918,7 +2080,16 @@ export async function stageAndServeStreamingExport(
           expiresAt: Date.now() + ttlMs,
           refCount: 0,
           pendingDelete: false,
+          userIdentityHash: userHash,
         };
+        // Register in the per-user tracking map before inserting so that a
+        // concurrent reap by the janitor sees a consistent view.
+        if (userHash) {
+          if (!userExportKeys.has(userHash)) {
+            userExportKeys.set(userHash, new Set());
+          }
+          userExportKeys.get(userHash)!.add(jobKey);
+        }
         // Enforce cache size limits before inserting.  Evict the oldest idle
         // entries first.  If the cache is still over budget (e.g. every entry
         // has an active reader that can't be evicted), skip storing — the
@@ -1928,7 +2099,14 @@ export async function stageAndServeStreamingExport(
         if (hasRoom) {
           stagedExportCache.set(jobKey, newEntry);
         } else {
-          // No room — schedule the file for immediate deletion once we return.
+          // No room — clean up per-user tracking and schedule file deletion.
+          if (userHash) {
+            const keys = userExportKeys.get(userHash);
+            if (keys) {
+              keys.delete(jobKey);
+              if (keys.size === 0) userExportKeys.delete(userHash);
+            }
+          }
           void unlinkStagedFile(filePath);
         }
         return { kind: "entry", entry: newEntry };
@@ -2137,6 +2315,12 @@ export async function stageStreamingExportFromHono(
     userIdentity,
   });
 
+  // Hash the raw identity string so the per-user quota tracking map never
+  // holds cookie values or admin keys in memory.
+  const userIdentityHash = createHash("sha256")
+    .update(userIdentity || "anon")
+    .digest("hex");
+
   // Build a stable, low-cardinality route label for log lines. Strip the
   // query string so log aggregation groups requests for the same export
   // endpoint together (different filters land on the same line) and
@@ -2154,7 +2338,7 @@ export async function stageStreamingExportFromHono(
     reqHeaders,
     jobKey,
     build,
-    options,
+    { ...options, userIdentityHash },
   );
 
   // Only instrument 2xx/206 responses — passthrough errors (401/403/500)

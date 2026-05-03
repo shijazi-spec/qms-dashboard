@@ -94,16 +94,11 @@ export const qmsDocsRoutes = [
             await import("../../utils/fileUpload");
           await initQmsDocsTable();
 
-          // Reject oversized multipart bodies before the parser buffers them.
-          // 25 MB file limit + multipart overhead; anything beyond 30 MB is not
-          // a valid single-file upload to this endpoint.
-          const MAX_SINGLE_UPLOAD_BYTES = 30 * 1024 * 1024;
-          const rawCL = c.req.header('Content-Length');
-          if (rawCL) {
-            const cl = parseInt(rawCL, 10);
-            if (Number.isFinite(cl) && cl > MAX_SINGLE_UPLOAD_BYTES) {
-              return c.json({ error: 'Request body too large (max 25 MB per file)' }, 413);
-            }
+          const rawUploadLen = c.req.header('Content-Length');
+          if (!rawUploadLen) return c.json({ error: 'Content-Length header required for file uploads' }, 411);
+          const uploadContentLen = parseInt(rawUploadLen, 10);
+          if (!Number.isFinite(uploadContentLen) || uploadContentLen > 26 * 1024 * 1024) {
+            return c.json({ error: 'Request body too large (max 25 MB)' }, 413);
           }
 
           const formData = await c.req.formData();
@@ -176,15 +171,11 @@ export const qmsDocsRoutes = [
           const MAX_NOTES = 2000;
           const MAX_REG_CSV = 1000;
 
-          // Reject oversized multipart bodies before the parser buffers them.
-          // 250 MB aggregate limit + multipart overhead; cap at 260 MB.
-          const MAX_BULK_BODY_BYTES = 260 * 1024 * 1024;
-          const rawCL2 = c.req.header('Content-Length');
-          if (rawCL2) {
-            const cl2 = parseInt(rawCL2, 10);
-            if (Number.isFinite(cl2) && cl2 > MAX_BULK_BODY_BYTES) {
-              return c.json({ error: 'Request body too large (max 250 MB aggregate)' }, 413);
-            }
+          const rawBatchLen = c.req.header('Content-Length');
+          if (!rawBatchLen) return c.json({ error: 'Content-Length header required for file uploads' }, 411);
+          const batchContentLen = parseInt(rawBatchLen, 10);
+          if (!Number.isFinite(batchContentLen) || batchContentLen > MAX_TOTAL_BYTES) {
+            return c.json({ error: 'Request body too large (max 250 MB total)' }, 413);
           }
 
           const formData = await c.req.formData();

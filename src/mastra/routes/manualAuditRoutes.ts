@@ -259,15 +259,11 @@ export const manualAuditRoutes = [
         if (!user) return unauthorizedResponse(c);
         if (!canIntake(user.role)) return forbiddenResponse(c);
 
-        // Reject oversized multipart bodies before the parser buffers them.
-        // 30 MB file limit + multipart overhead; anything beyond 35 MB is invalid.
-        const MAX_INTAKE_BODY_BYTES = 35 * 1024 * 1024;
-        const rawCL = c.req.header('Content-Length');
-        if (rawCL) {
-          const cl = parseInt(rawCL, 10);
-          if (Number.isFinite(cl) && cl > MAX_INTAKE_BODY_BYTES) {
-            return c.json({ error: 'Request body too large (max 30 MB per file)' }, 413);
-          }
+        const rawUploadLen = c.req.header('Content-Length');
+        if (!rawUploadLen) return c.json({ error: 'Content-Length header required for file uploads' }, 411);
+        const uploadContentLen = parseInt(rawUploadLen, 10);
+        if (!Number.isFinite(uploadContentLen) || uploadContentLen > 31 * 1024 * 1024) {
+          return c.json({ error: 'Request body too large (max 30 MB)' }, 413);
         }
 
         const body = await c.req.parseBody();
