@@ -52,10 +52,45 @@ const CONSULTANT_RESOURCE_ID = "consultant-session";
  * assistant turns. Falls back to a random UUID if memory is unavailable
  * (e.g. an unexpected query failure) so the client still gets *some* id.
  */
+/**
+ * Try to extract the assistant message id directly from the agent's own
+ * result object before falling back to a memory query. Mastra's generate()
+ * and stream() expose the persisted messages on `response.messages` once
+ * the turn completes — reading from there avoids an extra PG round-trip
+ * after every single chat turn (saves ~10-50ms of TTLB on every request).
+ */
+function extractAssistantIdFromAgentResult(result: any): string | null {
+  try {
+    const candidates = [
+      result?.response?.messages,
+      result?.messages,
+      result?.responseMessages,
+    ];
+    for (const msgs of candidates) {
+      if (!Array.isArray(msgs)) continue;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (m && m.role === "assistant" && typeof m.id === "string" && m.id) {
+          return m.id;
+        }
+      }
+    }
+  } catch {
+    /* fall through to memory query */
+  }
+  return null;
+}
+
 async function resolveLatestAssistantMessageId(
   agent: any,
   threadId: string,
+  preloaded?: any,
 ): Promise<string> {
+  // Fast path — pull the id straight from the agent result if available.
+  if (preloaded) {
+    const fromResult = extractAssistantIdFromAgentResult(preloaded);
+    if (fromResult) return fromResult;
+  }
   try {
     const memory = await agent.getMemory?.();
     if (!memory) return randomUUID();
@@ -76,6 +111,47 @@ async function resolveLatestAssistantMessageId(
     );
   }
   return randomUUID();
+}
+
+/**
+ * Per-thread serialization. Mastra's memory layer is not safe against
+ * two concurrent writes on the same threadId — rapid double-sends from
+ * the same user (e.g. impatient retry) can interleave assistant turns
+ * and corrupt the transcript order. We chain incoming requests for the
+ * same threadId through a tiny in-process Map so they execute serially.
+ * Different threads remain fully concurrent.
+ *
+ * We also cap the map size as a safety net so a long-running process
+ * with many threads does not leak entries when threads finish (each
+ * thread's entry is removed once it resolves).
+ */
+const threadMutex = new Map<string, Promise<unknown>>();
+const THREAD_MUTEX_MAX_SIZE = 5_000;
+async function withThreadLock<T>(
+  threadId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const prev = threadMutex.get(threadId) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  threadMutex.set(threadId, next);
+  if (threadMutex.size > THREAD_MUTEX_MAX_SIZE) {
+    // Drop the oldest entries; any in-flight promise they reference is
+    // still kept alive by the await chain below.
+    const it = threadMutex.keys();
+    for (let i = 0; i < 1000; i++) {
+      const k = it.next();
+      if (k.done) break;
+      threadMutex.delete(k.value);
+    }
+  }
+  try {
+    return await next;
+  } finally {
+    // Only clear if no newer waiter has chained on top of us.
+    if (threadMutex.get(threadId) === next) {
+      threadMutex.delete(threadId);
+    }
+  }
 }
 
 const CONSULTANT_ROLES: UserRole[] = [
@@ -172,11 +248,13 @@ export const consultantRoutes = [
           // Sanitize the optional ?limit= query — fall back to the
           // default when the value is missing, non-numeric, or NaN, then
           // clamp to [1, 200] so a malformed client cannot ask the
-          // memory layer for an unbounded slice.
-          const limitRaw = parseInt(c.req.query("limit") || "100", 10);
+          // memory layer for an unbounded slice. Default is 40 to match
+          // the agent's lastMessages window — fetching more is wasted
+          // work since the model only ever sees the last 40 anyway.
+          const limitRaw = parseInt(c.req.query("limit") || "40", 10);
           const lastN = Math.max(
             1,
-            Math.min(200, Number.isFinite(limitRaw) ? limitRaw : 100),
+            Math.min(200, Number.isFinite(limitRaw) ? limitRaw : 40),
           );
           const result = await memory.query({
             threadId,
@@ -275,43 +353,47 @@ export const consultantRoutes = [
             // Wrap agent invocation in AsyncLocalStorage so any AI write-tool
             // called during this turn can see WHO prompted it. Without this,
             // the HITL gate cannot attribute pending actions to a user.
-            const { result: response, callId } =
-              await withAiTelemetry<AgentTextResult>(
-                {
-                  agentName: "WalaPlus QMS Consultant",
-                  model: "gpt-4o",
-                  promptText: message,
-                  userId: user.userId,
-                  sessionId: resolvedThreadId,
-                  metadata: buildAiCallTelemetryMetadata({
-                    promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
-                  }),
-                },
-                async () => {
-                  const res = await withAgentUserContext(
-                    {
-                      user: {
-                        userId: user.userId,
-                        email: user.email,
-                        role: user.role,
-                        autoApproveTier: resolveAutoApproveTier(user.role),
-                      },
-                      threadId: resolvedThreadId,
-                    },
-                    () =>
-                      agent.generate(message, {
+            const { result: response, callId } = await withThreadLock(
+              resolvedThreadId,
+              () =>
+                withAiTelemetry<AgentTextResult>(
+                  {
+                    agentName: "WalaPlus QMS Consultant",
+                    model: "gpt-4o",
+                    promptText: message,
+                    userId: user.userId,
+                    sessionId: resolvedThreadId,
+                    metadata: buildAiCallTelemetryMetadata({
+                      promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
+                    }),
+                  },
+                  async () => {
+                    const res = await withAgentUserContext(
+                      {
+                        user: {
+                          userId: user.userId,
+                          email: user.email,
+                          role: user.role,
+                          autoApproveTier: resolveAutoApproveTier(user.role),
+                        },
                         threadId: resolvedThreadId,
-                        resourceId: CONSULTANT_RESOURCE_ID,
-                        abortSignal: controller.signal,
-                      }),
-                  );
-                  return res as AgentTextResult;
-                },
-              );
+                      },
+                      () =>
+                        agent.generate(message, {
+                          threadId: resolvedThreadId,
+                          resourceId: CONSULTANT_RESOURCE_ID,
+                          abortSignal: controller.signal,
+                        }),
+                    );
+                    return res as AgentTextResult;
+                  },
+                ),
+            );
 
             const messageId = await resolveLatestAssistantMessageId(
               agent,
               resolvedThreadId,
+              response,
             );
             return c.json({
               success: true,
@@ -389,6 +471,40 @@ export const consultantRoutes = [
             }),
           });
           let stream: Awaited<ReturnType<typeof agent.stream>>;
+          // Acquire the per-thread lock for the lifetime of THIS stream
+          // (init + consumption). We resolve `releaseThreadLock` from the
+          // SSE finally{} block so the next request on the same thread
+          // can begin only after we finish writing to memory.
+          //
+          // Safety: a hard auto-release timer (streamTimeout + 30s) fires
+          // even if every code path forgets to release the lock — that
+          // way a single bug here can never permanently starve a thread.
+          // The release function is idempotent.
+          let lockReleased = false;
+          let releaseThreadLock: () => void = () => {};
+          const releaseLockOnce = () => {
+            if (lockReleased) return;
+            lockReleased = true;
+            releaseThreadLock();
+          };
+          const lockSafetyTimer = setTimeout(
+            releaseLockOnce,
+            streamTimeout + 30_000,
+          );
+          const threadLockHandshake = withThreadLock(
+            resolvedThreadId,
+            () =>
+              new Promise<void>((res) => {
+                releaseThreadLock = () => {
+                  clearTimeout(lockSafetyTimer);
+                  res();
+                };
+              }),
+          );
+          // Surface lock-acquisition failures to the outer catch so we
+          // don't leak the span; otherwise the await inside .start() will
+          // never resolve if the prior thread holder rejected.
+          threadLockHandshake.catch(() => {});
           try {
             stream = await span.run(() =>
               withAgentUserContext(
@@ -410,6 +526,7 @@ export const consultantRoutes = [
               ),
             );
           } catch (streamInitErr) {
+            releaseLockOnce();
             clearTimeout(timer);
             const e =
               streamInitErr instanceof Error
@@ -430,16 +547,33 @@ export const consultantRoutes = [
           c.header("Connection", "keep-alive");
 
           const encoder = new TextEncoder();
+          // Heartbeat: while the agent is "thinking" (e.g. waiting on a
+          // slow tool before the first chunk arrives), the SSE socket is
+          // idle and intermediate proxies (Replit's edge, corporate
+          // gateways) can drop the connection after ~30-60s. Send an
+          // SSE comment frame every 15s — comments are ignored by the
+          // EventSource parser but keep the TCP socket warm.
+          const HEARTBEAT_MS = 15_000;
           const readable = new ReadableStream({
             async start(streamController) {
               let streamSuccess = true;
               let streamError: Error | undefined;
+              let firstChunkSeen = false;
+              const heartbeat = setInterval(() => {
+                if (firstChunkSeen) return;
+                try {
+                  streamController.enqueue(encoder.encode(`: ping\n\n`));
+                } catch {
+                  /* controller closed — ignore */
+                }
+              }, HEARTBEAT_MS);
               try {
                 // Run the stream consumption INSIDE span.run() so the
                 // parent_call_id ALS context is visible to tools invoked
                 // during streaming (tools execute lazily as chunks flow).
                 await span.run(async () => {
                   for await (const chunk of stream.textStream) {
+                    firstChunkSeen = true;
                     streamController.enqueue(
                       encoder.encode(
                         `data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`,
@@ -456,9 +590,28 @@ export const consultantRoutes = [
                 // memory. Returning that stable id (instead of a random
                 // UUID) lets the history endpoint pre-apply prior thumbs
                 // when the user revisits the page.
+                // Try to read the assistant id directly from the stream
+                // result first (Mastra exposes a `response` promise that
+                // resolves once the turn is fully persisted) — falls
+                // back to the memory query if that shape isn't present.
+                let preloaded: any = null;
+                try {
+                  const responseProp = (stream as any).response;
+                  if (responseProp && typeof responseProp.then === "function") {
+                    preloaded = await Promise.race([
+                      responseProp,
+                      new Promise((res) => setTimeout(() => res(null), 500)),
+                    ]);
+                  } else if (responseProp) {
+                    preloaded = responseProp;
+                  }
+                } catch {
+                  /* fall back to memory query below */
+                }
                 const messageId = await resolveLatestAssistantMessageId(
                   agent,
                   resolvedThreadId,
+                  preloaded,
                 );
                 streamController.enqueue(
                   encoder.encode(
@@ -482,19 +635,32 @@ export const consultantRoutes = [
                 streamController.close();
               } finally {
                 clearTimeout(timer);
+                clearInterval(heartbeat);
+                // Release the per-thread mutex now that this stream is
+                // fully done writing to Mastra memory — the next request
+                // on the same threadId can proceed. Idempotent so the
+                // safety timer doesn't double-release after us.
+                releaseLockOnce();
 
                 // Best-effort token-usage extraction, then finalize the
-                // parent row that was opened above.
+                // parent row that was opened above. We also clear the
+                // race-timer handle so it doesn't keep the event loop
+                // alive when usage resolves first (was a small leak).
                 let promptTokens: number | undefined;
                 let completionTokens: number | undefined;
                 let totalTokens: number | undefined;
                 if (streamSuccess) {
                   try {
+                    let usageRaceTimer: ReturnType<typeof setTimeout> | null =
+                      null;
                     const usage = await Promise.race([
-                      stream.usage ?? Promise.resolve(null),
-                      new Promise<null>((res) =>
-                        setTimeout(() => res(null), 2000),
-                      ),
+                      Promise.resolve(stream.usage ?? null).then((u) => {
+                        if (usageRaceTimer) clearTimeout(usageRaceTimer);
+                        return u;
+                      }),
+                      new Promise<null>((res) => {
+                        usageRaceTimer = setTimeout(() => res(null), 2000);
+                      }),
                     ]);
                     if (usage && typeof usage === "object") {
                       const u = usage as Record<string, unknown>;

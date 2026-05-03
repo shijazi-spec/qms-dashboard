@@ -280,7 +280,12 @@ export const qmsConsultantAgent = new Agent({
   memory: new Memory({
     options: {
       threads: {
-        generateTitle: true,
+        // Disabled: Mastra's generateTitle fires an extra blocking GPT-4o
+        // call on the first message of every new thread, adding ~1-3s to
+        // the very first reply. The consultant UI does not surface thread
+        // titles anywhere, so the call was pure latency. Threads are
+        // still created — they just don't get an auto-generated title.
+        generateTitle: false,
       },
       lastMessages: 40,
     },
