@@ -2151,6 +2151,11 @@
           const openForLine = openFor
             ? `<p class="mt-0.5 text-emerald-700" data-testid="text-history-open-for-${a.id}">Open for: ${esc(openFor)}</p>`
             : '';
+          // Notification delivery surface for closed/resolved alerts
+          // (Task #526). Reuses the same pill helper as the open-alerts
+          // panel so after-action review shows whether the alert was
+          // actually paged out at the time it was firing.
+          const notifiedBlock = renderToolHealthNotified(a);
           return `
           <div class="bg-white border border-gray-200 rounded-lg p-3" data-testid="card-tool-health-history-${a.id}">
             <div class="flex items-start gap-3 flex-wrap">
@@ -2164,6 +2169,7 @@
                 </div>
                 <p class="text-sm font-semibold text-gray-900 truncate" data-testid="text-history-title-${a.id}">${esc(a.title)}</p>
                 ${noteLine}
+                ${notifiedBlock}
               </div>
               <div class="shrink-0 text-end text-xs text-gray-500 whitespace-nowrap">
                 <p data-testid="text-history-when-${a.id}">${when}</p>

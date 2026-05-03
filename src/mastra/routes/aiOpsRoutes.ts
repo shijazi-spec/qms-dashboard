@@ -875,6 +875,12 @@ export const aiOpsRoutes = [
               // tool-health and prompt-regression auto-resolve sweeps
               // stamp this with an "auto-resolved" prefix.
               resolution_note: a.resolution_note ?? null,
+              // Notification delivery surface (Task #526): expose the same
+              // notified_at / notified_channel pair the open-alerts endpoint
+              // returns so the history table can render the shared
+              // renderToolHealthNotified() pill for after-action review.
+              notified_at: a.notified_at ?? null,
+              notified_channel: a.notified_channel ?? null,
             };
           });
           return c.json({ data, days, severity: severity ?? null });

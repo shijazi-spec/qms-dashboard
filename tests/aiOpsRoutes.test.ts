@@ -462,6 +462,35 @@ if (!HAS_DB) {
       const fallbackIds = (allFallback.body?.data ?? []).map((a: any) => a.id);
       suite.expect(fallbackIds.includes(highId), "fallback contains high seed");
       suite.expect(fallbackIds.includes(mediumId), "fallback contains medium seed");
+
+      // 5. Notification-delivery surface (Task #526): the history rows
+      // must expose `notified_at` / `notified_channel` so the dashboard
+      // history table can render the same Notified pill the open-alerts
+      // panel uses. We don't assert specific values (no notifier ran for
+      // the seeded rows) — we just lock in that the keys are present and
+      // null until a delivery is recorded.
+      const seededRow = (noFilter.body?.data ?? []).find(
+        (a: any) => a.id === highId,
+      );
+      suite.expect(seededRow != null, "history response includes seeded high row");
+      suite.expect(
+        Object.prototype.hasOwnProperty.call(seededRow, "notified_at"),
+        "history row includes notified_at field",
+      );
+      suite.expect(
+        Object.prototype.hasOwnProperty.call(seededRow, "notified_channel"),
+        "history row includes notified_channel field",
+      );
+      suite.expectEqual(
+        seededRow.notified_at,
+        null,
+        "notified_at null until notifier records",
+      );
+      suite.expectEqual(
+        seededRow.notified_channel,
+        null,
+        "notified_channel null until notifier records",
+      );
     } finally {
       if (original === undefined) delete process.env.ADMIN_API_KEY;
       else process.env.ADMIN_API_KEY = original;
