@@ -384,7 +384,12 @@ export async function redactSecretsInResponse(c: any): Promise<void> {
   c.res = new Response(redactedJson, { status: res.status, headers: res.headers });
 }
 
-async function injectCspNonce(c: any, cspNonce: string): Promise<void> {
+async function injectCspNonce(c: any, cspNonce: string, urlPath: string): Promise<void> {
+  // Do not inject nonces into dynamically generated report HTML. Reports embed
+  // database values in their markup and nonce injection would stamp a valid CSP
+  // nonce onto any attacker-supplied <script substring that survived into the
+  // output, defeating the nonce-based CSP entirely for those responses.
+  if (urlPath.startsWith('/api/reports/')) return;
   const contentType = c.res.headers.get('Content-Type') || '';
   if (contentType.includes('text/html') && c.res.body) {
     try {
@@ -513,6 +518,6 @@ export const globalMiddleware = [
     // `redactSecretsInResponse` doc-comment for rationale.
     await redactSecretsInResponse(c);
 
-    await injectCspNonce(c, cspNonce);
+    await injectCspNonce(c, cspNonce, urlPath);
   },
 ];
