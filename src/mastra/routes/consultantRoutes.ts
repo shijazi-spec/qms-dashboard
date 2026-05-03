@@ -299,7 +299,7 @@ export const consultantRoutes = [
                       threadId: resolvedThreadId,
                     },
                     () =>
-                      agent.generateLegacy(message, {
+                      agent.generate(message, {
                         threadId: resolvedThreadId,
                         resourceId: CONSULTANT_RESOURCE_ID,
                         abortSignal: controller.signal,
@@ -388,7 +388,7 @@ export const consultantRoutes = [
               promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
             }),
           });
-          let stream: Awaited<ReturnType<typeof agent.streamLegacy>>;
+          let stream: Awaited<ReturnType<typeof agent.stream>>;
           try {
             stream = await span.run(() =>
               withAgentUserContext(
@@ -402,7 +402,7 @@ export const consultantRoutes = [
                   threadId: resolvedThreadId,
                 },
                 () =>
-                  agent.streamLegacy(message, {
+                  agent.stream(message, {
                     threadId: resolvedThreadId,
                     resourceId: CONSULTANT_RESOURCE_ID,
                     abortSignal: controller.signal,
@@ -972,7 +972,7 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
                 }),
               },
               async () =>
-                (await agent.generateLegacy(scanPrompt, {
+                (await agent.generate(scanPrompt, {
                   threadId: `scan-${Date.now()}`,
                   resourceId: "system-scanner",
                   abortSignal: scanController.signal,
