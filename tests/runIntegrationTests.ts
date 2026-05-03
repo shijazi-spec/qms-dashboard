@@ -67,6 +67,18 @@
  * Test validates DATABASE_URL itself; CI wires it via
  * `.github/workflows/ai-metrics-sweep.yml`.
  *
+ * Prompt-regression alert cron DB integration test (Task #365): if the env
+ * var `RUN_PROMPT_REGRESSION_E2E=1` is set we additionally run
+ * `tests/promptRegressionAlertsCron.integration.ts` against a real
+ * Postgres. It seeds two prompt versions for the same agent (one with a
+ * high thumbs-up rate, one regressed below threshold), runs
+ * `runPromptRegressionCheck()` with default deps so the production
+ * SQL → cron → alert path is exercised end-to-end, and asserts an
+ * `ai_alerts` row with `alert_type='prompt_regression'` is created.
+ * Notification side-effect deps (Slack/email + open-alerts sweep +
+ * overrides loader) are stubbed so the test cannot page on-call or
+ * disturb pre-existing alerts on a shared DB. Cleanup runs in `finally`.
+ *
  * RBAC HTTP integration tests: if the env var `RUN_RBAC_INTEGRATION_E2E=1`
  * is set we additionally run `tests/rbacRouteLockdown.integration.ts` and
  * `tests/rbacReportRoutes.integration.ts` against a running dev server.
@@ -393,6 +405,37 @@ function runAiMetricsSweep(): Promise<RunResult> {
   });
 }
 
+function runPromptRegressionCronIntegration(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/promptRegressionAlertsCron.integration.ts";
+    const child = spawn(
+      "npx",
+      ["tsx", "tests/promptRegressionAlertsCron.integration.ts"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn prompt-regression cron integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
 function runReviewFilterIndex(): Promise<RunResult> {
   return new Promise((resolve) => {
     const started = Date.now();
@@ -544,6 +587,17 @@ async function main(): Promise<void> {
   } else {
     console.log(
       `\n[skip] ai_call_metrics secret-sweep DB integration test — set RUN_AI_METRICS_SWEEP_E2E=1 with DATABASE_URL pointed at a real Postgres to verify redactAiCallMetrics() against live SQL.`,
+    );
+  }
+
+  if (process.env.RUN_PROMPT_REGRESSION_E2E === "1") {
+    console.log(
+      `\n──── Prompt-regression alert cron DB integration test (Task #365) ────`,
+    );
+    results.push(await runPromptRegressionCronIntegration());
+  } else {
+    console.log(
+      `\n[skip] prompt-regression alert cron DB integration test — set RUN_PROMPT_REGRESSION_E2E=1 with DATABASE_URL pointed at a real Postgres to seed two prompt versions and verify runPromptRegressionCheck() opens an ai_alerts row end-to-end.`,
     );
   }
 
