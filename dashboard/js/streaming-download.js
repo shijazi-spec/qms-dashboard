@@ -2647,6 +2647,127 @@
             return true;
         }
 
+        // Build and display an accessible, styled confirm modal for large
+        // exports using the project's WalaPlusA11y modal API. Renders the
+        // estimated size and row count as a clearly formatted metric line and
+        // includes a "Tighten filters first" hint so users on slow connections
+        // can back out before consuming bandwidth or triggering a disk write.
+        // Returns a Promise<boolean> (true = continue, false = cancel).
+        // Falls back to window.confirm synchronously when the a11y module is
+        // absent (e.g. unit-test environments) so existing call-sites still work.
+        function buildDefaultConfirmLargeExportModal(message, estimate) {
+            var a11y = (typeof global !== 'undefined' && global.WalaPlusA11y) ||
+                       (typeof window !== 'undefined' && window.WalaPlusA11y);
+            var doc = (typeof document !== 'undefined') ? document : null;
+            if (a11y && typeof a11y.openModal === 'function' && doc) {
+                return new Promise(function (resolve) {
+                    var resolved = false;
+                    function finish(result) {
+                        if (resolved) return;
+                        resolved = true;
+                        try { a11y.closeModal(modal); } catch (_) {}
+                        setTimeout(function () {
+                            try { doc.body.removeChild(modal); } catch (_) {}
+                        }, 0);
+                        resolve(result);
+                    }
+
+                    var bytes = (estimate && estimate.bytes > 0) ? estimate.bytes : 0;
+                    var rows  = (estimate && estimate.rows  > 0) ? estimate.rows  : 0;
+
+                    var modal = doc.createElement('div');
+                    modal.setAttribute('role', 'dialog');
+                    modal.setAttribute('aria-modal', 'true');
+                    modal.setAttribute('aria-labelledby', 'sd-confirm-large-title');
+                    modal.setAttribute('data-testid', 'modal-confirm-large-export');
+                    modal.className = 'hidden fixed inset-0 z-[9999] flex items-center justify-center';
+
+                    var backdrop = doc.createElement('div');
+                    backdrop.className = 'fixed inset-0 bg-black bg-opacity-50';
+                    backdrop.setAttribute('aria-hidden', 'true');
+                    modal.appendChild(backdrop);
+
+                    var panel = doc.createElement('div');
+                    panel.className = 'relative bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md mx-4 w-full';
+
+                    var title = doc.createElement('h2');
+                    title.id = 'sd-confirm-large-title';
+                    title.className = 'text-base font-semibold text-gray-900 dark:text-gray-100 mb-2';
+                    title.textContent = tr('downloads.large_export_modal_title', 'Large export');
+                    panel.appendChild(title);
+
+                    var body = doc.createElement('p');
+                    body.className = 'text-sm text-gray-600 dark:text-gray-300 mb-3';
+                    body.textContent = tr('downloads.large_export_modal_body',
+                        'This export is bigger than usual and may take a moment to download.');
+                    panel.appendChild(body);
+
+                    if (bytes > 0 || rows > 0) {
+                        var metricsParts = [];
+                        if (bytes > 0) metricsParts.push('≈ ' + formatBytes(bytes));
+                        if (rows > 0) {
+                            metricsParts.push(tr('downloads.rows',
+                                '{count} rows',
+                                { count: rows.toLocaleString() }));
+                        }
+                        var metrics = doc.createElement('div');
+                        metrics.className = 'text-sm font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 mb-3';
+                        metrics.setAttribute('data-testid', 'text-large-export-metrics');
+                        metrics.textContent = metricsParts.join(' · ');
+                        panel.appendChild(metrics);
+                    }
+
+                    var hint = doc.createElement('p');
+                    hint.className = 'text-xs text-gray-500 dark:text-gray-400 mb-6';
+                    hint.textContent = tr('downloads.large_export_modal_hint',
+                        'Tip: Cancel and tighten your filters first to download a smaller file.');
+                    panel.appendChild(hint);
+
+                    var actions = doc.createElement('div');
+                    actions.className = 'flex justify-end gap-3';
+
+                    var cancelBtn = doc.createElement('button');
+                    cancelBtn.type = 'button';
+                    cancelBtn.setAttribute('data-testid', 'button-cancel-large-export');
+                    cancelBtn.className = 'px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500';
+                    cancelBtn.textContent = tr('downloads.large_export_modal_cancel', 'Cancel');
+                    cancelBtn.addEventListener('click', function () { finish(false); });
+                    actions.appendChild(cancelBtn);
+
+                    var continueBtn = doc.createElement('button');
+                    continueBtn.type = 'button';
+                    continueBtn.setAttribute('data-testid', 'button-continue-large-export');
+                    continueBtn.className = 'px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500';
+                    continueBtn.textContent = tr('downloads.large_export_modal_continue', 'Continue download');
+                    continueBtn.addEventListener('click', function () { finish(true); });
+                    actions.appendChild(continueBtn);
+
+                    panel.appendChild(actions);
+                    modal.appendChild(panel);
+                    doc.body.appendChild(modal);
+
+                    // Treat Escape / backdrop close as "Cancel" so the export
+                    // does not silently kick off when the user dismisses the
+                    // dialog.
+                    var observer = new MutationObserver(function () {
+                        if (modal.classList.contains('hidden')) {
+                            observer.disconnect();
+                            finish(false);
+                        }
+                    });
+                    observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+
+                    a11y.openModal(modal, (typeof document !== 'undefined' && document.activeElement) || null);
+                });
+            }
+            // Fallback: synchronous window.confirm (used in test environments and
+            // pages that have not loaded a11y.js).
+            if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+                return window.confirm(message);
+            }
+            return true;
+        }
+
         // Decide whether the download is "far enough along" that a stray
         // click should not be allowed to silently throw away progress.
         // Either threshold trips the confirm prompt:
@@ -2812,14 +2933,20 @@
 
                 var confirmLarge = (typeof options.confirmLargeExport === 'function')
                     ? options.confirmLargeExport
-                    : ((typeof window !== 'undefined' && typeof window.confirm === 'function')
-                        ? window.confirm.bind(window)
-                        : null);
+                    : buildDefaultConfirmLargeExportModal;
 
                 var proceed = true;
                 if (confirmLarge) {
-                    try { proceed = !!confirmLarge(confirmMsg, preflightEstimate); }
-                    catch (_) { proceed = true; }
+                    try {
+                        var rawProceed = confirmLarge(confirmMsg, preflightEstimate);
+                        // Async path — modal returned a Promise. Await it so
+                        // the gate honours the user's choice instead of
+                        // treating the pending Promise as truthy.
+                        if (rawProceed && typeof rawProceed.then === 'function') {
+                            rawProceed = await rawProceed;
+                        }
+                        proceed = !!rawProceed;
+                    } catch (_) { proceed = true; }
                 }
 
                 if (!proceed) {
