@@ -69,7 +69,6 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/accept-invite.html",
   "dashboard/admin.html",
   "dashboard/ai-approvals.html",
-  "dashboard/ai-ops.html",
   "dashboard/audits.html",
   "dashboard/calls.html",
   "dashboard/compliance.html",
