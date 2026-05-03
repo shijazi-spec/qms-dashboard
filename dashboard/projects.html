@@ -1180,7 +1180,6 @@
     </div>
 
     <script>
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
 
         function escapeHtml(str) {
             if (str == null) return '';
@@ -1439,13 +1438,13 @@
             document.getElementById('totalChangeImpact').textContent = '$' + totalImpact.toLocaleString();
         }
 
-        function openProcurementModal() { alert(_t('dyn.projects.procurement_coming_soon')); }
-        function editProcurement(id) { alert(_t('dyn.projects.edit_procurement', { id })); }
-        function deleteProcurement(id) { if(confirm(_t('dyn.projects.confirm_delete_procurement'))) fetch('/api/pmp/procurement/' + id, {method: 'DELETE'}).then(() => loadProcurement()); }
+        function openProcurementModal() { alert(WalaPlusI18n.t('dyn.projects.procurement_coming_soon')); }
+        function editProcurement(id) { alert(WalaPlusI18n.t('dyn.projects.edit_procurement', { id })); }
+        function deleteProcurement(id) { if(confirm(WalaPlusI18n.t('dyn.projects.confirm_delete_procurement'))) fetch('/api/pmp/procurement/' + id, {method: 'DELETE'}).then(() => loadProcurement()); }
 
-        function openChangeRequestModal() { alert(_t('dyn.projects.change_request_coming_soon')); }
-        function editChangeRequest(id) { alert(_t('dyn.projects.edit_change_request', { id })); }
-        function deleteChangeRequest(id) { if(confirm(_t('dyn.projects.confirm_delete_change'))) fetch('/api/pmp/change-requests/' + id, {method: 'DELETE'}).then(() => loadChangeRequests()); }
+        function openChangeRequestModal() { alert(WalaPlusI18n.t('dyn.projects.change_request_coming_soon')); }
+        function editChangeRequest(id) { alert(WalaPlusI18n.t('dyn.projects.edit_change_request', { id })); }
+        function deleteChangeRequest(id) { if(confirm(WalaPlusI18n.t('dyn.projects.confirm_delete_change'))) fetch('/api/pmp/change-requests/' + id, {method: 'DELETE'}).then(() => loadChangeRequests()); }
 
         function updateKPIs() {
             document.getElementById('totalProjects').textContent = analytics.totalProjects || 0;
@@ -1622,7 +1621,7 @@
         function renderGanttChart() {
             const container = document.getElementById('ganttChart');
             if (milestones.length === 0) {
-                container.innerHTML = '<p class="text-gray-500 text-center py-8">' + _t('dyn.projects.no_milestones') + '</p>';
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.projects.no_milestones') + '</p>';
                 return;
             }
 
@@ -1760,7 +1759,7 @@
         }
 
         function openProjectModal() {
-            document.getElementById('projectModalTitle').textContent = _t('dyn.projects.modal_new_project');
+            document.getElementById('projectModalTitle').textContent = WalaPlusI18n.t('dyn.projects.modal_new_project');
             document.getElementById('projectForm').reset();
             document.getElementById('projectId').value = '';
             document.getElementById('projectModal').classList.remove('hidden');
@@ -1928,9 +1927,9 @@
             const desc = document.getElementById('wizDescription').value;
             const name = document.getElementById('wizProjectName').value;
             const type = document.getElementById('wizProjectType').value;
-            if (!desc) { alert(_t('dyn.projects.enter_description_first')); return; }
+            if (!desc) { alert(WalaPlusI18n.t('dyn.projects.enter_description_first')); return; }
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>' + _t('dyn.projects.btn_generating');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>' + WalaPlusI18n.t('dyn.projects.btn_generating');
             try {
                 const res = await fetch('/api/pmp/generate-charter', {
                     method: 'POST',
@@ -1951,11 +1950,11 @@
                     if (c.milestones) wizardData.milestones = c.milestones.map(m => ({ name: m.name, date: '' }));
                     if (c.recommended_team_structure) wizardData.resources = c.recommended_team_structure.map(r => ({ role: r.role, count: 1 }));
                     renderAllWizardLists();
-                    alert(_t('dyn.projects.ai_prefilled'));
+                    alert(WalaPlusI18n.t('dyn.projects.ai_prefilled'));
                 }
-            } catch (err) { console.error('AI generation error:', err); alert(_t('dyn.projects.failed_generate_scope')); }
+            } catch (err) { console.error('AI generation error:', err); alert(WalaPlusI18n.t('dyn.projects.failed_generate_scope')); }
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-magic me-2"></i>' + _t('dyn.projects.btn_ai_scope');
+            btn.innerHTML = '<i class="fas fa-magic me-2"></i>' + WalaPlusI18n.t('dyn.projects.btn_ai_scope');
         }
 
         async function submitScopeWizard() {
@@ -2010,13 +2009,13 @@
                     loadProjects();
                     loadMilestones();
                     loadStakeholders();
-                    alert(_t('dyn.projects.project_created'));
+                    alert(WalaPlusI18n.t('dyn.projects.project_created'));
                 } else {
-                    alert(_t('dyn.projects.error_creating_project', { msg: data.error || _t('dyn.projects.unknown_error') }));
+                    alert(WalaPlusI18n.t('dyn.projects.error_creating_project', { msg: data.error || WalaPlusI18n.t('dyn.projects.unknown_error') }));
                 }
             } catch (err) {
                 console.error('Error submitting wizard:', err);
-                alert(_t('dyn.projects.failed_create_project'));
+                alert(WalaPlusI18n.t('dyn.projects.failed_create_project'));
             }
         }
 
@@ -2054,11 +2053,11 @@
                     loadAnalytics();
                 } else {
                     const err = await res.json();
-                    alert(err.error || _t('dyn.projects.failed_save_project'));
+                    alert(err.error || WalaPlusI18n.t('dyn.projects.failed_save_project'));
                 }
             } catch (error) {
                 console.error('Error saving project:', error);
-                alert(_t('dyn.projects.failed_save_project'));
+                alert(WalaPlusI18n.t('dyn.projects.failed_save_project'));
             }
         }
 
@@ -2074,7 +2073,7 @@
                 history.pushState({ projectId }, '', `/projects?id=${projectId}`);
             } catch (error) {
                 console.error('Error loading project:', error);
-                alert(_t('dyn.projects.failed_load_details'));
+                alert(WalaPlusI18n.t('dyn.projects.failed_load_details'));
             }
         }
 
@@ -2171,7 +2170,7 @@
             const el = document.getElementById(containerId);
             if (!el) return;
             if (!items || items.length === 0) {
-                el.innerHTML = '<span class="text-gray-400 text-sm">' + _t('dyn.projects.none_defined') + '</span>';
+                el.innerHTML = '<span class="text-gray-400 text-sm">' + WalaPlusI18n.t('dyn.projects.none_defined') + '</span>';
                 return;
             }
             el.innerHTML = items.map(item => `<div class="flex items-center text-sm"><i class="fas fa-check-circle text-green-500 me-2"></i>${escapeHtml(item)}</div>`).join('');
@@ -2181,7 +2180,7 @@
             const el = document.getElementById('detailResourcePlan');
             if (!el) return;
             if (!resources || resources.length === 0) {
-                el.innerHTML = '<span class="text-gray-400 text-sm">' + _t('dyn.projects.no_resource_plan') + '</span>';
+                el.innerHTML = '<span class="text-gray-400 text-sm">' + WalaPlusI18n.t('dyn.projects.no_resource_plan') + '</span>';
                 return;
             }
             el.innerHTML = resources.map(r => {
@@ -2196,7 +2195,7 @@
 
         function renderDetailMilestones(miles) {
             const el = document.getElementById('detailMilestones');
-            if (!miles.length) { el.innerHTML = '<p class="text-gray-400">' + _t('dyn.projects.no_milestones_defined') + '</p>'; return; }
+            if (!miles.length) { el.innerHTML = '<p class="text-gray-400">' + WalaPlusI18n.t('dyn.projects.no_milestones_defined') + '</p>'; return; }
             const statusColors = { pending: 'gray', in_progress: 'blue', completed: 'green', delayed: 'red' };
             el.innerHTML = miles.map(m => `
                 <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
@@ -2214,7 +2213,7 @@
 
         function renderDetailRisks(risks) {
             const el = document.getElementById('detailRisksTable');
-            if (!risks.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.projects.no_risks') + '</td></tr>'; return; }
+            if (!risks.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.projects.no_risks') + '</td></tr>'; return; }
             el.innerHTML = risks.map(r => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3"><div class="font-medium">${escapeHtml(r.risk_description)}</div></td>
@@ -2228,7 +2227,7 @@
 
         function renderDetailStakeholders(stakes) {
             const el = document.getElementById('detailStakeTable');
-            if (!stakes.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.projects.no_stakeholders') + '</td></tr>'; return; }
+            if (!stakes.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.projects.no_stakeholders') + '</td></tr>'; return; }
             el.innerHTML = stakes.map(s => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3 font-medium">${escapeHtml(s.name)}</td>
@@ -2242,7 +2241,7 @@
 
         function renderDetailProcurement(procs) {
             const el = document.getElementById('detailProcTable');
-            if (!procs.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.projects.no_procurement') + '</td></tr>'; return; }
+            if (!procs.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.projects.no_procurement') + '</td></tr>'; return; }
             el.innerHTML = procs.map(p => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3 font-medium">${escapeHtml(p.title)}</td>
@@ -2256,7 +2255,7 @@
 
         function renderDetailChanges(changes) {
             const el = document.getElementById('detailChangeTable');
-            if (!changes.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.projects.no_changes') + '</td></tr>'; return; }
+            if (!changes.length) { el.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.projects.no_changes') + '</td></tr>'; return; }
             const ccbColors = { pending: 'amber', approved: 'green', rejected: 'red', deferred: 'purple' };
             el.innerHTML = changes.map(c => `
                 <tr class="hover:bg-gray-50">
@@ -2296,7 +2295,7 @@
                 const res = await fetch(`/api/pmp/projects/${projectId}`);
                 const project = await res.json();
                 
-                document.getElementById('projectModalTitle').textContent = _t('dyn.projects.modal_edit_project');
+                document.getElementById('projectModalTitle').textContent = WalaPlusI18n.t('dyn.projects.modal_edit_project');
                 document.getElementById('projectId').value = projectId;
                 document.getElementById('projectName').value = project.project_name;
                 document.getElementById('projectCode').value = project.project_code;
@@ -2320,7 +2319,7 @@
         }
 
         async function deleteProject(projectId) {
-            if (!confirm(_t('dyn.projects.confirm_delete_project'))) return;
+            if (!confirm(WalaPlusI18n.t('dyn.projects.confirm_delete_project'))) return;
             try {
                 const res = await fetch(`/api/pmp/projects/${projectId}`, { method: 'DELETE' });
                 if (res.ok) {
@@ -2344,7 +2343,7 @@
         async function generateCharter() {
             const btn = document.getElementById('generateCharterBtn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>' + _t('dyn.projects.btn_generating');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>' + WalaPlusI18n.t('dyn.projects.btn_generating');
 
             try {
                 const res = await fetch('/api/pmp/generate-charter', {
@@ -2386,14 +2385,14 @@
                     
                     document.getElementById('charterResult').classList.remove('hidden');
                 } else {
-                    alert(data.error || _t('dyn.projects.failed_generate_charter'));
+                    alert(data.error || WalaPlusI18n.t('dyn.projects.failed_generate_charter'));
                 }
             } catch (error) {
                 console.error('Error generating charter:', error);
-                alert(_t('dyn.projects.failed_generate_charter'));
+                alert(WalaPlusI18n.t('dyn.projects.failed_generate_charter'));
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-magic me-2"></i>' + _t('dyn.projects.btn_generate_charter');
+                btn.innerHTML = '<i class="fas fa-magic me-2"></i>' + WalaPlusI18n.t('dyn.projects.btn_generate_charter');
             }
         }
 
@@ -2432,24 +2431,24 @@
                     closeCharterModal();
                     loadProjects();
                     loadAnalytics();
-                    alert(_t('dyn.projects.project_created_charter'));
+                    alert(WalaPlusI18n.t('dyn.projects.project_created_charter'));
                 } else {
                     const err = await res.json();
-                    alert(err.error || _t('dyn.projects.failed_create_project_charter'));
+                    alert(err.error || WalaPlusI18n.t('dyn.projects.failed_create_project_charter'));
                 }
             } catch (error) {
                 console.error('Error creating project:', error);
-                alert(_t('dyn.projects.failed_create_project_charter'));
+                alert(WalaPlusI18n.t('dyn.projects.failed_create_project_charter'));
             }
         }
 
-        function openRiskModal() { alert(_t('dyn.projects.risk_modal_stub')); }
-        function openMilestoneModal() { alert(_t('dyn.projects.milestone_modal_stub')); }
-        function openStakeholderModal() { alert(_t('dyn.projects.stakeholder_modal_stub')); }
-        function editRisk(id) { alert(_t('dyn.projects.edit_risk', { id })); }
-        function deleteRisk(id) { if (confirm(_t('dyn.projects.confirm_delete_risk'))) fetch(`/api/pmp/risks/${id}`, { method: 'DELETE' }).then(() => loadRisks()); }
-        function editStakeholder(id) { alert(_t('dyn.projects.edit_stakeholder', { id })); }
-        function deleteStakeholder(id) { if (confirm(_t('dyn.projects.confirm_delete_stakeholder'))) fetch(`/api/pmp/stakeholders/${id}`, { method: 'DELETE' }).then(() => loadStakeholders()); }
+        function openRiskModal() { alert(WalaPlusI18n.t('dyn.projects.risk_modal_stub')); }
+        function openMilestoneModal() { alert(WalaPlusI18n.t('dyn.projects.milestone_modal_stub')); }
+        function openStakeholderModal() { alert(WalaPlusI18n.t('dyn.projects.stakeholder_modal_stub')); }
+        function editRisk(id) { alert(WalaPlusI18n.t('dyn.projects.edit_risk', { id })); }
+        function deleteRisk(id) { if (confirm(WalaPlusI18n.t('dyn.projects.confirm_delete_risk'))) fetch(`/api/pmp/risks/${id}`, { method: 'DELETE' }).then(() => loadRisks()); }
+        function editStakeholder(id) { alert(WalaPlusI18n.t('dyn.projects.edit_stakeholder', { id })); }
+        function deleteStakeholder(id) { if (confirm(WalaPlusI18n.t('dyn.projects.confirm_delete_stakeholder'))) fetch(`/api/pmp/stakeholders/${id}`, { method: 'DELETE' }).then(() => loadStakeholders()); }
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>

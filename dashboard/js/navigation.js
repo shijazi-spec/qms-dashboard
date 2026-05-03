@@ -350,16 +350,17 @@ const WalaPlusNav = {
   },
 
   timeAgo(date) {
-    const _i18n = window.WalaPlusI18n;
-    const _t = (k) => _i18n ? _i18n.t(k) : k.split('.').pop();
+    // Reuse the WalaPlusNav._t method shorthand declared above so the i18n
+    // guardrail (Task #411) can statically verify each key lookup instead of
+    // having to track a second inline wrapper alias.
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-    if (seconds < 60) return _t('nav.time.just_now');
+    if (seconds < 60) return this._t('nav.time.just_now');
     const mins = Math.floor(seconds / 60);
-    if (mins < 60) return mins + _t('nav.time.minutes_ago');
+    if (mins < 60) return mins + this._t('nav.time.minutes_ago');
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return hrs + _t('nav.time.hours_ago');
+    if (hrs < 24) return hrs + this._t('nav.time.hours_ago');
     const days = Math.floor(hrs / 24);
-    return days + _t('nav.time.days_ago');
+    return days + this._t('nav.time.days_ago');
   },
 
   markRead(id) {
@@ -425,8 +426,10 @@ const WalaPlusNav = {
         if (data.authenticated && data.user) {
           const u = data.user;
 
-          // Static skeleton only — no user data interpolated here
-          const _t = (k) => (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop());
+          // Static skeleton only — no user data interpolated here.
+          // The arrow callback inherits `this` from loadUserInfo, so we
+          // call WalaPlusNav._t directly at every key site below — no
+          // local wrapper alias is needed (Task #411).
           const isAr = window.WalaPlusI18n && window.WalaPlusI18n.currentLang && window.WalaPlusI18n.currentLang() === 'ar';
           // Language toggle is exposed in the user dropdown so operators
           // can switch between English and العربية at runtime. The i18n
@@ -446,7 +449,7 @@ const WalaPlusNav = {
                   <p class="text-xs text-gray-500" data-testid="text-user-email"></p>
                 </div>
                 ${SHOW_LANG_TOGGLE ? `<div class="px-4 py-2 border-b border-gray-100">
-                  <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.language">${_t('nav.language')}</p>
+                  <p class="text-xs font-medium text-gray-500 mb-1" data-i18n="nav.language">${this._t('nav.language')}</p>
                   <div class="flex gap-2">
                     <button data-on-click="WalaPlusNav.setLang" data-args='["en"]'
                       class="flex-1 text-xs px-2 py-1 rounded border transition ${isAr ? 'border-gray-200 text-gray-600 hover:bg-gray-50' : 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'}"
@@ -458,7 +461,7 @@ const WalaPlusNav = {
                 </div>` : ''}
                 <button data-on-click="WalaPlusNav.signOut" class="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition" data-testid="button-logout">
                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-                  <span data-i18n="common.sign_out">${_t('common.sign_out')}</span>
+                  <span data-i18n="common.sign_out">${this._t('common.sign_out')}</span>
                 </button>
               </div>
             </div>`;

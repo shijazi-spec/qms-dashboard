@@ -272,20 +272,19 @@
                 document.getElementById('healthScore').textContent = (window.WalaPlusI18n ? window.WalaPlusI18n.formatNumber(healthScore) : String(healthScore));
                 const healthCard = document.getElementById('healthCard');
                 healthCard.className = 'rounded-xl shadow-lg p-6 text-white';
-                const _t = window.WalaPlusI18n ? window.WalaPlusI18n.t.bind(window.WalaPlusI18n) : (k) => k.split('.').pop();
                 const _fmt = (n) => window.WalaPlusI18n ? window.WalaPlusI18n.formatNumber(n) : String(n);
                 if (healthScore >= 80) {
                     healthCard.classList.add('health-excellent');
-                    document.getElementById('healthLabel').textContent = _t('executive.health_labels.excellent');
+                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.excellent');
                 } else if (healthScore >= 60) {
                     healthCard.classList.add('health-good');
-                    document.getElementById('healthLabel').textContent = _t('executive.health_labels.good');
+                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.good');
                 } else if (healthScore >= 40) {
                     healthCard.classList.add('health-warning');
-                    document.getElementById('healthLabel').textContent = _t('executive.health_labels.warning');
+                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.warning');
                 } else {
                     healthCard.classList.add('health-critical');
-                    document.getElementById('healthLabel').textContent = _t('executive.health_labels.critical');
+                    document.getElementById('healthLabel').textContent = WalaPlusI18n.t('executive.health_labels.critical');
                 }
                 
                 document.getElementById('kpiOnTarget').textContent = `${greenKPIs}/${totalKPIs}`;
@@ -413,8 +412,7 @@
                 
                 const riskList = risks.risks || risks || [];
                 if (!riskList.length) {
-                    const _tR = window.WalaPlusI18n ? window.WalaPlusI18n.t.bind(window.WalaPlusI18n) : (k) => k.split('.').pop();
-                    document.getElementById('topRisks').innerHTML = `<p class="text-gray-500 text-sm">${_tR('executive.no_open_risks')}</p>`;
+                    document.getElementById('topRisks').innerHTML = `<p class="text-gray-500 text-sm">${WalaPlusI18n.t('executive.no_open_risks')}</p>`;
                     return;
                 }
                 
@@ -439,8 +437,7 @@
             const belowTarget = (kpiData.kpiDetails || []).filter(k => k.status === 'red' || k.status === 'amber');
             
             if (!belowTarget.length) {
-                const _tK = window.WalaPlusI18n ? window.WalaPlusI18n.t.bind(window.WalaPlusI18n) : (k) => k.split('.').pop();
-                document.getElementById('kpisBelow').innerHTML = `<p class="text-gray-500 text-sm">${_tK('executive.all_kpis_target')}</p>`;
+                document.getElementById('kpisBelow').innerHTML = `<p class="text-gray-500 text-sm">${WalaPlusI18n.t('executive.all_kpis_target')}</p>`;
                 return;
             }
             
@@ -474,8 +471,7 @@
                 const reports = await res.json();
                 
                 if (!reports.length) {
-                    const _tRep = window.WalaPlusI18n ? window.WalaPlusI18n.t.bind(window.WalaPlusI18n) : (k) => k.split('.').pop();
-                    document.getElementById('reportsList').innerHTML = `<div class="p-8 text-center text-gray-500">${_tRep('executive.no_reports_found')}</div>`;
+                    document.getElementById('reportsList').innerHTML = `<div class="p-8 text-center text-gray-500">${WalaPlusI18n.t('executive.no_reports_found')}</div>`;
                     return;
                 }
                 

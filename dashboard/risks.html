@@ -327,7 +327,6 @@
         const pageSize = 20;
         let totalRisks = 0;
 
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
@@ -335,18 +334,18 @@
             let t;
             if (group === 'level') {
                 switch (key) {
-                    case 'critical': t = _t('dyn.risks.level.critical'); break;
-                    case 'high':     t = _t('dyn.risks.level.high'); break;
-                    case 'medium':   t = _t('dyn.risks.level.medium'); break;
-                    case 'low':      t = _t('dyn.risks.level.low'); break;
+                    case 'critical': t = WalaPlusI18n.t('dyn.risks.level.critical'); break;
+                    case 'high':     t = WalaPlusI18n.t('dyn.risks.level.high'); break;
+                    case 'medium':   t = WalaPlusI18n.t('dyn.risks.level.medium'); break;
+                    case 'low':      t = WalaPlusI18n.t('dyn.risks.level.low'); break;
                 }
             } else if (group === 'status_v') {
                 switch (key) {
-                    case 'open':         t = _t('dyn.risks.status_v.open'); break;
-                    case 'in_treatment': t = _t('dyn.risks.status_v.in_treatment'); break;
-                    case 'monitoring':   t = _t('dyn.risks.status_v.monitoring'); break;
-                    case 'escalated':    t = _t('dyn.risks.status_v.escalated'); break;
-                    case 'closed':       t = _t('dyn.risks.status_v.closed'); break;
+                    case 'open':         t = WalaPlusI18n.t('dyn.risks.status_v.open'); break;
+                    case 'in_treatment': t = WalaPlusI18n.t('dyn.risks.status_v.in_treatment'); break;
+                    case 'monitoring':   t = WalaPlusI18n.t('dyn.risks.status_v.monitoring'); break;
+                    case 'escalated':    t = WalaPlusI18n.t('dyn.risks.status_v.escalated'); break;
+                    case 'closed':       t = WalaPlusI18n.t('dyn.risks.status_v.closed'); break;
                 }
             }
             return (t && t !== key) ? t : String(key).replace(/_/g, ' ');
@@ -368,7 +367,7 @@
                 if (data.top_risks && data.top_risks.length > 0) {
                     renderTopRisks(data.top_risks.slice(0, 5));
                 } else {
-                    document.getElementById('topRisksList').innerHTML = '<div class="text-gray-600 text-center py-4">' + _t('dyn.risks.no_risks_registered') + '</div>';
+                    document.getElementById('topRisksList').innerHTML = '<div class="text-gray-600 text-center py-4">' + WalaPlusI18n.t('dyn.risks.no_risks_registered') + '</div>';
                 }
             } catch (error) {
                 console.error('Error loading summary:', error);
@@ -404,7 +403,7 @@
         function renderHeatmap(matrix) {
             const container = document.getElementById('heatmapGrid');
             if (!matrix || matrix.length === 0) {
-                container.innerHTML = '<div class="col-span-5 text-center text-gray-600 py-8">' + _t('dyn.risks.no_risk_data') + '</div>';
+                container.innerHTML = '<div class="col-span-5 text-center text-gray-600 py-8">' + WalaPlusI18n.t('dyn.risks.no_risk_data') + '</div>';
                 return;
             }
 
@@ -414,7 +413,7 @@
                     const cell = matrix[i][j];
                     const score = cell.impact * cell.likelihood;
                     const colorClass = getScoreColorClass(score);
-                    const tip = _t('dyn.risks.risk_cell_tooltip', { count: _fn(cell.count), impact: _fn(cell.impact), likelihood: _fn(cell.likelihood) });
+                    const tip = WalaPlusI18n.t('dyn.risks.risk_cell_tooltip', { count: _fn(cell.count), impact: _fn(cell.impact), likelihood: _fn(cell.likelihood) });
                     html += `
                         <div class="heatmap-cell w-12 h-12 rounded flex items-center justify-center text-sm font-bold ${colorClass}"
                              title="${tip}"
@@ -474,10 +473,10 @@
             if (!treatment) return '-';
             let t;
             switch (treatment) {
-                case 'mitigate': t = _t('dyn.risks.treatment.mitigate'); break;
-                case 'accept':   t = _t('dyn.risks.treatment.accept'); break;
-                case 'transfer': t = _t('dyn.risks.treatment.transfer'); break;
-                case 'avoid':    t = _t('dyn.risks.treatment.avoid'); break;
+                case 'mitigate': t = WalaPlusI18n.t('dyn.risks.treatment.mitigate'); break;
+                case 'accept':   t = WalaPlusI18n.t('dyn.risks.treatment.accept'); break;
+                case 'transfer': t = WalaPlusI18n.t('dyn.risks.treatment.transfer'); break;
+                case 'avoid':    t = WalaPlusI18n.t('dyn.risks.treatment.avoid'); break;
             }
             return (t && t !== treatment) ? t : '-';
         }
@@ -505,14 +504,14 @@
                 updatePagination();
             } catch (error) {
                 console.error('Error loading risks:', error);
-                document.getElementById('risksTableBody').innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-red-500">' + _t('dyn.risks.error_loading_risks') + '</td></tr>';
+                document.getElementById('risksTableBody').innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-red-500">' + WalaPlusI18n.t('dyn.risks.error_loading_risks') + '</td></tr>';
             }
         }
 
         function renderRisksTable(risks) {
             const tbody = document.getElementById('risksTableBody');
             if (!risks || risks.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-600">' + _t('dyn.risks.no_risks_found') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-600">' + WalaPlusI18n.t('dyn.risks.no_risks_found') + '</td></tr>';
                 return;
             }
 
@@ -521,7 +520,7 @@
                     <td class="px-4 py-3 text-sm text-gray-900">R-${String(risk.id).substring(0, 8).toUpperCase()}</td>
                     <td class="px-4 py-3">
                         <div class="text-sm font-medium text-gray-900 truncate max-w-xs">${risk.risk_title}</div>
-                        ${risk.ai_detected ? '<span class="text-xs text-purple-600">' + _t('dyn.risks.ai_detected_label') + '</span>' : ''}
+                        ${risk.ai_detected ? '<span class="text-xs text-purple-600">' + WalaPlusI18n.t('dyn.risks.ai_detected_label') + '</span>' : ''}
                     </td>
                     <td class="px-4 py-3 text-sm text-gray-600">${formatCategory(risk.risk_category)}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${risk.risk_owner || '-'}</td>
@@ -534,7 +533,7 @@
                     <td class="px-4 py-3 text-center text-sm text-gray-600">${formatTreatment(risk.treatment_strategy)}</td>
                     <td class="px-4 py-3 text-center">${formatStatus(risk.status)}</td>
                     <td class="px-4 py-3 text-center">
-                        <button data-on-click="viewRiskDetail" data-args="[&quot;${risk.id}&quot;]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">${_t('dyn.common.view')}</button>
+                        <button data-on-click="viewRiskDetail" data-args="[&quot;${risk.id}&quot;]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">${WalaPlusI18n.t('dyn.common.view')}</button>
                     </td>
                 </tr>
             `).join('');
@@ -597,20 +596,20 @@
                 if (res.ok) {
                     closeModal('addRiskModal');
                     loadAll();
-                    alert(_t('dyn.risks.risk_added'));
+                    alert(WalaPlusI18n.t('dyn.risks.risk_added'));
                 } else {
                     const err = await res.json();
-                    alert(_t('dyn.risks.error_prefix', { msg: err.error || _t('dyn.risks.failed_add_risk') }));
+                    alert(WalaPlusI18n.t('dyn.risks.error_prefix', { msg: err.error || WalaPlusI18n.t('dyn.risks.failed_add_risk') }));
                 }
             } catch (error) {
                 console.error('Error adding risk:', error);
-                alert(_t('dyn.risks.error_adding'));
+                alert(WalaPlusI18n.t('dyn.risks.error_adding'));
             }
         }
 
         async function viewRiskDetail(id) {
             document.getElementById('riskDetailModal').classList.add('active');
-            document.getElementById('riskDetailContent').innerHTML = '<div class="text-gray-600 text-center py-4">' + _t('dyn.common.loading') + '</div>';
+            document.getElementById('riskDetailContent').innerHTML = '<div class="text-gray-600 text-center py-4">' + WalaPlusI18n.t('dyn.common.loading') + '</div>';
 
             try {
                 const res = await fetch(`/api/risks/${id}`);
@@ -618,7 +617,7 @@
                 renderRiskDetail(data);
             } catch (error) {
                 console.error('Error loading risk detail:', error);
-                document.getElementById('riskDetailContent').innerHTML = '<div class="text-red-500 text-center py-4">' + _t('dyn.risks.error_loading_detail') + '</div>';
+                document.getElementById('riskDetailContent').innerHTML = '<div class="text-red-500 text-center py-4">' + WalaPlusI18n.t('dyn.risks.error_loading_detail') + '</div>';
             }
         }
 
@@ -639,53 +638,53 @@
                         </div>
                     </div>
 
-                    ${risk.risk_description ? `<div><h5 class="text-sm font-medium text-gray-700">${_t('dyn.risks.description')}</h5><p class="text-sm text-gray-600 mt-1">${risk.risk_description}</p></div>` : ''}
+                    ${risk.risk_description ? `<div><h5 class="text-sm font-medium text-gray-700">${WalaPlusI18n.t('dyn.risks.description')}</h5><p class="text-sm text-gray-600 mt-1">${risk.risk_description}</p></div>` : ''}
 
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div class="bg-gray-50 p-3 rounded">
-                            <div class="text-xs text-gray-500">${_t('dyn.risks.impact')}</div>
+                            <div class="text-xs text-gray-500">${WalaPlusI18n.t('dyn.risks.impact')}</div>
                             <div class="font-semibold">${_fn(risk.impact_score)}/5</div>
                         </div>
                         <div class="bg-gray-50 p-3 rounded">
-                            <div class="text-xs text-gray-500">${_t('dyn.risks.likelihood')}</div>
+                            <div class="text-xs text-gray-500">${WalaPlusI18n.t('dyn.risks.likelihood')}</div>
                             <div class="font-semibold">${_fn(risk.likelihood_score)}/5</div>
                         </div>
                         <div class="bg-gray-50 p-3 rounded">
-                            <div class="text-xs text-gray-500">${_t('dyn.risks.owner')}</div>
-                            <div class="font-semibold">${risk.risk_owner || _t('dyn.common.unassigned')}</div>
+                            <div class="text-xs text-gray-500">${WalaPlusI18n.t('dyn.risks.owner')}</div>
+                            <div class="font-semibold">${risk.risk_owner || WalaPlusI18n.t('dyn.common.unassigned')}</div>
                         </div>
                         <div class="bg-gray-50 p-3 rounded">
-                            <div class="text-xs text-gray-500">${_t('dyn.risks.department')}</div>
+                            <div class="text-xs text-gray-500">${WalaPlusI18n.t('dyn.risks.department')}</div>
                             <div class="font-semibold">${risk.owner_department || '-'}</div>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <h5 class="text-sm font-medium text-gray-700">${_t('dyn.risks.treatment_strategy')}</h5>
+                            <h5 class="text-sm font-medium text-gray-700">${WalaPlusI18n.t('dyn.risks.treatment_strategy')}</h5>
                             <p class="text-sm text-gray-600 mt-1">${formatTreatment(risk.treatment_strategy)}</p>
                             ${risk.treatment_description ? `<p class="text-xs text-gray-500 mt-1">${risk.treatment_description}</p>` : ''}
                         </div>
                         <div>
-                            <h5 class="text-sm font-medium text-gray-700">${_t('dyn.risks.status_label')}</h5>
+                            <h5 class="text-sm font-medium text-gray-700">${WalaPlusI18n.t('dyn.risks.status_label')}</h5>
                             <div class="mt-1">${formatStatus(risk.status)}</div>
                         </div>
                     </div>
 
                     ${risk.residual_impact && risk.residual_likelihood ? `
                     <div class="bg-green-50 p-4 rounded-lg">
-                        <h5 class="text-sm font-medium text-green-800">${_t('dyn.risks.residual_risk')}</h5>
+                        <h5 class="text-sm font-medium text-green-800">${WalaPlusI18n.t('dyn.risks.residual_risk')}</h5>
                         <div class="flex items-center gap-4 mt-2">
-                            <div class="text-sm">${_t('dyn.risks.impact')}: ${_fn(risk.residual_impact)}/5</div>
-                            <div class="text-sm">${_t('dyn.risks.likelihood')}: ${_fn(risk.residual_likelihood)}/5</div>
-                            <div class="font-bold">${_t('dyn.risks.score_label')}: ${_fn(risk.residual_risk_score)}</div>
+                            <div class="text-sm">${WalaPlusI18n.t('dyn.risks.impact')}: ${_fn(risk.residual_impact)}/5</div>
+                            <div class="text-sm">${WalaPlusI18n.t('dyn.risks.likelihood')}: ${_fn(risk.residual_likelihood)}/5</div>
+                            <div class="font-bold">${WalaPlusI18n.t('dyn.risks.score_label')}: ${_fn(risk.residual_risk_score)}</div>
                         </div>
                     </div>
                     ` : ''}
 
                     ${treatments.length > 0 ? `
                     <div>
-                        <h5 class="text-sm font-medium text-gray-700 mb-2">${_t('dyn.risks.treatment_actions')}</h5>
+                        <h5 class="text-sm font-medium text-gray-700 mb-2">${WalaPlusI18n.t('dyn.risks.treatment_actions')}</h5>
                         <div class="space-y-2">
                             ${treatments.map(t => {
                                 const prog = t.progress_percent || (t.status === 'completed' ? 100 : t.status === 'overdue' ? 30 : 50);
@@ -693,7 +692,7 @@
                                 const dueDate = new Date(t.due_date);
                                 const now = new Date();
                                 const daysLeft = Math.ceil((dueDate - now) / (1000*60*60*24));
-                                const dueLabel = daysLeft < 0 ? `<span class="text-red-600 font-medium">${_t('dyn.risks.days_overdue', { n: _fn(Math.abs(daysLeft)) })}</span>` : daysLeft <= 7 ? `<span class="text-amber-600 font-medium">${_t('dyn.risks.days_left', { n: _fn(daysLeft) })}</span>` : _t('dyn.risks.days_left', { n: _fn(daysLeft) });
+                                const dueLabel = daysLeft < 0 ? `<span class="text-red-600 font-medium">${WalaPlusI18n.t('dyn.risks.days_overdue', { n: _fn(Math.abs(daysLeft)) })}</span>` : daysLeft <= 7 ? `<span class="text-amber-600 font-medium">${WalaPlusI18n.t('dyn.risks.days_left', { n: _fn(daysLeft) })}</span>` : WalaPlusI18n.t('dyn.risks.days_left', { n: _fn(daysLeft) });
                                 const tStatus = _rlbl('treatment_status', t.status);
                                 return `
                                 <div class="border rounded p-3">
@@ -702,14 +701,14 @@
                                         <span class="px-2 py-1 text-xs rounded ${t.status === 'completed' ? 'bg-green-100 text-green-800' : t.status === 'overdue' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">${tStatus}</span>
                                     </div>
                                     <div class="mt-2">
-                                        <div class="flex justify-between text-xs text-gray-500 mb-1"><span>${_t('dyn.risks.progress')}</span><span>${_fn(prog)}%</span></div>
+                                        <div class="flex justify-between text-xs text-gray-500 mb-1"><span>${WalaPlusI18n.t('dyn.risks.progress')}</span><span>${_fn(prog)}%</span></div>
                                         <div class="w-full bg-gray-200 rounded-full h-2"><div class="${progColor} h-2 rounded-full" data-style="width:${prog}%"></div></div>
                                     </div>
                                     <div class="flex justify-between text-xs text-gray-500 mt-2">
-                                        <span>${_t('dyn.risks.assigned_label', { name: t.assigned_to })}</span>
-                                        <span>${_t('dyn.risks.due_with_left', { date: _fd(dueDate), left: dueLabel })}</span>
+                                        <span>${WalaPlusI18n.t('dyn.risks.assigned_label', { name: t.assigned_to })}</span>
+                                        <span>${WalaPlusI18n.t('dyn.risks.due_with_left', { date: _fd(dueDate), left: dueLabel })}</span>
                                     </div>
-                                    ${t.milestones ? `<div class="mt-2 text-xs text-gray-400">${_t('dyn.risks.milestones', { text: t.milestones })}</div>` : ''}
+                                    ${t.milestones ? `<div class="mt-2 text-xs text-gray-400">${WalaPlusI18n.t('dyn.risks.milestones', { text: t.milestones })}</div>` : ''}
                                 </div>
                             `}).join('')}
                         </div>
@@ -722,30 +721,30 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                             </svg>
-                            ${_t('dyn.risks.risk_accepted_grc')}
+                            ${WalaPlusI18n.t('dyn.risks.risk_accepted_grc')}
                         </h5>
                         <div class="text-sm text-slate-600 mt-2">
-                            <div>${_t('dyn.risks.accepted_by', { name: risk.accepted_by, role: risk.accepted_by_role || _t('dyn.risks.grc_manager') })}</div>
-                            ${risk.accepted_at ? `<div>${_t('dyn.risks.date_label', { date: _fd(risk.accepted_at) })}</div>` : ''}
-                            ${risk.acceptance_justification ? `<div class="mt-1">${_t('dyn.risks.justification_label', { text: risk.acceptance_justification })}</div>` : ''}
+                            <div>${WalaPlusI18n.t('dyn.risks.accepted_by', { name: risk.accepted_by, role: risk.accepted_by_role || WalaPlusI18n.t('dyn.risks.grc_manager') })}</div>
+                            ${risk.accepted_at ? `<div>${WalaPlusI18n.t('dyn.risks.date_label', { date: _fd(risk.accepted_at) })}</div>` : ''}
+                            ${risk.acceptance_justification ? `<div class="mt-1">${WalaPlusI18n.t('dyn.risks.justification_label', { text: risk.acceptance_justification })}</div>` : ''}
                         </div>
                     </div>
                     ` : ''}
 
                     <div class="flex justify-end gap-3 pt-4 border-t">
                         ${risk.status !== 'escalated' && risk.status !== 'closed' ? `
-                        <button data-on-click="escalateRisk" data-args="[&quot;${risk.id}&quot;]" class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50">${_t('dyn.risks.escalate')}</button>
+                        <button data-on-click="escalateRisk" data-args="[&quot;${risk.id}&quot;]" class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50">${WalaPlusI18n.t('dyn.risks.escalate')}</button>
                         ` : ''}
                         ${risk.status !== 'closed' && risk.treatment_strategy !== 'accept' ? `
                         <button data-on-click="acceptRisk" data-args="[&quot;${risk.id}&quot;]" class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                             </svg>
-                            ${_t('dyn.risks.accept_grc_only')}
+                            ${WalaPlusI18n.t('dyn.risks.accept_grc_only')}
                         </button>
                         ` : ''}
                         ${risk.status !== 'closed' ? `
-                        <button data-on-click="closeRisk" data-args="[&quot;${risk.id}&quot;]" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">${_t('dyn.risks.close_risk_btn')}</button>
+                        <button data-on-click="closeRisk" data-args="[&quot;${risk.id}&quot;]" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">${WalaPlusI18n.t('dyn.risks.close_risk_btn')}</button>
                         ` : ''}
                     </div>
                 </div>
@@ -753,7 +752,7 @@
         }
 
         async function escalateRisk(id) {
-            const reason = prompt(_t('dyn.risks.prompt_escalation'));
+            const reason = prompt(WalaPlusI18n.t('dyn.risks.prompt_escalation'));
             if (!reason) return;
 
             try {
@@ -765,7 +764,7 @@
                 if (res.ok) {
                     closeModal('riskDetailModal');
                     loadAll();
-                    alert(_t('dyn.risks.risk_escalated'));
+                    alert(WalaPlusI18n.t('dyn.risks.risk_escalated'));
                 }
             } catch (error) {
                 console.error('Error escalating risk:', error);
@@ -773,12 +772,12 @@
         }
 
         async function acceptRisk(id) {
-            const email = prompt(_t('dyn.risks.prompt_grc_email'));
+            const email = prompt(WalaPlusI18n.t('dyn.risks.prompt_grc_email'));
             if (!email) return;
 
-            const justification = prompt(_t('dyn.risks.prompt_justification'));
+            const justification = prompt(WalaPlusI18n.t('dyn.risks.prompt_justification'));
             if (!justification) {
-                alert(_t('dyn.risks.justification_required'));
+                alert(WalaPlusI18n.t('dyn.risks.justification_required'));
                 return;
             }
 
@@ -796,22 +795,22 @@
                 if (res.ok) {
                     closeModal('riskDetailModal');
                     loadAll();
-                    alert(_t('dyn.risks.risk_accepted'));
+                    alert(WalaPlusI18n.t('dyn.risks.risk_accepted'));
                 } else {
                     if (res.status === 403) {
-                        alert(_t('dyn.risks.access_denied_grc', { role: data.required_role, email: data.user_email }));
+                        alert(WalaPlusI18n.t('dyn.risks.access_denied_grc', { role: data.required_role, email: data.user_email }));
                     } else {
-                        alert(_t('dyn.risks.error_prefix', { msg: data.error || _t('dyn.risks.failed_accept') }));
+                        alert(WalaPlusI18n.t('dyn.risks.error_prefix', { msg: data.error || WalaPlusI18n.t('dyn.risks.failed_accept') }));
                     }
                 }
             } catch (error) {
                 console.error('Error accepting risk:', error);
-                alert(_t('dyn.risks.error_accepting'));
+                alert(WalaPlusI18n.t('dyn.risks.error_accepting'));
             }
         }
 
         async function closeRisk(id) {
-            if (!confirm(_t('dyn.risks.confirm_close'))) return;
+            if (!confirm(WalaPlusI18n.t('dyn.risks.confirm_close'))) return;
 
             try {
                 const res = await fetch(`/api/risks/${id}/close`, {
@@ -822,7 +821,7 @@
                 if (res.ok) {
                     closeModal('riskDetailModal');
                     loadAll();
-                    alert(_t('dyn.risks.risk_closed'));
+                    alert(WalaPlusI18n.t('dyn.risks.risk_closed'));
                 }
             } catch (error) {
                 console.error('Error closing risk:', error);
@@ -831,7 +830,7 @@
 
         function showHeatmapCellRisks(riskIds, impact, likelihood) {
             if (!riskIds || riskIds.length === 0) return;
-            alert(_t('dyn.risks.heatmap_summary', { count: _fn(riskIds.length), impact: _fn(impact), likelihood: _fn(likelihood), ids: riskIds.join(', ') }));
+            alert(WalaPlusI18n.t('dyn.risks.heatmap_summary', { count: _fn(riskIds.length), impact: _fn(impact), likelihood: _fn(likelihood), ids: riskIds.join(', ') }));
         }
 
         function loadAll() {

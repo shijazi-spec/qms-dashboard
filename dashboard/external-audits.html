@@ -285,7 +285,6 @@
   </div>
 
   <script>
-    const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
       '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
     }[c]));
@@ -339,13 +338,13 @@
       if (kind)   qs.set('kind', kind);
       if (status) qs.set('status', status);
       const tbody = document.getElementById('auditsTbody');
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + _t('dyn.ext_audits.loading') + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + WalaPlusI18n.t('dyn.ext_audits.loading') + '</td></tr>';
       try {
         const res = await fetch('/api/external-audits?' + qs.toString(), { credentials: 'same-origin' });
         const data = await res.json();
         const rows = data.rows || [];
         if (!rows.length) {
-          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + _t('dyn.ext_audits.no_external_audits') + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">' + WalaPlusI18n.t('dyn.ext_audits.no_external_audits') + '</td></tr>';
           return;
         }
         tbody.innerHTML = rows.map(r => `
@@ -362,7 +361,7 @@
           </tr>
         `).join('');
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-red-500 py-8">' + _t('dyn.ext_audits.failed_load') + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-red-500 py-8">' + WalaPlusI18n.t('dyn.ext_audits.failed_load') + '</td></tr>';
       }
     }
 
@@ -376,13 +375,13 @@
 
     async function loadCertificates() {
       const tbody = document.getElementById('certsTbody');
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">' + _t('dyn.ext_audits.loading') + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">' + WalaPlusI18n.t('dyn.ext_audits.loading') + '</td></tr>';
       try {
         const res = await fetch('/api/external-audits/certificates', { credentials: 'same-origin' });
         const data = await res.json();
         const rows = data.rows || [];
         if (!rows.length) {
-          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">' + _t('dyn.ext_audits.no_certificates') + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">' + WalaPlusI18n.t('dyn.ext_audits.no_certificates') + '</td></tr>';
           return;
         }
         tbody.innerHTML = rows.map(r => `
@@ -396,7 +395,7 @@
           </tr>
         `).join('');
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-red-500 py-8">' + _t('dyn.ext_audits.failed_load') + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-red-500 py-8">' + WalaPlusI18n.t('dyn.ext_audits.failed_load') + '</td></tr>';
       }
     }
 
@@ -408,8 +407,8 @@
         const data = await res.json();
         const rows = data.rows || [];
         const opts = rows.map(r => `<option value="${r.id}">${esc(r.audit_code)} — ${esc(r.title)}</option>`).join('');
-        sel.innerHTML    = '<option value="">' + _t('dyn.external_audits.select_audit_placeholder') + '</option>' + opts;
-        if (certSel) certSel.innerHTML = '<option value="">' + _t('dyn.external_audits.select_audit_placeholder') + '</option>' + opts;
+        sel.innerHTML    = '<option value="">' + WalaPlusI18n.t('dyn.external_audits.select_audit_placeholder') + '</option>' + opts;
+        if (certSel) certSel.innerHTML = '<option value="">' + WalaPlusI18n.t('dyn.external_audits.select_audit_placeholder') + '</option>' + opts;
       } catch (_) {}
     }
 
@@ -417,10 +416,10 @@
       const id = document.getElementById('readinessAuditSelector').value;
       const body = document.getElementById('readinessBody');
       if (!id) {
-        body.innerHTML = '<p class="text-sm text-gray-500">' + _t('dyn.ext_audits.pick_audit') + '</p>';
+        body.innerHTML = '<p class="text-sm text-gray-500">' + WalaPlusI18n.t('dyn.ext_audits.pick_audit') + '</p>';
         return;
       }
-      body.innerHTML = '<p class="text-center text-gray-400 py-8">' + _t('dyn.ext_audits.loading_readiness') + '</p>';
+      body.innerHTML = '<p class="text-center text-gray-400 py-8">' + WalaPlusI18n.t('dyn.ext_audits.loading_readiness') + '</p>';
       try {
         const res = await fetch('/api/external-audits/' + id, { credentials: 'same-origin' });
         const data = await res.json();
@@ -469,7 +468,7 @@
              `).join('')}
            </div>`;
       } catch (err) {
-        body.innerHTML = '<p class="text-red-500 text-center py-6">' + _t('dyn.ext_audits.failed_load_readiness') + '</p>';
+        body.innerHTML = '<p class="text-red-500 text-center py-6">' + WalaPlusI18n.t('dyn.ext_audits.failed_load_readiness') + '</p>';
       }
     }
 
@@ -489,7 +488,7 @@
         ev.target.reset();
         loadReadiness();
       } else {
-        alert(_t('dyn.ext_audits.failed_add_item'));
+        alert(WalaPlusI18n.t('dyn.ext_audits.failed_add_item'));
       }
     }
 
@@ -503,7 +502,7 @@
       if (res.ok) {
         loadReadiness();
       } else {
-        alert(_t('dyn.ext_audits.failed_update_item'));
+        alert(WalaPlusI18n.t('dyn.ext_audits.failed_update_item'));
       }
     }
 
@@ -528,7 +527,7 @@
         await Promise.all([loadSummary(), loadAudits(), populateReadinessSelector()]);
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(_t('dyn.ext_audits.failed_action', { msg: err.error || res.statusText }));
+        alert(WalaPlusI18n.t('dyn.ext_audits.failed_action', { msg: err.error || res.statusText }));
       }
     }
 
@@ -543,7 +542,7 @@
       const payload = Object.fromEntries(fd.entries());
       for (const k of Object.keys(payload)) if (payload[k] === '') payload[k] = null;
       const auditId = payload.external_audit_id;
-      if (!auditId) { alert(_t('dyn.ext_audits.pick_audit_first')); return; }
+      if (!auditId) { alert(WalaPlusI18n.t('dyn.ext_audits.pick_audit_first')); return; }
       const res = await fetch('/api/external-audits/' + auditId + '/certificates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -557,7 +556,7 @@
         loadSummary();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(_t('dyn.ext_audits.failed_action', { msg: err.error || res.statusText }));
+        alert(WalaPlusI18n.t('dyn.ext_audits.failed_action', { msg: err.error || res.statusText }));
       }
     }
 

@@ -236,35 +236,34 @@
     <script>
         let allKPIs = [];
 
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         function _kpiCategoryLabel(cat, fb) {
             switch (cat) {
-                case 'governance': return _t('kpis.c_governance', fb);
-                case 'risk':       return _t('kpis.c_risk', fb);
-                case 'compliance': return _t('kpis.c_compliance', fb);
-                case 'audit':      return _t('kpis.c_audit', fb);
-                case 'quality':    return _t('kpis.c_quality', fb);
-                case 'vendor':     return _t('kpis.c_vendor', fb);
-                case 'training':   return _t('kpis.c_training', fb);
-                case 'ai':         return _t('kpis.c_ai', fb);
+                case 'governance': return WalaPlusI18n.t('kpis.c_governance', fb);
+                case 'risk':       return WalaPlusI18n.t('kpis.c_risk', fb);
+                case 'compliance': return WalaPlusI18n.t('kpis.c_compliance', fb);
+                case 'audit':      return WalaPlusI18n.t('kpis.c_audit', fb);
+                case 'quality':    return WalaPlusI18n.t('kpis.c_quality', fb);
+                case 'vendor':     return WalaPlusI18n.t('kpis.c_vendor', fb);
+                case 'training':   return WalaPlusI18n.t('kpis.c_training', fb);
+                case 'ai':         return WalaPlusI18n.t('kpis.c_ai', fb);
             }
             return fb;
         }
         function _kpiOwnerLabel(owner) {
             switch (owner) {
-                case 'quality_manager':    return _t('dyn.kpis.owners.quality_manager');
-                case 'grc_manager':        return _t('dyn.kpis.owners.grc_manager');
-                case 'governance_officer': return _t('dyn.kpis.owners.governance_officer');
-                case 'shared':             return _t('dyn.kpis.owners.shared');
+                case 'quality_manager':    return WalaPlusI18n.t('dyn.kpis.owners.quality_manager');
+                case 'grc_manager':        return WalaPlusI18n.t('dyn.kpis.owners.grc_manager');
+                case 'governance_officer': return WalaPlusI18n.t('dyn.kpis.owners.governance_officer');
+                case 'shared':             return WalaPlusI18n.t('dyn.kpis.owners.shared');
             }
             return owner;
         }
         function _kpiOwnerFullLabel(owner) {
             switch (owner) {
-                case 'quality_manager':    return _t('dyn.kpis.owners_full.quality_manager');
-                case 'grc_manager':        return _t('dyn.kpis.owners_full.grc_manager');
-                case 'governance_officer': return _t('dyn.kpis.owners_full.governance_officer');
-                case 'shared':             return _t('dyn.kpis.owners_full.shared');
+                case 'quality_manager':    return WalaPlusI18n.t('dyn.kpis.owners_full.quality_manager');
+                case 'grc_manager':        return WalaPlusI18n.t('dyn.kpis.owners_full.grc_manager');
+                case 'governance_officer': return WalaPlusI18n.t('dyn.kpis.owners_full.governance_officer');
+                case 'shared':             return WalaPlusI18n.t('dyn.kpis.owners_full.shared');
             }
             return owner;
         }
@@ -325,10 +324,10 @@
                 type: 'doughnut',
                 data: {
                     labels: [
-                        _t('kpis.o_quality_manager', 'Sara (Quality)'),
-                        _t('kpis.o_grc_manager', 'Maram (GRC)'),
-                        _t('kpis.o_governance_officer', 'Mohammed (Governance)'),
-                        _t('kpis.o_shared', 'Shared')
+                        WalaPlusI18n.t('kpis.o_quality_manager', 'Sara (Quality)'),
+                        WalaPlusI18n.t('kpis.o_grc_manager', 'Maram (GRC)'),
+                        WalaPlusI18n.t('kpis.o_governance_officer', 'Mohammed (Governance)'),
+                        WalaPlusI18n.t('kpis.o_shared', 'Shared')
                     ],
                     datasets: [{
                         data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.governance_officer || 0, data.byOwner?.shared || 0],
@@ -343,10 +342,10 @@
                 type: 'doughnut',
                 data: {
                     labels: [
-                        _t('kpis.on_target', 'On Target'),
-                        _t('kpis.at_risk', 'At Risk'),
-                        _t('kpis.off_target', 'Off Target'),
-                        _t('dyn.kpis.no_data_status', 'No Data')
+                        WalaPlusI18n.t('kpis.on_target', 'On Target'),
+                        WalaPlusI18n.t('kpis.at_risk', 'At Risk'),
+                        WalaPlusI18n.t('kpis.off_target', 'Off Target'),
+                        WalaPlusI18n.t('dyn.kpis.no_data_status', 'No Data')
                     ],
                     datasets: [{
                         data: [data.byStatus?.green || 0, data.byStatus?.amber || 0, data.byStatus?.red || 0, data.byStatus?.no_data || 0],
@@ -363,7 +362,7 @@
                 data: {
                     labels: cats.map(c => _kpiCategoryLabel(c[0], c[0].charAt(0).toUpperCase() + c[0].slice(1))),
                     datasets: [{
-                        label: _t('dyn.kpis.chart_kpis'),
+                        label: WalaPlusI18n.t('dyn.kpis.chart_kpis'),
                         data: cats.map(c => c[1]),
                         backgroundColor: '#4F46E5'
                     }]
@@ -376,7 +375,7 @@
         function renderKPIList(kpis) {
             const container = document.getElementById('kpiList');
             if (!kpis.length) {
-                container.innerHTML = '<div class="p-8 text-center text-gray-500">' + _t('dyn.kpis.no_kpis') + '</div>';
+                container.innerHTML = '<div class="p-8 text-center text-gray-500">' + WalaPlusI18n.t('dyn.kpis.no_kpis') + '</div>';
                 return;
             }
             
@@ -397,17 +396,17 @@
                                 </div>
                                 <p class="text-sm text-gray-600 mt-1">${kpi.description || ''}</p>
                                 <div class="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                                    <span>${_t('dyn.kpis.owner_label', { name: ownerLabel })}</span>
-                                    <span>${_t('dyn.kpis.category_label', { name: kpi.category })}</span>
-                                    <span>${_t('dyn.kpis.frequency_label', { name: kpi.frequency })}</span>
-                                    ${hasNavMap ? `<span class="text-cyan-600 font-medium">📋 ${_t('dyn.kpis.has_steps')}</span>` : ''}
+                                    <span>${WalaPlusI18n.t('dyn.kpis.owner_label', { name: ownerLabel })}</span>
+                                    <span>${WalaPlusI18n.t('dyn.kpis.category_label', { name: kpi.category })}</span>
+                                    <span>${WalaPlusI18n.t('dyn.kpis.frequency_label', { name: kpi.frequency })}</span>
+                                    ${hasNavMap ? `<span class="text-cyan-600 font-medium">📋 ${WalaPlusI18n.t('dyn.kpis.has_steps')}</span>` : ''}
                                 </div>
                             </div>
                             <div class="text-end">
                                 <div class="text-2xl font-bold text-gray-900 ${trendClass}">
                                     ${kpi.latestValue !== null && kpi.latestValue !== undefined ? _fn(kpi.latestValue) + (kpi.unit || '%') : '--'}
                                 </div>
-                                <div class="text-xs text-gray-500">${_t('dyn.kpis.target_label', { value: (kpi.target_value !== null && kpi.target_value !== undefined ? _fn(kpi.target_value) : '--') + (kpi.unit || '%') })}</div>
+                                <div class="text-xs text-gray-500">${WalaPlusI18n.t('dyn.kpis.target_label', { value: (kpi.target_value !== null && kpi.target_value !== undefined ? _fn(kpi.target_value) : '--') + (kpi.unit || '%') })}</div>
                             </div>
                         </div>
                     </div>
@@ -432,47 +431,47 @@
                 
                 const ownerLabel = _kpiOwnerFullLabel(kpi.owner_type || 'shared');
                 const navMap = kpi.navigation_map ? (typeof kpi.navigation_map === 'string' ? JSON.parse(kpi.navigation_map) : kpi.navigation_map) : null;
-                const statusLabel = kpi.latestValue?.status || _t('dyn.kpis.no_data_status');
+                const statusLabel = kpi.latestValue?.status || WalaPlusI18n.t('dyn.kpis.no_data_status');
                 
                 document.getElementById('detailTitle').textContent = kpi.kpi_name;
                 document.getElementById('detailContent').innerHTML = `
                     <div class="grid grid-cols-2 gap-6">
                         <div>
-                            <h4 class="font-semibold text-gray-900 mb-3">${_t('dyn.kpis.definition')}</h4>
+                            <h4 class="font-semibold text-gray-900 mb-3">${WalaPlusI18n.t('dyn.kpis.definition')}</h4>
                             <div class="space-y-2 text-sm">
-                                <div><span class="text-gray-500">${_t('dyn.kpis.code_label')}</span> ${kpi.kpi_code}</div>
-                                <div><span class="text-gray-500">${_t('dyn.kpis.owner_kw')}</span> ${ownerLabel}</div>
-                                <div><span class="text-gray-500">${_t('dyn.kpis.category_kw')}</span> ${kpi.category}</div>
-                                <div><span class="text-gray-500">${_t('dyn.kpis.frequency_kw')}</span> ${kpi.frequency}</div>
-                                <div><span class="text-gray-500">${_t('dyn.kpis.unit_kw')}</span> ${kpi.unit}</div>
+                                <div><span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.code_label')}</span> ${kpi.kpi_code}</div>
+                                <div><span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.owner_kw')}</span> ${ownerLabel}</div>
+                                <div><span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.category_kw')}</span> ${kpi.category}</div>
+                                <div><span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.frequency_kw')}</span> ${kpi.frequency}</div>
+                                <div><span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.unit_kw')}</span> ${kpi.unit}</div>
                             </div>
                             <div class="mt-4">
-                                <span class="text-gray-500 text-sm">${_t('dyn.kpis.description_kw')}</span>
-                                <p class="text-sm text-gray-700 mt-1">${kpi.description || _t('dyn.kpis.no_description')}</p>
+                                <span class="text-gray-500 text-sm">${WalaPlusI18n.t('dyn.kpis.description_kw')}</span>
+                                <p class="text-sm text-gray-700 mt-1">${kpi.description || WalaPlusI18n.t('dyn.kpis.no_description')}</p>
                             </div>
                             <div class="mt-4">
-                                <span class="text-gray-500 text-sm">${_t('dyn.kpis.formula_kw')}</span>
-                                <p class="text-sm text-gray-700 mt-1 font-mono bg-gray-50 p-2 rounded">${kpi.formula || _t('dyn.kpis.not_specified')}</p>
+                                <span class="text-gray-500 text-sm">${WalaPlusI18n.t('dyn.kpis.formula_kw')}</span>
+                                <p class="text-sm text-gray-700 mt-1 font-mono bg-gray-50 p-2 rounded">${kpi.formula || WalaPlusI18n.t('dyn.kpis.not_specified')}</p>
                             </div>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-gray-900 mb-3">${_t('dyn.kpis.thresholds')}</h4>
+                            <h4 class="font-semibold text-gray-900 mb-3">${WalaPlusI18n.t('dyn.kpis.thresholds')}</h4>
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between p-2 bg-green-50 rounded">
-                                    <span class="text-green-700">${_t('dyn.kpis.green_on_target')}</span>
+                                    <span class="text-green-700">${WalaPlusI18n.t('dyn.kpis.green_on_target')}</span>
                                     <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '≥' : '≤'} ${_fn(kpi.threshold_green)}${kpi.unit}</span>
                                 </div>
                                 <div class="flex items-center justify-between p-2 bg-amber-50 rounded">
-                                    <span class="text-amber-700">${_t('dyn.kpis.amber_at_risk')}</span>
+                                    <span class="text-amber-700">${WalaPlusI18n.t('dyn.kpis.amber_at_risk')}</span>
                                     <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '≥' : '≤'} ${_fn(kpi.threshold_amber)}${kpi.unit}</span>
                                 </div>
                                 <div class="flex items-center justify-between p-2 bg-red-50 rounded">
-                                    <span class="text-red-700">${_t('dyn.kpis.red_off_target')}</span>
+                                    <span class="text-red-700">${WalaPlusI18n.t('dyn.kpis.red_off_target')}</span>
                                     <span class="font-medium">${kpi.threshold_direction === 'higher_is_better' ? '<' : '>'} ${_fn(kpi.threshold_red)}${kpi.unit}</span>
                                 </div>
                             </div>
                             <div class="mt-4">
-                                <span class="text-gray-500 text-sm">${_t('dyn.kpis.target_value')}</span>
+                                <span class="text-gray-500 text-sm">${WalaPlusI18n.t('dyn.kpis.target_value')}</span>
                                 <p class="text-2xl font-bold text-blue-800">${kpi.target_value !== null && kpi.target_value !== undefined ? _fn(kpi.target_value) : '--'}${kpi.unit}</p>
                             </div>
                         </div>
@@ -481,7 +480,7 @@
                     <div class="mt-6">
                         <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
                             <span class="w-6 h-6 bg-cyan-100 text-cyan-600 rounded me-2 flex items-center justify-center text-sm">📋</span>
-                            ${_t('dyn.kpis.nav_steps')}
+                            ${WalaPlusI18n.t('dyn.kpis.nav_steps')}
                         </h4>
                         <div class="space-y-3">
                             ${navMap.map(step => `
@@ -491,21 +490,21 @@
                                         <div class="flex-1">
                                             <div class="font-medium text-gray-900">${step.action}</div>
                                             <div class="text-sm text-gray-600 mt-1">
-                                                <span class="text-gray-500">${_t('dyn.kpis.screen_kw')}</span> 
+                                                <span class="text-gray-500">${WalaPlusI18n.t('dyn.kpis.screen_kw')}</span> 
                                                 <a href="${step.route}" class="text-cyan-600 hover:underline">${step.screen}</a>
                                             </div>
                                             <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
                                                 <div class="bg-white rounded p-2">
-                                                    <div class="text-gray-500 uppercase font-medium">${_t('dyn.kpis.what_to_check')}</div>
+                                                    <div class="text-gray-500 uppercase font-medium">${WalaPlusI18n.t('dyn.kpis.what_to_check')}</div>
                                                     <div class="text-gray-700">${step.what_to_check}</div>
                                                 </div>
                                                 <div class="bg-amber-50 rounded p-2">
-                                                    <div class="text-amber-600 uppercase font-medium">${_t('dyn.kpis.if_result')}</div>
+                                                    <div class="text-amber-600 uppercase font-medium">${WalaPlusI18n.t('dyn.kpis.if_result')}</div>
                                                     <div class="text-gray-700">${step.if_result}</div>
                                                 </div>
                                             </div>
                                             <div class="bg-green-50 rounded p-2 mt-2 text-xs">
-                                                <div class="text-green-600 uppercase font-medium">${_t('dyn.kpis.then_action')}</div>
+                                                <div class="text-green-600 uppercase font-medium">${WalaPlusI18n.t('dyn.kpis.then_action')}</div>
                                                 <div class="text-gray-700">${step.then_action}</div>
                                             </div>
                                         </div>
@@ -516,17 +515,17 @@
                     </div>
                     ` : ''}
                     <div class="mt-6">
-                        <h4 class="font-semibold text-gray-900 mb-3">${_t('dyn.kpis.history_title')}</h4>
+                        <h4 class="font-semibold text-gray-900 mb-3">${WalaPlusI18n.t('dyn.kpis.history_title')}</h4>
                         ${kpi.history && kpi.history.length ? `
                             <figure>
                                 <canvas id="historyChart" height="120" role="img" aria-label="KPI value history: line chart comparing actual values to target over time" aria-describedby="historyChart-summary"></canvas>
                                 <table id="historyChart-summary" class="sr-only"><caption>KPI Value History</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                             </figure>
-                        ` : '<p class="text-gray-500 text-sm">' + _t('dyn.kpis.no_history') + '</p>'}
+                        ` : '<p class="text-gray-500 text-sm">' + WalaPlusI18n.t('dyn.kpis.no_history') + '</p>'}
                     </div>
                     <div class="mt-6 flex justify-end gap-2">
-                        <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">${_t('dyn.kpis.record_value_btn')}</button>
-                        <button data-on-click="editKPI" data-args="[${kpi.id}]" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">${_t('dyn.kpis.edit_kpi_btn')}</button>
+                        <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">${WalaPlusI18n.t('dyn.kpis.record_value_btn')}</button>
+                        <button data-on-click="editKPI" data-args="[${kpi.id}]" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">${WalaPlusI18n.t('dyn.kpis.edit_kpi_btn')}</button>
                     </div>
                 `;
                 
@@ -541,12 +540,12 @@
                                 data: {
                                     labels: kpi.history.reverse().map(h => _fd(h.period_end)),
                                     datasets: [{
-                                        label: _t('dyn.kpis.chart_actual'),
+                                        label: WalaPlusI18n.t('dyn.kpis.chart_actual'),
                                         data: kpi.history.map(h => h.actual_value),
                                         borderColor: '#1E3A8A',
                                         tension: 0.3
                                     }, {
-                                        label: _t('dyn.kpis.chart_target'),
+                                        label: WalaPlusI18n.t('dyn.kpis.chart_target'),
                                         data: kpi.history.map(() => kpi.target_value),
                                         borderColor: '#9CA3AF',
                                         borderDash: [5, 5]
@@ -568,7 +567,7 @@
         }
 
         function openAddModal() {
-            document.getElementById('modalTitle').textContent = _t('dyn.kpis.modal_add');
+            document.getElementById('modalTitle').textContent = WalaPlusI18n.t('dyn.kpis.modal_add');
             document.getElementById('kpiForm').reset();
             document.getElementById('kpiId').value = '';
             document.getElementById('kpiModal').classList.remove('hidden');
@@ -584,7 +583,7 @@
                 const res = await fetch(`/api/kpis/${id}`);
                 const kpi = await res.json();
                 
-                document.getElementById('modalTitle').textContent = _t('dyn.kpis.modal_edit');
+                document.getElementById('modalTitle').textContent = WalaPlusI18n.t('dyn.kpis.modal_edit');
                 document.getElementById('kpiId').value = kpi.id;
                 document.getElementById('kpiName').value = kpi.kpi_name;
                 document.getElementById('kpiCode').value = kpi.kpi_code;
@@ -640,16 +639,16 @@
                     closeModal();
                     loadKPIs();
                 } else {
-                    alert(_t('dyn.kpis.failed_save'));
+                    alert(WalaPlusI18n.t('dyn.kpis.failed_save'));
                 }
             } catch (error) {
                 console.error('Error saving KPI:', error);
-                alert(_t('dyn.kpis.error_save'));
+                alert(WalaPlusI18n.t('dyn.kpis.error_save'));
             }
         });
 
         function openRecordValueModal(kpiId) {
-            const value = prompt(_t('dyn.kpis.prompt_value'));
+            const value = prompt(WalaPlusI18n.t('dyn.kpis.prompt_value'));
             if (value !== null) {
                 recordValue(kpiId, parseFloat(value));
             }
@@ -675,7 +674,7 @@
                     closeDetailModal();
                     loadKPIs();
                 } else {
-                    alert(_t('dyn.kpis.failed_record_value'));
+                    alert(WalaPlusI18n.t('dyn.kpis.failed_record_value'));
                 }
             } catch (error) {
                 console.error('Error recording value:', error);

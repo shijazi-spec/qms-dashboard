@@ -1010,7 +1010,6 @@
   </div>
 
   <script>
-    const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
     let costChart = null;
     let feedbackTrendChart = null;
     let toolHealthTrendChart = null;
@@ -1277,7 +1276,7 @@
             </div>`;
           }).join('');
         } else {
-          catsEl.innerHTML = '<div class="text-sm text-gray-400">' + _t('dyn.ai_ops.no_category_data') + '</div>';
+          catsEl.innerHTML = '<div class="text-sm text-gray-400">' + WalaPlusI18n.t('dyn.ai_ops.no_category_data') + '</div>';
         }
 
         // Refresh the prompt-version filter dropdown options from the
@@ -1462,10 +1461,10 @@
             </div>`;
           }).join('');
         } else {
-          recentEl.innerHTML = '<div class="text-sm text-gray-400">' + _t('dyn.ai_ops.no_thumbs_down') + '</div>';
+          recentEl.innerHTML = '<div class="text-sm text-gray-400">' + WalaPlusI18n.t('dyn.ai_ops.no_thumbs_down') + '</div>';
         }
       } catch (err) {
-        kpiEl.innerHTML = '<div class="text-sm text-red-500 col-span-4 py-4 text-center">' + _t('dyn.ai_ops.failed_load_feedback') + '</div>';
+        kpiEl.innerHTML = '<div class="text-sm text-red-500 col-span-4 py-4 text-center">' + WalaPlusI18n.t('dyn.ai_ops.failed_load_feedback') + '</div>';
         if (promptVersionsEl) promptVersionsEl.innerHTML = '<div class="text-sm text-gray-400">—</div>';
         if (clientSurfacesEl) clientSurfacesEl.innerHTML = '<div class="text-sm text-gray-400">—</div>';
       }
@@ -1573,7 +1572,7 @@
       } catch (err) {
         console.warn('Feedback trend load error', err);
         if (wrapEl)  wrapEl.style.display  = 'none';
-        if (emptyEl) { emptyEl.classList.remove('hidden'); emptyEl.textContent = _t('dyn.ai_ops.failed_load_trend'); }
+        if (emptyEl) { emptyEl.classList.remove('hidden'); emptyEl.textContent = WalaPlusI18n.t('dyn.ai_ops.failed_load_trend'); }
       }
     }
 
@@ -1631,14 +1630,14 @@
         const stats = data || {};
         rowCountEl.textContent = (stats.rowCount || 0).toLocaleString();
         if (retentionEl) {
-          retentionEl.textContent = _t('dyn.ai_ops.storage_retention_label', { days: stats.retentionDays });
+          retentionEl.textContent = WalaPlusI18n.t('dyn.ai_ops.storage_retention_label', { days: stats.retentionDays });
         }
 
         oldestAgeEl.textContent = fmtAgeDays(stats.oldestAgeDays);
         if (stats.oldestStartedAt) {
-          oldestDetailEl.textContent = _t('dyn.ai_ops.storage_oldest_row_prefix', { ts: fmtDate(stats.oldestStartedAt) });
+          oldestDetailEl.textContent = WalaPlusI18n.t('dyn.ai_ops.storage_oldest_row_prefix', { ts: fmtDate(stats.oldestStartedAt) });
         } else {
-          oldestDetailEl.textContent = _t('dyn.ai_ops.storage_no_rows');
+          oldestDetailEl.textContent = WalaPlusI18n.t('dyn.ai_ops.storage_no_rows');
         }
 
         // Reset to the neutral stat-card palette, then layer the warning
@@ -1661,7 +1660,7 @@
           oldestAgeEl.className = 'text-2xl font-bold text-red-700 mt-1';
           oldestDetailEl.className = 'text-xs text-red-700 mt-1 font-medium';
           oldestCardEl.setAttribute('data-warn', 'true');
-          oldestDetailEl.textContent = _t('dyn.ai_ops.storage_oldest_exceeds', {
+          oldestDetailEl.textContent = WalaPlusI18n.t('dyn.ai_ops.storage_oldest_exceeds', {
             ts: fmtDate(stats.oldestStartedAt),
             days: stats.retentionDays,
           });
@@ -1694,29 +1693,29 @@
         const lp = stats.lastPrune;
         if (!lp) {
           lastDeletedEl.textContent = '—';
-          lastDetailEl.textContent = _t('dyn.ai_ops.storage_no_prune_recorded');
+          lastDetailEl.textContent = WalaPlusI18n.t('dyn.ai_ops.storage_no_prune_recorded');
         } else {
-          const deletedLabel = _t('dyn.ai_ops.storage_rows_deleted', { n: (lp.rowsDeleted || 0).toLocaleString() });
-          lastDeletedEl.textContent = lp.success ? deletedLabel : _t('dyn.ai_ops.storage_failed_label');
+          const deletedLabel = WalaPlusI18n.t('dyn.ai_ops.storage_rows_deleted', { n: (lp.rowsDeleted || 0).toLocaleString() });
+          lastDeletedEl.textContent = lp.success ? deletedLabel : WalaPlusI18n.t('dyn.ai_ops.storage_failed_label');
           const ago = fmtRelTime(lp.ranAt);
           if (lp.success) {
-            lastDetailEl.textContent = _t('dyn.ai_ops.storage_last_run_meta', {
+            lastDetailEl.textContent = WalaPlusI18n.t('dyn.ai_ops.storage_last_run_meta', {
               ago: ago,
               days: lp.retentionDays,
               ms: (lp.durationMs || 0).toLocaleString(),
             });
           } else if (lp.errorMessage) {
-            lastDetailEl.textContent = _t('dyn.ai_ops.storage_last_run_failed_with_msg', {
+            lastDetailEl.textContent = WalaPlusI18n.t('dyn.ai_ops.storage_last_run_failed_with_msg', {
               ago: ago,
               msg: lp.errorMessage,
             });
           } else {
-            lastDetailEl.textContent = _t('dyn.ai_ops.storage_last_run_failed', { ago: ago });
+            lastDetailEl.textContent = WalaPlusI18n.t('dyn.ai_ops.storage_last_run_failed', { ago: ago });
           }
         }
       } catch (e) {
         console.error('Metrics table stats load error', e);
-        if (oldestDetailEl) oldestDetailEl.textContent = _t('dyn.ai_ops.storage_failed_load');
+        if (oldestDetailEl) oldestDetailEl.textContent = WalaPlusI18n.t('dyn.ai_ops.storage_failed_load');
       }
     }
 
@@ -2033,7 +2032,7 @@
       } catch (e) {
         console.error('Tool-health alerts load error', e);
         section.classList.remove('hidden');
-        list.innerHTML = '<p class="text-sm text-red-700" data-testid="text-tool-health-alerts-error">' + _t('dyn.ai_ops.failed_load_alerts') + '</p>';
+        list.innerHTML = '<p class="text-sm text-red-700" data-testid="text-tool-health-alerts-error">' + WalaPlusI18n.t('dyn.ai_ops.failed_load_alerts') + '</p>';
       }
     }
 
@@ -2123,23 +2122,23 @@
             // button on the filter bar. Mirrors the Health Pulse
             // `renderChecksWithFilter` pattern.
             const parts = [];
-            if (days !== 7) parts.push(_t('dyn.ai_ops.filter_days_named', { days: String(days) }));
-            if (severity) parts.push(_t('dyn.ai_ops.filter_severity_named', { severity }));
-            if (toolText) parts.push(_t('dyn.ai_ops.filter_tool_named', { tool: toolText }));
-            const filterDesc = parts.join(_t('dyn.ai_ops.filter_join'));
-            const msg = _t('dyn.ai_ops.no_alert_history_filtered_named', { filters: filterDesc });
+            if (days !== 7) parts.push(WalaPlusI18n.t('dyn.ai_ops.filter_days_named', { days: String(days) }));
+            if (severity) parts.push(WalaPlusI18n.t('dyn.ai_ops.filter_severity_named', { severity }));
+            if (toolText) parts.push(WalaPlusI18n.t('dyn.ai_ops.filter_tool_named', { tool: toolText }));
+            const filterDesc = parts.join(WalaPlusI18n.t('dyn.ai_ops.filter_join'));
+            const msg = WalaPlusI18n.t('dyn.ai_ops.no_alert_history_filtered_named', { filters: filterDesc });
             list.innerHTML =
               '<div class="px-2 py-6 text-center text-gray-500 text-sm" data-testid="text-tool-health-history-empty">'
               + '<div>' + esc(msg) + '</div>'
               + '<button type="button" data-on-click="resetToolHealthHistoryFilters"'
               + ' class="mt-3 text-sm font-medium text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"'
               + ' data-testid="button-tool-health-history-clear-filters">'
-              + esc(_t('dyn.ai_ops.clear_filters'))
+              + esc(WalaPlusI18n.t('dyn.ai_ops.clear_filters'))
               + '</button>'
               + '</div>';
             return;
           }
-          list.innerHTML = `<p class="text-sm text-gray-500" data-testid="text-tool-health-history-empty">${esc(_t('dyn.ai_ops.no_alert_history'))}</p>`;
+          list.innerHTML = `<p class="text-sm text-gray-500" data-testid="text-tool-health-history-empty">${esc(WalaPlusI18n.t('dyn.ai_ops.no_alert_history'))}</p>`;
           return;
         }
         const STATUS_BADGE = {
@@ -2222,7 +2221,7 @@
         }).join('');
       } catch (e) {
         console.error('Tool-health history load error', e);
-        if (list) list.innerHTML = '<p class="text-sm text-red-600" data-testid="text-tool-health-history-error">' + _t('dyn.ai_ops.failed_load_alert_history') + '</p>';
+        if (list) list.innerHTML = '<p class="text-sm text-red-600" data-testid="text-tool-health-history-error">' + WalaPlusI18n.t('dyn.ai_ops.failed_load_alert_history') + '</p>';
       }
     }
 
@@ -3038,7 +3037,7 @@
       const el = document.getElementById('latency-table');
       try {
         const { data } = await apiFetch('/api/ai-ops/agent-latency');
-        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + _t('dyn.ai_ops.no_data_7_days') + '</p>'; return; }
+        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + WalaPlusI18n.t('dyn.ai_ops.no_data_7_days') + '</p>'; return; }
         el.innerHTML = `
           <table class="min-w-full text-start text-sm" data-testid="table-agent-latency">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
@@ -3069,7 +3068,7 @@
             </tbody>
           </table>`;
       } catch (e) {
-        el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_latency') + '</p>';
+        el.innerHTML = '<p class="text-red-500 text-sm">' + WalaPlusI18n.t('dyn.ai_ops.failed_load_latency') + '</p>';
       }
     }
 
@@ -3213,7 +3212,7 @@
           ? parseInt(versionsRes.min_feedback)
           : 5;
         if (!data.length) {
-          el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-prompts-empty">' + _t('dyn.ai_ops.no_prompt_data') + '</p>';
+          el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-prompts-empty">' + WalaPlusI18n.t('dyn.ai_ops.no_prompt_data') + '</p>';
           return;
         }
 
@@ -3453,7 +3452,7 @@
         el.innerHTML = blocks;
       } catch (e) {
         console.error('Prompt versions error', e);
-        el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_prompt_compare') + '</p>';
+        el.innerHTML = '<p class="text-red-500 text-sm">' + WalaPlusI18n.t('dyn.ai_ops.failed_load_prompt_compare') + '</p>';
       }
     }
 
@@ -3465,7 +3464,7 @@
         const { data, agents } = await apiFetch(url);
         syncToolAgentOptions(agents);
         if (!data.length) {
-          el.innerHTML = `<p class="text-gray-400 text-sm" data-testid="text-tools-empty">${_t('dyn.ai_ops.no_tool_calls')}${agent ? ' ' + _t('dyn.ai_ops.for_agent_prefix') + '"' + esc(agent) + '"' : ''}</p>`;
+          el.innerHTML = `<p class="text-gray-400 text-sm" data-testid="text-tools-empty">${WalaPlusI18n.t('dyn.ai_ops.no_tool_calls')}${agent ? ' ' + WalaPlusI18n.t('dyn.ai_ops.for_agent_prefix') + '"' + esc(agent) + '"' : ''}</p>`;
           return;
         }
         el.innerHTML = `
@@ -3490,7 +3489,7 @@
             </tbody>
           </table>`;
       } catch (e) {
-        el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_tools') + '</p>';
+        el.innerHTML = '<p class="text-red-500 text-sm">' + WalaPlusI18n.t('dyn.ai_ops.failed_load_tools') + '</p>';
       }
     }
 
@@ -3683,15 +3682,15 @@
       // message so operators can see at a glance WHICH filter combination
       // is hiding everything.
       const parts = [];
-      if (state.status === 'error') parts.push(_t('dyn.ai_ops.filter_status_error'));
-      else if (state.status === 'ok') parts.push(_t('dyn.ai_ops.filter_status_ok'));
+      if (state.status === 'error') parts.push(WalaPlusI18n.t('dyn.ai_ops.filter_status_error'));
+      else if (state.status === 'ok') parts.push(WalaPlusI18n.t('dyn.ai_ops.filter_status_ok'));
       if (state.agent !== 'all') {
-        parts.push(_t('dyn.ai_ops.filter_agent_named', { agent: state.agent }));
+        parts.push(WalaPlusI18n.t('dyn.ai_ops.filter_agent_named', { agent: state.agent }));
       }
       if (state.tool) {
-        parts.push(_t('dyn.ai_ops.filter_tool_named', { tool: state.tool }));
+        parts.push(WalaPlusI18n.t('dyn.ai_ops.filter_tool_named', { tool: state.tool }));
       }
-      return parts.join(_t('dyn.ai_ops.filter_join'));
+      return parts.join(WalaPlusI18n.t('dyn.ai_ops.filter_join'));
     }
 
     async function loadIssues() {
@@ -3703,7 +3702,7 @@
         populateIssuesAgentFilter(lastIssuesData);
         renderIssuesTable();
       } catch (e) {
-        el.innerHTML = '<p class="text-red-500 text-sm">' + _t('dyn.ai_ops.failed_load_issues') + '</p>';
+        el.innerHTML = '<p class="text-red-500 text-sm">' + WalaPlusI18n.t('dyn.ai_ops.failed_load_issues') + '</p>';
       }
     }
 
@@ -3712,7 +3711,7 @@
       if (!el) return;
       const allData = lastIssuesData;
       if (!allData.length) {
-        el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-issues-empty">' + esc(_t('dyn.ai_ops.no_slow_calls')) + '</p>';
+        el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-issues-empty">' + esc(WalaPlusI18n.t('dyn.ai_ops.no_slow_calls')) + '</p>';
         return;
       }
       const state = getIssuesFilterState();
@@ -3723,20 +3722,20 @@
         // offer an inline one-click reset so operators don't mistake this
         // for a broken page or missing data (Task #722).
         const filterDesc = describeActiveIssuesFilters(state);
-        const msg = _t('dyn.ai_ops.no_matching_issues', { filters: filterDesc });
+        const msg = WalaPlusI18n.t('dyn.ai_ops.no_matching_issues', { filters: filterDesc });
         el.innerHTML =
           '<div class="px-6 py-8 text-center text-gray-500 text-sm" data-testid="text-no-matching-issues">'
           + '<div>' + esc(msg) + '</div>'
           + '<button type="button" data-on-click="resetIssuesFilters"'
           + ' class="mt-3 text-sm font-medium text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"'
           + ' data-testid="button-issues-clear-filters">'
-          + esc(_t('dyn.ai_ops.clear_filters'))
+          + esc(WalaPlusI18n.t('dyn.ai_ops.clear_filters'))
           + '</button>'
           + '</div>';
         return;
       }
       if (!data.length) {
-        el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-issues-empty">' + esc(_t('dyn.ai_ops.no_slow_calls')) + '</p>';
+        el.innerHTML = '<p class="text-gray-400 text-sm" data-testid="text-issues-empty">' + esc(WalaPlusI18n.t('dyn.ai_ops.no_slow_calls')) + '</p>';
         return;
       }
       el.innerHTML = `
@@ -3899,13 +3898,13 @@
         renderChildren(container, childrenCache.get(parentId));
         return;
       }
-      container.innerHTML = '<span class="text-gray-400">' + _t('dyn.ai_ops.loading_children') + '</span>';
+      container.innerHTML = '<span class="text-gray-400">' + WalaPlusI18n.t('dyn.ai_ops.loading_children') + '</span>';
       try {
         const { data } = await apiFetch(`/api/ai-ops/calls/${encodeURIComponent(parentId)}/children`);
         childrenCache.set(parentId, data);
         renderChildren(container, data);
       } catch (e) {
-        container.innerHTML = '<span class="text-red-500">' + _t('dyn.ai_ops.failed_load_children') + '</span>';
+        container.innerHTML = '<span class="text-red-500">' + WalaPlusI18n.t('dyn.ai_ops.failed_load_children') + '</span>';
       }
     }
 
@@ -4069,7 +4068,7 @@
 
     function renderChildren(container, rows) {
       if (!rows || !rows.length) {
-        container.innerHTML = '<span class="text-gray-400" data-testid="text-no-children">' + _t('dyn.ai_ops.no_children') + '</span>';
+        container.innerHTML = '<span class="text-gray-400" data-testid="text-no-children">' + WalaPlusI18n.t('dyn.ai_ops.no_children') + '</span>';
         return;
       }
 
@@ -4162,7 +4161,7 @@
       const el = document.getElementById('negative-table');
       try {
         const { data } = await apiFetch('/api/ai-ops/negative-feedback?limit=50');
-        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + _t('dyn.ai_ops.no_neg_feedback') + '</p>'; return; }
+        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + WalaPlusI18n.t('dyn.ai_ops.no_neg_feedback') + '</p>'; return; }
         el.innerHTML = `
           <table class="min-w-full text-start text-sm" data-testid="table-negative-feedback">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
@@ -4265,7 +4264,7 @@
         const { data } = await apiFetch(`/api/ai-ops/call/${encodeURIComponent(callId)}`);
         openCallDetailModal(data);
       } catch (e) {
-        alert(_t('dyn.ai_ops.could_not_load_call', { id: callId, msg: e.message || e }));
+        alert(WalaPlusI18n.t('dyn.ai_ops.could_not_load_call', { id: callId, msg: e.message || e }));
       }
     }
 
@@ -5657,8 +5656,8 @@
       const metaEl = document.getElementById('thresholds-updated-meta');
       const expiryMetaEl = document.getElementById('thresholds-expiry-meta');
       errEl.classList.add('hidden');
-      formEl.innerHTML = '<p class="text-sm text-gray-400">' + _t('dyn.ai_ops.loading_thresholds') + '</p>';
-      auditEl.innerHTML = '<p class="text-sm text-gray-400">' + _t('dyn.ai_ops.loading_short') + '</p>';
+      formEl.innerHTML = '<p class="text-sm text-gray-400">' + WalaPlusI18n.t('dyn.ai_ops.loading_thresholds') + '</p>';
+      auditEl.innerHTML = '<p class="text-sm text-gray-400">' + WalaPlusI18n.t('dyn.ai_ops.loading_short') + '</p>';
       if (expiryMetaEl) expiryMetaEl.innerHTML = '';
       try {
         const { data } = await apiFetch('/api/ai-ops/tool-health-config');
@@ -5670,19 +5669,19 @@
         renderThresholdsForm(data);
         renderThresholdsAudit(data.audit || []);
         if (data.updated_at) {
-          const who = data.updated_by ? ' ' + _t('dyn.ai_ops.by_prefix') + esc(data.updated_by) : '';
-          metaEl.innerHTML = _t('dyn.ai_ops.last_edited_prefix') + esc(fmtDate(data.updated_at)) + who;
+          const who = data.updated_by ? ' ' + WalaPlusI18n.t('dyn.ai_ops.by_prefix') + esc(data.updated_by) : '';
+          metaEl.innerHTML = WalaPlusI18n.t('dyn.ai_ops.last_edited_prefix') + esc(fmtDate(data.updated_at)) + who;
         } else {
-          metaEl.textContent = _t('dyn.ai_ops.no_overrides');
+          metaEl.textContent = WalaPlusI18n.t('dyn.ai_ops.no_overrides');
         }
         if (expiryMetaEl) {
           if (data.expires_at) {
             const cls = data.expired ? 'text-amber-700' : 'text-gray-600';
             const tag = data.expired
-              ? ' (' + _t('dyn.ai_ops.tag_expired') + ')'
-              : ' (' + _t('dyn.ai_ops.tag_auto_revert') + ')';
+              ? ' (' + WalaPlusI18n.t('dyn.ai_ops.tag_expired') + ')'
+              : ' (' + WalaPlusI18n.t('dyn.ai_ops.tag_auto_revert') + ')';
             expiryMetaEl.className = `mt-1 ${cls}`;
-            expiryMetaEl.textContent = _t('dyn.ai_ops.overrides_expire_prefix') + fmtDate(data.expires_at) + tag;
+            expiryMetaEl.textContent = WalaPlusI18n.t('dyn.ai_ops.overrides_expire_prefix') + fmtDate(data.expires_at) + tag;
           } else {
             expiryMetaEl.className = 'mt-1';
             expiryMetaEl.textContent = '';
@@ -5694,7 +5693,7 @@
         auditEl.innerHTML = '';
         metaEl.textContent = '';
         if (expiryMetaEl) expiryMetaEl.textContent = '';
-        errEl.textContent = _t('dyn.ai_ops.failed_load_config') + (e?.message || 'unknown error');
+        errEl.textContent = WalaPlusI18n.t('dyn.ai_ops.failed_load_config') + (e?.message || 'unknown error');
         errEl.classList.remove('hidden');
       }
     }
@@ -5947,8 +5946,8 @@
       const panel = document.getElementById('thresholds-preview-result');
       if (!panel) return;
       panel.classList.remove('hidden');
-      panel.innerHTML = `<div class="p-4 text-sm text-gray-500" data-testid="text-thresholds-preview-loading">${_t('dyn.ai_ops.preview_loading')}</div>`;
-      setSaveStatus(_t('dyn.ai_ops.previewing'), 'info');
+      panel.innerHTML = `<div class="p-4 text-sm text-gray-500" data-testid="text-thresholds-preview-loading">${WalaPlusI18n.t('dyn.ai_ops.preview_loading')}</div>`;
+      setSaveStatus(WalaPlusI18n.t('dyn.ai_ops.previewing'), 'info');
       try {
         const r = await fetch('/api/ai-ops/tool-health-config/preview', {
           method: 'POST',
@@ -5959,16 +5958,16 @@
         const body = await r.json().catch(() => ({}));
         if (!r.ok) {
           const detail = body?.details ? ` (${body.details.join('; ')})` : '';
-          panel.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-50 border-red-200" data-testid="text-thresholds-preview-error">${_t('dyn.ai_ops.preview_failed')}${esc(body?.error || 'HTTP ' + r.status)}${esc(detail)}</div>`;
-          setSaveStatus(`${_t('dyn.ai_ops.preview_failed')}${body?.error || 'HTTP ' + r.status}${detail}`, 'error');
+          panel.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-50 border-red-200" data-testid="text-thresholds-preview-error">${WalaPlusI18n.t('dyn.ai_ops.preview_failed')}${esc(body?.error || 'HTTP ' + r.status)}${esc(detail)}</div>`;
+          setSaveStatus(`${WalaPlusI18n.t('dyn.ai_ops.preview_failed')}${body?.error || 'HTTP ' + r.status}${detail}`, 'error');
           return;
         }
         renderThresholdsPreview(body.data);
-        setSaveStatus(_t('dyn.ai_ops.preview_ready'), 'ok');
+        setSaveStatus(WalaPlusI18n.t('dyn.ai_ops.preview_ready'), 'ok');
       } catch (e) {
         console.error('Threshold preview error', e);
-        panel.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-50 border-red-200" data-testid="text-thresholds-preview-error">${_t('dyn.ai_ops.preview_failed')}${esc(e?.message || 'unknown error')}</div>`;
-        setSaveStatus(`${_t('dyn.ai_ops.preview_failed')}${e?.message || 'unknown error'}`, 'error');
+        panel.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-50 border-red-200" data-testid="text-thresholds-preview-error">${WalaPlusI18n.t('dyn.ai_ops.preview_failed')}${esc(e?.message || 'unknown error')}</div>`;
+        setSaveStatus(`${WalaPlusI18n.t('dyn.ai_ops.preview_failed')}${e?.message || 'unknown error'}`, 'error');
       }
     }
 
@@ -6111,7 +6110,7 @@
     function renderThresholdsAudit(rows) {
       const el = document.getElementById('thresholds-audit');
       if (!rows || rows.length === 0) {
-        el.innerHTML = '<p class="text-sm text-gray-400" data-testid="text-thresholds-audit-empty">' + _t('dyn.ai_ops.no_threshold_changes') + '</p>';
+        el.innerHTML = '<p class="text-sm text-gray-400" data-testid="text-thresholds-audit-empty">' + WalaPlusI18n.t('dyn.ai_ops.no_threshold_changes') + '</p>';
         return;
       }
       el.innerHTML = rows.map((r, i) => {
