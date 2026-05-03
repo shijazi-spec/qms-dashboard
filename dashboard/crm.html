@@ -112,10 +112,10 @@
                     <h1 class="text-2xl font-bold text-gray-900" data-testid="text-page-title">CRM Data Hub</h1>
                     <p class="text-gray-500 text-sm mt-1" data-i18n="crm.subtitle">Live CRM data enriched with quality scores &amp; duplicate detection</p>
                 </div>
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center gap-3">
                     <span id="connectionStatus" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm" data-testid="status-connection">Checking...</span>
                     <span id="lastUpdated" class="text-xs text-gray-400"></span>
-                    <button data-on-click="refreshData" id="refreshBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2" data-testid="button-refresh">
+                    <button data-on-click="refreshData" id="refreshBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center gap-2" data-testid="button-refresh">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
@@ -148,7 +148,7 @@
             </div>
 
             <div class="border-b border-gray-200 mb-6">
-                <nav class="flex space-x-8" id="moduleTabs">
+                <nav class="flex gap-8" id="moduleTabs">
                     <button data-on-click="switchModule" data-args="[&quot;Leads&quot;]" data-module="Leads" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 tab-active" data-testid="tab-leads" data-i18n="crm.tab_leads">Leads</button>
                     <button data-on-click="switchModule" data-args="[&quot;Deals&quot;]" data-module="Deals" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-deals" data-i18n="crm.tab_deals">Deals</button>
                     <button data-on-click="switchModule" data-args="[&quot;Contacts&quot;]" data-module="Contacts" class="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300" data-testid="tab-contacts" data-i18n="crm.tab_contacts">Contacts</button>
@@ -157,7 +157,7 @@
             </div>
 
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center gap-4">
                     <div class="relative">
                         <input type="text" id="searchInput" placeholder="Search records..."
                             class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-64"
@@ -168,13 +168,13 @@
                     </div>
                     <span id="recordCount" class="text-sm text-gray-500" data-testid="text-record-count">0 records</span>
                 </div>
-                <div class="flex items-center space-x-3">
-                    <label class="inline-flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
+                <div class="flex items-center gap-3">
+                    <label class="inline-flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
                         <input type="checkbox" id="highlightIssues" checked data-on-change="renderTable"
                             class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-testid="checkbox-highlight-issues">
                         <span data-i18n="crm.highlight_issues">Highlight Issues</span>
                     </label>
-                    <label class="inline-flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
+                    <label class="inline-flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
                         <input type="checkbox" id="hideJunk" data-on-change="filterTable"
                             class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-testid="checkbox-hide-junk">
                         <span data-i18n="crm.hide_junk">Hide Junk</span>

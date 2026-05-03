@@ -96,7 +96,7 @@
 
         <div class="max-w-7xl mx-auto px-4 py-6">
             <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title">Audit Reports</h1>
-            <div class="flex space-x-2 mb-6 border-b border-gray-200">
+            <div class="flex gap-2 mb-6 border-b border-gray-200">
                 <button
                     data-on-click="showTab" data-args="[&quot;overview&quot;]"
                     id="tab-overview"
@@ -393,15 +393,15 @@
                         <h3 class="text-lg font-semibold">
                             Corrective and Preventive Actions
                         </h3>
-                        <div class="flex space-x-2">
-                            <button data-on-click="exportCSV" data-args="[&quot;capa&quot;]" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center space-x-1">
+                        <div class="flex gap-2">
+                            <button data-on-click="exportCSV" data-args="[&quot;capa&quot;]" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                 <span>Export CSV</span>
                             </button>
                             <button data-on-click="showCapaModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">New CAPA</button>
                         </div>
                     </div>
-                    <div class="flex space-x-2 mb-4">
+                    <div class="flex gap-2 mb-4">
                         <select
                             id="capa-status-filter"
                             data-on-change="loadCapa"
@@ -463,7 +463,7 @@
                     </div>
                     <div id="capa-bulk-toolbar" class="hidden mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
                         <span class="text-sm text-blue-700"><span id="capa-selected-count">0</span> CAPA(s) selected</span>
-                        <div class="flex space-x-2">
+                        <div class="flex gap-2">
                             <select id="capa-bulk-status" class="border rounded px-2 py-1 text-sm">
                                 <option value="">Change Status...</option>
                                 <option value="investigation">Investigation</option>
@@ -484,8 +484,8 @@
                         <h3 class="text-lg font-semibold">
                             Nonconformance Records
                         </h3>
-                        <div class="flex space-x-2">
-                            <button data-on-click="exportCSV" data-args="[&quot;nc&quot;]" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center space-x-1">
+                        <div class="flex gap-2">
+                            <button data-on-click="exportCSV" data-args="[&quot;nc&quot;]" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                 <span>Export CSV</span>
                             </button>
@@ -523,7 +523,7 @@
                     </div>
                     <div id="nc-bulk-toolbar" class="hidden mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center justify-between">
                         <span class="text-sm text-red-700"><span id="nc-selected-count">0</span> NC(s) selected</span>
-                        <div class="flex space-x-2">
+                        <div class="flex gap-2">
                             <select id="nc-bulk-status" class="border rounded px-2 py-1 text-sm">
                                 <option value="">Change Status...</option>
                                 <option value="open">Open</option>
@@ -744,7 +744,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-2 mt-6">
+                    <div class="flex justify-end gap-2 mt-6">
                         <button
                             type="button"
                             data-on-click="hideCapaModal"
@@ -1817,7 +1817,7 @@
                                 <input type="text" name="assigned_to" data-testid="input-nc-assigned" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Name or email">
                             </div>
                         </div>
-                        <div class="flex justify-end space-x-3 mt-6">
+                        <div class="flex justify-end gap-3 mt-6">
                             <button type="button" data-on-click="closeNcModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                             <button type="submit" data-testid="button-submit-nc" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700" data-i18n="qms.create_nc">Create NC</button>
                         </div>

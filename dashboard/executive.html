@@ -36,14 +36,14 @@
                 <p class="text-gray-600" data-i18n="executive.subtitle">Enterprise health overview with MBR/QBR/ABR summaries</p>
                 <p class="text-xs text-gray-400 mt-1" id="hijri-date-display"></p>
             </div>
-            <div class="flex space-x-2">
+            <div class="flex gap-2">
                 <button data-on-click="generateReport" data-args='["mbr"]' class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700" data-i18n="executive.generate_mbr">Generate MBR</button>
                 <button data-on-click="generateReport" data-args='["qbr"]' class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700" data-i18n="executive.generate_qbr">Generate QBR</button>
             </div>
         </div>
 
         <div class="mb-6 border-b bg-white rounded-t-xl">
-            <nav class="flex space-x-6 px-4">
+            <nav class="flex gap-6 px-4">
                 <button data-on-click="showTab" data-args='["overview"]' id="tab-overview" class="py-3 text-sm font-medium tab-active" data-i18n="executive.tabs.overview">Overview</button>
                 <button data-on-click="showTab" data-args='["kpis"]' id="tab-kpis" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.kpis">KPI Health</button>
                 <button data-on-click="showTab" data-args='["risks"]' id="tab-risks" class="py-3 text-sm font-medium text-gray-600 hover:text-gray-900" data-i18n="executive.tabs.risks">Risk Exposure</button>

@@ -88,7 +88,7 @@
         <div class="max-w-7xl mx-auto px-4 py-6">
             <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="nav.items.admin">User &amp; Role Management</h1>
             <div class="border-b border-gray-200 mb-6">
-                <nav class="flex space-x-8">
+                <nav class="flex gap-8">
                     <button
                         data-on-click="switchTab" data-args="[&quot;documents&quot;]"
                         id="tab-documents"
@@ -142,7 +142,7 @@
                         </div>
                         <button
                             data-on-click="showUploadModal"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
                         >
                             <svg
                                 class="w-5 h-5"
@@ -187,12 +187,12 @@
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-semibold text-gray-900">Department Scorecard Selection</h3>
-                        <div class="flex items-center space-x-2">
-                            <button data-on-click="showCreateScorecardModal" class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center space-x-1">
+                        <div class="flex items-center gap-2">
+                            <button data-on-click="showCreateScorecardModal" class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                                 <span>Create New</span>
                             </button>
-                            <button data-on-click="cloneCurrentScorecard" id="clone-scorecard-btn" class="bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 text-sm flex items-center space-x-1 hidden">
+                            <button data-on-click="cloneCurrentScorecard" id="clone-scorecard-btn" class="bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 text-sm flex items-center gap-1 hidden">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                                 <span>Clone</span>
                             </button>
@@ -232,13 +232,13 @@
                     </div>
                     <div class="flex items-center justify-between mt-3">
                         <p id="scorecard-dept-status" class="text-sm text-gray-500">Select a department to manage its scorecard</p>
-                        <div id="scorecard-actions" class="hidden flex items-center space-x-3">
+                        <div id="scorecard-actions" class="hidden flex items-center gap-3">
                             <span id="scorecard-version" class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">v1.0</span>
-                            <label class="flex items-center space-x-2 cursor-pointer">
+                            <label class="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" id="scorecard-active-toggle" data-on-change="toggleScorecardActive" class="w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500">
                                 <span class="text-sm font-medium text-gray-700">Set as Active</span>
                             </label>
-                            <button data-on-click="deleteCurrentScorecard" class="text-red-600 hover:text-red-800 text-sm flex items-center space-x-1">
+                            <button data-on-click="deleteCurrentScorecard" class="text-red-600 hover:text-red-800 text-sm flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                 <span>Delete</span>
                             </button>
@@ -330,7 +330,7 @@
                             </h3>
                             <button
                                 data-on-click="showAttributeModal"
-                                class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center space-x-1"
+                                class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center gap-1"
                             >
                                 <svg
                                     class="w-4 h-4"
@@ -422,7 +422,7 @@
                         <div
                             class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-3">
                                 <div
                                     class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"
                                 >
@@ -458,7 +458,7 @@
                         <div
                             class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-3">
                                 <div
                                     class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center"
                                 >
@@ -494,7 +494,7 @@
                         <div
                             class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-3">
                                 <div
                                     class="w-10 h-10 bg-fuchsia-100 rounded-lg flex items-center justify-center"
                                 >
@@ -520,7 +520,7 @@
                         <div
                             class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-3">
                                 <div
                                     class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center"
                                 >
@@ -568,7 +568,7 @@
                         </div>
                         <button
                             data-on-click="loadExportCacheStats"
-                            class="px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm flex items-center space-x-1"
+                            class="px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm flex items-center gap-1"
                             data-testid="button-refresh-export-cache">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -625,7 +625,7 @@
                         <button
                             data-on-click="triggerAudit"
                             id="trigger-audit-btn"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
                         >
                             <svg
                                 class="w-5 h-5"
@@ -650,7 +650,7 @@
                         </button>
                         <button
                             data-on-click="seedDefaultData"
-                            class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center space-x-2"
+                            class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
                         >
                             <svg
                                 class="w-5 h-5"
@@ -678,7 +678,7 @@
                             <h2 class="text-lg font-semibold text-gray-900" data-i18n="admin.tab_audit">System Audit Trail</h2>
                             <p class="text-sm text-gray-500">Complete activity log across all modules</p>
                         </div>
-                        <div class="flex items-center space-x-3">
+                        <div class="flex items-center gap-3">
                             <select id="auditModuleFilter" data-on-change="loadAuditTrail" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                                 <option value="">All Modules</option>
                                 <option value="team">Team</option>
@@ -706,7 +706,7 @@
                     </div>
                     <div class="mt-4 flex items-center justify-between">
                         <p id="auditPagination" class="text-sm text-gray-500">Showing 0 entries</p>
-                        <div class="flex space-x-2">
+                        <div class="flex gap-2">
                             <button data-on-click="loadAuditTrail" data-args="[${Math.max(0, currentAuditOffset - 20)}]" class="px-3 py-1 text-sm border rounded hover:bg-gray-50">Previous</button>
                             <button data-on-click="loadAuditTrail" data-args="[${currentAuditOffset + 20}]" class="px-3 py-1 text-sm border rounded hover:bg-gray-50">Next</button>
                         </div>
@@ -721,8 +721,8 @@
                             <h2 class="text-lg font-semibold text-gray-900">Rate Limit Monitor</h2>
                             <p class="text-sm text-gray-500">Live view of the distributed rate limiter — top offenders, fail-open events, and recent 429s.</p>
                         </div>
-                        <div class="flex items-center space-x-3">
-                            <label class="flex items-center space-x-2 text-sm text-gray-600">
+                        <div class="flex items-center gap-3">
+                            <label class="flex items-center gap-2 text-sm text-gray-600">
                                 <input type="checkbox" id="rate-limits-autorefresh" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" data-testid="input-rate-limits-autorefresh"/>
                                 <span>Auto-refresh (10s)</span>
                             </label>
@@ -990,7 +990,7 @@
                             >
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
+                    <div class="flex justify-end gap-3 mt-6">
                         <button
                             type="button"
                             data-on-click="closeUploadModal"
@@ -1128,7 +1128,7 @@
                             <label for="attr-is-active" class="ml-2 text-sm text-gray-700">Active (include in evaluations)</label>
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
+                    <div class="flex justify-end gap-3 mt-6">
                         <button type="button" data-on-click="closeAttributeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="admin.save_attribute">Save Attribute</button>
                     </div>
@@ -1182,7 +1182,7 @@
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
+                    <div class="flex justify-end gap-3 mt-6">
                         <button type="button" data-on-click="closeCreateScorecardModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700" data-i18n="admin.create_scorecard">Create Scorecard</button>
                     </div>

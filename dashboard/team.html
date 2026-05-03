@@ -61,7 +61,7 @@
 
     <main class="max-w-7xl mx-auto px-4 py-6">
         <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="nav.items.team">Team Performance</h1>
-        <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-xl">
+        <div class="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl">
             <button data-on-click="showTab" data-args="[&quot;overview&quot;]" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active" data-i18n="team.tab_overview">
                 Overview
             </button>
@@ -171,7 +171,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-gray-900" data-i18n="team.sec_members">Team Members</h3>
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center gap-4">
                         <select id="filterDepartment" data-on-change="loadMembers" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Departments</option>
                         </select>
@@ -217,7 +217,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-gray-900" data-i18n="team.sec_courses">Training Courses Catalog</h3>
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center gap-4">
                         <select id="filterCourseType" data-on-change="loadCourses" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Types</option>
                             <option value="mandatory">Mandatory</option>
@@ -261,7 +261,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-gray-900" data-i18n="team.sec_assignments">Project Assignments</h3>
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center gap-4">
                         <div class="flex bg-gray-100 rounded-lg p-1">
                             <button data-on-click="setProjectView" data-args="[&quot;table&quot;]" id="viewTable" class="px-3 py-1 rounded text-sm font-medium bg-white shadow">
                                 <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
@@ -426,7 +426,7 @@
                             <input type="date" name="hire_date" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
+                    <div class="flex justify-end gap-3 mt-6">
                         <button type="button" data-on-click="closeNewMemberModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add Member</button>
                     </div>
@@ -493,7 +493,7 @@
                             <textarea name="deliverables" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
+                    <div class="flex justify-end gap-3 mt-6">
                         <button type="button" data-on-click="closeNewProjectModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Assignment</button>
                     </div>
@@ -549,7 +549,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
+                    <div class="flex justify-end gap-3 mt-6">
                         <button type="button" data-on-click="closeNewCourseModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add Course</button>
                     </div>

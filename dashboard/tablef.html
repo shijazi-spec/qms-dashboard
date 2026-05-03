@@ -67,7 +67,7 @@
 
     <div class="max-w-7xl mx-auto px-4 py-6">
         <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="nav.items.tablef">Table F</h1>
-        <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-xl">
+        <div class="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl">
             <button data-on-click="showTab" data-args="[&quot;overview&quot;]" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active" data-i18n="tablef.tab_overview">
                 Overview
             </button>
@@ -177,7 +177,7 @@
             <div id="deptKpiGrid" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
                     <h3 class="text-lg font-semibold" data-i18n="tablef.sec_perf_matrix">KPI Performance Matrix</h3>
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center gap-2">
                         <button data-on-click="exportDeptKpis" data-args="[&quot;csv&quot;]" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export</button>
                     </div>
                 </div>
@@ -206,7 +206,7 @@
 
         <div id="content-kpimanager" class="tab-content hidden fade-in">
             <div class="flex justify-between items-center mb-6">
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center gap-4">
                     <select id="kpiDeptFilter" data-on-change="loadKpiManager" class="border border-gray-200 rounded-lg px-4 py-2">
                         <option value="">All Departments</option>
                     </select>
@@ -221,7 +221,7 @@
                         <option value="Strategic">Strategic</option>
                     </select>
                 </div>
-                <button data-on-click="showAddKpiModal" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2">
+                <button data-on-click="showAddKpiModal" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -332,7 +332,7 @@
         <div id="content-access" class="tab-content hidden fade-in">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-xl font-semibold">Access & Role Management</h2>
-                <button data-on-click="showAddUserModal" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2">
+                <button data-on-click="showAddUserModal" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
                     </svg>
@@ -486,7 +486,7 @@
                     </div>
                 </form>
             </div>
-            <div class="bg-gray-50 px-6 py-4 border-t flex justify-end space-x-3">
+            <div class="bg-gray-50 px-6 py-4 border-t flex justify-end gap-3">
                 <button data-on-click="closeKpiModal" class="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-100 transition">Cancel</button>
                 <button data-on-click="saveKpi" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Save KPI</button>
             </div>
@@ -541,7 +541,7 @@
                     </div>
                 </form>
             </div>
-            <div class="bg-gray-50 px-6 py-4 border-t flex justify-end space-x-3">
+            <div class="bg-gray-50 px-6 py-4 border-t flex justify-end gap-3">
                 <button data-on-click="closePerformanceModal" class="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-100 transition">Cancel</button>
                 <button data-on-click="savePerformance" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Save</button>
             </div>

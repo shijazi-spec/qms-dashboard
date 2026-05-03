@@ -116,7 +116,7 @@
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-redaction-sweep">
             <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
@@ -136,7 +136,7 @@
 
         <div id="postRestoreAlertsCard" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-post-restore-alerts">
             <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
@@ -156,7 +156,7 @@
 
         <div id="alertRecipientsCard" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-alert-recipients">
             <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
@@ -260,7 +260,7 @@
                     <input type="text" id="filterSearch" placeholder="User or description..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
             </div>
-            <div class="flex justify-end space-x-3 mt-4">
+            <div class="flex justify-end gap-3 mt-4">
                 <button data-on-click="clearFilters" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
                     Clear Filters
                 </button>
@@ -310,7 +310,7 @@
                 </table>
             </div>
             <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center gap-2">
                     <span class="text-sm text-gray-700">Page Size:</span>
                     <select id="pageSize" data-on-change="loadLogs" data-args="[1]" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
                         <option value="10">10</option>
@@ -319,7 +319,7 @@
                         <option value="100">100</option>
                     </select>
                 </div>
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center gap-2">
                     <button id="prevPage" data-on-click="loadLogs" data-args="[${currentPage - 1}]" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                         Previous
                     </button>

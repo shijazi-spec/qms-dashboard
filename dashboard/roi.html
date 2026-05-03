@@ -134,7 +134,7 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-gray-900" data-i18n="roi.sec_initiatives">Initiatives</h3>
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center gap-4">
                     <select id="filterRecommendation" data-on-change="loadInitiatives" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                         <option value="">All Recommendations</option>
                         <option value="approve">Approve</option>
@@ -265,7 +265,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;manpowerSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;manpowerSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">B. Manpower Cost Breakdown</span>
                             <svg id="manpowerSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -325,7 +325,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;platformSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;platformSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">C. Platform & Tool Costs</span>
                             <svg id="platformSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -333,7 +333,7 @@
                         </button>
                         <div id="platformSection" class="hidden mt-4 space-y-4">
                             <div id="platformToolsList" class="space-y-3"></div>
-                            <button type="button" data-on-click="addPlatformTool" class="flex items-center space-x-2 text-indigo-600 hover:text-indigo-800 font-medium">
+                            <button type="button" data-on-click="addPlatformTool" class="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                                 </svg>
@@ -343,7 +343,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;errorSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;errorSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">D. Error, Rework & SLA Costs</span>
                             <svg id="errorSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -389,7 +389,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;revenueSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;revenueSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">E. Revenue Impact</span>
                             <svg id="revenueSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -426,7 +426,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;implementationSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;implementationSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">F. Implementation Breakdown</span>
                             <svg id="implementationSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -503,7 +503,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;riskSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;riskSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">G. Risk & Confidence Inputs</span>
                             <svg id="riskSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -573,7 +573,7 @@
                     </div>
 
                     <div class="flex items-center justify-between border-t border-gray-200 pt-6">
-                        <div class="flex space-x-3">
+                        <div class="flex gap-3">
                             <button type="button" data-on-click="calculatePreview" class="text-indigo-600 hover:text-indigo-800 font-medium flex items-center">
                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
@@ -587,7 +587,7 @@
                                 AI Validate Inputs
                             </button>
                         </div>
-                        <div class="flex space-x-3">
+                        <div class="flex gap-3">
                             <button type="button" data-on-click="closeNewInitiativeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                             <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Initiative</button>
                         </div>

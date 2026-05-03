@@ -180,38 +180,19 @@ const ALLOWLISTS = {
     "dashboard/tablef.html",
     "dashboard/users.html",
   ]),
-  spaceX: new Set([
-    "dashboard/a11y.html",
-    "dashboard/admin.html",
-    "dashboard/ai-ops.html",
-    "dashboard/calls.html",
-    "dashboard/crm.html",
-    "dashboard/executive.html",
-    "dashboard/feedback.html",
-    "dashboard/index.html",
-    "dashboard/logs.html",
-    "dashboard/onboarding.html",
-    "dashboard/pdpl.html",
-    "dashboard/projects.html",
-    "dashboard/qms.html",
-    "dashboard/roi.html",
-    "dashboard/scorecard.html",
-    "dashboard/tablef.html",
-    "dashboard/team.html",
-    "dashboard/users.html",
-  ]),
+  // Drained to empty by Task #688 — all legacy `space-x-*` usages were
+  // migrated to `gap-*` on their flex containers so the layout mirrors
+  // correctly in Arabic RTL. Any new `space-x-*` will fail CI immediately.
+  spaceX: new Set([]),
   // No legacy violators today — left intentionally empty so the very
   // first new `rounded-l-*` / `rounded-r-*` to land in `dashboard/` is
   // caught by CI.
   roundedLR: new Set([]),
-  textLRNonTh: new Set([
-    "dashboard/ai-ops.html",
-    "dashboard/consultant.html",
-    "dashboard/grc.html",
-    "dashboard/onboarding.html",
-    "dashboard/projects.html",
-    "dashboard/roi.html",
-  ]),
+  // Drained to empty by Task #688 — all legacy non-`<th>` `text-left` /
+  // `text-right` usages were migrated to `text-start` / `text-end` so
+  // text alignment mirrors correctly in Arabic RTL. Any new violation
+  // will fail CI immediately.
+  textLRNonTh: new Set([]),
 };
 
 /**

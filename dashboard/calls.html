@@ -78,7 +78,7 @@
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="nav.items.calls">Call Evaluation</h1>
-        <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-xl overflow-x-auto">
+        <div class="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl overflow-x-auto">
             <button data-on-click="showTab" data-args="[&quot;overview&quot;]" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active whitespace-nowrap" data-i18n="calls.tab_overview">
                 Overview
             </button>
@@ -231,7 +231,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
                     <h3 class="text-lg font-semibold" data-i18n="calls.sec_records">Call Records</h3>
-                    <div class="flex items-center space-x-3">
+                    <div class="flex items-center gap-3">
                         <select id="sourceFilter" data-on-change="loadCalls" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Sources</option>
                             <option value="five9">Five9</option>
@@ -269,7 +269,7 @@
                     <div class="text-sm text-gray-500">
                         Showing <span id="showingFrom">0</span>-<span id="showingTo">0</span> of <span id="totalRecords">0</span> records
                     </div>
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center gap-2">
                         <button data-on-click="prevPage" id="prevBtn" class="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50" disabled>Previous</button>
                         <button data-on-click="nextPage" id="nextBtn" class="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Next</button>
                     </div>

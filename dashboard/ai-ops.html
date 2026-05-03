@@ -42,7 +42,7 @@
         <p class="text-sm text-gray-500 mt-1" data-i18n="ai_ops.subtitle">Token usage, cost trends, latency, and error telemetry across all AI agents.</p>
       </div>
       <button data-on-click="refreshAll" data-testid="button-refresh-all"
-        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm flex items-center space-x-2">
+        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm flex items-center gap-2">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
         </svg>
@@ -73,7 +73,7 @@
       >
         <button
           type="button"
-          class="flex-1 text-left flex items-center gap-2 min-w-0 hover:opacity-90"
+          class="flex-1 text-start flex items-center gap-2 min-w-0 hover:opacity-90"
           id="tool-health-override-banner-deeplink"
           data-testid="button-tool-health-override-banner-deeplink"
         >
@@ -120,21 +120,21 @@
             <button
               type="button"
               role="menuitem"
-              class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+              class="block w-full text-start px-3 py-1.5 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
               data-snooze-minutes="30"
               data-testid="button-tool-health-override-banner-snooze-30m"
             >30 min</button>
             <button
               type="button"
               role="menuitem"
-              class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+              class="block w-full text-start px-3 py-1.5 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
               data-snooze-minutes="60"
               data-testid="button-tool-health-override-banner-snooze-1h"
             >1 hour</button>
             <button
               type="button"
               role="menuitem"
-              class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+              class="block w-full text-start px-3 py-1.5 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
               data-snooze-minutes="240"
               data-testid="button-tool-health-override-banner-snooze-4h"
             >4 hours</button>
@@ -237,7 +237,7 @@
         <button type="button"
           id="tool-health-history-toggle"
           data-testid="button-tool-health-history-toggle"
-          class="w-full flex items-center justify-between px-5 py-3 text-left bg-white rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          class="w-full flex items-center justify-between px-5 py-3 text-start bg-white rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
           aria-expanded="false"
           aria-controls="tool-health-history-body">
           <div class="flex items-center gap-2">
@@ -398,7 +398,7 @@
 
     <!-- Tabs -->
     <div class="border-b border-gray-200 mb-6">
-      <nav class="flex space-x-8">
+      <nav class="flex gap-8">
         <button data-on-click="switchTab" data-args='["cost"]' id="tab-cost" class="py-3 px-1 tab-active font-medium text-sm" data-testid="tab-cost">Cost Trend</button>
         <button data-on-click="switchTab" data-args='["latency"]' id="tab-latency" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-latency">Agent Latency</button>
         <button data-on-click="switchTab" data-args='["prompts"]' id="tab-prompts" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-prompts">Prompt Version</button>
@@ -718,7 +718,7 @@
               redeploy needed.
             </p>
           </div>
-          <div class="text-right text-xs text-gray-500" data-testid="text-thresholds-meta">
+          <div class="text-end text-xs text-gray-500" data-testid="text-thresholds-meta">
             <div id="thresholds-updated-meta">—</div>
             <div id="thresholds-expiry-meta" class="mt-1" data-testid="text-thresholds-expiry-meta"></div>
           </div>
@@ -754,7 +754,7 @@
               Changes apply on the next cron pass — no redeploy needed.
             </p>
           </div>
-          <div class="text-right text-xs text-gray-500" data-testid="text-prompt-regression-meta">
+          <div class="text-end text-xs text-gray-500" data-testid="text-prompt-regression-meta">
             <div id="prompt-regression-updated-meta">—</div>
           </div>
         </div>
@@ -786,7 +786,7 @@
               Changes apply on the next cron pass — no redeploy needed.
             </p>
           </div>
-          <div class="text-right text-xs text-gray-500" data-testid="text-metrics-retention-meta">
+          <div class="text-end text-xs text-gray-500" data-testid="text-metrics-retention-meta">
             <div id="metrics-retention-updated-meta">—</div>
           </div>
         </div>
