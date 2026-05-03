@@ -3506,6 +3506,7 @@
               <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
               <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_tool">Tool</th>
               <th scope="col" class="px-3 py-2 text-end" data-i18n="ai_ops.col_latency">Latency</th>
+              <th scope="col" class="px-3 py-2">Shape</th>
               <th scope="col" class="px-3 py-2">Status</th>
               <th scope="col" class="px-3 py-2">Error / Prompt / Tool I/O preview</th>
             </tr></thead>
@@ -3535,6 +3536,9 @@
                 <td class="px-3 py-2 text-end ${parseInt(r.latency_ms||0)>60000?'text-red-600 font-semibold':''}">
                   ${fmtMs(r.latency_ms)}
                 </td>
+                <td class="px-3 py-2" data-testid="cell-shape-${r.id}">
+                  ${isParent ? `<span id="sparkbar-${r.id}" data-sparkbar-parent="${esc(String(r.id))}" class="inline-block align-middle text-gray-300 text-[10px]">…</span>` : ''}
+                </td>
                 <td class="px-3 py-2">
                   ${r.success
                     ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">OK</span>'
@@ -3557,7 +3561,7 @@
               </tr>
               ${isParent ? `<tr id="children-row-${r.id}" class="hidden" data-testid="children-row-${r.id}">
                 <td></td>
-                <td colspan="6" class="px-3 py-3 bg-blue-50/40">
+                <td colspan="7" class="px-3 py-3 bg-blue-50/40">
                   <div id="children-content-${r.id}" class="text-xs text-gray-500">Loading…</div>
                 </td>
               </tr>` : ''}`;
@@ -3580,10 +3584,58 @@
           }
         });
       });
+      el.querySelectorAll('[data-sparkbar-parent]').forEach(node => {
+        const pid = node.getAttribute('data-sparkbar-parent');
+        loadSparkbar(pid);
+      });
     }
 
     const childrenCache = new Map();
     const issueDataCache = new Map();
+    const sparkbarPending = new Set();
+
+    function renderSparkbarHtml(rows, parentId) {
+      if (!rows || !rows.length) {
+        return '<span class="text-gray-300 text-[10px]" data-testid="sparkbar-empty-' + esc(String(parentId)) + '">—</span>';
+      }
+      const total = rows.reduce((s, c) => s + Math.max(parseInt(c.latency_ms) || 0, 1), 0);
+      const errors = rows.filter(c => !c.success).length;
+      const segments = rows.map(c => {
+        const w = (Math.max(parseInt(c.latency_ms) || 0, 1) / total) * 100;
+        const color = c.success ? 'bg-green-500' : 'bg-red-500';
+        const label = (c.tool_name || '(agent)') + ' — ' + fmtMs(c.latency_ms);
+        return '<div class="' + color + ' h-full" data-style="width:' + w.toFixed(2) + '%" title="' + esc(label) + '"></div>';
+      }).join('');
+      const tip = rows.length + ' tool' + (rows.length === 1 ? '' : 's') + ', ' + errors + ' error' + (errors === 1 ? '' : 's');
+      return '<span class="inline-flex h-2 w-24 rounded overflow-hidden bg-gray-100 border border-gray-200 align-middle"'
+        + ' title="' + esc(tip) + '" aria-label="' + esc(tip) + '"'
+        + ' data-testid="sparkbar-' + esc(String(parentId)) + '">' + segments + '</span>';
+    }
+
+    function paintSparkbar(parentId, rows) {
+      const node = document.getElementById('sparkbar-' + parentId);
+      if (!node) return;
+      node.outerHTML = renderSparkbarHtml(rows, parentId);
+    }
+
+    async function loadSparkbar(parentId) {
+      if (childrenCache.has(parentId)) {
+        paintSparkbar(parentId, childrenCache.get(parentId));
+        return;
+      }
+      if (sparkbarPending.has(parentId)) return;
+      sparkbarPending.add(parentId);
+      try {
+        const { data } = await apiFetch('/api/ai-ops/calls/' + encodeURIComponent(parentId) + '/children');
+        childrenCache.set(parentId, data);
+        paintSparkbar(parentId, data);
+      } catch (e) {
+        const node = document.getElementById('sparkbar-' + parentId);
+        if (node) node.outerHTML = '<span class="text-gray-300 text-[10px]" data-testid="sparkbar-error-' + esc(String(parentId)) + '">—</span>';
+      } finally {
+        sparkbarPending.delete(parentId);
+      }
+    }
 
     async function toggleChildren(parentId, btn) {
       const row = document.getElementById(`children-row-${parentId}`);
