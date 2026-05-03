@@ -440,7 +440,7 @@
                         </div>
                         <div>
                             <h3 class="text-lg font-semibold text-white" data-i18n="calls.sec_bulk_upload">Bulk Call Recordings Upload</h3>
-                            <p class="text-sm text-white/80">Upload multiple audio/video files for transcription & analysis (up to 10 files)</p>
+                            <p class="text-sm text-white/80">Upload multiple recordings — agent email & client phone are auto-detected from filenames like <code class="bg-white/20 px-1 rounded">+966500908386 by agent@walaplus.com @ 8_58_04 AM</code></p>
                         </div>
                     </div>
                 </div>
@@ -462,14 +462,16 @@
                     </div>
                     <div class="mt-4 grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_default_agent">Default Agent Email *</label>
-                            <input type="email" id="bulk-agent-email" placeholder="agent@walaplus.com" 
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_default_agent">Fallback Agent Email</label>
+                            <input type="email" id="bulk-agent-email" placeholder="agent@walaplus.com"
                                    class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Used only for files where the agent email can't be detected from the filename.</p>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Default Agent Name</label>
-                            <input type="text" id="bulk-agent-name" placeholder="Agent Name" 
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Fallback Agent Name</label>
+                            <input type="text" id="bulk-agent-name" placeholder="Agent Name"
                                    class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Optional. Otherwise the local-part of the parsed email is used.</p>
                         </div>
                     </div>
                     <div class="mt-4 flex items-center gap-3">
@@ -1306,34 +1308,63 @@
             updateBulkAudioList();
         }
 
+        // Parse "<phone> by <agent_email> @ <H_M_S> AM/PM[.ext]" filenames.
+        // Returns { phone, agentEmail } with empty strings when not found.
+        function parseCallFilename(name) {
+            const out = { phone: '', agentEmail: '' };
+            if (!name) return out;
+            const stem = String(name).replace(/\.[^./\\]+$/, '');
+            const phoneMatch = stem.match(/(\+?\d[\d\s\-]{5,}\d)/);
+            if (phoneMatch) {
+                out.phone = phoneMatch[1].replace(/[\s\-]/g, '');
+            }
+            const emailMatch = stem.match(/([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})/);
+            if (emailMatch) {
+                out.agentEmail = emailMatch[1].toLowerCase();
+            }
+            return out;
+        }
+
         function updateBulkAudioList() {
             const listDiv = document.getElementById('bulk-audio-list');
             const filesDiv = document.getElementById('bulk-audio-files');
-            
+
             if (bulkAudioFiles.length === 0) {
                 listDiv.classList.add('hidden');
                 document.getElementById('bulk-audio-upload-btn').disabled = true;
                 return;
             }
-            
+
             listDiv.classList.remove('hidden');
-            filesDiv.innerHTML = bulkAudioFiles.map((file, idx) => `
-                <div class="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
-                    <div class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
-                        </svg>
-                        <span class="text-sm font-medium text-blue-800">${escapeHtml(file.name)}</span>
-                        <span class="text-xs text-blue-600">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+            filesDiv.innerHTML = bulkAudioFiles.map((file, idx) => {
+                const parsed = parseCallFilename(file.name);
+                const agentChip = parsed.agentEmail
+                    ? `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">👤 ${escapeHtml(parsed.agentEmail)}</span>`
+                    : `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">⚠ no agent in filename — fallback used</span>`;
+                const phoneChip = parsed.phone
+                    ? `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">📞 ${escapeHtml(parsed.phone)}</span>`
+                    : '';
+                return `
+                <div class="p-2 bg-blue-50 rounded-lg">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <svg class="w-4 h-4 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                            </svg>
+                            <span class="text-sm font-medium text-blue-800 truncate">${escapeHtml(file.name)}</span>
+                            <span class="text-xs text-blue-600 flex-shrink-0">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                        </div>
+                        <button data-on-click="removeBulkAudioFile" data-args="[${idx}]" class="text-gray-400 hover:text-red-600 flex-shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
                     </div>
-                    <button data-on-click="removeBulkAudioFile" data-args="[${idx}]" class="text-gray-400 hover:text-red-600">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
+                    <div class="mt-1 flex flex-wrap gap-1">${agentChip}${phoneChip}</div>
                 </div>
-            `).join('');
-            
+                `;
+            }).join('');
+
             document.getElementById('bulk-audio-upload-btn').disabled = false;
         }
 
@@ -1351,18 +1382,20 @@
         }
 
         async function uploadBulkAudioCalls() {
-            const agentEmail = document.getElementById('bulk-agent-email').value;
-            if (!agentEmail) {
-                alert(WalaPlusI18n.t('dyn.calls.agent_email_required'));
-                return;
-            }
             if (bulkAudioFiles.length === 0) {
                 alert(WalaPlusI18n.t('dyn.calls.no_files_selected'));
                 return;
             }
 
-            const agentName = document.getElementById('bulk-agent-name').value || '';
+            const fallbackEmail = (document.getElementById('bulk-agent-email').value || '').trim();
+            const fallbackName = (document.getElementById('bulk-agent-name').value || '').trim();
             const autoAnalyze = document.getElementById('bulk-auto-analyze').checked;
+
+            const unmatched = bulkAudioFiles.filter(f => !parseCallFilename(f.name).agentEmail);
+            if (unmatched.length > 0 && !fallbackEmail) {
+                alert(`${unmatched.length} file(s) have no agent email in the filename. Please provide a Fallback Agent Email or rename the files to include the agent's email (e.g. "+966500000000 by agent@walaplus.com @ 8_58_04 AM.mp3").`);
+                return;
+            }
 
             const btn = document.getElementById('bulk-audio-upload-btn');
             btn.disabled = true;
@@ -1378,14 +1411,31 @@
 
             for (let i = 0; i < bulkAudioFiles.length; i++) {
                 const file = bulkAudioFiles[i];
+                const parsed = parseCallFilename(file.name);
+                const fileAgentEmail = parsed.agentEmail || fallbackEmail;
+                const fileAgentName = parsed.agentEmail
+                    ? (fallbackName || parsed.agentEmail.split('@')[0])
+                    : (fallbackName || (fallbackEmail ? fallbackEmail.split('@')[0] : ''));
+                const fileLeadId = parsed.phone || '';
+                const fileContactName = parsed.phone || '';
+                const fileCallDate = file.lastModified ? new Date(file.lastModified).toISOString() : '';
+
                 progressText.textContent = `${_fn(i + 1)}/${_fn(bulkAudioFiles.length)} - ${file.name}`;
                 progressBar.style.width = `${((i + 1) / bulkAudioFiles.length) * 100}%`;
 
                 try {
+                    if (!fileAgentEmail) {
+                        errors.push({ file: file.name, error: 'No agent email in filename and no fallback provided' });
+                        continue;
+                    }
+
                     const formData = new FormData();
                     formData.append('file', file);
-                    formData.append('agent_email', agentEmail);
-                    formData.append('agent_name', agentName);
+                    formData.append('agent_email', fileAgentEmail);
+                    formData.append('agent_name', fileAgentName);
+                    if (fileLeadId) formData.append('lead_id', fileLeadId);
+                    if (fileContactName) formData.append('contact_name', fileContactName);
+                    if (fileCallDate) formData.append('call_date', fileCallDate);
                     formData.append('auto_analyze', autoAnalyze ? 'true' : 'false');
 
                     const res = await fetch('/api/calls/upload-audio', {
@@ -1395,7 +1445,7 @@
                     const data = await res.json();
 
                     if (data.success) {
-                        results.push({ file: file.name, call_id: data.call_record_id, status: data.analysis_status || 'uploaded' });
+                        results.push({ file: file.name, call_id: data.call_record_id, status: data.analysis_status || 'uploaded', agent: fileAgentEmail });
                     } else {
                         errors.push({ file: file.name, error: data.error });
                     }
@@ -1419,7 +1469,8 @@
             if (results.length > 0) {
                 html += `<div class="text-xs text-green-700 space-y-1">`;
                 results.forEach(r => {
-                    html += `<p>${escapeHtml(r.file)} - ${escapeHtml(r.status)}</p>`;
+                    const agent = r.agent ? ` → ${escapeHtml(r.agent)}` : '';
+                    html += `<p>${escapeHtml(r.file)}${agent} — ${escapeHtml(r.status)}</p>`;
                 });
                 html += `</div>`;
             }

@@ -967,6 +967,10 @@ Respond with JSON only:
           const file = formData.get("file");
           const agentEmail = formData.get("agent_email");
           const agentName = formData.get("agent_name") || "";
+          const leadId = (formData.get("lead_id") as string | null) || "";
+          const contactName =
+            (formData.get("contact_name") as string | null) || "";
+          const callDateRaw = formData.get("call_date") as string | null;
           const autoAnalyze = formData.get("auto_analyze") === "true";
 
           if (!agentEmail) {
@@ -983,6 +987,12 @@ Respond with JSON only:
             );
           }
 
+          let parsedCallDate = new Date();
+          if (callDateRaw) {
+            const d = new Date(callDateRaw);
+            if (!isNaN(d.getTime())) parsedCallDate = d;
+          }
+
           const {
             createCallRecord,
             initCallIntelligenceTables,
@@ -997,13 +1007,13 @@ Respond with JSON only:
           const callRecord = await createCallRecord({
             call_id: `audio-${Date.now()}`,
             source: "manual",
-            lead_id: "",
-            contact_name: "",
+            lead_id: leadId,
+            contact_name: contactName,
             agent_email: agentEmail,
             agent_name: agentName,
             direction: "outbound",
             recording_url: `/uploads/calls/${fileName}`,
-            call_date: new Date(),
+            call_date: parsedCallDate,
             status: "pending",
             metadata: {
               uploaded_at: new Date().toISOString(),
