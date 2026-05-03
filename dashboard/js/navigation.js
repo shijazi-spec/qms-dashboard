@@ -38,10 +38,12 @@ const WalaPlusNav = {
     switch (id) {
       case 'quality':   return this._t('nav.groups.quality');
       case 'grc':       return this._t('nav.groups.grc');
+      case 'fraud':     return this._t('nav.groups.fraud');
       case 'analytics': return this._t('nav.groups.analytics');
       case 'value':     return this._t('nav.groups.value');
       case 'support':   return this._t('nav.groups.support');
       case 'admin':     return this._t('nav.groups.admin');
+      case 'triggers':  return this._t('nav.groups.triggers');
     }
     return '';
   },
@@ -65,6 +67,12 @@ const WalaPlusNav = {
       case 'executive':       return this._t('nav.items.executive');
       case 'team':            return this._t('nav.items.team');
       case 'mohammed-sow':    return this._t('nav.items.mohammed-sow');
+      case 'fraud-rules':     return this._t('nav.items.fraud-rules');
+      case 'fraud-incidents': return this._t('nav.items.fraud-incidents');
+      case 'fraud-dashboard': return this._t('nav.items.fraud-dashboard');
+      case 'fraud-country-risk': return this._t('nav.items.fraud-country-risk');
+      case 'ai-ops':          return this._t('nav.items.ai-ops');
+      case 'triggers':        return this._t('nav.items.triggers');
       case 'roi':             return this._t('nav.items.roi');
       case 'projects':        return this._t('nav.items.projects');
       case 'consultant':      return this._t('nav.items.consultant');

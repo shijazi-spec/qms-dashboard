@@ -17,10 +17,12 @@
     "groups": {
       "quality": "Quality",
       "grc": "GRC",
+      "fraud": "Fraud Module",
       "analytics": "Team Mgmt",
       "value": "Value",
       "support": "Support",
-      "admin": "Admin & Tools"
+      "admin": "Admin & Tools",
+      "triggers": "Trigger Alerts"
     },
     "items": {
       "dashboard": "Dashboard",
@@ -59,7 +61,9 @@
       "infographic": "Infographic Generator",
       "logs": "System Logs",
       "health": "Health Pulse",
-      "qms-docs": "QMS Documents"
+      "qms-docs": "QMS Documents",
+      "ai-ops": "AI Operations",
+      "triggers": "Trigger Alerts"
     }
   },
   "login": {

@@ -17,10 +17,12 @@
     "groups": {
       "quality": "الجودة",
       "grc": "الحوكمة والمخاطر",
+      "fraud": "وحدة الاحتيال",
       "analytics": "إدارة الفريق",
       "value": "القيمة",
       "support": "الدعم",
-      "admin": "الأدمن والأدوات"
+      "admin": "الأدمن والأدوات",
+      "triggers": "تنبيهات المؤشرات"
     },
     "items": {
       "dashboard": "لوحة التحكم",
@@ -32,10 +34,10 @@
       "tablef": "جدول F",
       "risks": "إدارة المخاطر",
       "some-replit-key": "Some Replit Label",
-      "fraud-rules": "Fraud Rules",
-      "fraud-incidents": "Fraud Incidents",
-      "fraud-country-risk": "Country Risk",
-      "fraud-dashboard": "Fraud KPIs",
+      "fraud-rules": "قواعد الاحتيال",
+      "fraud-incidents": "حوادث الاحتيال",
+      "fraud-country-risk": "مخاطر الدول",
+      "fraud-dashboard": "مؤشرات الاحتيال",
       "qms": "تقارير التدقيق",
       "compliance": "الامتثال",
       "external-audits": "المراجعات الخارجية",
@@ -59,7 +61,9 @@
       "infographic": "مولّد الرسوم البيانية",
       "logs": "سجلات النظام",
       "health": "مراقبة الأداء",
-      "qms-docs": "وثائق نظام الجودة"
+      "qms-docs": "وثائق نظام الجودة",
+      "ai-ops": "عمليات الذكاء الاصطناعي",
+      "triggers": "تنبيهات المؤشرات"
     }
   },
   "login": {
