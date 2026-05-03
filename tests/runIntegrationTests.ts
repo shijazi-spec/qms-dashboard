@@ -581,6 +581,55 @@ function runStreamingDownloadSmoke(): Promise<RunResult> {
   });
 }
 
+/**
+ * Per-route, real-browser, client-observed-budget smoke for every export
+ * endpoint. Complements `runStreamingExportLatency` (server-only TTFB
+ * header) by measuring what the user actually sees through the live
+ * dashboard streaming-download client. See
+ * `tests/streamingDownloadPerRoute.spec.ts` for the full rationale.
+ *
+ * Pinned to --project=chromium because the client-budget regression
+ * class this catches (per-route TLS/edge buffering, SW round-trip
+ * overhead, browser disk-write throughput against a real backend) is
+ * engine-agnostic; cross-engine coverage of the streaming pipeline
+ * itself is already handled by `runStreamingDownloadSmoke` against the
+ * intercepted fixture.
+ */
+function runStreamingDownloadPerRoute(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/streamingDownloadPerRoute.spec.ts (chromium)";
+    const child = spawn(
+      "npx",
+      [
+        "playwright",
+        "test",
+        "tests/streamingDownloadPerRoute.spec.ts",
+        "--project=chromium",
+        "--reporter=list",
+      ],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(`Failed to spawn playwright: ${(err as Error).message}`);
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
 async function main(): Promise<void> {
   const overallStart = Date.now();
   const files = await discoverTestFiles();
@@ -625,6 +674,22 @@ async function main(): Promise<void> {
   } else {
     console.log(
       `\n[skip] streaming-export latency HTTP integration tests — set RUN_STREAMING_EXPORT_LATENCY_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include them.`,
+    );
+  }
+
+  // Per-route, real-browser, client-observed-budget smoke. Gated on the
+  // same env flag as the server-side latency check above so the two
+  // layers (server X-Stream-TTFB-Ms header AND client-observed TTFB +
+  // total wall time through the live SW streaming-download client) are
+  // exercised in lock-step — a regression in either fails the same job.
+  if (process.env.RUN_STREAMING_EXPORT_LATENCY_E2E === "1") {
+    console.log(
+      `\n──── tests/streamingDownloadPerRoute.spec.ts (playwright, chromium) ────`,
+    );
+    results.push(await runStreamingDownloadPerRoute());
+  } else {
+    console.log(
+      `\n[skip] streaming-download per-route client-budget smoke — set RUN_STREAMING_EXPORT_LATENCY_E2E=1 (with ADMIN_API_KEY, DATABASE_URL, and the dev server running) to include the real-browser per-route client-budget smoke alongside the server-side check.`,
     );
   }
 
