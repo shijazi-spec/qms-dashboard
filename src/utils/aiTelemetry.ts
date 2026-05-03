@@ -2033,6 +2033,17 @@ export interface PromptVersionAggregate {
    * "regressed" by downstream consumers.
    */
   meets_min_feedback: boolean;
+  /**
+   * Per-surface call-count breakdown hoisted from
+   * `ai_call_metrics.metadata.client_surface` within the selected window
+   * (Task #749). Shape: `{ web: 12, slack: 3, mobile: 1, unknown: 4 }`
+   * where the `unknown` bucket collapses rows whose metadata never
+   * captured a surface (e.g. legacy traffic). Empty object for archived
+   * rows with no in-window activity. Lets the AI Ops dashboard render a
+   * tooltip/breakdown showing which surfaces contributed to each
+   * (agent, prompt_version) bucket without a follow-up query.
+   */
+  client_surfaces: Record<string, number>;
 }
 
 /**
@@ -2097,6 +2108,35 @@ export async function getFeedbackRateByPromptVersion(
            AND m.tool_name IS NULL
          GROUP BY m.agent_name, COALESCE(m.metadata ->> 'prompt_version', '(unknown)')
        ),
+       -- Per-surface call-count breakdown (Task #749). Computed as its
+       -- own grouped CTE and re-joined to the windowed CTE to avoid the
+       -- "subquery uses ungrouped column" error you would get from
+       -- inlining a correlated subquery into the windowed SELECT.
+       -- Collapses missing/empty client_surface metadata into an
+       -- "unknown" bucket so per-surface counts stay additive with
+       -- call_count even on legacy rows that predate metadata capture.
+       surface_counts AS (
+         SELECT
+           m.agent_name,
+           COALESCE(m.metadata ->> 'prompt_version', '(unknown)')              AS prompt_version,
+           COALESCE(NULLIF(m.metadata ->> 'client_surface', ''), 'unknown')    AS surface,
+           COUNT(*)                                                            AS surface_count
+         FROM ai_call_metrics m
+         WHERE m.started_at >= NOW() - MAKE_INTERVAL(days => $1)
+           AND m.tool_name IS NULL
+         GROUP BY
+           m.agent_name,
+           COALESCE(m.metadata ->> 'prompt_version', '(unknown)'),
+           COALESCE(NULLIF(m.metadata ->> 'client_surface', ''), 'unknown')
+       ),
+       surface_breakdown AS (
+         SELECT
+           agent_name,
+           prompt_version,
+           jsonb_object_agg(surface, surface_count) AS client_surfaces
+         FROM surface_counts
+         GROUP BY agent_name, prompt_version
+       ),
        global_last AS (
          SELECT
            agent_name,
@@ -2127,10 +2167,13 @@ export async function getFeedbackRateByPromptVersion(
          w.last_seen                           AS last_seen,
          $2::INTEGER                           AS min_feedback,
          COALESCE(w.meets_min_feedback, FALSE) AS meets_min_feedback,
-         g.last_seen_at                        AS last_seen_at
+         g.last_seen_at                        AS last_seen_at,
+         COALESCE(sb.client_surfaces, '{}'::jsonb) AS client_surfaces
        FROM global_last g
        LEFT JOIN windowed w
          ON w.agent_name = g.agent_name AND w.prompt_version = g.prompt_version
+       LEFT JOIN surface_breakdown sb
+         ON sb.agent_name = g.agent_name AND sb.prompt_version = g.prompt_version
        ORDER BY g.agent_name, g.last_seen_at DESC`,
       [days, floor],
     );
@@ -2154,6 +2197,15 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<
     latency_ms: number;
     success: boolean;
     error_class: string | null;
+    /**
+     * Client surface that submitted the rating, hoisted from
+     * `ai_call_metrics.metadata.client_surface` (Task #749). Lets the AI
+     * Ops dashboard show whether thumbs-down ratings are coming from the
+     * web chat, the Slack bot, or a mobile client without a separate
+     * round-trip. NULL for legacy rows where the surface was never
+     * captured.
+     */
+    client_surface: string | null;
   }[]
 > {
   try {
@@ -2170,7 +2222,8 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<
          m.prompt_preview,
          m.latency_ms,
          m.success,
-         m.error_class
+         m.error_class,
+         m.metadata ->> 'client_surface' AS client_surface
        FROM ai_call_feedback f
        JOIN ai_call_metrics  m ON m.id = f.call_id
        WHERE f.rating = 'thumbs_down'

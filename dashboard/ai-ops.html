@@ -3176,6 +3176,34 @@
                 const callCountCell = noWindowActivity
                   ? `<span class="text-gray-400" title="No calls in selected window" data-testid="text-prompt-call-count-${esc(r.prompt_version)}">0</span>`
                   : `<span data-testid="text-prompt-call-count-${esc(r.prompt_version)}">${fmtNum(r.call_count)}</span>`;
+                // Surface breakdown (Task #749) — small inline badges showing
+                // which client surfaces (web/slack/mobile/unknown) contributed
+                // to this (agent, prompt_version) bucket within the selected
+                // window. Sorted by count desc; rows with no in-window
+                // activity render an em-dash so archived placeholders stay
+                // visually quiet. Hover on each badge reveals the absolute
+                // count via the title attr.
+                const surfaceMap = (r && typeof r.client_surfaces === 'object' && r.client_surfaces) ? r.client_surfaces : {};
+                const surfaceEntries = Object.keys(surfaceMap)
+                  .map(k => [k, Number(surfaceMap[k] || 0)])
+                  .filter(([, n]) => n > 0)
+                  .sort((a, b) => b[1] - a[1]);
+                const surfacePalette = {
+                  web:    'bg-sky-50 text-sky-700 border-sky-200',
+                  slack:  'bg-violet-50 text-violet-700 border-violet-200',
+                  mobile: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                };
+                const surfacesCell = (noWindowActivity || surfaceEntries.length === 0)
+                  ? `<span class="text-gray-400" title="No surface data in selected window" data-testid="text-prompt-surfaces-empty-${esc(r.prompt_version)}">—</span>`
+                  : surfaceEntries.map(([surface, count]) => {
+                      const cls = surfacePalette[String(surface).toLowerCase()] || 'bg-gray-50 text-gray-600 border-gray-200';
+                      return `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-medium me-1 ${cls}"
+                                    title="${esc(surface)}: ${fmtNum(count)} call${count === 1 ? '' : 's'}"
+                                    data-testid="badge-prompt-surface-${esc(r.prompt_version)}-${esc(surface)}">
+                                ${esc(surface)}
+                                <span class="font-mono text-gray-500">${fmtNum(count)}</span>
+                              </span>`;
+                    }).join('');
                 return `
                   <tr class="border-t ${isCurrent ? 'bg-green-50' : (i % 2 === 1 ? 'bg-gray-50' : '')}" data-testid="row-prompt-${esc(agent)}-${esc(r.prompt_version)}" data-prompt-status="${isCurrent ? 'current' : 'archived'}" data-prompt-window-activity="${noWindowActivity ? 'none' : 'present'}">
                     <td class="px-3 py-2 font-mono text-xs text-gray-800">${esc(r.prompt_version)}${currentPill}</td>
@@ -3187,10 +3215,11 @@
                     <td class="px-3 py-2 text-end">${fmtMs(r.p50_ms)}</td>
                     <td class="px-3 py-2 text-end">${fmtMs(r.avg_ms)}</td>
                     <td class="px-3 py-2 text-end">${errorCell}</td>
+                    <td class="px-3 py-2 text-xs" data-testid="cell-prompt-surfaces-${esc(r.prompt_version)}">${surfacesCell}</td>
                     <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${lastSeenCell}</td>
                   </tr>`;
               }).join('')
-            : `<tr><td colspan="8" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-current-${esc(agent)}">
+            : `<tr><td colspan="9" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-current-${esc(agent)}">
                   No traffic on the currently-deployed version yet${archivedCount > 0 ? ` — ${archivedCount} archived version${archivedCount === 1 ? '' : 's'} hidden` : ''}.
                 </td></tr>`;
 
@@ -3206,6 +3235,7 @@
                   <th class="px-3 py-2 text-end">p50 (ms)</th>
                   <th class="px-3 py-2 text-end">Avg (ms)</th>
                   <th class="px-3 py-2 text-end">Error %</th>
+                  <th class="px-3 py-2" title="Per-surface call breakdown within the selected window (web / slack / mobile / unknown)">Surfaces</th>
                   <th class="px-3 py-2">Last seen</th>
                 </tr></thead>
                 <tbody>${body}</tbody>
@@ -3737,15 +3767,35 @@
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
               <th class="px-3 py-2">When</th>
               <th class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
+              <th class="px-3 py-2">Surface</th>
               <th class="px-3 py-2">Call</th>
               <th class="px-3 py-2">Comment</th>
               <th class="px-3 py-2">Original Prompt</th>
               <th class="px-3 py-2 text-end" data-i18n="ai_ops.col_latency">Latency</th>
             </tr></thead>
-            <tbody>${data.map((r, i) => `
+            <tbody>${data.map((r, i) => {
+              // Surface badge (Task #749) — `client_surface` is hoisted from
+              // ai_call_metrics.metadata so operators can tell at a glance
+              // whether a thumbs-down came from the web chat, the Slack bot,
+              // or a mobile client. NULL/legacy rows render a muted dash.
+              const surfaceRaw = r.client_surface ? String(r.client_surface).trim() : '';
+              const surfacePalette = {
+                web:    'bg-sky-50 text-sky-700 border border-sky-200',
+                slack:  'bg-violet-50 text-violet-700 border border-violet-200',
+                mobile: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+              };
+              const surfaceClass = surfacePalette[surfaceRaw.toLowerCase()]
+                || 'bg-gray-50 text-gray-600 border border-gray-200';
+              const surfaceCell = surfaceRaw
+                ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${surfaceClass}"
+                          title="metadata.client_surface"
+                          data-testid="badge-negative-client-surface-${r.feedback_id}">${esc(surfaceRaw)}</span>`
+                : `<span class="text-gray-400 text-xs" data-testid="text-negative-client-surface-unknown-${r.feedback_id}">—</span>`;
+              return `
               <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-negative-${r.feedback_id}">
                 <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${fmtDate(r.created_at)}</td>
                 <td class="px-3 py-2 font-medium text-gray-900 text-xs">${esc(r.agent_name)}</td>
+                <td class="px-3 py-2 text-xs">${surfaceCell}</td>
                 <td class="px-3 py-2 text-xs">
                   <a href="#" data-on-click="showCallContext" data-args='[${JSON.stringify(String(r.call_id))}]' data-pass-event="true"
                      class="font-mono text-blue-600 hover:text-blue-800 underline"
@@ -3765,7 +3815,8 @@
                     : '<span class="text-gray-400">—</span>'}
                 </td>
                 <td class="px-3 py-2 text-end text-xs">${fmtMs(r.latency_ms)}</td>
-              </tr>`).join('')}
+              </tr>`;
+            }).join('')}
             </tbody>
           </table>`;
       } catch (e) {
