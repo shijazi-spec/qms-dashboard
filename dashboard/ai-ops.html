@@ -594,6 +594,37 @@
           </div>
           <div id="ai-ops-feedback-trend-empty" class="hidden text-sm text-gray-400 py-4 text-center" data-i18n="ai_ops.no_trend_data">No trend data for this period.</div>
         </div>
+        <!-- Weekly digest preview (Task #419). Always shows the last 7
+             days of thumbs-up / thumbs-down activity in a compact table,
+             matching the day-by-day breakdown sent in the weekly AI
+             feedback digest email/Slack notification (see
+             aiFeedbackDigestFunction in src/mastra/inngest/index.ts and
+             getWeeklyFeedbackDigest() in src/utils/aiFeedbackDatabase.ts).
+             Independent of the configurable `feedback-days` selector
+             above so admins can spot bad days without waiting for the
+             weekly digest. -->
+        <div class="mb-6">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-gray-700">Weekly Digest Preview (Last 7 Days)</h3>
+            <span id="ai-ops-feedback-weekly-summary" class="text-xs text-gray-500" data-testid="text-feedback-weekly-summary"></span>
+          </div>
+          <div id="ai-ops-feedback-weekly-wrap" class="overflow-x-auto">
+            <table class="min-w-full text-start text-sm" data-testid="table-feedback-weekly-digest">
+              <thead class="text-xs text-gray-500 uppercase">
+                <tr>
+                  <th scope="col" class="px-3 py-2">Day</th>
+                  <th scope="col" class="px-3 py-2 text-end">👍 Up</th>
+                  <th scope="col" class="px-3 py-2 text-end">👎 Down</th>
+                  <th scope="col" class="px-3 py-2 text-end">Total</th>
+                </tr>
+              </thead>
+              <tbody id="ai-ops-feedback-weekly-body">
+                <tr><td colspan="4" class="px-3 py-3 text-center text-gray-400 text-xs">Loading weekly digest…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="ai-ops-feedback-weekly-empty" class="hidden text-sm text-gray-400 py-3 text-center">No feedback recorded in the last 7 days.</div>
+        </div>
         <!-- Per-prompt-version thumbs-up ratio breakdown (Task #661).
              Lets operators tell at a glance whether a regression spike is
              concentrated on one prompt revision or spread across all
@@ -1469,6 +1500,70 @@
         if (clientSurfacesEl) clientSurfacesEl.innerHTML = '<div class="text-sm text-gray-400">—</div>';
       }
       loadFeedbackTrend();
+      loadWeeklyFeedbackDigest();
+    }
+
+    // Weekly digest preview (Task #419). Mirrors the day-by-day breakdown
+    // sent in the AI feedback digest notification — fixed to 7 days and
+    // independent of the configurable `feedback-days` selector so admins
+    // can spot bad days without waiting for the weekly digest. Sourced
+    // from the same /api/consultant/feedback/trend endpoint backed by
+    // getFeedbackTrend(7) in src/utils/aiFeedbackDatabase.ts.
+    async function loadWeeklyFeedbackDigest() {
+      const bodyEl    = document.getElementById('ai-ops-feedback-weekly-body');
+      const wrapEl    = document.getElementById('ai-ops-feedback-weekly-wrap');
+      const emptyEl   = document.getElementById('ai-ops-feedback-weekly-empty');
+      const summaryEl = document.getElementById('ai-ops-feedback-weekly-summary');
+      if (!bodyEl) return;
+      try {
+        const payload = await apiFetch('/api/consultant/feedback/trend?days=7');
+        const trend = Array.isArray(payload.trend) ? payload.trend : [];
+
+        if (trend.length === 0) {
+          if (wrapEl)  wrapEl.classList.add('hidden');
+          if (emptyEl) emptyEl.classList.remove('hidden');
+          if (summaryEl) summaryEl.textContent = '';
+          bodyEl.innerHTML = '';
+          return;
+        }
+        if (wrapEl)  wrapEl.classList.remove('hidden');
+        if (emptyEl) emptyEl.classList.add('hidden');
+
+        let totalUp = 0;
+        let totalDown = 0;
+        let peakDay = null;
+        let peakDown = 0;
+        const rows = trend.map(p => {
+          const up   = Number(p.thumbs_up)   || 0;
+          const down = Number(p.thumbs_down) || 0;
+          totalUp   += up;
+          totalDown += down;
+          if (down > peakDown) { peakDown = down; peakDay = p.day; }
+          const total = up + down;
+          const downClass = down > 0 ? 'text-red-700 font-semibold' : 'text-gray-400';
+          const upClass   = up   > 0 ? 'text-emerald-700' : 'text-gray-400';
+          return `<tr class="border-t" data-testid="row-feedback-weekly-${aiOpsEscapeHtml(p.day)}">
+            <td class="px-3 py-2 font-mono text-xs text-gray-700">${aiOpsEscapeHtml(p.day)}</td>
+            <td class="px-3 py-2 text-end text-xs ${upClass}">${up}</td>
+            <td class="px-3 py-2 text-end text-xs ${downClass}">${down}</td>
+            <td class="px-3 py-2 text-end text-xs text-gray-600">${total}</td>
+          </tr>`;
+        }).join('');
+        bodyEl.innerHTML = rows;
+
+        if (summaryEl) {
+          const grandTotal = totalUp + totalDown;
+          const upPct = grandTotal > 0 ? Math.round((totalUp / grandTotal) * 100) : 0;
+          const peakSuffix = (peakDay && peakDown > 0)
+            ? `, worst day ${aiOpsEscapeHtml(peakDay)} (${peakDown} 👎)`
+            : '';
+          summaryEl.textContent = `${grandTotal} ratings: ${totalUp} 👍 (${upPct}%) / ${totalDown} 👎${peakSuffix}`;
+        }
+      } catch (err) {
+        console.warn('Weekly feedback digest load error', err);
+        bodyEl.innerHTML = '<tr><td colspan="4" class="px-3 py-3 text-center text-red-500 text-xs">Failed to load weekly digest.</td></tr>';
+        if (summaryEl) summaryEl.textContent = '';
+      }
     }
 
     function syncFeedbackAgentOptions(agents) {
