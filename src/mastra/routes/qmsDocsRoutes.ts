@@ -94,6 +94,18 @@ export const qmsDocsRoutes = [
             await import("../../utils/fileUpload");
           await initQmsDocsTable();
 
+          // Reject oversized multipart bodies before the parser buffers them.
+          // 25 MB file limit + multipart overhead; anything beyond 30 MB is not
+          // a valid single-file upload to this endpoint.
+          const MAX_SINGLE_UPLOAD_BYTES = 30 * 1024 * 1024;
+          const rawCL = c.req.header('Content-Length');
+          if (rawCL) {
+            const cl = parseInt(rawCL, 10);
+            if (Number.isFinite(cl) && cl > MAX_SINGLE_UPLOAD_BYTES) {
+              return c.json({ error: 'Request body too large (max 25 MB per file)' }, 413);
+            }
+          }
+
           const formData = await c.req.formData();
           const file = formData.get("file");
           const category = String(formData.get("category") || "").trim();
@@ -163,6 +175,17 @@ export const qmsDocsRoutes = [
           const MAX_TOTAL_BYTES = 250 * 1024 * 1024;
           const MAX_NOTES = 2000;
           const MAX_REG_CSV = 1000;
+
+          // Reject oversized multipart bodies before the parser buffers them.
+          // 250 MB aggregate limit + multipart overhead; cap at 260 MB.
+          const MAX_BULK_BODY_BYTES = 260 * 1024 * 1024;
+          const rawCL2 = c.req.header('Content-Length');
+          if (rawCL2) {
+            const cl2 = parseInt(rawCL2, 10);
+            if (Number.isFinite(cl2) && cl2 > MAX_BULK_BODY_BYTES) {
+              return c.json({ error: 'Request body too large (max 250 MB aggregate)' }, 413);
+            }
+          }
 
           const formData = await c.req.formData();
           const category = String(formData.get("category") || "").trim();

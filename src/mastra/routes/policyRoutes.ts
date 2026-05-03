@@ -1195,6 +1195,17 @@ export const policyRoutes = [
           const policy = await getPolicyById(id);
           if (!policy) return c.json({ error: "Document not found" }, 404);
 
+          // Reject oversized multipart bodies before the parser buffers them.
+          // 25 MB file limit + multipart overhead; anything beyond 30 MB is invalid.
+          const MAX_POLICY_UPLOAD_BYTES = 30 * 1024 * 1024;
+          const rawCL = c.req.header('Content-Length');
+          if (rawCL) {
+            const cl = parseInt(rawCL, 10);
+            if (Number.isFinite(cl) && cl > MAX_POLICY_UPLOAD_BYTES) {
+              return c.json({ error: 'Request body too large (max 25 MB per file)' }, 413);
+            }
+          }
+
           const formData = await c.req.formData();
           const file = formData.get("file");
           if (!file || !(file instanceof File))

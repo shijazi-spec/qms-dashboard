@@ -301,11 +301,66 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
   return null;
 }
 
+// Maximum body size we are willing to buffer for JSON sanitization.
+// Requests larger than this skip sanitization (they are not valid JSON anyway).
+const MAX_JSON_SANITIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 async function applyBodySanitization(c: any, urlPath: string, method: string): Promise<void> {
   if (!['POST', 'PUT', 'PATCH'].includes(method)) return;
+
+  // Multipart uploads are never JSON — buffering them here would fully
+  // materialise the request body in memory before the handler's per-file size
+  // checks can run (double-buffering).  Skip entirely; each upload route
+  // enforces its own size limits.
+  const contentType = (c.req.header('Content-Type') || '').toLowerCase();
+  if (contentType.includes('multipart/form-data')) return;
+
+  // If the client declares a body larger than our JSON sanitization cap, skip
+  // reading it here.  The downstream handler will deal with the oversized body
+  // (or the global Content-Length guard below will have already rejected it).
+  const rawContentLength = c.req.header('Content-Length');
+  if (rawContentLength !== null && rawContentLength !== undefined) {
+    const declaredLength = parseInt(rawContentLength, 10);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_SANITIZE_BYTES) return;
+  }
+
   try {
+    // Read the cloned request body with a hard byte cap so that a large
+    // chunked body (no Content-Length) cannot exhaust server memory.  If
+    // bytes read exceed the cap we abort the read and skip sanitization
+    // entirely — the handler will deal with the body, or the 413 guard
+    // in globalMiddleware will have already rejected it.
     const cloned = c.req.raw.clone();
-    const bodyText = await cloned.text();
+    let bodyText: string;
+    if (cloned.body) {
+      const reader = cloned.body.getReader();
+      const decoder = new TextDecoder();
+      let chunks = '';
+      let totalBytes = 0;
+      let tooLarge = false;
+      try {
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            totalBytes += value.byteLength;
+            if (totalBytes > MAX_JSON_SANITIZE_BYTES) {
+              tooLarge = true;
+              break;
+            }
+            chunks += decoder.decode(value, { stream: true });
+          }
+        }
+        chunks += decoder.decode();
+      } finally {
+        try { reader.cancel(); } catch { /* noop */ }
+      }
+      if (tooLarge) return;
+      bodyText = chunks;
+    } else {
+      bodyText = '';
+    }
     let parsedBody: any;
     let isJson = false;
     try {
@@ -444,6 +499,25 @@ export const globalMiddleware = [
         c.header('Retry-After', String(rateCheck.retryAfter || 60));
         logRateLimit429(urlPath, method, ip, rateCheck.retryAfter);
         return c.json({ error: 'Too many requests' }, 429);
+      }
+    }
+
+    // Reject clearly oversized request bodies before any parsing occurs.
+    // This is a byte-volume guard: even if a caller stays within the
+    // request-count rate limit, we refuse to accept bodies that exceed
+    // the largest upload we would ever accept (260 MB covers the 250 MB
+    // aggregate bulk-upload limit plus multipart framing overhead).
+    // JSON endpoints are further capped at 10 MB inside applyBodySanitization.
+    // We only act when Content-Length is declared; chunked bodies without
+    // Content-Length are caught by the per-handler size checks instead.
+    if (isApi && ['POST', 'PUT', 'PATCH'].includes(method)) {
+      const rawCL = c.req.header('Content-Length');
+      if (rawCL !== null && rawCL !== undefined) {
+        const declaredBytes = parseInt(rawCL, 10);
+        const MAX_REQUEST_BODY_BYTES = 260 * 1024 * 1024; // 260 MB
+        if (Number.isFinite(declaredBytes) && declaredBytes > MAX_REQUEST_BODY_BYTES) {
+          return c.json({ error: 'Request body too large' }, 413);
+        }
       }
     }
 

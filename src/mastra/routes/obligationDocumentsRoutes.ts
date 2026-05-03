@@ -177,6 +177,17 @@ export const obligationDocumentsRoutes = [
 
           await initQmsDocsTable();
 
+          // Reject oversized multipart bodies before the parser buffers them.
+          // 250 MB aggregate limit + multipart overhead; cap at 260 MB.
+          const MAX_BULK_OBLIGATION_BYTES = 260 * 1024 * 1024;
+          const rawCL = c.req.header('Content-Length');
+          if (rawCL) {
+            const cl = parseInt(rawCL, 10);
+            if (Number.isFinite(cl) && cl > MAX_BULK_OBLIGATION_BYTES) {
+              return c.json({ error: 'Request body too large (max 250 MB aggregate)' }, 413);
+            }
+          }
+
           const formData = await c.req.formData();
           const rawCategory = String(
             formData.get("category") || "documents",

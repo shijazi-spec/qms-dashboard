@@ -849,6 +849,84 @@ const inFlightStaging = new Map<string, Promise<StagingResult>>();
 let stagedExportJanitorTimer: NodeJS.Timeout | null = null;
 
 // ---------------------------------------------------------------------------
+// Cache size limits (Task #811 — disk exhaustion guard)
+// ---------------------------------------------------------------------------
+//
+// An authorized user can repeatedly request unique export URLs (e.g. by
+// appending arbitrary query params) and create a distinct staged file for each
+// one, filling the server's temp volume within the TTL window.  We bound both
+// the entry count and the total on-disk bytes to limit how much a single
+// process can accumulate.
+//
+// When either limit is reached, the oldest (LRU) non-in-flight entries are
+// evicted before staging a new one.  If the cache is still over budget after
+// eviction (e.g. all entries have active readers), the new export is served
+// without being cached — the caller still gets their response, we just don't
+// retain the file.
+//
+// Limits are configurable via env so ops can tune for their volume without a
+// code change.  Defaults are deliberately conservative:
+//   STREAMING_EXPORT_CACHE_MAX_ENTRIES — default 200 entries
+//   STREAMING_EXPORT_CACHE_MAX_BYTES   — default 5 GB
+function stagedExportMaxEntries(): number {
+  const raw = process.env.STREAMING_EXPORT_CACHE_MAX_ENTRIES;
+  if (!raw) return 200;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 200;
+}
+
+function stagedExportMaxBytes(): number {
+  const raw = process.env.STREAMING_EXPORT_CACHE_MAX_BYTES;
+  if (!raw) return 5 * 1024 * 1024 * 1024; // 5 GB
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 5 * 1024 * 1024 * 1024;
+}
+
+/**
+ * Current total bytes tracked across all in-memory cache entries.
+ * Maintained incrementally to avoid a full map scan on every staging.
+ */
+function stagedExportCurrentBytes(): number {
+  let total = 0;
+  for (const entry of stagedExportCache.values()) total += entry.size;
+  return total;
+}
+
+/**
+ * Evict the oldest non-actively-read entries until the cache fits within the
+ * configured limits.  Returns true if the cache is now under budget (so the
+ * caller may safely add a new entry), false if it is still over budget (all
+ * remaining entries have active readers and cannot be evicted).
+ */
+async function evictStagedExportEntries(newEntrySize: number): Promise<boolean> {
+  const maxEntries = stagedExportMaxEntries();
+  const maxBytes = stagedExportMaxBytes();
+
+  // Collect eviction candidates: entries without active readers, sorted
+  // oldest-expiry-first (i.e. the entries that have been in the cache longest).
+  const candidates = [...stagedExportCache.entries()]
+    .filter(([, e]) => e.refCount === 0 && !e.pendingDelete)
+    .sort(([, a], [, b]) => a.expiresAt - b.expiresAt);
+
+  for (const [key, entry] of candidates) {
+    const currentEntries = stagedExportCache.size;
+    const currentBytes = stagedExportCurrentBytes();
+    // Stop evicting once both limits are satisfied including the new entry.
+    if (
+      currentEntries < maxEntries &&
+      currentBytes + newEntrySize <= maxBytes
+    ) break;
+    await reapStagedEntry(key, entry);
+  }
+
+  // Report whether we have room now.
+  return (
+    stagedExportCache.size < stagedExportMaxEntries() &&
+    stagedExportCurrentBytes() + newEntrySize <= stagedExportMaxBytes()
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Operator-visible counters (Task #755)
 // ---------------------------------------------------------------------------
 //
@@ -1550,7 +1628,18 @@ export async function stageAndServeStreamingExport(
           refCount: 0,
           pendingDelete: false,
         };
-        stagedExportCache.set(jobKey, newEntry);
+        // Enforce cache size limits before inserting.  Evict the oldest idle
+        // entries first.  If the cache is still over budget (e.g. every entry
+        // has an active reader that can't be evicted), skip storing — the
+        // caller still gets their response, we just don't retain the file on
+        // disk so a future request has to rebuild it.
+        const hasRoom = await evictStagedExportEntries(size);
+        if (hasRoom) {
+          stagedExportCache.set(jobKey, newEntry);
+        } else {
+          // No room — schedule the file for immediate deletion once we return.
+          void unlinkStagedFile(filePath);
+        }
         return { kind: "entry", entry: newEntry };
       })();
       inFlightStaging.set(jobKey, staging);
@@ -1730,8 +1819,30 @@ export async function stageStreamingExportFromHono(
     "";
 
   const method = (c.req.method || "GET").toUpperCase();
+
+  // Normalize the URL before deriving the cache key to prevent cache-bypass
+  // attacks where an attacker appends arbitrary nonce query params (e.g.
+  // ?nonce=1, ?nonce=2) to create distinct cache keys for identical exports.
+  // We canonicalise by sorting query params alphabetically so that
+  // ?b=2&a=1 and ?a=1&b=2 map to the same key.  Unknown/nonce params are
+  // still included in the sorted key — they appear in every key and therefore
+  // don't help an attacker who uses the same session across requests — while
+  // the global cache entry/size limits (Task #811) bound the total damage from
+  // high-cardinality key flooding.
+  let normalizedUrl: string;
+  try {
+    const parsedUrl = new URL(c.req.url, "http://x");
+    const sortedParams = [...parsedUrl.searchParams.entries()]
+      .sort(([a], [b]) => a.localeCompare(b));
+    const canonical = new URLSearchParams(sortedParams);
+    parsedUrl.search = canonical.toString();
+    normalizedUrl = `${parsedUrl.pathname}${parsedUrl.search}`;
+  } catch {
+    normalizedUrl = c.req.url;
+  }
+
   const jobKey = deriveStreamingExportJobKey({
-    url: `${method} ${c.req.url}`,
+    url: `${method} ${normalizedUrl}`,
     userIdentity,
   });
 
