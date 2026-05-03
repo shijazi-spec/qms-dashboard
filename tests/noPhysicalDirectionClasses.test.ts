@@ -10,6 +10,14 @@
  *   • Corner radii (`rounded-l-*`, `rounded-r-*`)
  *   • Non-`<th>` text-align on layout elements (`<td>`, `<div>`, `<p>`,
  *     `<li>`, `<span>`, …)
+ *   • Inline padding (`pl-*`, `pr-*`) on any element (Task #687)
+ *   • Inline margin (`ml-*`, `mr-*`) on any non-`<button>` element
+ *     (`<button>` is owned by `buttonMlMr`) (Task #687)
+ *   • Inline border width (`border-l-*`, `border-r-*`, bare
+ *     `border-l` / `border-r`) other than `-4` (which `borderLR4`
+ *     owns) on any element (Task #687)
+ *   • Positional insets (`left-*`, `right-*`) on any element
+ *     (Task #687)
  *
  * The dashboard supports Arabic via `html[dir="rtl"]` set by
  * `dashboard/js/i18n.js`. Per the "RTL Layout Convention" section of
@@ -143,6 +151,26 @@ try {
       // Rule 6 (textLRNonTh): non-<th> elements with text-left / text-right.
       '<td class="px-2 text-left">Cell</td>',
       '<div class="text-right">Total: $0</div>',
+      // Rule 7 (plPr, Task #687): pl-/pr- padding on any element.
+      '<div class="pl-4 bg-white">left-padded</div>',
+      // pl/pr keyword + arbitrary variants must also fire.
+      '<input class="pr-px border" />',
+      '<span class="pl-[3px]">tight</span>',
+      // Rule 8 (mlMrAll, Task #687): ml-/mr- on a non-<button> element
+      // (a <span> here). Must fire under mlMrAll, NOT buttonMlMr.
+      '<span class="ml-3 text-sm">label</span>',
+      '<div class="mr-auto">push-end</div>',
+      '<label class="mr-[6px]">checkbox</label>',
+      // Rule 9 (borderLR, Task #687): border-l-/border-r- with widths
+      // OTHER than 4 (which borderLR4 owns), and the bare 1px shorthand.
+      '<aside class="border-r bg-white">sidebar</aside>',
+      '<div class="border-l-2 border-blue-500">card</div>',
+      '<section class="border-r-8">heavy</section>',
+      // Rule 10 (insetLR, Task #687): left-/right- positional inset on
+      // an absolutely / fixed positioned element.
+      '<div class="absolute right-4 top-2">badge</div>',
+      '<svg class="absolute left-3 top-1/2"></svg>',
+      '<button class="fixed right-[12px] bottom-2">Help</button>',
       // Sentinel A: same `text-left` on a <th> on its own MUST hit the
       // thTextAlign rule but MUST NOT *also* hit the textLRNonTh rule
       // (the rules are mutually exclusive on the tag axis).
@@ -190,6 +218,61 @@ try {
   assert(out.includes("[spaceX]"), "negative test surfaces the spaceX rule");
   assert(out.includes("[roundedLR]"), "negative test surfaces the roundedLR rule");
   assert(out.includes("[textLRNonTh]"), "negative test surfaces the textLRNonTh rule");
+  // Task #687 — four new rule families.
+  assert(out.includes("[plPr]"), "negative test surfaces the plPr rule");
+  assert(out.includes("[mlMrAll]"), "negative test surfaces the mlMrAll rule");
+  assert(out.includes("[borderLR]"), "negative test surfaces the borderLR rule");
+  assert(out.includes("[insetLR]"), "negative test surfaces the insetLR rule");
+  // plPr must catch numeric, keyword (`px`), and arbitrary-value variants.
+  const plPrCount = (out.match(/\[plPr\]/g) ?? []).length;
+  assert(
+    plPrCount >= 3,
+    `plPr matches numeric (pl-4), keyword (pr-px), and arbitrary (pl-[3px]) variants (saw ${plPrCount}/3)`,
+  );
+  // mlMrAll must catch numeric, keyword (`auto`), and arbitrary-value variants.
+  const mlMrAllCount = (out.match(/\[mlMrAll\]/g) ?? []).length;
+  assert(
+    mlMrAllCount >= 3,
+    `mlMrAll matches numeric (ml-3), keyword (mr-auto), and arbitrary (mr-[6px]) variants (saw ${mlMrAllCount}/3)`,
+  );
+  // borderLR must catch bare shorthand, numeric < 4, and numeric > 4.
+  const borderLRCount = (out.match(/\[borderLR\]/g) ?? []).length;
+  assert(
+    borderLRCount >= 3,
+    `borderLR matches bare (border-r), small numeric (border-l-2), and large numeric (border-r-8) variants (saw ${borderLRCount}/3)`,
+  );
+  // insetLR must catch numeric, fractional (none here — using arbitrary),
+  // and arbitrary-value variants. We use right-4, left-3, right-[12px].
+  const insetLRCount = (out.match(/\[insetLR\]/g) ?? []).length;
+  assert(
+    insetLRCount >= 3,
+    `insetLR matches numeric (right-4), numeric (left-3), and arbitrary (right-[12px]) variants (saw ${insetLRCount}/3)`,
+  );
+  // mlMrAll and buttonMlMr must be tag-disjoint: a <button class="ml-2">
+  // hits buttonMlMr only and never also fires under mlMrAll.
+  assert(
+    !/Cancel.*\[mlMrAll\]/s.test(out),
+    "mlMrAll does NOT double-fire on <button> elements (buttonMlMr owns those)",
+  );
+  // borderLR must NOT misfire on `border-l-4` / `border-r-4` (borderLR4
+  // owns those). The negative-test page contains a `border-l-4` element
+  // for the borderLR4 rule; verify the borderLR rule never reports a
+  // matched token equal to `border-l-4` / `border-r-4`. Each violation
+  // formats the matched token in backticks (`...`) on the message line.
+  const borderLRMessageLines = out
+    .split("\n")
+    .filter((l) => l.includes("[borderLR]") && !l.includes("[borderLR4]"));
+  assert(
+    !borderLRMessageLines.some((l) => /`border-[lr]-4`/.test(l)),
+    "borderLR does NOT misfire on `border-l-4` / `border-r-4` (borderLR4 owns those)",
+  );
+  // borderLR must NOT misfire on `border-blue-500` (color, not
+  // direction). The matched token is in backticks on the message line;
+  // colour utilities should never appear there.
+  assert(
+    !borderLRMessageLines.some((l) => /`border-(?:blue|red|green|gray|slate|zinc|neutral|stone|orange|amber|yellow|lime|emerald|teal|cyan|sky|indigo|violet|purple|fuchsia|pink|rose)-/.test(l)),
+    "borderLR does NOT misfire on color utilities like `border-blue-500`",
+  );
   // Confirm the buttonMlMr regex catches numeric, keyword, and arbitrary-value
   // Tailwind variants — not just `mr-<digits>`.
   const buttonViolationCount = (out.match(/\[buttonMlMr\]/g) ?? []).length;
@@ -308,6 +391,18 @@ try {
       "  const flex = `<div class=\"flex space-x-2\">a b</div>`;",
       // jsRoundedLR — `rounded-l-lg` inside a string literal.
       "  const img = '<img class=\"rounded-l-lg\" alt=\"left\" />';",
+      // jsPlPr (Task #687) — `pl-4` / `pr-px` / arbitrary inside JS strings.
+      "  const pad = '<div class=\"pl-4\">left-padded</div>';",
+      "  const pad2 = `<input class=\"pr-px\" />`;",
+      "  const pad3 = '<span class=\"pl-[3px]\">tight</span>';",
+      // jsBorderLR (Task #687) — bare shorthand + non-`-4` widths.
+      "  const aside = '<aside class=\"border-r bg-white\">sidebar</aside>';",
+      "  const card = `<div class=\"border-l-2 border-blue-500\">card</div>`;",
+      "  const heavy = '<section class=\"border-r-8\">heavy</section>';",
+      // jsInsetLR (Task #687) — left-/right- positional insets.
+      "  const badge = '<div class=\"absolute right-4 top-2\">badge</div>';",
+      "  const ico = `<svg class=\"absolute left-3 top-1/2\"></svg>`;",
+      "  const help = '<button class=\"fixed right-[12px] bottom-2\">Help</button>';",
       // Per-line opt-out: same `mr-2` in a string MUST be skipped because of
       // the trailing `rtl-safe-physical:` marker on the same line.
       "  const docked = '<button class=\"mr-2\">Cancel</button>'; // rtl-safe-physical: docked in fixed LTR utility row",
@@ -359,6 +454,39 @@ try {
   assert(
     jsOut.includes("[jsRoundedLR]"),
     "JS-string pass surfaces the jsRoundedLR rule",
+  );
+  // Task #687 — JS-pass parity with the new HTML rules.
+  assert(jsOut.includes("[jsPlPr]"), "JS-string pass surfaces the jsPlPr rule");
+  assert(jsOut.includes("[jsBorderLR]"), "JS-string pass surfaces the jsBorderLR rule");
+  assert(jsOut.includes("[jsInsetLR]"), "JS-string pass surfaces the jsInsetLR rule");
+  // Variant coverage promises for each new JS rule.
+  const jsPlPrCount = (jsOut.match(/\[jsPlPr\]/g) ?? []).length;
+  assert(
+    jsPlPrCount >= 3,
+    `jsPlPr matches numeric (pl-4), keyword (pr-px), and arbitrary (pl-[3px]) variants in JS strings (saw ${jsPlPrCount}/3)`,
+  );
+  const jsBorderLRCount = (jsOut.match(/\[jsBorderLR\]/g) ?? []).length;
+  assert(
+    jsBorderLRCount >= 3,
+    `jsBorderLR matches bare (border-r), small numeric (border-l-2), and large numeric (border-r-8) variants in JS strings (saw ${jsBorderLRCount}/3)`,
+  );
+  const jsInsetLRCount = (jsOut.match(/\[jsInsetLR\]/g) ?? []).length;
+  assert(
+    jsInsetLRCount >= 3,
+    `jsInsetLR matches numeric (right-4 / left-3) and arbitrary (right-[12px]) variants in JS strings (saw ${jsInsetLRCount}/3)`,
+  );
+  // jsBorderLR must NOT misfire on `border-l-4` / `border-r-4`
+  // (jsBorderLR4 owns those) or on colour utilities (`border-blue-500`).
+  const jsBorderLRMessageLines = jsOut
+    .split("\n")
+    .filter((l) => l.includes("[jsBorderLR]") && !l.includes("[jsBorderLR4]"));
+  assert(
+    !jsBorderLRMessageLines.some((l) => /`border-[lr]-4`/.test(l)),
+    "jsBorderLR does NOT misfire on `border-l-4` / `border-r-4` (jsBorderLR4 owns those)",
+  );
+  assert(
+    !jsBorderLRMessageLines.some((l) => /`border-(?:blue|red|green|gray|slate|zinc|neutral|stone|orange|amber|yellow|lime|emerald|teal|cyan|sky|indigo|violet|purple|fuchsia|pink|rose)-/.test(l)),
+    "jsBorderLR does NOT misfire on color utilities like `border-blue-500` in JS strings",
   );
   // jsMlMr must catch numeric, keyword, and arbitrary-value variants.
   const jsMlMrCount = (jsOut.match(/\[jsMlMr\]/g) ?? []).length;

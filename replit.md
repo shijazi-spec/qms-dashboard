@@ -31,6 +31,26 @@ The platform is built around a robust GRC and quality management framework, leve
 - **Prompt Version Purging**: Tracking and display of prompt-version purge cleanup counts in the AI Ops dashboard.
 - **Historical Data Redaction**: `ai_call_metrics` historical sweep stamps rows with `previews_redacted_at` to indicate retroactive redaction.
 
+## RTL Layout Convention
+Dashboard pages are served to both English (LTR) and Arabic (RTL) users via `html[dir="rtl"]` set by `dashboard/js/i18n.js`. Layout details that should mirror in RTL must be written with CSS logical-direction utilities, NOT physical-direction Tailwind classes. Physical classes pin the layout to LTR and silently break the Arabic experience.
+
+The `scripts/check-rtl-classes.cjs` guard (wired into `scripts/post-merge.sh` and exercised by `tests/noPhysicalDirectionClasses.test.ts` on every `npm test`) blocks the following physical-direction class families from re-entering `dashboard/*.html`. Each rule has its own per-file allowlist of grandfathered pages; new dashboard files (or any file removed from an allowlist) are subject to the full rule.
+
+| Rule ID | Forbidden class family | Logical replacement |
+| --- | --- | --- |
+| `thTextAlign` | `<th class="text-left\|text-right">` | `text-start` / `text-end` |
+| `textLRNonTh` | `text-left` / `text-right` on any non-`<th>` element | `text-start` / `text-end` |
+| `borderLR4` | `border-l-4` / `border-r-4` (stat-card accent) | `border-s-4` / `border-e-4` |
+| `borderLR` *(Task #687)* | bare `border-l` / `border-r` and `border-l-*` / `border-r-*` widths other than `-4` | `border-s-…` / `border-e-…` |
+| `buttonMlMr` | `<button class="ml-*\|mr-*">` (icon gutters) | `ms-…` / `me-…` |
+| `mlMrAll` *(Task #687)* | `ml-*` / `mr-*` on any non-`<button>` element | `ms-…` / `me-…` |
+| `plPr` *(Task #687)* | `pl-*` / `pr-*` (inline padding) | `ps-…` / `pe-…` |
+| `insetLR` *(Task #687)* | `left-*` / `right-*` positional insets on absolute / fixed elements | `start-…` / `end-…` |
+| `spaceX` | `space-x-*` between flex / grid children (compiles to physical `margin-left`) | `gap-…` on the container |
+| `roundedLR` | `rounded-l-*` / `rounded-r-*` (inline corner radius) | `rounded-s-…` / `rounded-e-…` |
+
+A companion `<script>`-body pass also reports the same patterns inside JS template strings (rule IDs prefixed `script*` / `js*`); see `scripts/check-rtl-classes.cjs` for the JS-pass details. If a specific element genuinely must NOT mirror in RTL (rare), add a trailing comment `<!-- rtl-safe-physical: <reason> -->` (HTML) or `// rtl-safe-physical: <reason>` (JS) on the same line and the scanner will skip that line.
+
 ## External Dependencies
 - **Inngest**: For scheduling and executing cron jobs and workflows.
 - **Postgres**: Primary database for storing application data, configurations, and audit logs.

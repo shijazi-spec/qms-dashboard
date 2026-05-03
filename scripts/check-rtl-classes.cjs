@@ -144,6 +144,57 @@ const ALLOWLISTS = {
   spaceX: new Set([]),
   roundedLR: new Set([]),
   textLRNonTh: new Set([]),
+  // Task #687: padding-left / padding-right on any element. Use
+  // `ps-…` / `pe-…` (logical) so the inline padding flips with writing
+  // direction. Allowlist captures every page that ships violations today;
+  // new files must use logical-direction utilities from the start.
+  plPr: new Set([
+    "dashboard/consultant.html",
+    "dashboard/crm.html",
+    "dashboard/grc.html",
+    "dashboard/health.html",
+    "dashboard/index.html",
+  ]),
+  // Task #687: margin-left / margin-right on any non-`<button>` element
+  // (`<button>` is already covered by `buttonMlMr`). The two rules are
+  // tag-disjoint so each owns its own grandfathering granularity.
+  mlMrAll: new Set([
+    "dashboard/admin.html",
+    "dashboard/ai-approvals.html",
+    "dashboard/ai-ops.html",
+    "dashboard/consultant.html",
+    "dashboard/duplicates.html",
+    "dashboard/guide.html",
+    "dashboard/logs.html",
+    "dashboard/migration.html",
+    "dashboard/onboarding.html",
+    "dashboard/pdpl.html",
+    "dashboard/projects.html",
+    "dashboard/qms.html",
+    "dashboard/roi.html",
+    "dashboard/scorecard.html",
+    "dashboard/tablef.html",
+    "dashboard/team.html",
+    "dashboard/users.html",
+  ]),
+  // Task #687: `border-l-*` / `border-r-*` (any width OTHER than `-4`,
+  // which `borderLR4` already owns) and the bare `border-l` / `border-r`
+  // shorthand (1px). Use `border-s-…` / `border-e-…` so the accent
+  // border lands on the inline-start / inline-end edge in Arabic RTL.
+  borderLR: new Set([
+    "dashboard/consultant.html",
+  ]),
+  // Task #687: physical positional insets (`left-*`, `right-*`) used on
+  // absolutely / fixed-positioned elements. Use `start-…` / `end-…` so
+  // the offset mirrors with writing direction.
+  insetLR: new Set([
+    "dashboard/admin.html",
+    "dashboard/ai-ops.html",
+    "dashboard/crm.html",
+    "dashboard/duplicates.html",
+    "dashboard/feedback.html",
+    "dashboard/index.html",
+  ]),
 };
 
 /**
@@ -235,6 +286,16 @@ const JS_ALLOWLISTS = {
   // first new `rounded-l-*` / `rounded-r-*` to land in a JS template string
   // is caught by CI.
   jsRoundedLR: new Set([]),
+  // Task #687 — JS-string parity with the new HTML rules. Allowlists
+  // were captured by scanning every inline `<script>` body in
+  // `dashboard/*.html` for the corresponding pattern via the same
+  // acorn-based literal extractor the JS pass uses at runtime.
+  jsPlPr: new Set([]),
+  jsBorderLR: new Set([
+    "dashboard/duplicates.html",
+    "dashboard/projects.html",
+  ]),
+  jsInsetLR: new Set([]),
 };
 
 const TAG_OPEN_RE = /<([a-zA-Z][a-zA-Z0-9-]*)\b/;
@@ -293,6 +354,55 @@ const RULES = [
     appliesToTag: () => true,
     classRegex: /(?<=^|\s)(rounded-[lr](?:-(?:none|sm|md|lg|xl|2xl|3xl|full|[0-9]+(?:\.[0-9]+)?|\[[^\]]+\]))?)(?=\s|$)/,
     fix: "Use `rounded-s-…` / `rounded-e-…` (logical) so the rounded edge lands on the inline-start / inline-end side in Arabic RTL.",
+  },
+  {
+    id: "plPr",
+    // Task #687. Matches every Tailwind variant of pl-/pr-: numeric
+    // (`pl-2`, `pr-1.5`), fractional (`pl-1/2`), keyword (`pl-px`),
+    // and arbitrary value (`pr-[3px]`). Tailwind padding has no
+    // `auto` / `full` / `reverse` keywords, so we don't list them.
+    label: "uses physical pl-/pr- padding",
+    appliesToTag: () => true,
+    classRegex: /(?<=^|\s)(p[lr]-(?:[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?|px|\[[^\]]+\]))(?=\s|$)/,
+    fix: "Use `ps-…` / `pe-…` (logical) so the inline padding flips with writing direction in Arabic RTL.",
+  },
+  {
+    id: "mlMrAll",
+    // Task #687. Same regex as `buttonMlMr` but applied to every tag
+    // EXCEPT `<button>`. The two rules are tag-disjoint so each can
+    // keep its own per-rule allowlist while together covering all
+    // ml-/mr- usage in the dashboard HTML.
+    label: "uses physical ml-/mr- margin",
+    appliesToTag: (tag) => tag !== "button",
+    classRegex: /(?<=^|\s)(m[lr]-(?:[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?|px|auto|full|reverse|\[[^\]]+\]))(?=\s|$)/,
+    fix: "Use `ms-…` / `me-…` (logical) so the inline margin flips with writing direction in Arabic RTL.",
+  },
+  {
+    id: "borderLR",
+    // Task #687. Matches `border-l-*` / `border-r-*` for every Tailwind
+    // width OTHER than `-4` (which `borderLR4` already owns to preserve
+    // its tighter, longer-standing allowlist) AND the bare 1px shorthand
+    // `border-l` / `border-r`. Width values enumerated explicitly skip
+    // `4`. Color variants (`border-l-blue-500`) are NOT matched — they
+    // require a colour-token follow-up that isn't a width keyword and
+    // therefore fails the value alternation; the bare-shorthand match
+    // also fails because the next char is `-`, not whitespace.
+    label: "uses physical border-l-/border-r- inline border",
+    appliesToTag: () => true,
+    classRegex: /(?<=^|\s)(border-[lr](?:-(?:0|1|2|3|5|6|7|8|none|sm|md|lg|xl|2xl|3xl|4xl|\[[^\]]+\]))?)(?=\s|$)/,
+    fix: "Use `border-s-…` / `border-e-…` (logical) so the inline border lands on the inline-start / inline-end edge in Arabic RTL.",
+  },
+  {
+    id: "insetLR",
+    // Task #687. Matches Tailwind positional insets `left-*` / `right-*`
+    // (numeric, fractional, keyword `px`/`auto`/`full`, arbitrary
+    // `[…]`). Used on `absolute` / `fixed` positioned elements; the
+    // physical-direction insets pin the element to the LTR side and
+    // need to flip to the inline-start / inline-end side under RTL.
+    label: "uses physical left-/right- positional inset",
+    appliesToTag: () => true,
+    classRegex: /(?<=^|\s)((?:left|right)-(?:[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?|px|auto|full|\[[^\]]+\]))(?=\s|$)/,
+    fix: "Use `start-…` / `end-…` (logical) so the absolute/fixed offset mirrors with writing direction in Arabic RTL.",
   },
   {
     id: "textLRNonTh",
@@ -361,6 +471,33 @@ const JS_RULES = [
     label: "JS string literal contains physical rounded-l-/rounded-r- corner radius",
     classRegex: /(?<=^|[\s"'>])(rounded-[lr](?:-(?:none|sm|md|lg|xl|2xl|3xl|full|[0-9]+(?:\.[0-9]+)?|\[[^\]]+\]))?)(?=[\s"'<]|$)/,
     fix: "Use `rounded-s-…` / `rounded-e-…` (logical) so the rounded edge lands on the inline-start / inline-end side in Arabic RTL.",
+  },
+  // Task #687 — JS-string parity with the new HTML rules so a developer
+  // cannot bypass the gate by promoting a forbidden physical-direction
+  // class into a JS template string. Boundary lookarounds match how
+  // class tokens sit inside HTML markup that lives inside JS string
+  // literals (whitespace + quote + angle-bracket characters).
+  {
+    id: "jsPlPr",
+    label: "JS string literal contains physical pl-/pr- padding",
+    classRegex: /(?<=^|[\s"'>])(p[lr]-(?:[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?|px|\[[^\]]+\]))(?=[\s"'<]|$)/,
+    fix: "Use `ps-…` / `pe-…` (logical) so the inline padding flips with writing direction in Arabic RTL.",
+  },
+  {
+    id: "jsBorderLR",
+    // Mirrors the HTML `borderLR` rule: matches every Tailwind width
+    // OTHER than `-4` (which `jsBorderLR4` already owns) AND the bare
+    // 1px shorthand `border-l` / `border-r`. Color variants
+    // (`border-l-blue-500`) are NOT matched.
+    label: "JS string literal contains physical border-l-/border-r- inline border",
+    classRegex: /(?<=^|[\s"'>])(border-[lr](?:-(?:0|1|2|3|5|6|7|8|none|sm|md|lg|xl|2xl|3xl|4xl|\[[^\]]+\]))?)(?=[\s"'<]|$)/,
+    fix: "Use `border-s-…` / `border-e-…` (logical) so the inline border lands on the inline-start / inline-end edge in Arabic RTL.",
+  },
+  {
+    id: "jsInsetLR",
+    label: "JS string literal contains physical left-/right- positional inset",
+    classRegex: /(?<=^|[\s"'>])((?:left|right)-(?:[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?|px|auto|full|\[[^\]]+\]))(?=[\s"'<]|$)/,
+    fix: "Use `start-…` / `end-…` (logical) so the absolute/fixed offset mirrors with writing direction in Arabic RTL.",
   },
 ];
 
