@@ -971,6 +971,16 @@
             return div.innerHTML;
         }
 
+        /* Expose escapeHtml and renderMarkdown to the global scope so the
+           inline approval-card renderer in the second <script> block (which
+           is not inside this IIFE) can reuse them. Without this, calls to
+           escapeHtml() / renderMarkdown() from renderApprovalCard() throw
+           ReferenceError and the catch in fetchAndRenderApprovalCard()
+           silently replaces the inline card with a "Could not load approval
+           card …" placeholder — Task #804. */
+        window.escapeHtml = escapeHtml;
+        window.renderMarkdown = renderMarkdown;
+
         function showTyping() { typingIndicator.classList.remove('hidden'); typingIndicator.classList.add('flex'); scrollToBottom(); }
         function hideTyping() { typingIndicator.classList.add('hidden'); typingIndicator.classList.remove('flex'); }
         function scrollToBottom() { messagesContainer.scrollTop = messagesContainer.scrollHeight; }
@@ -1659,9 +1669,6 @@
         }
 
         chatInput.focus();
-
-        window.escapeHtml = escapeHtml;
-        window.renderMarkdown = renderMarkdown;
     })();
 
     /* =====================================================================
