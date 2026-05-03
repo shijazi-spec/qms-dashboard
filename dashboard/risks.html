@@ -327,6 +327,7 @@
         const pageSize = 20;
         let totalRisks = 0;
 
+        const _t = (k, v) => (window.WalaPlusI18n && WalaPlusI18n.t) ? (WalaPlusI18n.t(k) || v || k) : (v || k);
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
@@ -433,6 +434,15 @@
             return 'bg-green-200 text-green-900';
         }
 
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function getLevelBgClass(level) {
             switch(level) {
                 case 'critical': return 'risk-critical';
@@ -519,11 +529,11 @@
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3 text-sm text-gray-900">R-${String(risk.id).substring(0, 8).toUpperCase()}</td>
                     <td class="px-4 py-3">
-                        <div class="text-sm font-medium text-gray-900 truncate max-w-xs">${risk.risk_title}</div>
-                        ${risk.ai_detected ? '<span class="text-xs text-purple-600">' + WalaPlusI18n.t('dyn.risks.ai_detected_label') + '</span>' : ''}
+                        <div class="text-sm font-medium text-gray-900 truncate max-w-xs">${escapeHtml(risk.risk_title)}</div>
+                        ${risk.ai_detected ? '<span class="text-xs text-purple-600">' + _t('dyn.risks.ai_detected_label') + '</span>' : ''}
                     </td>
                     <td class="px-4 py-3 text-sm text-gray-600">${formatCategory(risk.risk_category)}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${risk.risk_owner || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(risk.risk_owner || '-')}</td>
                     <td class="px-4 py-3 text-center">
                         <span class="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${getLevelBgClass(risk.risk_level)}">${_fn(risk.risk_score)}</span>
                     </td>
@@ -629,7 +639,7 @@
                 <div class="space-y-6">
                     <div class="flex justify-between items-start">
                         <div>
-                            <h4 class="text-xl font-semibold text-gray-900">${risk.risk_title}</h4>
+                            <h4 class="text-xl font-semibold text-gray-900">${escapeHtml(risk.risk_title)}</h4>
                             <p class="text-sm text-gray-500 mt-1">R-${String(risk.id).substring(0, 8).toUpperCase()} | ${formatCategory(risk.risk_category)}</p>
                         </div>
                         <div class="text-center">
@@ -638,7 +648,7 @@
                         </div>
                     </div>
 
-                    ${risk.risk_description ? `<div><h5 class="text-sm font-medium text-gray-700">${WalaPlusI18n.t('dyn.risks.description')}</h5><p class="text-sm text-gray-600 mt-1">${risk.risk_description}</p></div>` : ''}
+                    ${risk.risk_description ? `<div><h5 class="text-sm font-medium text-gray-700">${_t('dyn.risks.description')}</h5><p class="text-sm text-gray-600 mt-1">${escapeHtml(risk.risk_description)}</p></div>` : ''}
 
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div class="bg-gray-50 p-3 rounded">
@@ -650,12 +660,12 @@
                             <div class="font-semibold">${_fn(risk.likelihood_score)}/5</div>
                         </div>
                         <div class="bg-gray-50 p-3 rounded">
-                            <div class="text-xs text-gray-500">${WalaPlusI18n.t('dyn.risks.owner')}</div>
-                            <div class="font-semibold">${risk.risk_owner || WalaPlusI18n.t('dyn.common.unassigned')}</div>
+                            <div class="text-xs text-gray-500">${_t('dyn.risks.owner')}</div>
+                            <div class="font-semibold">${escapeHtml(risk.risk_owner || _t('dyn.common.unassigned'))}</div>
                         </div>
                         <div class="bg-gray-50 p-3 rounded">
-                            <div class="text-xs text-gray-500">${WalaPlusI18n.t('dyn.risks.department')}</div>
-                            <div class="font-semibold">${risk.owner_department || '-'}</div>
+                            <div class="text-xs text-gray-500">${_t('dyn.risks.department')}</div>
+                            <div class="font-semibold">${escapeHtml(risk.owner_department || '-')}</div>
                         </div>
                     </div>
 
@@ -663,7 +673,7 @@
                         <div>
                             <h5 class="text-sm font-medium text-gray-700">${WalaPlusI18n.t('dyn.risks.treatment_strategy')}</h5>
                             <p class="text-sm text-gray-600 mt-1">${formatTreatment(risk.treatment_strategy)}</p>
-                            ${risk.treatment_description ? `<p class="text-xs text-gray-500 mt-1">${risk.treatment_description}</p>` : ''}
+                            ${risk.treatment_description ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(risk.treatment_description)}</p>` : ''}
                         </div>
                         <div>
                             <h5 class="text-sm font-medium text-gray-700">${WalaPlusI18n.t('dyn.risks.status_label')}</h5>
@@ -697,7 +707,7 @@
                                 return `
                                 <div class="border rounded p-3">
                                     <div class="flex justify-between items-start">
-                                        <div class="font-medium text-sm">${t.action_title}</div>
+                                        <div class="font-medium text-sm">${escapeHtml(t.action_title)}</div>
                                         <span class="px-2 py-1 text-xs rounded ${t.status === 'completed' ? 'bg-green-100 text-green-800' : t.status === 'overdue' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">${tStatus}</span>
                                     </div>
                                     <div class="mt-2">
@@ -705,10 +715,10 @@
                                         <div class="w-full bg-gray-200 rounded-full h-2"><div class="${progColor} h-2 rounded-full" data-style="width:${prog}%"></div></div>
                                     </div>
                                     <div class="flex justify-between text-xs text-gray-500 mt-2">
-                                        <span>${WalaPlusI18n.t('dyn.risks.assigned_label', { name: t.assigned_to })}</span>
+                                    <span>${WalaPlusI18n.t('dyn.risks.assigned_label', { name: escapeHtml(t.assigned_to) })}</span>
                                         <span>${WalaPlusI18n.t('dyn.risks.due_with_left', { date: _fd(dueDate), left: dueLabel })}</span>
                                     </div>
-                                    ${t.milestones ? `<div class="mt-2 text-xs text-gray-400">${WalaPlusI18n.t('dyn.risks.milestones', { text: t.milestones })}</div>` : ''}
+                                    ${t.milestones ? `<div class="mt-2 text-xs text-gray-400">${_t('dyn.risks.milestones', { text: escapeHtml(t.milestones) })}</div>` : ''}
                                 </div>
                             `}).join('')}
                         </div>
@@ -724,9 +734,9 @@
                             ${WalaPlusI18n.t('dyn.risks.risk_accepted_grc')}
                         </h5>
                         <div class="text-sm text-slate-600 mt-2">
-                            <div>${WalaPlusI18n.t('dyn.risks.accepted_by', { name: risk.accepted_by, role: risk.accepted_by_role || WalaPlusI18n.t('dyn.risks.grc_manager') })}</div>
-                            ${risk.accepted_at ? `<div>${WalaPlusI18n.t('dyn.risks.date_label', { date: _fd(risk.accepted_at) })}</div>` : ''}
-                            ${risk.acceptance_justification ? `<div class="mt-1">${WalaPlusI18n.t('dyn.risks.justification_label', { text: risk.acceptance_justification })}</div>` : ''}
+                            <div>${_t('dyn.risks.accepted_by', { name: escapeHtml(risk.accepted_by), role: escapeHtml(risk.accepted_by_role || _t('dyn.risks.grc_manager')) })}</div>
+                            ${risk.accepted_at ? `<div>${_t('dyn.risks.date_label', { date: _fd(risk.accepted_at) })}</div>` : ''}
+                            ${risk.acceptance_justification ? `<div class="mt-1">${_t('dyn.risks.justification_label', { text: escapeHtml(risk.acceptance_justification) })}</div>` : ''}
                         </div>
                     </div>
                     ` : ''}

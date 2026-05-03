@@ -417,12 +417,12 @@
                     const tbody = document.getElementById('incidentsTable');
                     tbody.innerHTML = data.incidents.length ? data.incidents.map(inc => `
                         <tr>
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900">${inc.incident_id}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600">${inc.title}</td>
-                            <td class="px-4 py-3"><span class="status-badge severity-${inc.severity}">${inc.severity}</span></td>
-                            <td class="px-4 py-3"><span class="status-badge status-${inc.status}">${inc.status}</span></td>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(inc.incident_id)}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(inc.title)}</td>
+                            <td class="px-4 py-3"><span class="status-badge severity-${escapeHtml(inc.severity)}">${escapeHtml(inc.severity)}</span></td>
+                            <td class="px-4 py-3"><span class="status-badge status-${escapeHtml(inc.status)}">${escapeHtml(inc.status)}</span></td>
                             <td class="px-4 py-3 text-sm text-gray-600">${new Date(inc.detected_date).toLocaleDateString()}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600">${inc.records_affected || '-'}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(inc.records_affected != null ? String(inc.records_affected) : '-')}</td>
                             <td class="px-4 py-3 text-sm">${inc.notification_required ? (inc.notification_sent ? '<span class="text-green-600">Sent</span>' : '<span class="text-amber-600">Required</span>') : '<span class="text-gray-400">Not Required</span>'}</td>
                             <td class="px-4 py-3 text-sm">
                                 <select data-on-change="updateIncidentStatus" data-args="[${inc.id},&quot;@this.value&quot;]" class="text-xs border rounded px-2 py-1">
@@ -449,10 +449,10 @@
                     const tbody = document.getElementById('guardrailsTable');
                     tbody.innerHTML = data.guardrails.map(g => `
                         <tr>
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900">${g.field_name}</td>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(g.field_name)}</td>
                             <td class="px-4 py-3 text-sm text-gray-600 font-mono text-xs">${escapeHtml(g.mask_pattern)}</td>
-                            <td class="px-4 py-3 text-sm text-purple-600 font-medium">${g.replacement}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600">${g.module || 'All'}</td>
+                            <td class="px-4 py-3 text-sm text-purple-600 font-medium">${escapeHtml(g.replacement)}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(g.module || 'All')}</td>
                             <td class="px-4 py-3 text-sm">${g.is_active ? '<span class="text-green-600">Active</span>' : '<span class="text-gray-400">Inactive</span>'}</td>
                         </tr>
                     `).join('');

@@ -405,6 +405,15 @@
             `).join('');
         }
 
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         async function renderTopRisks() {
             try {
                 const res = await fetch('/api/risks?status=open&limit=5');
@@ -420,8 +429,8 @@
                 document.getElementById('topRisks').innerHTML = riskList.slice(0, 5).map(r => `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
-                            <div class="font-medium text-gray-900">${r.risk_title}</div>
-                            <div class="text-xs text-gray-500">${_trDyn('executive.risk_categories', r.risk_category)} | ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.owner') : 'Owner'}: ${r.risk_owner || (window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.unassigned') : 'Unassigned')}</div>
+                            <div class="font-medium text-gray-900">${escapeHtml(r.risk_title)}</div>
+                            <div class="text-xs text-gray-500">${_trDyn('executive.risk_categories', r.risk_category)} | ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.owner') : 'Owner'}: ${escapeHtml(r.risk_owner || (window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.unassigned') : 'Unassigned'))}</div>
                         </div>
                         <span class="px-2 py-1 rounded text-xs font-medium ${r.risk_level === 'critical' ? 'bg-red-100 text-red-700' : r.risk_level === 'high' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}">
                             ${window.WalaPlusI18n ? window.WalaPlusI18n.t('executive.score') : 'Score'}: ${r.risk_score}

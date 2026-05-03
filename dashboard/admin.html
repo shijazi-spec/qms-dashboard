@@ -1411,8 +1411,8 @@
                         'Contacts': 'bg-cyan-100 text-cyan-700',
                         'Accounts': 'bg-indigo-100 text-indigo-700'
                     };
-                    const teamLabel = doc.team_name ? ` (${doc.team_name})` : '';
-                    return `<span class="px-2 py-0.5 ${colors[doc.crm_module] || 'bg-gray-100 text-gray-700'} rounded text-xs font-medium">${doc.crm_module}${teamLabel}</span>`;
+                    const teamLabel = doc.team_name ? ` (${escapeHtml(doc.team_name)})` : '';
+                    return `<span class="px-2 py-0.5 ${colors[doc.crm_module] || 'bg-gray-100 text-gray-700'} rounded text-xs font-medium">${escapeHtml(doc.crm_module)}${teamLabel}</span>`;
                 };
 
                 container.innerHTML = documents
@@ -1427,13 +1427,13 @@
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
-                                <h4 class="font-medium text-gray-900">${doc.name}</h4>
+                                <h4 class="font-medium text-gray-900">${escapeHtml(doc.name)}</h4>
                                 ${getModuleBadge(doc)}
                             </div>
                             <div class="flex items-center gap-3 text-sm text-gray-500">
-                                <span>Version ${doc.version}</span>
+                                <span>Version ${escapeHtml(doc.version)}</span>
                                 <span>|</span>
-                                <span>${doc.document_type}</span>
+                                <span>${escapeHtml(doc.document_type)}</span>
                                 <span>|</span>
                                 <span>${new Date(doc.created_at).toLocaleDateString()}</span>
                             </div>
@@ -1529,9 +1529,9 @@
                         typeof doc.rules_json === "string"
                             ? JSON.parse(doc.rules_json)
                             : doc.rules_json;
-                    content = `<pre class="text-sm text-gray-700 whitespace-pre-wrap">${JSON.stringify(rules, null, 2)}</pre>`;
+                    content = `<pre class="text-sm text-gray-700 whitespace-pre-wrap">${escapeHtml(JSON.stringify(rules, null, 2))}</pre>`;
                 } else if (doc.content_text) {
-                    content = `<pre class="text-sm text-gray-700 whitespace-pre-wrap">${doc.content_text}</pre>`;
+                    content = `<pre class="text-sm text-gray-700 whitespace-pre-wrap">${escapeHtml(doc.content_text)}</pre>`;
                 } else {
                     content =
                         '<p class="text-gray-500">No content available</p>';
@@ -1539,8 +1539,8 @@
 
                 preview.innerHTML = `
                 <div class="mb-4 pb-4 border-b">
-                    <h4 class="font-semibold text-gray-900">${doc.name}</h4>
-                    <p class="text-sm text-gray-500">Version ${doc.version} | ${doc.document_type}</p>
+                    <h4 class="font-semibold text-gray-900">${escapeHtml(doc.name)}</h4>
+                    <p class="text-sm text-gray-500">Version ${escapeHtml(doc.version)} | ${escapeHtml(doc.document_type)}</p>
                 </div>
                 ${content}
             `;
@@ -1865,20 +1865,20 @@
                                 <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
                                     <div class="flex items-start justify-between mb-2">
                                         <div class="flex items-center gap-3">
-                                            <span class="${actionColor} px-2 py-1 rounded text-xs font-medium uppercase">${log.action_type}</span>
-                                            <span class="text-sm font-medium text-gray-900">${log.entity_type}</span>
-                                            <span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">${log.module}</span>
+                                            <span class="${actionColor} px-2 py-1 rounded text-xs font-medium uppercase">${escapeHtml(log.action_type)}</span>
+                                            <span class="text-sm font-medium text-gray-900">${escapeHtml(log.entity_type)}</span>
+                                            <span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">${escapeHtml(log.module)}</span>
                                         </div>
                                         <span class="text-xs text-gray-400">${date}</span>
                                     </div>
                                     <div class="flex items-center gap-2 text-sm text-gray-600">
-                                        <span>ID: ${log.entity_id}</span>
-                                        ${log.user_name ? `<span>by ${log.user_name}</span>` : ''}
+                                        <span>ID: ${escapeHtml(log.entity_id)}</span>
+                                        ${log.user_name ? `<span>by ${escapeHtml(log.user_name)}</span>` : ''}
                                     </div>
                                     ${log.new_value ? `
                                         <details class="mt-2">
                                             <summary class="text-xs text-indigo-600 cursor-pointer hover:text-indigo-800">View Details</summary>
-                                            <pre class="mt-2 text-xs bg-white p-2 rounded border overflow-x-auto max-h-32">${JSON.stringify(log.new_value, null, 2)}</pre>
+                                            <pre class="mt-2 text-xs bg-white p-2 rounded border overflow-x-auto max-h-32">${escapeHtml(JSON.stringify(log.new_value, null, 2))}</pre>
                                         </details>
                                     ` : ''}
                                 </div>
@@ -2046,7 +2046,7 @@
                 const team = document.getElementById('scorecard-team').value;
                 const crmModule = document.getElementById('scorecard-crm-module').value;
                 document.getElementById('scorecard-dept-status').innerHTML = 
-                    `<span class="${scorecard.is_active ? 'text-green-600' : 'text-blue-600'}">Editing: ${scorecard.name}${scorecard.is_active ? ' (Active)' : ''}</span>`;
+                    `<span class="${scorecard.is_active ? 'text-green-600' : 'text-blue-600'}">Editing: ${escapeHtml(scorecard.name)}${scorecard.is_active ? ' (Active)' : ''}</span>`;
                 
                 renderScorecard(scorecard);
                 loadScorecardAttributes(id);
@@ -2106,14 +2106,14 @@
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                 </button>
                             </div>
-                            <span class="px-2 py-1 rounded-full text-xs font-medium ${dimColors[attr.dimension] || 'bg-gray-100 text-gray-800'}">${attr.dimension}</span>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium ${dimColors[attr.dimension] || 'bg-gray-100 text-gray-800'}">${escapeHtml(attr.dimension)}</span>
                             <div class="flex-1">
                                 <div class="flex items-center gap-2">
-                                    <p class="font-medium text-gray-900 text-sm">${attr.attribute_name}</p>
-                                    ${attr.severity ? `<span class="px-1.5 py-0.5 rounded text-xs ${severityColors[attr.severity] || 'bg-gray-100 text-gray-600'}">${attr.severity}</span>` : ''}
+                                    <p class="font-medium text-gray-900 text-sm">${escapeHtml(attr.attribute_name)}</p>
+                                    ${attr.severity ? `<span class="px-1.5 py-0.5 rounded text-xs ${severityColors[attr.severity] || 'bg-gray-100 text-gray-600'}">${escapeHtml(attr.severity)}</span>` : ''}
                                     ${!attr.is_active ? '<span class="px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500">Disabled</span>' : ''}
                                 </div>
-                                <p class="text-xs text-gray-500">${attr.description || ''}</p>
+                                <p class="text-xs text-gray-500">${escapeHtml(attr.description || '')}</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-4">
