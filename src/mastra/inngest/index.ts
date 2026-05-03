@@ -1035,6 +1035,29 @@ const rateLimit429SpikeAlertFunction = inngest.createFunction(
 );
 inngestFunctions.push(rateLimit429SpikeAlertFunction);
 
+// Export-endpoint p95 latency alert cron (Task #440) — scrapes the in-memory
+// rolling window populated by `instrumentExportResponseTiming` in
+// `src/utils/excelExport.ts` and pages on-call when any route's rolling p95
+// of TTFB or total duration exceeds `EXPORT_TTFB_BUDGET_MS` /
+// `EXPORT_TOTAL_BUDGET_MS`. Repeat-suppression is per-(route, reason) so a
+// sustained regression on one endpoint does not silence a fresh regression
+// on another. Runbook: docs/runbook-export-timing-alert.md.
+const exportTimingAlertFunction = inngest.createFunction(
+  { id: "export-timing-p95-alert" },
+  { cron: process.env.EXPORT_TIMING_ALERT_CRON || "*/5 * * * *" },
+  async ({ step }) => {
+    return await step.run("check-export-timing-p95", async () => {
+      const { runExportTimingAlertCheck } = await import(
+        "../../utils/exportTimingMetrics"
+      );
+      const result = await runExportTimingAlertCheck();
+      logger.info(`[ExportTimingAlert] Cron run complete:`, result);
+      return result;
+    });
+  },
+);
+inngestFunctions.push(exportTimingAlertFunction);
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Per-tool health alert cron — defined in workflows/toolHealthAlertsCron.ts
 // (kept there so all the threshold config + evaluation logic live together).

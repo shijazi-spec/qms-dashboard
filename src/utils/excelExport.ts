@@ -1539,6 +1539,27 @@ export function instrumentExportResponseTiming(
         `budget_total=${EXPORT_TOTAL_BUDGET_MS}ms status=${effectiveStatus}` +
         (extra ? ` ${extra}` : ""),
     );
+    // Feed the in-memory rolling-window aggregator that the export-timing
+    // p95 alert cron (Task #440) consumes. Lazy-import to break the import
+    // cycle (exportTimingMetrics imports the budget constants from this
+    // file). Wrapped in try/catch so a metrics bug can never break the
+    // streaming response we just finished serving.
+    void (async () => {
+      try {
+        const { recordExportTimingSample } = await import(
+          "./exportTimingMetrics"
+        );
+        recordExportTimingSample({
+          routeLabel,
+          ttfbMs,
+          totalMs,
+          bytes: bytesObserved,
+          status: effectiveStatus,
+        });
+      } catch {
+        /* noop — metrics bookkeeping must never affect the response */
+      }
+    })();
     if (effectiveStatus === "over-budget") {
       logger.warn(
         `[export-timing] TOTAL OVER BUDGET on ${routeLabel}: ${totalMs}ms ` +
