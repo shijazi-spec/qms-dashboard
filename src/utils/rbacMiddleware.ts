@@ -2152,6 +2152,27 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
 
   { pattern: /^\/api\/users\/stats$/, methods: ["GET"], roles: ["admin"] },
   { pattern: /^\/api\/users\/\d+$/, methods: ["GET"], roles: ["admin"] },
+  // PATCH on a specific user — admin-only (handler also enforces
+  // verifyAdminKey). Map-level rule is required because the broader
+  // `^/api/users` POST/PUT/DELETE permission rule above doesn't cover
+  // PATCH, so without this entry the deny-by-default fallback in
+  // `enforceRoutePermission` would swallow PATCH before the handler
+  // could run. DELETE is already covered by the `can_manage_users`
+  // rule above; intentionally not duplicated here so first-match
+  // semantics keep that policy authoritative.
+  {
+    pattern: /^\/api\/users\/\d+$/,
+    methods: ["PATCH"],
+    roles: ["admin"],
+  },
+  // Mobile consultant feedback (callId + messageId variants) — same
+  // allowlist as the web consultant chat (CONSULTANT_ROLES). See
+  // src/mastra/routes/mobileRoutes.ts:MOBILE_CONSULTANT_ROLES.
+  {
+    pattern: /^\/api\/mobile\/consultant\/(feedback|message-feedback)$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "grc_manager", "head_of_operations_quality"],
+  },
   {
     pattern: /^\/api\/users$/,
     methods: ["GET"],

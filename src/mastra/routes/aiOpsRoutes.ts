@@ -1211,25 +1211,50 @@ export const aiOpsRoutes = [
           const severity = (ALLOWED_SEVERITIES as readonly string[]).includes(sevRaw)
             ? sevRaw
             : undefined;
-          // Pull a generous window then filter in memory — `getAIAlerts`
-          // already orders by severity tier + created_at DESC and storage
-          // health typically has a handful of rows at most (it's a single
-          // dedupe-keyed alert), so the extra filtering cost is negligible.
-          const { alerts } = await getAIAlerts({
-            alert_type: 'storage_health',
-            limit: 100,
-          });
+          // Pull each closed-status bucket separately so the in-memory
+          // filter below never silently drops rows when the volume of
+          // a single status exceeds a single page. Storage-health was
+          // originally assumed to be a single dedupe-keyed alert, but
+          // long-running deployments accumulate hundreds of rows and
+          // a fixed `limit:100` would crop newer/lower-severity entries
+          // out of the response before the status filter ever ran.
+          const [{ alerts: ackAlerts }, { alerts: resolvedAlerts }] =
+            await Promise.all([
+              getAIAlerts({
+                alert_type: 'storage_health',
+                status: 'acknowledged',
+                limit: 500,
+              }),
+              getAIAlerts({
+                alert_type: 'storage_health',
+                status: 'resolved',
+                limit: 500,
+              }),
+            ]);
+          const alerts = [...ackAlerts, ...resolvedAlerts];
           const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+          // Compute the canonical triage timestamp once per row so the
+          // status-window filter, the ordering, and the response shape
+          // all agree on which event closed the alert.
+          const triageMs = (a: AIAlert): number => {
+            const raw = a.status === 'resolved'
+              ? (a.resolved_at ?? a.acknowledged_at ?? a.created_at)
+              : (a.acknowledged_at ?? a.created_at);
+            return raw ? new Date(raw).getTime() : 0;
+          };
           const data = alerts
             .filter((a) => {
               if (a.status !== 'acknowledged' && a.status !== 'resolved') return false;
               if (severity && a.severity !== severity) return false;
-              const triagedRaw = a.status === 'resolved'
-                ? (a.resolved_at ?? a.acknowledged_at ?? a.created_at)
-                : (a.acknowledged_at ?? a.created_at);
-              const ts = triagedRaw ? new Date(triagedRaw).getTime() : 0;
-              return ts >= cutoffMs;
+              return triageMs(a) >= cutoffMs;
             })
+            // Sort by triage time DESC across BOTH status buckets so the
+            // newest closures surface first regardless of which bucket
+            // they came from. Without this re-sort the bucket-merge
+            // would always rank acknowledged rows above resolved ones
+            // and starve recent resolutions when acknowledged volume
+            // exceeds `limit`.
+            .sort((a, b) => triageMs(b) - triageMs(a))
             .slice(0, limit)
             .map((a: AIAlert) => {
               const triagedAt = a.status === 'resolved'

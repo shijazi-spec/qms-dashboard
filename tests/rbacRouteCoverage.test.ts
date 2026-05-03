@@ -164,7 +164,13 @@ function isFrameworkManaged(urlPath: string): boolean {
  * filenames, ISO dates, codes, sections, etc.).
  */
 function concretize(routePath: string): string {
-  return routePath.replace(/:([A-Za-z][A-Za-z0-9_]*)/g, "1");
+  // Mastra route paths can carry an inline regex constraint after the
+  // param name, e.g. `/api/qms/capa/:id{[0-9]+}` (digits-only). The
+  // ROUTE_PERMISSION_MAP rules match against runtime URL paths which
+  // never include the `{…}` suffix, so strip it before substitution.
+  return routePath
+    .replace(/:([A-Za-z][A-Za-z0-9_]*)\{[^}]*\}/g, "1")
+    .replace(/:([A-Za-z][A-Za-z0-9_]*)/g, "1");
 }
 
 const allRoutes: RouteDef[] = [];
