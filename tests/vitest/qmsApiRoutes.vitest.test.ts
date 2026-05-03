@@ -191,7 +191,7 @@ describe("GET /api/qms/capa/:id — real data path", () => {
     vi.mocked(qmsDb.getCapaById).mockResolvedValueOnce(capa);
     vi.mocked(qmsDb.getCapaActionItems).mockResolvedValueOnce(items);
 
-    const handler = await buildHandler(qmsApiRoutes, "/api/qms/capa/:id", "GET");
+    const handler = await buildHandler(qmsApiRoutes, "/api/qms/capa/:id{[0-9]+}", "GET");
     const res = await handler(
       makeContext({ method: "GET", headers: AUTH_HEADERS, params: { id: "7" } }),
     );
@@ -205,7 +205,7 @@ describe("GET /api/qms/capa/:id — real data path", () => {
   test("404 when CAPA not found (and action items not fetched)", async () => {
     vi.mocked(qmsDb.getCapaById).mockResolvedValueOnce(null);
 
-    const handler = await buildHandler(qmsApiRoutes, "/api/qms/capa/:id", "GET");
+    const handler = await buildHandler(qmsApiRoutes, "/api/qms/capa/:id{[0-9]+}", "GET");
     const res = await handler(
       makeContext({ method: "GET", headers: AUTH_HEADERS, params: { id: "999" } }),
     );
