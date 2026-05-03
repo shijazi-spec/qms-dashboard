@@ -2426,7 +2426,9 @@
     "sw_expired_title": "Download link expired",
     "sw_expired_heading": "This download link has expired",
     "sw_expired_body": "The streaming download could not be started because the link is no longer valid. Please return to the previous page and start the export again.",
-    "sw_expired_retry_hint": "You can safely close this tab."
+    "sw_expired_retry_hint": "You can safely close this tab.",
+    "mark_all_read": "Mark all as read",
+    "mark_all_read_aria": "Mark all downloads as read"
   },
   "fraud_incidents": {
     "title": "Fraud Incidents",
