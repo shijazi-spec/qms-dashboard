@@ -1245,7 +1245,20 @@
       "invite_link_label": "Invite link",
       "copy_link_btn": "Copy link",
       "copy_link_done": "Copied!",
-      "close_btn": "Close"
+      "close_btn": "Close",
+      "admin_api_key_title": "Admin Authentication",
+      "admin_api_key_label": "Admin API Key",
+      "admin_api_key_placeholder": "Enter your admin API key",
+      "admin_api_key_submit": "Sign In",
+      "admin_api_key_skip": "Skip",
+      "approve_access_title": "Approve Access Request",
+      "approve_btn": "Approve",
+      "deny_access_title": "Deny Access Request",
+      "denial_reason_label": "Reason (optional)",
+      "denial_reason_placeholder": "Why is this request being denied?",
+      "deny_btn": "Deny",
+      "disable_user_title": "Disable User",
+      "disable_btn": "Disable"
     },
     "projects": {
       "procurement_coming_soon": "Procurement modal - Coming soon",

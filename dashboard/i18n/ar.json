@@ -1245,7 +1245,20 @@
       "invite_link_label": "رابط الدعوة",
       "copy_link_btn": "نسخ الرابط",
       "copy_link_done": "تم النسخ!",
-      "close_btn": "إغلاق"
+      "close_btn": "إغلاق",
+      "admin_api_key_title": "مصادقة المسؤول",
+      "admin_api_key_label": "مفتاح API المسؤول",
+      "admin_api_key_placeholder": "أدخل مفتاح API الخاص بك",
+      "admin_api_key_submit": "تسجيل الدخول",
+      "admin_api_key_skip": "تخطٍّ",
+      "approve_access_title": "الموافقة على طلب الوصول",
+      "approve_btn": "موافقة",
+      "deny_access_title": "رفض طلب الوصول",
+      "denial_reason_label": "السبب (اختياري)",
+      "denial_reason_placeholder": "ما سبب رفض هذا الطلب؟",
+      "deny_btn": "رفض",
+      "disable_user_title": "تعطيل المستخدم",
+      "disable_btn": "تعطيل"
     },
     "projects": {
       "procurement_coming_soon": "نافذة المشتريات - قريبًا",
