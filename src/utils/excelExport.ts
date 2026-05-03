@@ -723,22 +723,25 @@ export function streamCsv(
   chunkSize = 1000,
 ): Response {
   const headerLine = headers.join(",") + "\n";
+  const encoder = new TextEncoder();
 
-  let stream: ReadableStream<string>;
+  let stream: ReadableStream<Uint8Array>;
 
   if (Array.isArray(rows)) {
     // ── Synchronous array path: emit in chunks via pull() ──
     const arr = rows;
     let cursor = 0;
-    stream = new ReadableStream<string>({
+    stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(headerLine);
+        controller.enqueue(encoder.encode(headerLine));
       },
       pull(controller) {
         const batch = arr.slice(cursor, cursor + chunkSize);
         cursor += chunkSize;
         if (batch.length > 0) {
-          controller.enqueue(batch.map((r) => r.join(",")).join("\n") + "\n");
+          controller.enqueue(
+            encoder.encode(batch.map((r) => r.join(",")).join("\n") + "\n"),
+          );
         }
         if (cursor >= arr.length) {
           controller.close();
@@ -747,20 +750,20 @@ export function streamCsv(
     });
   } else {
     // ── AsyncIterable path: consume from iterator in start() ──
-    stream = new ReadableStream<string>({
+    stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
-          controller.enqueue(headerLine);
+          controller.enqueue(encoder.encode(headerLine));
           let buf: string[] = [];
           for await (const row of rows) {
             buf.push(row.join(","));
             if (buf.length >= chunkSize) {
-              controller.enqueue(buf.join("\n") + "\n");
+              controller.enqueue(encoder.encode(buf.join("\n") + "\n"));
               buf = [];
             }
           }
           if (buf.length > 0) {
-            controller.enqueue(buf.join("\n") + "\n");
+            controller.enqueue(encoder.encode(buf.join("\n") + "\n"));
           }
           controller.close();
         } catch (err) {
