@@ -82,6 +82,7 @@
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
         <script src="/js/i18n.js?v=1.0"></script>
+        <script src="/js/streaming-download.js?v=2.2.0"></script>
 </head>
     <body class="bg-gray-50 min-h-screen">
         <div id="walaplus-nav"></div>
@@ -394,9 +395,10 @@
                             Corrective and Preventive Actions
                         </h3>
                         <div class="flex gap-2">
-                            <button data-on-click="exportCSV" data-args="[&quot;capa&quot;]" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-1">
+                            <button id="exportCapaBtn" data-on-click="exportCSV" data-args="[&quot;capa&quot;]" data-estimate-url="/api/qms/capa/export" data-testid="button-export-capa-csv" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                 <span data-i18n="common.export_csv">Export CSV</span>
+                                <span data-size-hint class="ms-1 text-xs text-gray-500"></span>
                             </button>
                             <button data-on-click="showCapaModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" data-i18n="qms.new_capa_btn">New CAPA</button>
                         </div>
@@ -485,9 +487,10 @@
                             Nonconformance Records
                         </h3>
                         <div class="flex gap-2">
-                            <button data-on-click="exportCSV" data-args="[&quot;nc&quot;]" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-1">
+                            <button id="exportNcBtn" data-on-click="exportCSV" data-args="[&quot;nc&quot;]" data-estimate-url="/api/qms/nc/export" data-testid="button-export-nc-csv" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                 <span data-i18n="common.export_csv">Export CSV</span>
+                                <span data-size-hint class="ms-1 text-xs text-gray-500"></span>
                             </button>
                             <button data-on-click="showNcModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" data-i18n="qms.new_nc_btn">New NC</button>
                         </div>
@@ -999,6 +1002,7 @@
                             .join("") ||
                         '<tr><td colspan="8" class="text-center py-4 text-gray-500">No CAPA records found</td></tr>';
                     document.getElementById("capa-table").innerHTML = html;
+                    refreshQmsExportHint('capa');
                 } catch (error) {
                     console.error("Error loading CAPA:", error);
                 }
@@ -1027,6 +1031,7 @@
                             .join("") ||
                         '<tr><td colspan="7" class="text-center py-4 text-gray-500">No NC records found</td></tr>';
                     document.getElementById("nc-table").innerHTML = html;
+                    refreshQmsExportHint('nc');
                 } catch (error) {
                     console.error("Error loading NC:", error);
                 }
@@ -1683,9 +1688,34 @@
                 } catch(e) {}
             }
 
+            function buildQmsExportUrl(type) {
+                const params = new URLSearchParams();
+                if (type === 'capa') {
+                    const statusEl = document.getElementById('capa-status-filter');
+                    const severityEl = document.getElementById('capa-severity-filter');
+                    const status = statusEl ? statusEl.value : '';
+                    const severity = severityEl ? severityEl.value : '';
+                    if (status) params.append('status', status);
+                    if (severity) params.append('severity', severity);
+                }
+                const qs = params.toString();
+                return `/api/qms/${type}/export${qs ? '?' + qs : ''}`;
+            }
+
+            function refreshQmsExportHint(type) {
+                if (!window.streamingDownload || !streamingDownload.fetchEstimate) return;
+                const btn = document.getElementById(type === 'capa' ? 'exportCapaBtn' : 'exportNcBtn');
+                if (!btn) return;
+                const url = buildQmsExportUrl(type);
+                btn.setAttribute('data-estimate-url', url);
+                streamingDownload.fetchEstimate(url)
+                    .then((est) => { if (est) streamingDownload.applySizeHint(btn, est); })
+                    .catch(() => { /* hint is best-effort */ });
+            }
+
             async function exportCSV(type) {
                 try {
-                    const res = await fetch(`/api/qms/${type}/export`, {credentials:'same-origin'});
+                    const res = await fetch(buildQmsExportUrl(type), {credentials:'same-origin'});
                     if (!res.ok) { alert(WalaPlusI18n.t('dyn.qms.export_failed')); return; }
                     const blob = await res.blob();
                     const url = URL.createObjectURL(blob);
