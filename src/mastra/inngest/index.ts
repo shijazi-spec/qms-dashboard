@@ -620,6 +620,42 @@ const aiCostSummaryFunction = inngest.createFunction(
         );
       }
 
+      // Task #797: After the metrics sweep, run the feedback
+      // prompt-version backfill so legacy ai_response_feedback rows (and
+      // any newly-rated calls that briefly raced ahead of the consultant
+      // span) get `metadata.prompt_version` stamped from the linked
+      // ai_call_metrics row. Idempotent — quiet no-op once steady-state.
+      // Wrapped in its own try/catch so a failure here cannot mask the
+      // metrics sweep result above (mirrors that pattern exactly).
+      try {
+        const pg = await import("pg");
+        const { runFeedbackPromptVersionBackfill } =
+          await import("../../scripts/backfillAiResponseFeedbackPromptVersion");
+        const feedbackBackfillPool = new pg.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const feedbackResult =
+            await runFeedbackPromptVersionBackfill(feedbackBackfillPool);
+          if (feedbackResult.rows_updated > 0) {
+            logger.info(
+              `[AI-Cost] Feedback prompt-version backfill rewrote ` +
+                `${feedbackResult.rows_updated} ai_response_feedback rows ` +
+                `(scanned=${feedbackResult.scanned}, eligible=${feedbackResult.eligible}, ` +
+                `missing_source=${feedbackResult.missing_source}, ` +
+                `unlinked=${feedbackResult.unlinked})`,
+            );
+          }
+        } finally {
+          await feedbackBackfillPool.end();
+        }
+      } catch (feedbackBackfillErr) {
+        logger.warn(
+          "[AI-Cost] ai_response_feedback prompt-version backfill failed (non-fatal):",
+          feedbackBackfillErr,
+        );
+      }
+
       const thresholdUsd = parseFloat(
         process.env.AI_DAILY_COST_ALERT_USD || "10",
       );
