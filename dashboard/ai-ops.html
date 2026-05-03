@@ -4035,6 +4035,7 @@
               <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_agent">Agent</th>
               <th scope="col" class="px-3 py-2">Surface</th>
               <th scope="col" class="px-3 py-2">Call</th>
+              <th scope="col" class="px-3 py-2">Context</th>
               <th scope="col" class="px-3 py-2">Comment</th>
               <th scope="col" class="px-3 py-2">Original Prompt</th>
               <th scope="col" class="px-3 py-2 text-end" data-i18n="ai_ops.col_latency">Latency</th>
@@ -4057,6 +4058,35 @@
                           title="metadata.client_surface"
                           data-testid="badge-negative-client-surface-${r.feedback_id}">${esc(surfaceRaw)}</span>`
                 : `<span class="text-gray-400 text-xs" data-testid="text-negative-client-surface-unknown-${r.feedback_id}">—</span>`;
+              // Render the parent call's `ai_call_metrics.metadata` JSONB as
+              // chips (Task #621) so the Negative Feedback table tells the
+              // same regression story as the sibling Recent Thumbs-Down
+              // panel above. Same key set / styling as the chips rendered
+              // by the feedback loader so operators pivoting between the
+              // two views see a consistent palette.
+              const meta = (r && typeof r.metadata === 'object' && r.metadata) ? r.metadata : {};
+              const metaChips = [
+                { key: 'prompt_version',  label: 'prompt' },
+                { key: 'feature_flag',    label: 'flag' },
+                { key: 'experiment_arm',  label: 'arm' },
+                { key: 'rating_source',   label: 'source' },
+                { key: 'workflow',        label: 'workflow' },
+                { key: 'step',            label: 'step' },
+              ]
+                .filter(({ key }) => typeof meta[key] === 'string' && meta[key].trim() !== '')
+                .map(({ key, label }) => {
+                  const val = esc(String(meta[key]).substring(0, 60));
+                  return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-red-200 text-[10px] text-red-700"
+                                data-testid="chip-negative-${esc(key)}-${r.feedback_id}"
+                                title="metadata.${esc(key)}">
+                            <span class="font-semibold uppercase tracking-wide text-red-500">${esc(label)}</span>
+                            <span class="font-mono">${val}</span>
+                          </span>`;
+                })
+                .join('');
+              const metaCell = metaChips
+                ? `<div class="flex flex-wrap gap-1" data-testid="meta-negative-${r.feedback_id}">${metaChips}</div>`
+                : `<span class="text-gray-400 text-xs" data-testid="meta-negative-empty-${r.feedback_id}">—</span>`;
               return `
               <tr class="border-t ${i % 2 === 1 ? 'bg-gray-50' : ''}" data-testid="row-negative-${r.feedback_id}">
                 <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${fmtDate(r.created_at)}</td>
@@ -4070,6 +4100,7 @@
                     #${esc(r.call_id)}
                   </a>
                 </td>
+                <td class="px-3 py-2 text-xs align-top">${metaCell}</td>
                 <td class="px-3 py-2 text-xs text-gray-700" data-testid="text-feedback-comment-${r.feedback_id}">
                   ${r.comment
                     ? `<div class="whitespace-pre-wrap break-words max-w-24r">${esc(r.comment)}</div>`

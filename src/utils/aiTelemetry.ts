@@ -2315,6 +2315,17 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<
      * captured.
      */
     client_surface: string | null;
+    /**
+     * Parent call's full `ai_call_metrics.metadata` JSONB (Task #621). Lets
+     * the AI Ops dashboard's Negative Feedback table render the same
+     * prompt-version / experiment-arm / feature-flag chips already shown on
+     * the Recent Thumbs-Down panel so operators don't lose regression
+     * context when pivoting between the two views. Always an object —
+     * legacy rows where metadata is SQL NULL are normalized to `{}` so the
+     * dashboard never has to defensively null-check before reading nested
+     * keys.
+     */
+    metadata: Record<string, unknown>;
   }[]
 > {
   try {
@@ -2332,7 +2343,8 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<
          m.latency_ms,
          m.success,
          m.error_class,
-         m.metadata ->> 'client_surface' AS client_surface
+         m.metadata ->> 'client_surface' AS client_surface,
+         m.metadata     AS metadata
        FROM ai_call_feedback f
        JOIN ai_call_metrics  m ON m.id = f.call_id
        WHERE f.rating = 'thumbs_down'
@@ -2341,7 +2353,13 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<
        LIMIT $1`,
       [limit],
     );
-    return result.rows;
+    return result.rows.map((row) => ({
+      ...row,
+      metadata:
+        row.metadata && typeof row.metadata === "object"
+          ? (row.metadata as Record<string, unknown>)
+          : {},
+    }));
   } catch (err) {
     logger.error("[aiTelemetry] getRecentNegativeFeedback failed:", err);
     return [];
