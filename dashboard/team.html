@@ -142,19 +142,22 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_by_dept">Team by Department</h3>
                     <div class="chart-container">
-                        <canvas id="departmentChart"></canvas>
+                        <canvas id="departmentChart" role="img" aria-label="Team by Department: doughnut chart showing employee count per department" aria-describedby="departmentChart-summary"></canvas>
+                        <table id="departmentChart-summary" class="sr-only"><caption>Team by Department</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_project_status">Project Status</h3>
                     <div class="chart-container">
-                        <canvas id="projectStatusChart"></canvas>
+                        <canvas id="projectStatusChart" role="img" aria-label="Project Status: doughnut chart showing assigned, in progress, completed, and on-hold project counts" aria-describedby="projectStatusChart-summary"></canvas>
+                        <table id="projectStatusChart-summary" class="sr-only"><caption>Project Status</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_team_status">Team Status</h3>
                     <div class="chart-container">
-                        <canvas id="statusChart"></canvas>
+                        <canvas id="statusChart" role="img" aria-label="Team Status: doughnut chart showing active, inactive, on-leave, and probation employee counts" aria-describedby="statusChart-summary"></canvas>
+                        <table id="statusChart-summary" class="sr-only"><caption>Team Status</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                     </div>
                 </div>
             </div>
@@ -357,7 +360,8 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4">Performance by Department</h3>
                     <div class="chart-container">
-                        <canvas id="performanceDeptChart"></canvas>
+                        <canvas id="performanceDeptChart" role="img" aria-label="Performance by Department: bar chart showing average performance score per department" aria-describedby="performanceDeptChart-summary"></canvas>
+                        <table id="performanceDeptChart-summary" class="sr-only"><caption>Performance by Department</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -788,6 +792,7 @@
                     plugins: { legend: { position: 'bottom' } }
                 }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('departmentChart', departmentChart, 'Team by Department');
         }
 
         function renderProjectStatusChart(status) {
@@ -810,6 +815,7 @@
                     plugins: { legend: { position: 'bottom' } }
                 }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('projectStatusChart', projectStatusChart, 'Project Status');
         }
 
         function renderStatusChart(status) {
@@ -832,6 +838,7 @@
                     plugins: { legend: { position: 'bottom' } }
                 }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('statusChart', statusChart, 'Team Status');
         }
 
         function renderPerformanceDeptChart(departments) {
@@ -856,6 +863,7 @@
                     plugins: { legend: { display: false } }
                 }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('performanceDeptChart', performanceDeptChart, 'Performance by Department');
         }
 
         function renderTopPerformers(performers) {

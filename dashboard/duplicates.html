@@ -301,11 +301,11 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4" data-i18n="duplicates.sec_by_source">Duplicates by Source</h3>
-                    <div class="chart-container"><canvas id="sourceChart"></canvas></div>
+                    <div class="chart-container"><canvas id="sourceChart" role="img" aria-label="Duplicates by Source: bar chart showing duplicate counts grouped by source system" aria-describedby="sourceChart-summary"></canvas><table id="sourceChart-summary" class="sr-only"><caption>Duplicates by Source</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table></div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4" data-i18n="duplicates.sec_similarity">Similarity Score Distribution</h3>
-                    <div class="chart-container"><canvas id="confidenceChart"></canvas></div>
+                    <div class="chart-container"><canvas id="confidenceChart" role="img" aria-label="Similarity Score Distribution: doughnut chart showing strong, moderate, and weak match confidence counts" aria-describedby="confidenceChart-summary"></canvas><table id="confidenceChart-summary" class="sr-only"><caption>Similarity Score Distribution</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table></div>
                 </div>
             </div>
 
@@ -783,12 +783,15 @@
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
             });
 
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('sourceChart', sourceChart, 'Duplicates by Source');
+
             if (confidenceChart) confidenceChart.destroy();
             confidenceChart = new Chart(document.getElementById('confidenceChart'), {
                 type: 'doughnut',
                 data: { labels: [_t('dyn.duplicates.conf_strong'), _t('dyn.duplicates.conf_moderate'), _t('dyn.duplicates.conf_weak')], datasets: [{ data: [data.highConfidence||0, data.mediumConfidence||0, data.lowConfidence||0], backgroundColor: ['#EF4444','#F59E0B','#22C55E'] }] },
                 options: { responsive: true, maintainAspectRatio: false }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('confidenceChart', confidenceChart, 'Similarity Score Distribution');
         }
 
         // C4: Paginated cluster loading

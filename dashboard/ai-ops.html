@@ -330,7 +330,8 @@
               </div>
             </div>
             <div class="relative">
-              <canvas id="tool-health-trend-chart" height="110" data-testid="chart-tool-health-trend"></canvas>
+              <canvas id="tool-health-trend-chart" height="110" data-testid="chart-tool-health-trend" role="img" aria-label="Tool health alert trend: stacked bar and line chart showing daily alerts fired and median time-to-resolve" aria-describedby="tool-health-trend-chart-summary"></canvas>
+              <table id="tool-health-trend-chart-summary" class="sr-only"><caption>Tool Health Alert Trend</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
               <p id="tool-health-trend-empty" class="hidden text-xs text-gray-500 italic text-center py-6" data-testid="text-tool-health-trend-empty">No tool-health alert activity in this window.</p>
             </div>
           </div>
@@ -421,7 +422,8 @@
             <option value="30">Last 30 days</option>
           </select>
         </div>
-        <canvas id="cost-chart" height="100"></canvas>
+        <canvas id="cost-chart" height="100" role="img" aria-label="AI cost trend: bar and line chart showing daily agent cost in USD and error counts" aria-describedby="cost-chart-summary"></canvas>
+        <table id="cost-chart-summary" class="sr-only"><caption>AI Cost Trend</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
         <p class="text-xs text-gray-400 mt-3">
           Agent-level calls only (tool sub-calls excluded to avoid double-counting).
           Cost = tokens × model rate from the price table in <code>src/utils/aiTelemetry.ts</code>.
@@ -579,7 +581,8 @@
         <div class="mb-6">
           <h3 class="text-sm font-semibold text-gray-700 mb-3">Daily Thumbs-Up / Thumbs-Down Trend</h3>
           <div id="ai-ops-feedback-trend-wrap" class="relative h-56">
-            <canvas id="ai-ops-feedback-trend-chart" data-testid="chart-feedback-trend"></canvas>
+            <canvas id="ai-ops-feedback-trend-chart" data-testid="chart-feedback-trend" role="img" aria-label="Daily thumbs-up and thumbs-down feedback trend: bar chart of positive and negative feedback counts per day" aria-describedby="ai-ops-feedback-trend-chart-summary"></canvas>
+            <table id="ai-ops-feedback-trend-chart-summary" class="sr-only"><caption>Daily Thumbs-Up / Thumbs-Down Trend</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
           </div>
           <div id="ai-ops-feedback-trend-empty" class="hidden text-sm text-gray-400 py-4 text-center">No trend data for this period.</div>
         </div>
@@ -918,7 +921,8 @@
             </div>
           </div>
           <div class="border rounded bg-white p-3 mb-3 chart-canvas-wrap">
-            <canvas id="metrics-prune-history-chart" data-testid="chart-metrics-prune-history" aria-label="Sparkline of rows deleted per daily prune cron pass"></canvas>
+            <canvas id="metrics-prune-history-chart" data-testid="chart-metrics-prune-history" role="img" aria-label="Sparkline of rows deleted per daily prune cron pass" aria-describedby="metrics-prune-history-chart-summary"></canvas>
+            <table id="metrics-prune-history-chart-summary" class="sr-only"><caption>Metrics Prune History</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
           </div>
           <div class="overflow-x-auto">
             <table class="min-w-full text-sm" data-testid="table-metrics-prune-history">
@@ -1505,6 +1509,7 @@
             },
           },
         });
+        if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('ai-ops-feedback-trend-chart', feedbackTrendChart, 'Daily Thumbs-Up / Thumbs-Down Trend');
       } catch (err) {
         console.warn('Feedback trend load error', err);
         if (wrapEl)  wrapEl.style.display  = 'none';
@@ -2363,6 +2368,7 @@
             },
           },
         });
+        if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('tool-health-trend-chart', toolHealthTrendChart, 'Tool Health Alert Trend');
       } catch (e) {
         console.error('Tool-health trend load error', e);
         if (emptyEl) {
@@ -2956,6 +2962,7 @@
             }
           }
         });
+        if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('cost-chart', costChart, 'AI Cost Trend');
       } catch (e) {
         console.error('Cost trend error', e);
       }
@@ -5424,6 +5431,7 @@
           },
         },
       });
+      if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('metrics-prune-history-chart', metricsPruneHistoryChart, 'Metrics Prune History');
     }
 
     function onMetricsPruneHistoryLimitChange() {

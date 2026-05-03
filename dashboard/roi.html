@@ -120,13 +120,15 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="roi.sec_ai_recs">AI Recommendations</h3>
                 <div class="chart-container">
-                    <canvas id="recommendationChart"></canvas>
+                    <canvas id="recommendationChart" role="img" aria-label="AI Recommendations: doughnut chart showing approve, evaluate, and reject counts" aria-describedby="recommendationChart-summary"></canvas>
+                    <table id="recommendationChart-summary" class="sr-only"><caption>AI Recommendations</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                 </div>
             </div>
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 lg:col-span-2">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="roi.sec_npv_by_dept">NPV by Department</h3>
                 <div class="chart-container">
-                    <canvas id="departmentChart"></canvas>
+                    <canvas id="departmentChart" role="img" aria-label="NPV by Department: bar chart showing total NPV in SAR per department" aria-describedby="departmentChart-summary"></canvas>
+                    <table id="departmentChart-summary" class="sr-only"><caption>NPV by Department</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                 </div>
             </div>
         </div>
@@ -901,6 +903,7 @@
                         }
                     }
                 });
+                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('recommendationChart', recommendationChart, 'AI Recommendations');
 
                 if (departmentChart) departmentChart.destroy();
                 const deptCtx = document.getElementById('departmentChart').getContext('2d');
@@ -931,6 +934,7 @@
                         }
                     }
                 });
+                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('departmentChart', departmentChart, 'NPV by Department');
             } catch (error) {
                 console.error('Error loading analytics:', error);
             }
