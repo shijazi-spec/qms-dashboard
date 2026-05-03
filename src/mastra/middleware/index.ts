@@ -440,11 +440,13 @@ export async function redactSecretsInResponse(c: any): Promise<void> {
 }
 
 async function injectCspNonce(c: any, cspNonce: string, urlPath: string): Promise<void> {
-  // Do not inject nonces into dynamically generated report HTML. Reports embed
-  // database values in their markup and nonce injection would stamp a valid CSP
-  // nonce onto any attacker-supplied <script substring that survived into the
-  // output, defeating the nonce-based CSP entirely for those responses.
-  if (urlPath.startsWith('/api/reports/')) return;
+  // Do not inject nonces into dynamically generated API HTML responses (e.g.
+  // /api/reports/*). API HTML responses embed database values in their markup
+  // and nonce injection would stamp a valid CSP nonce onto any attacker-
+  // supplied <script substring that survived into the output, defeating the
+  // nonce-based CSP entirely for those responses. Page routes (non-/api/)
+  // still receive nonce injection for their trusted inline scripts.
+  if (urlPath.startsWith('/api/')) return;
   const contentType = c.res.headers.get('Content-Type') || '';
   if (contentType.includes('text/html') && c.res.body) {
     try {

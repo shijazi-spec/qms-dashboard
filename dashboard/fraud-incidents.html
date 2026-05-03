@@ -652,5 +652,10 @@
 
         document.addEventListener('DOMContentLoaded', loadIncidents);
     </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
 </body>
 </html>
