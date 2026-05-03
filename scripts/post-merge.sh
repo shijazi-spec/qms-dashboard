@@ -29,30 +29,17 @@ echo "▶ CI gate: full test suite (tests/runIntegrationTests.ts)"
 npx tsx tests/runIntegrationTests.ts
 
 # ----------------------------------------------------------------------------
-# CI gate — i18n coverage guardrail (Task #125 / #150 / #345)
+# CI gate — i18n coverage guardrail (Task #125 / #150 / #345 / #373)
 #
-# Blocks merges that:
-#   * Add a `dashboard/*.html` page without `/js/i18n.js` + the
-#     `WalaPlusI18n.init().then(applyToDOM)` bootstrap.
-#   * Reference a `data-i18n="ns.key"` whose key is missing from
-#     `dashboard/i18n/en.json` or `dashboard/i18n/ar.json`.
-#   * Drift the `en.json` / `ar.json` key trees apart (orphans either way,
-#     or a leaf turning into a sub-object on one side only).
-#   * Use a static `WalaPlusI18n.t('ns.key')` call in `dashboard/js/*.js` or
-#     an inline <script> block whose key is missing from en.json / ar.json.
-#     Dynamic t(variable) calls are surfaced as non-blocking ⚠ warnings.
-#   * Add a NEW orphan key to en.json / ar.json that is not referenced by any
-#     data-i18n attribute or static t('...') call, AND is not listed in
-#     `scripts/i18n-unused-baseline.json` (Task #345). Pre-existing orphans
-#     stay as ⚠ warnings until the cleanup task drains them.
-#
-# All six checks live in `scripts/check-i18n.cjs` and are also covered by
-# `tests/i18nCoverage.test.ts` (auto-discovered by `npm test`). To register
-# a new dynamic-lookup prefix, edit `dashboard/i18n/.referenced-dynamically.json`.
+# The full i18n guardrail (`scripts/check-i18n.cjs --report-unused`) is run
+# as part of the integration suite above via `tests/i18nCoverage.test.ts`,
+# which spawns the script with `--report-unused` and bubbles up its exit
+# code. The previously-explicit `node scripts/check-i18n.cjs --report-unused`
+# call here was removed in Task #373 because it executed the same six checks
+# a second time, doubling the i18n wall-clock cost without adding coverage.
+# To register a new dynamic-lookup prefix, edit
+# `dashboard/i18n/.referenced-dynamically.json`.
 # ----------------------------------------------------------------------------
-echo ""
-echo "▶ CI gate: i18n coverage (Task #125 / #150 / #345)"
-node scripts/check-i18n.cjs --report-unused
 
 # ----------------------------------------------------------------------------
 # CI gate — dashboard inline-handler + inline-<script> CSP guard
