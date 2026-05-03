@@ -7,6 +7,11 @@
     "notifications": "Notifications",
     "view_all": "View All",
     "language": "Language",
+    "pinned": "Pinned",
+    "recent": "Recent",
+    "no_results": "No matching items",
+    "pin_action": "Pin",
+    "unpin_action": "Unpin",
     "time": {
       "just_now": "just now",
       "minutes_ago": "m ago",

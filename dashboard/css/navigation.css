@@ -180,3 +180,99 @@ html[dir="rtl"] .wp-nav-tooltip::before {
   border-right-color: transparent;
   border-left-color: #1e293b;
 }
+
+/* ===== Active item polish (Task #822) =====
+ * The current page must be unmistakable: a strong inline-start accent bar
+ * on the row container (mirrored under RTL via the inset-inline-start
+ * logical property), bolder text, and a higher-contrast tint that meets
+ * WCAG AA in both themes. The accent lives on .wp-rail-row so it spans
+ * the whole row (link + sibling pin button), not just the link.
+ */
+.wp-rail-row.wp-rail-row-active {
+  position: relative;
+  background-color: #eef2ff; /* indigo-50, AA on slate-900 text */
+}
+.wp-rail-row.wp-rail-row-active::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 2px;
+  background-color: #3730a3; /* indigo-800 */
+}
+.wp-rail-item.wp-rail-item-active {
+  color: #3730a3;
+}
+
+/* Dark-mode treatment (the dashboard does not currently expose a dark
+   theme toggle, but the rail honours the OS preference for users who
+   force a dark color-scheme at the browser level). */
+@media (prefers-color-scheme: dark) {
+  .wp-rail-row.wp-rail-row-active {
+    background-color: rgba(99, 102, 241, 0.18);
+  }
+  .wp-rail-row.wp-rail-row-active::before { background-color: #c7d2fe; }
+  .wp-rail-item.wp-rail-item-active { color: #c7d2fe; }
+}
+
+/* ===== Visible focus ring on every interactive rail surface ===== */
+.wp-rail-item:focus-visible,
+.wp-group-toggle:focus-visible,
+.wp-pin-btn:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+/* ===== Pin button: hidden until the row is hovered/focused, always
+ *      visible once a leaf is pinned, and always reachable via keyboard
+ *      so the affordance survives even in the collapsed rail (where
+ *      hover is not a reliable trigger and labels are hidden). */
+.wp-pin-btn {
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background-color 0.12s ease;
+}
+.wp-rail-row:hover .wp-pin-btn,
+.wp-rail-row:focus-within .wp-pin-btn,
+.wp-pin-btn:focus-visible,
+.wp-pin-btn.wp-pinned {
+  opacity: 1;
+}
+.wp-pin-btn.wp-pinned {
+  color: #b45309; /* amber-700 */
+}
+
+/* In the collapsed rail the row centres its single icon and the pin slot
+ * floats over the inline-end edge so it stays operable (visible on hover/
+ * focus, persistently visible when pinned) without stealing horizontal
+ * room from the icon. The mobile breakpoint (which expands the rail
+ * back to full width) inherits the default inline layout. */
+body.wp-rail-collapsed .wp-rail .wp-rail-row { position: relative; }
+body.wp-rail-collapsed .wp-rail .wp-pin-slot {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  padding: 0;
+}
+body.wp-rail-collapsed .wp-rail .wp-pin-btn { padding: 2px; }
+body.wp-rail-collapsed .wp-rail .wp-pin-btn svg { width: 0.75rem; height: 0.75rem; }
+@media (max-width: 767px) {
+  body.wp-rail-collapsed .wp-rail .wp-pin-slot {
+    position: static;
+    padding-inline-end: 0.25rem;
+  }
+}
+
+/* ===== Search highlight ===== */
+.wp-nav-mark {
+  background-color: #fef3c7; /* amber-100 */
+  color: #78350f;            /* amber-900 */
+  padding: 0 1px;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+/* ===== "No results" empty state ===== */
+.wp-nav-empty.hidden { display: none; }
+
