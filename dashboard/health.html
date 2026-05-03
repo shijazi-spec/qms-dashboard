@@ -100,6 +100,31 @@
         }
         .copy-link-status[data-tone="error"] { color: #B91C1C; }
         .copy-link-status[hidden] { display: none; }
+        /* Per-row "Copy link to this check" — small icon button rendered
+           in the right gutter of each check summary so admins can grab a
+           direct link that auto-expands a single failing check. */
+        .row-copy-link-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 26px; height: 26px; border-radius: 6px;
+            border: 1px solid transparent; background: transparent;
+            color: #6B7280; cursor: pointer; flex: 0 0 auto;
+            transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .row-copy-link-btn:hover {
+            background: #EFF6FF; color: #1D4ED8; border-color: #DBEAFE;
+        }
+        .row-copy-link-btn:focus-visible {
+            outline: 2px solid #2563EB; outline-offset: 2px;
+        }
+        .row-copy-link-btn[data-state="copied"] { color: #047857; }
+        .row-copy-link-btn[data-state="error"]  { color: #B91C1C; }
+        .row-copy-link-btn svg { width: 14px; height: 14px; }
+        /* Briefly highlight the target row when arriving via ?check=<id>
+           so a teammate's eye lands on the right check immediately. */
+        details.check-row.is-deep-link-target {
+            background-color: #FEF3C7;
+            transition: background-color 1.5s ease-out;
+        }
     </style>
     <script src="/js/i18n.js?v=1.0"></script>
 </head>
@@ -261,6 +286,11 @@
         const STATUS_STORAGE_KEY = 'health.filterStatus';
         const STATUS_QUERY_PARAM = 'status';
         const STATUS_VALUES = ['all', 'fail', 'warn', 'pass', 'skipped'];
+        // Deep-link param: when present, the matching row is auto-expanded
+        // and scrolled into view on first render. The param is preserved
+        // alongside ?category and ?status so a single URL can carry the
+        // full triage context.
+        const CHECK_QUERY_PARAM = 'check';
 
         function readInitialFilter() {
             try {
@@ -527,8 +557,9 @@
                     const detailJson = c.details ? `<pre class="json">${escapeHtml(JSON.stringify(c.details, null, 2))}</pre>` : '';
                     const message = c.message ? `<div class="text-sm text-gray-600 mt-1 mb-2">${escapeHtml(c.message)}</div>` : '';
                     const sparkline = renderCheckSparkline(c.id, lastPerCheckHistory[c.id]);
+                    const rowCopyAria = _t('dyn.health.copy_check_link_aria', { id: c.id });
                     return `
-                        <details class="check-row border-t border-gray-100" data-testid="row-check-${escapeHtml(c.id)}">
+                        <details class="check-row border-t border-gray-100" data-check-id="${escapeHtml(c.id)}" data-testid="row-check-${escapeHtml(c.id)}">
                             <summary class="flex items-center gap-3 px-6 py-3">
                                 <span class="chev text-gray-400">▸</span>
                                 <span class="dot dot-${c.status}"></span>
@@ -537,6 +568,16 @@
                                     <div class="text-xs text-gray-500">${escapeHtml(c.id)} · ${c.duration_ms}ms</div>
                                 </div>
                                 <span class="badge badge-${c.status}">${c.status.toUpperCase()}</span>
+                                <button type="button" class="row-copy-link-btn"
+                                    data-check-copy="${escapeHtml(c.id)}"
+                                    aria-label="${escapeHtml(rowCopyAria)}"
+                                    title="${escapeHtml(_t('dyn.health.copy_check_link'))}"
+                                    data-testid="button-copy-check-link-${escapeHtml(c.id)}">
+                                    <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                                        <path d="M3 10.5V3.5C3 2.94772 3.44772 2.5 4 2.5H10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                                    </svg>
+                                </button>
                             </summary>
                             <div class="px-6 pb-4 ps-16">
                                 ${message}
@@ -594,6 +635,22 @@
                     });
                 }
             }
+            // Wire each row's per-check copy-link button. stopPropagation()
+            // is critical: the button lives inside <summary>, and a bare
+            // click would also toggle the <details> open/close state.
+            el('checks-list').querySelectorAll('[data-check-copy]').forEach(btn => {
+                btn.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    const checkId = btn.getAttribute('data-check-copy');
+                    copyCheckLink(checkId, btn);
+                });
+            });
+            // Apply ?check=<id> deep-link if present. We do it after the
+            // list is in the DOM so querySelector can find the row, and
+            // we only auto-expand once per page load to avoid yanking
+            // focus on the 60s auto-refresh.
+            applyCheckDeepLink();
         }
 
         function matchesStatus(check, status) {
@@ -771,6 +828,99 @@
                 }
             } catch (_) { /* noop — fall through to error message */ }
             showStatus('copy_link_failed', 'error');
+        }
+
+        // Build a shareable URL for a single check, preserving the
+        // currently active ?category and ?status params so the recipient
+        // lands on the same filtered slice the sender was looking at.
+        function buildCheckLinkUrl(checkId) {
+            const url = new URL(window.location.href);
+            url.searchParams.set(CHECK_QUERY_PARAM, checkId);
+            return url.toString();
+        }
+
+        // Per-row copy buttons get their own confirmation timer so a copy
+        // on row A doesn't reset the "copied" flash on row B.
+        const rowCopyResetTimers = new WeakMap();
+
+        async function copyCheckLink(checkId, btn) {
+            if (!checkId || !btn) return;
+            const url = buildCheckLinkUrl(checkId);
+            const flash = (state, key) => {
+                btn.dataset.state = state;
+                const label = _t('dyn.health.' + key);
+                // Reflect in the tooltip + aria-label so AT users hear the
+                // confirmation; the icon itself has no visible text.
+                btn.setAttribute('title', label);
+                btn.setAttribute('aria-label', label);
+                const prev = rowCopyResetTimers.get(btn);
+                if (prev) clearTimeout(prev);
+                rowCopyResetTimers.set(btn, setTimeout(() => {
+                    delete btn.dataset.state;
+                    btn.setAttribute('title', _t('dyn.health.copy_check_link'));
+                    btn.setAttribute('aria-label', _t('dyn.health.copy_check_link_aria', { id: checkId }));
+                }, 2500));
+            };
+            try {
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    await navigator.clipboard.writeText(url);
+                    flash('copied', 'copy_check_link_copied');
+                    return;
+                }
+            } catch (_) { /* fall through */ }
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = url;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'absolute';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (ok) {
+                    flash('copied', 'copy_check_link_copied');
+                    return;
+                }
+            } catch (_) { /* noop */ }
+            flash('error', 'copy_check_link_failed');
+        }
+
+        // Tracks whether we've already applied a ?check=<id> deep-link in
+        // this page session — auto-refresh re-renders the list every 60s
+        // and we don't want to keep yanking the viewport back to the
+        // target row each time.
+        let deepLinkApplied = false;
+
+        function applyCheckDeepLink() {
+            if (deepLinkApplied) return;
+            let targetId = null;
+            try {
+                targetId = new URL(window.location.href).searchParams.get(CHECK_QUERY_PARAM);
+            } catch { /* noop */ }
+            if (!targetId) return;
+            const row = el('checks-list').querySelector(
+                '[data-check-id="' + (window.CSS && CSS.escape ? CSS.escape(targetId) : targetId.replace(/"/g, '\\"')) + '"]'
+            );
+            if (!row) return;
+            // We mark it "applied" even if the row is filtered out, so a
+            // category/status filter combo that hides the target check
+            // doesn't keep retrying on every refresh.
+            deepLinkApplied = true;
+            row.open = true;
+            row.classList.add('is-deep-link-target');
+            // rAF so layout has settled (Chart.js sizing, sparkline SVGs,
+            // etc.) before we measure the scroll position.
+            requestAnimationFrame(() => {
+                try {
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } catch {
+                    row.scrollIntoView();
+                }
+                // Fade the highlight out after a couple of seconds so it
+                // doesn't linger as a permanent visual artefact.
+                setTimeout(() => row.classList.remove('is-deep-link-target'), 2200);
+            });
         }
 
         function renderHistory(history) {
