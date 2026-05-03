@@ -1704,8 +1704,11 @@ export async function getKnownAgentNames(): Promise<string[]> {
  * `getChildToolCallsForParent` in sync.
  */
 export const CHILD_TOOL_CALLS_SQL = `SELECT
-       id, agent_name, tool_name,
-       latency_ms, success, error_class, error_message, started_at
+       id, agent_name, tool_name, model,
+       prompt_tokens, completion_tokens, estimated_cost_usd,
+       latency_ms, success, error_class, error_message, started_at,
+       prompt_preview, tool_input_preview, tool_output_preview,
+       previews_redacted_at
      FROM ai_call_metrics
      WHERE parent_call_id = $1
      ORDER BY started_at ASC, id ASC`;
@@ -1715,11 +1718,19 @@ export async function getChildToolCallsForParent(parentId: number): Promise<
     id: string;
     agent_name: string;
     tool_name: string | null;
+    model: string | null;
+    prompt_tokens: number | null;
+    completion_tokens: number | null;
+    estimated_cost_usd: number | null;
     latency_ms: number;
     success: boolean;
     error_class: string | null;
     error_message: string | null;
     started_at: string;
+    prompt_preview: string | null;
+    tool_input_preview: string | null;
+    tool_output_preview: string | null;
+    previews_redacted_at: string | null;
   }[]
 > {
   await ensureAiMetricsTable();

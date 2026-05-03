@@ -4016,7 +4016,8 @@
       }
     }
 
-    function renderChildrenTable(rows) {
+    function renderChildrenTable(rows, parentId) {
+      const pid = esc(String(parentId == null ? '' : parentId));
       return `
         <table class="min-w-full text-start text-xs" data-testid="table-child-tools">
           <thead><tr class="text-gray-500 uppercase">
@@ -4027,7 +4028,13 @@
             <th scope="col" class="px-2 py-1" data-i18n="ai_ops.col_error">Error</th>
           </tr></thead>
           <tbody>${rows.map(c => `
-            <tr class="border-t border-blue-100" data-testid="row-child-${c.id}">
+            <tr class="border-t border-blue-100 cursor-pointer hover:bg-blue-50 focus:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400"
+                data-testid="row-child-${c.id}"
+                data-child-call-id="${esc(String(c.id))}"
+                data-child-parent-id="${pid}"
+                tabindex="0"
+                role="button"
+                aria-label="Open call detail for ${esc(c.tool_name || 'child call')}">
               <td class="px-2 py-1 text-gray-500 whitespace-nowrap">${fmtDate(c.started_at)}</td>
               <td class="px-2 py-1 font-mono text-gray-800">${esc(c.tool_name || '—')}</td>
               <td class="px-2 py-1 text-end ${parseInt(c.latency_ms||0)>10000?'text-red-600 font-semibold':''}">${fmtMs(c.latency_ms)}</td>
@@ -4201,7 +4208,7 @@
       const parentId = containerId.replace('children-content-', '');
       const body = currentView === 'timeline'
         ? renderChildrenWaterfall(rows, parentId)
-        : renderChildrenTable(rows);
+        : renderChildrenTable(rows, parentId);
 
       container.dataset.view = currentView;
       container.innerHTML = header + body;
@@ -4418,18 +4425,35 @@
              </div>
            </div>`
         : '';
+      const copyIconSvg = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>';
       const toolInputBlock = call.tool_input_preview
         ? `<div>
              <div class="text-xs text-gray-500 uppercase mb-1">Tool input (sanitized preview)</div>
-             <pre class="p-3 bg-gray-50 border border-gray-200 rounded text-xs whitespace-pre-wrap break-words font-mono"
-                  data-testid="text-call-tool-input">${esc(call.tool_input_preview)}</pre>
+             <div class="relative">
+               <button type="button"
+                       class="absolute top-1.5 end-1.5 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                       data-copy-target-id="call-tool-input-pre"
+                       aria-label="Copy tool input to clipboard"
+                       data-testid="button-copy-tool-input">${copyIconSvg}<span data-copy-label>Copy</span></button>
+               <pre id="call-tool-input-pre"
+                    class="p-3 pe-16 bg-gray-50 border border-gray-200 rounded text-xs whitespace-pre-wrap break-words font-mono"
+                    data-testid="text-call-tool-input">${esc(call.tool_input_preview)}</pre>
+             </div>
            </div>`
         : '';
       const toolOutputBlock = call.tool_output_preview
         ? `<div>
              <div class="text-xs text-gray-500 uppercase mb-1">Tool output (sanitized preview)</div>
-             <pre class="p-3 bg-gray-50 border border-gray-200 rounded text-xs whitespace-pre-wrap break-words font-mono"
-                  data-testid="text-call-tool-output">${esc(call.tool_output_preview)}</pre>
+             <div class="relative">
+               <button type="button"
+                       class="absolute top-1.5 end-1.5 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                       data-copy-target-id="call-tool-output-pre"
+                       aria-label="Copy tool output to clipboard"
+                       data-testid="button-copy-tool-output">${copyIconSvg}<span data-copy-label>Copy</span></button>
+               <pre id="call-tool-output-pre"
+                    class="p-3 pe-16 bg-gray-50 border border-gray-200 rounded text-xs whitespace-pre-wrap break-words font-mono"
+                    data-testid="text-call-tool-output">${esc(call.tool_output_preview)}</pre>
+             </div>
            </div>`
         : '';
       const modal = document.createElement('div');
@@ -6757,7 +6781,84 @@
       // Delegated listener for the per-row Table/Timeline view toggle on the
       // child-tool-call panel (Task #103). Buttons are rendered dynamically by
       // renderChildren() so we attach a single delegated handler at body scope.
+      // Task #326: Copy-to-clipboard for tool I/O preview blocks in the call
+      // detail modal. The button is rendered inside a template string so we
+      // attach a single delegated listener at body scope.
+      async function handleCopyButton(copyBtn) {
+        const targetId = copyBtn.getAttribute('data-copy-target-id');
+        const target = targetId && document.getElementById(targetId);
+        if (!target) return;
+        const text = target.textContent || '';
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'absolute';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+          }
+          const labelEl = copyBtn.querySelector('[data-copy-label]');
+          const original = labelEl ? labelEl.textContent : '';
+          if (labelEl) labelEl.textContent = 'Copied!';
+          if (window.WalaPlusA11y && window.WalaPlusA11y.announce) {
+            window.WalaPlusA11y.announce('Copied to clipboard');
+          }
+          if (copyBtn._copyResetTimer) clearTimeout(copyBtn._copyResetTimer);
+          copyBtn._copyResetTimer = setTimeout(() => {
+            if (labelEl) labelEl.textContent = original || 'Copy';
+          }, 1500);
+        } catch (_e) {
+          const labelEl = copyBtn.querySelector('[data-copy-label]');
+          if (labelEl) {
+            const original = labelEl.textContent;
+            labelEl.textContent = 'Copy failed';
+            setTimeout(() => { labelEl.textContent = original || 'Copy'; }, 1500);
+          }
+        }
+      }
+
+      // Task #326: Enter/Space on a focused child-call row opens the modal,
+      // matching the parent-row keyboard behaviour in renderRecentTable.
+      document.body.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const childRow = e.target.closest('[data-child-call-id][data-child-parent-id]');
+        if (!childRow || !childRow.contains(e.target)) return;
+        if (e.target !== childRow) return;
+        e.preventDefault();
+        const parentId = childRow.getAttribute('data-child-parent-id');
+        const callId = childRow.getAttribute('data-child-call-id');
+        const cached = childrenCache.get(parentId);
+        const call = cached && cached.find(c => String(c.id) === String(callId));
+        if (call) openCallDetailModal(call, childRow);
+      });
+
       document.body.addEventListener('click', (e) => {
+        const copyBtn = e.target.closest('[data-copy-target-id]');
+        if (copyBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleCopyButton(copyBtn);
+          return;
+        }
+        // Task #326: child-call rows in the expanded subtable open the same
+        // call detail modal (parent rows already do this in renderRecentTable).
+        // Cached child rows from /api/ai-ops/calls/:id/children are reused — no
+        // extra network request.
+        const childRow = e.target.closest('[data-child-call-id][data-child-parent-id]');
+        if (childRow) {
+          const parentId = childRow.getAttribute('data-child-parent-id');
+          const callId = childRow.getAttribute('data-child-call-id');
+          const cached = childrenCache.get(parentId);
+          const call = cached && cached.find(c => String(c.id) === String(callId));
+          if (call) openCallDetailModal(call, childRow);
+          return;
+        }
         const btn = e.target.closest('[data-child-view][data-child-container]');
         if (btn) {
           const containerId = btn.getAttribute('data-child-container');
