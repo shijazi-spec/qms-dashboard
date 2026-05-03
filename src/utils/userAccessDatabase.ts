@@ -872,6 +872,86 @@ export async function updateUserRole(
   return user;
 }
 
+export async function updateUserProfile(
+  userId: number,
+  patch: { full_name?: string; team?: string; role?: UserRole },
+  updatedBy: string,
+): Promise<PlatformUser | null> {
+  const sets: string[] = [];
+  const params: any[] = [];
+  let i = 1;
+  if (patch.full_name !== undefined) {
+    sets.push(`full_name = $${i++}`);
+    params.push(patch.full_name);
+  }
+  if (patch.team !== undefined) {
+    sets.push(`team = $${i++}`);
+    params.push(patch.team);
+  }
+  if (patch.role !== undefined) {
+    sets.push(`role = $${i++}`);
+    params.push(patch.role);
+  }
+  if (sets.length === 0) {
+    return await getUserById(userId);
+  }
+  sets.push(`updated_at = NOW()`);
+  params.push(userId);
+
+  const result = await pool.query(
+    `UPDATE platform_users SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`,
+    params,
+  );
+  const user = result.rows[0];
+  if (!user) return null;
+
+  try {
+    const { invalidatePlatformUserCache } = await import("./rbacMiddleware");
+    invalidatePlatformUserCache(user.email);
+  } catch {}
+
+  if (patch.role !== undefined) {
+    await createDefaultPermissions(userId, patch.role);
+  }
+
+  await logAccessEvent({
+    event_type: "USER_UPDATED",
+    user_email: updatedBy,
+    target_email: user.email,
+    action: `Updated profile (${Object.keys(patch).join(", ")})`,
+    details: { user_id: userId, patch },
+    performed_by: updatedBy,
+  });
+
+  return user;
+}
+
+export async function deleteUser(
+  userId: number,
+  deletedBy: string,
+): Promise<{ deleted: boolean; email: string | null }> {
+  const existing = await getUserById(userId);
+  if (!existing) return { deleted: false, email: null };
+
+  await pool.query(`DELETE FROM platform_users WHERE id = $1`, [userId]);
+
+  try {
+    const { invalidatePlatformUserCache } = await import("./rbacMiddleware");
+    invalidatePlatformUserCache(existing.email);
+  } catch {}
+
+  await logAccessEvent({
+    event_type: "USER_DELETED",
+    user_email: deletedBy,
+    target_email: existing.email,
+    action: `Hard-deleted user account`,
+    details: { user_id: userId, email: existing.email },
+    performed_by: deletedBy,
+  });
+
+  return { deleted: true, email: existing.email };
+}
+
 export async function updateUserPermissions(
   userId: number,
   permissions: Partial<ScreenPermission>[],

@@ -54,12 +54,20 @@
                 <h1 class="text-2xl font-bold text-gray-900" data-i18n="users.title">Users & Access Control</h1>
                 <p class="text-gray-600" data-i18n="users.subtitle">Manage user invitations, approvals, and permissions</p>
             </div>
-            <button data-on-click="showInviteModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center">
-                <svg class="w-5 h-5 me-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                </svg>
-                Invite User
-            </button>
+            <div class="flex items-center gap-2">
+                <button data-on-click="bulkDeleteOthers" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center text-sm" title="Hard delete every user except Sarah Hijazi and a.amashah@walaplus.com">
+                    <svg class="w-5 h-5 me-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/>
+                    </svg>
+                    Delete All Other Users
+                </button>
+                <button data-on-click="showInviteModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center">
+                    <svg class="w-5 h-5 me-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Invite User
+                </button>
+            </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
@@ -438,7 +446,8 @@
                         <td class="px-4 py-3 text-sm text-gray-500">${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
                         <td class="px-4 py-3">
                             <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm me-2">Edit</button>
-                            <button data-on-click="disableUser" data-args="[${u.id}]" class="text-red-600 hover:text-red-800 text-sm">Disable</button>
+                            <button data-on-click="disableUser" data-args="[${u.id}]" class="text-amber-600 hover:text-amber-800 text-sm me-2">Disable</button>
+                            <button data-on-click="deleteUserConfirm" data-args='[${u.id}, ${JSON.stringify(u.email)}]' class="text-red-600 hover:text-red-800 text-sm">Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -467,8 +476,9 @@
                         <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded status-${u.status}">${u.status.replace('_', ' ')}</span></td>
                         <td class="px-4 py-3">
                             <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm me-2">View</button>
-                            ${u.status === 'disabled' ? `<button data-on-click="enableUser" data-args="[${u.id}]" class="text-green-600 hover:text-green-800 text-sm">Enable</button>` : ''}
-                            ${u.status === 'active' ? `<button data-on-click="disableUser" data-args="[${u.id}]" class="text-red-600 hover:text-red-800 text-sm">Disable</button>` : ''}
+                            ${u.status === 'disabled' ? `<button data-on-click="enableUser" data-args="[${u.id}]" class="text-green-600 hover:text-green-800 text-sm me-2">Enable</button>` : ''}
+                            ${u.status === 'active' ? `<button data-on-click="disableUser" data-args="[${u.id}]" class="text-amber-600 hover:text-amber-800 text-sm me-2">Disable</button>` : ''}
+                            <button data-on-click="deleteUserConfirm" data-args='[${u.id}, ${JSON.stringify(u.email)}]' class="text-red-600 hover:text-red-800 text-sm">Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -712,6 +722,10 @@
             }
         }
 
+        function escAttr(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
         async function viewUserDetail(userId) {
             document.getElementById('user-detail-modal').classList.add('active');
             const content = document.getElementById('user-detail-content');
@@ -728,35 +742,57 @@
 
                 const u = data.user;
                 const perms = data.permissions || [];
-                
+                const ROLES = ['admin','quality_manager','quality_specialist','grc_manager','team_lead','department_viewer','auditor','ai_specialist','bu_owner','executive','custom'];
+                const TEAMS = ['SDR','Sales','Quality','GRC','Viewer','Other'];
+                if (u.role && !ROLES.includes(u.role)) ROLES.unshift(u.role);
+                const roleOptions = ROLES.map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r}</option>`).join('');
+                const currentTeam = u.team || '';
+                if (currentTeam && !TEAMS.includes(currentTeam)) TEAMS.unshift(currentTeam);
+                const teamOptions = TEAMS.map(t => `<option value="${t}" ${currentTeam === t ? 'selected' : ''}>${t}</option>`).join('');
+
                 content.innerHTML = `
                     <div class="space-y-4">
-                        <div class="grid grid-cols-2 gap-4">
+                        <form id="user-edit-form" data-on-submit="saveUserProfile" data-pass-event="true" data-args="[${u.id}]" class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="text-sm text-gray-500">Name</label>
-                                <p class="font-medium">${u.full_name}</p>
+                                <label class="text-sm text-gray-500">Full Name</label>
+                                <input name="full_name" type="text" required value="${escAttr(u.full_name)}"
+                                       class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
-                                <label class="text-sm text-gray-500">Email</label>
-                                <p class="font-medium">${u.email}</p>
+                                <label class="text-sm text-gray-500">Email <span class="text-xs text-gray-400">(read-only)</span></label>
+                                <p class="font-medium mt-2">${escAttr(u.email)}</p>
                             </div>
                             <div>
                                 <label class="text-sm text-gray-500">Role</label>
-                                <p><span class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">${u.role}</span></p>
+                                <select name="role" class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    ${roleOptions}
+                                </select>
                             </div>
                             <div>
                                 <label class="text-sm text-gray-500">Team</label>
-                                <p>${u.team}</p>
+                                <select name="team" class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    ${teamOptions}
+                                </select>
                             </div>
                             <div>
                                 <label class="text-sm text-gray-500">Status</label>
-                                <p><span class="px-2 py-1 rounded text-sm status-${u.status}">${u.status.replace('_', ' ')}</span></p>
+                                <p class="mt-2"><span class="px-2 py-1 rounded text-sm status-${u.status}">${u.status.replace('_', ' ')}</span></p>
                             </div>
                             <div>
                                 <label class="text-sm text-gray-500">Created</label>
-                                <p class="text-sm">${new Date(u.created_at).toLocaleString()}</p>
+                                <p class="text-sm mt-2">${new Date(u.created_at).toLocaleString()}</p>
                             </div>
-                        </div>
+                            <div class="col-span-2 flex items-center justify-between pt-2">
+                                <button type="button" data-on-click="deleteUserConfirm" data-args="[${u.id}, &quot;${escAttr(u.email)}&quot;]"
+                                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium">
+                                    Hard Delete User
+                                </button>
+                                <button type="submit"
+                                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
+                                    Save Changes
+                                </button>
+                            </div>
+                        </form>
 
                         <div class="border-t pt-4">
                             <h4 class="font-medium mb-3">Screen Permissions</h4>
@@ -796,6 +832,146 @@
 
         function hideUserDetailModal() {
             document.getElementById('user-detail-modal').classList.remove('active');
+        }
+
+        async function saveUserProfile(userId, event) {
+            event.preventDefault();
+            const form = event.target;
+            const payload = {
+                full_name: form.full_name.value.trim(),
+                role: form.role.value,
+                team: form.team.value.trim(),
+            };
+            if (!payload.full_name) {
+                alert('Full name is required.');
+                return;
+            }
+            try {
+                const res = await fetch(`/api/users/${userId}`, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    alert('User updated.');
+                    hideUserDetailModal();
+                    loadActiveUsers();
+                    loadAllUsers();
+                    loadStats();
+                } else {
+                    alert('Update failed: ' + (data.error || res.status));
+                }
+            } catch (e) {
+                alert('Error updating user.');
+            }
+        }
+
+        const PROTECTED_EMAILS = ['a.amashah@walaplus.com'];
+        const PROTECTED_NAME_SUBSTR = 'sarah hijazi';
+
+        function isProtectedUser(u) {
+            const email = (u.email || '').toLowerCase();
+            const name = (u.full_name || '').toLowerCase();
+            if (PROTECTED_EMAILS.includes(email)) return true;
+            if (name.includes(PROTECTED_NAME_SUBSTR)) return true;
+            return false;
+        }
+
+        async function deleteUserConfirm(userId, email) {
+            const ok = confirm(`HARD DELETE user "${email}"?\n\nThis permanently removes the user and all their permissions/data scope. This cannot be undone.`);
+            if (!ok) return;
+            const typed = prompt(`Type the email to confirm deletion:\n${email}`);
+            if (typed !== email) {
+                alert('Email did not match. Deletion cancelled.');
+                return;
+            }
+            try {
+                const res = await fetch(`/api/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { ...headers, 'x-confirm-delete': 'true' },
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success) {
+                    alert('User deleted.');
+                    hideUserDetailModal();
+                    loadActiveUsers();
+                    loadAllUsers();
+                    loadStats();
+                } else {
+                    alert('Delete failed: ' + (data.error || res.status));
+                }
+            } catch (e) {
+                alert('Error deleting user.');
+            }
+        }
+
+        async function bulkDeleteOthers() {
+            try {
+                let currentEmail = null;
+                try {
+                    const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+                    if (meRes.ok) {
+                        const me = await meRes.json();
+                        currentEmail = (me?.user?.email || me?.email || '').toLowerCase() || null;
+                    }
+                } catch {}
+
+                const res = await fetch('/api/users', { headers });
+                const data = await res.json();
+                const all = data.users || [];
+                const isSelf = u => currentEmail && (u.email || '').toLowerCase() === currentEmail;
+                const isKeeper = u => isProtectedUser(u) || isSelf(u);
+                const targets = all.filter(u => !isKeeper(u));
+                const keepers = all.filter(isKeeper);
+
+                if (targets.length === 0) {
+                    alert('No users to delete. Only protected users remain.');
+                    return;
+                }
+
+                const msg = `HARD DELETE ${targets.length} users?\n\n` +
+                    `Keeping: ${keepers.map(k => k.email).join(', ') || '(none)'}\n\n` +
+                    `Deleting: ${targets.slice(0, 5).map(t => t.email).join(', ')}${targets.length > 5 ? `, … and ${targets.length - 5} more` : ''}\n\n` +
+                    `This is PERMANENT and cannot be undone.`;
+                if (!confirm(msg)) return;
+                const typed = prompt(`Type DELETE ${targets.length} to confirm:`);
+                if (typed !== `DELETE ${targets.length}`) {
+                    alert('Confirmation did not match. Cancelled.');
+                    return;
+                }
+
+                let ok = 0, failed = 0;
+                const errors = [];
+                for (const u of targets) {
+                    try {
+                        const r = await fetch(`/api/users/${u.id}`, {
+                            method: 'DELETE',
+                            headers: { ...headers, 'x-confirm-delete': 'true' },
+                        });
+                        if (r.ok) {
+                            ok++;
+                        } else {
+                            failed++;
+                            const j = await r.json().catch(() => ({}));
+                            errors.push(`${u.email}: ${j.error || r.status}`);
+                        }
+                    } catch (e) {
+                        failed++;
+                        errors.push(`${u.email}: network error`);
+                    }
+                }
+
+                let summary = `Bulk delete complete.\nDeleted: ${ok}\nFailed: ${failed}`;
+                if (errors.length) summary += `\n\nErrors:\n` + errors.slice(0, 10).join('\n');
+                alert(summary);
+
+                loadActiveUsers();
+                loadAllUsers();
+                loadStats();
+            } catch (e) {
+                alert('Bulk delete failed: ' + e.message);
+            }
         }
 
         loadStats();
