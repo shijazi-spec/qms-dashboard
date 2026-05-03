@@ -48,6 +48,12 @@
                 </p>
             </div>
             <div class="flex gap-2 flex-wrap">
+                <button data-on-click="streamDownload" data-args="[&quot;/api/audits/export&quot;,&quot;audits.csv&quot;]" data-pass-event="true" data-estimate-url="/api/audits/export" class="px-4 py-2 border border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    <span data-i18n="audits.export_csv">Export Audits CSV</span>
+                </button>
                 <a href="/intake" title="Upload off-platform audit reports; GPT-4o extracts findings for QM review (WP-SOP-041)"
                    class="px-4 py-2 border border-indigo-700 text-indigo-700 rounded-lg hover:bg-indigo-50 font-medium flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -460,10 +466,26 @@
             `).join('');
         }
 
+        // Keep the static "Export Audits CSV" button in sync with the active
+        // status filter so the streamed CSV matches the rows currently shown
+        // in the Audit Schedule table. streaming-download.js reads
+        // data-args / data-estimate-url at click time, so updating the
+        // attributes here is sufficient — no extra click handler needed.
+        function syncAuditsExportButton() {
+            const btn = document.querySelector('[data-testid="button-export-csv"]');
+            if (!btn) return;
+            const status = (document.getElementById('filterAuditStatus') || {}).value || '';
+            const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+            const exportUrl = `/api/audits/export${qs}`;
+            btn.setAttribute('data-args', JSON.stringify([exportUrl, 'audits.csv']));
+            btn.setAttribute('data-estimate-url', exportUrl);
+        }
+
         async function loadAudits() {
             const status = document.getElementById('filterAuditStatus').value;
             let url = '/api/audits';
             if (status) url += `?status=${status}`;
+            syncAuditsExportButton();
 
             try {
                 const res = await fetch(url);

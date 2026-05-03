@@ -1529,6 +1529,7 @@
     "manual_intake": "Manual Intake",
     "new_finding": "+ Finding",
     "new_audit": "New Audit",
+    "export_csv": "Export Audits CSV",
     "annual_programme": "Annual Audit Programme",
     "audit_schedule": "Audit Schedule",
     "findings_severity": "Findings by Severity",

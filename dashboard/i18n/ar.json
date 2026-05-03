@@ -1529,6 +1529,7 @@
     "manual_intake": "الاستلام اليدوي",
     "new_finding": "+ ملاحظة",
     "new_audit": "مراجعة جديدة",
+    "export_csv": "تصدير المراجعات CSV",
     "annual_programme": "برنامج المراجعة السنوي",
     "audit_schedule": "جدول المراجعات",
     "findings_severity": "الملاحظات حسب الخطورة",

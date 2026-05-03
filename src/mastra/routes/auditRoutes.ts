@@ -80,6 +80,163 @@ export const auditRoutes = [
     },
   },
   {
+    // Bulk CSV export of the audits schedule. Mirrors the static streaming
+    // export pattern used by /api/vendors/export, /api/policies/export,
+    // /api/risks/export, /api/duplicates/export and /api/logs/export so the
+    // audits dashboard can expose a one-click "Export Audits CSV" button on
+    // first paint (allowing the Arabic streaming-fallback advisory to attach).
+    //
+    // IMPORTANT: this literal-segment route MUST be registered before the
+    // dynamic `/api/audits/:id` handler below, otherwise Hono will treat
+    // "export" as the :id param and serve audit-detail JSON / 404 instead of
+    // streaming CSV. (Same ordering rule the QMS/CAPA/KPI export routes
+    // call out in src/mastra/index.ts.)
+    path: "/api/audits/export/estimate",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const { initAuditTables } =
+            await import("../../utils/auditDatabase");
+          await initAuditTables();
+
+          const url = new URL(c.req.url);
+          const status = url.searchParams.get("status") || undefined;
+          const conditions: string[] = [];
+          const filterParams: unknown[] = [];
+          if (status) {
+            filterParams.push(status);
+            conditions.push(`status = $${filterParams.length}`);
+          }
+          const where = conditions.length
+            ? `WHERE ${conditions.join(" AND ")}`
+            : "";
+
+          const r = await pool.query(
+            `SELECT COUNT(*)::int AS total FROM audits ${where}`,
+            filterParams,
+          );
+          const { estimateFromCount, estimateResponse } =
+            await import("../../utils/exportEstimate");
+          return estimateResponse(estimateFromCount(r.rows[0]?.total, "csv"));
+        } catch (error) {
+          safeLogger.error(
+            "❌ [AuditAPI] Error estimating audits export:",
+            error,
+          );
+          return c.json({ error: "Failed to estimate export size" }, 500);
+        } finally {
+          await pool.end();
+        }
+      };
+    },
+  },
+  {
+    path: "/api/audits/export",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const pg = await import("pg");
+        const exportPool = new pg.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const { initAuditTables } =
+            await import("../../utils/auditDatabase");
+          await initAuditTables();
+
+          const url = new URL(c.req.url);
+          const status = url.searchParams.get("status") || undefined;
+
+          const conditions: string[] = [];
+          const filterParams: unknown[] = [];
+          if (status) {
+            filterParams.push(status);
+            conditions.push(`status = $${filterParams.length}`);
+          }
+          const where = conditions.length
+            ? `WHERE ${conditions.join(" AND ")}`
+            : "";
+
+          const { escapeCSVValue } = await import("../../utils/inputSanitizer");
+          const { streamCsv, cursorQuery, stageStreamingExportFromHono } =
+            await import("../../utils/excelExport");
+
+          const source = cursorQuery(
+            exportPool,
+            `SELECT id, audit_code, title, COALESCE(audit_type, type) AS audit_type, status,
+                    lead_auditor, auditee_department, audit_standard,
+                    planned_start_date, planned_end_date,
+                    actual_start_date, actual_end_date,
+                    findings_count, critical_findings, created_at
+             FROM audits ${where}
+             ORDER BY COALESCE(planned_start_date, scheduled_date, created_at) DESC NULLS LAST`,
+            filterParams,
+          );
+
+          const headers = [
+            "ID",
+            "Audit Code",
+            "Title",
+            "Type",
+            "Status",
+            "Lead Auditor",
+            "Department",
+            "Standard",
+            "Planned Start",
+            "Planned End",
+            "Actual Start",
+            "Actual End",
+            "Findings",
+            "Critical Findings",
+            "Created",
+          ];
+          const rows = (async function* () {
+            try {
+              for await (const a of source) {
+                const row = a as Record<string, unknown>;
+                yield [
+                  row["id"],
+                  row["audit_code"] ?? "",
+                  row["title"] ?? "",
+                  row["audit_type"] ?? "",
+                  row["status"] ?? "",
+                  row["lead_auditor"] ?? "",
+                  row["auditee_department"] ?? "",
+                  row["audit_standard"] ?? "",
+                  row["planned_start_date"] ?? "",
+                  row["planned_end_date"] ?? "",
+                  row["actual_start_date"] ?? "",
+                  row["actual_end_date"] ?? "",
+                  row["findings_count"] ?? 0,
+                  row["critical_findings"] ?? 0,
+                  row["created_at"] ?? "",
+                ].map((v) => escapeCSVValue(String(v ?? "")));
+              }
+            } finally {
+              await exportPool.end();
+            }
+          })();
+          return await stageStreamingExportFromHono(c, () =>
+            streamCsv(
+              `audits_${new Date().toISOString().split("T")[0]}.csv`,
+              headers,
+              rows,
+            ),
+          );
+        } catch (error) {
+          safeLogger.error("❌ [AuditAPI] Error exporting audits:", error);
+          await exportPool.end();
+          return c.json({ error: "Failed to export audits" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/audits/:id",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {

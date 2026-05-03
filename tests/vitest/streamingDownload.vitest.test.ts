@@ -3319,13 +3319,11 @@ describe('streamingDownload (browser helper)', () => {
       // static "Export CSV" button so findExportButton() matches it on
       // first paint, just like the other dashboards.
       { page: 'logs', staticButton: true },
-      // audits.html's per-row PDF buttons are rendered dynamically by
-      // renderAudits() after the /api/audits fetch, so the static HTML
-      // still has no matching trigger. The dashboard code now calls
-      // attachStreamingFallbackNotice() at the end of renderAudits() so
-      // the advisory appears as soon as the table is populated; the
-      // assertion below simulates that injection.
-      { page: 'audits', staticButton: false },
+      // audits.html now ships a static "Export Audits CSV" button in the
+      // toolbar wired to /api/audits/export with data-estimate-url, so
+      // findExportButton() matches it on first paint just like the other
+      // dashboards. The dynamically-rendered per-row PDF buttons remain.
+      { page: 'audits', staticButton: true },
     ];
 
     function loadDashboardEnv(page: string) {
