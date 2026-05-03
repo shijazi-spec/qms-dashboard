@@ -3323,6 +3323,38 @@
                                 <span class="font-mono text-gray-500">${fmtNum(count)}</span>
                               </span>`;
                     }).join('');
+                // Rating-source breakdown (Task #799) — small inline
+                // badges showing how this version's ratings split across
+                // the source the user reacted from (inline thumbs vs.
+                // comment modal vs. retroactive triage, with an
+                // "unknown" bucket for legacy ratings recorded before
+                // the field existed). Helps operators spot when a
+                // version's feedback rate is heavily skewed toward one
+                // source (which can bias the rate). Sorted by count
+                // desc; rows with no in-window ratings render an
+                // em-dash so archived placeholders stay quiet.
+                const ratingSourceMap = (r && typeof r.rating_sources === 'object' && r.rating_sources) ? r.rating_sources : {};
+                const ratingSourceEntries = Object.keys(ratingSourceMap)
+                  .map(k => [k, Number(ratingSourceMap[k] || 0)])
+                  .filter(([, n]) => n > 0)
+                  .sort((a, b) => b[1] - a[1]);
+                const ratingSourcePalette = {
+                  inline_thumbs: 'bg-amber-50 text-amber-700 border-amber-200',
+                  comment_modal: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                  retro_triage:  'bg-rose-50 text-rose-700 border-rose-200',
+                };
+                const noRatings = Number(r.total_feedback || 0) === 0;
+                const ratingSourcesCell = (noRatings || ratingSourceEntries.length === 0)
+                  ? `<span class="text-gray-400" title="No ratings in selected window" data-testid="text-prompt-rating-sources-empty-${esc(r.prompt_version)}">—</span>`
+                  : ratingSourceEntries.map(([source, count]) => {
+                      const cls = ratingSourcePalette[String(source).toLowerCase()] || 'bg-gray-50 text-gray-600 border-gray-200';
+                      return `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-medium me-1 ${cls}"
+                                    title="${esc(source)}: ${fmtNum(count)} rating${count === 1 ? '' : 's'}"
+                                    data-testid="badge-prompt-rating-source-${esc(r.prompt_version)}-${esc(source)}">
+                                ${esc(source)}
+                                <span class="font-mono text-gray-500">${fmtNum(count)}</span>
+                              </span>`;
+                    }).join('');
                 return `
                   <tr class="border-t ${isCurrent ? 'bg-green-50' : (isStuck ? 'bg-amber-50' : (i % 2 === 1 ? 'bg-gray-50' : ''))}" data-testid="row-prompt-${esc(agent)}-${esc(r.prompt_version)}" data-prompt-status="${isCurrent ? 'current' : 'archived'}" data-prompt-window-activity="${noWindowActivity ? 'none' : 'present'}" data-prompt-stuck="${isStuck ? 'true' : 'false'}">
                     <td class="px-3 py-2 font-mono text-xs text-gray-800">${esc(r.prompt_version)}${currentPill}${stuckPill}</td>
@@ -3335,14 +3367,15 @@
                     <td class="px-3 py-2 text-end">${fmtMs(r.avg_ms)}</td>
                     <td class="px-3 py-2 text-end">${errorCell}</td>
                     <td class="px-3 py-2 text-xs" data-testid="cell-prompt-surfaces-${esc(r.prompt_version)}">${surfacesCell}</td>
+                    <td class="px-3 py-2 text-xs" data-testid="cell-prompt-rating-sources-${esc(r.prompt_version)}">${ratingSourcesCell}</td>
                     <td class="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">${lastSeenCell}</td>
                   </tr>`;
               }).join('')
             : (onlyStuck && activeVersion
-                ? `<tr><td colspan="9" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-stuck-${esc(agent)}">
+                ? `<tr><td colspan="10" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-stuck-${esc(agent)}">
                       No archived versions are still being called in the selected window — every client is on the active prompt.
                     </td></tr>`
-                : `<tr><td colspan="9" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-current-${esc(agent)}">
+                : `<tr><td colspan="10" class="px-3 py-3 text-xs text-gray-400" data-testid="text-no-current-${esc(agent)}">
                       No traffic on the currently-deployed version yet${archivedCount > 0 ? ` — ${archivedCount} archived version${archivedCount === 1 ? '' : 's'} hidden` : ''}.
                     </td></tr>`);
 
@@ -3359,6 +3392,7 @@
                   <th scope="col" class="px-3 py-2 text-end" data-i18n="ai_ops.col_avg_ms">Avg (ms)</th>
                   <th scope="col" class="px-3 py-2 text-end" data-i18n="ai_ops.col_error_pct">Error %</th>
                   <th scope="col" class="px-3 py-2" title="Per-surface call breakdown within the selected window (web / slack / mobile / unknown)" data-i18n="ai_ops.col_surfaces">Surfaces</th>
+                  <th scope="col" class="px-3 py-2" title="Per-rating-source breakdown within the selected window (inline_thumbs / comment_modal / retro_triage / unknown). Helps spot when a version's feedback rate is skewed toward one source." data-i18n="ai_ops.col_rating_sources">Rating sources</th>
                   <th scope="col" class="px-3 py-2" data-i18n="ai_ops.col_last_seen">Last seen</th>
                 </tr></thead>
                 <tbody>${body}</tbody>

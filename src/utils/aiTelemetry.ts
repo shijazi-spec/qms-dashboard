@@ -2181,6 +2181,18 @@ export interface PromptVersionAggregate {
    * (agent, prompt_version) bucket without a follow-up query.
    */
   client_surfaces: Record<string, number>;
+  /**
+   * Per-rating-source breakdown hoisted from
+   * `ai_call_feedback.metadata.rating_source` within the selected window
+   * (Task #799). Shape: `{ inline_thumbs: 7, comment_modal: 2, retro_triage: 1, unknown: 3 }`
+   * where the `unknown` bucket collapses ratings whose metadata never
+   * captured a source (e.g. legacy votes recorded before the field was
+   * introduced). Empty object for rows with no in-window ratings. Lets
+   * the AI Ops dashboard render a per-source breakdown showing whether a
+   * version's feedback rate is heavily skewed toward a single source
+   * (which can bias the rate) without an extra round-trip.
+   */
+  rating_sources: Record<string, number>;
 }
 
 /**
@@ -2294,6 +2306,39 @@ export const FEEDBACK_RATE_BY_PROMPT_VERSION_SQL = `WITH windowed AS (
          FROM surface_counts
          GROUP BY agent_name, prompt_version
        ),
+       -- Per-rating-source breakdown (Task #799). Mirrors the
+       -- surface_counts CTE above but pulls from
+       -- ai_call_feedback.metadata.rating_source and is keyed off the
+       -- joined feedback row (so it counts ratings, not calls). Like
+       -- surfaces, missing/empty values collapse into an "unknown"
+       -- bucket so the per-source counts stay additive with
+       -- total_feedback even on legacy ratings recorded before the
+       -- field existed. The grouped jsonb_object_agg is split into a
+       -- separate CTE for the same reason as surface_breakdown — to
+       -- avoid "subquery uses ungrouped column" errors.
+       rating_source_counts AS (
+         SELECT
+           m.agent_name,
+           COALESCE(m.metadata ->> 'prompt_version', '(unknown)')                  AS prompt_version,
+           COALESCE(NULLIF(f.metadata ->> 'rating_source', ''), 'unknown')         AS rating_source,
+           COUNT(*)                                                                AS source_count
+         FROM ai_call_metrics m
+         JOIN ai_call_feedback f ON f.call_id = m.id
+         WHERE m.started_at >= NOW() - MAKE_INTERVAL(days => $1)
+           AND m.tool_name IS NULL
+         GROUP BY
+           m.agent_name,
+           COALESCE(m.metadata ->> 'prompt_version', '(unknown)'),
+           COALESCE(NULLIF(f.metadata ->> 'rating_source', ''), 'unknown')
+       ),
+       rating_source_breakdown AS (
+         SELECT
+           agent_name,
+           prompt_version,
+           jsonb_object_agg(rating_source, source_count) AS rating_sources
+         FROM rating_source_counts
+         GROUP BY agent_name, prompt_version
+       ),
        global_last AS (
          SELECT
            agent_name,
@@ -2325,12 +2370,15 @@ export const FEEDBACK_RATE_BY_PROMPT_VERSION_SQL = `WITH windowed AS (
          $2::INTEGER                           AS min_feedback,
          COALESCE(w.meets_min_feedback, FALSE) AS meets_min_feedback,
          g.last_seen_at                        AS last_seen_at,
-         COALESCE(sb.client_surfaces, '{}'::jsonb) AS client_surfaces
+         COALESCE(sb.client_surfaces, '{}'::jsonb) AS client_surfaces,
+         COALESCE(rsb.rating_sources, '{}'::jsonb) AS rating_sources
        FROM global_last g
        LEFT JOIN windowed w
          ON w.agent_name = g.agent_name AND w.prompt_version = g.prompt_version
        LEFT JOIN surface_breakdown sb
          ON sb.agent_name = g.agent_name AND sb.prompt_version = g.prompt_version
+       LEFT JOIN rating_source_breakdown rsb
+         ON rsb.agent_name = g.agent_name AND rsb.prompt_version = g.prompt_version
        ORDER BY g.agent_name, g.last_seen_at DESC`;
 
 export async function getRecentNegativeFeedback(limit = 25): Promise<
