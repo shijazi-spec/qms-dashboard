@@ -58,7 +58,8 @@
       "ai-approvals": "AI Approvals Queue",
       "infographic": "Infographic Generator",
       "logs": "System Logs",
-      "health": "Health Pulse"
+      "health": "Health Pulse",
+      "qms-docs": "QMS Documents"
     }
   },
   "login": {
@@ -408,7 +409,9 @@
     "all_levels": "All Levels",
     "pending_verification": "Pending Verification",
     "verified_closed": "Verified Closed",
-    "update": "Update"
+    "update": "Update",
+    "all": "All",
+    "clear": "Clear"
   },
   "dyn": {
     "common": {
@@ -2415,5 +2418,36 @@
     "sw_expired_heading": "This download link has expired",
     "sw_expired_body": "The streaming download could not be started because the link is no longer valid. Please return to the previous page and start the export again.",
     "sw_expired_retry_hint": "You can safely close this tab."
+  },
+  "fraud_incidents": {
+    "title": "Fraud Incidents",
+    "subtitle": "PRD-FRD-001 Feature 2 — Incident tracking and P1/P2 escalation with SAMA reporting"
+  },
+  "fraud_rules": {
+    "title": "Fraud Rules Register",
+    "subtitle": "PRD-FRD-001 Feature 1 — Centralized fraud rule inventory with threshold tracking and review scheduling",
+    "add_rule": "Add Rule",
+    "total": "Total",
+    "passed": "Passed",
+    "pending": "Pending",
+    "needs_attention": "Needs Attention",
+    "misconfigured": "Misconfigured",
+    "urgent_title": "Urgent Items",
+    "urgent_desc": "Rules requiring immediate attention",
+    "filter_owner": "Filter by Owner",
+    "filter_status": "Filter by Status",
+    "filter_type": "Filter by Type",
+    "col_id": "ID",
+    "col_name": "Rule",
+    "col_type": "Type",
+    "col_owner": "Owner",
+    "col_status": "Status",
+    "col_alert": "Alert Threshold",
+    "col_block": "Block Threshold",
+    "col_setting": "Current → Target",
+    "col_last_tested": "Last Tested",
+    "col_next_review": "Next Review",
+    "col_actions": "Actions",
+    "empty": "No fraud rules found."
   }
 }

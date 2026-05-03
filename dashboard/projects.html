@@ -1834,10 +1834,10 @@
             const container = document.getElementById(containerId);
             if (!container) return;
             container.innerHTML = wizardData[key].map((item, idx) => {
-                const text = isObject ? (item.name || item.role || item.text) + (item.date ? ` (${item.date})` : '') + (item.count ? ` x${item.count}` : '') + (item.type ? ` - ${item.type}` : '') : item;
+                const text = isObject ? escapeHtml((item.name || item.role || item.text) + (item.date ? ` (${item.date})` : '') + (item.count ? ` x${item.count}` : '') + (item.type ? ` - ${item.type}` : '')) : escapeHtml(item);
                 return `<div class="flex items-center justify-between bg-${color}-50 px-3 py-2 rounded-lg">
-                    <span class="text-sm text-${color}-800">${escapeHtml(text)}</span>
-                    <button data-on-click="removeWizardItem" data-args="[&quot;${escapeHtml(key)}&quot;,${parseInt(idx)}]" class="text-${color}-600 hover:text-${color}-800"><i class="fas fa-times"></i></button>
+                    <span class="text-sm text-${color}-800">${text}</span>
+                    <button data-on-click="removeWizardItem" data-args="[&quot;${escapeHtml(key)}&quot;,${idx}]" class="text-${color}-600 hover:text-${color}-800"><i class="fas fa-times"></i></button>
                 </div>`;
             }).join('');
         }
@@ -1907,14 +1907,14 @@
                 <strong>Scope Statement:</strong> ${document.getElementById('wizScopeStatement').value ? 'Defined' : 'Not defined'}`;
             document.getElementById('summaryScope').innerHTML = scope;
 
-            const deliverables = `<strong>Deliverables:</strong> ${parseInt(wizardData.deliverables.length)}<br>
-                <strong>Milestones:</strong> ${parseInt(wizardData.milestones.length)}<br>
+            const deliverables = `<strong>Deliverables:</strong> ${wizardData.deliverables.length}<br>
+                <strong>Milestones:</strong> ${wizardData.milestones.length}<br>
                 <strong>Timeline:</strong> ${escapeHtml(document.getElementById('wizPlannedStart').value || 'TBD')} to ${escapeHtml(document.getElementById('wizPlannedEnd').value || 'TBD')}`;
             document.getElementById('summaryDeliverables').innerHTML = deliverables;
 
-            const constraints = `<strong>Constraints:</strong> ${parseInt(wizardData.constraints.length)}<br>
-                <strong>Assumptions:</strong> ${parseInt(wizardData.assumptions.length)}<br>
-                <strong>Budget:</strong> $${parseFloat(document.getElementById('wizBudgetApproved').value) || '0'}`;
+            const constraints = `<strong>Constraints:</strong> ${wizardData.constraints.length}<br>
+                <strong>Assumptions:</strong> ${wizardData.assumptions.length}<br>
+                <strong>Budget:</strong> $${parseFloat(document.getElementById('wizBudgetApproved').value || '0').toLocaleString()}`;
             document.getElementById('summaryConstraints').innerHTML = constraints;
 
             const resources = `<strong>Resources:</strong> ${parseInt(wizardData.resources.length)} roles defined<br>

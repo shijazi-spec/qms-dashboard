@@ -105,6 +105,10 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/triggers.html",
   "dashboard/users.html",
   "dashboard/vendors.html",
+  "dashboard/fraud-country-risk.html",
+  "dashboard/fraud-dashboard.html",
+  "dashboard/fraud-incidents.html",
+  "dashboard/fraud-rules.html",
 ]);
 
 function toRelKey(absPath) {
