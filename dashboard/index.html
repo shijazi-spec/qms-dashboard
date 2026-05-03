@@ -6,6 +6,7 @@
     <title>WalaPlus Quality Dashboard</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/chart-theme.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
@@ -2398,7 +2399,7 @@
         // ---- Records by Layout (full CRM pies) ----
         let leadsLayoutPieChart = null;
         let dealsLayoutPieChart = null;
-        const LAYOUT_PALETTE = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16'];
+        const LAYOUT_PALETTE = (window.WalaPlusChartTheme && window.WalaPlusChartTheme.PALETTE) || ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16'];
 
         function renderLayoutPie(canvasId, legendId, totalElId, breakdown, total) {
             const ctx = document.getElementById(canvasId);
@@ -2424,27 +2425,30 @@
                 }).join('');
             }
 
-            const config = {
-                type: 'doughnut',
-                data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '55%',
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: (item) => {
-                                    const v = item.parsed;
-                                    const pct = total ? ((v / total) * 100).toFixed(1) : '0.0';
-                                    return `${item.label}: ${v.toLocaleString()} (${pct}%)`;
+            const theme = window.WalaPlusChartTheme;
+            const config = theme
+                ? theme.doughnutConfig({ labels, data, colors, legend: false, cutout: '60%' })
+                : {
+                    type: 'doughnut',
+                    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '60%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (item) => {
+                                        const v = item.parsed;
+                                        const pct = total ? ((v / total) * 100).toFixed(1) : '0.0';
+                                        return `${item.label}: ${v.toLocaleString()} (${pct}%)`;
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            };
+                };
             return new Chart(ctx, config);
         }
 
@@ -2515,7 +2519,7 @@
                 }
                 if (emptyEl) emptyEl.style.display = 'none';
 
-                const palette = ['#6366f1','#8b5cf6','#a855f7','#d946ef','#f43f5e','#f97316','#eab308','#22c55e','#06b6d4','#0ea5e9','#3b82f6','#ec4899'];
+                const palette = (window.WalaPlusChartTheme && window.WalaPlusChartTheme.PALETTE) || ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6','#6366f1','#eab308'];
                 const colorFor = (i) => palette[i % palette.length];
 
                 cardsEl.innerHTML = entries.map(([name, count], i) => {
@@ -2532,23 +2536,17 @@
                 const ctx = canvas.getContext('2d');
                 if (!ctx) return;
                 if (issuesLayoutChart) { issuesLayoutChart.destroy(); issuesLayoutChart = null; }
-                issuesLayoutChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: entries.map(e => e[0]),
-                        datasets: [{
-                            data: entries.map(e => e[1]),
-                            backgroundColor: entries.map((_, i) => colorFor(i)),
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        animation: { duration: 500 },
-                        plugins: { legend: { position: 'right' } }
+                const _layoutLabels = entries.map(e => e[0]);
+                const _layoutData = entries.map(e => e[1]);
+                const _layoutColors = entries.map((_, i) => colorFor(i));
+                issuesLayoutChart = new Chart(ctx, window.WalaPlusChartTheme
+                    ? window.WalaPlusChartTheme.doughnutConfig({ labels: _layoutLabels, data: _layoutData, colors: _layoutColors })
+                    : {
+                        type: 'doughnut',
+                        data: { labels: _layoutLabels, datasets: [{ data: _layoutData, backgroundColor: _layoutColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
-                });
+                );
                 if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('issuesChartLayout', issuesLayoutChart, 'Issues by Layout');
             } catch (err) {
                 console.error('Error rendering Issues by Layout:', err);
@@ -2592,27 +2590,15 @@
                 const allModules = ['Deals', 'Contacts', 'Leads', 'Accounts'];
                 const categories = allModules;
                 const values = allModules.map(m => normalized[m] || 0);
-                issuesChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: categories,
-                        datasets: [{
-                            data: values,
-                            backgroundColor: ['#6366f1', '#a855f7', '#d946ef', '#f43f5e'],
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        animation: { duration: 500 },
-                        plugins: {
-                            legend: {
-                                position: 'right'
-                            }
-                        }
+                const _moduleColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+                issuesChart = new Chart(ctx, window.WalaPlusChartTheme
+                    ? window.WalaPlusChartTheme.doughnutConfig({ labels: categories, data: values, colors: _moduleColors })
+                    : {
+                        type: 'doughnut',
+                        data: { labels: categories, datasets: [{ data: values, backgroundColor: _moduleColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
-                });
+                );
                 if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('issuesChart', issuesChart, 'Issues by Category');
             } catch (err) {
                 console.error('Error rendering issues chart:', err);
@@ -2632,27 +2618,15 @@
                 const normalized = normalizeIssuesByCategory(issuesByCategory);
                 const allModules = ['Deals', 'Contacts', 'Leads', 'Accounts'];
                 const values = allModules.map(m => normalized[m] || 0);
-                issuesTotalChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: allModules,
-                        datasets: [{
-                            data: values,
-                            backgroundColor: ['#6366f1', '#a855f7', '#d946ef', '#f43f5e'],
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        animation: { duration: 500 },
-                        plugins: {
-                            legend: {
-                                position: 'right'
-                            }
-                        }
+                const _modTotColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+                issuesTotalChart = new Chart(ctx, window.WalaPlusChartTheme
+                    ? window.WalaPlusChartTheme.doughnutConfig({ labels: allModules, data: values, colors: _modTotColors })
+                    : {
+                        type: 'doughnut',
+                        data: { labels: allModules, datasets: [{ data: values, backgroundColor: _modTotColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
-                });
+                );
                 if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('issuesChartTotal', issuesTotalChart, 'Records with Issues by Module');
             } catch (err) {
                 console.error('Error rendering total issues chart:', err);
