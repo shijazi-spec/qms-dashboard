@@ -85,7 +85,7 @@
             tool-health overrides revert at
             <span class="font-mono" id="tool-health-override-banner-absolute" data-testid="text-tool-health-override-expiry-absolute">—</span>
             <span id="tool-health-override-banner-countdown" data-testid="text-tool-health-override-expiry-countdown">(in —)</span>
-            <span class="ml-2 text-xs underline whitespace-nowrap">Open Alert Thresholds →</span>
+            <span class="ms-2 text-xs underline whitespace-nowrap">Open Alert Thresholds →</span>
           </span>
         </button>
         <!-- Snooze split-button (Task #333). Operators want to pick how long
@@ -114,7 +114,7 @@
             id="tool-health-override-banner-snooze-menu"
             role="menu"
             aria-labelledby="tool-health-override-banner-snooze"
-            class="hidden absolute right-0 top-full mt-1 z-10 min-w-[8rem] rounded-md border border-gray-200 bg-white shadow-lg py-1 text-xs text-gray-800"
+            class="hidden absolute end-0 top-full mt-1 z-10 min-w-[8rem] rounded-md border border-gray-200 bg-white shadow-lg py-1 text-xs text-gray-800"
             data-testid="menu-tool-health-override-banner-snooze"
           >
             <button
@@ -200,7 +200,7 @@
             </svg>
             <h2 class="text-lg font-semibold text-amber-900" data-testid="text-storage-health-alerts-heading">
               Storage health alerts
-              <span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-600 text-white" id="storage-health-alerts-count" data-testid="badge-storage-health-alerts-count">0</span>
+              <span class="ms-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-600 text-white" id="storage-health-alerts-count" data-testid="badge-storage-health-alerts-count">0</span>
             </h2>
           </div>
           <p class="text-xs text-amber-800">Open alerts from the AI usage table prune cron. Acknowledge to triage, resolve once the table is back inside the retention window, or dismiss known-noisy ones.</p>
@@ -222,7 +222,7 @@
             </svg>
             <h2 class="text-lg font-semibold text-red-800" data-testid="text-tool-health-alerts-heading">
               Tool health alerts
-              <span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white" id="tool-health-alerts-count" data-testid="badge-tool-health-alerts-count">0</span>
+              <span class="ms-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white" id="tool-health-alerts-count" data-testid="badge-tool-health-alerts-count">0</span>
             </h2>
           </div>
           <p class="text-xs text-red-700">Open alerts from the per-tool error/latency monitor. Acknowledge to triage, resolve once fixed.</p>
@@ -866,7 +866,7 @@
             >Older &raquo;</button>
             <span
               id="metrics-retention-audit-pager-status"
-              class="text-xs text-gray-500 ml-2"
+              class="text-xs text-gray-500 ms-2"
               data-testid="text-metrics-retention-audit-pager-status"
             ></span>
           </div>

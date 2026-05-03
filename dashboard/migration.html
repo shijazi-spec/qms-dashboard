@@ -55,23 +55,23 @@
                 <div class="text-sm text-gray-500" data-i18n="migration.total_jobs">Total Jobs</div>
                 <div id="totalJobs" class="text-2xl font-bold text-gray-900">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-blue-500">
                 <div class="text-sm text-gray-500">In Progress</div>
                 <div id="inProgressJobs" class="text-2xl font-bold text-blue-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-green-500">
                 <div class="text-sm text-gray-500">Completed</div>
                 <div id="completedJobs" class="text-2xl font-bold text-green-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-red-500">
                 <div class="text-sm text-gray-500">Failed</div>
                 <div id="failedJobs" class="text-2xl font-bold text-red-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-indigo-500">
                 <div class="text-sm text-gray-500" data-i18n="migration.records_imported">Records Imported</div>
                 <div id="recordsImported" class="text-2xl font-bold text-indigo-600">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-amber-500">
                 <div class="text-sm text-gray-500" data-i18n="migration.duplicates_detected">Duplicates Detected</div>
                 <div id="duplicatesDetected" class="text-2xl font-bold text-amber-600">-</div>
             </div>
@@ -102,8 +102,8 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="migration.col_job_code">Job Code</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="migration.col_job_code">Job Code</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.module">Module</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="migration.col_records">Records</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
@@ -228,7 +228,7 @@
                     <div id="fileInfo" class="hidden mt-2 p-3 bg-gray-50 rounded-lg flex justify-between items-center">
                         <div>
                             <span id="fileName" class="text-sm font-medium text-gray-700"></span>
-                            <span id="fileSize" class="text-xs text-gray-500 ml-2"></span>
+                            <span id="fileSize" class="text-xs text-gray-500 ms-2"></span>
                         </div>
                         <button type="button" data-on-click="clearFile" class="text-red-500 hover:text-red-700">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

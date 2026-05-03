@@ -129,7 +129,7 @@
                 <option value="pending,executed,rejected,failed,expired" data-i18n="ai_approvals.status_all">All</option>
             </select>
 
-            <label class="text-xs text-gray-600 ml-2 flex items-center gap-1">
+            <label class="text-xs text-gray-600 ms-2 flex items-center gap-1">
                 <span data-i18n="ai_approvals.filter_risk">Risk</span>
                 <!-- Task #619: drop-everything signal for a Critical pile-up.
                      Re-uses the count already fetched by refreshRiskLevelCounts()
@@ -137,7 +137,7 @@
                      Critical bucket reaches CRITICAL_BADGE_THRESHOLD. -->
                 <span id="badgeCriticalRisk"
                       data-testid="badge-critical-risk"
-                      class="hidden ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
+                      class="hidden ms-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
                       title="Pending approvals at Critical risk level">0</span>
             </label>
             <select id="fltRisk" aria-label="Filter by risk level" class="border border-gray-300 rounded px-2 py-1 text-sm">
@@ -164,11 +164,11 @@
                         data-base-label="Low">Low</option>
             </select>
 
-            <label class="text-xs text-gray-600 ml-2 flex items-center gap-1">
+            <label class="text-xs text-gray-600 ms-2 flex items-center gap-1">
                 <input id="fltMine" type="checkbox" class="rounded"> <span data-i18n="ai_approvals.only_my">Only my proposals</span>
             </label>
 
-            <label class="text-xs text-gray-600 ml-2" data-i18n="ai_approvals.filter_review">Review</label>
+            <label class="text-xs text-gray-600 ms-2" data-i18n="ai_approvals.filter_review">Review</label>
             <select id="fltReview" aria-label="Filter by review status"
                     data-testid="select-review-filter"
                     class="border border-gray-300 rounded px-2 py-1 text-sm"
@@ -188,16 +188,16 @@
                         data-base-label="No reviewer yet">No reviewer yet</option>
             </select>
 
-            <label class="text-xs text-gray-600 ml-2 flex items-center gap-1" title="Limit the list to rows where credential-shaped values were detected in the payload.">
+            <label class="text-xs text-gray-600 ms-2 flex items-center gap-1" title="Limit the list to rows where credential-shaped values were detected in the payload.">
                 <input id="fltCredWarn" type="checkbox" class="rounded" data-testid="input-credential-warnings-only">
                 <span data-i18n="ai_approvals.only_credential_warnings">Credential warnings only</span>
                 <span id="badgeCredWarn"
                       data-testid="badge-credential-warnings"
-                      class="hidden ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
+                      class="hidden ms-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
                       title="Pending approvals flagged for credential-shaped values">0</span>
             </label>
 
-            <div id="summaryCounts" class="ml-auto text-xs text-gray-600 flex gap-3">
+            <div id="summaryCounts" class="ms-auto text-xs text-gray-600 flex gap-3">
                 <span><span data-i18n="ai_approvals.pending">Pending</span>: <b id="cntPending">—</b></span>
                 <span><span data-i18n="ai_approvals.executed_today">Executed today</span>: <b id="cntExecutedToday">—</b></span>
             </div>

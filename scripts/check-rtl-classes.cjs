@@ -133,65 +133,16 @@ const OPT_OUT_MARKER = "rtl-safe-physical";
  * file from the relevant array below.
  */
 const ALLOWLISTS = {
-  thTextAlign: new Set([
-    "dashboard/admin.html",
-    "dashboard/ai-ops.html",
-    "dashboard/calls.html",
-    "dashboard/crm.html",
-    "dashboard/duplicates.html",
-    "dashboard/external-audits.html",
-    "dashboard/grc.html",
-    "dashboard/guide.html",
-    "dashboard/index.html",
-    "dashboard/intake.html",
-    "dashboard/logs.html",
-    "dashboard/migration.html",
-    "dashboard/pdpl.html",
-    "dashboard/policies.html",
-    "dashboard/projects.html",
-    "dashboard/qms.html",
-    "dashboard/reviews.html",
-    "dashboard/roi.html",
-    "dashboard/tablef.html",
-    "dashboard/team.html",
-    "dashboard/users.html",
-  ]),
-  borderLR4: new Set([
-    "dashboard/duplicates.html",
-    "dashboard/external-audits.html",
-    "dashboard/grc.html",
-    "dashboard/guide.html",
-    "dashboard/index.html",
-    "dashboard/intake.html",
-    "dashboard/migration.html",
-    "dashboard/policies.html",
-    "dashboard/projects.html",
-    "dashboard/qms.html",
-    "dashboard/scorecard.html",
-    "dashboard/tablef.html",
-  ]),
-  buttonMlMr: new Set([
-    "dashboard/ai-approvals.html",
-    "dashboard/ai-ops.html",
-    "dashboard/consultant.html",
-    "dashboard/projects.html",
-    "dashboard/reviews.html",
-    "dashboard/roi.html",
-    "dashboard/tablef.html",
-    "dashboard/users.html",
-  ]),
-  // Drained to empty by Task #688 — all legacy `space-x-*` usages were
-  // migrated to `gap-*` on their flex containers so the layout mirrors
-  // correctly in Arabic RTL. Any new `space-x-*` will fail CI immediately.
+  // All previously-grandfathered dashboard pages have been migrated off
+  // the per-rule allowlists (Task #761). The empty sets are kept so the
+  // RULES table can still look up an allowlist by `rule.id` without a
+  // null check, and so a future regression that needs a temporary
+  // exemption has an obvious place to add it.
+  thTextAlign: new Set([]),
+  borderLR4: new Set([]),
+  buttonMlMr: new Set([]),
   spaceX: new Set([]),
-  // No legacy violators today — left intentionally empty so the very
-  // first new `rounded-l-*` / `rounded-r-*` to land in `dashboard/` is
-  // caught by CI.
   roundedLR: new Set([]),
-  // Drained to empty by Task #688 — all legacy non-`<th>` `text-left` /
-  // `text-right` usages were migrated to `text-start` / `text-end` so
-  // text alignment mirrors correctly in Arabic RTL. Any new violation
-  // will fail CI immediately.
   textLRNonTh: new Set([]),
 };
 

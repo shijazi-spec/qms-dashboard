@@ -169,7 +169,7 @@
         </script>
 
         <!-- Settings Panel (Slide-out) -->
-        <div id="settingsPanel" class="settings-panel fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 overflow-y-auto">
+        <div id="settingsPanel" class="settings-panel fixed end-0 top-0 h-full w-80 bg-white shadow-2xl z-50 overflow-y-auto">
             <div class="p-6">
                 <div class="flex items-center justify-between mb-6">
                     <h2 class="text-lg font-bold text-gray-900">Customize Dashboard</h2>
@@ -258,8 +258,8 @@
                     <div class="flex-1 min-w-[220px]">
                         <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Search Record ID</label>
                         <div class="relative">
-                            <svg class="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 110-16 8 8 0 010 16z"/></svg>
-                            <input type="text" id="modalRecordIdSearch" data-on-input="filterModalIssues" placeholder="Type record ID…" class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-record-id-search">
+                            <svg class="w-4 h-4 absolute start-2.5 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 110-16 8 8 0 010 16z"/></svg>
+                            <input type="text" id="modalRecordIdSearch" data-on-input="filterModalIssues" placeholder="Type record ID…" class="w-full ps-8 pe-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-record-id-search">
                         </div>
                     </div>
                     <div class="min-w-[200px]">
@@ -282,16 +282,16 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50 sticky top-0">
                             <tr>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Record ID</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lead Status</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pipeline</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Layouts</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Record ID</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Lead Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Pipeline</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Layouts</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
                             </tr>
                         </thead>
                         <tbody id="issuesTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -709,14 +709,14 @@
                                     <table class="min-w-full divide-y divide-gray-200">
                                         <thead class="bg-gray-50">
                                             <tr>
-                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
-                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="The Created/Modified date window the user picked when this audit was run. 'All Data' = no filter was applied (or the audit predates this feature).">Period Covered</th>
-                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall</th>
-                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">People</th>
-                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Process</th>
-                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Governance</th>
-                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
-                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider" title="The Created/Modified date window the user picked when this audit was run. 'All Data' = no filter was applied (or the audit predates this feature).">Period Covered</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Overall</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">People</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Process</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Governance</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
                                             </tr>
                                         </thead>
                                         <tbody id="historyTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -763,8 +763,8 @@
                             <div class="p-6">
                                 <div class="mb-3 flex flex-col sm:flex-row gap-3">
                                     <div class="relative flex-1">
-                                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                        <input type="text" id="agentSearchInput" data-on-input="filterAndSortAgents" placeholder="Search by name..." class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-agent-search">
+                                        <svg class="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                        <input type="text" id="agentSearchInput" data-on-input="filterAndSortAgents" placeholder="Search by name..." class="w-full ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-agent-search">
                                     </div>
                                     <select id="agentSortOrder" aria-label="Sort agents by" data-on-change="filterAndSortAgents" class="text-sm border border-gray-200 rounded-lg px-3 py-2" data-testid="select-agent-sort">
                                         <option value="score-asc">Score: Low → High</option>

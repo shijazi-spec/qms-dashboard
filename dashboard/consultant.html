@@ -165,7 +165,7 @@
     <div class="sidebar-overlay" id="sidebarOverlay" data-on-click="toggleSidebar"></div>
 
     <div class="chat-container flex">
-        <aside class="sidebar w-[280px] bg-white border-r border-gray-200 flex flex-col shrink-0" id="sidebar">
+        <aside class="sidebar w-[280px] bg-white border-e border-gray-200 flex flex-col shrink-0" id="sidebar">
             <div class="p-4 flex-1 overflow-y-auto">
                 <div class="flex items-center gap-2 mb-3">
                     <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
@@ -284,12 +284,12 @@
                     <h1 class="text-sm font-semibold text-gray-800" data-i18n="consultant.title">QMS AI Consultant</h1>
                     <p class="text-xs text-gray-500" data-i18n="consultant.subtitle">Powered by WalaPlus Intelligence</p>
                 </div>
-                <div class="ml-auto flex items-center gap-2">
+                <div class="ms-auto flex items-center gap-2">
                     <button data-on-click="exportChat" class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors" data-i18n-title="consultant.export_conversation" title="Export conversation">
                         <svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     </button>
                     <button data-on-click="clearChat" class="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-100 transition-colors" data-i18n-title="consultant.new_conversation" title="New conversation">
-                        <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        <svg class="w-4 h-4 inline-block me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         <span data-i18n="consultant.new_chat">New Chat</span>
                     </button>
                 </div>
@@ -346,7 +346,7 @@
             <div class="p-4 bg-white border-t border-gray-200 chat-input-area">
                 <form id="chatForm" class="flex items-end gap-3">
                     <div class="flex-1 relative">
-                        <textarea id="chatInput" rows="1" placeholder="Ask the AI Consultant anything about your QMS..." data-i18n-placeholder="consultant.input_placeholder" class="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 pr-12 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow chat-input-cap"></textarea>
+                        <textarea id="chatInput" rows="1" placeholder="Ask the AI Consultant anything about your QMS..." data-i18n-placeholder="consultant.input_placeholder" class="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 pe-12 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow chat-input-cap"></textarea>
                     </div>
                     <button type="submit" id="sendBtn" aria-label="Send message" class="shrink-0 w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors" disabled>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 0l-7 7m7-7l7 7"/></svg>

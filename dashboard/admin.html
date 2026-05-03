@@ -610,7 +610,7 @@
                         <div>
                             <span class="font-medium text-gray-600">TTL:</span>
                             <span id="export-cache-ttl" data-testid="text-export-cache-ttl">—</span>
-                            <span class="ml-3 font-medium text-gray-600">Expired waiting:</span>
+                            <span class="ms-3 font-medium text-gray-600">Expired waiting:</span>
                             <span id="export-cache-expired" data-testid="text-export-cache-expired">—</span>
                         </div>
                     </div>
@@ -730,7 +730,7 @@
                                 <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                                 </svg>
-                                <span class="ml-1">Refresh</span>
+                                <span class="ms-1">Refresh</span>
                             </button>
                         </div>
                     </div>
@@ -800,10 +800,10 @@
                                     <table class="min-w-full text-sm">
                                         <thead class="bg-gray-50 text-gray-600">
                                             <tr>
-                                                <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
-                                                <th scope="col" class="px-4 py-2 text-left font-medium">IP</th>
-                                                <th scope="col" class="px-4 py-2 text-right font-medium">Events</th>
-                                                <th scope="col" class="px-4 py-2 text-right font-medium">Suppressed</th>
+                                                <th scope="col" class="px-4 py-2 text-start font-medium">#</th>
+                                                <th scope="col" class="px-4 py-2 text-start font-medium">IP</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium">Events</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium">Suppressed</th>
                                             </tr>
                                         </thead>
                                         <tbody id="spike24h-top-ips" data-testid="table-spike24h-top-ips">
@@ -818,10 +818,10 @@
                                     <table class="min-w-full text-sm">
                                         <thead class="bg-gray-50 text-gray-600">
                                             <tr>
-                                                <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
-                                                <th scope="col" class="px-4 py-2 text-left font-medium">Path</th>
-                                                <th scope="col" class="px-4 py-2 text-right font-medium">Events</th>
-                                                <th scope="col" class="px-4 py-2 text-right font-medium">Suppressed</th>
+                                                <th scope="col" class="px-4 py-2 text-start font-medium">#</th>
+                                                <th scope="col" class="px-4 py-2 text-start font-medium">Path</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium">Events</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium">Suppressed</th>
                                             </tr>
                                         </thead>
                                         <tbody id="spike24h-top-paths" data-testid="table-spike24h-top-paths">
@@ -841,9 +841,9 @@
                         <table class="min-w-full text-sm">
                             <thead class="bg-gray-50 text-gray-600">
                                 <tr>
-                                    <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
-                                    <th scope="col" class="px-4 py-2 text-left font-medium">Key</th>
-                                    <th scope="col" class="px-4 py-2 text-right font-medium">Count</th>
+                                    <th scope="col" class="px-4 py-2 text-start font-medium">#</th>
+                                    <th scope="col" class="px-4 py-2 text-start font-medium">Key</th>
+                                    <th scope="col" class="px-4 py-2 text-end font-medium">Count</th>
                                 </tr>
                             </thead>
                             <tbody id="rate-limits-top-keys" data-testid="table-rate-limits-top-keys">
@@ -985,7 +985,7 @@
                             />
                             <label
                                 for="doc-active"
-                                class="ml-2 text-sm text-gray-700"
+                                class="ms-2 text-sm text-gray-700"
                                 >Set as active document</label
                             >
                         </div>
@@ -1125,7 +1125,7 @@
                         </div>
                         <div class="flex items-center">
                             <input type="checkbox" id="attr-is-active" checked class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                            <label for="attr-is-active" class="ml-2 text-sm text-gray-700">Active (include in evaluations)</label>
+                            <label for="attr-is-active" class="ms-2 text-sm text-gray-700">Active (include in evaluations)</label>
                         </div>
                     </div>
                     <div class="flex justify-end gap-3 mt-6">
@@ -1192,7 +1192,7 @@
 
         <div
             id="toast"
-            class="hidden fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300"
+            class="hidden fixed bottom-4 end-4 px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300"
         >
             <span id="toast-message"></span>
         </div>
