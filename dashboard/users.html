@@ -55,11 +55,11 @@
                 <p class="text-gray-600" data-i18n="users.subtitle">Manage user invitations, approvals, and permissions</p>
             </div>
             <div class="flex items-center gap-2">
-                <button data-on-click="bulkDeleteOthers" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center text-sm" title="Hard delete every user except Sarah Hijazi and a.amashah@walaplus.com">
+                <button data-on-click="openDeleteUserModal" data-testid="button-delete-user" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center text-sm" title="Pick a user to permanently delete (Sarah Hijazi, a.amashah@walaplus.com, and you are protected)">
                     <svg class="w-5 h-5 me-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/>
                     </svg>
-                    Delete All Other Users
+                    Delete User
                 </button>
                 <button data-on-click="showInviteModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center">
                     <svg class="w-5 h-5 me-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -248,6 +248,38 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-user-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-red-700">Delete User</h3>
+                <button data-on-click="hideDeleteUserModal" data-testid="button-close-delete-user" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <p class="text-sm text-gray-600 mb-3">
+                Pick a user to permanently delete. This is a HARD delete and cannot be undone.
+                Protected accounts (Sarah Hijazi, a.amashah@walaplus.com) and your own account
+                are not selectable.
+            </p>
+            <div class="space-y-3">
+                <div>
+                    <label for="delete-user-select" class="block text-sm font-medium mb-1">User</label>
+                    <select id="delete-user-select" data-testid="select-delete-user" class="w-full border rounded px-3 py-2">
+                        <option value="">Loading…</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="delete-user-confirm-input" class="block text-sm font-medium mb-1">
+                        Type <span class="font-mono font-bold">DELETE</span> to confirm
+                    </label>
+                    <input id="delete-user-confirm-input" data-testid="input-delete-user-confirm" type="text" class="w-full border rounded px-3 py-2" placeholder="DELETE" autocomplete="off" />
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" data-on-click="hideDeleteUserModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+                <button type="button" data-on-click="confirmDeleteUserFromModal" data-testid="button-confirm-delete-user" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Delete User</button>
             </div>
         </div>
     </div>
@@ -1093,7 +1125,17 @@
             }
         }
 
-        async function bulkDeleteOthers() {
+        async function openDeleteUserModal() {
+            const modal = document.getElementById('delete-user-modal');
+            const select = document.getElementById('delete-user-select');
+            const confirmInput = document.getElementById('delete-user-confirm-input');
+            if (confirmInput) confirmInput.value = '';
+            if (select) {
+                select.innerHTML = '<option value="">Loading…</option>';
+                select.disabled = true;
+            }
+            modal.classList.add('active');
+
             try {
                 let currentEmail = null;
                 try {
@@ -1108,56 +1150,65 @@
                 const data = await res.json();
                 const all = data.users || [];
                 const isSelf = u => currentEmail && (u.email || '').toLowerCase() === currentEmail;
-                const isKeeper = u => isProtectedUser(u) || isSelf(u);
-                const targets = all.filter(u => !isKeeper(u));
-                const keepers = all.filter(isKeeper);
+                const eligible = all
+                    .filter(u => !isProtectedUser(u) && !isSelf(u))
+                    .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
 
-                if (targets.length === 0) {
-                    alert('No users to delete. Only protected users remain.');
+                if (eligible.length === 0) {
+                    select.innerHTML = '<option value="">No deletable users — only protected accounts remain</option>';
+                    select.disabled = true;
                     return;
                 }
 
-                const msg = `HARD DELETE ${targets.length} users?\n\n` +
-                    `Keeping: ${keepers.map(k => k.email).join(', ') || '(none)'}\n\n` +
-                    `Deleting: ${targets.slice(0, 5).map(t => t.email).join(', ')}${targets.length > 5 ? `, … and ${targets.length - 5} more` : ''}\n\n` +
-                    `This is PERMANENT and cannot be undone.`;
-                if (!confirm(msg)) return;
-                const typed = prompt(`Type DELETE ${targets.length} to confirm:`);
-                if (typed !== `DELETE ${targets.length}`) {
-                    alert('Confirmation did not match. Cancelled.');
-                    return;
-                }
-
-                let ok = 0, failed = 0;
-                const errors = [];
-                for (const u of targets) {
-                    try {
-                        const r = await fetch(`/api/users/${u.id}`, {
-                            method: 'DELETE',
-                            headers: { ...headers, 'x-confirm-delete': 'true' },
-                        });
-                        if (r.ok) {
-                            ok++;
-                        } else {
-                            failed++;
-                            const j = await r.json().catch(() => ({}));
-                            errors.push(`${u.email}: ${j.error || r.status}`);
-                        }
-                    } catch (e) {
-                        failed++;
-                        errors.push(`${u.email}: network error`);
-                    }
-                }
-
-                let summary = `Bulk delete complete.\nDeleted: ${ok}\nFailed: ${failed}`;
-                if (errors.length) summary += `\n\nErrors:\n` + errors.slice(0, 10).join('\n');
-                alert(summary);
-
-                loadActiveUsers();
-                loadAllUsers();
-                loadStats();
+                select.innerHTML =
+                    '<option value="">Select a user…</option>' +
+                    eligible.map(u => {
+                        const label = (u.full_name && u.full_name.trim())
+                            ? `${u.full_name} <${u.email}>`
+                            : u.email;
+                        return `<option value="${u.id}" data-email="${u.email}">${label}</option>`;
+                    }).join('');
+                select.disabled = false;
             } catch (e) {
-                alert('Bulk delete failed: ' + e.message);
+                select.innerHTML = '<option value="">Error loading users</option>';
+                select.disabled = true;
+            }
+        }
+
+        function hideDeleteUserModal() {
+            document.getElementById('delete-user-modal').classList.remove('active');
+        }
+
+        async function confirmDeleteUserFromModal() {
+            const select = document.getElementById('delete-user-select');
+            const confirmInput = document.getElementById('delete-user-confirm-input');
+            const userId = select?.value;
+            const email = select?.selectedOptions?.[0]?.dataset?.email || '';
+            if (!userId) {
+                alert('Please pick a user to delete.');
+                return;
+            }
+            if ((confirmInput?.value || '').trim() !== 'DELETE') {
+                alert('Type DELETE in the confirmation box to proceed.');
+                return;
+            }
+            try {
+                const r = await fetch(`/api/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { ...headers, 'x-confirm-delete': 'true' },
+                });
+                const j = await r.json().catch(() => ({}));
+                if (r.ok && j.success) {
+                    alert(`Deleted: ${email}`);
+                    hideDeleteUserModal();
+                    loadActiveUsers();
+                    loadAllUsers();
+                    loadStats();
+                } else {
+                    alert(`Delete failed: ${j.error || r.status}`);
+                }
+            } catch (e) {
+                alert('Error deleting user: ' + e.message);
             }
         }
 
