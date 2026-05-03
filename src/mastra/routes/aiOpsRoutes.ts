@@ -11,6 +11,7 @@ import {
   getCallById,
   insertCallFeedback,
   setCallPromptVersionIfMissing,
+  setCallClientSurfaceIfMissing,
   getChildToolCallsForParent,
   getParentCallsForTool,
   getKnownAgentNames,
@@ -442,6 +443,17 @@ export const aiOpsRoutes = [
           // this endpoint don't have to remember which spelling won.
           const promptVersionRaw =
             body.promptVersion ?? body.prompt_version;
+          // Task #763: non-web rating surfaces (Slack thumbs-up/down bot,
+          // mobile app, embedded widget) tag their POST with
+          // `clientSurface` so the per-surface breakdown in the AI Ops
+          // dashboard (`getFeedbackBreakdownByPromptVersion()
+          // .client_surfaces`) attributes those ratings to the right
+          // bucket. Accept either spelling for parity with the
+          // promptVersion field above. Web callers omit it; the
+          // sibling /api/consultant/feedback path defaults to 'web' so
+          // the call-id endpoint follows the same convention here.
+          const clientSurfaceRaw =
+            body.clientSurface ?? body.client_surface;
           const parsedCallId = parseInt(String(callId ?? ""), 10);
           if (
             !Number.isFinite(parsedCallId) ||
@@ -487,6 +499,21 @@ export const aiOpsRoutes = [
             const trimmed = promptVersionRaw.trim();
             if (trimmed) cleanPromptVersion = trimmed.slice(0, 100);
           }
+          // Same validate-then-clamp shape as promptVersion above. Length
+          // cap matches the consultant-feedback path's safeMetaString(50)
+          // so both surfaces enforce a single ceiling on the value that
+          // ends up in `metadata->>'client_surface'`.
+          let cleanClientSurface: string | undefined;
+          if (clientSurfaceRaw != null) {
+            if (typeof clientSurfaceRaw !== "string") {
+              return c.json(
+                { error: "clientSurface must be a string" },
+                400,
+              );
+            }
+            const trimmed = clientSurfaceRaw.trim();
+            if (trimmed) cleanClientSurface = trimmed.slice(0, 50);
+          }
           const ok = await insertCallFeedback(
             parsedCallId,
             rating as "thumbs_up" | "thumbs_down",
@@ -504,6 +531,17 @@ export const aiOpsRoutes = [
             await setCallPromptVersionIfMissing(
               parsedCallId,
               cleanPromptVersion,
+            );
+          }
+          // Mirror the prompt_version backfill for the surface marker so
+          // a Slack/mobile/embedded rating is attributed to its UI in
+          // the per-surface dashboard breakdown. Same rationale as
+          // setCallPromptVersionIfMissing: never overwrite a value the
+          // server already wrote at span open — only fill when absent.
+          if (cleanClientSurface) {
+            await setCallClientSurfaceIfMissing(
+              parsedCallId,
+              cleanClientSurface,
             );
           }
           return c.json({ success: ok });

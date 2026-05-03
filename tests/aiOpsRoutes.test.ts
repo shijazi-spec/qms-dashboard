@@ -1935,6 +1935,160 @@ if (HAS_DB) {
     },
   );
 
+  // -------------------------------------------------------------------
+  // Task #763: POST /api/ai-ops/feedback must also persist the echoed
+  // `clientSurface` into ai_call_metrics.metadata.client_surface so the
+  // per-surface breakdown in the AI Ops dashboard attributes Slack /
+  // mobile / embedded ratings correctly. Same never-overwrite-server-truth
+  // contract as prompt_version above.
+  // -------------------------------------------------------------------
+  await suite.test(
+    "POST /api/ai-ops/feedback — persists clientSurface into ai_call_metrics.metadata when missing",
+    async () => {
+      await ensureAiMetricsTable();
+      const callId = await insertAiCallMetric({
+        agent_name: TEST_AGENT,
+        model: "gpt-4o",
+        latency_ms: 500,
+        success: true,
+      });
+      suite.expect(callId != null && callId > 0, "seeded call row with id");
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId,
+              rating: "thumbs_up",
+              clientSurface: "slack",
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 200, "feedback POST returns 200");
+        suite.expectEqual(res.body?.success, true, "feedback recorded");
+
+        const pool = new pgMod.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const row = await pool.query(
+            `SELECT metadata FROM ai_call_metrics WHERE id = $1`,
+            [callId],
+          );
+          const meta = row.rows[0]?.metadata ?? {};
+          suite.expectEqual(
+            meta.client_surface,
+            "slack",
+            "metadata.client_surface backfilled from request",
+          );
+        } finally {
+          await pool.end();
+        }
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  await suite.test(
+    "POST /api/ai-ops/feedback — does NOT overwrite an existing client_surface",
+    async () => {
+      await ensureAiMetricsTable();
+      const SERVER_SURFACE = "web";
+      const callId = await insertAiCallMetric({
+        agent_name: TEST_AGENT,
+        model: "gpt-4o",
+        latency_ms: 700,
+        success: true,
+        metadata: { client_surface: SERVER_SURFACE },
+      });
+      suite.expect(callId != null && callId > 0, "seeded call row with id");
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId,
+              rating: "thumbs_down",
+              clientSurface: "slack",
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 200, "feedback POST returns 200");
+
+        const pool = new pgMod.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const row = await pool.query(
+            `SELECT metadata FROM ai_call_metrics WHERE id = $1`,
+            [callId],
+          );
+          const meta = row.rows[0]?.metadata ?? {};
+          suite.expectEqual(
+            meta.client_surface,
+            SERVER_SURFACE,
+            "existing server-side client_surface preserved (client cannot overwrite)",
+          );
+        } finally {
+          await pool.end();
+        }
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  await suite.test(
+    "POST /api/ai-ops/feedback — 400 when clientSurface is not a string",
+    async () => {
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId: 1,
+              rating: "thumbs_up",
+              clientSurface: { not: "a string" },
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 400, "rejects non-string clientSurface");
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
   await suite.test(
     "cleanup: remove seeded ai_call_metrics rows for Task #745 test agent",
     async () => {

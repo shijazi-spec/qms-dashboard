@@ -137,6 +137,15 @@ export interface AiCallTelemetryMetadata {
   step?: string;
   /** Background-scan kind (e.g. `platform_scan`). */
   scan_type?: string;
+  /**
+   * Surface that produced the call / rating (e.g. `web`, `mobile`, `slack`,
+   * `embedded`). Mirrors the same field on `AiCallFeedbackMetadata` and
+   * is read by the per-surface breakdown in
+   * `getFeedbackBreakdownByPromptVersion()`. Task #763 made the call-id
+   * rating endpoint backfill this onto legacy rows that lack one so
+   * Slack / mobile / embedded ratings attribute correctly.
+   */
+  client_surface?: string;
 }
 
 /**
@@ -154,6 +163,7 @@ export interface AiCallTelemetryMetadataInput {
   workflow?: string;
   step?: string;
   scanType?: string;
+  clientSurface?: string;
 }
 
 const TELEMETRY_METADATA_KEY_MAP: Record<
@@ -167,6 +177,7 @@ const TELEMETRY_METADATA_KEY_MAP: Record<
   workflow: "workflow",
   step: "step",
   scanType: "scan_type",
+  clientSurface: "client_surface",
 };
 
 /**
@@ -1971,6 +1982,85 @@ export async function setCallPromptVersionIfMissing(
   } catch (err) {
     logger.error("[aiTelemetry] Failed to backfill prompt_version on call:", err);
     return false;
+  }
+}
+
+/**
+ * Task #763: companion to {@link setCallPromptVersionIfMissing} that
+ * backfills `metadata.client_surface` on a call row when it is missing.
+ *
+ * Used by non-web rating surfaces (Slack thumbs-up/down bot, mobile app,
+ * embedded widget) to mark which UI produced the rating so per-surface
+ * analytics in the AI Operations dashboard
+ * (`getFeedbackBreakdownByPromptVersion().client_surfaces`) are populated
+ * without changing the message-id consultant feedback path.
+ *
+ * Refuses to overwrite an existing `client_surface` because the value
+ * recorded server-side at span open time (when present) is the source of
+ * truth — a misconfigured downstream surface shouldn't be able to reattribute
+ * a row to a different bucket after the fact.
+ *
+ * Returns true when the row was updated, false otherwise.
+ */
+export async function setCallClientSurfaceIfMissing(
+  callId: number,
+  surface: string,
+): Promise<boolean> {
+  try {
+    if (!Number.isFinite(callId) || callId <= 0) return false;
+    if (typeof surface !== "string") return false;
+    const trimmed = surface.trim().slice(0, 50);
+    if (!trimmed) return false;
+    await ensureAiMetricsTable();
+    const result = await pool.query(
+      `UPDATE ai_call_metrics
+          SET metadata = COALESCE(metadata, '{}'::jsonb)
+                         || jsonb_build_object('client_surface', $2::text)
+        WHERE id = $1
+          AND COALESCE(metadata ->> 'client_surface', '') = ''`,
+      [callId, trimmed],
+    );
+    return (result.rowCount ?? 0) > 0;
+  } catch (err) {
+    logger.error("[aiTelemetry] Failed to backfill client_surface on call:", err);
+    return false;
+  }
+}
+
+/**
+ * Read the recorded `metadata.prompt_version` for a single call.
+ *
+ * Task #763: non-web rating surfaces (Slack bot, mobile app, embedded
+ * widget) typically only have the `callId` of the response the user
+ * reacted to — they do not carry the `promptVersion` echo the web
+ * consultant chat client passes back in its feedback POST. Surfaces
+ * call this helper to look up the version that was active when the
+ * response was generated, then forward it on the rating POST so
+ * per-version analytics (`getFeedbackRateByPromptVersion`) attribute
+ * Slack/mobile/embedded ratings the same way they attribute web ones.
+ *
+ * Returns the trimmed prompt-version string, or null when the row does
+ * not exist or has no `metadata.prompt_version` (e.g. a legacy call
+ * recorded before the always-on telemetry path).
+ */
+export async function getCallPromptVersion(
+  callId: number,
+): Promise<string | null> {
+  try {
+    if (!Number.isFinite(callId) || callId <= 0) return null;
+    await ensureAiMetricsTable();
+    const result = await pool.query(
+      `SELECT NULLIF(TRIM(metadata ->> 'prompt_version'), '') AS prompt_version
+         FROM ai_call_metrics
+        WHERE id = $1
+        LIMIT 1`,
+      [callId],
+    );
+    const value = result.rows[0]?.prompt_version;
+    return typeof value === "string" && value ? value : null;
+  } catch (err) {
+    logger.error("[aiTelemetry] Failed to read prompt_version for call:", err);
+    return null;
   }
 }
 
