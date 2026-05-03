@@ -2602,6 +2602,7 @@
     "daily_thumbs_trend": "Daily Thumbs-Up / Thumbs-Down Trend",
     "thumbs_up_by_prompt": "Thumbs-Up Ratio by Prompt Version",
     "thumbs_up_by_surface": "Thumbs-Up Ratio by Client Surface",
+    "thumbs_up_by_prompt_surface": "Thumbs-Up Ratio by Prompt Version × Client Surface",
     "top_thumbs_down_categories": "Top Thumbs-Down Categories",
     "all_prompt_versions": "All prompt versions",
     "all_surfaces": "All surfaces",

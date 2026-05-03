@@ -337,6 +337,31 @@ export interface FeedbackStats {
    * prompt-version breakdown.
    */
   client_surfaces: FeedbackClientSurfaceBreakdown[];
+  /**
+   * Per-(prompt_version × client_surface) cross-tab breakdown for the same
+   * window as the headline totals (Task #732).
+   *
+   * Lets an operator answer "is the new prompt revision worse on mobile
+   * specifically, or equally bad everywhere?" without having to
+   * manually intersect the sibling `prompt_versions` and
+   * `client_surfaces` rollups. Each row carries the same shape as the
+   * one-dimensional rollups so the dashboard can reuse the existing
+   * red/amber/green ratio colour scale.
+   *
+   * Rows where either field is NULL or blank are bucketed under the
+   * literal `unknown` (same convention as the sibling rollups) so
+   * legacy rows from before Task #590 still contribute to the totals.
+   */
+  prompt_version_surfaces: FeedbackPromptVersionSurfaceBreakdown[];
+}
+
+export interface FeedbackPromptVersionSurfaceBreakdown {
+  prompt_version: string;
+  client_surface: string;
+  total: number;
+  thumbs_up: number;
+  thumbs_down: number;
+  thumbs_up_ratio: number;
 }
 
 export async function getFeedbackStats(
@@ -424,6 +449,27 @@ export async function getFeedbackStats(
     params,
   );
 
+  // Per-(prompt_version × client_surface) cross-tab breakdown (Task #732).
+  // Same window, agent filter, 'unknown' sentinel handling, and red/amber/
+  // green ratio fan-out as the one-dimensional rollups above. Cap at 60
+  // rows (≈ 12 prompt versions × 5 surfaces) so a long tail can't blow up
+  // the dashboard payload while still leaving plenty of headroom for the
+  // realistic web/slack/mobile/unknown × handful-of-revisions matrix.
+  const versionSurfaces = await pool.query(
+    `SELECT
+       COALESCE(NULLIF(TRIM(metadata->>'prompt_version'),  ''), 'unknown') AS prompt_version,
+       COALESCE(NULLIF(TRIM(metadata->>'client_surface'),  ''), 'unknown') AS client_surface,
+       COUNT(*)                                                            AS total,
+       COUNT(*) FILTER (WHERE rating='up')                                 AS thumbs_up,
+       COUNT(*) FILTER (WHERE rating='down')                               AS thumbs_down
+     FROM ai_response_feedback
+     WHERE created_at >= NOW() - make_interval(days => $1)${agentClause}
+     GROUP BY 1, 2
+     ORDER BY total DESC, prompt_version ASC, client_surface ASC
+     LIMIT 60`,
+    params,
+  );
+
   const total = parseInt(totals.rows[0].total) || 0;
   const up = parseInt(totals.rows[0].thumbs_up) || 0;
   const down = parseInt(totals.rows[0].thumbs_down) || 0;
@@ -444,6 +490,20 @@ export async function getFeedbackStats(
       const rowDown = parseInt(r.thumbs_down) || 0;
       return {
         prompt_version: String(r.prompt_version),
+        total: rowTotal,
+        thumbs_up: rowUp,
+        thumbs_down: rowDown,
+        thumbs_up_ratio:
+          rowTotal > 0 ? Math.round((rowUp / rowTotal) * 100) : 0,
+      };
+    }),
+    prompt_version_surfaces: versionSurfaces.rows.map((r) => {
+      const rowTotal = parseInt(r.total) || 0;
+      const rowUp = parseInt(r.thumbs_up) || 0;
+      const rowDown = parseInt(r.thumbs_down) || 0;
+      return {
+        prompt_version: String(r.prompt_version),
+        client_surface: String(r.client_surface),
         total: rowTotal,
         thumbs_up: rowUp,
         thumbs_down: rowDown,

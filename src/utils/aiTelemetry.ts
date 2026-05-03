@@ -1941,6 +1941,12 @@ export async function ensureFeedbackTable(): Promise<void> {
         );
         ALTER TABLE ai_call_feedback
           ADD COLUMN IF NOT EXISTS comment TEXT;
+        -- Task #799: rating-source breakdown joins on
+        -- f.metadata ->> 'rating_source'. The breakdown SQL was added
+        -- without the corresponding schema bump, so on existing
+        -- databases the column may be missing.
+        ALTER TABLE ai_call_feedback
+          ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
         CREATE INDEX IF NOT EXISTS idx_ai_call_feedback_call_id
           ON ai_call_feedback (call_id);
         CREATE INDEX IF NOT EXISTS idx_ai_call_feedback_created_at
