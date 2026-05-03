@@ -1,3 +1,135 @@
-# OPTIONAL: back up the file content before removing it
-cp .github/workflows/ai-approval-redaction-integration.yml /tmp/ai-approval-redaction-integration.yml.bak
-cat /tmp/ai-approval-redaction-integration.yml.bak   # to view/copy later
+name: AI approval-queue redaction integration test
+
+# Runs the live-HTTP secret-leak integration test for the AI approval queue
+# (Task #348) against a freshly booted dev server. The in-process companion
+# test (`tests/aiApprovalRoutesRedaction.test.ts`) stubs out the database to
+# exercise route handlers directly, which covers handler logic but NOT the
+# full HTTP / middleware stack (auth wiring, response shaping, JSON
+# serializers, edge framing). The integration test driven here closes that
+# gap by:
+#
+#   * seeding rows through the real `enqueuePendingAction` against the live
+#     database,
+#   * signing a quality-manager session cookie with the same SESSION_SECRET
+#     the dev server uses, then
+#   * driving GET /api/ai/approvals*, POST /api/ai/approvals/:code/approve
+#     (success path) and POST /api/ai/approvals/:code/approve (throw path),
+#     asserting that none of the seeded plaintext secrets appear in any
+#     response body and that the redaction sentinel does appear (so the
+#     row was surfaced, not silently empty).
+#
+# The two synthetic canary tools required by the POST /approve assertions
+# (`integration-test-redaction-canary__ok` and
+# `integration-test-redaction-canary__throws`) are registered in the server
+# at startup whenever NODE_ENV !== 'production'
+# (src/utils/integrationTestFixtureTools.ts), so no extra runtime setup is
+# required beyond `npm run dev`.
+#
+# A regression in:
+#   - the redactSensitiveFields() pipeline
+#   - the route-level error-message scrubbing in POST /approve
+#   - the response-shaping middleware that JSON-serializes the result before
+#     it is masked on the way into ai_pending_actions
+#   - the canary-tool registration at server startup
+# fails this job, so the regression is caught before merge instead of only
+# after deploy. The same test is also wired into the main Tests workflow
+# via RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1 (see .github/workflows/test.yml)
+# so even if this dedicated workflow is disabled or skipped, `npm test` still
+# enforces the gate.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+concurrency:
+  group: ai-approval-redaction-integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ai-approval-redaction-integration:
+    name: AI approval-queue redaction HTTP integration suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: walaplus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/walaplus_test
+      # Both the dev server and the test harness MUST use the same key,
+      # otherwise the signed cookies the harness generates fail HMAC
+      # verification and every request comes back 401 — never 200/500 —
+      # which would silently mask any redaction regression.
+      SESSION_SECRET: ci-session-secret-do-not-use-in-prod
+      ADMIN_API_KEY: ci-admin-key-approval-redaction-integration
+      TEST_ADMIN_KEY: ci-admin-key-approval-redaction-integration
+      BASE_URL: http://localhost:5000
+      PORT: "5000"
+      DATA_MODE: REAL
+      CI: "true"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start dev server
+        run: |
+          npm run dev > server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          # Wait for /api/health to come up (max 90 s). We also probe the
+          # root path as a fallback in case /api/health isn't wired into
+          # this branch yet — the integration test itself does the same
+          # root reachability probe before issuing requests.
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:5000/api/health > /dev/null 2>&1; then
+              echo "Server ready (/api/health) after ${i}s"; exit 0
+            fi
+            if curl -fsS -o /dev/null http://localhost:5000/ > /dev/null 2>&1; then
+              echo "Server ready (root) after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not become healthy in time" >&2
+          tail -200 server.log >&2 || true
+          exit 1
+
+      - name: Run AI approval-queue redaction integration test
+        run: bash scripts/run-ai-approval-redaction-integration.sh
+
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-approval-redaction-integration-server-log
+          path: server.log
+          if-no-files-found: ignore
+
+      - name: Stop dev server
+        if: always()
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then
+            kill "${SERVER_PID}" 2>/dev/null || true
+          fi

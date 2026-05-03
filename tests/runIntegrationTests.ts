@@ -103,6 +103,24 @@
  * only being catchable by manually running `npx tsx tests/testRateLimiter*Http.ts`
  * with the secret flipped.
  *
+ * Tool-health on-call notifier integration test: if the env var
+ * `RUN_TOOL_HEALTH_INTEGRATION_E2E=1` is set we additionally run
+ * `tests/toolHealthAlertNotifier.integration.ts` (via
+ * `scripts/run-tool-health-notifier-integration.sh`). The test posts to a
+ * real Slack channel and/or a real Resend inbox using the production
+ * Block Kit and plaintext renderers — NOT stubs — so broken Block Kit
+ * shapes, bad subject lines, plaintext truncation, and character-escaping
+ * bugs are caught before they page on-call at 3 AM. The file self-skips
+ * cleanly (exits 0) when none of the optional Slack/Resend credential
+ * pairs (SLACK_BOT_TOKEN+SLACK_TEST_CHANNEL or
+ * RESEND_API_KEY+RESEND_TEST_EMAIL) are configured, so wiring this flag
+ * on unconditionally in the standard test job is safe even on
+ * environments that don't have the secrets configured. The dedicated CI
+ * workflow `.github/workflows/tool-health-notifier-integration.yml`
+ * forwards the same secrets, and the main `.github/workflows/test.yml`
+ * also sets the flag so a renderer regression fails CI in the same run
+ * as the unit tests when credentials are present.
+ *
  * AI approval-queue HTTP secret-leak integration test: if the env var
  * `RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1` is set we additionally run
  * `tests/aiApprovalRoutesRedaction.integration.ts` against a running dev
@@ -332,6 +350,37 @@ function runRateLimiterIntegrationSuite(): Promise<RunResult> {
     child.on("error", (err) => {
       console.error(
         `Failed to spawn rate-limiter integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runToolHealthNotifierIntegration(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/toolHealthAlertNotifier.integration.ts";
+    const child = spawn(
+      "bash",
+      ["scripts/run-tool-health-notifier-integration.sh"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn tool-health notifier integration suite: ${(err as Error).message}`,
       );
       resolve({
         file: label,
@@ -620,6 +669,17 @@ async function main(): Promise<void> {
   } else {
     console.log(
       `\n[skip] RBAC HTTP integration tests — set RUN_RBAC_INTEGRATION_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include them.`,
+    );
+  }
+
+  if (process.env.RUN_TOOL_HEALTH_INTEGRATION_E2E === "1") {
+    console.log(
+      `\n──── Tool-health on-call notifier integration test (Slack/Resend Block Kit + plaintext renderers) ────`,
+    );
+    results.push(await runToolHealthNotifierIntegration());
+  } else {
+    console.log(
+      `\n[skip] Tool-health on-call notifier integration test — set RUN_TOOL_HEALTH_INTEGRATION_E2E=1 to include it (the underlying test self-skips cleanly when no Slack/Resend credentials are configured).`,
     );
   }
 
