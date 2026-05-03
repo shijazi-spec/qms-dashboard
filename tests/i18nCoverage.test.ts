@@ -504,5 +504,145 @@ try {
   fs.rmSync(orphanRoot, { recursive: true, force: true });
 }
 
+/* ---------------------------------------------------------------------------
+ * Task #407 — `public/*.html` pages are also audited by Check 1 (page wiring)
+ * and Check 2 (data-i18n reference coverage).
+ *
+ * `public/` is forward-looking — it doesn't exist in the repo today — so the
+ * easiest way to assert the new coverage is to synthesise a tmp-tree with
+ * BOTH `dashboard/` and `public/` and inject a `public/foo.html` page that
+ * (a) lacks the i18n bootstrap and (b) references a bogus `data-i18n` key.
+ * The script must:
+ *   - exit non-zero
+ *   - mention `public/foo.html` in the page-wiring diagnostic
+ *   - mention `public/foo.html :: "ns.bogus_public_key"` in the reference
+ *     coverage diagnostic
+ *
+ * Removing the temp file (or fixing it) restores a passing run.
+ * ------------------------------------------------------------------------ */
+
+console.log("\n▶ Task #407 — public/*.html pages are also audited by Check 1 and Check 2\n");
+
+const publicRoot = fs.mkdtempSync(path.join(os.tmpdir(), "i18n-public-coverage-"));
+try {
+  const tmpScripts = path.join(publicRoot, "scripts");
+  const tmpDashboard = path.join(publicRoot, "dashboard");
+  const tmpI18n = path.join(tmpDashboard, "i18n");
+  const tmpPublic = path.join(publicRoot, "public");
+  fs.mkdirSync(tmpScripts, { recursive: true });
+  fs.mkdirSync(tmpI18n, { recursive: true });
+  fs.mkdirSync(tmpPublic, { recursive: true });
+
+  fs.copyFileSync(SCRIPT, path.join(tmpScripts, "check-i18n.cjs"));
+
+  // Minimal JSON trees — `ns.static_key` exists, `ns.bogus_public_key` does NOT.
+  const swStrings = {
+    en: { title: "Expired", heading: "Expired", body: "Body", retry_hint: "Hint" },
+    ar: { title: "منتهي", heading: "منتهي", body: "نص", retry_hint: "تلميح" },
+  } as const;
+  const tree = {
+    ns: { static_key: "Static" },
+    downloads: {
+      sw_expired_title: swStrings.en.title,
+      sw_expired_heading: swStrings.en.heading,
+      sw_expired_body: swStrings.en.body,
+      sw_expired_retry_hint: swStrings.en.retry_hint,
+    },
+  };
+  const treeAr = {
+    ns: { static_key: "ثابت" },
+    downloads: {
+      sw_expired_title: swStrings.ar.title,
+      sw_expired_heading: swStrings.ar.heading,
+      sw_expired_body: swStrings.ar.body,
+      sw_expired_retry_hint: swStrings.ar.retry_hint,
+    },
+  };
+  fs.writeFileSync(path.join(tmpI18n, "en.json"), JSON.stringify(tree));
+  fs.writeFileSync(path.join(tmpI18n, "ar.json"), JSON.stringify(treeAr));
+
+  const renderLang = (lang: "en" | "ar") => {
+    const fields = Object.entries(swStrings[lang])
+      .map(([k, v]) => `    ${k}: '${v}'`)
+      .join(",\n");
+    return `  ${lang}: {\n${fields}\n  }`;
+  };
+  fs.writeFileSync(
+    path.join(tmpDashboard, "streaming-download-sw.js"),
+    `var SW_STRINGS = {\n${renderLang("en")},\n${renderLang("ar")}\n};\n`,
+  );
+
+  fs.writeFileSync(
+    path.join(tmpScripts, "i18n-dynamic-baseline.json"),
+    JSON.stringify({ entries: [] }),
+  );
+
+  // A valid dashboard page so Check 1 / Check 2 have something legit to scan.
+  const dashboardPage = `<!DOCTYPE html>
+<html><head>
+  <script src="/js/i18n.js?v=1"></script>
+</head><body>
+  <span data-i18n="ns.static_key">Static</span>
+  <script>window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());</script>
+</body></html>
+`;
+  fs.writeFileSync(path.join(tmpDashboard, "ok.html"), dashboardPage);
+
+  // Sanity: with NO public/ pages, the gate passes.
+  const baselineRun = spawnSync(
+    "node",
+    [path.join(tmpScripts, "check-i18n.cjs")],
+    { stdio: "pipe", encoding: "utf8" },
+  );
+  assert(
+    baselineRun.status === 0,
+    "tmp tree without any public/ pages passes the gate (sanity check)",
+  );
+
+  // Now drop a bogus public/ page that (a) lacks the i18n bootstrap and (b)
+  // references a key not present in either JSON tree.
+  const bogusPublicPage = `<!DOCTYPE html>
+<html><head><title>Status</title></head><body>
+  <span data-i18n="ns.bogus_public_key">Status</span>
+</body></html>
+`;
+  fs.writeFileSync(path.join(tmpPublic, "foo.html"), bogusPublicPage);
+
+  const failingRun = spawnSync(
+    "node",
+    [path.join(tmpScripts, "check-i18n.cjs")],
+    { stdio: "pipe", encoding: "utf8" },
+  );
+  const failingOut = (failingRun.stdout ?? "") + (failingRun.stderr ?? "");
+
+  assert(
+    failingRun.status !== 0,
+    "guardrail exits non-zero when a public/*.html page references a missing data-i18n key",
+  );
+  assert(
+    /Page wiring:[^\n]*do not load \/js\/i18n\.js[\s\S]*public\/foo\.html/.test(failingOut),
+    "Check 1 (page wiring) flags public/foo.html for missing the i18n bootstrap",
+  );
+  assert(
+    /public\/foo\.html :: "ns\.bogus_public_key"/.test(failingOut),
+    "Check 2 (reference coverage) names the bogus key in public/foo.html for both en.json and ar.json",
+  );
+
+  // Removing the offending file restores a passing run — proves the new
+  // public/ coverage is bounded by what's actually in the directory.
+  fs.unlinkSync(path.join(tmpPublic, "foo.html"));
+  const recoveryRun = spawnSync(
+    "node",
+    [path.join(tmpScripts, "check-i18n.cjs")],
+    { stdio: "pipe", encoding: "utf8" },
+  );
+  assert(
+    recoveryRun.status === 0,
+    "removing the bogus public/ page restores a passing guardrail run",
+  );
+} finally {
+  fs.rmSync(publicRoot, { recursive: true, force: true });
+}
+
 console.log(`\n  Result: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

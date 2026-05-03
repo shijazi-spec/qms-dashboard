@@ -75,6 +75,13 @@ const UPDATE_UNUSED_BASELINE = CLI_ARGS.has('--update-unused-baseline');
 // real pages.)
 const PAGE_WIRING_ALLOWLIST = new Set([]);
 
+// Same idea as `PAGE_WIRING_ALLOWLIST` but for `public/*.html` pages. Pages
+// here legitimately do not need the i18n bootstrap (e.g. a static status page
+// served before the JS bundle loads, or a server-rendered marketing page that
+// is translated server-side). Keep this list tiny and explicit; every entry
+// must be a basename, not a full path.
+const PUBLIC_PAGE_WIRING_ALLOWLIST = new Set([]);
+
 // Accept both `data-i18n="key"` and `data-i18n='key'` quoting. HTML allows
 // either, and a future edit could mix them; missing a single-quoted reference
 // would silently weaken the coverage check.
@@ -178,15 +185,36 @@ function getDeep(obj, dottedKey) {
  * Check 1 — page wiring
  * ------------------------------------------------------------------------ */
 
-function checkPageWiring(pages) {
-  const missingScript = [];
+function checkPageWiring(pages, publicPages) {
+  const missingScript = []; // {dir, page}
   const missingInitApply = [];
-  for (const page of pages) {
-    if (PAGE_WIRING_ALLOWLIST.has(page)) continue;
-    const html = fs.readFileSync(path.join(DASHBOARD_DIR, page), 'utf8');
+
+  // Build a unified work list so dashboard/ and public/ pages share the same
+  // logic. `public/` is forward-looking — `listPublicHtmlPages()` returns []
+  // when the directory does not exist, so this loop is a no-op today.
+  const allPages = [
+    ...pages.map((page) => ({
+      dir: DASHBOARD_DIR,
+      dirLabel: 'dashboard',
+      page,
+      allowlist: PAGE_WIRING_ALLOWLIST,
+    })),
+    ...publicPages.map((page) => ({
+      dir: PUBLIC_DIR,
+      dirLabel: 'public',
+      page,
+      allowlist: PUBLIC_PAGE_WIRING_ALLOWLIST,
+    })),
+  ];
+
+  let auditedCount = 0;
+  for (const { dir, dirLabel, page, allowlist } of allPages) {
+    if (allowlist.has(page)) continue;
+    auditedCount++;
+    const html = fs.readFileSync(path.join(dir, page), 'utf8');
 
     if (!I18N_SCRIPT_RE.test(html)) {
-      missingScript.push(page);
+      missingScript.push({ dirLabel, page });
       continue;
     }
 
@@ -204,31 +232,32 @@ function checkPageWiring(pages) {
         break;
       }
     }
-    if (!wired) missingInitApply.push(page);
+    if (!wired) missingInitApply.push({ dirLabel, page });
   }
 
   if (missingScript.length === 0 && missingInitApply.length === 0) {
-    console.log(`✓ Page wiring (${pages.length - PAGE_WIRING_ALLOWLIST.size} page(s)) — every page loads /js/i18n.js and calls WalaPlusI18n.init().then(applyToDOM)`);
+    console.log(`✓ Page wiring (${auditedCount} page(s)) — every page loads /js/i18n.js and calls WalaPlusI18n.init().then(applyToDOM)`);
     return true;
   }
 
   if (missingScript.length) {
     fail(
-      `Page wiring: ${missingScript.length} dashboard page(s) do not load /js/i18n.js`,
+      `Page wiring: ${missingScript.length} page(s) do not load /js/i18n.js`,
       [
-        ...missingScript.map((f) => `dashboard/${f}`),
+        ...missingScript.map(({ dirLabel, page }) => `${dirLabel}/${page}`),
         '',
         'Fix: add `<script src="/js/i18n.js?v=1.0"></script>` to the <head> of each page.',
-        'If the file is genuinely not a user-facing dashboard page (fragment, email preview, …),',
-        'add its basename to PAGE_WIRING_ALLOWLIST in scripts/check-i18n.cjs with a one-line reason.',
+        'If the file is genuinely not a user-facing page (fragment, email preview, server-rendered',
+        'marketing page, …), add its basename to PAGE_WIRING_ALLOWLIST (dashboard/) or',
+        'PUBLIC_PAGE_WIRING_ALLOWLIST (public/) in scripts/check-i18n.cjs with a one-line reason.',
       ],
     );
   }
   if (missingInitApply.length) {
     fail(
-      `Page wiring: ${missingInitApply.length} dashboard page(s) load i18n.js but never run init().then(applyToDOM)`,
+      `Page wiring: ${missingInitApply.length} page(s) load i18n.js but never run init().then(applyToDOM)`,
       [
-        ...missingInitApply.map((f) => `dashboard/${f}`),
+        ...missingInitApply.map(({ dirLabel, page }) => `${dirLabel}/${page}`),
         '',
         'Fix: include this snippet in the page bootstrap script:',
         '    window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());',
@@ -243,20 +272,28 @@ function checkPageWiring(pages) {
  * Check 2 — reference coverage
  * ------------------------------------------------------------------------ */
 
-function checkReferenceCoverage(pages, en, ar) {
-  const missingEn = []; // [{page, key}]
+function checkReferenceCoverage(pages, publicPages, en, ar) {
+  const missingEn = []; // [{dirLabel, page, key}]
   const missingAr = [];
   let totalRefs = 0;
 
-  for (const page of pages) {
-    const html = fs.readFileSync(path.join(DASHBOARD_DIR, page), 'utf8');
+  // Combine dashboard/ and public/ pages so a future `public/foo.html` with a
+  // `data-i18n="ns.bogus"` attribute is caught by the same gate. `public/`
+  // is optional — `listPublicHtmlPages()` returns [] when missing.
+  const allPages = [
+    ...pages.map((page) => ({ dir: DASHBOARD_DIR, dirLabel: 'dashboard', page })),
+    ...publicPages.map((page) => ({ dir: PUBLIC_DIR, dirLabel: 'public', page })),
+  ];
+
+  for (const { dir, dirLabel, page } of allPages) {
+    const html = fs.readFileSync(path.join(dir, page), 'utf8');
     let m;
     I18N_ATTR_RE.lastIndex = 0;
     while ((m = I18N_ATTR_RE.exec(html))) {
       totalRefs++;
       const key = m[1] || m[2]; // group 1 = double-quoted, group 2 = single-quoted
-      if (typeof getDeep(en, key) !== 'string') missingEn.push({ page, key });
-      if (typeof getDeep(ar, key) !== 'string') missingAr.push({ page, key });
+      if (typeof getDeep(en, key) !== 'string') missingEn.push({ dirLabel, page, key });
+      if (typeof getDeep(ar, key) !== 'string') missingAr.push({ dirLabel, page, key });
     }
   }
 
@@ -269,7 +306,7 @@ function checkReferenceCoverage(pages, en, ar) {
     fail(
       `Reference coverage: ${missingEn.length} data-i18n reference(s) missing from dashboard/i18n/en.json`,
       [
-        ...missingEn.slice(0, 50).map(({ page, key }) => `dashboard/${page} :: "${key}"`),
+        ...missingEn.slice(0, 50).map(({ dirLabel, page, key }) => `${dirLabel}/${page} :: "${key}"`),
         ...(missingEn.length > 50 ? [`... and ${missingEn.length - 50} more`] : []),
         '',
         'Fix: add the missing key under the appropriate namespace in dashboard/i18n/en.json',
@@ -281,7 +318,7 @@ function checkReferenceCoverage(pages, en, ar) {
     fail(
       `Reference coverage: ${missingAr.length} data-i18n reference(s) missing from dashboard/i18n/ar.json`,
       [
-        ...missingAr.slice(0, 50).map(({ page, key }) => `dashboard/${page} :: "${key}"`),
+        ...missingAr.slice(0, 50).map(({ dirLabel, page, key }) => `${dirLabel}/${page} :: "${key}"`),
         ...(missingAr.length > 50 ? [`... and ${missingAr.length - 50} more`] : []),
         '',
         'Fix: add the Arabic translation for each key in dashboard/i18n/ar.json.',
@@ -1009,7 +1046,7 @@ function listJsFiles() {
   }
 }
 
-function collectReferencedKeys(pages) {
+function collectReferencedKeys(pages, publicPages) {
   const keys = new Set();
 
   // a0. Strings consumed by the streaming-download Service Worker. These
@@ -1021,9 +1058,15 @@ function collectReferencedKeys(pages) {
     keys.add(i18nKey);
   }
 
-  // a. data-i18n* attributes from all HTML pages
-  for (const page of pages) {
-    const html = fs.readFileSync(path.join(DASHBOARD_DIR, page), 'utf8');
+  // a. data-i18n* attributes from all HTML pages (dashboard/ AND public/).
+  //    `public/` is optional — `publicPages` is [] when the directory does
+  //    not exist, so this is a no-op today.
+  const allPages = [
+    ...(pages || []).map((page) => ({ dir: DASHBOARD_DIR, page })),
+    ...(publicPages || []).map((page) => ({ dir: PUBLIC_DIR, page })),
+  ];
+  for (const { dir, page } of allPages) {
+    const html = fs.readFileSync(path.join(dir, page), 'utf8');
     let m;
     I18N_ATTR_RE.lastIndex = 0;
     while ((m = I18N_ATTR_RE.exec(html))) {
@@ -1119,8 +1162,8 @@ function writeUnusedBaseline(unusedKeys) {
   fs.writeFileSync(UNUSED_BASELINE_PATH, JSON.stringify(payload, null, 2) + '\n', 'utf8');
 }
 
-function checkUnusedKeys(pages, en) {
-  const referencedKeys = collectReferencedKeys(pages);
+function checkUnusedKeys(pages, publicPages, en) {
+  const referencedKeys = collectReferencedKeys(pages, publicPages);
   const dynamicPrefixes = loadDynamicPrefixes();
   const enFlat = flatten(en);
 
@@ -1241,8 +1284,8 @@ function main() {
   const en = readJson(EN_PATH);
   const ar = readJson(AR_PATH);
 
-  const ok1 = checkPageWiring(pages);
-  const ok2 = checkReferenceCoverage(pages, en, ar);
+  const ok1 = checkPageWiring(pages, publicPages);
+  const ok2 = checkReferenceCoverage(pages, publicPages, en, ar);
   const ok3 = checkTreeParity(en, ar);
   const ok4 = checkSwDictionaryParity(en, ar);
   const ok5 = checkJsKeyCoverage(pages, publicPages, en, ar);
@@ -1250,7 +1293,7 @@ function main() {
   let ok6 = true;
   if (reportUnused) {
     console.log('\n--- Unused-key scan (Task #345 — blocks on NEW orphans) ---');
-    ok6 = checkUnusedKeys(pages, en);
+    ok6 = checkUnusedKeys(pages, publicPages, en);
   }
 
   if (ok1 && ok2 && ok3 && ok4 && ok5 && ok6) {
