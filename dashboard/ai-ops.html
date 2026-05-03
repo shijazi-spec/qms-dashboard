@@ -3698,7 +3698,59 @@
         </table>`;
     }
 
-    function renderChildrenWaterfall(rows) {
+    function renderWaterfallDetail(c, parentId) {
+      const errBlock = c.error_class || c.error_message
+        ? `<div class="rounded border border-red-200 bg-red-50 p-2">
+             <div class="text-[10px] uppercase text-red-700 font-semibold mb-1">Error</div>
+             <div class="font-mono text-xs text-red-700" data-testid="text-waterfall-detail-error-class-${c.id}">${esc(c.error_class || '')}</div>
+             ${c.error_message
+               ? `<pre class="mt-1 whitespace-pre-wrap break-words text-xs text-red-800 font-mono" data-testid="text-waterfall-detail-error-message-${c.id}">${esc(c.error_message)}</pre>`
+               : ''}
+           </div>`
+        : '';
+      const inputBlock = c.tool_input_preview
+        ? `<div>
+             <div class="text-[10px] uppercase text-gray-500 font-semibold mb-1">Tool input (sanitized preview)</div>
+             <pre class="p-2 bg-gray-50 border border-gray-200 rounded text-xs whitespace-pre-wrap break-words font-mono"
+                  data-testid="text-waterfall-detail-input-${c.id}">${esc(c.tool_input_preview)}</pre>
+           </div>`
+        : '';
+      const outputBlock = c.tool_output_preview
+        ? `<div>
+             <div class="text-[10px] uppercase text-gray-500 font-semibold mb-1">Tool output (sanitized preview)</div>
+             <pre class="p-2 bg-gray-50 border border-gray-200 rounded text-xs whitespace-pre-wrap break-words font-mono"
+                  data-testid="text-waterfall-detail-output-${c.id}">${esc(c.tool_output_preview)}</pre>
+           </div>`
+        : '';
+      return `
+        <div class="ms-28 ps-2 my-2 border-s-2 ${c.success ? 'border-green-300' : 'border-red-300'} space-y-2"
+             data-testid="waterfall-detail-${c.id}">
+          <div class="flex items-center justify-between">
+            <div class="text-xs text-gray-700">
+              <span class="font-mono">${esc(c.tool_name || '(agent)')}</span>
+              <span class="text-gray-400"> · </span>
+              <span data-testid="text-waterfall-detail-when-${c.id}">${fmtDate(c.started_at)}</span>
+              <span class="text-gray-400"> · </span>
+              <span>${fmtMs(c.latency_ms)}</span>
+            </div>
+            <button type="button"
+                    class="text-gray-400 hover:text-gray-700 text-lg leading-none px-2"
+                    aria-label="Close details"
+                    data-waterfall-close="1"
+                    data-waterfall-parent-id="${esc(String(parentId))}"
+                    data-waterfall-bar-id="${esc(String(c.id))}"
+                    data-testid="button-close-waterfall-detail-${c.id}">&times;</button>
+          </div>
+          ${errBlock}
+          ${inputBlock}
+          ${outputBlock}
+          ${!errBlock && !inputBlock && !outputBlock
+            ? '<div class="text-xs text-gray-400 italic">No additional details available for this tool call.</div>'
+            : ''}
+        </div>`;
+    }
+
+    function renderChildrenWaterfall(rows, parentId) {
       const starts = rows.map(c => new Date(c.started_at).getTime());
       const earliestMs = Math.min(...starts);
       const ends = rows.map((c, i) => starts[i] + (parseInt(c.latency_ms) || 0));
@@ -3715,6 +3767,7 @@
         return labels;
       })();
 
+      const parentIdAttr = esc(String(parentId == null ? '' : parentId));
       const bars = rows.map((c, i) => {
         const leftPct = ((starts[i] - earliestMs) / totalSpan) * 100;
         const widthPct = Math.max(((parseInt(c.latency_ms) || 0) / totalSpan) * 100, 0.5);
@@ -3724,20 +3777,26 @@
         const errorTip = c.error_class
           ? ` | ${esc(c.error_class)}${c.error_message ? ': ' + esc(c.error_message.slice(0, 120)) : ''}`
           : '';
-        const tooltip = `${toolLabel} — ${fmtMs(c.latency_ms)}${errorTip}`;
+        const tooltip = `${toolLabel} — ${fmtMs(c.latency_ms)}${errorTip} (click for details)`;
         return `
           <div class="flex items-center gap-2 mb-1" data-testid="waterfall-row-${c.id}">
             <div class="w-28 flex-shrink-0 text-end text-gray-600 font-mono truncate text-[10px]" title="${toolLabel}">${toolLabel}</div>
             <div class="relative flex-1 h-5">
-              <div class="absolute h-full rounded ${color} ${hoverColor} cursor-default transition-colors"
+              <button type="button"
+                   class="absolute h-full rounded border-0 p-0 ${color} ${hoverColor} cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
                    data-style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%"
                    title="${tooltip}"
+                   aria-label="${tooltip}"
+                   aria-expanded="false"
+                   data-waterfall-bar-id="${esc(String(c.id))}"
+                   data-waterfall-parent-id="${parentIdAttr}"
                    data-testid="waterfall-bar-${c.id}">
                 <span class="sr-only">${tooltip}</span>
-              </div>
+              </button>
             </div>
             <div class="w-14 flex-shrink-0 text-end text-[10px] ${parseInt(c.latency_ms||0)>10000?'text-red-600 font-semibold':'text-gray-500'}">${fmtMs(c.latency_ms)}</div>
-          </div>`;
+          </div>
+          <div class="hidden" data-waterfall-detail-host="${esc(String(c.id))}"></div>`;
       }).join('');
 
       const axisHtml = axisLabels.map(a =>
@@ -3745,7 +3804,7 @@
       ).join('');
 
       return `
-        <div data-testid="waterfall-chart">
+        <div data-testid="waterfall-chart" data-waterfall-parent-id="${parentIdAttr}">
           <div class="flex items-center gap-2 mb-1">
             <div class="w-28 flex-shrink-0"></div>
             <div class="relative flex-1 h-4">${axisHtml}</div>
@@ -3762,7 +3821,7 @@
           <div class="mt-2 flex items-center gap-3 text-[10px] text-gray-500">
             <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-green-500 inline-block"></span> Success</span>
             <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-red-500 inline-block"></span> Error</span>
-            <span class="ms-auto">Hover bars for details</span>
+            <span class="ms-auto">Hover or click a bar for details</span>
           </div>
         </div>`;
     }
@@ -3791,12 +3850,61 @@
           </div>
         </div>`;
 
+      const parentId = containerId.replace('children-content-', '');
       const body = currentView === 'timeline'
-        ? renderChildrenWaterfall(rows)
+        ? renderChildrenWaterfall(rows, parentId)
         : renderChildrenTable(rows);
 
       container.dataset.view = currentView;
       container.innerHTML = header + body;
+    }
+
+    function toggleWaterfallDetail(parentId, callId) {
+      const rows = childrenCache.get(parentId);
+      if (!rows) return;
+      const containerId = 'children-content-' + parentId;
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const chart = container.querySelector('[data-testid="waterfall-chart"][data-waterfall-parent-id="' + parentId + '"]');
+      if (!chart) return;
+      const host = chart.querySelector('[data-waterfall-detail-host="' + callId + '"]');
+      const bar = chart.querySelector('[data-waterfall-bar-id="' + callId + '"][data-waterfall-parent-id="' + parentId + '"]');
+      if (!host) return;
+      const isOpen = !host.classList.contains('hidden');
+      // Close all other open detail panels in this chart
+      chart.querySelectorAll('[data-waterfall-detail-host]').forEach(h => {
+        if (h !== host) {
+          h.classList.add('hidden');
+          h.innerHTML = '';
+        }
+      });
+      chart.querySelectorAll('[data-waterfall-bar-id]').forEach(b => {
+        if (b !== bar) b.setAttribute('aria-expanded', 'false');
+      });
+      if (isOpen) {
+        host.classList.add('hidden');
+        host.innerHTML = '';
+        if (bar) bar.setAttribute('aria-expanded', 'false');
+      } else {
+        const call = rows.find(r => String(r.id) === String(callId));
+        if (!call) return;
+        host.innerHTML = renderWaterfallDetail(call, parentId);
+        host.classList.remove('hidden');
+        if (bar) bar.setAttribute('aria-expanded', 'true');
+      }
+    }
+
+    function closeAllWaterfallDetailsOutside(target) {
+      document.querySelectorAll('[data-testid="waterfall-chart"]').forEach(chart => {
+        if (target && chart.contains(target)) return;
+        chart.querySelectorAll('[data-waterfall-detail-host]').forEach(h => {
+          h.classList.add('hidden');
+          h.innerHTML = '';
+        });
+        chart.querySelectorAll('[data-waterfall-bar-id]').forEach(b => {
+          b.setAttribute('aria-expanded', 'false');
+        });
+      });
     }
 
     function switchChildView(containerId, view) {
@@ -6094,12 +6202,34 @@
       // renderChildren() so we attach a single delegated handler at body scope.
       document.body.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-child-view][data-child-container]');
-        if (!btn) return;
-        const containerId = btn.getAttribute('data-child-container');
-        const view = btn.getAttribute('data-child-view');
-        if (containerId && (view === 'table' || view === 'timeline')) {
-          switchChildView(containerId, view);
+        if (btn) {
+          const containerId = btn.getAttribute('data-child-container');
+          const view = btn.getAttribute('data-child-view');
+          if (containerId && (view === 'table' || view === 'timeline')) {
+            switchChildView(containerId, view);
+          }
+          return;
         }
+        // Task #260: Click a waterfall bar or its close button to toggle the
+        // inline detail panel. Click anywhere else to close any open panel.
+        const closeBtn = e.target.closest('[data-waterfall-close="1"]');
+        if (closeBtn) {
+          const parentId = closeBtn.getAttribute('data-waterfall-parent-id');
+          const callId = closeBtn.getAttribute('data-waterfall-bar-id');
+          if (parentId && callId) toggleWaterfallDetail(parentId, callId);
+          return;
+        }
+        const bar = e.target.closest('[data-waterfall-bar-id][data-waterfall-parent-id]');
+        if (bar) {
+          const parentId = bar.getAttribute('data-waterfall-parent-id');
+          const callId = bar.getAttribute('data-waterfall-bar-id');
+          if (parentId && callId) toggleWaterfallDetail(parentId, callId);
+          return;
+        }
+        // Click outside: close any open waterfall detail panels unless the
+        // click landed inside a still-open detail host.
+        const insideDetail = e.target.closest('[data-waterfall-detail-host]');
+        if (!insideDetail) closeAllWaterfallDetailsOutside(null);
       });
       loadSummary();
       loadMetricsTableStats();
