@@ -90,6 +90,7 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/migration.html",
   "dashboard/onboarding.html",
   "dashboard/pdpl.html",
+  "dashboard/pipeline-aging.html",
   "dashboard/policies.html",
   "dashboard/projects.html",
   "dashboard/qms-docs.html",
