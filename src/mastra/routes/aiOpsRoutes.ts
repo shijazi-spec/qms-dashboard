@@ -316,23 +316,16 @@ function summarizeBreachCandidates(candidates: ToolHealthBreachCandidate[]): {
 
 export const aiOpsRoutes = [
   {
+    // The AI Operations page (dashboard/ai-ops.html) was retired by user
+    // request. The backend `/api/ai-ops/*` routes below remain — they're
+    // still consumed by the tool-health / prompt-regression cron jobs,
+    // mobile routes, the consultant feedback writer, and the Slack
+    // 👍/👎 handler. To keep historical alert email and Slack links
+    // working we 302 the old `/ai-ops` URL to the main dashboard.
     path: "/ai-ops",
     method: "GET" as const,
     createHandler: async () => {
-      return async (c: any) => {
-        const user = await requireRole(c, AI_OPS_ROLES);
-        if (!user) return c.json({ error: "Insufficient permissions" }, 403);
-        const possiblePaths = [
-          join(process.cwd(), "dashboard", "ai-ops.html"),
-          "/home/runner/workspace/dashboard/ai-ops.html",
-        ];
-        for (const p of possiblePaths) {
-          if (existsSync(p)) {
-            return c.html(readFileSync(p, "utf-8"));
-          }
-        }
-        return c.text("AI Operations page not found", 404);
-      };
+      return async (c: any) => c.redirect("/dashboard", 302);
     },
   },
 

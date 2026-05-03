@@ -83,7 +83,6 @@ const WalaPlusNav = {
       case 'fraud-incidents': return this._t('nav.items.fraud-incidents');
       case 'fraud-dashboard': return this._t('nav.items.fraud-dashboard');
       case 'fraud-country-risk': return this._t('nav.items.fraud-country-risk');
-      case 'ai-ops':          return this._t('nav.items.ai-ops');
       case 'triggers':        return this._t('nav.items.triggers');
       case 'roi':             return this._t('nav.items.roi');
       case 'projects':        return this._t('nav.items.projects');
@@ -207,7 +206,6 @@ const WalaPlusNav = {
         { label: 'User & Role Management', href: '/admin', icon: 'cog', id: 'admin' },
         { label: 'Users & Access', href: '/users', icon: 'users', id: 'users' },
         { label: 'AI Approvals Queue', href: '/ai-approvals', icon: 'check-circle', id: 'ai-approvals' },
-        { label: 'AI Operations', href: '/ai-ops', icon: 'chip', id: 'ai-ops' },
         { label: 'Infographic Generator', href: '/infographic', icon: 'photograph', id: 'infographic' },
         { label: 'System Logs', href: '/logs', icon: 'document-report', id: 'logs' },
         { label: 'Health Pulse', href: '/dashboard/health', icon: 'shield-check', id: 'health' }

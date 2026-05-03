@@ -361,7 +361,7 @@ export async function evaluateAndAlertStorageHealth(
           type: 'alert',
           title: 'AI Usage Table Storage Recovered',
           message: note,
-          link: '/ai-ops',
+          link: '/dashboard',
           severity: 'low',
         });
         result.inAppCreated = true;
@@ -425,7 +425,7 @@ export async function evaluateAndAlertStorageHealth(
       type: 'alert',
       title: 'AI Usage Table Storage Alert',
       message: description,
-      link: '/ai-ops',
+      link: '/dashboard',
       severity: 'high',
     });
     result.inAppCreated = true;
@@ -503,7 +503,7 @@ export async function evaluateAndAlertStorageHealth(
               } at ${stats.lastPrune.ranAt} (deleted ${stats.lastPrune.rowsDeleted})</li>`
             : '<li>Last prune: no history yet</li>') +
           `</ul>` +
-          `<p><a href="/ai-ops">View AI Operations panel</a></p>` +
+          `<p><a href="/dashboard">View dashboard</a></p>` +
           `<p><em>This alert will auto-resolve on the next cron pass once ` +
           `the oldest row is back inside the window.</em></p>`,
       });
@@ -646,10 +646,10 @@ function buildRepageMessages(
     `<h2>AI Usage Table Storage Alert — re-page</h2>` +
     `<p><strong>${alert.title}</strong></p>` +
     `<p>This alert has been in the OPEN state for ${ageHours} hours and ` +
-    `nobody has acknowledged it on /ai-ops yet. The daily prune cron is ` +
-    `re-paging on-call so the backlog does not silently grow.</p>` +
+    `nobody has acknowledged it on the dashboard yet. The daily prune ` +
+    `cron is re-paging on-call so the backlog does not silently grow.</p>` +
     (alert.description ? `<p>${alert.description}</p>` : '') +
-    `<p><a href="${appBaseUrl}/ai-ops">View AI Operations panel</a></p>` +
+    `<p><a href="${appBaseUrl}/dashboard">View dashboard</a></p>` +
     `<p><em>Re-pages will continue every ` +
     `STORAGE_HEALTH_REPAGE_AFTER_MIN minutes until the alert is ` +
     `acknowledged or resolved.</em></p>`;

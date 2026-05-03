@@ -163,9 +163,12 @@ function readConfig() {
   // `link` is always emit-able (relative when no base URL is set); `linkIsAbsolute`
   // gates Slack's action button — Slack rejects blocks whose button.url is a
   // relative path, so we degrade to a plain mrkdwn link in that case.
+  // The AI Operations page was retired; point recipients at the main
+  // dashboard instead. The legacy `?tab=…` query suffix appended further
+  // down is harmless on /dashboard (the param is just ignored).
   const link = appUrl
-    ? `${appUrl}/dashboard/ai-ops.html`
-    : `/dashboard/ai-ops.html`;
+    ? `${appUrl}/dashboard`
+    : `/dashboard`;
   const linkIsAbsolute = /^https?:\/\//i.test(link);
   return {
     slackChannel: slackChannel || null,

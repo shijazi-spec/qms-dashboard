@@ -151,7 +151,7 @@ export function buildMorningDigestMessage(
 ): { slackText: string; emailSubject: string; emailHtml: string } {
   const fromIso = new Date(windowFromMs).toISOString().replace('T', ' ').slice(0, 16);
   const toIso = new Date(windowToMs).toISOString().replace('T', ' ').slice(0, 16);
-  const link = `${appBaseUrl || ''}/ai-ops`;
+  const link = `${appBaseUrl || ''}/dashboard`;
 
   const header =
     `:sunrise: *Morning digest — ${alerts.length} unresolved alert` +

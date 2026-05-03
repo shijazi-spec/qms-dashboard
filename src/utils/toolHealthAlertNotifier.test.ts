@@ -217,7 +217,7 @@ async function testSlackSentOnSuccess(): Promise<void> {
     (b: any) =>
       b?.type === "actions" &&
       Array.isArray(b.elements) &&
-      b.elements.some((e: any) => e?.url === "https://wala.example.com/dashboard/ai-ops.html"),
+      b.elements.some((e: any) => e?.url === "https://wala.example.com/dashboard"),
   );
   assert(hasButton, "absolute APP_URL renders an actions.button block with that URL");
   // Context block carries the dedupe key — this is what on-call uses to
@@ -270,7 +270,7 @@ async function testEmailSentOnSuccess(): Promise<void> {
   assert(
     typeof emailCalls[0].html === "string" &&
       emailCalls[0].html.includes("search_web") &&
-      emailCalls[0].html.includes("https://wala.example.com/dashboard/ai-ops.html"),
+      emailCalls[0].html.includes("https://wala.example.com/dashboard"),
     "HTML body includes tool name and absolute panel link",
   );
   assert(
@@ -1312,7 +1312,7 @@ async function testConfigChangeSlackAndEmailOnSuccess(): Promise<void> {
       Array.isArray(b.elements) &&
       b.elements.some(
         (e: any) =>
-          e?.url === "https://wala.example.com/dashboard/ai-ops.html?tab=thresholds",
+          e?.url === "https://wala.example.com/dashboard?tab=thresholds",
       ),
   );
   assert(hasButton, "absolute APP_URL renders an Open Alert Thresholds button");
@@ -1353,7 +1353,7 @@ async function testConfigChangeSlackAndEmailOnSuccess(): Promise<void> {
     typeof emailCalls[0].html === "string" &&
       emailCalls[0].html.includes("alice@example.com") &&
       emailCalls[0].html.includes(
-        "https://wala.example.com/dashboard/ai-ops.html?tab=thresholds",
+        "https://wala.example.com/dashboard?tab=thresholds",
       ),
     "HTML body attributes the operator and links to the thresholds tab",
   );
@@ -1900,7 +1900,7 @@ async function testExpiringSoonSlackOnSuccess(): Promise<void> {
       Array.isArray(b.elements) &&
       b.elements.some(
         (e: any) =>
-          e?.url === "https://wala.example.com/dashboard/ai-ops.html?tab=thresholds",
+          e?.url === "https://wala.example.com/dashboard?tab=thresholds",
       ),
   );
   assert(hasButton, "absolute APP_URL renders an Open Alert Thresholds button");
@@ -2113,7 +2113,7 @@ async function testRecoverySlackAndEmailOnSuccess(): Promise<void> {
       b?.type === "actions" &&
       Array.isArray(b.elements) &&
       b.elements.some(
-        (e: any) => e?.url === "https://wala.example.com/dashboard/ai-ops.html",
+        (e: any) => e?.url === "https://wala.example.com/dashboard",
       ),
   );
   assert(hasButton, "absolute APP_URL renders an Open AI Operations panel button");
@@ -2147,7 +2147,7 @@ async function testRecoverySlackAndEmailOnSuccess(): Promise<void> {
     typeof emailCalls[0].html === "string" &&
       emailCalls[0].html.includes("search_web") &&
       emailCalls[0].html.includes(
-        "https://wala.example.com/dashboard/ai-ops.html",
+        "https://wala.example.com/dashboard",
       ),
     "HTML body includes tool name and absolute panel link",
   );

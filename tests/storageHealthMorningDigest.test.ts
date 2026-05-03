@@ -187,7 +187,7 @@ await suite.test(
       'slack text mentions second alert title',
     );
     suite.expect(
-      harness.slacks[0].text.includes('app.example.com/ai-ops'),
+      harness.slacks[0].text.includes('app.example.com/dashboard'),
       'slack text contains app link',
     );
 
