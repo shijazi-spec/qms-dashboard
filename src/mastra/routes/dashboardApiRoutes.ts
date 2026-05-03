@@ -384,7 +384,24 @@ const _dashboardApiRoutesRaw = [
       return async (c: any) => {
         const logger = mastra?.getLogger();
         try {
-          const module = c.req.query("module") || "Leads";
+          const ALLOWED_CRM_MODULES = new Set([
+            "Leads",
+            "Deals",
+            "Contacts",
+            "Accounts",
+          ]);
+          const rawModule = c.req.query("module") || "Leads";
+          if (!ALLOWED_CRM_MODULES.has(rawModule)) {
+            return c.json(
+              {
+                success: false,
+                error: "Invalid module",
+                message: `Module '${rawModule}' is not permitted. Allowed values: ${[...ALLOWED_CRM_MODULES].join(", ")}.`,
+              },
+              400,
+            );
+          }
+          const module = rawModule;
           const page = parseInt(c.req.query("page") || "1");
           const perPage = parseInt(c.req.query("per_page") || "50");
           const status = getZohoConnectionStatus();
