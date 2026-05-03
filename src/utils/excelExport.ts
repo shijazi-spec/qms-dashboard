@@ -978,6 +978,68 @@ async function ensureStagedExportDir(): Promise<string> {
   return dir;
 }
 
+/**
+ * Eagerly create (or re-chmod) the streaming-export cache directory at
+ * worker boot, *before* any export traffic is served.
+ *
+ * Why this exists separately from the lazy `ensureStagedExportDir` call
+ * inside `stageAndServeStreamingExport`:
+ *
+ *   - On a freshly restarted worker that hasn't served an export yet, an
+ *     inherited cache directory from a previous run could sit on disk
+ *     with the wrong (looser) permissions for an arbitrary window —
+ *     exactly the window during which other OS users on the same host
+ *     could list staged-export filenames or read in-flight files.
+ *   - Doing the chmod once at startup closes that window and surfaces
+ *     permission/IO problems immediately at boot rather than on the
+ *     first user export request.
+ *
+ * Logs a single startup line with the cache dir path and the resulting
+ * mode (in octal) so operators can confirm the lockdown actually took
+ * effect — useful when STREAMING_EXPORT_CACHE_DIR is pointed at an
+ * unexpected mount or owned by a different user (chmod becomes a no-op
+ * with an EPERM warning in that case, see `ensureStagedExportDir`).
+ *
+ * Failures are swallowed and logged at error level rather than thrown:
+ * the lazy `ensureStagedExportDir` inside the request path remains as a
+ * safety net, and we do not want a transient FS hiccup at boot to abort
+ * the whole worker.
+ */
+export async function lockDownStagedExportCacheDirAtStartup(): Promise<void> {
+  const dir = stagedExportCacheDir();
+  try {
+    await ensureStagedExportDir();
+    let modeStr = "unknown";
+    let actualMode: number | null = null;
+    try {
+      const st = await fsPromises.stat(dir);
+      actualMode = st.mode & 0o777;
+      modeStr = `0o${actualMode.toString(8).padStart(3, "0")}`;
+    } catch {
+      /* stat is best-effort for the log line */
+    }
+    if (actualMode !== null && actualMode !== 0o700) {
+      // chmod was a no-op (e.g. EPERM because dir is owned by another
+      // user) — staged files are still 0o600 but the dir itself is
+      // looser than intended. Surface this loudly at startup so ops
+      // can re-home STREAMING_EXPORT_CACHE_DIR rather than discover it
+      // post-incident.
+      logger.warn(
+        `[stagedExport] cache directory checked at startup: ${dir} (mode ${modeStr}) — expected 0o700, dir is looser than intended`,
+      );
+    } else {
+      logger.info(
+        `[stagedExport] cache directory locked down at startup: ${dir} (mode ${modeStr})`,
+      );
+    }
+  } catch (err) {
+    logger.error(
+      `[stagedExport] failed to lock down cache directory at startup: ${dir}`,
+      err,
+    );
+  }
+}
+
 async function unlinkStagedFile(filePath: string): Promise<void> {
   try {
     await fsPromises.unlink(filePath);
