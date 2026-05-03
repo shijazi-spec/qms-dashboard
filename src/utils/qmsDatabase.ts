@@ -177,6 +177,42 @@ async function initQmsSchema(): Promise<void> {
       created_at      TIMESTAMPTZ DEFAULT NOW(),
       updated_at      TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Columns added by later code paths (closure approval & effectiveness review).
+    -- Production DBs got these via legacy migrations; ALTER … IF NOT EXISTS keeps
+    -- a fresh dev/CI database in sync without disturbing existing schemas.
+    ALTER TABLE capa_records
+      ADD COLUMN IF NOT EXISTS closure_approved_by      TEXT,
+      ADD COLUMN IF NOT EXISTS closure_approved_at      TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS effectiveness_result     TEXT,
+      ADD COLUMN IF NOT EXISTS effectiveness_evidence   TEXT,
+      ADD COLUMN IF NOT EXISTS effectiveness_reviewed_by TEXT,
+      ADD COLUMN IF NOT EXISTS effectiveness_reviewed_at TIMESTAMPTZ;
+
+    ALTER TABLE nonconformance_records
+      ADD COLUMN IF NOT EXISTS closure_approved_by TEXT,
+      ADD COLUMN IF NOT EXISTS closure_approved_at TIMESTAMPTZ;
+
+    CREATE TABLE IF NOT EXISTS quality_metrics (
+      id               SERIAL PRIMARY KEY,
+      metric_date      DATE NOT NULL,
+      metric_type      TEXT NOT NULL,
+      dimension        TEXT,
+      category         TEXT,
+      metric_name      TEXT NOT NULL,
+      metric_value     NUMERIC,
+      metric_target    NUMERIC,
+      metric_unit      TEXT,
+      deals_evaluated  INTEGER,
+      deals_passed     INTEGER,
+      deals_failed     INTEGER,
+      capa_opened      INTEGER,
+      capa_closed      INTEGER,
+      nc_opened        INTEGER,
+      nc_closed        INTEGER,
+      metadata         JSONB,
+      created_at       TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 }
 
