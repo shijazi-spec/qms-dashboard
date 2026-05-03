@@ -255,11 +255,25 @@ export interface RateLimitSpike24hPath {
   suppressed: number;
 }
 
+export interface RateLimitSpike24hHourBucket {
+  /** ISO-8601 timestamp marking the start of the hour bucket (UTC). */
+  hour: string;
+  /** Number of `rate_limit_429` system_events whose `created_at` fell in that hour. */
+  count: number;
+}
+
 export interface RateLimitSpike24h {
   total429: number;
   totalSuppressed: number;
   topIps: RateLimitSpike24hIp[];
   topPaths: RateLimitSpike24hPath[];
+  /**
+   * Per-hour 429 counts for the last 24 hours, oldest → newest. Always
+   * exactly 24 entries (zero-filled via generate_series so a quiet hour
+   * still shows up as a bar of height 0). Lets the dashboard render a
+   * sparkline showing whether the storm is growing or already subsiding.
+   */
+  hourlyBuckets: RateLimitSpike24hHourBucket[];
   /**
    * Effective alert threshold (from RATE_LIMIT_429_24H_ALERT_THRESHOLD,
    * default 500). `0` means the alert is disabled. Surfaced so the
@@ -382,6 +396,26 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
           WHERE event_type = 'rate_limit_429'
             AND created_at > NOW() - INTERVAL '24 hours'`,
       ),
+      // Per-hour bucket counts for the last 24 hours. `generate_series`
+      // zero-fills quiet hours so the dashboard sparkline always has
+      // exactly 24 evenly-spaced points to plot regardless of traffic.
+      pool.query<{ hour: Date; count: string }>(
+        `WITH hours AS (
+           SELECT generate_series(
+             date_trunc('hour', NOW()) - INTERVAL '23 hours',
+             date_trunc('hour', NOW()),
+             INTERVAL '1 hour'
+           ) AS hour
+         )
+         SELECT h.hour AS hour,
+                COUNT(se.event_type)::bigint AS count
+           FROM hours h
+           LEFT JOIN system_events se
+             ON se.event_type = 'rate_limit_429'
+            AND date_trunc('hour', se.created_at) = h.hour
+          GROUP BY h.hour
+          ORDER BY h.hour ASC`,
+      ),
       pool.query<{ ip: string; events: string; suppressed: string }>(
         `SELECT
             COALESCE(metadata->>'ip', 'unknown')           AS ip,
@@ -407,7 +441,7 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
           LIMIT 5`,
       ),
     ])
-      .then(async ([totRes, ipRes, pathRes]) => {
+      .then(async ([totRes, hourRes, ipRes, pathRes]) => {
         const topIps: RateLimitSpike24hIp[] = ipRes.rows.map((row) => ({
           ip: row.ip,
           events: parseInt(row.events, 10),
@@ -418,6 +452,15 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
           events: parseInt(row.events, 10),
           suppressed: parseInt(row.suppressed, 10),
         }));
+        const hourlyBuckets: RateLimitSpike24hHourBucket[] = hourRes.rows.map(
+          (row) => ({
+            hour:
+              row.hour instanceof Date
+                ? row.hour.toISOString()
+                : new Date(String(row.hour)).toISOString(),
+            count: parseInt(row.count, 10),
+          }),
+        );
         const total429 = parseInt(totRes.rows[0]?.total ?? "0", 10);
         // Annotate with the alert evaluation so the dashboard banner and
         // the cron's system_event alert use the same source of truth.
@@ -429,6 +472,7 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
           totalSuppressed: parseInt(totRes.rows[0]?.suppressed ?? "0", 10),
           topIps,
           topPaths,
+          hourlyBuckets,
           alertThreshold: evalResult.threshold,
           alertActive: evalResult.active,
         };
@@ -443,6 +487,7 @@ export async function getRateLimitStats(): Promise<RateLimitStats> {
           totalSuppressed: 0,
           topIps: [],
           topPaths: [],
+          hourlyBuckets: [],
           alertThreshold: 0,
           alertActive: false,
         };

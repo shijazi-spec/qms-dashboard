@@ -793,6 +793,27 @@
                                 <p class="text-xs text-gray-500 mt-1">Sum of <code class="text-xs">suppressed_in_previous_minute</code></p>
                             </div>
                         </div>
+                        <div class="px-4 pb-4 bg-white">
+                            <div class="bg-gray-50 rounded-lg p-4 border">
+                                <div class="flex items-center justify-between mb-2">
+                                    <p class="text-xs uppercase tracking-wide text-gray-500">429s per hour (last 24 h)</p>
+                                    <p class="text-xs text-gray-500" id="spike24h-trend-summary" data-testid="text-spike24h-trend-summary">—</p>
+                                </div>
+                                <svg id="spike24h-sparkline"
+                                     data-testid="chart-spike24h-sparkline"
+                                     viewBox="0 0 240 48"
+                                     preserveAspectRatio="none"
+                                     class="w-full h-12"
+                                     role="img"
+                                     aria-label="429 events per hour over the last 24 hours">
+                                    <title id="spike24h-sparkline-title">429 events per hour — last 24 hours</title>
+                                </svg>
+                                <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+                                    <span data-testid="text-spike24h-axis-start">−24 h</span>
+                                    <span data-testid="text-spike24h-axis-end">now</span>
+                                </div>
+                            </div>
+                        </div>
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 px-4 pb-4 bg-white">
                             <div>
                                 <p class="text-xs font-semibold text-gray-600 mb-2" data-i18n="admin.top5_ips_24h">Top 5 offending IPs (24h)</p>
@@ -2563,9 +2584,69 @@
                 }
 
                 // 24h spike summary card
-                const spike = data.spike24h || { total429: 0, totalSuppressed: 0, topIps: [], topPaths: [], alertThreshold: 0, alertActive: false };
+                const spike = data.spike24h || { total429: 0, totalSuppressed: 0, topIps: [], topPaths: [], hourlyBuckets: [], alertThreshold: 0, alertActive: false };
                 document.getElementById("spike24h-total").textContent = String(spike.total429 ?? 0);
                 document.getElementById("spike24h-suppressed").textContent = String(spike.totalSuppressed ?? 0);
+
+                // Per-hour sparkline. We render bars (rather than a polyline)
+                // because (a) zero-traffic hours show up as visible empty
+                // slots instead of dipping to a confusing baseline, and
+                // (b) it scales sanely between 0 and "current storm" without
+                // needing axis labels. The trend summary text compares the
+                // most recent 6h against the previous 6h so ops can tell at
+                // a glance whether the storm is growing, steady, or fading.
+                (function renderSpike24hSparkline() {
+                    const svg = document.getElementById("spike24h-sparkline");
+                    const summaryEl = document.getElementById("spike24h-trend-summary");
+                    if (!svg) return;
+                    const buckets = Array.isArray(spike.hourlyBuckets) ? spike.hourlyBuckets : [];
+                    while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild);
+                    if (buckets.length === 0) {
+                        if (summaryEl) summaryEl.textContent = _t('dyn.admin.no_429_events') || 'No 429 events in window';
+                        return;
+                    }
+                    const W = 240, H = 48, GAP = 1;
+                    const barW = (W - GAP * (buckets.length - 1)) / buckets.length;
+                    const maxCount = buckets.reduce((m, b) => Math.max(m, Number(b.count) || 0), 0);
+                    const ns = "http://www.w3.org/2000/svg";
+                    buckets.forEach((b, i) => {
+                        const count = Number(b.count) || 0;
+                        const h = maxCount === 0 ? 1 : Math.max(1, Math.round((count / maxCount) * (H - 2)));
+                        const x = i * (barW + GAP);
+                        const y = H - h;
+                        const rect = document.createElementNS(ns, "rect");
+                        rect.setAttribute("x", String(x));
+                        rect.setAttribute("y", String(y));
+                        rect.setAttribute("width", String(barW));
+                        rect.setAttribute("height", String(h));
+                        rect.setAttribute("fill", count === 0 ? "#e5e7eb" : (spike.alertActive ? "#dc2626" : "#f59e0b"));
+                        rect.setAttribute("data-testid", "bar-spike24h-hour-" + i);
+                        rect.setAttribute("data-hour", String(b.hour));
+                        rect.setAttribute("data-count", String(count));
+                        const title = document.createElementNS(ns, "title");
+                        const hourLabel = (() => {
+                            try { return new Date(b.hour).toLocaleString(); } catch { return String(b.hour); }
+                        })();
+                        title.textContent = hourLabel + ' — ' + count + ' × 429';
+                        rect.appendChild(title);
+                        svg.appendChild(rect);
+                    });
+                    if (summaryEl) {
+                        const half = Math.floor(buckets.length / 2);
+                        const recent = buckets.slice(-half).reduce((s, b) => s + (Number(b.count) || 0), 0);
+                        const prior = buckets.slice(0, buckets.length - half).reduce((s, b) => s + (Number(b.count) || 0), 0);
+                        let trend;
+                        if (recent === 0 && prior === 0) trend = '→ quiet';
+                        else if (prior === 0) trend = '↑ growing';
+                        else {
+                            const ratio = recent / prior;
+                            if (ratio >= 1.25) trend = '↑ growing';
+                            else if (ratio <= 0.75) trend = '↓ subsiding';
+                            else trend = '→ steady';
+                        }
+                        summaryEl.textContent = 'recent ' + half + 'h: ' + recent + ' · prior ' + (buckets.length - half) + 'h: ' + prior + ' · ' + trend;
+                    }
+                })();
 
                 // Threshold-breach banner (Task #282) — surfaces the same
                 // condition that the rate-limit-429-spike-alert cron pages
