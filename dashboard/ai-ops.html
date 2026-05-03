@@ -408,6 +408,7 @@
         <button data-on-click="switchTab" data-args='["feedback"]' id="tab-feedback" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-feedback" data-i18n="ai_ops.tab_consultant_feedback">Consultant Feedback</button>
         <button data-on-click="switchTab" data-args='["negative"]' id="tab-negative" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-negative" data-i18n="ai_ops.tab_negative_feedback">Negative Feedback</button>
         <button data-on-click="switchTab" data-args='["thresholds"]' id="tab-thresholds" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-thresholds" data-i18n="ai_ops.tab_alert_thresholds">Alert Thresholds</button>
+        <button data-on-click="switchTab" data-args='["governance"]' id="tab-governance" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm" data-testid="tab-governance">Tool Governance</button>
       </nav>
     </div>
 
@@ -963,6 +964,38 @@
       </div>
     </div>
 
+    <!-- Tool Governance Tab (Task #651) -->
+    <!-- Read-only audit view of TOOL_GOVERNANCE_POLICIES so admins and
+         auditors can see at a glance which AI tools require human approval,
+         which are auto-approved by tier, and which bypass the gate
+         entirely (read-only / internal-notification / background workflow).
+         Backed by GET /api/ai-ops/tool-governance — the merged view from
+         the same registry the runtime gate consults, so this page can
+         never drift from src/utils/aiToolGovernance.ts. -->
+    <div id="content-governance" class="hidden fade-in">
+      <div class="bg-white rounded-xl shadow-sm border p-6" data-testid="section-tool-governance">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900" data-testid="text-tool-governance-heading">AI Tool Governance</h2>
+            <p class="text-sm text-gray-500 mt-1">
+              Every AI tool the consultant agent can invoke, grouped by gate disposition.
+              Sourced from <code class="bg-gray-100 px-1 rounded">TOOL_GOVERNANCE_POLICIES</code>
+              in <code class="bg-gray-100 px-1 rounded">src/utils/aiToolGovernance.ts</code> —
+              this view is the audit artifact for that file.
+            </p>
+          </div>
+          <div class="text-end text-xs text-gray-500" data-testid="text-tool-governance-meta">
+            <div id="tool-governance-total">—</div>
+          </div>
+        </div>
+        <div id="tool-governance-load-error" class="hidden mb-4 px-3 py-2 text-sm rounded border border-red-200 bg-red-50 text-red-700" data-testid="text-tool-governance-load-error"></div>
+        <div id="tool-governance-summary" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6" data-testid="summary-tool-governance"></div>
+        <div id="tool-governance-groups" class="space-y-6" data-testid="list-tool-governance-groups">
+          <p class="text-gray-400 text-sm">Loading…</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Price Table Info -->
     <div class="bg-white rounded-xl shadow-sm border p-5 mt-6" data-testid="section-price-table">
       <h3 class="text-sm font-semibold text-gray-700 mb-2" data-i18n="ai_ops.model_price_table">Model Price Table</h3>
@@ -981,7 +1014,7 @@
     let costChart = null;
     let feedbackTrendChart = null;
     let toolHealthTrendChart = null;
-    const TABS = ['cost', 'latency', 'prompts', 'tools', 'issues', 'feedback', 'negative', 'thresholds'];
+    const TABS = ['cost', 'latency', 'prompts', 'tools', 'issues', 'feedback', 'negative', 'thresholds', 'governance'];
 
     function switchTab(tab) {
       TABS.forEach(t => {
@@ -1002,6 +1035,7 @@
       if (tab === 'feedback') loadAIFeedback();
       if (tab === 'negative') loadNegativeFeedback();
       if (tab === 'thresholds') loadThresholdsForm();
+      if (tab === 'governance') loadToolGovernance();
     }
 
     function aiOpsEscapeHtml(str) {
@@ -6387,6 +6421,139 @@
       }).join('');
     }
 
+    // ── Tool Governance audit view (Task #651) ──────────────────────────────
+    // Renders the read-only audit view of TOOL_GOVERNANCE_POLICIES, grouped
+    // by gate disposition: HIGH/MEDIUM/LOW gated, gate-exempt, or read-only
+    // allowlisted. Each row shows the tool id, label, risk level, requires-
+    // approval flag, and the compliance refs from the policy.
+    const TOOL_GOVERNANCE_GROUPS = [
+      {
+        key: 'gatedHigh',
+        title: 'Gated — HIGH risk',
+        description: 'Requires human approval. High-risk writes (NC/CAPA creation, training completion) — only Quality Managers / admins can approve.',
+        badgeClass: 'bg-red-100 text-red-800 border border-red-200',
+        rowClass: 'border-red-100',
+      },
+      {
+        key: 'gatedMedium',
+        title: 'Gated — MEDIUM risk',
+        description: 'Requires human approval. Medium-risk writes (training assignment, checklist mgmt). Auto-approvable for users on the medium tier.',
+        badgeClass: 'bg-orange-100 text-orange-800 border border-orange-200',
+        rowClass: 'border-orange-100',
+      },
+      {
+        key: 'gatedLow',
+        title: 'Gated — LOW risk',
+        description: 'Requires human approval but auto-approvable for any user with a non-"never" auto-approve tier.',
+        badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
+        rowClass: 'border-amber-100',
+      },
+      {
+        key: 'exemptReadOnly',
+        title: 'Read-only allowlisted',
+        description: 'No platform write — read-only queries, analytics, and external-data ingestion. Bypasses the approval gate by policy decision.',
+        badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+        rowClass: 'border-emerald-100',
+      },
+      {
+        key: 'exemptOther',
+        title: 'Gate-exempt — other',
+        description: 'Non-read-only but exempt by deliberate policy: internal alerts, background email workflows whose own governance covers the side-effect, and scaffolding fixtures.',
+        badgeClass: 'bg-sky-100 text-sky-800 border border-sky-200',
+        rowClass: 'border-sky-100',
+      },
+    ];
+
+    function riskBadgeClass(risk) {
+      switch (String(risk || '').toLowerCase()) {
+        case 'critical': return 'bg-red-200 text-red-900';
+        case 'high':     return 'bg-red-100 text-red-800';
+        case 'medium':   return 'bg-orange-100 text-orange-800';
+        case 'low':      return 'bg-gray-100 text-gray-700';
+        default:         return 'bg-gray-100 text-gray-700';
+      }
+    }
+
+    async function loadToolGovernance() {
+      const summaryEl = document.getElementById('tool-governance-summary');
+      const groupsEl = document.getElementById('tool-governance-groups');
+      const totalEl = document.getElementById('tool-governance-total');
+      const errEl = document.getElementById('tool-governance-load-error');
+      if (!groupsEl) return;
+      errEl.classList.add('hidden');
+      groupsEl.innerHTML = '<p class="text-gray-400 text-sm">Loading…</p>';
+      summaryEl.innerHTML = '';
+      try {
+        const data = await apiFetch('/api/ai-ops/tool-governance');
+        const counts = data.counts || {};
+        totalEl.textContent = `${data.totalTools || 0} tool${(data.totalTools || 0) === 1 ? '' : 's'} registered`;
+
+        summaryEl.innerHTML = TOOL_GOVERNANCE_GROUPS.map(g => `
+          <div class="rounded-lg border ${g.badgeClass} px-3 py-2" data-testid="card-tool-governance-summary-${g.key}">
+            <div class="text-[11px] uppercase tracking-wide font-semibold opacity-80">${esc(g.title)}</div>
+            <div class="text-xl font-bold mt-1" data-testid="text-tool-governance-count-${g.key}">${esc(counts[g.key] ?? 0)}</div>
+          </div>
+        `).join('');
+
+        const groups = data.groups || {};
+        const sections = TOOL_GOVERNANCE_GROUPS.map(g => {
+          const rows = groups[g.key] || [];
+          const body = rows.length === 0
+            ? `<p class="text-sm text-gray-400 italic px-4 py-3" data-testid="text-tool-governance-empty-${g.key}">No tools in this group.</p>`
+            : `<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-tool-governance-${g.key}">
+                <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-600">
+                  <tr>
+                    <th scope="col" class="text-start px-3 py-2 font-semibold">Tool ID</th>
+                    <th scope="col" class="text-start px-3 py-2 font-semibold">Label</th>
+                    <th scope="col" class="text-start px-3 py-2 font-semibold">Risk</th>
+                    <th scope="col" class="text-start px-3 py-2 font-semibold">Requires approval</th>
+                    <th scope="col" class="text-start px-3 py-2 font-semibold">Compliance refs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows.map(r => {
+                    const refsHtml = (r.complianceRefs && r.complianceRefs.length)
+                      ? `<ul class="list-disc list-inside space-y-0.5">${r.complianceRefs.map(ref => `<li>${esc(ref)}</li>`).join('')}</ul>`
+                      : '<span class="text-gray-400 italic">read-only — no policy</span>';
+                    const reqBadge = r.requiresApproval
+                      ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800" data-testid="badge-tool-governance-requires-yes-' + esc(r.toolId) + '">Yes</span>'
+                      : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800" data-testid="badge-tool-governance-requires-no-' + esc(r.toolId) + '">No</span>';
+                    return `
+                      <tr class="border-t ${g.rowClass}" data-testid="row-tool-governance-${esc(r.toolId)}">
+                        <td class="px-3 py-2 align-top font-mono text-xs text-gray-900 break-all" data-testid="text-tool-governance-id-${esc(r.toolId)}">${esc(r.toolId)}</td>
+                        <td class="px-3 py-2 align-top text-gray-800" data-testid="text-tool-governance-label-${esc(r.toolId)}">${esc(r.label)}</td>
+                        <td class="px-3 py-2 align-top">
+                          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${riskBadgeClass(r.riskLevel)}" data-testid="badge-tool-governance-risk-${esc(r.toolId)}">${esc(String(r.riskLevel || '').toUpperCase())}</span>
+                        </td>
+                        <td class="px-3 py-2 align-top">${reqBadge}</td>
+                        <td class="px-3 py-2 align-top text-xs text-gray-700" data-testid="text-tool-governance-refs-${esc(r.toolId)}">${refsHtml}</td>
+                      </tr>`;
+                  }).join('')}
+                </tbody>
+              </table></div>`;
+          return `
+            <section class="border border-gray-200 rounded-xl overflow-hidden" data-testid="section-tool-governance-group-${g.key}">
+              <header class="px-4 py-3 ${g.badgeClass} flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h3 class="text-sm font-semibold" data-testid="text-tool-governance-group-title-${g.key}">${esc(g.title)}</h3>
+                  <p class="text-xs opacity-80 mt-0.5">${esc(g.description)}</p>
+                </div>
+                <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-white/70" data-testid="badge-tool-governance-group-count-${g.key}">${esc(rows.length)}</span>
+              </header>
+              ${body}
+            </section>`;
+        });
+        groupsEl.innerHTML = sections.join('');
+      } catch (e) {
+        console.error('Tool governance load error', e);
+        groupsEl.innerHTML = '';
+        summaryEl.innerHTML = '';
+        totalEl.textContent = '';
+        errEl.textContent = 'Failed to load tool governance overview: ' + (e?.message || 'unknown error');
+        errEl.classList.remove('hidden');
+      }
+    }
+
     function refreshAll() {
       loadSummary();
       loadMetricsTableStats();
@@ -6405,6 +6572,7 @@
       if (active === 'feedback')   loadAIFeedback();
       if (active === 'negative')   loadNegativeFeedback();
       if (active === 'thresholds') loadThresholdsForm();
+      if (active === 'governance') loadToolGovernance();
     }
 
     function esc(s) {

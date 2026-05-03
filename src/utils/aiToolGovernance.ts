@@ -679,6 +679,101 @@ export function getPolicy(toolId: string): ToolGovernancePolicy | null {
 }
 
 /* ------------------------------------------------------------------------- *
+ * Read-only audit view of the governance registry.
+ *
+ * Powers the "Tool Governance" section on the AI Operations admin page
+ * (Task #651). Returns every registered tool, classified by its current
+ * gate disposition so auditors can see at a glance which AI tools require
+ * human approval, which are auto-approved by tier, and which bypass the
+ * gate entirely (read-only / internal-notification / background workflow).
+ *
+ * Buckets:
+ *   - gatedHigh    — requiresApproval && riskLevel === 'high'
+ *   - gatedMedium  — requiresApproval && riskLevel === 'medium'
+ *   - gatedLow     — requiresApproval && riskLevel === 'low'
+ *   - exemptReadOnly  — !requiresApproval AND policy advertises a read-only
+ *                       posture (label suffix "(read-only)" OR compliance
+ *                       ref contains the literal "read-only").
+ *   - exemptOther     — !requiresApproval and not read-only — covers
+ *                       internal alerts, background email workflows, and
+ *                       scaffolding fixtures whose side-effect is governed
+ *                       elsewhere.
+ *
+ * The bucketing is derived from the same TOOL_GOVERNANCE_POLICIES the
+ * runtime gate consults, so this view can never drift from the file.
+ * ------------------------------------------------------------------------- */
+
+export type ToolGovernanceBucket =
+  | 'gatedHigh'
+  | 'gatedMedium'
+  | 'gatedLow'
+  | 'exemptReadOnly'
+  | 'exemptOther';
+
+export interface ToolGovernanceRow {
+  toolId: string;
+  label: string;
+  riskLevel: RiskLevel;
+  requiresApproval: boolean;
+  complianceRefs: string[];
+  entityType: string;
+  bucket: ToolGovernanceBucket;
+}
+
+export interface ToolGovernanceOverview {
+  totalTools: number;
+  counts: Record<ToolGovernanceBucket, number>;
+  groups: Record<ToolGovernanceBucket, ToolGovernanceRow[]>;
+}
+
+function classifyPolicy(p: ToolGovernancePolicy): ToolGovernanceBucket {
+  if (p.requiresApproval) {
+    if (p.riskLevel === 'high' || p.riskLevel === 'critical') return 'gatedHigh';
+    if (p.riskLevel === 'medium') return 'gatedMedium';
+    return 'gatedLow';
+  }
+  const labelSaysReadOnly = /\(read-only\)/i.test(p.label);
+  const refSaysReadOnly = (p.complianceRefs || []).some((r) =>
+    /read-only/i.test(r),
+  );
+  return labelSaysReadOnly || refSaysReadOnly ? 'exemptReadOnly' : 'exemptOther';
+}
+
+export function getToolGovernanceOverview(): ToolGovernanceOverview {
+  const groups: Record<ToolGovernanceBucket, ToolGovernanceRow[]> = {
+    gatedHigh: [],
+    gatedMedium: [],
+    gatedLow: [],
+    exemptReadOnly: [],
+    exemptOther: [],
+  };
+  const policies = Object.values(TOOL_GOVERNANCE_POLICIES);
+  for (const p of policies) {
+    const bucket = classifyPolicy(p);
+    groups[bucket].push({
+      toolId: p.toolId,
+      label: p.label,
+      riskLevel: p.riskLevel,
+      requiresApproval: p.requiresApproval,
+      complianceRefs: [...(p.complianceRefs || [])],
+      entityType: p.entityType,
+      bucket,
+    });
+  }
+  for (const key of Object.keys(groups) as ToolGovernanceBucket[]) {
+    groups[key].sort((a, b) => a.toolId.localeCompare(b.toolId));
+  }
+  const counts: Record<ToolGovernanceBucket, number> = {
+    gatedHigh: groups.gatedHigh.length,
+    gatedMedium: groups.gatedMedium.length,
+    gatedLow: groups.gatedLow.length,
+    exemptReadOnly: groups.exemptReadOnly.length,
+    exemptOther: groups.exemptOther.length,
+  };
+  return { totalTools: policies.length, counts, groups };
+}
+
+/* ------------------------------------------------------------------------- *
  * Auto-approval resolution
  *
  * A user can be granted auto-approval up to a certain risk level. We map

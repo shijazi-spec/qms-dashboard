@@ -46,6 +46,7 @@ import { join } from "path";
 import { existsSync, readFileSync } from "fs";
 
 import { logger } from "../../utils/logger";
+import { getToolGovernanceOverview } from "../../utils/aiToolGovernance";
 // Sourced from the central registry so adding a new agent only requires a
 // single edit in src/mastra/agents/promptVersionRegistry.ts. See that file
 // for the maintenance contract this endpoint shares with the prompt-version
@@ -2792,6 +2793,39 @@ export const aiOpsRoutes = [
         } catch (error) {
           logger.error("[AI-Ops] metrics-retention prune-now error", error as Error);
           return c.json({ error: "Failed to run manual prune" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Read-only audit view of TOOL_GOVERNANCE_POLICIES (Task #651).
+   *
+   * Powers the "Tool Governance" tab on /ai-ops, which lists every AI
+   * tool the consultant agent can invoke, grouped by gate disposition
+   * (HIGH/MEDIUM/LOW gated, gate-exempt, read-only allowlisted) so
+   * auditors and admins can see at a glance which tools require human
+   * approval and which bypass the gate. The view is derived from the
+   * same registry the runtime gate consults (see
+   * src/utils/aiToolGovernance.ts) so it can never drift from the file.
+   *
+   * Open to all AI_OPS_ROLES because the underlying governance file is
+   * already source-controlled and visible to every engineer with repo
+   * access — this endpoint just renders that audit artifact.
+   */
+  {
+    path: "/api/ai-ops/tool-governance",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const overview = getToolGovernanceOverview();
+          return c.json(overview);
+        } catch (error) {
+          logger.error("[AI-Ops] tool-governance error:", error);
+          return c.json({ error: "Failed to load tool governance overview" }, 500);
         }
       };
     },
