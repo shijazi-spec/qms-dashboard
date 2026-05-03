@@ -1435,7 +1435,10 @@
       "copy_check_link_failed": "Couldn't copy — copy from the address bar instead",
       "copy_link_url_label": "Sharable URL",
       "copy_link_url_aria": "Current sharable Health Pulse URL — click to select all",
-      "sparkline_mini_aria": "Recent {count}-run status sparkline for check {id}"
+      "sparkline_mini_aria": "Recent {count}-run status sparkline for check {id}",
+      "flapping_badge": "Flapping",
+      "flapping_tooltip": "Status changed {flips} times in the last {window} checks — flagged as unstable",
+      "flapping_aria": "Unstable check — status changed {flips} times in the last {window} runs"
     },
     "admin": {
       "no_audit_entries": "No audit entries found",

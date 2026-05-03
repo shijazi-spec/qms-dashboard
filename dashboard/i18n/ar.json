@@ -1435,7 +1435,10 @@
       "copy_check_link_failed": "تعذر النسخ — انسخ من شريط العنوان بدلاً من ذلك",
       "copy_link_url_label": "الرابط القابل للمشاركة",
       "copy_link_url_aria": "عنوان URL الحالي القابل للمشاركة لنبض النظام — انقر لتحديد الكل",
-      "sparkline_mini_aria": "خط مؤشر مختصر لحالة آخر {count} تشغيل للفحص {id}"
+      "sparkline_mini_aria": "خط مؤشر مختصر لحالة آخر {count} تشغيل للفحص {id}",
+      "flapping_badge": "متذبذب",
+      "flapping_tooltip": "تغيّرت الحالة {flips} مرات خلال آخر {window} فحوصات — مُحدد كغير مستقر",
+      "flapping_aria": "فحص غير مستقر — تغيّرت الحالة {flips} مرات خلال آخر {window} تشغيل"
     },
     "admin": {
       "no_audit_entries": "لم يتم العثور على إدخالات تدقيق",
