@@ -10,7 +10,7 @@
  *   • Slack/email transport errors do not throw out of `notifyToolHealthBreach`
  *     and do not poison the throttle map.
  *   • Multiple comma-separated email recipients are forwarded as an array.
- *   • Built link points to `/dashboard/ai-ops.html` and honours
+ *   • Built link points to `/dashboard` and honours
  *     `TOOL_HEALTH_APP_URL`.
  *
  * Run:  npx tsx tests/toolHealthAlertNotifier.test.ts
@@ -180,7 +180,7 @@ await suite.test(
     // Link button must point at the AI Ops panel under the configured base URL.
     const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
     suite.expect(
-      blocks.includes("https://qms.example.com/dashboard/ai-ops.html"),
+      blocks.includes("https://qms.example.com/dashboard"),
       `slack blocks contain link to AI Ops panel (got: ${blocks.slice(0, 200)}...)`,
     );
     // Dedupe key should appear in the context footer for traceability.
@@ -214,11 +214,11 @@ await suite.test(
       `subject prefixed with severity (got: ${call.subject})`,
     );
     suite.expect(
-      (call.html ?? "").includes("/dashboard/ai-ops.html"),
+      (call.html ?? "").includes("/dashboard"),
       "email HTML links to AI Operations panel",
     );
     suite.expect(
-      (call.text ?? "").includes("/dashboard/ai-ops.html"),
+      (call.text ?? "").includes("/dashboard"),
       "email plaintext links to AI Operations panel",
     );
     suite.expectEqual(slackCalls.length, 0, "no slack");
@@ -597,7 +597,7 @@ await suite.test(
     suite.expectEqual(hasButton, false, "no actions button when URL is relative");
     const json = JSON.stringify(blocks);
     suite.expect(
-      json.includes("/dashboard/ai-ops.html"),
+      json.includes("/dashboard"),
       "still surfaces the relative path as text",
     );
     suite.expect(
@@ -605,7 +605,7 @@ await suite.test(
       "tells the operator how to enable a clickable link",
     );
     suite.expect(
-      !json.includes("https:///dashboard/ai-ops.html"),
+      !json.includes("https:///dashboard"),
       "no malformed URL with empty origin",
     );
   },
@@ -626,7 +626,7 @@ await suite.test(
     suite.expect(!!button, "actions button rendered when URL is absolute");
     suite.expectEqual(
       button?.url,
-      "https://qms.example.com/dashboard/ai-ops.html",
+      "https://qms.example.com/dashboard",
       "button URL is absolute and points to AI Ops panel",
     );
   },
@@ -787,7 +787,7 @@ await suite.test(
       "operator note surfaced",
     );
     suite.expect(
-      blocks.includes("https://qms.example.com/dashboard/ai-ops.html?tab=thresholds"),
+      blocks.includes("https://qms.example.com/dashboard?tab=thresholds"),
       `blocks include deep-link to Alert Thresholds tab (got: ${blocks.slice(0, 200)}...)`,
     );
     suite.expect(
@@ -815,7 +815,7 @@ await suite.test(
     suite.expectEqual(hasButton, false, "no actions button when URL is relative");
     const json = JSON.stringify(blocks);
     suite.expect(
-      json.includes("/dashboard/ai-ops.html?tab=thresholds"),
+      json.includes("/dashboard?tab=thresholds"),
       "still surfaces relative path",
     );
     suite.expect(
@@ -999,7 +999,7 @@ await suite.test(
       "HTML body lists changed field label",
     );
     suite.expect(
-      emailCalls[0]?.html.includes("https://qms.example.com/dashboard/ai-ops.html?tab=thresholds"),
+      emailCalls[0]?.html.includes("https://qms.example.com/dashboard?tab=thresholds"),
       "HTML body includes deep-link to Alert Thresholds tab",
     );
     suite.expect(
@@ -1188,7 +1188,7 @@ await suite.test(
     );
     suite.expect(
       blocks.includes(
-        "https://qms.example.com/dashboard/ai-ops.html?tab=thresholds#threshold-audit-7777",
+        "https://qms.example.com/dashboard?tab=thresholds#threshold-audit-7777",
       ),
       `blocks deep-link to the audit row (got: ${blocks.slice(0, 400)}...)`,
     );
@@ -1233,7 +1233,7 @@ await suite.test(
     suite.expectEqual(hasButton, false, "no actions button when URL is relative");
     const json = JSON.stringify(blocks);
     suite.expect(
-      json.includes("/dashboard/ai-ops.html"),
+      json.includes("/dashboard"),
       "still surfaces the relative path as text",
     );
     suite.expect(
@@ -1416,7 +1416,7 @@ await suite.test(
       "blocks reference alert id",
     );
     suite.expect(
-      blocks.includes("https://qms.example.com/dashboard/ai-ops.html"),
+      blocks.includes("https://qms.example.com/dashboard"),
       "blocks link to AI Ops panel",
     );
     suite.expect(
@@ -1446,11 +1446,11 @@ await suite.test(
       "subject includes tool name",
     );
     suite.expect(
-      (call.html ?? "").includes("/dashboard/ai-ops.html"),
+      (call.html ?? "").includes("/dashboard"),
       "email HTML links to AI Operations panel",
     );
     suite.expect(
-      (call.text ?? "").includes("/dashboard/ai-ops.html"),
+      (call.text ?? "").includes("/dashboard"),
       "email plaintext links to AI Operations panel",
     );
     suite.expect(
@@ -1652,7 +1652,7 @@ await suite.test(
     suite.expectEqual(hasButton, false, "no actions button when URL is relative");
     const json = JSON.stringify(blocks);
     suite.expect(
-      json.includes("/dashboard/ai-ops.html"),
+      json.includes("/dashboard"),
       "still surfaces the relative path as text",
     );
   },

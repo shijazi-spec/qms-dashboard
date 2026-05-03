@@ -100,8 +100,8 @@ const ERROR_CASES: ErrorCase[] = [
     errorBody: { error: "Failed to fetch CAPA records" },
   },
   {
-    name: "GET /api/qms/capa/:id",
-    path: "/api/qms/capa/:id",
+    name: "GET /api/qms/capa/:id{[0-9]+}",
+    path: "/api/qms/capa/:id{[0-9]+}",
     method: "GET",
     dbFn: "getCapaById",
     errorBody: { error: "Failed to fetch CAPA details" },

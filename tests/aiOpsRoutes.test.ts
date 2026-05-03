@@ -65,13 +65,14 @@ for (const route of aiOpsRoutes) {
   });
 }
 
-await suite.test("GET /ai-ops — 403 without an AI-ops role (html route also gated)", async () => {
+await suite.test("GET /ai-ops — 302 redirect to /dashboard (page retired, no auth check)", async () => {
   const handler = await buildHandler(aiOpsRoutes, "/ai-ops", "GET");
-  const ctx = makeContext({ method: "GET" }) as FakeContext & { html?: any };
+  const ctx = makeContext({ method: "GET" }) as FakeContext & { html?: any; redirect?: any };
   ctx.html = (body: string, status?: number) => ({ status: status ?? 200, body, headers: {} });
+  ctx.redirect = (location: string, status?: number) => ({ status: status ?? 302, body: "", headers: { Location: location } });
   const res = await handler(ctx);
-  suite.expectEqual(res.status, 403, "status");
-  suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
+  suite.expectEqual(res.status, 302, "status");
+  suite.expectEqual(res.headers?.Location, "/dashboard", "redirect target");
 });
 
 // ---------------------------------------------------------------------------
