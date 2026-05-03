@@ -2392,7 +2392,27 @@ export const FEEDBACK_RATE_BY_PROMPT_VERSION_SQL = `WITH windowed AS (
          ON rsb.agent_name = g.agent_name AND rsb.prompt_version = g.prompt_version
        ORDER BY g.agent_name, g.last_seen_at DESC`;
 
-export async function getRecentNegativeFeedback(limit = 25): Promise<
+/**
+ * Optional filters for the Recent Thumbs-Down panel (Task #598).
+ *
+ * - `agentName` narrows to a single agent (e.g. when an admin spots a
+ *   regression on `qmsConsultantAgent` and wants to drill in without
+ *   scrolling the combined list). Trimmed and capped at 100 chars to match
+ *   the agent_name column the production rows use.
+ * - `days` controls the lookback window (was hard-coded to 30). Clamped to
+ *   1..365 to match the route-level `safeInt` guard so an out-of-range value
+ *   from a future caller can never blow out the query plan. Both filters
+ *   are applied via parameterized SQL — no string interpolation.
+ */
+export interface RecentNegativeFeedbackOptions {
+  limit?: number;
+  agentName?: string | null;
+  days?: number;
+}
+
+export async function getRecentNegativeFeedback(
+  optsOrLimit: number | RecentNegativeFeedbackOptions = {},
+): Promise<
   {
     feedback_id: string;
     call_id: string;
@@ -2428,7 +2448,31 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<
   }[]
 > {
   try {
+    // Back-compat: accept the legacy positional `limit` form so existing
+    // callers (and the test suite that pre-dates Task #598) keep working
+    // without a sweep — only the route-level dashboard wiring needs the
+    // new options bag.
+    const opts: RecentNegativeFeedbackOptions =
+      typeof optsOrLimit === "number" ? { limit: optsOrLimit } : optsOrLimit;
+    const limit = Math.max(1, Math.min(1000, Math.floor(opts.limit ?? 25)));
+    const days = Math.max(1, Math.min(365, Math.floor(opts.days ?? 30)));
+    const agentName =
+      typeof opts.agentName === "string" && opts.agentName.trim()
+        ? opts.agentName.trim().slice(0, 100)
+        : null;
+
     await ensureFeedbackTable();
+    // INTERVAL is built via parameterized arithmetic (`INTERVAL '1 day' * $N`)
+    // so the day-window stays a real integer parameter — never a string
+    // interpolated into the SQL — which keeps the query injection-safe and
+    // lets Postgres reuse the prepared plan across windows. Same pattern
+    // for the optional agent_name filter.
+    const params: any[] = [limit, days];
+    let agentClause = "";
+    if (agentName) {
+      params.push(agentName);
+      agentClause = ` AND m.agent_name = $${params.length}`;
+    }
     const result = await pool.query(
       `SELECT
          f.id           AS feedback_id,
@@ -2447,10 +2491,10 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<
        FROM ai_call_feedback f
        JOIN ai_call_metrics  m ON m.id = f.call_id
        WHERE f.rating = 'thumbs_down'
-         AND f.created_at >= NOW() - INTERVAL '30 days'
+         AND f.created_at >= NOW() - (INTERVAL '1 day' * $2)${agentClause}
        ORDER BY f.created_at DESC
        LIMIT $1`,
-      [limit],
+      params,
     );
     return result.rows.map((row) => ({
       ...row,
@@ -2465,7 +2509,7 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<
   }
 }
 
-export async function getFeedbackRateByAgent(): Promise<
+export async function getFeedbackRateByAgent(days = 30): Promise<
   {
     agent_name: string;
     total_feedback: number;
@@ -2475,6 +2519,12 @@ export async function getFeedbackRateByAgent(): Promise<
   }[]
 > {
   try {
+    // Same parameterized day-window plumbing as `getRecentNegativeFeedback`
+    // (Task #598) so the dashboard's per-agent feedback-rate panel and the
+    // recent thumbs-down panel narrow to the same 7/30/90 window when an
+    // operator flips the toggle. Clamped to 1..365 to match the route-level
+    // safeInt guard.
+    const safeDays = Math.max(1, Math.min(365, Math.floor(days || 30)));
     await ensureFeedbackTable();
     const result = await pool.query(
       `SELECT
@@ -2488,9 +2538,10 @@ export async function getFeedbackRateByAgent(): Promise<
          )                                                                    AS feedback_rate_pct
        FROM ai_call_feedback f
        JOIN ai_call_metrics  m ON m.id = f.call_id
-       WHERE f.created_at >= NOW() - INTERVAL '30 days'
+       WHERE f.created_at >= NOW() - (INTERVAL '1 day' * $1)
        GROUP BY m.agent_name
        ORDER BY total_feedback DESC`,
+      [safeDays],
     );
     return result.rows;
   } catch {

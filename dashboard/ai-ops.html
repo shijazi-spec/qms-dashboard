@@ -770,10 +770,69 @@
     <!-- Negative Feedback Tab -->
     <div id="content-negative" class="hidden fade-in">
       <div class="bg-white rounded-xl shadow-sm border p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-1" data-i18n="ai_ops.recent_thumbs_down">Recent Thumbs-Down Feedback — last 30 days</h2>
-        <p class="text-sm text-gray-500 mb-4">
-          User-reported bad answers, with optional "what went wrong?" comments and a link back to the original AI call row.
-        </p>
+        <div class="flex items-start justify-between gap-4 mb-4 flex-wrap">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 mb-1" data-i18n="ai_ops.recent_thumbs_down">Recent Thumbs-Down Feedback</h2>
+            <p class="text-sm text-gray-500">
+              User-reported bad answers, with optional "what went wrong?" comments and a link back to the original AI call row.
+            </p>
+          </div>
+          <!-- Drill-down filter bar (Task #598). The agent dropdown is
+               populated from the same per-agent feedback-rate dataset
+               already loaded by the Tool Health tab so admins don't have
+               to wait on a second round trip. The day-window toggle
+               mirrors the 7/30/90 options on the consultant feedback
+               panel above so both panels share a vocabulary. The
+               prompt_version / feature_flag inputs are populated by
+               clicking the matching chip on a row below — they let an
+               admin pivot from "this row failed" to "all rows on this
+               revision/flag" in one click. Inputs apply client-side over
+               the fetched window for snappy filtering. -->
+          <div class="flex flex-wrap items-end gap-2" data-testid="filters-negative-feedback">
+            <div class="flex flex-col">
+              <label for="negative-agent-filter" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Agent</label>
+              <select id="negative-agent-filter"
+                      data-on-change="loadNegativeFeedback"
+                      class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      data-testid="select-negative-agent">
+                <option value="">All agents</option>
+              </select>
+            </div>
+            <div class="flex flex-col">
+              <label for="negative-days-filter" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Window</label>
+              <select id="negative-days-filter"
+                      data-on-change="loadNegativeFeedback"
+                      class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      data-testid="select-negative-days">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+            </div>
+            <div class="flex flex-col">
+              <label for="negative-prompt-version-filter" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Prompt version</label>
+              <input id="negative-prompt-version-filter"
+                     type="text"
+                     placeholder="e.g. qms@deadbeef"
+                     data-on-input="onNegativeChipFilterInput"
+                     class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-44"
+                     data-testid="input-negative-prompt-version">
+            </div>
+            <div class="flex flex-col">
+              <label for="negative-feature-flag-filter" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Feature flag</label>
+              <input id="negative-feature-flag-filter"
+                     type="text"
+                     placeholder="e.g. pilot-rollout"
+                     data-on-input="onNegativeChipFilterInput"
+                     class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
+                     data-testid="input-negative-feature-flag">
+            </div>
+            <button type="button"
+                    data-on-click="clearNegativeFilters"
+                    class="text-xs text-gray-500 hover:text-gray-700 underline self-center mb-1"
+                    data-testid="button-negative-filters-clear">Clear</button>
+          </div>
+        </div>
         <div id="negative-table" class="overflow-x-auto">
           <p class="text-gray-400 text-sm" data-i18n="admin.loading">Loading…</p>
         </div>
@@ -4385,12 +4444,118 @@
       renderChildren(container, rows);
     }
 
+    // Debounce timer for the prompt_version / feature_flag client-side
+    // filter inputs in the Negative Feedback panel (Task #598). Chips clicked
+    // on a row populate these inputs and re-run loadNegativeFeedback() so
+    // the operator can pivot from "this row" to "all rows on this revision/
+    // flag" in one click. Re-renders use the cached payload to keep the
+    // pivot snappy — only an agent or window change re-fetches.
+    let negativeFeedbackChipFilterTimer = null;
+    let negativeFeedbackCache = [];
+
+    function onNegativeChipFilterInput() {
+      if (negativeFeedbackChipFilterTimer) clearTimeout(negativeFeedbackChipFilterTimer);
+      negativeFeedbackChipFilterTimer = setTimeout(() => {
+        renderNegativeFeedback(negativeFeedbackCache);
+      }, 200);
+    }
+
+    function clearNegativeFilters() {
+      const a = document.getElementById('negative-agent-filter');
+      const d = document.getElementById('negative-days-filter');
+      const pv = document.getElementById('negative-prompt-version-filter');
+      const ff = document.getElementById('negative-feature-flag-filter');
+      if (a) a.value = '';
+      if (d) d.value = '30';
+      if (pv) pv.value = '';
+      if (ff) ff.value = '';
+      loadNegativeFeedback();
+    }
+
+    // Click-to-filter handler invoked from the chip buttons in
+    // renderNegativeFeedback below. Populates the matching input and
+    // triggers a re-render against the cached payload — no extra round
+    // trip to the API needed for these client-side filters.
+    function applyNegativeChipFilter(field, value) {
+      const idMap = {
+        prompt_version: 'negative-prompt-version-filter',
+        feature_flag:   'negative-feature-flag-filter',
+      };
+      const inputId = idMap[field];
+      if (!inputId) return;
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      input.value = value || '';
+      renderNegativeFeedback(negativeFeedbackCache);
+    }
+
+    // Populate the agent dropdown from the same per-agent feedback-rate
+    // dataset already exposed by /api/ai-ops/agent-latency (which joins
+    // getFeedbackRateByAgent under the hood). Preserves the currently-
+    // selected value across reloads so an admin's narrowed view survives
+    // a refresh.
+    async function loadNegativeAgentOptions() {
+      const sel = document.getElementById('negative-agent-filter');
+      if (!sel) return;
+      try {
+        const { data } = await apiFetch('/api/ai-ops/agent-latency');
+        const desired = sel.value || '';
+        const seen = new Set();
+        const opts = ['<option value="">All agents</option>'];
+        (Array.isArray(data) ? data : []).forEach(r => {
+          const name = r && r.agent_name;
+          if (!name || seen.has(name)) return;
+          seen.add(name);
+          opts.push(`<option value="${esc(name)}">${esc(name)}</option>`);
+        });
+        if (desired && !seen.has(desired)) {
+          opts.push(`<option value="${esc(desired)}">${esc(desired)}</option>`);
+        }
+        sel.innerHTML = opts.join('');
+        sel.value = desired;
+      } catch (_e) { /* leave the placeholder option in place */ }
+    }
+
     async function loadNegativeFeedback() {
       const el = document.getElementById('negative-table');
       try {
-        const { data } = await apiFetch('/api/ai-ops/negative-feedback?limit=50');
-        if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm">' + WalaPlusI18n.t('dyn.ai_ops.no_neg_feedback') + '</p>'; return; }
-        el.innerHTML = `
+        // Lazily backfill the agent dropdown the first time the panel
+        // loads — keeps the initial render snappy without an extra blocking
+        // round-trip on every refresh.
+        const sel = document.getElementById('negative-agent-filter');
+        if (sel && sel.options.length <= 1) {
+          await loadNegativeAgentOptions();
+        }
+        const agentName = (sel?.value || '').trim();
+        const days = document.getElementById('negative-days-filter')?.value || '30';
+        const params = new URLSearchParams({ limit: '50', days: String(days) });
+        if (agentName) params.set('agentName', agentName);
+        const { data } = await apiFetch(`/api/ai-ops/feedback/recent-negative?${params.toString()}`);
+        negativeFeedbackCache = Array.isArray(data) ? data : [];
+        renderNegativeFeedback(negativeFeedbackCache);
+      } catch (e) {
+        el.innerHTML = '<p class="text-red-500 text-sm">Failed to load negative feedback.</p>';
+      }
+    }
+
+    function renderNegativeFeedback(rows) {
+      const el = document.getElementById('negative-table');
+      if (!el) return;
+      // Apply the chip-driven client-side filters. Trim so a stray space in
+      // the input doesn't accidentally drop every row.
+      const pvFilter = (document.getElementById('negative-prompt-version-filter')?.value || '').trim();
+      const ffFilter = (document.getElementById('negative-feature-flag-filter')?.value || '').trim();
+      const data = (Array.isArray(rows) ? rows : []).filter(r => {
+        const meta = (r && typeof r.metadata === 'object' && r.metadata) ? r.metadata : {};
+        if (pvFilter && String(meta.prompt_version || '') !== pvFilter) return false;
+        if (ffFilter && String(meta.feature_flag   || '') !== ffFilter) return false;
+        return true;
+      });
+      if (!data.length) {
+        el.innerHTML = '<p class="text-gray-400 text-sm">' + WalaPlusI18n.t('dyn.ai_ops.no_neg_feedback') + '</p>';
+        return;
+      }
+      el.innerHTML = `
           <table class="min-w-full text-start text-sm" data-testid="table-negative-feedback">
             <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
               <th scope="col" class="px-3 py-2" data-i18n="ai_ops.when">When</th>
@@ -4427,6 +4592,12 @@
               // by the feedback loader so operators pivoting between the
               // two views see a consistent palette.
               const meta = (r && typeof r.metadata === 'object' && r.metadata) ? r.metadata : {};
+              // Task #598: prompt_version and feature_flag chips are
+              // click-to-filter — they populate the matching input above
+              // and re-run the renderer. The remaining keys have no
+              // dedicated input so they render as inert spans (same
+              // visual treatment, no hover affordance).
+              const CLICKABLE_CHIP_KEYS = { prompt_version: true, feature_flag: true };
               const metaChips = [
                 { key: 'prompt_version',  label: 'prompt' },
                 { key: 'feature_flag',    label: 'flag' },
@@ -4437,7 +4608,26 @@
               ]
                 .filter(({ key }) => typeof meta[key] === 'string' && meta[key].trim() !== '')
                 .map(({ key, label }) => {
-                  const val = esc(String(meta[key]).substring(0, 60));
+                  // Full raw value is preserved for the click-to-filter
+                  // payload so long prompt_version / feature_flag values
+                  // (e.g. SHA-suffixed identifiers) still match exactly
+                  // when the user clicks the chip; only the on-screen
+                  // label is truncated to keep the chip compact.
+                  const rawVal = String(meta[key]);
+                  const displayVal = esc(rawVal.substring(0, 60));
+                  const val = displayVal;
+                  if (CLICKABLE_CHIP_KEYS[key]) {
+                    const argsAttr = esc(JSON.stringify([key, rawVal]));
+                    return `<button type="button"
+                                  data-on-click="applyNegativeChipFilter"
+                                  data-args='${argsAttr}'
+                                  class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-red-200 text-[10px] text-red-700 hover:bg-red-50 cursor-pointer"
+                                  data-testid="chip-negative-${esc(key)}-${r.feedback_id}"
+                                  title="Click to filter by metadata.${esc(key)}=${val}">
+                              <span class="font-semibold uppercase tracking-wide text-red-500">${esc(label)}</span>
+                              <span class="font-mono">${val}</span>
+                            </button>`;
+                  }
                   return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-red-200 text-[10px] text-red-700"
                                 data-testid="chip-negative-${esc(key)}-${r.feedback_id}"
                                 title="metadata.${esc(key)}">
@@ -4478,9 +4668,6 @@
             }).join('')}
             </tbody>
           </table>`;
-      } catch (e) {
-        el.innerHTML = '<p class="text-red-500 text-sm">Failed to load negative feedback.</p>';
-      }
     }
 
     async function showCallContext(callId, event) {

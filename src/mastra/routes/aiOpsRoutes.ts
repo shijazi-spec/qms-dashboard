@@ -441,9 +441,15 @@ export const aiOpsRoutes = [
         try {
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          // Task #598: thread the same `?days=` window the dashboard's
+          // Recent Negative Feedback panel uses through the per-agent
+          // feedback-rate path so both panels stay window-consistent.
+          // Defaults to 30 (legacy behaviour) and is clamped 1..365 by
+          // safeInt + the loader's own clamp.
+          const days = safeInt(c.req.query("days"), 30, 1, 365);
           const [latency, feedback] = await Promise.all([
             getAgentLatencyPercentiles(),
-            getFeedbackRateByAgent(),
+            getFeedbackRateByAgent(days),
           ]);
           const fbMap = new Map(feedback.map((f) => [f.agent_name, f]));
           const data = latency.map((row) => ({
@@ -664,24 +670,57 @@ export const aiOpsRoutes = [
     },
   },
 
-  {
-    path: "/api/ai-ops/negative-feedback",
-    method: "GET" as const,
-    createHandler: async () => {
+  // Task #598: shared handler for the Recent Thumbs-Down feed.
+  // Exposed under the new canonical path
+  // `/api/ai-ops/feedback/recent-negative` AND the legacy
+  // `/api/ai-ops/negative-feedback` alias so any existing dashboard code,
+  // bookmarks, or external consumers keep working through the cutover.
+  // Both routes share the same handler factory below.
+  ...((): any[] => {
+    const recentNegativeHandler = async () => {
       return async (c: any) => {
         try {
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const limit = safeInt(c.req.query("limit"), 25, 1, 100);
-          const data = await getRecentNegativeFeedback(limit);
-          return c.json({ data });
+          // Task #598: dashboard-driven drill-down filters. `days` mirrors
+          // the 7/30/90 window toggle on the panel (clamped to 1..365 so
+          // the loader's parameterized INTERVAL stays sensible) and
+          // `agentName` mirrors the per-agent dropdown — populated client
+          // side from the same agents already shown in the per-agent
+          // feedback-rate panel. Both default to the historical 30-day
+          // combined-list behaviour when omitted.
+          const days = safeInt(c.req.query("days"), 30, 1, 365);
+          const agentNameRaw = c.req.query("agentName");
+          const agentName =
+            typeof agentNameRaw === "string" && agentNameRaw.trim()
+              ? agentNameRaw.trim().slice(0, 100)
+              : null;
+          const data = await getRecentNegativeFeedback({
+            limit,
+            days,
+            agentName,
+          });
+          return c.json({ data, days, agentName });
         } catch (error) {
           logger.error("[AI-Ops] negative-feedback error:", error);
           return c.json({ error: "Failed to fetch negative feedback" }, 500);
         }
       };
-    },
-  },
+    };
+    return [
+      {
+        path: "/api/ai-ops/feedback/recent-negative",
+        method: "GET" as const,
+        createHandler: recentNegativeHandler,
+      },
+      {
+        path: "/api/ai-ops/negative-feedback",
+        method: "GET" as const,
+        createHandler: recentNegativeHandler,
+      },
+    ];
+  })(),
 
   {
     path: "/api/ai-ops/call/:id",
