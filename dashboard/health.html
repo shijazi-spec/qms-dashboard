@@ -138,6 +138,13 @@
             outline: 2px solid #2563EB; outline-offset: 2px;
             background: #FFFFFF;
         }
+        .sparkline-mini {
+            display: inline-block; vertical-align: middle; flex-shrink: 0;
+            margin-right: 4px;
+        }
+        .sparkline-mini rect { transition: opacity 0.15s; }
+        .sparkline-mini:hover rect { opacity: 0.85; }
+        .sparkline-mini rect:hover { opacity: 1; }
     </style>
     <script src="/js/i18n.js?v=1.0"></script>
 </head>
@@ -431,6 +438,41 @@
                 + '</div>';
         }
 
+        /**
+         * Compact inline sparkline shown directly in the collapsed row so
+         * admins can scan flapping checks across the whole breakdown
+         * without expanding each one. Reuses the same per-check history
+         * payload as the full-size sparkline (`/api/health/pulse`); just
+         * trims to the most recent ~10 runs for a row-friendly footprint.
+         */
+        function renderMiniSparkline(checkId, history) {
+            if (!Array.isArray(history) || history.length < 2) {
+                return '';
+            }
+            const recent = history.slice(-10);
+            const barWidth = 4;
+            const barGap = 2;
+            const barHeight = 16;
+            const total = recent.length;
+            const width = total * (barWidth + barGap) - barGap;
+            const bars = recent.map((entry, i) => {
+                const x = i * (barWidth + barGap);
+                const status = entry && entry.status ? entry.status : 'skipped';
+                const color = STATUS_BAR_COLOR[status] || STATUS_BAR_COLOR.skipped;
+                const tip = fmtTime(entry && entry.run_at) + ' — ' + status.toUpperCase();
+                return '<rect x="' + x + '" y="0" width="' + barWidth + '" height="' + barHeight + '" fill="' + color + '" rx="1">'
+                    + '<title>' + escapeHtml(tip) + '</title>'
+                    + '</rect>';
+            }).join('');
+            const ariaLabel = _t('dyn.health.sparkline_mini_aria', { count: total, id: checkId });
+            return '<svg class="sparkline-mini" viewBox="0 0 ' + width + ' ' + barHeight + '" '
+                + 'width="' + width + '" height="' + barHeight + '" '
+                + 'role="img" aria-label="' + escapeHtml(ariaLabel) + '" '
+                + 'data-testid="sparkline-mini-' + escapeHtml(checkId) + '">'
+                + bars
+                + '</svg>';
+        }
+
         function renderAlertBanner(latest) {
             const banner = el('alert-banner');
             const inner = el('alert-banner-inner');
@@ -569,7 +611,9 @@
                 const rows = rowsArr.map(c => {
                     const detailJson = c.details ? `<pre class="json">${escapeHtml(JSON.stringify(c.details, null, 2))}</pre>` : '';
                     const message = c.message ? `<div class="text-sm text-gray-600 mt-1 mb-2">${escapeHtml(c.message)}</div>` : '';
-                    const sparkline = renderCheckSparkline(c.id, lastPerCheckHistory[c.id]);
+                    const checkHistory = lastPerCheckHistory[c.id];
+                    const sparkline = renderCheckSparkline(c.id, checkHistory);
+                    const miniSparkline = renderMiniSparkline(c.id, checkHistory);
                     const rowCopyAria = _t('dyn.health.copy_check_link_aria', { id: c.id });
                     return `
                         <details class="check-row border-t border-gray-100" data-check-id="${escapeHtml(c.id)}" data-testid="row-check-${escapeHtml(c.id)}">
@@ -580,6 +624,7 @@
                                     <div class="text-sm font-medium text-gray-900">${escapeHtml(c.label || c.id)}</div>
                                     <div class="text-xs text-gray-500">${escapeHtml(c.id)} · ${c.duration_ms}ms</div>
                                 </div>
+                                ${miniSparkline}
                                 <span class="badge badge-${c.status}">${c.status.toUpperCase()}</span>
                                 <button type="button" class="row-copy-link-btn"
                                     data-check-copy="${escapeHtml(c.id)}"
