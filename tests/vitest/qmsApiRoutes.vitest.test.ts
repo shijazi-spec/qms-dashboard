@@ -59,6 +59,120 @@ afterEach(() => {
   delete process.env.ADMIN_API_KEY;
 });
 
+type ErrorCase = {
+  name: string;
+  path: string;
+  method: string;
+  dbFn: keyof typeof import("../../src/utils/qmsDatabase");
+  errorBody: { error: string };
+  body?: unknown;
+  params?: Record<string, string>;
+  query?: Record<string, string>;
+};
+
+const ERROR_CASES: ErrorCase[] = [
+  {
+    name: "GET /api/qms/dashboard",
+    path: "/api/qms/dashboard",
+    method: "GET",
+    dbFn: "getQmsDashboardData",
+    errorBody: { error: "Failed to fetch QMS dashboard" },
+  },
+  {
+    name: "GET /api/qms/evaluations",
+    path: "/api/qms/evaluations",
+    method: "GET",
+    dbFn: "getDealEvaluations",
+    errorBody: { error: "Failed to fetch evaluations" },
+  },
+  {
+    name: "GET /api/qms/evaluations/stats",
+    path: "/api/qms/evaluations/stats",
+    method: "GET",
+    dbFn: "getEvaluationStatistics",
+    errorBody: { error: "Failed to fetch evaluation stats" },
+  },
+  {
+    name: "GET /api/qms/capa",
+    path: "/api/qms/capa",
+    method: "GET",
+    dbFn: "getCapaRecords",
+    errorBody: { error: "Failed to fetch CAPA records" },
+  },
+  {
+    name: "GET /api/qms/capa/:id",
+    path: "/api/qms/capa/:id",
+    method: "GET",
+    dbFn: "getCapaById",
+    errorBody: { error: "Failed to fetch CAPA details" },
+    params: { id: "1" },
+  },
+  {
+    name: "POST /api/qms/capa",
+    path: "/api/qms/capa",
+    method: "POST",
+    dbFn: "createCapaRecord",
+    errorBody: { error: "Failed to create CAPA" },
+    body: { title: "X", severity: "minor", capaType: "corrective" },
+  },
+  {
+    name: "GET /api/qms/nc",
+    path: "/api/qms/nc",
+    method: "GET",
+    dbFn: "getNonconformances",
+    errorBody: { error: "Failed to fetch NC records" },
+  },
+  {
+    name: "POST /api/qms/nc",
+    path: "/api/qms/nc",
+    method: "POST",
+    dbFn: "createNonconformance",
+    errorBody: { error: "Failed to create NC" },
+    body: { title: "X", severity: "minor", ncType: "process" },
+  },
+  {
+    name: "GET /api/qms/training",
+    path: "/api/qms/training",
+    method: "GET",
+    dbFn: "getTrainingRecords",
+    errorBody: { error: "Failed to fetch training records" },
+  },
+  {
+    name: "GET /api/qms/training/assignments",
+    path: "/api/qms/training/assignments",
+    method: "GET",
+    dbFn: "getTrainingAssignments",
+    errorBody: { error: "Failed to fetch training assignments" },
+  },
+  {
+    name: "GET /api/qms/framework",
+    path: "/api/qms/framework",
+    method: "GET",
+    dbFn: "getActiveFramework",
+    errorBody: { error: "Failed to fetch evaluation framework" },
+  },
+];
+
+describe("error-path coverage — every db-backed QMS route returns deterministic 500 body", () => {
+  test.each(ERROR_CASES)(
+    "$name returns 500 with exact error body when $dbFn rejects",
+    async ({ path, method, dbFn, errorBody, body, params, query }) => {
+      const fn = qmsDb[dbFn] as unknown as ReturnType<typeof vi.fn>;
+      vi.mocked(fn).mockRejectedValueOnce(new Error("simulated db failure"));
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      const handler = await buildHandler(qmsApiRoutes, path, method);
+      const res = await handler(
+        makeContext({ method, headers: AUTH_HEADERS, body, params, query }),
+      );
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual(errorBody);
+      errSpy.mockRestore();
+    },
+  );
+});
+
 describe("GET /api/qms/dashboard — real data path", () => {
   test("200 returns the exact payload from getQmsDashboardData", async () => {
     const fixture: Awaited<ReturnType<typeof qmsDb.getQmsDashboardData>> = {
