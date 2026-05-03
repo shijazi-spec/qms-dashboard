@@ -900,6 +900,95 @@ describe('streamingDownload (browser helper)', () => {
     expect(env.win.alert).not.toHaveBeenCalled();
   });
 
+  it('shows an "Interrupted — Retry" toast when a mid-stream TypeError kills the service-worker streaming path (Task #379)', async () => {
+    // The SW path catches its own pipeTo() rejections and rethrows them as a
+    // synthetic AbortError (so the iframe-driven download is treated as a
+    // normal cancellation by the browser). The outer catch-block must still
+    // recognise this as an environmental abort — NOT a user cancel — and
+    // surface the amber "Download interrupted — Retry" toast, matching the
+    // behaviour of the FSA and Blob paths.
+    env = setupBrowserEnv({
+      enableShowSaveFilePicker: false,
+      installServiceWorker: true,
+    });
+
+    let bodyController: any;
+    const body = new (globalThis as any).ReadableStream({
+      start(c: any) { bodyController = c; },
+    });
+
+    let fetchCalls = 0;
+    env.win.fetch = vi.fn(async () => {
+      fetchCalls += 1;
+      return new (globalThis as any).Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-disposition': 'attachment; filename="sw-network-drop.bin"',
+        },
+      });
+    });
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/sw-network-drop.bin', {
+      skipEstimate: true,
+      streamToDisk: true,
+    });
+
+    // Wait until the SW register ack lands and the iframe is in the DOM —
+    // this means we're truly on the SW streaming path (not the Blob fallback).
+    for (let i = 0; i < 50; i++) {
+      const hasReg = env.swCalls.some((c) => c.msg && c.msg.type === 'register');
+      const hasIframe = env.win.document.querySelectorAll('iframe').length > 0;
+      if (hasReg && hasIframe) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(env.swCalls.some((c) => c.msg && c.msg.type === 'register')).toBe(true);
+
+    // Push a chunk so we're truly mid-stream (received > 0).
+    bodyController.enqueue(new Uint8Array([1, 2, 3, 4]));
+    await new Promise((r) => setTimeout(r, 5));
+
+    // Simulate a real network drop on the body: this surfaces inside pipeTo()
+    // as a TypeError, which the SW catch-block rewraps into AbortError before
+    // it ever reaches the outer guard.
+    const networkErr: any = new Error('Failed to fetch');
+    networkErr.name = 'TypeError';
+    bodyController.error(networkErr);
+
+    await expect(downloadPromise).rejects.toMatchObject({
+      name: 'AbortError',
+      interrupted: true,
+    });
+
+    // The "Interrupted — Retry" warn toast must appear — same as the FSA and
+    // Blob paths. The filename context must be preserved.
+    const toast = env.win.document.querySelector('[data-testid="toast-download-interrupted"]');
+    expect(toast).not.toBeNull();
+    expect(toast?.textContent).toMatch(/interrupted/i);
+    expect(toast?.textContent).toMatch(/sw-network-drop\.bin/);
+
+    // The Retry button must be present.
+    const retryBtn = toast?.querySelector(
+      '[data-testid="button-retry-download"]'
+    ) as HTMLButtonElement | null;
+    expect(retryBtn).not.toBeNull();
+    expect(retryBtn?.textContent).toBe('Retry');
+
+    // The progress card must show "Interrupted", not "Cancelled".
+    const card = env.win.document.querySelector('[data-testid="card-download-progress"]');
+    const status = card?.querySelector('[data-testid="text-download-status"]');
+    expect(status?.textContent).toMatch(/interrupted/i);
+
+    // Best-effort: the SW received an explicit cancel for the registration so
+    // the in-flight stream entry is cleaned up server-worker-side.
+    const cancelCalls = env.swCalls.filter((c) => c.msg && c.msg.type === 'cancel');
+    expect(cancelCalls.length).toBeGreaterThanOrEqual(1);
+
+    // Only one fetch — Retry hasn't been clicked yet.
+    expect(fetchCalls).toBe(1);
+    expect(env.win.alert).not.toHaveBeenCalled();
+  });
+
   it('does NOT show an "Interrupted — Retry" toast for a TypeError that occurs before any bytes are received (pre-stream failure)', async () => {
     env = setupBrowserEnv({ enableShowSaveFilePicker: false });
 
