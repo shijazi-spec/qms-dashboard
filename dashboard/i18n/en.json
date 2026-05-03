@@ -657,6 +657,8 @@
       }
     },
     "compliance": {
+      "chart_no_data": "No data",
+      "chart_obligations_count": "{count} obligations",
       "priority": {
         "critical": "Critical",
         "high": "High",

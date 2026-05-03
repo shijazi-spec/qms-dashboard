@@ -480,19 +480,23 @@
         function renderByRegulation(regs) {
             const container = document.getElementById('byRegulationChart');
             if (!regs || regs.length === 0) {
-                container.innerHTML = '<div class="text-gray-400 text-center py-4">No data</div>';
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">' + _t('dyn.compliance.chart_no_data') + '</div>';
                 return;
             }
             container.innerHTML = regs.map(r => `
                 <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
                     <span class="text-sm font-medium">${r.regulation_code}</span>
-                    <span class="text-sm text-gray-600">${r.obligation_count} obligations</span>
+                    <span class="text-sm text-gray-600">${_t('dyn.compliance.chart_obligations_count', { count: r.obligation_count })}</span>
                 </div>
             `).join('');
         }
 
         function renderByPriority(priorities) {
             const container = document.getElementById('byPriorityChart');
+            if (!priorities || priorities.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">' + _t('dyn.compliance.chart_no_data') + '</div>';
+                return;
+            }
             const colors = {
                 'critical': 'bg-red-100 text-red-800',
                 'high': 'bg-orange-100 text-orange-800',
