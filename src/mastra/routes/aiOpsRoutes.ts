@@ -2203,6 +2203,155 @@ export const aiOpsRoutes = [
   },
 
   /**
+   * AI usage history retention — CSV export endpoint (Task #652).
+   *
+   * Streams the full retention audit history (config changes + manual
+   * "Prune now" rows) matching the supplied date-range filter as a CSV
+   * attachment so admins can hand the timeline to compliance / management
+   * during an incident review without DB access.
+   *
+   * Mirrors the GET endpoint's `from` / `to` validation (ISO-8601, from
+   * must be on or before to) but intentionally does NOT accept `limit`
+   * or `offset` — the export is meant to bypass the 100-row paging
+   * ceiling and return every matching row in one shot. Streaming is
+   * server-side via {@link streamAiMetricsRetentionAudit} so a multi-year
+   * history doesn't have to fit in memory.
+   *
+   * The CSV columns mirror the dashboard audit row layout
+   * (timestamp, operator, before days, after days, note). Filename
+   * encodes the active filter window (or `all` when unfiltered) so an
+   * exported file is self-describing.
+   *
+   * Gated by AI_OPS_ROLES — same authorization gate as the GET endpoint.
+   */
+  {
+    path: "/api/ai-ops/metrics-retention/export.csv",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const rawFrom = c.req.query("from");
+          const rawTo = c.req.query("to");
+
+          let auditFrom: Date | null = null;
+          if (rawFrom != null && String(rawFrom).trim() !== "") {
+            const d = new Date(String(rawFrom));
+            if (Number.isNaN(d.getTime())) {
+              return c.json(
+                { error: "from must be a valid ISO-8601 timestamp" },
+                400,
+              );
+            }
+            auditFrom = d;
+          }
+
+          let auditTo: Date | null = null;
+          if (rawTo != null && String(rawTo).trim() !== "") {
+            const d = new Date(String(rawTo));
+            if (Number.isNaN(d.getTime())) {
+              return c.json(
+                { error: "to must be a valid ISO-8601 timestamp" },
+                400,
+              );
+            }
+            auditTo = d;
+          }
+          if (auditFrom && auditTo && auditFrom.getTime() > auditTo.getTime()) {
+            return c.json(
+              { error: "from must be on or before to" },
+              400,
+            );
+          }
+
+          const { streamAiMetricsRetentionAudit } = await import(
+            "../../utils/aiMetricsRetentionConfig"
+          );
+
+          // RFC 4180 quoting — wrap every field in quotes and double any
+          // embedded quote so audit notes containing commas, newlines, or
+          // quote characters round-trip cleanly into Excel / Sheets.
+          const csvField = (raw: unknown): string => {
+            if (raw == null) return '""';
+            const s = String(raw);
+            return '"' + s.replace(/"/g, '""') + '"';
+          };
+
+          const lines: string[] = [];
+          lines.push(
+            ["timestamp", "operator", "before_days", "after_days", "note"]
+              .map(csvField)
+              .join(","),
+          );
+
+          // Normalize the audit row's `changed_at` to an ISO-8601 string
+          // without an `any` escape hatch — pg can hand back either a
+          // `Date` (default) or a string when type parsers are
+          // overridden, so accept both explicitly and reject anything
+          // else with a typed error rather than silently coercing
+          // `null`/`undefined` into "Invalid Date".
+          const toIsoTimestamp = (value: Date | string): string => {
+            if (value instanceof Date) return value.toISOString();
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) {
+              throw new TypeError(
+                `Unparseable changed_at value in retention audit row: ${String(value)}`,
+              );
+            }
+            return parsed.toISOString();
+          };
+
+          for await (const row of streamAiMetricsRetentionAudit({
+            from: auditFrom,
+            to: auditTo,
+          })) {
+            const ts = toIsoTimestamp(row.changed_at);
+            lines.push(
+              [
+                csvField(ts),
+                csvField(row.changed_by),
+                csvField(row.before_days == null ? "" : row.before_days),
+                csvField(row.after_days == null ? "" : row.after_days),
+                csvField(row.note ?? ""),
+              ].join(","),
+            );
+          }
+
+          // Filename window — date-only stamp keeps the name short, and
+          // the `all` sentinel is used when neither bound was supplied so
+          // the file is still self-describing in that case. Includes the
+          // export instant so two exports taken back-to-back don't collide
+          // in a downloads folder.
+          const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+          const fromTag = auditFrom ? isoDay(auditFrom) : "all";
+          const toTag = auditTo ? isoDay(auditTo) : "all";
+          const stamp = new Date()
+            .toISOString()
+            .replace(/[:.]/g, "-");
+          const filename = `ai-metrics-retention-audit_${fromTag}_to_${toTag}_${stamp}.csv`;
+
+          // Trailing newline per RFC 4180 §2.2 — some parsers (notably
+          // older Excel imports) silently drop the final record without it.
+          const body = lines.join("\r\n") + "\r\n";
+
+          c.header("Content-Type", "text/csv; charset=utf-8");
+          c.header("Content-Disposition", `attachment; filename="${filename}"`);
+          c.header("Cache-Control", "no-store");
+          return c.body(body, 200);
+        } catch (error) {
+          logger.error(
+            "[AI-Ops] metrics-retention export.csv error",
+            error as Error,
+          );
+          return c.json({ error: "Failed to export retention audit" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
    * AI usage history retention — prune-run history endpoint (Task #559).
    *
    * Returns the rolling history of daily prune passes (date,

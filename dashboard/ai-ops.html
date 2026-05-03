@@ -845,6 +845,18 @@
               class="px-3 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
               data-testid="button-metrics-retention-audit-clear"
              data-i18n="common.clear">Clear</button>
+            <!-- Task #652: CSV export of the full filtered audit history.
+                 Bypasses the 100-row paging ceiling server-side so a
+                 multi-quarter incident review can be handed to compliance
+                 in a single download. The filename encodes the active
+                 filter window so the file is self-describing. -->
+            <button
+              type="button"
+              data-on-click="exportMetricsRetentionAuditCsv"
+              class="px-3 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+              data-testid="button-metrics-retention-audit-export"
+              title="Download the full filtered retention audit history as CSV"
+            >Export CSV</button>
             <span
               id="metrics-retention-audit-filter-error"
               class="text-xs text-red-600 hidden"
@@ -4805,6 +4817,44 @@
       metricsRetentionAuditState.to = '';
       metricsRetentionAuditState.offset = 0;
       loadMetricsRetentionForm();
+    }
+
+    // Task #652: trigger a CSV download of the full filtered retention
+    // audit. Reuses the same `from` / `to` boundary logic as the paged
+    // GET so the export window matches what's currently visible on the
+    // dashboard. The server sets `Content-Disposition: attachment`, so a
+    // hidden `<a>` click is enough — no blob shuffling required, and
+    // the same-origin session cookie travels with the request
+    // automatically.
+    function exportMetricsRetentionAuditCsv() {
+      // Drive the export off the *applied* filter state, not the raw
+      // input values, so an admin who has typed a new date but not yet
+      // clicked Apply gets a CSV that matches what the audit list on
+      // screen is currently showing. Mirrors what the paged GET sends
+      // via buildMetricsRetentionAuditQuery().
+      const from = (metricsRetentionAuditState.from || '').trim();
+      const to = (metricsRetentionAuditState.to || '').trim();
+      setMetricsRetentionAuditFilterError('');
+      const params = new URLSearchParams();
+      if (from) {
+        const d = new Date(from + 'T00:00:00');
+        if (!Number.isNaN(d.getTime())) params.set('from', d.toISOString());
+      }
+      if (to) {
+        const d = new Date(to + 'T23:59:59.999');
+        if (!Number.isNaN(d.getTime())) params.set('to', d.toISOString());
+      }
+      const qs = params.toString();
+      const url = '/api/ai-ops/metrics-retention/export.csv' + (qs ? '?' + qs : '');
+      const a = document.createElement('a');
+      a.href = url;
+      // The download attribute is just a hint — the server's
+      // Content-Disposition supplies the authoritative filename.
+      a.download = '';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
 
     // Parse `[prune-now] previewed=N deleted=M retention=Xd[ — operator note]`
