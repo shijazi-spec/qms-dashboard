@@ -887,7 +887,22 @@ export const aiOpsRoutes = [
           )
             ? sevRaw
             : undefined;
-          const alerts = await getToolHealthAlertHistory(days, limit, severity);
+          // Resolution-source filter (Task #417). Whitelist here so only
+          // the two valid values reach the SQL — the database helper
+          // pushes the `resolution_note ILIKE 'auto-resolved%'` check
+          // into the WHERE clause so the filter never silently drops
+          // matches when closed-alert volume crosses the page cap.
+          const resolutionRaw = (c.req.query("resolution") || "").toLowerCase();
+          const resolution =
+            resolutionRaw === "auto" || resolutionRaw === "manual"
+              ? (resolutionRaw as "auto" | "manual")
+              : undefined;
+          const alerts = await getToolHealthAlertHistory(
+            days,
+            limit,
+            severity,
+            resolution,
+          );
           const data = alerts.map((a: AIAlert) => {
             const parsed = parseToolHealthRelatedId(a.related_record_id);
             const triagedAt =

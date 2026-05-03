@@ -1387,29 +1387,19 @@
                 var url = '/api/consultant/alerts?limit=50';
                 if (status) url += '&status=' + status;
                 if (severity) url += '&severity=' + severity;
+                // Push the auto-vs-manual filter into SQL via the
+                // `resolution` query param (Task #417). Previously this
+                // was applied client-side AFTER the 50-row API cap, which
+                // silently dropped matches whenever closed-alert volume
+                // crossed the cap in a single status. The server
+                // whitelists the value so anything other than
+                // 'auto'/'manual' is a no-op.
+                if (resolutionFilter === 'auto' || resolutionFilter === 'manual') {
+                    url += '&resolution=' + resolutionFilter;
+                }
                 var res = await fetch(url, { credentials: 'same-origin' });
                 var data = await res.json();
                 var alerts = data.alerts || [];
-
-                // Apply the auto-vs-manual filter client-side. The API
-                // doesn't (yet) expose this distinction as a query param —
-                // it's a label derived from `resolution_note`. Filtering
-                // here keeps the wire contract unchanged.
-                if (resolutionFilter === 'auto') {
-                    alerts = alerts.filter(isAutoResolved);
-                } else if (resolutionFilter === 'manual') {
-                    // Manually-closed = resolved or dismissed by a human.
-                    // Dismissed alerts are always manual (cron auto-resolve
-                    // never dismisses), so include them too. Open and
-                    // acknowledged rows are excluded because the
-                    // auto/manual distinction only makes sense for closed
-                    // alerts.
-                    alerts = alerts.filter(function(a) {
-                        if (a.status === 'dismissed') return true;
-                        if (a.status === 'resolved') return !isAutoResolved(a);
-                        return false;
-                    });
-                }
 
                 if (!alerts.length) {
                     content.innerHTML = '<div class="text-center text-gray-600 py-8">No alerts match the selected filters</div>';

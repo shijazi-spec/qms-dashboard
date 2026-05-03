@@ -555,11 +555,22 @@ export const consultantRoutes = [
           const alertType = c.req.query("type") as AlertType | undefined;
           const limit = parseInt(c.req.query("limit") || "50");
           const offset = parseInt(c.req.query("offset") || "0");
+          // Server-side resolution-source filter (Task #417). The All
+          // Alerts modal previously applied this client-side AFTER the
+          // 50-row API cap, which silently dropped matches whenever
+          // closed-alert volume crossed the cap in a single status.
+          // Whitelist here so only the two valid values reach the SQL.
+          const resolutionRaw = (c.req.query("resolution") || "").toLowerCase();
+          const resolution =
+            resolutionRaw === "auto" || resolutionRaw === "manual"
+              ? (resolutionRaw as "auto" | "manual")
+              : undefined;
 
           const result = await getAIAlerts({
             status: status || undefined,
             severity: severity || undefined,
             alert_type: alertType || undefined,
+            resolution,
             limit: isNaN(limit) ? 50 : limit,
             offset: isNaN(offset) ? 0 : offset,
           });

@@ -504,6 +504,215 @@ if (!HAS_DB) {
       }
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Auto-vs-manual resolution-source filter (Task #417).
+  //
+  // The dashboards previously applied this filter client-side AFTER the
+  // API's 50-row cap, which silently dropped matches whenever closed-alert
+  // volume crossed the cap in a single status. The fix pushes the
+  // `resolution_note ILIKE 'auto-resolved%'` check into SQL inside
+  // getToolHealthAlertHistory(), exposed via `?resolution=auto|manual` on
+  // /api/ai-ops/tool-health-alerts/history. This test seeds one auto-resolved
+  // and one manually-resolved tool_health row, then asserts each filter
+  // value returns only its matching seed and excludes the other.
+  // -------------------------------------------------------------------------
+  const RESOLUTION_SUFFIX = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const AUTO_TOOL = `test_resolution_auto_${RESOLUTION_SUFFIX}`;
+  const MANUAL_TOOL = `test_resolution_manual_${RESOLUTION_SUFFIX}`;
+  let autoSeedId: number | null = null;
+  let manualSeedId: number | null = null;
+
+  await suite.test("happy: GET /api/ai-ops/tool-health-alerts/history filters by resolution=auto|manual", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    const pgMod = await import("pg");
+    const pool = new pgMod.default.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      // AUTO row: status='resolved' AND resolution_note ILIKE 'auto-resolved%'.
+      const autoRes = await pool.query(
+        `INSERT INTO ai_alerts
+           (alert_type, severity, title, description, suggestion, related_module,
+            related_record_id, status, acknowledged_by, resolved_at,
+            resolution_note, created_at)
+         VALUES
+           ('tool_health', 'high', $1,
+            'Task #417 resolution-filter test seed (auto)', 'n/a', 'ai_ops',
+            $2, 'resolved', NULL, NOW(), 'auto-resolved: error rate recovered (test)', NOW())
+         RETURNING id`,
+        [`Resolution test AUTO ${AUTO_TOOL}`, `${AUTO_TOOL}:error_rate`],
+      );
+      autoSeedId = Number(autoRes.rows[0].id);
+
+      // MANUAL row: status='resolved' AND resolution_note IS NULL → human-closed.
+      const manualRes = await pool.query(
+        `INSERT INTO ai_alerts
+           (alert_type, severity, title, description, suggestion, related_module,
+            related_record_id, status, acknowledged_by, resolved_at,
+            resolution_note, created_at)
+         VALUES
+           ('tool_health', 'high', $1,
+            'Task #417 resolution-filter test seed (manual)', 'n/a', 'ai_ops',
+            $2, 'resolved', 'history-resolution-test', NOW(), NULL, NOW())
+         RETURNING id`,
+        [`Resolution test MANUAL ${MANUAL_TOOL}`, `${MANUAL_TOOL}:p95_latency`],
+      );
+      manualSeedId = Number(manualRes.rows[0].id);
+
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-alerts/history",
+        "GET",
+      );
+
+      // 1. resolution=auto → only AUTO seed; MANUAL excluded.
+      const autoOnly = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", resolution: "auto" },
+        }),
+      );
+      suite.expectEqual(autoOnly.status, 200, "auto-only status");
+      const autoRows = (autoOnly.body?.data ?? []) as any[];
+      suite.expect(autoRows.some((a) => a.id === autoSeedId), "auto filter contains AUTO seed");
+      suite.expect(!autoRows.some((a) => a.id === manualSeedId), "auto filter excludes MANUAL seed");
+      suite.expect(
+        autoRows.every((a) => a.status === "resolved"
+          && typeof a.resolution_note === "string"
+          && a.resolution_note.toLowerCase().startsWith("auto-resolved")),
+        "every auto-filter row is resolved with an 'auto-resolved' note prefix",
+      );
+
+      // 2. resolution=manual → only MANUAL seed; AUTO excluded.
+      const manualOnly = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", resolution: "manual" },
+        }),
+      );
+      suite.expectEqual(manualOnly.status, 200, "manual-only status");
+      const manualRows = (manualOnly.body?.data ?? []) as any[];
+      suite.expect(manualRows.some((a) => a.id === manualSeedId), "manual filter contains MANUAL seed");
+      suite.expect(!manualRows.some((a) => a.id === autoSeedId), "manual filter excludes AUTO seed");
+      suite.expect(
+        manualRows.every((a) => {
+          const note = String(a.resolution_note || "").toLowerCase();
+          return !note.startsWith("auto-resolved");
+        }),
+        "no manual-filter row carries an 'auto-resolved' note prefix",
+      );
+
+      // 3. Unknown resolution value → falls through to unfiltered (both seeds present).
+      const allFallback = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", resolution: "garbage" },
+        }),
+      );
+      suite.expectEqual(allFallback.status, 200, "unknown-resolution fallback status");
+      const fallbackIds = (allFallback.body?.data ?? []).map((a: any) => a.id);
+      suite.expect(fallbackIds.includes(autoSeedId), "fallback contains AUTO seed");
+      suite.expect(fallbackIds.includes(manualSeedId), "fallback contains MANUAL seed");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      const ids = [autoSeedId, manualSeedId].filter((x): x is number => x != null);
+      if (ids.length > 0) {
+        try {
+          await pool.query(`DELETE FROM ai_alerts WHERE id = ANY($1::bigint[])`, [ids]);
+        } catch { /* best-effort */ }
+      }
+      await pool.end().catch(() => {});
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Same resolution filter, exercised against /api/consultant/alerts
+  // (Task #417). Mirrors the AI Ops test above but routes through the
+  // consultant handler so the All Alerts modal's wire path is also locked
+  // in. Dismissed rows are valid manual-resolution targets here (the
+  // consultant feed includes them); we seed one to prove they surface.
+  // -------------------------------------------------------------------------
+  const CONSULT_SUFFIX = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const CONSULT_AUTO_TITLE = `Resolution test consult AUTO ${CONSULT_SUFFIX}`;
+  const CONSULT_MANUAL_TITLE = `Resolution test consult MANUAL ${CONSULT_SUFFIX}`;
+  const CONSULT_DISMISSED_TITLE = `Resolution test consult DISMISSED ${CONSULT_SUFFIX}`;
+
+  await suite.test("happy: GET /api/consultant/alerts respects ?resolution=auto|manual", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    const pgMod = await import("pg");
+    const pool = new pgMod.default.Pool({ connectionString: process.env.DATABASE_URL });
+    const { consultantRoutes } = await import("../src/mastra/routes/consultantRoutes");
+    let cAuto: number | null = null;
+    let cManual: number | null = null;
+    let cDismissed: number | null = null;
+    try {
+      const a = await pool.query(
+        `INSERT INTO ai_alerts (alert_type, severity, title, description, suggestion,
+            related_module, related_record_id, status, resolved_at, resolution_note, created_at)
+         VALUES ('tool_health','critical',$1,'seed','n/a','ai_ops',$2,'resolved',NOW(),
+            'auto-resolved: recovered (test)',NOW()) RETURNING id`,
+        [CONSULT_AUTO_TITLE, `consult:${CONSULT_SUFFIX}:auto`],
+      );
+      cAuto = Number(a.rows[0].id);
+      const m = await pool.query(
+        `INSERT INTO ai_alerts (alert_type, severity, title, description, suggestion,
+            related_module, related_record_id, status, resolved_at, resolution_note, created_at)
+         VALUES ('tool_health','critical',$1,'seed','n/a','ai_ops',$2,'resolved',NOW(),NULL,NOW())
+         RETURNING id`,
+        [CONSULT_MANUAL_TITLE, `consult:${CONSULT_SUFFIX}:manual`],
+      );
+      cManual = Number(m.rows[0].id);
+      const d = await pool.query(
+        `INSERT INTO ai_alerts (alert_type, severity, title, description, suggestion,
+            related_module, related_record_id, status, resolved_at, resolution_note, created_at)
+         VALUES ('tool_health','critical',$1,'seed','n/a','ai_ops',$2,'dismissed',NULL,NULL,NOW())
+         RETURNING id`,
+        [CONSULT_DISMISSED_TITLE, `consult:${CONSULT_SUFFIX}:dismissed`],
+      );
+      cDismissed = Number(d.rows[0].id);
+
+      const handler = await buildHandler(consultantRoutes, "/api/consultant/alerts", "GET");
+
+      // resolution=auto → only the auto-resolved seed.
+      const autoRes = await handler(makeContext({
+        method: "GET",
+        headers: { "X-Admin-Key": ADMIN_KEY },
+        query: { limit: "100", resolution: "auto" },
+      }));
+      suite.expectEqual(autoRes.status, 200, "consultant auto status");
+      const autoIds = (autoRes.body?.alerts ?? []).map((x: any) => x.id);
+      suite.expect(autoIds.includes(cAuto), "consultant auto contains AUTO seed");
+      suite.expect(!autoIds.includes(cManual), "consultant auto excludes MANUAL seed");
+      suite.expect(!autoIds.includes(cDismissed), "consultant auto excludes DISMISSED seed");
+
+      // resolution=manual → manual + dismissed seeds, NOT auto.
+      const manualRes = await handler(makeContext({
+        method: "GET",
+        headers: { "X-Admin-Key": ADMIN_KEY },
+        query: { limit: "100", resolution: "manual" },
+      }));
+      suite.expectEqual(manualRes.status, 200, "consultant manual status");
+      const manualIds = (manualRes.body?.alerts ?? []).map((x: any) => x.id);
+      suite.expect(manualIds.includes(cManual), "consultant manual contains MANUAL seed");
+      suite.expect(manualIds.includes(cDismissed), "consultant manual contains DISMISSED seed");
+      suite.expect(!manualIds.includes(cAuto), "consultant manual excludes AUTO seed");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      const ids = [cAuto, cManual, cDismissed].filter((x): x is number => x != null);
+      if (ids.length > 0) {
+        try {
+          await pool.query(`DELETE FROM ai_alerts WHERE id = ANY($1::bigint[])`, [ids]);
+        } catch { /* best-effort */ }
+      }
+      await pool.end().catch(() => {});
+    }
+  });
 }
 
 // ───────────────────────────────────────────────────────────────────────────

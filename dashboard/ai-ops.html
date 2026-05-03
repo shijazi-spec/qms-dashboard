@@ -289,6 +289,24 @@
                      class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
                      data-testid="input-tool-health-history-tool">
             </div>
+            <!-- Sort control (Task #417). The default ordering matches what the
+                 backend returns (most-recently-triaged first), but on-call
+                 reviewers often want to find the alerts that stayed open the
+                 longest — those are the post-incident-review candidates. The
+                 "Open the longest" option re-sorts the already-fetched window
+                 client-side using the same created_at→resolved_at delta the
+                 inline "Open for: …" line surfaces. Acknowledged-only rows
+                 (no resolved_at) are pinned to the bottom so they don't
+                 spuriously rank above genuinely long-open resolved ones. -->
+            <div class="flex flex-col min-w-[170px]">
+              <label for="tool-health-history-sort" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1" data-i18n="ai_ops.sort_label">Sort</label>
+              <select id="tool-health-history-sort"
+                      class="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      data-testid="select-tool-health-history-sort">
+                <option value="triaged-desc" data-i18n="ai_ops.sort_recently_triaged">Most recently triaged</option>
+                <option value="open-for-desc" data-i18n="ai_ops.sort_open_for_desc">Open the longest</option>
+              </select>
+            </div>
             <button type="button"
                     id="tool-health-history-reset"
                     class="text-xs font-medium text-gray-600 hover:text-gray-900 underline self-center mb-1"
@@ -2229,9 +2247,11 @@
       const daysSel = document.getElementById('tool-health-history-days');
       const sevSel  = document.getElementById('tool-health-history-severity');
       const toolInp = document.getElementById('tool-health-history-tool');
+      const sortSel = document.getElementById('tool-health-history-sort');
       const days     = daysSel ? (parseInt(daysSel.value, 10) || 7) : 7;
       const severity = sevSel  ? sevSel.value : '';
       const toolText = toolInp ? toolInp.value.trim().toLowerCase() : '';
+      const sortKey  = sortSel ? sortSel.value : 'triaged-desc';
       if (windowLabel) {
         windowLabel.textContent = days === 1 ? '(last 1 day)' : `(last ${days} days)`;
       }
@@ -2242,9 +2262,35 @@
         const allAlerts = Array.isArray(data) ? data : [];
         // Tool-name search runs client-side against the returned window so
         // typing in the box doesn't fire a request per keystroke.
-        const alerts = toolText
+        let alerts = toolText
           ? allAlerts.filter(a => (a.tool_name || '').toLowerCase().includes(toolText))
-          : allAlerts;
+          : allAlerts.slice();
+        // Apply the user-selected sort order (Task #417). The default
+        // 'triaged-desc' preserves the backend's most-recently-triaged
+        // ordering. 'open-for-desc' re-sorts client-side using the
+        // created_at→resolved_at delta — the same value the inline
+        // "Open for: …" line surfaces — so reviewers can find the alerts
+        // that stayed open the longest at a glance. Acknowledged-only
+        // rows (no resolved_at, no measurable open-for) are pinned to
+        // the bottom so they don't spuriously rank above genuinely
+        // long-open resolved alerts.
+        if (sortKey === 'open-for-desc') {
+          const openMs = (a) => {
+            if (!a || !a.created_at || !a.resolved_at) return -1;
+            const c = new Date(a.created_at).getTime();
+            const r = new Date(a.resolved_at).getTime();
+            if (Number.isNaN(c) || Number.isNaN(r) || r < c) return -1;
+            return r - c;
+          };
+          alerts.sort((a, b) => {
+            const da = openMs(a);
+            const db = openMs(b);
+            if (da === db) return 0;
+            if (da < 0) return 1;
+            if (db < 0) return -1;
+            return db - da;
+          });
+        }
         if (countBadge) countBadge.textContent = String(alerts.length);
         if (alerts.length === 0) {
           const filtersActive = !!severity || !!toolText || days !== 7;
@@ -2408,9 +2454,11 @@
       const daysSel = document.getElementById('tool-health-history-days');
       const sevSel  = document.getElementById('tool-health-history-severity');
       const toolInp = document.getElementById('tool-health-history-tool');
+      const sortSel = document.getElementById('tool-health-history-sort');
       const reset   = document.getElementById('tool-health-history-reset');
       if (daysSel) daysSel.addEventListener('change', () => loadToolHealthAlertsHistory());
       if (sevSel)  sevSel .addEventListener('change', () => loadToolHealthAlertsHistory());
+      if (sortSel) sortSel.addEventListener('change', () => loadToolHealthAlertsHistory());
       if (toolInp) {
         let toolDebounce;
         toolInp.addEventListener('input', () => {
@@ -2430,9 +2478,11 @@
       const daysSel = document.getElementById('tool-health-history-days');
       const sevSel  = document.getElementById('tool-health-history-severity');
       const toolInp = document.getElementById('tool-health-history-tool');
+      const sortSel = document.getElementById('tool-health-history-sort');
       if (daysSel) daysSel.value = '7';
       if (sevSel)  sevSel.value  = '';
       if (toolInp) toolInp.value = '';
+      if (sortSel) sortSel.value = 'triaged-desc';
       loadToolHealthAlertsHistory();
     }
 

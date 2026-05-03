@@ -139,6 +139,29 @@ export async function getAIAlerts(filters?: {
   status?: AlertStatus;
   severity?: AlertSeverity;
   alert_type?: AlertType;
+  /**
+   * Auto-vs-manual resolution-source filter for closed alerts. When set,
+   * pushes the same `resolution_note ILIKE 'auto-resolved%'` check the
+   * dashboard previously applied client-side (after the 50-row cap) into
+   * the SQL WHERE so the filter never silently drops matches when closed
+   * alert volume crosses the page size in a single status (Task #417).
+   *
+   * Semantics mirror the All Alerts modal's pre-existing client-side
+   * `isAutoResolved` helper:
+   *   - 'auto'   → status='resolved' AND resolution_note starts with
+   *                'auto-resolved' (the prefix both auto-resolve crons
+   *                stamp on the row).
+   *   - 'manual' → dismissed rows (always human) OR resolved rows whose
+   *                resolution_note is missing or does NOT start with
+   *                'auto-resolved'. Acknowledged/open rows are excluded
+   *                because the auto/manual distinction is only
+   *                meaningful for closed alerts.
+   *
+   * When the caller also passes `status`, the resolution clause stacks on
+   * top — e.g. status='resolved' + resolution='manual' yields only the
+   * human-resolved rows.
+   */
+  resolution?: 'auto' | 'manual';
   limit?: number;
   offset?: number;
 }): Promise<{ alerts: AIAlert[]; total: number }> {
@@ -157,6 +180,15 @@ export async function getAIAlerts(filters?: {
   if (filters?.alert_type) {
     conditions.push(`alert_type = $${paramIdx++}`);
     params.push(filters.alert_type);
+  }
+  if (filters?.resolution === 'auto') {
+    conditions.push(
+      `status = 'resolved' AND resolution_note ILIKE 'auto-resolved%'`,
+    );
+  } else if (filters?.resolution === 'manual') {
+    conditions.push(
+      `(status = 'dismissed' OR (status = 'resolved' AND (resolution_note IS NULL OR resolution_note NOT ILIKE 'auto-resolved%')))`,
+    );
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -452,30 +484,43 @@ export async function getToolHealthAlertHistory(
   days = 7,
   limit = 20,
   severity?: string,
+  resolution?: 'auto' | 'manual',
 ): Promise<AIAlert[]> {
+  // Build the WHERE/params dynamically so the new optional `resolution`
+  // filter (Task #417) can stack on top of the existing severity filter
+  // without an explosion of query string permutations. The resolution
+  // clause mirrors getAIAlerts(): 'auto' requires a resolved row whose
+  // resolution_note starts with 'auto-resolved'; 'manual' requires an
+  // acknowledged or resolved row whose note does NOT start with that
+  // prefix (acknowledged rows are always treated as manual triage since
+  // the cron auto-resolve path skips the acknowledge step).
+  const conditions: string[] = [
+    `alert_type = 'tool_health'`,
+    `status IN ('acknowledged', 'resolved')`,
+    `COALESCE(resolved_at, acknowledged_at, created_at) >= NOW() - ($1 || ' days')::INTERVAL`,
+  ];
+  const params: any[] = [days, limit];
+  let paramIdx = 3;
   if (severity) {
-    const result = await pool.query(
-      `SELECT *
-         FROM ai_alerts
-        WHERE alert_type = 'tool_health'
-          AND status IN ('acknowledged', 'resolved')
-          AND severity = $3
-          AND COALESCE(resolved_at, acknowledged_at, created_at) >= NOW() - ($1 || ' days')::INTERVAL
-        ORDER BY COALESCE(resolved_at, acknowledged_at, created_at) DESC
-        LIMIT $2`,
-      [days, limit, severity],
+    conditions.push(`severity = $${paramIdx++}`);
+    params.push(severity);
+  }
+  if (resolution === 'auto') {
+    conditions.push(
+      `status = 'resolved' AND resolution_note ILIKE 'auto-resolved%'`,
     );
-    return result.rows;
+  } else if (resolution === 'manual') {
+    conditions.push(
+      `(status = 'acknowledged' OR (status = 'resolved' AND (resolution_note IS NULL OR resolution_note NOT ILIKE 'auto-resolved%')))`,
+    );
   }
   const result = await pool.query(
     `SELECT *
        FROM ai_alerts
-      WHERE alert_type = 'tool_health'
-        AND status IN ('acknowledged', 'resolved')
-        AND COALESCE(resolved_at, acknowledged_at, created_at) >= NOW() - ($1 || ' days')::INTERVAL
+      WHERE ${conditions.join(' AND ')}
       ORDER BY COALESCE(resolved_at, acknowledged_at, created_at) DESC
       LIMIT $2`,
-    [days, limit],
+    params,
   );
   return result.rows;
 }
