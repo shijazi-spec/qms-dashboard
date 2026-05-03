@@ -2239,7 +2239,7 @@
         if (!hint) {
             hint = document.createElement('span');
             hint.setAttribute('data-size-hint', '');
-            hint.className = 'ml-2 text-xs text-gray-500 dark:text-gray-400';
+            hint.className = 'streaming-ms-2 text-xs text-gray-500 dark:text-gray-400';
             el.appendChild(hint);
         }
         hint.textContent = '(' + label + ')';
