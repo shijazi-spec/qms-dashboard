@@ -2,6 +2,10 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { sharedPool as pool } from "../../utils/sharedPool";
 
+// NOTE: 'pdpl' and 'event_logs' are intentionally excluded from this map.
+// Those tables are restricted to admin-only API routes and must never be
+// reachable through the AI consultant tool, which is accessible to
+// non-admin roles (ai_specialist, grc_manager, head_of_operations_quality).
 const MODULE_TABLE_MAP: Record<string, { table: string; orderBy?: string; join?: string }> = {
   nonconformances: { table: 'nonconformance_records' },
   capas: { table: 'capa_records' },
@@ -14,8 +18,6 @@ const MODULE_TABLE_MAP: Record<string, { table: string; orderBy?: string; join?:
     join: 'LEFT JOIN kpi_entries ON kpi_definitions.id = kpi_entries.kpi_id',
   },
   vendors: { table: 'vendors' },
-  pdpl: { table: 'pdpl_data_inventory' },
-  event_logs: { table: 'event_logs', orderBy: 'created_at DESC' },
   training: { table: 'training_records' },
 };
 
@@ -24,13 +26,13 @@ export const queryPlatformDataTool = createTool({
 
   description:
     "Queries platform data across QMS modules including nonconformances, CAPAs, risks, " +
-    "policies, audits, compliance obligations, KPIs, vendors, PDPL, event logs, and training records. " +
+    "policies, audits, compliance obligations, KPIs, vendors, and training records. " +
     "Supports optional filtering by status, severity, date range, and result limit.",
 
   inputSchema: z.object({
     module: z.enum([
       'nonconformances', 'capas', 'risks', 'policies', 'audits',
-      'compliance', 'kpis', 'vendors', 'pdpl', 'event_logs', 'training',
+      'compliance', 'kpis', 'vendors', 'training',
     ]).describe("The QMS module to query data from"),
     status: z.string().optional().describe("Filter by status value"),
     severity: z.string().optional().describe("Filter by severity level"),
