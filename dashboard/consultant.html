@@ -216,14 +216,14 @@
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.suggest_improvements">Suggest Improvements</span>
                         </div>
                     </button>
-                </div>
+                            </div>
 
                 <!-- Chat History Section -->
                 <div class="mt-4 pt-3 border-t border-gray-200">
                     <div class="flex items-center justify-between mb-2 sidebar-section-btn" data-on-click="toggleSection" data-args='["chatHistoryList"]'>
                         <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="consultant.chat_history">Chat History</span>
                         <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                    </div>
+                        </div>
                     <div id="chatHistoryList" class="space-y-1 mb-2">
                         <div class="text-xs text-gray-400 py-1 text-center" data-i18n="consultant.no_previous_chats">No previous chats</div>
                     </div>
@@ -252,9 +252,15 @@
                     <div id="knowledgeDocsList" class="space-y-1 mb-2">
                         <div class="text-xs text-gray-400 py-1 text-center" data-i18n="common.loading">Loading...</div>
                     </div>
+ slack-audit-notification-alignment
+                    <button class="w-full text-left p-2 rounded-lg border border-dashed border-gray-300 hover:border-indigo-300 text-xs text-gray-500 hover:text-indigo-600 transition" data-on-click="removeClass" data-args='["docUploadModal","hidden"]' data-i18n="consultant.upload_document">
+                            + Upload Document
+                        </button>
+
                     <button class="w-full text-start p-2 rounded-lg border border-dashed border-gray-300 hover:border-indigo-300 text-xs text-gray-500 hover:text-indigo-600 transition" data-on-click="removeClass" data-args='["docUploadModal","hidden"]' data-i18n="consultant.upload_document">
                         + Upload Document
                     </button>
+ main
                 </div>
 
                 <!-- Alerts Section -->
@@ -1057,9 +1063,9 @@
                 }
 
                 if (buffer.trim() && buffer.startsWith('data: ') && buffer.substring(6) !== '[DONE]') {
-                    fullText += buffer.substring(6);
-                    bubble.innerHTML = renderMarkdown(fullText);
-                }
+                        fullText += buffer.substring(6);
+                        bubble.innerHTML = renderMarkdown(fullText);
+                    }
 
                 if (isArabic(fullText)) bubble.setAttribute('dir', 'rtl');
                 chatMessages.push({ role: 'assistant', content: fullText, time: new Date().toISOString() });
@@ -1543,12 +1549,12 @@
             ws.className = 'py-8';
             ws.innerHTML =
                 '<div class="text-center max-w-lg mx-auto">' +
-                    '<div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg">' +
-                        '<svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a2.25 2.25 0 01-1.59.659H9.06a2.25 2.25 0 01-1.59-.659L5 14.5m14 0V5.846a2.25 2.25 0 00-1.357-2.067l-.543-.235a24.156 24.156 0 00-10.2 0l-.543.235A2.25 2.25 0 005 5.846V14.5"/></svg>' +
-                    '</div>' +
-                    '<h2 class="text-lg font-semibold text-gray-800 mb-1">QMS AI Consultant</h2>' +
+                        '<div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg">' +
+                            '<svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a2.25 2.25 0 01-1.59.659H9.06a2.25 2.25 0 01-1.59-.659L5 14.5m14 0V5.846a2.25 2.25 0 00-1.357-2.067l-.543-.235a24.156 24.156 0 00-10.2 0l-.543.235A2.25 2.25 0 005 5.846V14.5"/></svg>' +
+                        '</div>' +
+                        '<h2 class="text-lg font-semibold text-gray-800 mb-1">QMS AI Consultant</h2>' +
                     '<p class="text-sm text-gray-500 leading-relaxed mb-4">Your intelligent quality management advisor — ready to help with compliance, risks, KPIs, audits, and more.</p>' +
-                '</div>' +
+                    '</div>' +
                 '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto">' +
                     '<div class="bg-white rounded-xl border border-gray-200 p-4 text-center"><div class="text-2xl font-bold text-indigo-600" id="welcomeAlertCount">-</div><div class="text-xs text-gray-500 mt-1">Open Alerts</div></div>' +
                     '<div class="bg-white rounded-xl border border-gray-200 p-4 text-center"><div class="text-2xl font-bold text-emerald-600" id="welcomeKpiStatus">-</div><div class="text-xs text-gray-500 mt-1">KPI Health</div></div>' +
@@ -1678,22 +1684,22 @@
                         alert('Upload failed: ' + (data.error || 'Unknown error'));
                     }
                 } else {
-                    var res = await fetch('/api/knowledge/upload', {
+                var res = await fetch('/api/knowledge/upload', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
+                    body: JSON.stringify({
                             title: title, content: content, documentType: docType,
-                            tags: tags ? tags.split(',').map(function(t) { return t.trim(); }) : [],
-                            fileType: 'text',
-                        })
-                    });
-                    var data = await res.json();
-                    if (data.success) {
-                        alert('Document uploaded: ' + data.chunkCount + ' searchable chunks created');
+                        tags: tags ? tags.split(',').map(function(t) { return t.trim(); }) : [],
+                        fileType: 'text',
+                    })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    alert('Document uploaded: ' + data.chunkCount + ' searchable chunks created');
                         closeUploadModal();
-                    } else {
-                        alert('Upload failed: ' + (data.error || 'Unknown error'));
-                    }
+                } else {
+                    alert('Upload failed: ' + (data.error || 'Unknown error'));
                 }
+            }
             } catch(e) { alert('Upload failed: ' + e.message); }
             btn.textContent = 'Upload';
             btn.disabled = false;
@@ -1800,21 +1806,21 @@
                 <button class="feedback-category-btn" data-cat="off_policy" data-on-click="toggleFeedbackCategory" data-args='["@this"]' data-testid="cat-off-policy">Off-policy</button>
                 <button class="feedback-category-btn" data-cat="formatting" data-on-click="toggleFeedbackCategory" data-args='["@this"]' data-testid="cat-formatting">Formatting issue</button>
                 <button class="feedback-category-btn" data-cat="other" data-on-click="toggleFeedbackCategory" data-args='["@this"]' data-testid="cat-other">Other</button>
-            </div>
+                </div>
             <div class="mb-4">
                 <label for="feedbackComment" class="block text-xs font-medium text-gray-700 mb-1">Additional comments (optional)</label>
                 <textarea id="feedbackComment" rows="3" maxlength="1000" placeholder="Describe what went wrong..."
                     data-testid="input-feedback-comment"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"></textarea>
-            </div>
+                </div>
             <div class="flex justify-end gap-2">
                 <button data-on-click="closeFeedbackModal" data-testid="button-feedback-skip"
                     class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg hover:bg-gray-100 transition">Skip</button>
                 <button data-on-click="submitThumbsDown" data-testid="button-feedback-submit"
                     class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition">Submit Feedback</button>
+                </div>
+                </div>
             </div>
-        </div>
-    </div>
 
     <script>
     /* =====================================================================

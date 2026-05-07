@@ -112,6 +112,94 @@ export const analyticsRoutes = [
     },
   },
   {
+    path: "/api/digest/issues.xlsx",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...ANALYTICS_READ_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to export digest issues",
+            );
+
+          const {
+            computeDigestWindow,
+            generateDigestData,
+          } = await import("../../utils/executiveDigest");
+          const { streamXlsx, stageStreamingExportFromHono } =
+            await import("../../utils/excelExport");
+
+          const cadenceRaw = String(c.req.query("cadence") || "weekly").toLowerCase();
+          const cadence =
+            cadenceRaw === "monthly" || cadenceRaw === "quarterly"
+              ? cadenceRaw
+              : "weekly";
+
+          const now = new Date();
+          const fallbackWindow = computeDigestWindow(cadence as any, now);
+          const windowStartRaw = c.req.query("windowStart");
+          const windowEndRaw = c.req.query("windowEnd");
+          const requestedWindow =
+            windowStartRaw && windowEndRaw
+              ? {
+                  cadence,
+                  start: new Date(windowStartRaw),
+                  end: new Date(windowEndRaw),
+                  periodLabel: fallbackWindow.periodLabel,
+                }
+              : fallbackWindow;
+
+          const data = await generateDigestData({
+            cadence: cadence as any,
+            now,
+            window: requestedWindow as any,
+          });
+
+          const rows = data.finding_types.map((f) => ({
+            module: f.module,
+            issue_type: f.issue_type,
+            severity: f.severity,
+            count: f.count,
+            period: data.period,
+            window_start: data.window_start,
+            window_end: data.window_end,
+          }));
+
+          const safeCadence = cadence.replace(/[^a-z]/gi, "_");
+          const filename = `digest_issues_${safeCadence}_${Date.now()}.xlsx`;
+
+          return await stageStreamingExportFromHono(c, async () =>
+            streamXlsx(
+              [
+                {
+                  name: "Digest Issues",
+                  columns: [
+                    { header: "Module", key: "module", width: 18 },
+                    { header: "Issue Type", key: "issue_type", width: 40 },
+                    { header: "Severity", key: "severity", width: 12 },
+                    { header: "Count", key: "count", width: 10 },
+                    { header: "Period", key: "period", width: 26 },
+                    { header: "Window Start", key: "window_start", width: 28 },
+                    { header: "Window End", key: "window_end", width: 28 },
+                  ],
+                  rows,
+                },
+              ],
+              filename,
+              { title: "Executive Digest Issues" },
+            ),
+          );
+        } catch (error) {
+          return c.json({ error: "Failed to export digest issues to XLSX" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/analytics/executive-digest",
     method: "GET" as const,
     createHandler: async () => {

@@ -37,7 +37,7 @@ export const triggerRoutes = [
               403,
             );
           }
-
+          
           const url = new URL(c.req.url);
           const type = url.searchParams.get("type") || undefined;
 
@@ -75,7 +75,7 @@ export const triggerRoutes = [
             await import("../../utils/auditTriggerDatabase");
           const { getSessionUser } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
-
+          
           const user = getSessionUser(c);
           if (!user) return c.json({ error: "Authentication required" }, 401);
           if (!TRIGGER_REVIEWER_ROLES.has(user.role)) {
@@ -133,7 +133,7 @@ export const triggerRoutes = [
           const { logEvent } = await import("../../utils/eventLogsDatabase");
           const { getSessionUser } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
-
+          
           const user = getSessionUser(c);
           if (!user) return c.json({ error: "Authentication required" }, 401);
 
@@ -330,7 +330,7 @@ export const triggerRoutes = [
             await import("../../utils/auditTriggerDatabase");
           const { getSessionUser } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
-
+          
           const user = getSessionUser(c);
           if (!user) return c.json({ error: "Authentication required" }, 401);
           if (!TRIGGER_REVIEWER_ROLES.has(user.role)) {
@@ -386,7 +386,7 @@ export const triggerRoutes = [
               403,
             );
           }
-
+          
           const url = new URL(c.req.url);
 
           // Non-admin users can only see notifications addressed to their own role.
@@ -427,7 +427,7 @@ export const triggerRoutes = [
             await import("../../utils/auditTriggerDatabase");
           const { getSessionUser } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
-
+          
           const user = getSessionUser(c);
           if (!user) return c.json({ error: "Authentication required" }, 401);
 

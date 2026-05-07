@@ -42,13 +42,18 @@
     "express-session": "^1.19.0",
     "inngest": "^3.52.0",
     "inngest-cli": "^1.17.0",
+ slack-audit-notification-alignment
+    "mammoth": "^1.8.0",
+
     "jsdom": "^29.1.1",
+ main
     "mastra": "^0.18.9",
     "memoizee": "^0.4.17",
     "openai": "^6.22.0",
     "openid-client": "^6.8.2",
     "p-limit": "^7.3.0",
     "passport": "^0.7.0",
+    "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
     "pg": "^8.16.3",
     "pino": "^10.3.1",

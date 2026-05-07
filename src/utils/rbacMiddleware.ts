@@ -656,6 +656,32 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST", "PUT"],
     permission: "can_create_capa",
   },
+  // Phase 1-3 of compliance-mapping feature — link/unlink/judge/apply-mapping
+  // need head_of_operations_quality in addition to the existing GRC roles.
+  // This rule MUST come before the general write-roles rule below so it wins.
+  {
+    pattern:
+      /^\/api\/compliance\/(documents|obligations\/[^/]+\/(documents|judge|suggest-documents|bulk-upload))/,
+    methods: ["POST", "DELETE"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+    ],
+  },
+  // Audit-readiness PDF download — restricted (no executive read like the
+  // CSV export endpoint).
+  {
+    pattern: /^\/api\/compliance\/regulations\/[^/]+\/audit-readiness\/pdf/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+    ],
+  },
   {
     pattern: /^\/api\/compliance/,
     methods: ["POST", "PUT", "DELETE"],

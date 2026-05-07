@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WalaPlus - Document Mapping</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .fade-in { animation: fadeIn 0.4s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=1"></script>
+    <script src="/js/navigation.js?v=4.7"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            WalaPlusNav.init('document-mapping');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- Header -->
+        <div class="flex flex-wrap justify-between items-start gap-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="docmap.title">Document Mapping</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="docmap.subtitle">AI-assisted mapping of uploaded documents to compliance clauses, with automated quality judgement and audit-ready reports.</p>
+            </div>
+            <div class="flex gap-3">
+                <button type="button" data-on-click="reloadAll" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium flex items-center gap-2" data-testid="button-refresh-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span data-i18n="docmap.refresh_all">Refresh</span>
+                </button>
+                <a href="/compliance" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium flex items-center gap-2" data-testid="link-back-compliance">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                    <span data-i18n="docmap.back_to_compliance">Back to Compliance</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Overall coverage strip -->
+        <section class="bg-white rounded-lg shadow p-6 mb-6" data-testid="section-overall-coverage">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <div class="text-sm text-gray-500" data-i18n="docmap.overall_coverage">Overall Document-Mapping Coverage</div>
+                    <div class="mt-1 flex items-baseline gap-3">
+                        <div id="overallCoverage" class="text-4xl font-bold text-emerald-600">-</div>
+                        <div class="text-sm text-gray-500"><span id="overallCoverageDetail">0 / 0</span> <span data-i18n="docmap.clauses_with_evidence">clauses with linked evidence</span></div>
+                    </div>
+                </div>
+                <div class="flex-1 min-w-[200px] max-w-md">
+                    <div class="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+                        <div id="overallCoverageBar" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
+                    </div>
+                    <div class="text-[11px] text-gray-400 mt-1" data-i18n="docmap.coverage_legend">Green ≥ 80% · Yellow ≥ 50% · Amber ≥ 25% · Red &lt; 25%</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Per-framework coverage tile grid -->
+        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-coverage-grid">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.per_framework_title">Coverage by Framework</h2>
+                    <p class="text-xs text-gray-500" data-i18n="docmap.per_framework_subtitle">% of clauses with at least one linked document. Click a tile to drill into unmapped clauses, or download an Audit-Readiness PDF for that framework.</p>
+                </div>
+            </div>
+            <div id="coverageGrid" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading coverage…</div>
+            </div>
+        </section>
+
+        <!-- Unmapped clauses drill-down (toggled by clicking a tile) -->
+        <section id="unmapped-section" class="bg-white rounded-lg shadow mb-6 hidden fade-in" data-testid="section-unmapped">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">
+                        <span data-i18n="docmap.unmapped_title">Unmapped Clauses</span> — <span id="unmappedFrameworkName" class="text-emerald-700">—</span>
+                    </h2>
+                    <p class="text-xs text-gray-500"><span id="unmappedCount">0</span> <span data-i18n="docmap.unmapped_count_suffix">clauses have no document linked yet — start with the highest-priority items first.</span></p>
+                </div>
+                <button type="button" data-on-click="closeUnmapped" class="text-sm text-gray-500 hover:text-gray-800" data-testid="button-unmapped-close" data-i18n="common.close">Close</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_code">Code</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_title">Title</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_domain">Domain</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_priority">Priority</th>
+                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="unmappedTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Mapping Console: pick a clause → AI suggests documents → Link -->
+        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-mapping-console">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.console_title">Mapping Console</h2>
+                <p class="text-xs text-gray-500" data-i18n="docmap.console_subtitle">Select a clause and ask the AI consultant which uploaded documents likely satisfy it. Accepted suggestions are linked, audit-logged, and auto-judged.</p>
+            </div>
+            <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="docmap.console_framework">Framework</label>
+                    <select id="consoleFramework" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" data-on-change="loadConsoleClauses">
+                        <option value="" data-i18n="docmap.all_frameworks">All Frameworks</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="docmap.console_clause">Clause</label>
+                    <div class="flex gap-2">
+                        <select id="consoleClause" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-console-clause">
+                            <option value="" data-i18n="docmap.console_pick_clause">Select a clause…</option>
+                        </select>
+                        <button type="button" data-on-click="runConsoleSuggest" class="px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 text-sm font-medium whitespace-nowrap" data-testid="button-console-suggest">
+                            <span data-i18n="docmap.console_suggest_btn">Suggest Documents</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="consoleResults" class="px-4 pb-4">
+                <div class="text-sm text-gray-400 text-center py-6" data-i18n="docmap.console_idle">Pick a framework and clause above, then click <strong>Suggest Documents</strong> to ask the AI for candidates.</div>
+            </div>
+        </section>
+
+        <!-- AI-Judged Non-Compliance Findings -->
+        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-findings">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.findings_title">AI-Judged Findings</h2>
+                    <p class="text-xs text-gray-500" data-i18n="docmap.findings_subtitle">Document/clause links the AI judge marked as partial, missing topic, or needs review. Add stronger evidence or revise the clause owner.</p>
+                </div>
+                <button type="button" data-on-click="reloadFindings" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium" data-testid="button-findings-reload" data-i18n="common.refresh">Refresh</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_framework">Framework</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_clause">Clause</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_document">Document</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_status">Status</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_rationale">AI Rationale</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_judged">Judged</th>
+                        </tr>
+                    </thead>
+                    <tbody id="findingsTableBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">Loading findings…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Compliance v2 — Auto-mapped citations review queue -->
+        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-automapped">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.automapped_title">Auto-Mapped, Needs Review</h2>
+                    <p class="text-xs text-gray-500" data-i18n="docmap.automapped_subtitle">Document/clause links the citation extractor created automatically (e.g. when a document explicitly cites "ISO 27001 A.5.15"). Confirm to keep the link, or reject to remove it.</p>
+                </div>
+                <button type="button" data-on-click="loadAutoMapped" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium" data-testid="button-automapped-reload" data-i18n="common.refresh">Refresh</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_framework">Framework</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_clause">Clause</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_document">Document</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_citation">Citation</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_excerpt">Excerpt</th>
+                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="autoMappedTableBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        let frameworks = [];                  // cached list of regulations
+        let coverageByRegId = {};             // { [regulation_id]: FrameworkCoverage }
+        let consoleClauses = [];              // last-fetched clauses for the console
+
+        // ───────────────────────── Coverage ─────────────────────────
+        async function loadCoverage() {
+            const grid = document.getElementById('coverageGrid');
+            try {
+                const res = await fetch('/api/compliance/coverage/all');
+                if (!res.ok) {
+                    grid.innerHTML = '<div class="text-sm text-red-600 col-span-full text-center py-6">Failed to load coverage.</div>';
+                    return;
+                }
+                const data = await res.json();
+                const items = data.coverage || [];
+
+                coverageByRegId = {};
+                let totalAll = 0;
+                let weAll = 0;
+                items.forEach(function (c) {
+                    coverageByRegId[c.regulation_id] = c;
+                    totalAll += (c.total_obligations || 0);
+                    weAll += (c.with_evidence || 0);
+                });
+
+                // Overall card
+                const overallEl = document.getElementById('overallCoverage');
+                const detailEl = document.getElementById('overallCoverageDetail');
+                const barEl = document.getElementById('overallCoverageBar');
+                const overallPct = totalAll > 0 ? Math.round((weAll / totalAll) * 100) : 0;
+                if (overallEl) overallEl.textContent = overallPct + '%';
+                if (detailEl) detailEl.textContent = weAll + ' / ' + totalAll;
+                if (barEl) {
+                    barEl.style.width = overallPct + '%';
+                    if (overallPct >= 80)      barEl.className = 'h-full bg-emerald-500 transition-all';
+                    else if (overallPct >= 50) barEl.className = 'h-full bg-yellow-500 transition-all';
+                    else if (overallPct >= 25) barEl.className = 'h-full bg-amber-500 transition-all';
+                    else                       barEl.className = 'h-full bg-red-500 transition-all';
+                }
+
+                // Per-framework tiles
+                if (items.length === 0) {
+                    grid.innerHTML = '<div class="text-sm text-gray-400 col-span-full text-center py-6">No regulations seeded yet.</div>';
+                    return;
+                }
+                grid.innerHTML = items.map(function (c) {
+                    const pct = c.coverage_pct || 0;
+                    let band = 'bg-red-50 border-red-200 text-red-800';
+                    let bar = 'bg-red-500';
+                    if (pct >= 80)      { band = 'bg-green-50 border-green-200 text-green-800'; bar = 'bg-green-500'; }
+                    else if (pct >= 50) { band = 'bg-yellow-50 border-yellow-200 text-yellow-800'; bar = 'bg-yellow-500'; }
+                    else if (pct >= 25) { band = 'bg-amber-50 border-amber-200 text-amber-800'; bar = 'bg-amber-500'; }
+                    const safeName = (c.regulation_name || '').replace(/</g, '&lt;');
+                    const safeCode = (c.regulation_code || '').replace(/</g, '&lt;');
+                    return ''
+                        + '<div class="border rounded-lg p-3 hover:shadow transition ' + band + '" data-testid="coverage-tile-' + safeCode + '">'
+                            + '<div class="text-xs font-semibold tracking-wide opacity-80">' + safeCode + '</div>'
+                            + '<div class="text-sm font-medium leading-tight mt-0.5 truncate" title="' + safeName + '">' + safeName + '</div>'
+                            + '<div class="mt-3 flex items-baseline justify-between">'
+                                + '<div class="text-2xl font-bold">' + pct + '%</div>'
+                                + '<div class="text-xs">' + (c.with_evidence || 0) + ' / ' + (c.total_obligations || 0) + '</div>'
+                            + '</div>'
+                            + '<div class="mt-2 h-1.5 w-full rounded-full bg-white/60 overflow-hidden">'
+                                + '<div class="h-full ' + bar + '" style="width:' + pct + '%"></div>'
+                            + '</div>'
+                            + '<div class="mt-3 flex items-center gap-2">'
+                                + '<button type="button" data-on-click="openUnmapped" data-args="[' + (c.regulation_id || 0) + ', &quot;' + safeCode + '&quot;]" class="flex-1 text-xs px-2 py-1 rounded bg-white/70 hover:bg-white border border-current font-medium" data-testid="button-drill-' + safeCode + '">'
+                                    + '<span data-i18n="docmap.tile_drill">View unmapped</span>'
+                                + '</button>'
+                                + '<a href="/api/compliance/regulations/' + c.regulation_id + '/audit-readiness/pdf" target="_blank" rel="noopener" class="flex-1 text-xs px-2 py-1 rounded bg-white/70 hover:bg-white border border-current font-medium text-center" data-testid="button-pdf-' + safeCode + '">'
+                                    + '<span data-i18n="docmap.tile_pdf">Audit PDF</span>'
+                                + '</a>'
+                            + '</div>'
+                        + '</div>';
+                }).join('');
+                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(grid);
+            } catch (e) {
+                grid.innerHTML = '<div class="text-sm text-red-600 col-span-full text-center py-6">Network error loading coverage.</div>';
+            }
+        }
+
+        // ──────────────────────── Unmapped drill ────────────────────
+        async function openUnmapped(regulationId, regCode) {
+            const sec = document.getElementById('unmapped-section');
+            const body = document.getElementById('unmappedTableBody');
+            sec.classList.remove('hidden');
+            sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">Loading…</td></tr>';
+            document.getElementById('unmappedFrameworkName').textContent = regCode || '—';
+            try {
+                const res = await fetch('/api/compliance/regulations/' + regulationId + '/unmapped');
+                if (!res.ok) {
+                    body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-red-600">Failed to load.</td></tr>';
+                    return;
+                }
+                const data = await res.json();
+                document.getElementById('unmappedFrameworkName').textContent = data.regulation_name || regCode || '—';
+                document.getElementById('unmappedCount').textContent = data.count || 0;
+                const rows = data.unmapped || [];
+                if (rows.length === 0) {
+                    body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-green-700 font-medium">All clauses are mapped — no gaps.</td></tr>';
+                    return;
+                }
+                body.innerHTML = rows.map(function (r) {
+                    const safeTitle = (r.title || '').replace(/</g, '&lt;');
+                    return '<tr data-testid="unmapped-row-' + r.id + '">'
+                        + '<td class="px-4 py-2 text-sm font-mono text-gray-900">' + (r.obligation_code || '') + '</td>'
+                        + '<td class="px-4 py-2 text-sm text-gray-700">' + safeTitle + '</td>'
+                        + '<td class="px-4 py-2 text-sm text-gray-500">' + (r.section_domain || '—') + '</td>'
+                        + '<td class="px-4 py-2 text-xs"><span class="px-2 py-1 rounded-full ' + priorityBadge(r.priority) + '">' + (r.priority || '—') + '</span></td>'
+                        + '<td class="px-4 py-2 text-right whitespace-nowrap">'
+                            + '<button type="button" data-on-click="suggestForUnmappedRow" data-args="[' + r.id + ',&quot;' + (r.obligation_code || '').replace(/"/g, '&quot;') + ' — ' + safeTitle.replace(/"/g, '&quot;') + '&quot;]" class="text-xs text-emerald-700 hover:underline font-medium" data-testid="button-suggest-' + r.id + '">'
+                                + '<span data-i18n="docmap.suggest_short">Suggest docs</span>'
+                            + '</button>'
+                        + '</td>'
+                        + '</tr>';
+                }).join('');
+                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(body);
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-red-600">Network error.</td></tr>';
+            }
+        }
+
+        function closeUnmapped() {
+            document.getElementById('unmapped-section').classList.add('hidden');
+        }
+
+        function priorityBadge(p) {
+            switch (p) {
+                case 'critical': return 'bg-red-100 text-red-800';
+                case 'high':     return 'bg-orange-100 text-orange-800';
+                case 'medium':   return 'bg-yellow-100 text-yellow-800';
+                case 'low':      return 'bg-gray-100 text-gray-700';
+                default:         return 'bg-gray-100 text-gray-600';
+            }
+        }
+
+        // Bridge: clicking "Suggest docs" on an unmapped row pre-fills the
+        // console and runs the suggest call so the user lands in the same
+        // workflow regardless of entry point.
+        async function suggestForUnmappedRow(obligationId, label) {
+            const consoleClauseSel = document.getElementById('consoleClause');
+            // Make sure the clauses dropdown contains the row we want
+            let opt = Array.prototype.find.call(consoleClauseSel.options, function (o) { return o.value === String(obligationId); });
+            if (!opt) {
+                opt = document.createElement('option');
+                opt.value = String(obligationId);
+                opt.textContent = label;
+                consoleClauseSel.appendChild(opt);
+            }
+            consoleClauseSel.value = String(obligationId);
+            document.querySelector('[data-testid="section-mapping-console"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            await runConsoleSuggest();
+        }
+
+        // ──────────────────────── Mapping Console ───────────────────
+        async function loadFrameworks() {
+            try {
+                const res = await fetch('/api/compliance/regulations');
+                const data = await res.json();
+                frameworks = data.regulations || [];
+                const sel = document.getElementById('consoleFramework');
+                sel.innerHTML = '<option value="" data-i18n="docmap.all_frameworks">All Frameworks</option>'
+                    + frameworks.map(function (r) {
+                        return '<option value="' + r.id + '">' + escAttr(r.regulation_code + ' — ' + r.name) + '</option>';
+                    }).join('');
+                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(sel);
+            } catch (e) {
+                console.error('Error loading frameworks', e);
+            }
+        }
+
+        async function loadConsoleClauses() {
+            const regId = document.getElementById('consoleFramework').value;
+            const sel = document.getElementById('consoleClause');
+            sel.innerHTML = '<option value="">Loading clauses…</option>';
+            try {
+                let url = '/api/compliance/obligations';
+                if (regId) url += '?regulation_id=' + regId;
+                const res = await fetch(url);
+                const data = await res.json();
+                consoleClauses = data.obligations || [];
+                if (consoleClauses.length === 0) {
+                    sel.innerHTML = '<option value="">No clauses for this framework</option>';
+                    return;
+                }
+                sel.innerHTML = '<option value="" data-i18n="docmap.console_pick_clause">Select a clause…</option>'
+                    + consoleClauses.map(function (o) {
+                        return '<option value="' + o.id + '">' + escAttr((o.obligation_code || '') + ' — ' + (o.title || '')) + '</option>';
+                    }).join('');
+                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(sel);
+            } catch (e) {
+                sel.innerHTML = '<option value="">Failed to load clauses</option>';
+            }
+        }
+
+        async function runConsoleSuggest() {
+            const obligationId = document.getElementById('consoleClause').value;
+            const results = document.getElementById('consoleResults');
+            if (!obligationId) {
+                results.innerHTML = '<div class="text-sm text-amber-700 text-center py-6">Please select a clause first.</div>';
+                return;
+            }
+            results.innerHTML = '<div class="text-sm text-gray-500 text-center py-6">Asking the AI consultant for matching documents…</div>';
+            try {
+                const r = await fetch('/api/compliance/obligations/' + obligationId + '/suggest-documents', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}'
+                });
+                const data = await r.json().catch(function () { return {}; });
+                if (!r.ok) {
+                    results.innerHTML = '<div class="text-sm text-red-600 text-center py-6">Failed: ' + (data.error || ('HTTP ' + r.status)) + '</div>';
+                    return;
+                }
+                const candidates = data.candidates || [];
+                if (candidates.length === 0) {
+                    results.innerHTML = '<div class="text-sm text-gray-500 text-center py-6">No candidate documents found. Upload a relevant document via <a href="/qms-docs" class="text-emerald-700 underline">QMS Documents</a> first.</div>';
+                    return;
+                }
+                results.innerHTML = '<div class="space-y-3">' + candidates.map(function (s, idx) {
+                    const safeTitle = escAttr(s.title || '');
+                    const safeExcerpt = (s.excerpt || '').replace(/</g, '&lt;');
+                    const status = s.extraction_status || '—';
+                    const score = s.score != null ? (' · score ' + s.score) : '';
+                    return ''
+                        + '<div class="border border-gray-200 rounded-lg p-3 fade-in" data-testid="suggestion-' + idx + '">'
+                            + '<div class="flex items-start justify-between gap-3">'
+                                + '<div class="min-w-0">'
+                                    + '<div class="text-sm font-semibold text-gray-900 truncate">' + safeTitle + '</div>'
+                                    + '<div class="text-[11px] text-gray-500 mt-0.5">extraction: ' + escAttr(status) + score + '</div>'
+                                + '</div>'
+                                + '<button type="button" data-on-click="acceptConsoleSuggestion" data-args="[' + obligationId + ',' + s.document_id + ']" class="px-3 py-1 bg-emerald-700 text-white text-xs font-medium rounded hover:bg-emerald-800 whitespace-nowrap" data-testid="button-accept-' + idx + '">Link</button>'
+                            + '</div>'
+                            + (safeExcerpt ? '<div class="mt-2 text-xs text-gray-600 line-clamp-3">' + safeExcerpt + '</div>' : '')
+                        + '</div>';
+                }).join('') + '</div>';
+            } catch (e) {
+                results.innerHTML = '<div class="text-sm text-red-600 text-center py-6">Network error.</div>';
+            }
+        }
+
+        async function acceptConsoleSuggestion(obligationId, documentId) {
+            try {
+                const r = await fetch('/api/compliance/obligations/' + obligationId + '/documents', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ document_id: documentId })
+                });
+                if (r.ok) {
+                    document.getElementById('consoleResults').innerHTML = '<div class="text-sm text-green-700 text-center py-6">Linked. The AI judge will assess the evidence quality shortly.</div>';
+                    await loadCoverage();
+                    await loadFindings();
+                } else {
+                    const err = await r.json().catch(function () { return {}; });
+                    alert('Failed to link document: ' + (err.error || ('HTTP ' + r.status)));
+                }
+            } catch (e) {
+                alert('Network error linking document.');
+            }
+        }
+
+        // ──────────────────────── AI Findings ────────────────────────
+        async function loadFindings() {
+            const body = document.getElementById('findingsTableBody');
+            try {
+                const res = await fetch('/api/compliance/non-compliance-findings?limit=200');
+                if (!res.ok) {
+                    body.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-red-600">Failed to load findings.</td></tr>';
+                    return;
+                }
+                const data = await res.json();
+                const findings = data.findings || [];
+                if (findings.length === 0) {
+                    body.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-green-700 font-medium">No non-compliance findings — every linked document is satisfying its clause.</td></tr>';
+                    return;
+                }
+                body.innerHTML = findings.map(function (f) {
+                    let statusBadge = 'bg-gray-100 text-gray-700';
+                    if (f.status === 'partial')             statusBadge = 'bg-amber-100 text-amber-800';
+                    else if (f.status === 'missing_topic')  statusBadge = 'bg-red-100 text-red-800';
+                    else if (f.status === 'needs_review')   statusBadge = 'bg-blue-100 text-blue-800';
+                    const safeRationale = (f.rationale || '').replace(/</g, '&lt;');
+                    const safeDocTitle = (f.document_title || '').replace(/</g, '&lt;');
+                    const safeObTitle = (f.obligation_title || '').replace(/</g, '&lt;');
+                    const dt = f.judged_at ? new Date(f.judged_at).toLocaleDateString() : '—';
+                    return '<tr data-testid="finding-' + f.id + '">'
+                        + '<td class="px-4 py-2 text-xs font-mono text-gray-700">' + (f.regulation_code || '') + '</td>'
+                        + '<td class="px-4 py-2 text-sm text-gray-900"><div class="font-mono text-xs text-gray-500">' + (f.obligation_code || '') + '</div>' + safeObTitle + '</td>'
+                        + '<td class="px-4 py-2 text-sm text-gray-700">' + safeDocTitle + '</td>'
+                        + '<td class="px-4 py-2 text-xs"><span class="px-2 py-1 rounded-full ' + statusBadge + '">' + (f.status || '—') + '</span></td>'
+                        + '<td class="px-4 py-2 text-xs text-gray-600 max-w-md">' + safeRationale + '</td>'
+                        + '<td class="px-4 py-2 text-xs text-gray-500">' + dt + '</td>'
+                        + '</tr>';
+                }).join('');
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-red-600">Network error loading findings.</td></tr>';
+            }
+        }
+
+        function reloadFindings() { loadFindings(); }
+
+        // ──────────────────────── Boot ────────────────────────────────
+        function escAttr(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        async function reloadAll() {
+            await loadFrameworks();
+            await loadCoverage();
+            await loadFindings();
+            await loadConsoleClauses();
+            await loadAutoMapped();
+        }
+
+        // ── Compliance v2: Auto-mapped citations review queue ──
+        function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+        async function loadAutoMapped() {
+            const tbody = document.getElementById('autoMappedTableBody');
+            try {
+                const r = await fetch('/api/compliance/auto-mapped');
+                if (!r.ok) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-red-600">Failed to load.</td></tr>';
+                    return;
+                }
+                const data = await r.json();
+                const items = data.items || [];
+                if (!items.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">No auto-mapped links awaiting review.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = items.map(function (it) {
+                    return '<tr class="hover:bg-gray-50">'
+                        + '<td class="px-4 py-2 text-xs font-mono">' + escAttr(it.regulation_code || '—') + '</td>'
+                        + '<td class="px-4 py-2 text-xs"><span class="font-mono">' + escAttr(it.obligation_code || '—') + '</span><br><span class="text-gray-500 text-[11px]">' + escAttr((it.obligation_title || '').slice(0, 80)) + '</span></td>'
+                        + '<td class="px-4 py-2 text-xs">' + escAttr(it.document_title || it.file_name || ('Doc #' + it.document_id)) + '</td>'
+                        + '<td class="px-4 py-2 text-xs"><code class="bg-indigo-50 text-indigo-800 px-1 rounded">' + escAttr(it.raw_citation || '—') + '</code></td>'
+                        + '<td class="px-4 py-2 text-xs text-gray-600">' + escAttr((it.source_excerpt || '').slice(0, 180)) + '</td>'
+                        + '<td class="px-4 py-2 text-center">'
+                            + '<button data-on-click="confirmAutoMap" data-args="[' + Number(it.link_id) + ']" class="text-xs text-emerald-700 hover:text-emerald-900 font-medium mr-2" data-i18n="docmap.confirm">Confirm</button>'
+                            + '<button data-on-click="rejectAutoMap" data-args="[' + Number(it.link_id) + ']" class="text-xs text-red-700 hover:text-red-900 font-medium" data-i18n="docmap.reject">Reject</button>'
+                        + '</td>'
+                    + '</tr>';
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-red-600">Error: ' + escAttr(e.message) + '</td></tr>';
+            }
+        }
+        async function confirmAutoMap(linkId) {
+            const r = await fetch('/api/compliance/auto-mapped/' + linkId + '/confirm', { method: 'POST', credentials: 'same-origin' });
+            if (r.ok) loadAutoMapped();
+            else alert('Failed to confirm.');
+        }
+        async function rejectAutoMap(linkId) {
+            if (!confirm('Remove this auto-created link?')) return;
+            const r = await fetch('/api/compliance/auto-mapped/' + linkId + '/reject', { method: 'POST', credentials: 'same-origin' });
+            if (r.ok) loadAutoMapped();
+            else alert('Failed to reject.');
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            reloadAll();
+        });
+    </script>
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

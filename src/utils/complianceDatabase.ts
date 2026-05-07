@@ -232,6 +232,70 @@ export async function initComplianceTables(): Promise<void> {
     `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS clause_number VARCHAR(50)`,
   );
 
+ slack-audit-notification-alignment
+  // Compliance v2 — clause-source traceability. Records whether the
+  // obligations under a regulation came from a curated seed, an
+  // AI-assisted ingestion of a source PDF, or were entered manually.
+  await pool.query(
+    `ALTER TABLE regulations ADD COLUMN IF NOT EXISTS source_document_id INTEGER`,
+  );
+  await pool.query(
+    `ALTER TABLE regulations ADD COLUMN IF NOT EXISTS clause_source VARCHAR(20) DEFAULT 'curated'`,
+  );
+
+  // Compliance v2 — regulation_imports tracks an "Ingest Standard from
+  // Document" run end-to-end. The draft_clauses JSON is what the AI
+  // extractor produced; the user reviews/edits, then on Apply we
+  // bulk-insert into obligations.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS regulation_imports (
+      id              SERIAL PRIMARY KEY,
+      regulation_id   INTEGER REFERENCES regulations(id) ON DELETE CASCADE,
+      document_id     INTEGER REFERENCES qms_uploaded_documents(id) ON DELETE SET NULL,
+      status          VARCHAR(20) NOT NULL DEFAULT 'extracting',
+      draft_clauses   JSONB DEFAULT '[]',
+      error           TEXT,
+      created_by      VARCHAR(255),
+      created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      applied_at      TIMESTAMP,
+      applied_count   INTEGER DEFAULT 0
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_regulation_imports_regulation
+       ON regulation_imports (regulation_id)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_regulation_imports_status
+       ON regulation_imports (status)`,
+  );
+
+  // Compliance v2 — document_clause_citations records every clause
+  // reference the citation extractor finds in an uploaded document
+  // (e.g. "PDPL Article 6", "ISO 27001 A.5.15"). Resolved citations
+  // (where obligation_id is set) feed the auto-mapping flow and the
+  // strong-confidence suggestion channel.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS document_clause_citations (
+      id              SERIAL PRIMARY KEY,
+      document_id     INTEGER NOT NULL REFERENCES qms_uploaded_documents(id) ON DELETE CASCADE,
+      regulation_id   INTEGER REFERENCES regulations(id) ON DELETE SET NULL,
+      obligation_id   INTEGER REFERENCES obligations(id) ON DELETE SET NULL,
+      raw_citation    TEXT NOT NULL,
+      source_excerpt  TEXT,
+      confidence      INTEGER NOT NULL DEFAULT 80,
+      method          VARCHAR(20) NOT NULL DEFAULT 'regex',
+      created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(document_id, raw_citation)
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_dcc_document ON document_clause_citations (document_id)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_dcc_obligation ON document_clause_citations (obligation_id)`,
+
   // Per-regulation uploaded official document (one PDF per row, replace on
   // re-upload). Added as nullable columns so existing rows keep working.
   await pool.query(
@@ -248,11 +312,37 @@ export async function initComplianceTables(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE regulations ADD COLUMN IF NOT EXISTS document_uploaded_by VARCHAR(255)`,
+ main
   );
 
   await seedDefaultRegulations();
   await seedPDPLObligations();
   await seedSAMAObligations();
+
+  // Phase 1.1 — extended framework catalogues for the document-mapping
+  // feature. Each call is idempotent and is a no-op once the framework
+  // has been seeded (see runFrameworkSeed in src/utils/seeds/).
+  try {
+    const { seedPdplFillObligations } = await import("./seeds/pdplFillObligations");
+    const { seedSamaCsfFullObligations } = await import("./seeds/samaCsfFullObligations");
+    const { seedISO27001Obligations } = await import("./seeds/iso27001Obligations");
+    const { seedISO9001Obligations } = await import("./seeds/iso9001Obligations");
+    const { seedNcaEccObligations } = await import("./seeds/ncaEccObligations");
+    const { seedNcaDccObligations } = await import("./seeds/ncaDccObligations");
+    const { seedPciDssObligations } = await import("./seeds/pciDssObligations");
+    await seedPdplFillObligations(pool as any);
+    await seedSamaCsfFullObligations(pool as any);
+    await seedISO27001Obligations(pool as any);
+    await seedISO9001Obligations(pool as any);
+    await seedNcaEccObligations(pool as any);
+    await seedNcaDccObligations(pool as any);
+    await seedPciDssObligations(pool as any);
+  } catch (err) {
+    logger.error("⚠️ [ComplianceDB] Extended framework seed failed:", err);
+    // Do NOT throw — failing to seed extended catalogues should not
+    // crash boot. The original PDPL/SAMA seed remains usable.
+  }
+
   logger.info("✅ [ComplianceDB] Compliance tables initialized");
 }
 

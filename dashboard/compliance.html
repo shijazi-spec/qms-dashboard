@@ -17,8 +17,8 @@
         .priority-high { background-color: #DC2626; color: white; }
         .priority-medium { background-color: #F59E0B; color: white; }
         .priority-low { background-color: #10B981; color: white; }
-        .fade-in { animation: fadeIn 0.5s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.4s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
         .modal.active { display: flex; align-items: center; justify-content: center; }
         .score-gauge { position: relative; width: 120px; height: 120px; }
@@ -26,6 +26,29 @@
         .score-gauge circle { fill: none; stroke-width: 10; }
         .score-gauge .bg { stroke: #E5E7EB; }
         .score-gauge .progress { stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
+        /* Sticky filter bar — sits below the topstrip (48px) */
+        .filter-bar {
+            position: sticky;
+            top: 48px;
+            z-index: 20;
+            background: #FFFFFF;
+            border: 1px solid #E5E7EB;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            background: #EEF2FF;
+            color: #4338CA;
+        }
+        .chip button { color: inherit; opacity: 0.7; }
+        .chip button:hover { opacity: 1; }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
@@ -36,7 +59,11 @@
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
+ slack-audit-notification-alignment
+    <script src="/js/navigation.js?v=4.7"></script>
+
         <script src="/js/navigation.js?v=5.0"></script>
+ main
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('compliance');
@@ -44,55 +71,89 @@
     </script>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div class="flex justify-between items-center mb-6">
+
+        <!-- ─── Header ──────────────────────────────────────────────── -->
+        <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900" data-i18n="compliance.title">Regulatory Compliance</h1>
                 <p class="text-sm text-gray-500 mt-1" data-i18n="compliance.subtitle">PDPL, NCA/ECC, ISO standards tracking and obligation management</p>
             </div>
             <div class="flex gap-3">
-                <select id="statusFilter" class="border rounded-lg px-3 py-2 text-sm" data-on-change="loadObligations" data-testid="select-status-filter">
-                    <option value="" data-i18n="common.all_statuses">All Statuses</option>
-                    <option value="compliant" data-i18n="compliance.s_compliant">Compliant</option>
-                    <option value="in_progress" data-i18n="compliance.s_in_progress">In Progress</option>
-                    <option value="non_compliant" data-i18n="compliance.s_non_compliant">Non-Compliant</option>
-                    <option value="pending" data-i18n="compliance.s_pending">Pending</option>
-                </select>
                 <button data-on-click="navigateTo" data-args="[&quot;/api/compliance/export&quot;]" class="px-4 py-2 border border-green-700 text-green-700 rounded-lg hover:bg-green-50 font-medium flex items-center gap-2" data-testid="button-export-csv">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    Export CSV
+                    <span data-i18n="compliance.export_csv">Export CSV</span>
                 </button>
-                <button data-on-click="openAddObligationModal" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                    </svg>
-                    Add Obligation
+                <button data-on-click="openIngestStandardModal" class="px-4 py-2 border border-indigo-600 text-indigo-700 rounded-lg hover:bg-indigo-50 font-medium flex items-center gap-2" data-testid="button-ingest-standard">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V20a2 2 0 01-2 2z"/></svg>
+                    <span data-i18n="compliance.ingest_standard">Ingest Standard</span>
+                </button>
+                <button data-on-click="openAddObligationModal" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2" data-testid="button-add-obligation">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    <span data-i18n="compliance.add_obligation">Add Obligation</span>
                 </button>
             </div>
         </div>
 
-        <!-- Per-regulation tab strip (added) -->
-        <div class="bg-white rounded-lg shadow mb-6 overflow-hidden">
-            <div class="border-b border-gray-200 px-2 overflow-x-auto">
-                <nav id="reg-tabs" class="flex gap-1 min-w-max" aria-label="Regulation tabs" data-testid="nav-regulation-tabs">
-                    <button type="button" data-on-click="selectRegulationTab" data-args="[&quot;all&quot;]"
-                            class="reg-tab px-4 py-3 text-sm font-medium text-gray-700 border-b-2 border-green-700"
-                            data-tab-id="all" data-testid="tab-regulation-all">All Regulations</button>
-                </nav>
-            </div>
-            <div id="reg-tab-summary" class="px-4 py-3 bg-gray-50 border-b border-gray-200 hidden">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <div class="text-sm font-semibold text-gray-900" id="reg-tab-name">—</div>
-                        <div class="text-xs text-gray-500" id="reg-tab-meta">—</div>
-                    </div>
-                    <div class="flex gap-2">
-                        <span id="reg-tab-clauses-count" class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">0 clauses</span>
-                        <span id="reg-tab-docs-count" class="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-800">0 documents linked</span>
-                    </div>
+        <!-- ─── Sticky filter bar (drives every section below) ────── -->
+        <div class="filter-bar mb-6 px-4 py-3" data-testid="filter-bar">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 items-end">
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_framework">Framework</label>
+                    <select id="fltFramework" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-framework">
+                        <option value="" data-i18n="compliance.all_regulations">All Regulations</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_lifecycle">Lifecycle</label>
+                    <select id="fltLifecycle" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-lifecycle">
+                        <option value="" data-i18n="compliance.flt_all">All</option>
+                        <option value="applicable" data-i18n="compliance.lc_applicable">Applicable</option>
+                        <option value="pending_review" data-i18n="compliance.lc_pending_review">Pending Review</option>
+                        <option value="exempt" data-i18n="compliance.lc_exempt">Exempt</option>
+                        <option value="not_applicable" data-i18n="compliance.lc_not_applicable">Not Applicable</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_assessment">Assessment</label>
+                    <select id="fltAssessment" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-assessment">
+                        <option value="" data-i18n="compliance.flt_all">All</option>
+                        <option value="compliant" data-i18n="compliance.s_compliant">Compliant</option>
+                        <option value="partially_compliant" data-i18n="compliance.s_partially_compliant">Partially Compliant</option>
+                        <option value="non_compliant" data-i18n="compliance.s_non_compliant">Non-Compliant</option>
+                        <option value="not_assessed" data-i18n="compliance.s_not_assessed">Not Assessed</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_priority">Priority</label>
+                    <select id="fltPriority" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-priority">
+                        <option value="" data-i18n="compliance.flt_all">All</option>
+                        <option value="critical" data-i18n="compliance.p_critical">Critical</option>
+                        <option value="high" data-i18n="compliance.p_high">High</option>
+                        <option value="medium" data-i18n="compliance.p_medium">Medium</option>
+                        <option value="low" data-i18n="compliance.p_low">Low</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_domain">Domain</label>
+                    <select id="fltDomain" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-domain">
+                        <option value="" data-i18n="compliance.flt_all">All</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-500 mb-1" data-i18n="compliance.flt_owner">Owner</label>
+                    <select id="fltOwner" data-on-change="onFilterChange" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" data-testid="filter-owner">
+                        <option value="" data-i18n="compliance.flt_all">All</option>
+                    </select>
+                </div>
+                <div class="flex items-end justify-end gap-2">
+                    <button type="button" data-on-click="resetFilters" class="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50" data-testid="button-reset-filters" data-i18n="compliance.flt_reset">Reset</button>
                 </div>
             </div>
+            <div id="filterChips" class="mt-2 flex flex-wrap gap-1 text-xs hidden" aria-live="polite"></div>
+            <div id="filterMatchCount" class="mt-2 text-xs text-gray-500" data-testid="filter-match-count"></div>
         </div>
 
+        <!-- ─── KPI Row ─────────────────────────────────────────────── -->
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
             <div class="bg-white rounded-lg shadow p-6 flex items-center gap-4">
                 <div class="score-gauge" id="scoreGauge">
@@ -105,48 +166,57 @@
                     </div>
                 </div>
                 <div>
-                    <div class="text-sm text-gray-500">Overall Compliance</div>
-                    <div class="text-lg font-semibold text-gray-900">Score</div>
+                    <div class="text-sm text-gray-500" data-i18n="compliance.overall_score_label">Overall Compliance</div>
+                    <div class="text-lg font-semibold text-gray-900" data-i18n="compliance.score_label">Score</div>
                 </div>
             </div>
 
             <div class="bg-white rounded-lg shadow p-6">
                 <div class="text-sm text-gray-500" data-i18n="compliance.active_regulations">Active Regulations</div>
                 <div id="activeRegulations" class="text-3xl font-bold text-blue-600 mt-2">-</div>
-                <div class="text-xs text-gray-400 mt-1">Frameworks tracked</div>
+                <div class="text-xs text-gray-400 mt-1" data-i18n="compliance.frameworks_tracked">Frameworks tracked</div>
             </div>
 
             <div class="bg-white rounded-lg shadow p-6">
                 <div class="text-sm text-gray-500" data-i18n="compliance.total_obligations">Total Obligations</div>
                 <div id="totalObligations" class="text-3xl font-bold text-gray-900 mt-2">-</div>
-                <div class="text-xs text-gray-400 mt-1">Compliance requirements</div>
+                <div class="text-xs text-gray-400 mt-1" data-i18n="compliance.compliance_requirements">Compliance requirements</div>
             </div>
 
             <div class="bg-white rounded-lg shadow p-6">
                 <div class="text-sm text-gray-500" data-i18n="compliance.pending_remediations">Pending Remediations</div>
                 <div id="pendingRemediations" class="text-3xl font-bold text-amber-600 mt-2">-</div>
-                <div class="text-xs text-red-500 mt-1"><span id="overdueRemediations">0</span> overdue</div>
+                <div class="text-xs text-red-500 mt-1"><span id="overdueRemediations">0</span> <span data-i18n="compliance.overdue">overdue</span></div>
             </div>
         </div>
 
+        <!-- ─── Status counters (each is clickable → sets Assessment filter) -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+            <button type="button" data-on-click="setAssessmentFilter" data-args="[&quot;compliant&quot;]" class="bg-green-50 border border-green-200 rounded-lg p-4 text-center hover:bg-green-100 transition" data-testid="counter-compliant">
                 <div id="compliantCount" class="text-2xl font-bold text-green-700">-</div>
                 <div class="text-sm text-green-600" data-i18n="compliance.compliant">Compliant</div>
-            </div>
-            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+            </button>
+            <button type="button" data-on-click="setAssessmentFilter" data-args="[&quot;partially_compliant&quot;]" class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center hover:bg-amber-100 transition" data-testid="counter-partial">
                 <div id="partialCount" class="text-2xl font-bold text-amber-700">-</div>
                 <div class="text-sm text-amber-600" data-i18n="compliance.partially_compliant">Partially Compliant</div>
-            </div>
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+            </button>
+            <button type="button" data-on-click="setAssessmentFilter" data-args="[&quot;non_compliant&quot;]" class="bg-red-50 border border-red-200 rounded-lg p-4 text-center hover:bg-red-100 transition" data-testid="counter-non-compliant">
                 <div id="nonCompliantCount" class="text-2xl font-bold text-red-700">-</div>
                 <div class="text-sm text-red-600" data-i18n="compliance.non_compliant">Non-Compliant</div>
-            </div>
-            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+            </button>
+            <button type="button" data-on-click="setAssessmentFilter" data-args="[&quot;not_assessed&quot;]" class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center hover:bg-gray-100 transition" data-testid="counter-not-assessed">
                 <div id="notAssessedCount" class="text-2xl font-bold text-gray-600">-</div>
                 <div class="text-sm text-gray-500" data-i18n="compliance.not_assessed">Not Assessed</div>
-            </div>
+            </button>
         </div>
+
+ slack-audit-notification-alignment
+        <!-- ─── Frameworks (replaces both Regulation Library list AND tab strip) -->
+        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-frameworks">
+            <div class="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.frameworks_title">Frameworks</h2>
+                    <p class="text-xs text-gray-500" data-i18n="compliance.frameworks_subtitle">Each framework card shows its clauses, % assessed, and % compliant. Click a card to open its clauses & document mapping below.</p>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="lg:col-span-2 space-y-6">
@@ -158,107 +228,150 @@
                         <div class="p-4 text-center text-gray-400">Loading regulations...</div>
                     </div>
                     <input type="file" id="regulationDocFileInput" accept="application/pdf,.pdf" class="hidden" data-testid="input-regulation-document-file" />
+ main
                 </div>
+                <a href="/document-mapping" class="text-xs text-emerald-700 hover:text-emerald-800 font-medium" data-testid="link-document-mapping" data-i18n="compliance.go_doc_mapping">Open Document Mapping →</a>
+            </div>
+            <div id="frameworksGrid" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading frameworks…</div>
+            </div>
+        </section>
 
-                <div class="bg-white rounded-lg shadow">
-                    <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-                        <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.obligations_register">Obligations Register</h2>
-                        <select id="filterRegulation" data-on-change="loadObligations" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                            <option value="" data-i18n="compliance.all_regulations">All Regulations</option>
-                        </select>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_code">Code</th>
-                                    <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_obligation">Obligation</th>
-                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_priority">Priority</th>
-                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_status">Status</th>
-                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_actions">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="obligationsTableBody" class="bg-white divide-y divide-gray-200">
-                                <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Loading obligations...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
+        <!-- ─── Open framework: summary + Clauses & Document Mapping panel -->
+        <section id="frameworkDetail" class="bg-white rounded-lg shadow mb-6 hidden fade-in" data-testid="section-framework-detail">
+            <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <div class="text-sm font-semibold text-gray-900" id="frameworkDetailName">—</div>
+                    <div class="text-xs text-gray-500" id="frameworkDetailMeta">—</div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span id="frameworkDetailClauses" class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">0 clauses</span>
+                    <span id="frameworkDetailDocs" class="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-800">0 documents linked</span>
+                    <a id="frameworkGapPdfLink" href="#" target="_blank" rel="noopener" class="text-xs px-3 py-1 border border-blue-700 text-blue-700 rounded hover:bg-blue-50 font-medium" data-i18n="compliance.gap_pdf">Gap Analysis PDF</a>
+                    <a id="frameworkAuditRunLink" href="/audit-readiness" class="text-xs px-3 py-1 border border-emerald-700 text-emerald-700 rounded hover:bg-emerald-50 font-medium" data-i18n="compliance.start_audit_run">Start Audit Run</a>
+                    <button type="button" data-on-click="closeFramework" class="text-xs text-gray-500 hover:text-gray-800" data-testid="button-close-framework" data-i18n="common.close">Close</button>
                 </div>
             </div>
-
-            <div class="space-y-6">
-                <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="compliance.by_regulation">By Regulation</h2>
-                    <div id="byRegulationChart" class="space-y-2">
-                        <div class="text-gray-400 text-center py-4">Loading...</div>
-                    </div>
+            <!-- Compliance v2 — Framework Gap Analysis snapshot -->
+            <div class="p-4 border-b border-gray-200 bg-blue-50">
+                <h3 class="text-sm font-semibold text-blue-900" data-i18n="compliance.framework_gap_title">Framework Gap Analysis (latest assessment per clause)</h3>
+                <div id="frameworkGapSummary" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-center">
+                    <div class="bg-white rounded p-2"><div class="text-lg font-bold text-emerald-700" id="gapCntCompliant">—</div><div class="text-[10px] uppercase text-gray-500" data-i18n="compliance.assess_compliant">Compliant</div></div>
+                    <div class="bg-white rounded p-2"><div class="text-lg font-bold text-amber-600" id="gapCntPartial">—</div><div class="text-[10px] uppercase text-gray-500" data-i18n="compliance.assess_partial">Partially</div></div>
+                    <div class="bg-white rounded p-2"><div class="text-lg font-bold text-red-700" id="gapCntNoncompliant">—</div><div class="text-[10px] uppercase text-gray-500" data-i18n="compliance.assess_noncompliant">Non-Compliant</div></div>
+                    <div class="bg-white rounded p-2"><div class="text-lg font-bold text-gray-500" id="gapCntNotAssessed">—</div><div class="text-[10px] uppercase text-gray-500" data-i18n="compliance.assess_not">Not Assessed</div></div>
                 </div>
+            </div>
+            <div class="p-4 border-b border-gray-200">
+                <h3 class="text-sm font-semibold text-gray-700" data-i18n="compliance.clause_mapping_title">Clauses & Document Mapping</h3>
+                <p class="text-xs text-gray-500 mt-0.5" data-i18n="compliance.clause_mapping_subtitle">Each clause below can be linked to one or more uploaded documents from the QMS library.</p>
+            </div>
+            <div id="clause-cards" class="divide-y divide-gray-200">
+                <div class="p-6 text-center text-gray-400">Loading clauses…</div>
+            </div>
+        </section>
 
-                <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="compliance.by_priority">By Priority</h2>
-                    <div id="byPriorityChart" class="space-y-2">
-                        <div class="text-gray-400 text-center py-4">Loading...</div>
-                    </div>
+        <!-- ─── Analytics row: By Priority + By Domain + Upcoming Deadlines -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-base font-semibold text-gray-900 mb-3" data-i18n="compliance.by_priority">By Priority</h2>
+                <div id="byPriorityChart" class="space-y-2">
+                    <div class="text-gray-400 text-center py-4 text-sm">Loading…</div>
                 </div>
-
-                <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="compliance.upcoming_deadlines">Upcoming Deadlines</h2>
-                    <div id="upcomingDeadlines" class="space-y-3">
-                        <div class="text-gray-400 text-center py-4">Loading...</div>
-                    </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-base font-semibold text-gray-900 mb-3" data-i18n="compliance.by_domain">By Domain</h2>
+                <div id="byDomainChart" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    <div class="text-gray-400 text-center py-4 text-sm">Loading…</div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-base font-semibold text-gray-900 mb-3" data-i18n="compliance.upcoming_deadlines">Upcoming Deadlines</h2>
+                <div id="upcomingDeadlines" class="space-y-2">
+                    <div class="text-gray-400 text-center py-4 text-sm">Loading…</div>
                 </div>
             </div>
         </div>
 
-        <!-- Clause → document mapping panel (shown when a regulation tab is selected) -->
-        <section id="clause-mapping-section" class="bg-white rounded-lg shadow mt-6 hidden" data-testid="section-clause-mapping">
-            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+        <!-- ─── Single combined Obligations & Assessments table ───── -->
+        <section class="bg-white rounded-lg shadow" data-testid="section-obligations">
+            <div class="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-2">
                 <div>
-                    <h2 class="text-lg font-semibold text-gray-900">Clauses & Document Mapping</h2>
-                    <p class="text-xs text-gray-500 mt-1">Each clause below can be linked to one or more uploaded documents from the QMS library.</p>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.obligations_assessments_title">Obligations & Assessments</h2>
+                    <p class="text-xs text-gray-500" data-i18n="compliance.obligations_assessments_subtitle">All clauses with their lifecycle status, latest assessment, and last review date. Use the filter bar to narrow.</p>
                 </div>
-            </div>
-            <div id="clause-cards" class="divide-y divide-gray-200">
-                <div class="p-6 text-center text-gray-400">Select a regulation tab above to view its clauses.</div>
-            </div>
-        </section>
-
-        <div class="bg-white rounded-lg shadow mt-6">
-            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-                <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.gap_analysis">Gap Analysis</h2>
-                <select id="gapRegulationFilter" data-on-change="loadGapAnalysis" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-gap-regulation">
-                    <option value="" data-i18n="compliance.all_regulations">All Regulations</option>
-                </select>
+                <div class="text-xs text-gray-500" id="obligationsResultCount" data-testid="text-result-count"></div>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_code">Code</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_obligation">Obligation</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_domain">Domain</th>
-                            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_priority">Priority</th>
-                            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_status">Status</th>
-                            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_score">Score</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_last_assessed">Last Assessed</th>
+                            <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_code">Code</th>
+                            <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_obligation">Obligation</th>
+                            <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_framework">Framework</th>
+                            <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_domain">Domain</th>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_priority">Priority</th>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_lifecycle">Lifecycle</th>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_assessment">Assessment</th>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_score">Score</th>
+                            <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_last_assessed">Last Assessed</th>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="compliance.col_actions">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="gapAnalysisBody" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">Loading gap analysis...</td></tr>
+                    <tbody id="obligationsTableBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="10" class="px-4 py-8 text-center text-gray-400">Loading obligations…</td></tr>
                     </tbody>
                 </table>
             </div>
-        </div>
+        </section>
     </main>
 
+    <!-- ─── Ingest Standard modal (Compliance v2 Pillar 1) -->
+    <div id="ingestStandardModal" class="modal" role="dialog" aria-modal="true">
+        <div class="bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="compliance.ingest_modal_title">Ingest Standard from Document</h3>
+                    <p class="text-xs text-gray-500 mt-1" data-i18n="compliance.ingest_modal_subtitle">Upload a regulation/standard PDF in the QMS library first, then pick it here. AI drafts the clauses; you review before they become obligations.</p>
+                </div>
+                <button data-on-click="closeModal" data-args="[&quot;ingestStandardModal&quot;]" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="ingestStandardForm" data-on-submit="submitIngestStandard" data-pass-event="true" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.ingest_pick_regulation">Existing regulation (optional)</label>
+                    <select name="regulation_id" id="ingestRegulationSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">— Create new regulation later —</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1" data-i18n="compliance.ingest_pick_regulation_help">Pick a regulation if you want the extracted clauses to land under an existing framework. Leave empty for a fresh framework you'll name later.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.ingest_pick_doc">Source document *</label>
+                    <select name="document_id" id="ingestDocumentSelect" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">— Pick an uploaded document —</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1" data-i18n="compliance.ingest_pick_doc_help">Only documents whose text has been extracted appear here. Upload via Documentations / QMS library if yours is missing.</p>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800">
+                    <span data-i18n="compliance.ingest_warning">Heads up: AI-extracted clauses are a draft. Review every row in the import-review screen before applying.</span>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t">
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;ingestStandardModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="common.cancel">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" data-i18n="compliance.ingest_start">Start Extraction</button>
+                </div>
+                <p id="ingestStandardMsg" class="text-sm"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- ─── Add Obligation modal (unchanged from previous version) -->
     <div id="addObligationModal" class="modal">
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-gray-900">Add Compliance Obligation</h3>
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="compliance.add_obligation">Add Compliance Obligation</h3>
                 <button data-on-click="closeModal" data-args="[&quot;addObligationModal&quot;]" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
             <form id="addObligationForm" data-on-submit="submitObligation" data-pass-event="true" class="p-6 space-y-4">
@@ -329,21 +442,20 @@
                     <textarea name="evidence_requirements" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="What evidence is needed to demonstrate compliance?"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" data-on-click="closeModal" data-args="[&quot;addObligationModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addObligationModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="common.cancel">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800" data-i18n="compliance.create_obligation">Create Obligation</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- ─── Assessment modal (unchanged) -->
     <div id="assessmentModal" class="modal">
         <div class="bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-gray-900">Record Assessment</h3>
+                <h3 class="text-lg font-semibold text-gray-900" data-i18n="compliance.record_assessment">Record Assessment</h3>
                 <button data-on-click="closeModal" data-args="[&quot;assessmentModal&quot;]" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
             <form id="assessmentForm" data-on-submit="submitAssessment" data-pass-event="true" class="p-6 space-y-4">
@@ -375,41 +487,39 @@
                     <textarea name="comments" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Additional notes"></textarea>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" data-on-click="closeModal" data-args="[&quot;assessmentModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800">Record Assessment</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;assessmentModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="common.cancel">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800" data-i18n="compliance.record_assessment">Record Assessment</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Clause-documents modal (added) -->
+    <!-- ─── Clause-documents modal (unchanged) -->
     <div id="clauseDocsModal" class="modal" role="dialog" aria-modal="true">
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200 flex justify-between items-center">
                 <div>
-                    <h3 class="text-lg font-semibold text-gray-900">Clause Documents</h3>
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="compliance.clause_documents">Clause Documents</h3>
                     <div class="text-xs text-gray-500 mt-1" id="clauseDocsTitle">—</div>
                 </div>
                 <button data-on-click="closeModal" data-args="[&quot;clauseDocsModal&quot;]" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
             <div class="p-6 space-y-5">
                 <div>
-                    <div class="text-sm font-semibold text-gray-700 mb-2">Linked documents</div>
+                    <div class="text-sm font-semibold text-gray-700 mb-2" data-i18n="compliance.linked_documents">Linked documents</div>
                     <div id="clauseDocsList" class="border border-gray-200 rounded-lg divide-y divide-gray-100">
                         <div class="p-3 text-center text-gray-400 text-sm">Loading…</div>
                     </div>
                 </div>
                 <div>
-                    <div class="text-sm font-semibold text-gray-700 mb-2">Bulk upload to this clause</div>
+                    <div class="text-sm font-semibold text-gray-700 mb-2" data-i18n="compliance.bulk_upload_to_clause">Bulk upload to this clause</div>
                     <form id="clauseBulkForm" data-testid="form-clause-bulk-upload">
                         <input type="hidden" id="clauseBulkObligationId">
                         <div class="grid grid-cols-2 gap-3 mb-3">
                             <div>
-                                <label class="block text-xs font-medium text-gray-600 mb-1">Category</label>
+                                <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="compliance.f_category">Category</label>
                                 <select id="clauseBulkCategory" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                                     <option value="documents" data-i18n="compliance.cat_documents">Documents</option>
                                     <option value="policies" data-i18n="compliance.cat_policies">Policies</option>
@@ -419,7 +529,7 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-gray-600 mb-1">Notes (optional)</label>
+                                <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="compliance.f_notes">Notes (optional)</label>
                                 <input id="clauseBulkNotes" type="text" maxlength="500" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             </div>
                         </div>
@@ -428,7 +538,7 @@
                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="input-clause-bulk-files">
                         <p id="clauseBulkCount" class="text-xs text-gray-500 mt-1"></p>
                         <div class="flex justify-end mt-3">
-                            <button type="submit" id="btnClauseBulkUpload" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm" data-testid="button-submit-clause-bulk">Upload & Link</button>
+                            <button type="submit" id="btnClauseBulkUpload" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm" data-testid="button-submit-clause-bulk" data-i18n="compliance.upload_and_link">Upload & Link</button>
                         </div>
                         <p id="clauseBulkMsg" class="mt-2 text-sm"></p>
                     </form>
@@ -438,44 +548,157 @@
     </div>
 
     <script>
-        let regulations = [];
-        let activeRegulationTab = 'all';
-        let activeRegulationCode = null;
+        // ──────────────────────── State ────────────────────────────────
+        let regulations = [];                     // full reg list
+        let allObligations = [];                  // raw /obligations
+        let gapByCode = {};                       // /gap-analysis indexed by obligation_code
+        let evidenceCountByObId = {};             // doc count per clause (lazy)
+        let mergedRows = [];                      // merged + reusable view-model
+        let activeRegulationCode = null;          // for clause-mapping panel
         const obligationTitles = {};
 
+        const filterState = {
+            framework: '', lifecycle: '', assessment: '',
+            priority: '', domain: '', owner: ''
+        };
+
+        // ──────────────────────── Helpers ──────────────────────────────
+        function escAttr(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function _ct(k, fb) {
+            return (window.WalaPlusI18n && window.WalaPlusI18n.t) ? (window.WalaPlusI18n.t(k) || fb) : fb;
+        }
+        function _td(prefix, value) {
+            if (!value) return '';
+            return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic) ? (window.WalaPlusI18n.tDynamic(prefix, value) || value) : value;
+        }
+        function getLifecycleClass(status) {
+            const classes = {
+                'applicable': 'bg-blue-100 text-blue-800',
+                'not_applicable': 'bg-gray-100 text-gray-600',
+                'pending_review': 'bg-amber-100 text-amber-800',
+                'exempt': 'bg-purple-100 text-purple-800'
+            };
+            return classes[status] || 'bg-gray-100 text-gray-700';
+        }
+        function getAssessmentClass(status) {
+            const classes = {
+                'compliant': 'status-compliant',
+                'partially_compliant': 'status-partially',
+                'non_compliant': 'status-non-compliant',
+                'not_assessed': 'status-not-assessed'
+            };
+            return classes[status] || 'status-not-assessed';
+        }
+        function formatLifecycle(status) {
+            const map = {
+                'applicable':     _ct('compliance.lc_applicable',     'Applicable'),
+                'not_applicable': _ct('compliance.lc_not_applicable', 'Not Applicable'),
+                'pending_review': _ct('compliance.lc_pending_review', 'Pending Review'),
+                'exempt':         _ct('compliance.lc_exempt',         'Exempt')
+            };
+            return map[status] || String(status || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        function formatAssessment(status) {
+            const map = {
+                'compliant':           _ct('compliance.s_compliant',           'Compliant'),
+                'partially_compliant': _ct('compliance.s_partial_short',       'Partial'),
+                'non_compliant':       _ct('compliance.s_non_compliant',       'Non-Compliant'),
+                'not_assessed':        _ct('compliance.s_not_assessed',        'Not Assessed')
+            };
+            return map[status] || _ct('compliance.s_not_assessed', 'Not Assessed');
+        }
+        function getJurisdictionColor(jurisdiction) {
+            const colors = {
+                'saudi':         'bg-green-700',
+                'gcc':           'bg-blue-700',
+                'international': 'bg-purple-700',
+                'internal':      'bg-gray-700'
+            };
+            return colors[jurisdiction] || 'bg-gray-600';
+        }
+
+        // ──────────────────────── Data fetching ────────────────────────
         async function loadSummary() {
             try {
                 const res = await fetch('/api/compliance/summary');
                 const data = await res.json();
-                
+
                 document.getElementById('activeRegulations').textContent = data.active_regulations || 0;
                 document.getElementById('totalObligations').textContent = data.total_obligations || 0;
                 document.getElementById('pendingRemediations').textContent = data.pending_remediations || 0;
                 document.getElementById('overdueRemediations').textContent = data.overdue_remediations || 0;
 
-                const breakdown = data.compliance_breakdown || {};
-                document.getElementById('compliantCount').textContent = breakdown.compliant || 0;
-                document.getElementById('partialCount').textContent = breakdown.partially_compliant || 0;
-                document.getElementById('nonCompliantCount').textContent = breakdown.non_compliant || 0;
-                document.getElementById('notAssessedCount').textContent = breakdown.not_assessed || 0;
-
                 const score = data.overall_compliance_score || 0;
                 document.getElementById('scoreValue').textContent = score + '%';
                 const progress = document.getElementById('scoreProgress');
                 const circumference = 2 * Math.PI * 50;
-                const offset = circumference - (score / 100 * circumference);
-                progress.style.strokeDashoffset = offset;
-                
-                if (score >= 80) progress.style.stroke = '#10B981';
+                progress.style.strokeDashoffset = circumference - (score / 100 * circumference);
+                if (score >= 80)      progress.style.stroke = '#10B981';
                 else if (score >= 50) progress.style.stroke = '#F59E0B';
-                else progress.style.stroke = '#EF4444';
-
-                if (data.by_regulation) renderByRegulation(data.by_regulation);
-                if (data.by_priority) renderByPriority(data.by_priority);
-            } catch (error) {
-                console.error('Error loading summary:', error);
+                else                  progress.style.stroke = '#EF4444';
+            } catch (e) {
+                console.error('Error loading summary:', e);
             }
         }
+
+ slack-audit-notification-alignment
+        async function loadAllData() {
+            try {
+                const [regsRes, oblsRes, gapRes] = await Promise.all([
+                    fetch('/api/compliance/regulations'),
+                    fetch('/api/compliance/obligations'),
+                    fetch('/api/compliance/gap-analysis')
+                ]);
+                regulations    = (await regsRes.json()).regulations || [];
+                allObligations = (await oblsRes.json()).obligations  || [];
+                const gaps     = (await gapRes.json()).gap_analysis  || [];
+
+                gapByCode = {};
+                gaps.forEach(function (g) { gapByCode[g.obligation_code] = g; });
+
+                buildMergedRows();
+                hydrateFilterDropdowns();
+                populateModalRegulationDropdown();
+                applyFilters();
+            } catch (e) {
+                console.error('Error loading data:', e);
+                document.getElementById('obligationsTableBody').innerHTML =
+                    '<tr><td colspan="10" class="px-4 py-8 text-center text-red-500">Failed to load obligations.</td></tr>';
+            }
+        }
+
+        // Merge /obligations + /gap-analysis (by obligation_code) into a
+        // single array each row of which has every field used by every
+        // section of the page.
+        function buildMergedRows() {
+            mergedRows = allObligations.map(function (o) {
+                const g = gapByCode[o.obligation_code] || {};
+                obligationTitles[o.id] = o.obligation_code + ' — ' + (o.title || '');
+                return {
+                    id: o.id,
+                    obligation_code: o.obligation_code,
+                    title: o.title,
+                    description: o.description,
+                    article_reference: o.article_reference,
+                    regulation_id: o.regulation_id,
+                    regulation_code: o.regulation_code || g.regulation_code || '',
+                    regulation_name: g.regulation_name || '',
+                    section_domain: o.section_domain || g.section_domain || '',
+                    priority: o.priority,
+                    lifecycle_status: o.status,
+                    responsible_department: o.responsible_department || '',
+                    assessment_status: g.latest_status || 'not_assessed',
+                    score: g.latest_score,
+                    last_assessed: g.last_assessed
+                };
+            });
+        }
+
+        async function loadDeadlines() {
+            try {
+                const res = await fetch('/api/compliance/deadlines');
 
         function renderByRegulation(regs) {
             const container = document.getElementById('byRegulationChart');
@@ -535,22 +758,58 @@
             try {
                 if (currentUserRole === null) await loadCurrentUser();
                 const res = await fetch('/api/compliance/regulations');
+ main
                 const data = await res.json();
-                regulations = data.regulations || [];
-                renderRegulations(regulations);
-                populateRegulationDropdowns(regulations);
-                populateGapRegulationFilter(regulations);
-            } catch (error) {
-                console.error('Error loading regulations:', error);
+                renderDeadlines(data.upcoming || [], data.overdue || []);
+            } catch (e) {
+                console.error('Error loading deadlines:', e);
             }
         }
 
-        function renderRegulations(regs) {
-            const container = document.getElementById('regulationsList');
-            if (!regs || regs.length === 0) {
-                container.innerHTML = '<div class="p-4 text-center text-gray-400">No regulations found. Add regulations to get started.</div>';
-                return;
-            }
+        // ──────────────────────── Filter state ─────────────────────────
+        function readFilterState() {
+            filterState.framework  = document.getElementById('fltFramework').value;
+            filterState.lifecycle  = document.getElementById('fltLifecycle').value;
+            filterState.assessment = document.getElementById('fltAssessment').value;
+            filterState.priority   = document.getElementById('fltPriority').value;
+            filterState.domain     = document.getElementById('fltDomain').value;
+            filterState.owner      = document.getElementById('fltOwner').value;
+        }
+        function onFilterChange() { readFilterState(); applyFilters(); }
+        function resetFilters() {
+            ['fltFramework','fltLifecycle','fltAssessment','fltPriority','fltDomain','fltOwner']
+                .forEach(function (id) { document.getElementById(id).value = ''; });
+            onFilterChange();
+        }
+        function setAssessmentFilter(status) {
+            const sel = document.getElementById('fltAssessment');
+            sel.value = (sel.value === status) ? '' : status;   // toggle
+            onFilterChange();
+            document.querySelector('[data-testid="section-obligations"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        function applyFilterChip(field, value) {
+            // Helper used by the framework cards: clicking a card sets framework filter.
+            const map = {
+                framework: 'fltFramework', lifecycle: 'fltLifecycle', assessment: 'fltAssessment',
+                priority: 'fltPriority', domain: 'fltDomain', owner: 'fltOwner'
+            };
+            const id = map[field];
+            if (!id) return;
+            document.getElementById(id).value = value || '';
+            onFilterChange();
+        }
+
+ slack-audit-notification-alignment
+        function getFilteredRows() {
+            return mergedRows.filter(function (r) {
+                if (filterState.framework  && String(r.regulation_id) !== String(filterState.framework)) return false;
+                if (filterState.lifecycle  && r.lifecycle_status   !== filterState.lifecycle)         return false;
+                if (filterState.assessment && r.assessment_status  !== filterState.assessment)        return false;
+                if (filterState.priority   && r.priority           !== filterState.priority)          return false;
+                if (filterState.domain     && (r.section_domain || '') !== filterState.domain)        return false;
+                if (filterState.owner      && (r.responsible_department || '') !== filterState.owner) return false;
+                return true;
+            });
 
             const canManage = canManageRegulationDocs();
             container.innerHTML = regs.map(r => {
@@ -621,152 +880,401 @@
                     </div>
                 </div>
             `;}).join('');
+ main
         }
 
-        function getJurisdictionColor(jurisdiction) {
-            const colors = {
-                'saudi': 'bg-green-700',
-                'gcc': 'bg-blue-700',
-                'international': 'bg-purple-700',
-                'internal': 'bg-gray-700'
+        function renderFilterChips() {
+            const wrap = document.getElementById('filterChips');
+            if (!wrap) return;
+            const labels = {
+                framework: _ct('compliance.flt_framework', 'Framework'),
+                lifecycle: _ct('compliance.flt_lifecycle', 'Lifecycle'),
+                assessment: _ct('compliance.flt_assessment', 'Assessment'),
+                priority: _ct('compliance.flt_priority', 'Priority'),
+                domain: _ct('compliance.flt_domain', 'Domain'),
+                owner: _ct('compliance.flt_owner', 'Owner')
             };
-            return colors[jurisdiction] || 'bg-gray-600';
-        }
-
-        function populateRegulationDropdowns(regs) {
-            const filterSelect = document.getElementById('filterRegulation');
-            const modalSelect = document.getElementById('modalRegulationSelect');
-            
-            const options = regs.map(r => `<option value="${r.id}">${r.regulation_code} - ${r.name}</option>`).join('');
-            
-            filterSelect.innerHTML = '<option value="" data-i18n="compliance.all_regulations">All Regulations</option>' + options;
-            modalSelect.innerHTML = '<option value="" data-i18n="compliance.select_regulation">Select regulation</option>' + options;
-            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) {
-                window.WalaPlusI18n.applyToDOM(filterSelect);
-                window.WalaPlusI18n.applyToDOM(modalSelect);
+            const valueLabel = function (field, raw) {
+                if (field === 'framework') {
+                    const r = regulations.find(function (x) { return String(x.id) === String(raw); });
+                    return r ? r.regulation_code : raw;
+                }
+                if (field === 'lifecycle')  return formatLifecycle(raw);
+                if (field === 'assessment') return formatAssessment(raw);
+                if (field === 'priority')   return _td('dyn.compliance.priority', raw) || raw;
+                return raw;
+            };
+            const chips = [];
+            Object.keys(filterState).forEach(function (k) {
+                if (filterState[k]) {
+                    chips.push('<span class="chip" data-testid="chip-' + k + '">'
+                        + escAttr(labels[k]) + ': ' + escAttr(valueLabel(k, filterState[k]))
+                        + '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;' + k + '&quot;,&quot;&quot;]" aria-label="Clear ' + labels[k] + '">×</button>'
+                        + '</span>');
+                }
+            });
+            if (chips.length === 0) {
+                wrap.classList.add('hidden');
+                wrap.innerHTML = '';
+            } else {
+                wrap.classList.remove('hidden');
+                wrap.innerHTML = chips.join(' ');
             }
         }
 
-        async function loadObligations() {
-            const regulationId = document.getElementById('filterRegulation').value;
-            const statusFilter = document.getElementById('statusFilter')?.value || '';
-            let url = '/api/compliance/obligations';
-            const params = [];
-            if (regulationId) params.push(`regulation_id=${regulationId}`);
-            if (statusFilter) params.push(`status=${statusFilter}`);
-            if (params.length) url += '?' + params.join('&');
-
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                renderObligations(data.obligations || []);
-            } catch (error) {
-                console.error('Error loading obligations:', error);
-            }
+        // ──────────────────────── Apply filters everywhere ─────────────
+        function applyFilters() {
+            const rows = getFilteredRows();
+            renderObligationsTable(rows);
+            renderStatusCounters(rows);
+            renderByPriority(rows);
+            renderByDomain(rows);
+            renderFrameworksGrid(rows);
+            renderFilterChips();
+            const cnt = document.getElementById('filterMatchCount');
+            if (cnt) cnt.textContent = rows.length + ' / ' + mergedRows.length + ' ' + _ct('compliance.matching_clauses', 'matching clauses');
         }
 
-        function escAttr(s) {
-            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        // ──────────────────────── Filter dropdown population ───────────
+        function hydrateFilterDropdowns() {
+            // Framework
+            const fw = document.getElementById('fltFramework');
+            const cur = fw.value;
+            fw.innerHTML = '<option value="" data-i18n="compliance.all_regulations">' + _ct('compliance.all_regulations', 'All Regulations') + '</option>'
+                + regulations.map(function (r) {
+                    return '<option value="' + r.id + '">' + escAttr(r.regulation_code + ' — ' + r.name) + '</option>';
+                }).join('');
+            fw.value = cur;
+
+            // Domain (from data)
+            const domains = Array.from(new Set(mergedRows.map(function (r) { return r.section_domain; }).filter(Boolean))).sort();
+            const dom = document.getElementById('fltDomain');
+            const curDom = dom.value;
+            dom.innerHTML = '<option value="">' + _ct('compliance.flt_all', 'All') + '</option>'
+                + domains.map(function (d) { return '<option value="' + escAttr(d) + '">' + escAttr(d) + '</option>'; }).join('');
+            dom.value = curDom;
+
+            // Owner (from data)
+            const owners = Array.from(new Set(mergedRows.map(function (r) { return r.responsible_department; }).filter(Boolean))).sort();
+            const own = document.getElementById('fltOwner');
+            const curOwn = own.value;
+            own.innerHTML = '<option value="">' + _ct('compliance.flt_all', 'All') + '</option>'
+                + owners.map(function (d) { return '<option value="' + escAttr(d) + '">' + escAttr(d) + '</option>'; }).join('');
+            own.value = curOwn;
         }
 
-        function renderObligations(obligations) {
-            const tbody = document.getElementById('obligationsTableBody');
-            if (!obligations || obligations.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">No obligations found. Add obligations to track compliance.</td></tr>';
+        function populateModalRegulationDropdown() {
+            const sel = document.getElementById('modalRegulationSelect');
+            sel.innerHTML = '<option value="" data-i18n="compliance.select_regulation">' + _ct('compliance.select_regulation', 'Select regulation') + '</option>'
+                + regulations.map(function (r) { return '<option value="' + r.id + '">' + escAttr(r.regulation_code + ' - ' + r.name) + '</option>'; }).join('');
+        }
+
+        // ──────────────────────── Render: status counters ──────────────
+        function renderStatusCounters(rows) {
+            let c = 0, p = 0, n = 0, na = 0;
+            rows.forEach(function (r) {
+                if (r.assessment_status === 'compliant') c++;
+                else if (r.assessment_status === 'partially_compliant') p++;
+                else if (r.assessment_status === 'non_compliant') n++;
+                else na++;
+            });
+            document.getElementById('compliantCount').textContent = c;
+            document.getElementById('partialCount').textContent = p;
+            document.getElementById('nonCompliantCount').textContent = n;
+            document.getElementById('notAssessedCount').textContent = na;
+        }
+
+        // ──────────────────────── Render: framework cards ──────────────
+        function renderFrameworksGrid(filteredRows) {
+            const grid = document.getElementById('frameworksGrid');
+            if (!regulations.length) {
+                grid.innerHTML = '<div class="text-sm text-gray-400 col-span-full text-center py-6">No regulations seeded yet.</div>';
                 return;
             }
+            // Compute per-framework metrics from FILTERED rows (so the cards reflect current filters)
+            const byReg = {};
+            filteredRows.forEach(function (r) {
+                if (!r.regulation_id) return;
+                const k = r.regulation_id;
+                if (!byReg[k]) byReg[k] = { total: 0, assessed: 0, compliant: 0 };
+                byReg[k].total++;
+                if (r.assessment_status && r.assessment_status !== 'not_assessed') byReg[k].assessed++;
+                if (r.assessment_status === 'compliant') byReg[k].compliant++;
+            });
 
-            tbody.innerHTML = obligations.map(o => `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3">
-                        <div class="text-sm font-medium text-blue-600">${o.obligation_code}</div>
-                        <div class="text-xs text-gray-500">${o.regulation_code || ''}</div>
-                    </td>
-                    <td class="px-4 py-3">
-                        <div class="text-sm font-medium text-gray-900 truncate max-w-xs">${o.title}</div>
-                        <div class="text-xs text-gray-500">${o.responsible_department || 'No owner'}</div>
-                    </td>
-                    <td class="px-4 py-3 text-center">
-                        <span class="px-2 py-1 text-xs rounded-full priority-${o.priority}">${_td('dyn.compliance.priority', o.priority)}</span>
-                    </td>
-                    <td class="px-4 py-3 text-center">
-                        <span class="px-2 py-1 text-xs rounded-full ${getStatusClass(o.status)}">${formatStatus(o.status)}</span>
-                    </td>
-                    <td class="px-4 py-3 text-center">
-                        <button data-title="${escAttr(o.title)}" data-on-click="openAssessmentModal" data-args="[${o.id},&quot;@this.dataset.title&quot;]" class="text-green-600 hover:text-green-800 text-sm font-medium">Assess</button>
-                    </td>
-                </tr>
-            `).join('');
+            grid.innerHTML = regulations.map(function (r) {
+                const m = byReg[r.id] || { total: 0, assessed: 0, compliant: 0 };
+                const assessedPct = m.total ? Math.round((m.assessed / m.total) * 100) : 0;
+                const compliantPct = m.total ? Math.round((m.compliant / m.total) * 100) : 0;
+                const isOpen = activeRegulationCode === r.regulation_code;
+                const safeName = escAttr(r.name);
+                const safeCode = escAttr(r.regulation_code);
+                let band = 'border-gray-200 hover:border-emerald-400';
+                if (isOpen) band = 'border-emerald-600 ring-2 ring-emerald-100';
+                return ''
+                    + '<div class="border ' + band + ' rounded-lg p-4 transition" data-testid="framework-card-' + safeCode + '">'
+                        + '<div class="flex items-start justify-between gap-3 mb-3">'
+                            + '<div class="flex items-center gap-2 min-w-0">'
+                                + '<div class="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-[11px] ' + getJurisdictionColor(r.jurisdiction) + '">' + escAttr((r.regulation_code || '').substring(0, 3)) + '</div>'
+                                + '<div class="min-w-0">'
+                                    + '<div class="text-sm font-semibold text-gray-900 truncate" title="' + safeName + '">' + safeName + '</div>'
+                                    + '<div class="text-[11px] text-gray-500 truncate">' + safeCode + ' · ' + escAttr(r.jurisdiction || '—') + '</div>'
+                                + '</div>'
+                            + '</div>'
+                        + '</div>'
+                        + '<div class="grid grid-cols-3 gap-2 text-center mb-3">'
+                            + '<div><div class="text-lg font-bold text-gray-900">' + m.total + '</div><div class="text-[10px] text-gray-500 uppercase tracking-wide" data-i18n="compliance.clauses_short">Clauses</div></div>'
+                            + '<div><div class="text-lg font-bold text-blue-700">' + assessedPct + '%</div><div class="text-[10px] text-gray-500 uppercase tracking-wide" data-i18n="compliance.assessed_short">Assessed</div></div>'
+                            + '<div><div class="text-lg font-bold text-green-700">' + compliantPct + '%</div><div class="text-[10px] text-gray-500 uppercase tracking-wide" data-i18n="compliance.compliant">Compliant</div></div>'
+                        + '</div>'
+                        + '<div class="flex items-center gap-2">'
+                            + '<button type="button" data-on-click="openFramework" data-args="[' + r.id + ']" class="flex-1 text-xs px-3 py-1.5 bg-emerald-700 text-white rounded hover:bg-emerald-800 font-medium" data-testid="button-open-' + safeCode + '">'
+                                + (isOpen ? '<span data-i18n="compliance.opened">Opened</span>' : '<span data-i18n="compliance.open_btn">Open</span>')
+                            + '</button>'
+                            + '<a href="/api/compliance/regulations/' + r.id + '/audit-readiness/pdf" target="_blank" rel="noopener" class="text-xs px-3 py-1.5 border border-emerald-700 text-emerald-700 rounded hover:bg-emerald-50 font-medium" data-testid="button-pdf-' + safeCode + '" data-i18n="compliance.audit_pdf_short">Audit PDF</a>'
+                        + '</div>'
+                    + '</div>';
+            }).join('');
+            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(grid);
         }
 
-        function getStatusClass(status) {
-            const classes = {
-                'applicable': 'bg-blue-100 text-blue-800',
-                'not_applicable': 'bg-gray-100 text-gray-600',
-                'pending_review': 'bg-amber-100 text-amber-800',
-                'exempt': 'bg-purple-100 text-purple-800'
+        async function openFramework(regulationId) {
+            const reg = regulations.find(function (r) { return String(r.id) === String(regulationId); });
+            if (!reg) return;
+            // Set the framework filter so the rest of the page narrows to this framework
+            document.getElementById('fltFramework').value = String(regulationId);
+            onFilterChange();
+
+            // Show the framework detail panel and load clause cards
+            const panel = document.getElementById('frameworkDetail');
+            activeRegulationCode = reg.regulation_code;
+            document.getElementById('frameworkDetailName').textContent = reg.name + ' (' + reg.regulation_code + ')';
+            document.getElementById('frameworkDetailMeta').textContent =
+                (reg.issuing_body || '—') + ' · ' + (reg.jurisdiction || '—') + ' · v' + (reg.version || '—');
+            // Compliance v2 — Gap Analysis PDF link uses the regulation's id;
+            // the audit-run start link funnels into the new audit-readiness page
+            // with the framework pre-filtered.
+            const gapLink = document.getElementById('frameworkGapPdfLink');
+            if (gapLink) gapLink.href = '/api/compliance/regulations/' + reg.id + '/gap-analysis.pdf';
+            const auditLink = document.getElementById('frameworkAuditRunLink');
+            if (auditLink) auditLink.href = '/audit-readiness';
+            panel.classList.remove('hidden');
+            await loadClauseCards(reg.regulation_code);
+            renderFrameworkGapSummary(reg.regulation_code);
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function renderFrameworkGapSummary(regCode) {
+            // Compliance v2 — quick gap snapshot for the open framework
+            // computed from the merged obligations+gap-analysis rows the
+            // page already loaded. Keeps the panel a 1-RTT operation;
+            // the full PDF is the deeper view.
+            const rows = (typeof mergedRows !== 'undefined' && Array.isArray(mergedRows))
+                ? mergedRows.filter(function (r) { return r.regulation_code === regCode; })
+                : [];
+            const counts = { compliant: 0, partial: 0, non: 0, none: 0 };
+            rows.forEach(function (r) {
+                const s = (r.compliance_status || r.assessment_status || '').toLowerCase();
+                if (s === 'compliant') counts.compliant++;
+                else if (s === 'partially_compliant') counts.partial++;
+                else if (s === 'non_compliant') counts.non++;
+                else counts.none++;
+            });
+            const set = function (id, v) {
+                const el = document.getElementById(id);
+                if (el) el.textContent = String(v);
             };
-            return classes[status] || 'bg-gray-100';
+            set('gapCntCompliant', counts.compliant);
+            set('gapCntPartial', counts.partial);
+            set('gapCntNoncompliant', counts.non);
+            set('gapCntNotAssessed', counts.none);
         }
 
-        function _ct(k, fb) {
-            return (window.WalaPlusI18n && window.WalaPlusI18n.t)
-                ? (window.WalaPlusI18n.t(k) || fb)
-                : fb;
+        function closeFramework() {
+            document.getElementById('frameworkDetail').classList.add('hidden');
+            activeRegulationCode = null;
+            applyFilters();   // re-render framework cards so highlight is cleared
         }
-        function _td(prefix, value) {
-            if (!value) return '';
-            return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic)
-                ? (window.WalaPlusI18n.tDynamic(prefix, value) || value)
-                : value;
-        }
-        function formatStatus(status) {
-            const map = {
-                'compliant':           _ct('compliance.s_compliant',           'Compliant'),
-                'partially_compliant': _ct('compliance.s_partially_compliant', 'Partially Compliant'),
-                'non_compliant':       _ct('compliance.s_non_compliant',       'Non-Compliant'),
-                'not_assessed':        _ct('compliance.s_not_assessed',        'Not Assessed'),
-                'in_progress':         _ct('compliance.s_in_progress',         'In Progress'),
-                'pending':             _ct('compliance.s_pending',             'Pending'),
-                'pending_review':      _ct('compliance.s_pending_review',      'Pending Review'),
-                'exempt':              _ct('compliance.s_exempt',              'Exempt')
+
+        // ──────────────────────── Render: charts ───────────────────────
+        function renderByPriority(rows) {
+            const container = document.getElementById('byPriorityChart');
+            const buckets = { critical: 0, high: 0, medium: 0, low: 0 };
+            rows.forEach(function (r) { if (r.priority && buckets[r.priority] != null) buckets[r.priority]++; });
+            const total = rows.length || 1;
+            const colors = {
+                critical: { bg: 'bg-red-50',    bar: 'bg-red-600',    text: 'text-red-800' },
+                high:     { bg: 'bg-orange-50', bar: 'bg-orange-500', text: 'text-orange-800' },
+                medium:   { bg: 'bg-yellow-50', bar: 'bg-yellow-500', text: 'text-yellow-800' },
+                low:      { bg: 'bg-green-50',  bar: 'bg-green-500',  text: 'text-green-800' }
             };
-            return map[status] || String(status || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            container.innerHTML = ['critical','high','medium','low'].map(function (p) {
+                const c = colors[p];
+                const pct = Math.round(buckets[p] / total * 100);
+                const label = _td('dyn.compliance.priority', p) || p;
+                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;priority&quot;,&quot;' + p + '&quot;]" class="w-full text-left ' + c.bg + ' rounded p-2 hover:opacity-90" data-testid="chart-priority-' + p + '">'
+                    + '<div class="flex justify-between items-center text-xs ' + c.text + ' font-medium mb-1"><span class="capitalize">' + escAttr(label) + '</span><span>' + buckets[p] + ' (' + pct + '%)</span></div>'
+                    + '<div class="h-1.5 w-full bg-white/70 rounded-full overflow-hidden"><div class="h-full ' + c.bar + '" style="width:' + pct + '%"></div></div>'
+                    + '</button>';
+            }).join('');
+            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(container);
         }
 
-        async function loadDeadlines() {
-            try {
-                const res = await fetch('/api/compliance/deadlines');
-                const data = await res.json();
-                renderDeadlines(data.upcoming || [], data.overdue || []);
-            } catch (error) {
-                console.error('Error loading deadlines:', error);
+        function renderByDomain(rows) {
+            const container = document.getElementById('byDomainChart');
+            const buckets = {};
+            rows.forEach(function (r) {
+                const d = r.section_domain || '—';
+                buckets[d] = (buckets[d] || 0) + 1;
+            });
+            const entries = Object.entries(buckets).sort(function (a, b) { return b[1] - a[1]; });
+            if (entries.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">No data</div>';
+                return;
             }
+            const max = entries[0][1];
+            container.innerHTML = entries.map(function (e) {
+                const name = e[0]; const n = e[1];
+                const pct = Math.round(n / max * 100);
+                const safe = escAttr(name);
+                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;domain&quot;,&quot;' + safe.replace(/"/g, '\\&quot;') + '&quot;]" class="w-full text-left p-1.5 rounded hover:bg-gray-50">'
+                    + '<div class="flex justify-between items-center text-xs text-gray-700 mb-0.5"><span class="truncate" title="' + safe + '">' + safe + '</span><span class="text-gray-500">' + n + '</span></div>'
+                    + '<div class="h-1 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-indigo-500" style="width:' + pct + '%"></div></div>'
+                    + '</button>';
+            }).join('');
         }
 
         function renderDeadlines(upcoming, overdue) {
             const container = document.getElementById('upcomingDeadlines');
-            const all = [...overdue.map(o => ({...o, isOverdue: true})), ...upcoming];
-            
+            const all = [].concat(overdue.map(function (o) { return Object.assign({}, o, { isOverdue: true }); }), upcoming);
             if (all.length === 0) {
-                container.innerHTML = '<div class="text-gray-400 text-center py-4">No upcoming deadlines</div>';
+                container.innerHTML = '<div class="text-gray-400 text-center py-4 text-sm">' + _ct('compliance.no_deadlines', 'No upcoming deadlines') + '</div>';
                 return;
             }
-
-            container.innerHTML = all.slice(0, 5).map(d => `
-                <div class="p-3 rounded border ${d.isOverdue ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}">
-                    <div class="font-medium text-sm truncate">${d.obligation_title}</div>
-                    <div class="flex justify-between items-center mt-1">
-                        <span class="text-xs text-gray-500 capitalize">${_td('dyn.compliance.event_type', d.event_type)}</span>
-                        <span class="text-xs ${d.isOverdue ? 'text-red-600 font-bold' : 'text-gray-600'}">${new Date(d.scheduled_date).toLocaleDateString()}</span>
-                    </div>
-                </div>
-            `).join('');
+            container.innerHTML = all.slice(0, 6).map(function (d) {
+                return '<div class="p-2 rounded border ' + (d.isOverdue ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200') + '">'
+                    + '<div class="font-medium text-xs truncate">' + escAttr(d.obligation_title) + '</div>'
+                    + '<div class="flex justify-between items-center mt-1">'
+                        + '<span class="text-[10px] text-gray-500 capitalize">' + escAttr(_td('dyn.compliance.event_type', d.event_type) || d.event_type) + '</span>'
+                        + '<span class="text-[10px] ' + (d.isOverdue ? 'text-red-600 font-bold' : 'text-gray-600') + '">' + new Date(d.scheduled_date).toLocaleDateString() + '</span>'
+                    + '</div>'
+                + '</div>';
+            }).join('');
         }
 
+        // ──────────────────────── Render: combined obligations table ───
+        function renderObligationsTable(rows) {
+            const tbody = document.getElementById('obligationsTableBody');
+            const cnt = document.getElementById('obligationsResultCount');
+            if (cnt) cnt.textContent = rows.length + ' ' + _ct('compliance.results_label', 'result' + (rows.length === 1 ? '' : 's'));
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-10 text-center text-gray-400">'
+                    + _ct('compliance.no_match', 'No clauses match the current filters.')
+                    + ' <button type="button" data-on-click="resetFilters" class="text-emerald-700 hover:underline ml-1">'
+                    + _ct('compliance.flt_reset', 'Reset')
+                    + '</button>'
+                    + '</td></tr>';
+                if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(tbody);
+                return;
+            }
+            tbody.innerHTML = rows.map(function (r) {
+                const dt = r.last_assessed ? new Date(r.last_assessed).toLocaleDateString() : '—';
+                return '<tr class="hover:bg-gray-50" data-testid="row-obligation-' + r.id + '">'
+                    + '<td class="px-3 py-2.5 text-sm font-medium text-blue-600 whitespace-nowrap">' + escAttr(r.obligation_code) + '</td>'
+                    + '<td class="px-3 py-2.5">'
+                        + '<div class="text-sm font-medium text-gray-900 max-w-xs truncate" title="' + escAttr(r.title) + '">' + escAttr(r.title) + '</div>'
+                        + (r.responsible_department ? '<div class="text-[11px] text-gray-500 truncate">' + escAttr(r.responsible_department) + '</div>' : '')
+                    + '</td>'
+                    + '<td class="px-3 py-2.5 text-xs text-gray-700 font-mono">' + escAttr(r.regulation_code) + '</td>'
+                    + '<td class="px-3 py-2.5 text-xs text-gray-500">' + escAttr(r.section_domain || '—') + '</td>'
+                    + '<td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 text-xs rounded-full priority-' + escAttr(r.priority) + '">' + escAttr(_td('dyn.compliance.priority', r.priority) || r.priority) + '</span></td>'
+                    + '<td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 text-xs rounded-full ' + getLifecycleClass(r.lifecycle_status) + '">' + escAttr(formatLifecycle(r.lifecycle_status)) + '</span></td>'
+                    + '<td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 text-xs rounded-full ' + getAssessmentClass(r.assessment_status) + '">' + escAttr(formatAssessment(r.assessment_status)) + '</span></td>'
+                    + '<td class="px-3 py-2.5 text-center text-sm font-medium text-gray-700">' + (r.score != null ? (r.score + '%') : '—') + '</td>'
+                    + '<td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">' + escAttr(dt) + '</td>'
+                    + '<td class="px-3 py-2.5 text-center whitespace-nowrap">'
+                        + '<button data-title="' + escAttr(r.title) + '" data-on-click="openAssessmentModal" data-args="[' + r.id + ',&quot;@this.dataset.title&quot;]" class="text-green-600 hover:text-green-800 text-xs font-medium mr-2" data-testid="button-assess-' + r.id + '" data-i18n="compliance.assess_short">Assess</button>'
+                        + '<button data-on-click="openClauseDocsModal" data-args="[' + r.id + ',&quot;' + escAttr(r.obligation_code + ' — ' + (r.title || '')) + '&quot;]" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium" data-testid="button-link-' + r.id + '" data-i18n="compliance.link_docs_short">Link Docs</button>'
+                    + '</td>'
+                + '</tr>';
+            }).join('');
+            if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(tbody);
+        }
+
+        // ──────────────────────── Modals & writes ──────────────────────
         function openAddObligationModal() {
             document.getElementById('addObligationForm').reset();
             document.getElementById('addObligationModal').classList.add('active');
+        }
+
+        // ── Ingest Standard from Document (Compliance v2 Pillar 1) ───
+        async function openIngestStandardModal() {
+            const modal = document.getElementById('ingestStandardModal');
+            const regSel = document.getElementById('ingestRegulationSelect');
+            const docSel = document.getElementById('ingestDocumentSelect');
+            const msg = document.getElementById('ingestStandardMsg');
+            msg.textContent = '';
+            regSel.innerHTML = '<option value="">— Create new regulation later —</option>';
+            docSel.innerHTML = '<option value="">— Pick an uploaded document —</option>';
+            modal.classList.add('active');
+            try {
+                const [regs, docs] = await Promise.all([
+                    fetch('/api/compliance/regulations').then(function (r) { return r.json(); }),
+                    fetch('/api/qms-docs?extracted=1').then(function (r) { return r.json(); }).catch(function () { return { documents: [] }; })
+                ]);
+                (regs.regulations || []).forEach(function (r) {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = r.regulation_code + ' — ' + r.name;
+                    regSel.appendChild(opt);
+                });
+                const docList = docs.documents || docs.items || [];
+                docList.filter(function (d) { return d.extraction_status === 'extracted' || d.extracted_text; }).forEach(function (d) {
+                    const opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = (d.title || d.file_name || ('Doc #' + d.id)) + ' (' + (d.category || '?') + ')';
+                    docSel.appendChild(opt);
+                });
+                if (docSel.options.length === 1) {
+                    msg.className = 'text-sm text-amber-700';
+                    msg.textContent = _ct('compliance.ingest_no_docs', 'No extracted documents found. Upload a regulation PDF in the QMS library first; text extraction runs automatically and finishes within a minute.');
+                }
+            } catch (e) {
+                msg.className = 'text-sm text-red-600';
+                msg.textContent = 'Failed to load options: ' + e.message;
+            }
+        }
+
+        async function submitIngestStandard(event) {
+            event.preventDefault();
+            const form = event.target;
+            const documentId = Number(form.document_id.value);
+            const regulationId = form.regulation_id.value ? Number(form.regulation_id.value) : null;
+            const msg = document.getElementById('ingestStandardMsg');
+            msg.className = 'text-sm text-gray-600';
+            msg.textContent = _ct('compliance.ingest_starting', 'Starting extraction…');
+            try {
+                const r = await fetch('/api/compliance/imports', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ document_id: documentId, regulation_id: regulationId })
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    msg.className = 'text-sm text-red-600';
+                    msg.textContent = 'Failed: ' + (data.error || ('HTTP ' + r.status));
+                    return;
+                }
+                msg.className = 'text-sm text-green-700';
+                msg.textContent = _ct('compliance.ingest_kicked_off', 'Extraction started — opening review screen…');
+                setTimeout(function () {
+                    window.location.href = '/import-review?id=' + data.import.id;
+                }, 600);
+            } catch (e) {
+                msg.className = 'text-sm text-red-600';
+                msg.textContent = 'Network error: ' + e.message;
+            }
         }
 
         function openAssessmentModal(obligationId, title) {
@@ -877,173 +1385,56 @@
 
         async function submitObligation(event) {
             event.preventDefault();
-            const form = event.target;
-            const formData = new FormData(form);
+            const formData = new FormData(event.target);
             const data = Object.fromEntries(formData.entries());
             data.regulation_id = parseInt(data.regulation_id);
-
             try {
                 const res = await fetch('/api/compliance/obligations', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
                 });
-                
                 if (res.ok) {
                     closeModal('addObligationModal');
-                    loadAll();
-                    alert('Obligation created successfully!');
+                    await reloadAll();
+                    alert(_ct('compliance.obligation_created', 'Obligation created successfully!'));
                 } else {
                     const err = await res.json();
                     alert('Error: ' + (err.error || 'Failed to create obligation'));
                 }
-            } catch (error) {
-                console.error('Error creating obligation:', error);
+            } catch (e) {
+                console.error('Error creating obligation:', e);
                 alert('Error creating obligation');
             }
         }
 
         async function submitAssessment(event) {
             event.preventDefault();
-            const form = event.target;
-            const formData = new FormData(form);
+            const formData = new FormData(event.target);
             const data = Object.fromEntries(formData.entries());
             data.obligation_id = parseInt(data.obligation_id);
-
             try {
                 const res = await fetch('/api/compliance/assessments', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
                 });
-                
                 if (res.ok) {
                     closeModal('assessmentModal');
-                    loadAll();
-                    alert('Assessment recorded successfully!');
+                    await reloadAll();
+                    alert(_ct('compliance.assessment_recorded', 'Assessment recorded successfully!'));
                 } else {
                     const err = await res.json();
                     alert('Error: ' + (err.error || 'Failed to record assessment'));
                 }
-            } catch (error) {
-                console.error('Error recording assessment:', error);
+            } catch (e) {
+                console.error('Error recording assessment:', e);
                 alert('Error recording assessment');
             }
         }
 
-        async function loadGapAnalysis() {
-            try {
-                const regFilter = document.getElementById('gapRegulationFilter').value;
-                let url = '/api/compliance/gap-analysis';
-                if (regFilter) url += `?regulation_id=${regFilter}`;
-                const res = await fetch(url);
-                const data = await res.json();
-                const gaps = data.gap_analysis || [];
-                const tbody = document.getElementById('gapAnalysisBody');
-                if (gaps.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">No obligations found</td></tr>';
-                    return;
-                }
-                const statusColors = {
-                    'compliant': 'status-compliant',
-                    'partially_compliant': 'status-partially',
-                    'non_compliant': 'status-non-compliant',
-                    'not_assessed': 'status-not-assessed'
-                };
-                const statusLabels = {
-                    'compliant':           _ct('compliance.s_compliant',           'Compliant'),
-                    'partially_compliant': _ct('compliance.s_partial_short',       'Partial'),
-                    'non_compliant':       _ct('compliance.s_non_compliant',       'Non-Compliant'),
-                    'not_assessed':        _ct('compliance.s_not_assessed',        'Not Assessed')
-                };
-                tbody.innerHTML = gaps.map(g => `
-                    <tr class="hover:bg-gray-50" data-testid="row-gap-${g.obligation_code}">
-                        <td class="px-4 py-3 text-sm font-medium text-blue-600">${g.obligation_code}</td>
-                        <td class="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">${g.title}</td>
-                        <td class="px-4 py-3 text-sm text-gray-500">${g.section_domain || '-'}</td>
-                        <td class="px-4 py-3 text-center"><span class="px-2 py-1 text-xs rounded-full priority-${g.priority}">${_td('dyn.compliance.priority', g.priority)}</span></td>
-                        <td class="px-4 py-3 text-center"><span class="px-2 py-1 text-xs rounded-full ${statusColors[g.latest_status] || 'status-not-assessed'}">${statusLabels[g.latest_status] || g.latest_status}</span></td>
-                        <td class="px-4 py-3 text-center text-sm font-medium">${g.latest_score != null ? g.latest_score + '%' : '-'}</td>
-                        <td class="px-4 py-3 text-sm text-gray-500">${g.last_assessed ? new Date(g.last_assessed).toLocaleDateString() : 'Never'}</td>
-                    </tr>
-                `).join('');
-            } catch (e) {
-                console.error('Error loading gap analysis:', e);
-                document.getElementById('gapAnalysisBody').innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-red-500">Error loading gap analysis</td></tr>';
-            }
-        }
-
-        function populateGapRegulationFilter(regulations) {
-            const sel = document.getElementById('gapRegulationFilter');
-            if (!sel || !regulations) return;
-            regulations.forEach(r => {
-                const opt = document.createElement('option');
-                opt.value = r.id;
-                opt.textContent = r.regulation_code + ' - ' + r.name;
-                sel.appendChild(opt);
-            });
-        }
-
-        // ── Per-regulation tab strip ───────────────────────────────────
-        function renderRegulationTabs() {
-            const nav = document.getElementById('reg-tabs');
-            if (!nav) return;
-            const allBtn = '<button type="button" data-on-click="selectRegulationTab" data-args="[&quot;all&quot;]"' +
-                ' class="reg-tab px-4 py-3 text-sm font-medium ' +
-                (activeRegulationTab === 'all' ? 'text-green-700 border-b-2 border-green-700' : 'text-gray-600 border-b-2 border-transparent hover:text-gray-900') +
-                '" data-tab-id="all" data-testid="tab-regulation-all">All Regulations</button>';
-            const regBtns = (regulations || []).map(function (r) {
-                const active = String(activeRegulationTab) === String(r.id);
-                return '<button type="button" data-on-click="selectRegulationTab" data-args=\'["' + r.id + '"]\'' +
-                    ' class="reg-tab px-4 py-3 text-sm font-medium ' +
-                    (active ? 'text-green-700 border-b-2 border-green-700' : 'text-gray-600 border-b-2 border-transparent hover:text-gray-900') +
-                    '" data-tab-id="' + r.id + '" data-testid="tab-regulation-' + r.regulation_code + '">' +
-                    escAttr(r.regulation_code) + '</button>';
-            }).join('');
-            nav.innerHTML = allBtn + regBtns;
-        }
-
-        async function selectRegulationTab(tabId) {
-            activeRegulationTab = tabId;
-            renderRegulationTabs();
-            const summary = document.getElementById('reg-tab-summary');
-            const mappingSec = document.getElementById('clause-mapping-section');
-            const filterSel = document.getElementById('filterRegulation');
-            const gapSel = document.getElementById('gapRegulationFilter');
-
-            if (tabId === 'all') {
-                activeRegulationCode = null;
-                summary.classList.add('hidden');
-                mappingSec.classList.add('hidden');
-                if (filterSel) filterSel.value = '';
-                if (gapSel) gapSel.value = '';
-                loadObligations();
-                loadGapAnalysis();
-            } else {
-                const reg = regulations.find(function (r) { return String(r.id) === String(tabId); });
-                if (reg) {
-                    activeRegulationCode = reg.regulation_code;
-                    document.getElementById('reg-tab-name').textContent = reg.name + ' (' + reg.regulation_code + ')';
-                    document.getElementById('reg-tab-meta').textContent =
-                        (reg.issuing_body || '—') + ' · ' + (reg.jurisdiction || '—') + ' · v' + (reg.version || '—');
-                    summary.classList.remove('hidden');
-                    mappingSec.classList.remove('hidden');
-                    await loadClauseCards(reg.regulation_code);
-                }
-            }
-        }
-
+        // ──────────────────────── Clause-mapping panel (preserved) ─────
         async function loadClauseCards(regulationCode) {
             const wrap = document.getElementById('clause-cards');
             wrap.innerHTML = '<div class="p-6 text-center text-gray-400">Loading clauses…</div>';
             try {
-                const res = await fetch('/api/compliance/obligations');
-                const data = await res.json();
-                const all = data.obligations || [];
-                const obligations = all.filter(function (o) {
-                    return String(o.regulation_code || '') === String(regulationCode);
-                });
-
+                const obligations = allObligations.filter(function (o) { return String(o.regulation_code || '') === String(regulationCode); });
                 const counts = {};
                 await Promise.all(obligations.map(async function (o) {
                     try {
@@ -1054,10 +1445,9 @@
                         } else { counts[o.id] = 0; }
                     } catch (e) { counts[o.id] = 0; }
                 }));
-
                 const totalDocs = Object.values(counts).reduce(function (a, b) { return a + b; }, 0);
-                document.getElementById('reg-tab-clauses-count').textContent = obligations.length + ' clause' + (obligations.length === 1 ? '' : 's');
-                document.getElementById('reg-tab-docs-count').textContent = totalDocs + ' document' + (totalDocs === 1 ? '' : 's') + ' linked';
+                document.getElementById('frameworkDetailClauses').textContent = obligations.length + ' clause' + (obligations.length === 1 ? '' : 's');
+                document.getElementById('frameworkDetailDocs').textContent = totalDocs + ' document' + (totalDocs === 1 ? '' : 's') + ' linked';
 
                 if (obligations.length === 0) {
                     wrap.innerHTML = '<div class="p-6 text-center text-gray-400">No clauses defined for this regulation yet. Use <strong>+ Add Obligation</strong> above to create one.</div>';
@@ -1103,10 +1493,7 @@
             list.innerHTML = '<div class="p-3 text-center text-gray-400 text-sm">Loading…</div>';
             try {
                 const r = await fetch('/api/compliance/obligations/' + obligationId + '/documents');
-                if (!r.ok) {
-                    list.innerHTML = '<div class="p-3 text-center text-red-500 text-sm">Failed to load documents.</div>';
-                    return;
-                }
+                if (!r.ok) { list.innerHTML = '<div class="p-3 text-center text-red-500 text-sm">Failed to load documents.</div>'; return; }
                 const data = await r.json();
                 const docs = data.documents || [];
                 if (docs.length === 0) {
@@ -1131,26 +1518,23 @@
         }
 
         async function unlinkClauseDoc(obligationId, docId) {
-            if (!confirm('Remove this document from this clause? The file remains in the QMS library.')) return;
+            if (!confirm(_ct('compliance.confirm_unlink', 'Remove this document from this clause? The file remains in the QMS library.'))) return;
             try {
                 const r = await fetch('/api/compliance/obligations/' + obligationId + '/documents/' + docId, {
                     method: 'DELETE', credentials: 'same-origin'
                 });
                 if (r.ok) {
                     await loadClauseDocs(obligationId);
-                    if (activeRegulationTab !== 'all') await loadClauseCards(activeRegulationCode);
+                    if (activeRegulationCode) await loadClauseCards(activeRegulationCode);
                 } else {
                     alert('Failed to unlink.');
                 }
             } catch (e) { alert('Network error.'); }
         }
 
-        function loadAll() {
-            loadSummary();
-            loadRegulations().then(renderRegulationTabs);
-            loadObligations();
-            loadDeadlines();
-            loadGapAnalysis();
+        // ──────────────────────── Boot ─────────────────────────────────
+        async function reloadAll() {
+            await Promise.all([loadSummary(), loadAllData(), loadDeadlines()]);
         }
 
         document.addEventListener('walaPlusLanguageChange', function () {
@@ -1158,14 +1542,14 @@
         });
 
         document.addEventListener('DOMContentLoaded', function () {
-            loadAll();
+            reloadAll();
 
+            // Bulk-upload form (preserved from previous version)
             const filesEl = document.getElementById('clauseBulkFiles');
             if (filesEl) {
                 filesEl.addEventListener('change', function () {
                     const n = filesEl.files ? filesEl.files.length : 0;
-                    document.getElementById('clauseBulkCount').textContent =
-                        n ? n + ' file' + (n === 1 ? '' : 's') + ' selected' : '';
+                    document.getElementById('clauseBulkCount').textContent = n ? n + ' file' + (n === 1 ? '' : 's') + ' selected' : '';
                 });
             }
             const cForm = document.getElementById('clauseBulkForm');
@@ -1176,13 +1560,12 @@
                     const msg = document.getElementById('clauseBulkMsg');
                     const btn = document.getElementById('btnClauseBulkUpload');
                     msg.className = 'mt-2 text-sm text-gray-600';
-                    msg.textContent = 'Uploading…';
+                    msg.textContent = _ct('compliance.uploading', 'Uploading…');
                     btn.disabled = true;
-
                     const fEl = document.getElementById('clauseBulkFiles');
                     if (!fEl.files || fEl.files.length === 0) {
                         msg.className = 'mt-2 text-sm text-red-600';
-                        msg.textContent = 'Please choose at least one file.';
+                        msg.textContent = _ct('compliance.choose_files', 'Please choose at least one file.');
                         btn.disabled = false;
                         return;
                     }
@@ -1190,12 +1573,11 @@
                     for (const f of fEl.files) fd.append('file', f);
                     fd.append('category', document.getElementById('clauseBulkCategory').value);
                     fd.append('notes', document.getElementById('clauseBulkNotes').value.trim());
-
                     try {
                         const r = await fetch('/api/compliance/obligations/' + oblId + '/bulk-upload', {
                             method: 'POST', credentials: 'same-origin', body: fd
                         });
-                        const data = await r.json().catch(() => ({}));
+                        const data = await r.json().catch(function () { return {}; });
                         if (!r.ok) {
                             msg.className = 'mt-2 text-sm text-red-600';
                             msg.textContent = 'Upload failed: ' + (data.error || ('HTTP ' + r.status));
@@ -1205,7 +1587,7 @@
                             msg.className = 'mt-2 text-sm ' + (fail ? 'text-amber-700' : 'text-green-700');
                             msg.textContent = ok + ' uploaded & linked' + (fail ? ', ' + fail + ' failed' : '') + '.';
                             await loadClauseDocs(oblId);
-                            if (activeRegulationTab !== 'all') await loadClauseCards(activeRegulationCode);
+                            if (activeRegulationCode) await loadClauseCards(activeRegulationCode);
                         }
                     } catch (err) {
                         msg.className = 'mt-2 text-sm text-red-600';

@@ -311,12 +311,12 @@ export async function fetchAllZohoRecords(
       try {
         return await fetchZohoRecords(module, {
           page: pageNum,
-          perPage,
-          fields: params.fields,
-          criteria: params.criteria,
-          sortBy: params.sortBy,
-          sortOrder: params.sortOrder,
-        });
+        perPage,
+        fields: params.fields,
+        criteria: params.criteria,
+        sortBy: params.sortBy,
+        sortOrder: params.sortOrder,
+      });
       } catch (error: any) {
         if (error.message?.includes('204') || error.message?.includes('No Content')) {
           return [];
@@ -349,10 +349,10 @@ export async function fetchAllZohoRecords(
         hasMore = false;
         break;
       }
-      allRecords.push(...records);
+        allRecords.push(...records);
       logger.info(`📊 [ZohoCRM] Fetched page ${pageNum}: ${records.length} records (total: ${allRecords.length})`);
-      if (records.length < perPage) {
-        hasMore = false;
+        if (records.length < perPage) {
+          hasMore = false;
         break;
       }
       if (allRecords.length >= maxRecords) {
@@ -596,8 +596,8 @@ export async function fetchDeletedZohoRecords(
         }
         const more = (response as any)?.info?.more_records;
         if (!more || rows.length < perPage) {
-          hasMore = false;
-        } else {
+        hasMore = false;
+      } else {
           page++;
         }
         await sleep(150);
@@ -613,7 +613,7 @@ export async function fetchDeletedZohoRecords(
       }
     }
   }
-
+  
   logger.info(`✅ [ZohoCRM] Found ${all.length} deleted/merged ${module} record(s)`);
   return all;
 }
@@ -1036,7 +1036,7 @@ export function calculateQualityScores(
   const formatIssues = issues.filter(i => i.issueType === 'invalid_format').length;
   const invalidValueIssues = issues.filter(i => i.issueType === 'invalid_value').length;
   const governanceIssues = issues.filter(i => i.issueType === 'governance_violation').length;
-
+  
   const processRelatedIssues = formatIssues + invalidValueIssues;
 
   const decayScore = (issueCount: number) => 100 * Math.exp(-0.5 * issueCount / totalRecords);

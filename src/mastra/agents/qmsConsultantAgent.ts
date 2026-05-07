@@ -16,6 +16,7 @@ import { createNcTool, getNcListTool } from "../tools/ncManagementTool";
 import { createCapaTool, getCapaListTool, getCapaDetailsTool, updateCapaTool, addCapaActionTool } from "../tools/capaManagementTool";
 import { runChecklistTool, manageChecklistTool } from "../tools/checklistTools";
 import { searchKnowledgeTool } from "../tools/searchKnowledgeTool";
+import { suggestObligationMappingTool } from "../tools/suggestObligationMappingTool";
 import { createTrainingTool, getTrainingListTool, assignTrainingTool, getTrainingAssignmentsTool, completeTrainingTool } from "../tools/trainingManagementTool";
 import { withApprovalGate } from "../../utils/withApprovalGate";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
@@ -261,6 +262,7 @@ export const qmsConsultantAgent = new Agent({
     getCapaDetailsTool:           wt(getCapaDetailsTool, AGENT_NAME),
     runChecklistTool:             wt(runChecklistTool, AGENT_NAME),
     searchKnowledgeTool:          wt(searchKnowledgeTool, AGENT_NAME),
+    suggestObligationMappingTool: wt(suggestObligationMappingTool, AGENT_NAME),
     getTrainingListTool:          wt(getTrainingListTool, AGENT_NAME),
     getTrainingAssignmentsTool:   wt(getTrainingAssignmentsTool, AGENT_NAME),
 
