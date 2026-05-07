@@ -985,6 +985,7 @@ ${data.duplicate_clusters > 0 ? `<div class="card"><h3>Duplicate Radar</h3><p st
 export function buildDigestSlackBlocks(data: DigestData): any[] {
   const healthEmoji = (score: number): string =>
     score >= 90 ? "🟢" : score >= 75 ? "🟡" : score >= 60 ? "🟠" : "🔴";
+  const hasAbsoluteDashboardUrl = /^https?:\/\//i.test(DIGEST_DASHBOARD_LINK);
 
   const sections = data.business_sections.map((section) => ({
     type: "section",
@@ -1065,7 +1066,9 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         text: `*Quality snapshot:* NC Open ${data.nc_summary.open} • CAPA Open ${data.capa_summary.open} • Risks ${data.risk_summary.total_active} • KPI Red ${data.kpi_summary.red}`,
       },
     },
-    {
+  ];
+  if (hasAbsoluteDashboardUrl) {
+    blocks.push({
       type: "actions",
       elements: [
         {
@@ -1074,8 +1077,8 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
           url: DIGEST_DASHBOARD_LINK,
         },
       ],
-    },
-  ];
+    });
+  }
   if (findingTypeChunks.length > 0) {
     blocks.push({ type: "divider" });
     findingTypeChunks.forEach((chunk, idx) => {
