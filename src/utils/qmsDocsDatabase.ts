@@ -130,23 +130,6 @@ export async function createDocument(input: {
   return result.rows[0] as QmsUploadedDocument;
 }
 
-export async function setDocumentExtractionResult(
-  _id: number,
-  _status: string,
-  _text: string | null,
-  _hash: string | null,
-): Promise<void> {
-  logger.warn(
-    "[qmsDocsDatabase] setDocumentExtractionResult stub — extraction columns not yet present in qms_uploaded_documents",
-  );
-}
-
-export async function listDocumentsPendingExtraction(
-  _batchSize: number,
-): Promise<QmsUploadedDocument[]> {
-  return [];
-}
-
 export async function getDocumentById(id: number): Promise<QmsUploadedDocument | null> {
   await initQmsDocsTable();
   const result = await pool.query(
