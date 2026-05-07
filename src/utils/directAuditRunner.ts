@@ -527,7 +527,7 @@ export async function runDirectAudit(logger?: any) {
         } = await import("./notificationOutbox");
         const score = qualityScores.overallScore || 0;
         const scoreEmoji = score >= 90 ? "🟢" : score >= 80 ? "🟡" : score >= 70 ? "🟠" : "🔴";
-        const sevSummary = `Critical: ${criticalIssues} · High: ${highIssues} · Medium: ${mediumIssues} · Low: ${lowIssues}`;
+        const sevSummary = `🔴 Critical: ${criticalIssues}\n🟠 High: ${highIssues}\n🟡 Medium: ${mediumIssues}\n🟢 Low: ${lowIssues}`;
         const moduleSummary = moduleBreakdown
           .filter((m: any) => m.recordsAudited > 0)
           .map((m: any) => `• *${m.module}*: ${m.recordsAudited.toLocaleString()} records, ${m.issuesFound.toLocaleString()} issues`)
@@ -551,11 +551,8 @@ export async function runDirectAudit(logger?: any) {
           if (currentChunk) findingTypeChunks.push(currentChunk);
         }
         const dashUrl = process.env.PUBLIC_DASHBOARD_URL || "https://qms-dashboard.replit.app/";
-        const generatedAtKsa = new Date().toLocaleString("en-GB", {
+        const generatedAtKsa = new Date().toLocaleTimeString("en-US", {
           timeZone: "Asia/Riyadh",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
           hour: "2-digit",
           minute: "2-digit",
           hour12: true,
@@ -567,9 +564,9 @@ export async function runDirectAudit(logger?: any) {
           const digestData = await generateDigestData({ cadence: "weekly", now: new Date() });
           const sectionLines = digestData.business_sections.map(
             (section) =>
-              `• *${section.title}* — Total ${section.total} (L ${section.leads} / D ${section.deals}) | New ${section.new_in_window} | Progressed ${section.progressed} | Stalled ${section.stalled} | Severity C/H/M/L ${section.severity_counts.critical}/${section.severity_counts.high}/${section.severity_counts.medium}/${section.severity_counts.low}`,
+              `• *${section.title}*\n  - Total ${section.total} (Leads ${section.leads} / Deals ${section.deals})\n  - New ${section.new_in_window}\n  - Progressed ${section.progressed}\n  - Stalled ${section.stalled}\n  - Severity: 🔴 Critical ${section.severity_counts.critical} | 🟠 High ${section.severity_counts.high} | 🟡 Medium ${section.severity_counts.medium} | 🟢 Low ${section.severity_counts.low}`,
           );
-          executiveSectionText = `*Period Covered (KSA):*\n${digestData.window_start} -> ${digestData.window_end}\n\n*Executive Segments (Dashboard-aligned):*\n${sectionLines.join("\n")}`;
+          executiveSectionText = `*Period Covered (KSA):*\n${digestData.window_start} -> ${digestData.window_end}\n\n*Executive Segments (Dashboard-aligned):*\n${sectionLines.join("\n")}\n\n*Definitions:*\nProgressed = records in advancing stages (Qualified, Proposal, Negotiation, Won/Converted/Contract/Onboarding).\nStalled = records in non-progress stages (On hold, Lost, Not Interested, Junk, Unqualified, Inactive).`;
         } catch (digestErr) {
           logger?.warn("⚠️ [DirectAudit] Could not build executive sections for Slack message", {
             error: digestErr instanceof Error ? digestErr.message : String(digestErr),

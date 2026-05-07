@@ -996,12 +996,18 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
   const healthEmoji = (score: number): string =>
     score >= 90 ? "≡ƒƒó" : score >= 75 ? "≡ƒƒí" : score >= 60 ? "≡ƒƒá" : "≡ƒö┤";
   const hasAbsoluteDashboardUrl = /^https?:\/\//i.test(DIGEST_DASHBOARD_LINK);
+  const generatedTimeKsa = new Date(data.generated_at).toLocaleTimeString("en-US", {
+    timeZone: "Asia/Riyadh",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 
   const sections = data.business_sections.map((section) => ({
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*${section.title}*\n- Total: *${section.total}* (Leads ${section.leads} / Deals ${section.deals})\n- New: *${section.new_in_window}*\n- Progressed: *${section.progressed}* | Stalled: *${section.stalled}*\n- Severity: C *${section.severity_counts.critical}* / H *${section.severity_counts.high}* / M *${section.severity_counts.medium}* / L *${section.severity_counts.low}*\n- Health: ${healthEmoji(section.health_score)} *${section.health_score}%*`,
+      text: `*${section.title}*\n- Total: *${section.total}* (Leads *${section.leads}* / Deals *${section.deals}*)\n- New: *${section.new_in_window}*\n- Progressed: *${section.progressed}*\n- Stalled: *${section.stalled}*\n- Severity: 🔴 Critical *${section.severity_counts.critical}* | 🟠 High *${section.severity_counts.high}* | 🟡 Medium *${section.severity_counts.medium}* | 🟢 Low *${section.severity_counts.low}*\n- Health: ${healthEmoji(section.health_score)} *${section.health_score}%*`,
     },
   }));
   const findingTypeLines = data.finding_types.map(
@@ -1040,7 +1046,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         },
         {
           type: "mrkdwn",
-          text: `Generated: ${new Date(data.generated_at).toLocaleString("en-GB", { timeZone: "Asia/Riyadh" })} (KSA)`,
+          text: `Generated: ${generatedTimeKsa} (KSA)`,
         },
       ],
     },
@@ -1058,7 +1064,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         },
         {
           type: "mrkdwn",
-          text: `*Severity*\nC ${data.business_overview.severity_counts.critical} - H ${data.business_overview.severity_counts.high} - M ${data.business_overview.severity_counts.medium} - L ${data.business_overview.severity_counts.low}`,
+          text: `*Severity*\n🔴 Critical ${data.business_overview.severity_counts.critical}\n🟠 High ${data.business_overview.severity_counts.high}\n🟡 Medium ${data.business_overview.severity_counts.medium}\n🟢 Low ${data.business_overview.severity_counts.low}`,
         },
         {
           type: "mrkdwn",
@@ -1075,6 +1081,15 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         type: "mrkdwn",
         text: `*Quality snapshot:* NC Open ${data.nc_summary.open} - CAPA Open ${data.capa_summary.open} - Risks ${data.risk_summary.total_active} - KPI Red ${data.kpi_summary.red}`,
       },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `Progressed = records in advancing stages (Qualified, Proposal, Negotiation, Won/Converted/Contract/Onboarding). Stalled = records in non-progress stages (On hold, Lost, Not Interested, Junk, Unqualified, Inactive).`,
+        },
+      ],
     },
   ];
   if (hasAbsoluteDashboardUrl) {
