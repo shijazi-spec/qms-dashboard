@@ -1,21 +1,17 @@
 import pg from "pg";
 import { logger } from "./logger";
 import { sendSlackNotification } from "./slackNotifications";
- slack-digest-benchmark-tuning
 import {
   analyzeRecordHygiene,
   DEFAULT_GOVERNANCE_RULES,
   fetchAllZohoRecords,
   type ZohoCRMRecord,
 } from "./zohoCRM";
-
-import { fetchAllZohoRecords, type ZohoCRMRecord } from "./zohoCRM";
 import {
   getWeeklyFeedbackDigest,
   summarizeFeedbackTrend,
   type FeedbackTrendSummary,
 } from "./aiFeedbackDatabase";
- main
 
 const { Pool } = pg;
 
@@ -735,7 +731,7 @@ export async function generateDigestData(
   const totalRecords = businessSections.reduce((sum, s) => sum + s.total, 0);
 
   let aiFeedbackSummary: DigestData['ai_feedback_summary'] = {
-    period: `${weekAgo.toDateString()} – ${now.toDateString()}`,
+    period: `${window.start.toDateString()} – ${now.toDateString()}`,
     total: 0,
     thumbs_up: 0,
     thumbs_down: 0,
