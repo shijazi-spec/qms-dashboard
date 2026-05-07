@@ -1,3 +1,111 @@
+ slack-audit-notification-alignment
+name: Streaming Download Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/streaming-download-smoke.yml"
+      - "playwright.config.ts"
+      - "tests/streamingDownload.spec.ts"
+      - "tests/streamingExportLatency.integration.ts"
+      - "src/utils/excelExport.ts"
+      - "src/mastra/routes/staticPageRoutes.ts"
+  pull_request:
+    paths:
+      - ".github/workflows/streaming-download-smoke.yml"
+      - "playwright.config.ts"
+      - "tests/streamingDownload.spec.ts"
+      - "tests/streamingExportLatency.integration.ts"
+      - "src/utils/excelExport.ts"
+      - "src/mastra/routes/staticPageRoutes.ts"
+
+concurrency:
+  group: streaming-download-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  streaming-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NODE_ENV: development
+      BASE_URL: http://localhost:5000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Gate by required secrets
+        id: gate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+        run: |
+          if [ -z "${DATABASE_URL}" ] || [ -z "${SESSION_SECRET}" ]; then
+            echo "run_e2e=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping streaming smoke (DATABASE_URL/SESSION_SECRET not configured)."
+          else
+            echo "run_e2e=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Playwright browsers
+        if: steps.gate.outputs.run_e2e == 'true'
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Start dev server
+        if: steps.gate.outputs.run_e2e == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+        run: |
+          nohup npm run dev > /tmp/dev-server.log 2>&1 &
+
+      - name: Wait for server readiness
+        if: steps.gate.outputs.run_e2e == 'true'
+        run: |
+          for i in {1..90}; do
+            if curl -fsS http://localhost:5000/api/health >/dev/null; then
+              echo "Server is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Server did not become ready in time."
+          sed -n '1,220p' /tmp/dev-server.log || true
+          exit 1
+
+      - name: Run streaming download Playwright smoke
+        if: steps.gate.outputs.run_e2e == 'true'
+        run: npx playwright test tests/streamingDownload.spec.ts --reporter=list
+
+      - name: Run streaming export latency integration
+        if: steps.gate.outputs.run_e2e == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          BASE_URL: http://localhost:5000
+        run: npx tsx tests/streamingExportLatency.integration.ts
+
+      - name: Upload logs on failure
+        if: failure() && steps.gate.outputs.run_e2e == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: streaming-smoke-debug-logs
+          path: |
+            /tmp/dev-server.log
+            playwright-report
+            test-results
+
 ls -la /tmp/wf-backup/
 total 56
 drwxr-xr-x 1 runner runner   144 May  3 09:20 .
@@ -5,3 +113,4 @@ drwxrwxrwx 1 runner runner 28780 May  3 09:10 ..
 -rw-r--r-- 1 runner runner 19252 May  3 09:20 streaming-download-smoke.yml
 -rw-r--r-- 1 runner runner 10769 May  3 09:04 test.yml
 -rw-r--r-- 1 runner runner  2759 May  3 09:04 tool-health-notifier-integration.yml
+ main

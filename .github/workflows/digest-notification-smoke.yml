@@ -1,0 +1,52 @@
+name: Digest Notification Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/digest-notification-smoke.yml"
+      - "src/utils/executiveDigest.ts"
+      - "src/utils/directAuditRunner.ts"
+      - "src/mastra/routes/analyticsRoutes.ts"
+      - "src/mastra/inngest/index.ts"
+      - "src/utils/slackNotifications.ts"
+      - "tests/executiveDigestCadence.test.ts"
+      - "tests/analyticsRoutes.test.ts"
+  pull_request:
+    paths:
+      - ".github/workflows/digest-notification-smoke.yml"
+      - "src/utils/executiveDigest.ts"
+      - "src/utils/directAuditRunner.ts"
+      - "src/mastra/routes/analyticsRoutes.ts"
+      - "src/mastra/inngest/index.ts"
+      - "src/utils/slackNotifications.ts"
+      - "tests/executiveDigestCadence.test.ts"
+      - "tests/analyticsRoutes.test.ts"
+
+concurrency:
+  group: digest-notification-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  digest-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run analytics route auth smoke
+        run: npx tsx tests/analyticsRoutes.test.ts
+
+      - name: Run executive digest cadence smoke
+        run: npx tsx tests/executiveDigestCadence.test.ts
