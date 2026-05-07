@@ -128,7 +128,14 @@ export const analyticsRoutes = [
           const { generateDigestData, buildDigestHTML } =
             await import("../../utils/executiveDigest");
           const format = c.req.query("format");
-          const data = await generateDigestData();
+          const periodQuery = String(
+            c.req.query("period") || "weekly",
+          ).toLowerCase();
+          const cadence =
+            periodQuery === "monthly" || periodQuery === "quarterly"
+              ? periodQuery
+              : "weekly";
+          const data = await generateDigestData({ cadence: cadence as any });
           if (format === "html") {
             const html = buildDigestHTML(data);
             return new Response(html, {
@@ -156,9 +163,50 @@ export const analyticsRoutes = [
               c,
               "Insufficient permissions to send executive digest",
             );
-          const { sendDigestEmail } =
+          const {
+            sendDigestEmail,
+            sendDigestSlack,
+            runDigestFanout,
+            computeDigestWindow,
+          } =
             await import("../../utils/executiveDigest");
-          const result = await sendDigestEmail();
+          let body: any = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          const target = String(body.target || "email").toLowerCase();
+          const period = String(body.period || "weekly").toLowerCase();
+          const preview = !!body.preview;
+          const cadence =
+            period === "monthly" || period === "quarterly"
+              ? period
+              : "weekly";
+          const now = new Date();
+          const window = computeDigestWindow(cadence as any, now);
+          if (target === "slack") {
+            const result = await sendDigestSlack({
+              cadence: cadence as any,
+              now,
+              window,
+              preview,
+            });
+            return c.json(result);
+          }
+          if (target === "both") {
+            const result = await runDigestFanout(cadence as any, {
+              now,
+              window,
+              preview,
+            });
+            return c.json(result);
+          }
+          const result = await sendDigestEmail({
+            cadence: cadence as any,
+            now,
+            window,
+          });
           return c.json(result);
         } catch (error) {
           return c.json({ error: "Failed to send digest" }, 500);
