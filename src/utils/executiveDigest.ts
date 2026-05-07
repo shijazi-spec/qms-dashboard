@@ -27,6 +27,10 @@ const KSA_OFFSET_MS = 3 * 60 * 60 * 1000;
 const KSA_WEEKDAY_THURSDAY = 4;
 const DIGEST_DASHBOARD_LINK = process.env.DIGEST_DASHBOARD_URL || "/executive";
 
+function isAbsoluteHttpUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
 export type DigestCadence = "weekly" | "monthly" | "quarterly";
 export type DigestChannel = "email" | "slack";
 export type DigestSendTarget = "email" | "slack" | "both";
@@ -1129,16 +1133,20 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         text: `*Quality snapshot:* NC Open ${data.nc_summary.open} • CAPA Open ${data.capa_summary.open} • Risks ${data.risk_summary.total_active} • KPI Red ${data.kpi_summary.red}`,
       },
     },
-    {
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: { type: "plain_text", text: "Open Executive Dashboard", emoji: true },
-          url: DIGEST_DASHBOARD_LINK,
-        },
-      ],
-    },
+    ...(isAbsoluteHttpUrl(DIGEST_DASHBOARD_LINK)
+      ? [
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: { type: "plain_text", text: "Open Executive Dashboard", emoji: true },
+                url: DIGEST_DASHBOARD_LINK,
+              },
+            ],
+          },
+        ]
+      : []),
   ];
   if (findingTypeChunks.length > 0) {
     blocks.push({ type: "divider" });
