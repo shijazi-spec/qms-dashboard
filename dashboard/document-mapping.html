@@ -62,7 +62,7 @@
                 </div>
                 <div class="flex-1 min-w-[200px] max-w-md">
                     <div class="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
-                        <div id="overallCoverageBar" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
+                        <div id="overallCoverageBar" class="h-full bg-emerald-500 transition-all" data-style="width:0%"></div>
                     </div>
                     <div class="text-[11px] text-gray-400 mt-1" data-i18n="docmap.coverage_legend">Green ≥ 80% · Yellow ≥ 50% · Amber ≥ 25% · Red &lt; 25%</div>
                 </div>
@@ -260,7 +260,7 @@
                                 + '<div class="text-xs">' + (c.with_evidence || 0) + ' / ' + (c.total_obligations || 0) + '</div>'
                             + '</div>'
                             + '<div class="mt-2 h-1.5 w-full rounded-full bg-white/60 overflow-hidden">'
-                                + '<div class="h-full ' + bar + '" style="width:' + pct + '%"></div>'
+                                + '<div class="h-full ' + bar + '" data-style="width:' + pct + '%"></div>'
                             + '</div>'
                             + '<div class="mt-3 flex items-center gap-2">'
                                 + '<button type="button" data-on-click="openUnmapped" data-args="[' + (c.regulation_id || 0) + ', &quot;' + safeCode + '&quot;]" class="flex-1 text-xs px-2 py-1 rounded bg-white/70 hover:bg-white border border-current font-medium" data-testid="button-drill-' + safeCode + '">'

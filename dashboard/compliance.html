@@ -1114,7 +1114,7 @@
                 const label = _td('dyn.compliance.priority', p) || p;
                 return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;priority&quot;,&quot;' + p + '&quot;]" class="w-full text-left ' + c.bg + ' rounded p-2 hover:opacity-90" data-testid="chart-priority-' + p + '">'
                     + '<div class="flex justify-between items-center text-xs ' + c.text + ' font-medium mb-1"><span class="capitalize">' + escAttr(label) + '</span><span>' + buckets[p] + ' (' + pct + '%)</span></div>'
-                    + '<div class="h-1.5 w-full bg-white/70 rounded-full overflow-hidden"><div class="h-full ' + c.bar + '" style="width:' + pct + '%"></div></div>'
+                    + '<div class="h-1.5 w-full bg-white/70 rounded-full overflow-hidden"><div class="h-full ' + c.bar + '" data-style="width:' + pct + '%"></div></div>'
                     + '</button>';
             }).join('');
             if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(container);
@@ -1139,7 +1139,7 @@
                 const safe = escAttr(name);
                 return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;domain&quot;,&quot;' + safe.replace(/"/g, '\\&quot;') + '&quot;]" class="w-full text-left p-1.5 rounded hover:bg-gray-50">'
                     + '<div class="flex justify-between items-center text-xs text-gray-700 mb-0.5"><span class="truncate" title="' + safe + '">' + safe + '</span><span class="text-gray-500">' + n + '</span></div>'
-                    + '<div class="h-1 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-indigo-500" style="width:' + pct + '%"></div></div>'
+                    + '<div class="h-1 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-indigo-500" data-style="width:' + pct + '%"></div></div>'
                     + '</button>';
             }).join('');
         }
