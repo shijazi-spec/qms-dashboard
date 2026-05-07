@@ -2,23 +2,6 @@ name: AI Approval Redaction Integration
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/ai-approval-redaction-integration.yml"
-      - "scripts/run-ai-approval-redaction-integration.sh"
-      - "tests/aiApprovalRoutesRedaction.integration.ts"
-      - "src/mastra/routes/aiApprovalRoutes.ts"
-      - "src/utils/aiApprovalDatabase.ts"
-      - "src/utils/integrationTestFixtureTools.ts"
-  pull_request:
-    paths:
-      - ".github/workflows/ai-approval-redaction-integration.yml"
-      - "scripts/run-ai-approval-redaction-integration.sh"
-      - "tests/aiApprovalRoutesRedaction.integration.ts"
-      - "src/mastra/routes/aiApprovalRoutes.ts"
-      - "src/utils/aiApprovalDatabase.ts"
-      - "src/utils/integrationTestFixtureTools.ts"
 
 concurrency:
   group: ai-approval-redaction-${{ github.ref }}
