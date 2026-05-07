@@ -25,13 +25,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('reviews');
@@ -91,14 +91,14 @@
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_review_no">Review #</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.date">Date</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_chair">Chair</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_next_review">Next Review</th>
-                        <th class="px-4 py-3"></th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_review_no">Review #</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.date">Date</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_chair">Chair</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
+                        <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="reviews.col_next_review">Next Review</th>
+                        <th scope="col" class="px-4 py-3"></th>
                     </tr>
                 </thead>
                 <tbody id="reviewsBody" class="divide-y divide-gray-200">
@@ -175,7 +175,6 @@
     </div>
 
     <script>
-    const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
     const API = '';
     let currentReviews = [];
 
@@ -192,7 +191,7 @@
             currentReviews = data.reviews || [];
             renderReviews();
         } catch (e) {
-            document.getElementById('reviewsBody').innerHTML = '<tr><td colspan="8" class="text-center py-8 text-red-400">' + _t('dyn.reviews.failed_load') + '</td></tr>';
+            document.getElementById('reviewsBody').innerHTML = '<tr><td colspan="8" class="text-center py-8 text-red-400">' + WalaPlusI18n.t('dyn.reviews.failed_load') + '</td></tr>';
         }
 
         loadActionSummary();
@@ -212,7 +211,7 @@
     function renderReviews() {
         const tbody = document.getElementById('reviewsBody');
         if (!currentReviews.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">' + _t('dyn.reviews.no_reviews') + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">' + WalaPlusI18n.t('dyn.reviews.no_reviews') + '</td></tr>';
             return;
         }
         tbody.innerHTML = currentReviews.map(r => `
@@ -225,7 +224,7 @@
                 <td class="px-4 py-3 text-sm">${Array.isArray(r.action_items) ? r.action_items.length : '-'}</td>
                 <td class="px-4 py-3 text-sm">${r.next_review_date ? new Date(r.next_review_date).toLocaleDateString() : '-'}</td>
                 <td class="px-4 py-3">
-                    <button data-on-click="event.stopPropagation,editReview" data-args="[[],[${r.id}]]" class="text-indigo-600 hover:text-indigo-800 text-sm mr-2">Edit</button>
+                    <button data-on-click="event.stopPropagation,editReview" data-args="[[],[${r.id}]]" class="text-indigo-600 hover:text-indigo-800 text-sm me-2">Edit</button>
                     <button data-on-click="event.stopPropagation,gatherInputs" data-args="[[],[${r.id}]]" class="text-green-600 hover:text-green-800 text-sm" title="Auto-gather QMS data as review inputs">Gather Data</button>
                 </td>
             </tr>
@@ -238,7 +237,7 @@
     }
 
     function showCreateModal() {
-        document.getElementById('modalTitle').textContent = _t('dyn.reviews.new_review_title');
+        document.getElementById('modalTitle').textContent = WalaPlusI18n.t('dyn.reviews.new_review_title');
         document.getElementById('editId').value = '';
         document.getElementById('reviewForm').reset();
         document.getElementById('formDate').value = new Date().toISOString().split('T')[0];
@@ -249,7 +248,7 @@
         try {
             const res = await fetch(`${API}/api/management-reviews/${id}`, { credentials: 'include' });
             const review = await res.json();
-            document.getElementById('modalTitle').textContent = _t('dyn.reviews.edit_review_title');
+            document.getElementById('modalTitle').textContent = WalaPlusI18n.t('dyn.reviews.edit_review_title');
             document.getElementById('editId').value = id;
             document.getElementById('formTitle').value = review.title || '';
             document.getElementById('formDate').value = review.review_date ? review.review_date.split('T')[0] : '';
@@ -260,7 +259,7 @@
             document.getElementById('formMinutes').value = review.minutes || '';
             document.getElementById('formOutput').value = review.output_summary || '';
             showModal('createModal');
-        } catch { alert(_t('dyn.reviews.failed_load_review')); }
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_load_review')); }
     }
 
     async function saveReview(e) {
@@ -285,19 +284,19 @@
             if (!res.ok) throw new Error('Save failed');
             hideModal('createModal');
             loadReviews();
-        } catch { alert(_t('dyn.reviews.failed_save_review')); }
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_save_review')); }
     }
 
     async function gatherInputs(id) {
-        if (!confirm(_t('dyn.reviews.confirm_gather_inputs'))) return;
+        if (!confirm(WalaPlusI18n.t('dyn.reviews.confirm_gather_inputs'))) return;
         try {
             const res = await fetch(`${API}/api/management-reviews/${id}/gather-inputs`, { method: 'POST', credentials: 'include' });
             const data = await res.json();
             if (data.success) {
-                alert(_t('dyn.reviews.inputs_gathered'));
+                alert(WalaPlusI18n.t('dyn.reviews.inputs_gathered'));
                 loadReviews();
             } else throw new Error();
-        } catch { alert(_t('dyn.reviews.failed_gather_inputs')); }
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_gather_inputs')); }
     }
 
     async function showDetail(id) {
@@ -330,7 +329,7 @@
                 actionsHtml = `<div class="mt-4">
                     <h4 class="font-semibold text-sm mb-2">Action Items (${actions.length})</h4>
                     <table class="w-full text-xs border">
-                        <thead><tr class="bg-gray-50"><th class="px-2 py-1 text-left">#</th><th class="px-2 py-1 text-left">Description</th><th class="px-2 py-1 text-left">Assigned To</th><th class="px-2 py-1 text-left">Due</th><th class="px-2 py-1 text-left">Status</th><th class="px-2 py-1"></th></tr></thead>
+                        <thead><tr class="bg-gray-50"><th scope="col" class="px-2 py-1 text-start">#</th><th scope="col" class="px-2 py-1 text-start">Description</th><th scope="col" class="px-2 py-1 text-start">Assigned To</th><th scope="col" class="px-2 py-1 text-start">Due</th><th scope="col" class="px-2 py-1 text-start">Status</th><th scope="col" class="px-2 py-1"></th></tr></thead>
                         <tbody>${actions.map(a => `
                             <tr class="border-t"><td class="px-2 py-1">${a.action_number}</td><td class="px-2 py-1">${esc(a.description)}</td><td class="px-2 py-1">${esc(a.assigned_to)}</td>
                             <td class="px-2 py-1">${a.due_date ? new Date(a.due_date).toLocaleDateString() : '-'}</td>
@@ -373,7 +372,7 @@
                     </div>
                 </div>`;
             showModal('detailModal');
-        } catch { alert(_t('dyn.reviews.failed_load_details')); }
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_load_details')); }
     }
 
     async function addAction(reviewId) {
@@ -381,7 +380,7 @@
         const assigned = document.getElementById('newActionAssign').value;
         const due = document.getElementById('newActionDue').value;
         const priority = document.getElementById('newActionPriority').value;
-        if (!desc || !assigned || !due) { alert(_t('dyn.reviews.fill_action_fields')); return; }
+        if (!desc || !assigned || !due) { alert(WalaPlusI18n.t('dyn.reviews.fill_action_fields')); return; }
         try {
             const res = await fetch(`${API}/api/management-reviews/${reviewId}/actions`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
@@ -390,7 +389,7 @@
             if (!res.ok) throw new Error();
             showDetail(reviewId);
             loadActionSummary();
-        } catch { alert(_t('dyn.reviews.failed_add_action')); }
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_add_action')); }
     }
 
     async function completeAction(actionId) {
@@ -401,7 +400,7 @@
             });
             if (!res.ok) throw new Error();
             loadReviews();
-        } catch { alert(_t('dyn.reviews.failed_complete_action')); }
+        } catch { alert(WalaPlusI18n.t('dyn.reviews.failed_complete_action')); }
     }
 
     function showModal(id) { document.getElementById(id).classList.add('active'); }

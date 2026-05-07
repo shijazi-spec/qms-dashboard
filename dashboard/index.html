@@ -6,6 +6,7 @@
     <title>WalaPlus Quality Dashboard</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/chart-theme.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
@@ -154,14 +155,14 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="app">
         <div id="walaplus-nav"></div>
         <script src="/js/a11y.js" defer></script>
         <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 WalaPlusNav.init('dashboard');
@@ -169,7 +170,7 @@
         </script>
 
         <!-- Settings Panel (Slide-out) -->
-        <div id="settingsPanel" class="settings-panel fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 overflow-y-auto">
+        <div id="settingsPanel" class="settings-panel fixed end-0 top-0 h-full w-80 bg-white shadow-2xl z-50 overflow-y-auto">
             <div class="p-6">
                 <div class="flex items-center justify-between mb-6">
                     <h2 class="text-lg font-bold text-gray-900">Customize Dashboard</h2>
@@ -194,7 +195,7 @@
                     </div>
 
                     <div class="border-t pt-6">
-                        <button data-on-click="resetLayout" class="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition flex items-center justify-center space-x-2">
+                        <button data-on-click="resetLayout" class="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition flex items-center justify-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                             </svg>
@@ -217,7 +218,7 @@
                         <h2 class="text-lg font-bold text-gray-900" id="modalTitle">Issue Details</h2>
                         <p class="text-sm text-gray-500" id="modalSubtitle">Click on any issue to view details</p>
                     </div>
-                    <div class="flex items-center space-x-3">
+                    <div class="flex items-center gap-3">
                         <select id="modalModuleFilter" data-on-change="filterModalIssues" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
                             <option value="all">All Modules</option>
                             <option value="Deals">Deals</option>
@@ -235,13 +236,13 @@
                         <select id="modalLayoutFilter" data-on-change="filterModalIssues" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5" data-testid="select-layout-filter">
                             <option value="all">All Layouts</option>
                         </select>
-                        <button data-on-click="exportIssues" data-args="[&quot;csv&quot;]" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700 flex items-center space-x-1">
+                        <button data-on-click="exportIssues" data-args="[&quot;csv&quot;]" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700 flex items-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                             </svg>
                             <span>CSV</span>
                         </button>
-                        <button data-on-click="exportIssues" data-args="[&quot;json&quot;]" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700 flex items-center space-x-1">
+                        <button data-on-click="exportIssues" data-args="[&quot;json&quot;]" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700 flex items-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                             </svg>
@@ -258,8 +259,8 @@
                     <div class="flex-1 min-w-[220px]">
                         <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Search Record ID</label>
                         <div class="relative">
-                            <svg class="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 110-16 8 8 0 010 16z"/></svg>
-                            <input type="text" id="modalRecordIdSearch" data-on-input="filterModalIssues" placeholder="Type record ID…" class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-record-id-search">
+                            <svg class="w-4 h-4 absolute start-2.5 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 110-16 8 8 0 010 16z"/></svg>
+                            <input type="text" id="modalRecordIdSearch" data-on-input="filterModalIssues" placeholder="Type record ID…" class="w-full ps-8 pe-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-record-id-search">
                         </div>
                     </div>
                     <div class="min-w-[200px]">
@@ -282,16 +283,16 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50 sticky top-0">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Record ID</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lead Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pipeline</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Layouts</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Record ID</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Lead Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Pipeline</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Layouts</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
                             </tr>
                         </thead>
                         <tbody id="issuesTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -557,7 +558,7 @@
                                           data-tip="Total failing-field issues split across CRM modules (Deals, Contacts, Leads, Accounts). One record can contribute several issues if multiple required fields are blank."
                                           data-testid="info-issues-category">i</span>
                                 </span>
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center gap-2">
                                     <button data-on-click="openIssuesModal" data-args="[&quot;all&quot;]" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View All Issues</button>
                                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
@@ -610,7 +611,7 @@
                                           data-tip="Distinct records (not issues) that have at least one data-quality problem, grouped by module. A record with three missing fields is counted once here."
                                           data-testid="info-records-issues">i</span>
                                 </span>
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center gap-2">
                                     <button data-on-click="openIssuesModal" data-args="[&quot;all&quot;]" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View All Records</button>
                                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
@@ -709,14 +710,14 @@
                                     <table class="min-w-full divide-y divide-gray-200">
                                         <thead class="bg-gray-50">
                                             <tr>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="Time window between this audit and the previous one — useful for spotting daily/weekly/monthly cadence">Period Covered</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">People</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Process</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Governance</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider" title="The Created/Modified date window the user picked when this audit was run. 'All Data' = no filter was applied (or the audit predates this feature).">Period Covered</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Overall</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">People</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Process</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Governance</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
+                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
                                             </tr>
                                         </thead>
                                         <tbody id="historyTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -731,7 +732,7 @@
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="agent-performance" data-name="Agent Performance">
                             <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
                                 <span class="text-xs font-medium text-gray-500 uppercase">CRM Owner Data Quality</span>
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center gap-2">
                                     <select id="statusFilter" aria-label="Filter by status" data-on-change="filterAndSortAgents" class="text-xs border border-gray-200 rounded px-2 py-1" data-testid="select-status-filter">
                                         <option value="Active" selected>Active</option>
                                         <option value="all">All Status</option>
@@ -763,8 +764,8 @@
                             <div class="p-6">
                                 <div class="mb-3 flex flex-col sm:flex-row gap-3">
                                     <div class="relative flex-1">
-                                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                        <input type="text" id="agentSearchInput" data-on-input="filterAndSortAgents" placeholder="Search by name..." class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-agent-search">
+                                        <svg class="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                        <input type="text" id="agentSearchInput" data-on-input="filterAndSortAgents" placeholder="Search by name..." class="w-full ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" data-testid="input-agent-search">
                                     </div>
                                     <select id="agentSortOrder" aria-label="Sort agents by" data-on-change="filterAndSortAgents" class="text-sm border border-gray-200 rounded-lg px-3 py-2" data-testid="select-agent-sort">
                                         <option value="score-asc">Score: Low → High</option>
@@ -774,7 +775,7 @@
                                     </select>
                                 </div>
                                 <div class="mb-3 p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-                                    <div class="flex items-center space-x-1">
+                                    <div class="flex items-center gap-1">
                                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                         </svg>
@@ -784,7 +785,7 @@
                                 <!-- Coverage metrics display -->
                                 <div id="agentCoverageMetrics" class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm hidden">
                                     <div class="flex items-center justify-between">
-                                        <div class="flex items-center space-x-2">
+                                        <div class="flex items-center gap-2">
                                             <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                             </svg>
@@ -1830,28 +1831,28 @@
                 return `
                     <div class="bg-gray-50 rounded-xl p-4 hover:shadow-md transition cursor-pointer" data-on-click="showAgentDetails" data-args="[&quot;${agent.id}&quot;]">
                         <div class="flex items-center justify-between mb-3">
-                            <div class="flex items-center space-x-2">
+                            <div class="flex items-center gap-2">
                                 <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
                                     ${agent.name.split(' ').map(n => n[0]).join('')}
                                 </div>
                                 <div>
                                     <div class="font-medium text-gray-900 text-sm">${agent.name}</div>
-                                    <div class="flex items-center space-x-1 mt-0.5">
+                                    <div class="flex items-center gap-1 mt-0.5">
                                         <span class="text-xs px-2 py-0.5 rounded-full ${teamBadge}">${agent.team}</span>
-                                        <span class="text-xs px-2 py-0.5 rounded-full ${statusBadge} flex items-center space-x-1">
+                                        <span class="text-xs px-2 py-0.5 rounded-full ${statusBadge} flex items-center gap-1">
                                             <span class="w-1.5 h-1.5 rounded-full ${statusDot} inline-block"></span>
                                             <span>${agent.status || 'Unknown'}</span>
                                         </span>
                                     </div>
                                 </div>
                             </div>
-                            <div class="text-right">
+                            <div class="text-end">
                                 <div class="text-2xl font-bold" data-style="color: ${scoreColor}">${agent.score}%</div>
                             </div>
                         </div>
                         <div class="flex items-center justify-between text-xs text-gray-500">
                             <span>${agent.recordsAudited} records</span>
-                            <span class="flex items-center space-x-1">
+                            <span class="flex items-center gap-1">
                                 <span class="w-2 h-2 rounded-full bg-red-500"></span>
                                 <span>${agent.issues.critical}</span>
                                 <span class="w-2 h-2 rounded-full bg-orange-500"></span>
@@ -2386,7 +2387,7 @@
 
             const lastUpdatedEl = document.getElementById('lastUpdated');
             if (lastUpdatedEl) {
-                lastUpdatedEl.textContent = 'Last updated: ' + new Date(audit.audit_date).toLocaleString();
+                lastUpdatedEl.textContent = 'Last AI Audit: ' + new Date(audit.audit_date).toLocaleString();
             }
             
             applyWidgetConfig();
@@ -2398,7 +2399,7 @@
         // ---- Records by Layout (full CRM pies) ----
         let leadsLayoutPieChart = null;
         let dealsLayoutPieChart = null;
-        const LAYOUT_PALETTE = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16'];
+        const LAYOUT_PALETTE = (window.WalaPlusChartTheme && window.WalaPlusChartTheme.PALETTE) || ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16'];
 
         function renderLayoutPie(canvasId, legendId, totalElId, breakdown, total) {
             const ctx = document.getElementById(canvasId);
@@ -2424,27 +2425,30 @@
                 }).join('');
             }
 
-            const config = {
-                type: 'doughnut',
-                data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '55%',
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: (item) => {
-                                    const v = item.parsed;
-                                    const pct = total ? ((v / total) * 100).toFixed(1) : '0.0';
-                                    return `${item.label}: ${v.toLocaleString()} (${pct}%)`;
+            const theme = window.WalaPlusChartTheme;
+            const config = theme
+                ? theme.doughnutConfig({ labels, data, colors, legend: false, cutout: '60%' })
+                : {
+                    type: 'doughnut',
+                    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '60%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (item) => {
+                                        const v = item.parsed;
+                                        const pct = total ? ((v / total) * 100).toFixed(1) : '0.0';
+                                        return `${item.label}: ${v.toLocaleString()} (${pct}%)`;
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            };
+                };
             return new Chart(ctx, config);
         }
 
@@ -2515,7 +2519,7 @@
                 }
                 if (emptyEl) emptyEl.style.display = 'none';
 
-                const palette = ['#6366f1','#8b5cf6','#a855f7','#d946ef','#f43f5e','#f97316','#eab308','#22c55e','#06b6d4','#0ea5e9','#3b82f6','#ec4899'];
+                const palette = (window.WalaPlusChartTheme && window.WalaPlusChartTheme.PALETTE) || ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6','#6366f1','#eab308'];
                 const colorFor = (i) => palette[i % palette.length];
 
                 cardsEl.innerHTML = entries.map(([name, count], i) => {
@@ -2532,23 +2536,17 @@
                 const ctx = canvas.getContext('2d');
                 if (!ctx) return;
                 if (issuesLayoutChart) { issuesLayoutChart.destroy(); issuesLayoutChart = null; }
-                issuesLayoutChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: entries.map(e => e[0]),
-                        datasets: [{
-                            data: entries.map(e => e[1]),
-                            backgroundColor: entries.map((_, i) => colorFor(i)),
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        animation: { duration: 500 },
-                        plugins: { legend: { position: 'right' } }
+                const _layoutLabels = entries.map(e => e[0]);
+                const _layoutData = entries.map(e => e[1]);
+                const _layoutColors = entries.map((_, i) => colorFor(i));
+                issuesLayoutChart = new Chart(ctx, window.WalaPlusChartTheme
+                    ? window.WalaPlusChartTheme.doughnutConfig({ labels: _layoutLabels, data: _layoutData, colors: _layoutColors })
+                    : {
+                        type: 'doughnut',
+                        data: { labels: _layoutLabels, datasets: [{ data: _layoutData, backgroundColor: _layoutColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
-                });
+                );
                 if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('issuesChartLayout', issuesLayoutChart, 'Issues by Layout');
             } catch (err) {
                 console.error('Error rendering Issues by Layout:', err);
@@ -2592,27 +2590,15 @@
                 const allModules = ['Deals', 'Contacts', 'Leads', 'Accounts'];
                 const categories = allModules;
                 const values = allModules.map(m => normalized[m] || 0);
-                issuesChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: categories,
-                        datasets: [{
-                            data: values,
-                            backgroundColor: ['#6366f1', '#a855f7', '#d946ef', '#f43f5e'],
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        animation: { duration: 500 },
-                        plugins: {
-                            legend: {
-                                position: 'right'
-                            }
-                        }
+                const _moduleColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+                issuesChart = new Chart(ctx, window.WalaPlusChartTheme
+                    ? window.WalaPlusChartTheme.doughnutConfig({ labels: categories, data: values, colors: _moduleColors })
+                    : {
+                        type: 'doughnut',
+                        data: { labels: categories, datasets: [{ data: values, backgroundColor: _moduleColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
-                });
+                );
                 if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('issuesChart', issuesChart, 'Issues by Category');
             } catch (err) {
                 console.error('Error rendering issues chart:', err);
@@ -2632,27 +2618,15 @@
                 const normalized = normalizeIssuesByCategory(issuesByCategory);
                 const allModules = ['Deals', 'Contacts', 'Leads', 'Accounts'];
                 const values = allModules.map(m => normalized[m] || 0);
-                issuesTotalChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: allModules,
-                        datasets: [{
-                            data: values,
-                            backgroundColor: ['#6366f1', '#a855f7', '#d946ef', '#f43f5e'],
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        animation: { duration: 500 },
-                        plugins: {
-                            legend: {
-                                position: 'right'
-                            }
-                        }
+                const _modTotColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+                issuesTotalChart = new Chart(ctx, window.WalaPlusChartTheme
+                    ? window.WalaPlusChartTheme.doughnutConfig({ labels: allModules, data: values, colors: _modTotColors })
+                    : {
+                        type: 'doughnut',
+                        data: { labels: allModules, datasets: [{ data: values, backgroundColor: _modTotColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 10 }] },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: { duration: 500 }, plugins: { legend: { position: 'right' } } }
                     }
-                });
+                );
                 if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('issuesChartTotal', issuesTotalChart, 'Records with Issues by Module');
             } catch (err) {
                 console.error('Error rendering total issues chart:', err);
@@ -2795,7 +2769,7 @@
                 const iconColor = dimColors[s.name] || 'text-gray-600 bg-gray-100';
                 opportunities.push(`
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div class="flex items-center space-x-3">
+                        <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-lg ${iconColor} flex items-center justify-center">${dimIcons[s.name] || ''}</div>
                             <div>
                                 <div class="font-medium text-gray-900">${s.name}</div>
@@ -2858,48 +2832,44 @@
                     priority = rec.priority || priorities[Math.min(idx, priorities.length - 1)];
                 }
                 return `
-                <div class="p-4 border-l-4 rounded-lg ${priorityColors[priority] || priorityColors.medium}">
+                <div class="p-4 border-s-4 rounded-lg ${priorityColors[priority] || priorityColors.medium}">
                     <h4 class="font-medium text-gray-900">${title}</h4>
                     <p class="text-sm text-gray-600 mt-1">${description}</p>
                 </div>`;
             }).join('');
         }
 
-        // Format the time-window between two consecutive audits as a
-        // short human-readable label (e.g. "1d 2h", "3h 15m", "45m") plus
-        // the start→end timestamps. Used by Audit History to make daily /
-        // weekly / monthly cadence visible at a glance.
-        function formatAuditPeriod(prevDate, currDate) {
-            if (!prevDate) {
-                return '<span class="text-xs text-gray-400" title="No earlier audit in view — start of window">— first in view —</span>';
+        // Render the "Period Covered" cell for one Audit History row.
+        // The audit row carries the upper-area filter the user picked
+        // when "Run AI Audit" was clicked (period_created_start/end and
+        // period_modified_start/end). When neither pair is set — cron
+        // audits and audits that predate this feature — the cell shows
+        // "All Data" so the user knows nothing was scoped out.
+        function formatAuditPeriod(audit) {
+            if (!audit) return '<span class="text-xs text-gray-400">All Data</span>';
+            const cs = audit.period_created_start;
+            const ce = audit.period_created_end;
+            const ms = audit.period_modified_start;
+            const me = audit.period_modified_end;
+            const fmtDate = (v) => {
+                if (!v) return '';
+                // Postgres returns dates as ISO timestamps; keep just YYYY-MM-DD
+                // for a compact, locale-stable display.
+                const s = String(v);
+                const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+                return m ? m[1] : s;
+            };
+            const lines = [];
+            if (cs && ce) {
+                lines.push(`<div class="text-xs text-gray-700"><span class="text-blue-600 font-medium">Created:</span> ${fmtDate(cs)} → ${fmtDate(ce)}</div>`);
             }
-            const start = new Date(prevDate);
-            const end = new Date(currDate);
-            if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-                return '<span class="text-xs text-gray-400">—</span>';
+            if (ms && me) {
+                lines.push(`<div class="text-xs text-gray-700"><span class="text-green-700 font-medium">Modified:</span> ${fmtDate(ms)} → ${fmtDate(me)}</div>`);
             }
-            const diffMs = end.getTime() - start.getTime();
-            if (diffMs <= 0) {
-                return '<span class="text-xs text-gray-400">—</span>';
+            if (lines.length === 0) {
+                return '<span class="text-xs text-gray-500" title="No date filter was applied when this audit ran (or the audit predates this feature)">All Data</span>';
             }
-            const totalMin = Math.round(diffMs / 60000);
-            const days = Math.floor(totalMin / 1440);
-            const hours = Math.floor((totalMin % 1440) / 60);
-            const mins = totalMin % 60;
-            let span;
-            if (days >= 1) {
-                span = hours > 0 ? `${days}d ${hours}h` : `${days}d`;
-            } else if (hours >= 1) {
-                span = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-            } else {
-                span = `${mins}m`;
-            }
-            const fmt = (d) => d.toLocaleString('en-GB', {
-                day: '2-digit', month: 'short',
-                hour: '2-digit', minute: '2-digit', hour12: false
-            });
-            return `<div class="text-xs text-gray-700">${fmt(start)} → ${fmt(end)}</div>
-                    <div class="text-[10px] text-gray-500 mt-0.5">${span}</div>`;
+            return lines.join('');
         }
 
         function updateHistory(history) {
@@ -2910,16 +2880,13 @@
                 return;
             }
 
-            // History arrives newest-first. The "period covered" by audit N
-            // is naturally [audit N-1.audit_date → audit N.audit_date] —
-            // the chronologically older row is the next item in the array.
+            // History arrives newest-first. "Period Covered" now shows
+            // the user-selected Created/Modified window that was active
+            // when the audit was triggered (persisted on the audit row),
+            // not the gap between consecutive audit timestamps.
             const visible = history.slice(0, 10);
-            tbody.innerHTML = visible.map((audit, idx) => {
-                const olderAudit = visible[idx + 1];
-                const periodCell = formatAuditPeriod(
-                    olderAudit ? olderAudit.audit_date : null,
-                    audit.audit_date,
-                );
+            tbody.innerHTML = visible.map((audit) => {
+                const periodCell = formatAuditPeriod(audit);
                 return `
                 <tr>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${new Date(audit.audit_date).toLocaleString()}</td>

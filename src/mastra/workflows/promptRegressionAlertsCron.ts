@@ -44,13 +44,20 @@ import {
   createAIAlert,
   resolveAlert,
   getOpenAlertsByType,
+  claimToolHealthNotifySlot,
   type AIAlert,
   type AlertSeverity,
 } from "../../utils/aiAlertsDatabase";
+import {
+  getPromptRegressionConfigOverrides,
+  type PromptRegressionConfigOverrides,
+} from "../../utils/promptRegressionConfigDatabase";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Single, env-overridable config block — thresholds live here so ops can
-// tune without redeploying.
+// tune without redeploying. Admins can additionally persist per-deploy
+// overrides via the AI Ops "Prompt regression thresholds" panel (Task #754),
+// which the cron merges in at runtime via `loadOverrides`.
 // ──────────────────────────────────────────────────────────────────────────────
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -59,22 +66,97 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+/**
+ * Compile-time defaults — what the cron uses if no env var and no DB
+ * override is set. Surfaced via the AI Ops `prompt-regression-config` GET
+ * endpoint so the dashboard can render "Currently effective" alongside
+ * "Override active" / "env baseline" columns in the same form layout the
+ * tool-health threshold panel uses.
+ */
+export const PROMPT_REGRESSION_DEFAULTS = {
+  windowDays: 30,
+  minFeedback: 10,
+  dropPctPoints: 10,
+  notifyThrottleMin: 60,
+} as const;
+
+/**
+ * Per-field validation bounds for the prompt-regression threshold form.
+ * Mirrored on the API layer so the server is the source of truth either way.
+ */
+export const PROMPT_REGRESSION_BOUNDS: Record<
+  keyof typeof PROMPT_REGRESSION_DEFAULTS,
+  { min: number; max: number }
+> = {
+  windowDays: { min: 1, max: 365 },
+  minFeedback: { min: 1, max: 10_000 },
+  dropPctPoints: { min: 1, max: 100 },
+  notifyThrottleMin: { min: 0, max: 7 * 24 * 60 },
+};
+
+/**
+ * Live env baseline — env vars override compile-time defaults. Read at
+ * import time so a redeploy with a new env value takes effect immediately;
+ * the DB override is layered on top at run time.
+ */
+export const PROMPT_REGRESSION_ENV_BASELINE = {
+  windowDays: envInt(
+    "PROMPT_REGRESSION_WINDOW_DAYS",
+    PROMPT_REGRESSION_DEFAULTS.windowDays,
+  ),
+  minFeedback: envInt(
+    "PROMPT_REGRESSION_MIN_FEEDBACK",
+    PROMPT_REGRESSION_DEFAULTS.minFeedback,
+  ),
+  dropPctPoints: envInt(
+    "PROMPT_REGRESSION_DROP_PCT_POINTS",
+    PROMPT_REGRESSION_DEFAULTS.dropPctPoints,
+  ),
+  notifyThrottleMin: envInt(
+    "PROMPT_REGRESSION_NOTIFY_THROTTLE_MIN",
+    PROMPT_REGRESSION_DEFAULTS.notifyThrottleMin,
+  ),
+} as const;
+
+export interface EffectivePromptRegressionConfig {
+  windowDays: number;
+  minFeedback: number;
+  dropPctPoints: number;
+  notifyThrottleMin: number;
+}
+
+/**
+ * Merges DB overrides on top of the env baseline. Used by the cron at
+ * runtime AND by the AI Ops `prompt-regression-config` GET endpoint so the
+ * dashboard's "Currently effective" column matches what the next cron pass
+ * will actually see.
+ */
+export function mergePromptRegressionOverrides(
+  overrides: PromptRegressionConfigOverrides | null | undefined,
+): EffectivePromptRegressionConfig {
+  const merged: EffectivePromptRegressionConfig = {
+    ...PROMPT_REGRESSION_ENV_BASELINE,
+  };
+  if (!overrides) return merged;
+  for (const key of Object.keys(merged) as Array<
+    keyof EffectivePromptRegressionConfig
+  >) {
+    const v = overrides[key];
+    if (v != null && Number.isFinite(v) && v >= 0) {
+      merged[key] = v;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Back-compat shim: older call-sites (and the cron registration below)
+ * still reach for `PROMPT_REGRESSION_THRESHOLDS.cron` and the env-baseline
+ * thresholds at import time. New code should call
+ * {@link mergePromptRegressionOverrides} to pick up DB overrides too.
+ */
 export const PROMPT_REGRESSION_THRESHOLDS = {
-  /** Rolling window (days) over which feedback is aggregated. */
-  windowDays: envInt("PROMPT_REGRESSION_WINDOW_DAYS", 30),
-  /**
-   * Minimum number of recorded ratings (👍 + 👎) a prompt version must have
-   * before it can either define the "best" baseline OR be reported as a
-   * regression. Stops a brand-new version from triggering a page on a
-   * single thumbs-down.
-   */
-  minFeedback: envInt("PROMPT_REGRESSION_MIN_FEEDBACK", 10),
-  /**
-   * Minimum drop in percentage points vs the best version for the same
-   * agent before we open an alert. Matches the dashboard's existing 10pp
-   * regression highlight.
-   */
-  dropPctPoints: envInt("PROMPT_REGRESSION_DROP_PCT_POINTS", 10),
+  ...PROMPT_REGRESSION_ENV_BASELINE,
   /** Cron expression — once a day at 06:30 UTC by default. */
   cron: process.env.PROMPT_REGRESSION_ALERT_CRON || "30 6 * * *",
   /** Where the alert links the admin to. */
@@ -175,7 +257,10 @@ export interface PromptRegressionDeps {
    * skipped as a duplicate) without touching Slack/email or env vars.
    * Default impl forwards to `sendPromptRegressionNotifications`.
    */
-  notifyBreaches?: (breaches: RegressionBreach[]) => Promise<void>;
+  notifyBreaches?: (
+    breaches: RegressionBreach[],
+    effectiveConfig: EffectivePromptRegressionConfig,
+  ) => Promise<void>;
   /**
    * Returns the "current time" used to compute the
    * `regressed_last_seen_days_ago` clause in the alert description.
@@ -183,6 +268,13 @@ export interface PromptRegressionDeps {
    * without flaking on the wall clock. Defaults to `new Date()`.
    */
   now?: () => Date;
+  /**
+   * Loads admin-configured threshold overrides from the
+   * `prompt_regression_config_overrides` table (Task #754). Wrapped in a
+   * dep so unit tests can synthesise overrides without touching Postgres.
+   * Defaults to {@link getPromptRegressionConfigOverrides}.
+   */
+  loadOverrides?: () => Promise<PromptRegressionConfigOverrides>;
 }
 
 /**
@@ -201,6 +293,26 @@ export interface PromptRegressionNotifyDeps {
     html?: string;
     text?: string;
   }) => Promise<unknown>;
+  /**
+   * Atomically claim the per-(agent:version) "notify slot" so a flapping
+   * regression cannot re-page Slack/email twice within
+   * `notifyThrottleMin`. Defaults to {@link claimToolHealthNotifySlot} —
+   * the same persistent throttle store the tool-health notifier uses
+   * (Task #754). Tests inject a stub to avoid touching Postgres.
+   */
+  claimDb?: (
+    notificationKey: string,
+    nowMs: number,
+    throttleMs: number,
+  ) => Promise<boolean>;
+  /**
+   * Effective config the notifier should use for window/threshold copy AND
+   * the throttle window. Defaults to the env baseline so existing call-sites
+   * (and tests that don't care about DB overrides) continue to work. The
+   * cron passes the merged effective config so Slack/email copy reflects
+   * whatever the admin tuned in the UI.
+   */
+  effectiveConfig?: EffectivePromptRegressionConfig;
 }
 
 const defaultDeps: Required<PromptRegressionDeps> = {
@@ -228,8 +340,10 @@ const defaultDeps: Required<PromptRegressionDeps> = {
   resolveAlert: (id, note) => resolveAlert(id, note),
   notifyRecovery: (recoveries) =>
     sendPromptRegressionRecoveryNotifications(recoveries),
-  notifyBreaches: (breaches) => sendPromptRegressionNotifications(breaches),
+  notifyBreaches: (breaches, effectiveConfig) =>
+    sendPromptRegressionNotifications(breaches, { effectiveConfig }),
   now: () => new Date(),
+  loadOverrides: () => getPromptRegressionConfigOverrides(),
 };
 
 function toNumOrNull(v: unknown): number | null {
@@ -305,8 +419,26 @@ function parseRegressionRecordId(key: string): {
 export async function runPromptRegressionCheck(
   depsOverride: PromptRegressionDeps = {},
 ): Promise<PromptRegressionCheckResult> {
-  const cfg = PROMPT_REGRESSION_THRESHOLDS;
   const deps = { ...defaultDeps, ...depsOverride };
+
+  // Resolve the effective config at run time so admin overrides set via
+  // the AI Ops "Prompt regression thresholds" panel take effect on the
+  // very next cron pass without a restart (Task #754). Loader failures
+  // log and resolve to `{}` so a broken admin UI never blocks the cron.
+  let overrides: PromptRegressionConfigOverrides = {};
+  try {
+    overrides = await deps.loadOverrides();
+  } catch (err) {
+    logger.error(
+      "[PromptRegression] Failed to load admin overrides — falling back to env baseline:",
+      err,
+    );
+  }
+  const cfg = {
+    ...mergePromptRegressionOverrides(overrides),
+    cron: PROMPT_REGRESSION_THRESHOLDS.cron,
+    link: PROMPT_REGRESSION_THRESHOLDS.link,
+  };
 
   const out: PromptRegressionCheckResult = {
     agentsEvaluated: 0,
@@ -536,7 +668,7 @@ export async function runPromptRegressionCheck(
     // also falls through — the recovery notifier above already paged.
     if (out.breaches.length > 0) {
       try {
-        await deps.notifyBreaches(out.breaches);
+        await deps.notifyBreaches(out.breaches, cfg);
       } catch (notifyErr) {
         logger.error(
           `[PromptRegression] Breach notifier threw for ${out.breaches.length} breaches:`,
@@ -565,16 +697,58 @@ export async function sendPromptRegressionNotifications(
   breaches: RegressionBreach[],
   notifyDeps: PromptRegressionNotifyDeps = {},
 ): Promise<void> {
-  const cfg = PROMPT_REGRESSION_THRESHOLDS;
-  const count = breaches.length;
-  if (count === 0) return;
-  const plural = count === 1 ? "regression" : "regressions";
+  const cfg = notifyDeps.effectiveConfig ?? {
+    ...PROMPT_REGRESSION_ENV_BASELINE,
+  };
+  if (breaches.length === 0) return;
   const fetchFn = notifyDeps.fetchFn ?? globalThis.fetch;
+
+  // ── Cooldown / throttle ──────────────────────────────────────────────────
+  // Reuses the persistent `tool_health_notifications` slot table (Task #754)
+  // so a flapping regression cannot re-page on-call inside the configured
+  // cooldown — survives server restarts and is shared across pods. Each
+  // breach is filtered independently so a brand-new agent regression still
+  // pages even when an unrelated one is in cooldown. A throttle window of
+  // 0 disables the gate entirely (useful in tests / dev).
+  const claimDb = notifyDeps.claimDb ?? claimToolHealthNotifySlot;
+  const throttleMs = (cfg.notifyThrottleMin ?? 0) * 60_000;
+  const nowMs = Date.now();
+  const sendable: RegressionBreach[] = [];
+  if (throttleMs > 0) {
+    for (const b of breaches) {
+      const key = `prompt_regression:${b.agent_name}:${b.regressed_version}`;
+      let claimed = true;
+      try {
+        claimed = await claimDb(key, nowMs, throttleMs);
+      } catch (err) {
+        // DB outage on the throttle table must not silence the page —
+        // fall through to "send" and rely on the in-process / alert-row
+        // dedupe upstream to keep noise reasonable.
+        logger.warn(
+          `[PromptRegression] claimDb threw for ${key} — sending anyway:`,
+          err,
+        );
+      }
+      if (!claimed) {
+        logger.info(
+          `[PromptRegression] Throttled notification for ${key} ` +
+            `(within ${cfg.notifyThrottleMin}m cooldown).`,
+        );
+        continue;
+      }
+      sendable.push(b);
+    }
+  } else {
+    sendable.push(...breaches);
+  }
+  if (sendable.length === 0) return;
+  const count = sendable.length;
+  const plural = count === 1 ? "regression" : "regressions";
 
   // ── Slack ──────────────────────────────────────────────────────────────────
   if (process.env.SLACK_WEBHOOK_URL) {
     try {
-      const lines = breaches.map(
+      const lines = sendable.map(
         (b) =>
           `• *${b.agent_name}* — version \`${b.regressed_version}\` at ` +
           `${b.regressed_rate_pct.toFixed(0)}% vs best \`${b.best_version}\` ` +
@@ -610,7 +784,7 @@ export async function sendPromptRegressionNotifications(
           const { sendResendEmail } = await import("../../utils/resendMail");
           return sendResendEmail(opts);
         });
-      const rows = breaches
+      const rows = sendable
         .map(
           (b) =>
             `<tr>

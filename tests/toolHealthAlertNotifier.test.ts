@@ -10,7 +10,7 @@
  *   • Slack/email transport errors do not throw out of `notifyToolHealthBreach`
  *     and do not poison the throttle map.
  *   • Multiple comma-separated email recipients are forwarded as an array.
- *   • Built link points to `/dashboard/ai-ops.html` and honours
+ *   • Built link points to `/dashboard` and honours
  *     `TOOL_HEALTH_APP_URL`.
  *
  * Run:  npx tsx tests/toolHealthAlertNotifier.test.ts
@@ -132,6 +132,8 @@ const ENV_KEYS = [
   "TOOL_HEALTH_NOTIFY_THROTTLE_MIN",
   "TOOL_HEALTH_APP_URL",
   "TOOL_HEALTH_CONFIG_NOTIFY",
+  "TOOL_HEALTH_RECOVERY_NOTIFY",
+  "TOOL_HEALTH_RECOVERY_SKIP_TOOLS",
   "SLACK_CHANNEL_ID",
 ];
 
@@ -178,7 +180,7 @@ await suite.test(
     // Link button must point at the AI Ops panel under the configured base URL.
     const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
     suite.expect(
-      blocks.includes("https://qms.example.com/dashboard/ai-ops.html"),
+      blocks.includes("https://qms.example.com/dashboard"),
       `slack blocks contain link to AI Ops panel (got: ${blocks.slice(0, 200)}...)`,
     );
     // Dedupe key should appear in the context footer for traceability.
@@ -212,11 +214,11 @@ await suite.test(
       `subject prefixed with severity (got: ${call.subject})`,
     );
     suite.expect(
-      (call.html ?? "").includes("/dashboard/ai-ops.html"),
+      (call.html ?? "").includes("/dashboard"),
       "email HTML links to AI Operations panel",
     );
     suite.expect(
-      (call.text ?? "").includes("/dashboard/ai-ops.html"),
+      (call.text ?? "").includes("/dashboard"),
       "email plaintext links to AI Operations panel",
     );
     suite.expectEqual(slackCalls.length, 0, "no slack");
@@ -595,7 +597,7 @@ await suite.test(
     suite.expectEqual(hasButton, false, "no actions button when URL is relative");
     const json = JSON.stringify(blocks);
     suite.expect(
-      json.includes("/dashboard/ai-ops.html"),
+      json.includes("/dashboard"),
       "still surfaces the relative path as text",
     );
     suite.expect(
@@ -603,7 +605,7 @@ await suite.test(
       "tells the operator how to enable a clickable link",
     );
     suite.expect(
-      !json.includes("https:///dashboard/ai-ops.html"),
+      !json.includes("https:///dashboard"),
       "no malformed URL with empty origin",
     );
   },
@@ -624,7 +626,7 @@ await suite.test(
     suite.expect(!!button, "actions button rendered when URL is absolute");
     suite.expectEqual(
       button?.url,
-      "https://qms.example.com/dashboard/ai-ops.html",
+      "https://qms.example.com/dashboard",
       "button URL is absolute and points to AI Ops panel",
     );
   },
@@ -785,7 +787,7 @@ await suite.test(
       "operator note surfaced",
     );
     suite.expect(
-      blocks.includes("https://qms.example.com/dashboard/ai-ops.html?tab=thresholds"),
+      blocks.includes("https://qms.example.com/dashboard?tab=thresholds"),
       `blocks include deep-link to Alert Thresholds tab (got: ${blocks.slice(0, 200)}...)`,
     );
     suite.expect(
@@ -813,7 +815,7 @@ await suite.test(
     suite.expectEqual(hasButton, false, "no actions button when URL is relative");
     const json = JSON.stringify(blocks);
     suite.expect(
-      json.includes("/dashboard/ai-ops.html?tab=thresholds"),
+      json.includes("/dashboard?tab=thresholds"),
       "still surfaces relative path",
     );
     suite.expect(
@@ -997,7 +999,7 @@ await suite.test(
       "HTML body lists changed field label",
     );
     suite.expect(
-      emailCalls[0]?.html.includes("https://qms.example.com/dashboard/ai-ops.html?tab=thresholds"),
+      emailCalls[0]?.html.includes("https://qms.example.com/dashboard?tab=thresholds"),
       "HTML body includes deep-link to Alert Thresholds tab",
     );
     suite.expect(
@@ -1094,11 +1096,17 @@ await suite.test(
 // ──────────────────────────────────────────────────────────────────────────────
 // Task #213 — override auto-revert Slack notification
 // ──────────────────────────────────────────────────────────────────────────────
-function makeOverrideStubs(opts: { slackResult?: boolean | Error } = {}): {
+function makeOverrideStubs(opts: {
+  slackResult?: boolean | Error;
+  auditEntries?: ToolHealthConfigAuditEntry[];
+  auditError?: Error;
+} = {}): {
   deps: ToolHealthOverrideNotifierDeps;
   slackCalls: SlackCall[];
+  auditCalls: number[];
 } {
   const slackCalls: SlackCall[] = [];
+  const auditCalls: number[] = [];
   return {
     deps: {
       sendSlack: async (channel, text, blocks) => {
@@ -1106,8 +1114,14 @@ function makeOverrideStubs(opts: { slackResult?: boolean | Error } = {}): {
         if (opts.slackResult instanceof Error) throw opts.slackResult;
         return opts.slackResult ?? true;
       },
+      getAudit: async (limit) => {
+        auditCalls.push(limit);
+        if (opts.auditError) throw opts.auditError;
+        return opts.auditEntries ?? [];
+      },
     },
     slackCalls,
+    auditCalls,
   };
 }
 
@@ -1174,7 +1188,7 @@ await suite.test(
     );
     suite.expect(
       blocks.includes(
-        "https://qms.example.com/dashboard/ai-ops.html?tab=thresholds#threshold-audit-7777",
+        "https://qms.example.com/dashboard?tab=thresholds#threshold-audit-7777",
       ),
       `blocks deep-link to the audit row (got: ${blocks.slice(0, 400)}...)`,
     );
@@ -1219,7 +1233,7 @@ await suite.test(
     suite.expectEqual(hasButton, false, "no actions button when URL is relative");
     const json = JSON.stringify(blocks);
     suite.expect(
-      json.includes("/dashboard/ai-ops.html"),
+      json.includes("/dashboard"),
       "still surfaces the relative path as text",
     );
     suite.expect(
@@ -1244,6 +1258,70 @@ await suite.test(
     } finally {
       console.error = origErr;
     }
+  },
+);
+
+await suite.test(
+  "override-expired: appends 'Recent changes' block from getAudit (Task #384)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls, auditCalls } = makeOverrideStubs({
+      auditEntries: makeSampleAuditEntries(3),
+    });
+    const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
+    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(auditCalls.length, 1, "getAudit called exactly once");
+    suite.expectEqual(auditCalls[0], 3, "getAudit called with limit=3");
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      blocks.includes("Recent changes (last 3)"),
+      `blocks include the Recent changes header (got: ${blocks.slice(0, 400)}...)`,
+    );
+    suite.expect(
+      blocks.includes("Alice Admin") && blocks.includes("Bob Ops"),
+      "blocks include the recent changers",
+    );
+  },
+);
+
+await suite.test(
+  "override-expired: getAudit error is swallowed; Slack still posts without the block (Task #384)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeOverrideStubs({
+      auditError: new Error("db down"),
+    });
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
+      suite.expectEqual(result.slackSent, true, "slack still posts");
+      suite.expectEqual(slackCalls.length, 1, "one slack call");
+      const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+      suite.expect(
+        !blocks.includes("Recent changes"),
+        "no Recent changes block when audit fetch failed",
+      );
+    } finally {
+      console.error = origErr;
+    }
+  },
+);
+
+await suite.test(
+  "override-expired: empty audit list → no Recent changes block",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    const { deps, slackCalls } = makeOverrideStubs({ auditEntries: [] });
+    await notifyToolHealthOverrideExpired(sampleOverride(), deps);
+    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expect(
+      !blocks.includes("Recent changes"),
+      "no Recent changes block when audit list is empty",
+    );
   },
 );
 
@@ -1338,7 +1416,7 @@ await suite.test(
       "blocks reference alert id",
     );
     suite.expect(
-      blocks.includes("https://qms.example.com/dashboard/ai-ops.html"),
+      blocks.includes("https://qms.example.com/dashboard"),
       "blocks link to AI Ops panel",
     );
     suite.expect(
@@ -1368,11 +1446,11 @@ await suite.test(
       "subject includes tool name",
     );
     suite.expect(
-      (call.html ?? "").includes("/dashboard/ai-ops.html"),
+      (call.html ?? "").includes("/dashboard"),
       "email HTML links to AI Operations panel",
     );
     suite.expect(
-      (call.text ?? "").includes("/dashboard/ai-ops.html"),
+      (call.text ?? "").includes("/dashboard"),
       "email plaintext links to AI Operations panel",
     );
     suite.expect(
@@ -1574,7 +1652,7 @@ await suite.test(
     suite.expectEqual(hasButton, false, "no actions button when URL is relative");
     const json = JSON.stringify(blocks);
     suite.expect(
-      json.includes("/dashboard/ai-ops.html"),
+      json.includes("/dashboard"),
       "still surfaces the relative path as text",
     );
   },
@@ -1762,6 +1840,119 @@ await suite.test(
     suite.expectEqual(recordResultCalls.length, 1, "still called");
     suite.expectEqual(recordResultCalls[0]?.alertId, null, "alert_id forwarded as null");
     suite.expectEqual(recordResultCalls[0]?.channel, "slack", "channel reflects the send");
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Task #347 — per-tool / global recovery notification opt-out
+// ──────────────────────────────────────────────────────────────────────────────
+
+await suite.test(
+  "recovery opt-out: TOOL_HEALTH_RECOVERY_NOTIFY=0 silences ALL recoveries (returns skipped+disabled)",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ALERT_EMAIL = "oncall@example.com";
+    process.env.TOOL_HEALTH_RECOVERY_NOTIFY = "0";
+    const { deps, slackCalls, emailCalls } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+    suite.expectEqual(result.skipped, true, "skipped");
+    suite.expectEqual(result.disabled, true, "disabled flag set");
+    suite.expectEqual(result.slackSent, false, "no slack");
+    suite.expectEqual(result.emailSent, false, "no email");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(emailCalls.length, 0, "no email call");
+  },
+);
+
+await suite.test(
+  "recovery opt-out: TOOL_HEALTH_RECOVERY_NOTIFY accepts false/no/off (case-insensitive)",
+  async () => {
+    for (const off of ["false", "FALSE", "no", "Off"]) {
+      clearEnv();
+      process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+      process.env.TOOL_HEALTH_RECOVERY_NOTIFY = off;
+      const { deps, slackCalls } = makeRecoveryStubs();
+      const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+      suite.expectEqual(result.disabled, true, `disabled for value '${off}'`);
+      suite.expectEqual(slackCalls.length, 0, `no slack call for '${off}'`);
+    }
+  },
+);
+
+await suite.test(
+  "recovery opt-out: TOOL_HEALTH_RECOVERY_NOTIFY=1 (or unset) leaves recoveries enabled",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_RECOVERY_NOTIFY = "1";
+    const { deps, slackCalls } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+    suite.expectEqual(result.disabled, false, "not disabled");
+    suite.expectEqual(result.slackSent, true, "slack sent");
+    suite.expectEqual(slackCalls.length, 1, "one slack call");
+  },
+);
+
+await suite.test(
+  "recovery opt-out: TOOL_HEALTH_RECOVERY_SKIP_TOOLS silences only the listed tools",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_RECOVERY_SKIP_TOOLS =
+      "qms_create_nc, other_noisy_tool";
+
+    // Listed tool → suppressed.
+    const { deps: depsA, slackCalls: slackA } = makeRecoveryStubs();
+    const a = await notifyToolHealthRecovery(
+      sampleRecovery({ tool_name: "qms_create_nc" }),
+      depsA,
+    );
+    suite.expectEqual(a.disabled, true, "listed tool disabled");
+    suite.expectEqual(a.skipped, true, "listed tool skipped");
+    suite.expectEqual(slackA.length, 0, "no slack for listed tool");
+
+    // Unlisted tool → still pages.
+    const { deps: depsB, slackCalls: slackB } = makeRecoveryStubs();
+    const b = await notifyToolHealthRecovery(
+      sampleRecovery({ tool_name: "quiet_tool" }),
+      depsB,
+    );
+    suite.expectEqual(b.disabled, false, "unlisted tool not disabled");
+    suite.expectEqual(b.slackSent, true, "unlisted tool still pages");
+    suite.expectEqual(slackB.length, 1, "one slack for unlisted tool");
+  },
+);
+
+await suite.test(
+  "recovery opt-out: TOOL_HEALTH_RECOVERY_SKIP_TOOLS matches case-insensitively",
+  async () => {
+    clearEnv();
+    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_RECOVERY_SKIP_TOOLS = "QMS_Create_NC";
+    const { deps, slackCalls } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(
+      sampleRecovery({ tool_name: "qms_create_nc" }),
+      deps,
+    );
+    suite.expectEqual(result.disabled, true, "case-insensitive match");
+    suite.expectEqual(slackCalls.length, 0, "no slack call");
+  },
+);
+
+await suite.test(
+  "recovery opt-out: opt-out short-circuits BEFORE the no-transport-configured check",
+  // When the operator explicitly opted out we want `disabled: true` rather
+  // than masquerading as "no Slack/email configured" — dashboards rely on
+  // that distinction to decide whether to nag ops to wire up a transport.
+  async () => {
+    clearEnv();
+    // Note: NO Slack channel and NO email recipient configured.
+    process.env.TOOL_HEALTH_RECOVERY_NOTIFY = "0";
+    const { deps } = makeRecoveryStubs();
+    const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
+    suite.expectEqual(result.disabled, true, "disabled wins over plain skipped");
+    suite.expectEqual(result.skipped, true, "skipped also true");
   },
 );
 

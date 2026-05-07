@@ -67,11 +67,28 @@ await suite.test("GET /unknown — 404 from Hono", async () => {
 // These run regardless of DATABASE_URL so the 500 branches are always covered.
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** Helper: replace pool.query with a throwing stub and return a restore fn. */
+/** Helper: replace pool.query with a throwing stub and return a restore fn.
+ *
+ * Also patches `pg.Pool.prototype.query` so calls issued by *other* Pool
+ * instances (notably the separate pool inside `src/utils/tablefDatabase.ts`,
+ * which the route handlers delegate to for INSERT/UPDATE/DELETE) are
+ * intercepted too. Without the prototype patch, the route's `pool` throws but
+ * the database module's `pool` either silently succeeds or hits the real DB,
+ * leaving the 500 branches uncovered for write paths (#753 follow-up). */
 function stubPoolQueryToThrow(): () => void {
   const original = (pool as any).query.bind(pool);
+  const ProtoPool = (pool as any).constructor;
+  const protoOriginal = ProtoPool?.prototype?.query;
   (pool as any).query = async () => { throw new Error("simulated DB failure"); };
-  return () => { (pool as any).query = original; };
+  if (ProtoPool?.prototype) {
+    ProtoPool.prototype.query = async () => { throw new Error("simulated DB failure"); };
+  }
+  return () => {
+    (pool as any).query = original;
+    if (ProtoPool?.prototype && protoOriginal) {
+      ProtoPool.prototype.query = protoOriginal;
+    }
+  };
 }
 
 // ── initTableFTables middleware failure ───────────────────────────────────────

@@ -291,6 +291,10 @@
       tbody.appendChild(tr);
     });
     summary.appendChild(tbody);
+
+    if (title) {
+      announce(title + ' updated');
+    }
   }
 
   /**

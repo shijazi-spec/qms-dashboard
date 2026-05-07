@@ -69,7 +69,6 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/accept-invite.html",
   "dashboard/admin.html",
   "dashboard/ai-approvals.html",
-  "dashboard/ai-ops.html",
   "dashboard/audits.html",
   "dashboard/calls.html",
   "dashboard/compliance.html",
@@ -91,8 +90,10 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/migration.html",
   "dashboard/onboarding.html",
   "dashboard/pdpl.html",
+  "dashboard/pipeline-aging.html",
   "dashboard/policies.html",
   "dashboard/projects.html",
+  "dashboard/qms-docs.html",
   "dashboard/qms.html",
   "dashboard/reviews.html",
   "dashboard/risks.html",
@@ -101,8 +102,13 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/sop.html",
   "dashboard/tablef.html",
   "dashboard/team.html",
+  "dashboard/triggers.html",
   "dashboard/users.html",
   "dashboard/vendors.html",
+  "dashboard/fraud-country-risk.html",
+  "dashboard/fraud-dashboard.html",
+  "dashboard/fraud-incidents.html",
+  "dashboard/fraud-rules.html",
 ]);
 
 function toRelKey(absPath) {

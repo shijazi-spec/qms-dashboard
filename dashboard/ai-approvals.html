@@ -53,13 +53,13 @@
             flex-shrink: 0;
         }
     </style>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             if (window.WalaPlusNav) WalaPlusNav.init('ai-approvals');
@@ -129,7 +129,7 @@
                 <option value="pending,executed,rejected,failed,expired" data-i18n="ai_approvals.status_all">All</option>
             </select>
 
-            <label class="text-xs text-gray-600 ml-2 flex items-center gap-1">
+            <label class="text-xs text-gray-600 ms-2 flex items-center gap-1">
                 <span data-i18n="ai_approvals.filter_risk">Risk</span>
                 <!-- Task #619: drop-everything signal for a Critical pile-up.
                      Re-uses the count already fetched by refreshRiskLevelCounts()
@@ -137,7 +137,7 @@
                      Critical bucket reaches CRITICAL_BADGE_THRESHOLD. -->
                 <span id="badgeCriticalRisk"
                       data-testid="badge-critical-risk"
-                      class="hidden ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
+                      class="hidden ms-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
                       title="Pending approvals at Critical risk level">0</span>
             </label>
             <select id="fltRisk" aria-label="Filter by risk level" class="border border-gray-300 rounded px-2 py-1 text-sm">
@@ -164,11 +164,11 @@
                         data-base-label="Low">Low</option>
             </select>
 
-            <label class="text-xs text-gray-600 ml-2 flex items-center gap-1">
+            <label class="text-xs text-gray-600 ms-2 flex items-center gap-1">
                 <input id="fltMine" type="checkbox" class="rounded"> <span data-i18n="ai_approvals.only_my">Only my proposals</span>
             </label>
 
-            <label class="text-xs text-gray-600 ml-2" data-i18n="ai_approvals.filter_review">Review</label>
+            <label class="text-xs text-gray-600 ms-2" data-i18n="ai_approvals.filter_review">Review</label>
             <select id="fltReview" aria-label="Filter by review status"
                     data-testid="select-review-filter"
                     class="border border-gray-300 rounded px-2 py-1 text-sm"
@@ -188,16 +188,16 @@
                         data-base-label="No reviewer yet">No reviewer yet</option>
             </select>
 
-            <label class="text-xs text-gray-600 ml-2 flex items-center gap-1" title="Limit the list to rows where credential-shaped values were detected in the payload.">
+            <label class="text-xs text-gray-600 ms-2 flex items-center gap-1" title="Limit the list to rows where credential-shaped values were detected in the payload.">
                 <input id="fltCredWarn" type="checkbox" class="rounded" data-testid="input-credential-warnings-only">
                 <span data-i18n="ai_approvals.only_credential_warnings">Credential warnings only</span>
                 <span id="badgeCredWarn"
                       data-testid="badge-credential-warnings"
-                      class="hidden ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
+                      class="hidden ms-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
                       title="Pending approvals flagged for credential-shaped values">0</span>
             </label>
 
-            <div id="summaryCounts" class="ml-auto text-xs text-gray-600 flex gap-3">
+            <div id="summaryCounts" class="ms-auto text-xs text-gray-600 flex gap-3">
                 <span><span data-i18n="ai_approvals.pending">Pending</span>: <b id="cntPending">—</b></span>
                 <span><span data-i18n="ai_approvals.executed_today">Executed today</span>: <b id="cntExecutedToday">—</b></span>
             </div>
@@ -226,8 +226,10 @@
             <div class="flex items-start justify-between gap-3 px-5 py-3 border-b border-gray-200">
                 <div class="min-w-0">
                     <h2 id="actionDetailTitle" class="text-base font-semibold text-gray-900 truncate"
+                        data-i18n="dyn.ai_approvals.action_detail_title"
                         data-testid="text-action-detail-title">AI action detail</h2>
-                    <p id="actionDetailSummary" class="text-xs text-gray-500 mt-0.5">
+                    <p id="actionDetailSummary" class="text-xs text-gray-500 mt-0.5"
+                       data-i18n="dyn.ai_approvals.loading_action_details">
                         Loading action details…
                     </p>
                 </div>
@@ -248,7 +250,119 @@
 
 <script>
 (function () {
-    const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+    // Task #751: this helper used to forward its first argument straight
+    // to the translator (a t-of-variable shape), but the i18n guardrail
+    // in scripts/check-i18n.cjs cannot statically verify that pattern —
+    // which means a missing Arabic key could silently regress the page
+    // for ar-locale users. We now dispatch by literal key below so every
+    // translator call site is a string literal the gate can validate
+    // against en.json + ar.json. To add a new dynamic message, add the
+    // case below AND the matching entry under `dyn.ai_approvals` in
+    // dashboard/i18n/en.json + dashboard/i18n/ar.json.
+    const _t = (k, v) => {
+        if (!window.WalaPlusI18n) return k;
+        switch (k) {
+            case 'dyn.ai_approvals.no_approvals':
+                return WalaPlusI18n.t('dyn.ai_approvals.no_approvals', v);
+            case 'dyn.ai_approvals.prompt_rejection_reason':
+                return WalaPlusI18n.t('dyn.ai_approvals.prompt_rejection_reason', v);
+            case 'dyn.ai_approvals.reason_required':
+                return WalaPlusI18n.t('dyn.ai_approvals.reason_required', v);
+            case 'dyn.ai_approvals.loading':
+                return WalaPlusI18n.t('dyn.ai_approvals.loading', v);
+            case 'dyn.ai_approvals.action_not_found_title':
+                return WalaPlusI18n.t('dyn.ai_approvals.action_not_found_title', v);
+            case 'dyn.ai_approvals.action_not_found_body':
+                return WalaPlusI18n.t('dyn.ai_approvals.action_not_found_body', v);
+            case 'dyn.ai_approvals.failed_load':
+                return WalaPlusI18n.t('dyn.ai_approvals.failed_load', v);
+            case 'dyn.ai_approvals.processing':
+                return WalaPlusI18n.t('dyn.ai_approvals.processing', v);
+            case 'dyn.ai_approvals.details':
+                return WalaPlusI18n.t('dyn.ai_approvals.details', v);
+            case 'dyn.ai_approvals.action_detail_title':
+                return WalaPlusI18n.t('dyn.ai_approvals.action_detail_title', v);
+            case 'dyn.ai_approvals.loading_action_details':
+                return WalaPlusI18n.t('dyn.ai_approvals.loading_action_details', v);
+            case 'dyn.ai_approvals.close_action_detail_dialog':
+                return WalaPlusI18n.t('dyn.ai_approvals.close_action_detail_dialog', v);
+            case 'dyn.ai_approvals.viewed_by':
+                return WalaPlusI18n.t('dyn.ai_approvals.viewed_by', v);
+            case 'dyn.ai_approvals.viewers_explainer':
+                return WalaPlusI18n.t('dyn.ai_approvals.viewers_explainer', v);
+            case 'dyn.ai_approvals.no_prior_viewers':
+                return WalaPlusI18n.t('dyn.ai_approvals.no_prior_viewers', v);
+            case 'dyn.ai_approvals.prior_reviewers_aria':
+                return WalaPlusI18n.t('dyn.ai_approvals.prior_reviewers_aria', v);
+            case 'dyn.ai_approvals.last_viewed_label':
+                return WalaPlusI18n.t('dyn.ai_approvals.last_viewed_label', v);
+            case 'dyn.ai_approvals.unknown_reviewer':
+                return WalaPlusI18n.t('dyn.ai_approvals.unknown_reviewer', v);
+            case 'dyn.ai_approvals.malformed_response':
+                return WalaPlusI18n.t('dyn.ai_approvals.malformed_response', v);
+            case 'dyn.ai_approvals.view_zero':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_zero', v);
+            case 'dyn.ai_approvals.view_one':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_one', v);
+            case 'dyn.ai_approvals.view_two':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_two', v);
+            case 'dyn.ai_approvals.view_few':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_few', v);
+            case 'dyn.ai_approvals.view_many':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_many', v);
+            case 'dyn.ai_approvals.view_other':
+                return WalaPlusI18n.t('dyn.ai_approvals.view_other', v);
+            case 'dyn.ai_approvals.reviewer_zero':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_zero', v);
+            case 'dyn.ai_approvals.reviewer_one':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_one', v);
+            case 'dyn.ai_approvals.reviewer_two':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_two', v);
+            case 'dyn.ai_approvals.reviewer_few':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_few', v);
+            case 'dyn.ai_approvals.reviewer_many':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_many', v);
+            case 'dyn.ai_approvals.reviewer_other':
+                return WalaPlusI18n.t('dyn.ai_approvals.reviewer_other', v);
+            default:
+                return k;
+        }
+    };
+    // Pluralisation helper. Picks the right CLDR plural category for the
+    // active language (Arabic uses 6 categories — zero/one/two/few/many/other
+    // — versus English's two), formats the count with locale-appropriate
+    // numerals, then dispatches to the matching literal _t key. The switch
+    // here keeps every key visible to the i18n guardrail (Task #295).
+    const _plural = (base, n) => {
+        const lang = (window.WalaPlusI18n && window.WalaPlusI18n.currentLang)
+            ? window.WalaPlusI18n.currentLang() : 'en';
+        let cat = 'other';
+        try { cat = new Intl.PluralRules(lang).select(n); } catch (_) {}
+        const formatted = (window.WalaPlusI18n && window.WalaPlusI18n.formatNumber)
+            ? window.WalaPlusI18n.formatNumber(n) : String(n);
+        const v = { n: formatted };
+        if (base === 'view') {
+            switch (cat) {
+                case 'zero': return _t('dyn.ai_approvals.view_zero', v);
+                case 'one':  return _t('dyn.ai_approvals.view_one',  v);
+                case 'two':  return _t('dyn.ai_approvals.view_two',  v);
+                case 'few':  return _t('dyn.ai_approvals.view_few',  v);
+                case 'many': return _t('dyn.ai_approvals.view_many', v);
+                default:     return _t('dyn.ai_approvals.view_other', v);
+            }
+        }
+        if (base === 'reviewer') {
+            switch (cat) {
+                case 'zero': return _t('dyn.ai_approvals.reviewer_zero', v);
+                case 'one':  return _t('dyn.ai_approvals.reviewer_one',  v);
+                case 'two':  return _t('dyn.ai_approvals.reviewer_two',  v);
+                case 'few':  return _t('dyn.ai_approvals.reviewer_few',  v);
+                case 'many': return _t('dyn.ai_approvals.reviewer_many', v);
+                default:     return _t('dyn.ai_approvals.reviewer_other', v);
+            }
+        }
+        return String(n);
+    };
     var listEl = document.getElementById('approvalsList');
     var fltStatus = document.getElementById('fltStatus');
     var fltRisk = document.getElementById('fltRisk');
@@ -625,7 +739,7 @@
         if (a.status === 'pending') {
             actionsHtml =
                 '<button data-code="' + a.action_code + '" data-act="approve" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">Approve</button>' +
-                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ml-1">Reject</button>';
+                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-1">Reject</button>';
         } else if (a.status === 'executed') {
             actionsHtml = '<span class="text-xs text-green-700">' + (a.result_entity_id ? '→ ' + escapeHtml(a.result_entity_id) : 'Done') + '</span>';
         } else if (a.status === 'rejected') {
@@ -641,7 +755,8 @@
         // the action before it shipped, not only while it was pending.
         actionsHtml += '<button type="button" data-code="' + a.action_code + '" data-act="details" ' +
             'data-testid="button-details-' + escapeHtml(a.action_code) + '" ' +
-            'class="text-xs text-indigo-700 hover:text-indigo-900 underline mt-1">Details</button>';
+            'class="text-xs text-indigo-700 hover:text-indigo-900 underline mt-1">' +
+            escapeHtml(_t('dyn.ai_approvals.details')) + '</button>';
 
         return (
             '<div class="bg-white border border-gray-200 rounded-lg p-3" data-code="' + a.action_code + '">' +
@@ -722,8 +837,19 @@
     function openDetailModal(code) {
         detailLastFocus = document.activeElement;
         var myRequestId = ++detailRequestId;
+        // Refresh the close-button aria-label on every open so a mid-session
+        // language change (Task #543) immediately localises the dialog.
+        // The static markup carries an English fallback for the case where
+        // i18n hasn't loaded yet (e.g. cached page open while offline).
+        detailCloseBtn.setAttribute(
+            'aria-label',
+            _t('dyn.ai_approvals.close_action_detail_dialog'),
+        );
         detailTitle.textContent = code;
-        detailSummary.textContent = _t('dyn.ai_approvals.loading');
+        // Subtitle uses the dedicated "Loading action details…" copy
+        // (Task #543) so screen readers get a meaningful announcement
+        // instead of the generic "Loading…" used inside the body.
+        detailSummary.textContent = _t('dyn.ai_approvals.loading_action_details');
         detailBody.innerHTML = '<div class="text-sm text-gray-500 py-6 text-center" aria-live="polite">' +
             _t('dyn.ai_approvals.loading') + '</div>';
         detailModal.classList.remove('hidden');
@@ -913,11 +1039,11 @@
         if (!viewers || viewers.length === 0) {
             return '<div class="rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-xs text-gray-500 text-center"' +
                 ' data-testid="text-no-prior-viewers">' +
-                'No reviewers have opened this action yet.' +
+                escapeHtml(_t('dyn.ai_approvals.no_prior_viewers')) +
                 '</div>';
         }
         var rows = viewers.map(function (v, idx) {
-            var name      = v.user_name || v.user_email || 'Unknown reviewer';
+            var name      = v.user_name || v.user_email || _t('dyn.ai_approvals.unknown_reviewer');
             var email     = v.user_email && v.user_email !== name ? v.user_email : '';
             var role      = v.user_role || '';
             var viewCount = Math.max(1, v.view_count | 0);
@@ -926,9 +1052,10 @@
             var color     = avatarColor(seed);
             var initials  = avatarInitials(v);
 
-            // Per-user view count: "1 view" / "N views". Single string so SR
-            // users hear it as one phrase next to the timestamp.
-            var countLabel = viewCount === 1 ? '1 view' : (viewCount + ' views');
+            // Per-user view count: locale-aware pluralisation via Intl.PluralRules
+            // (Arabic has 6 plural categories; English has 2). Single string so
+            // SR users hear it as one phrase next to the timestamp.
+            var countLabel = _plural('view', viewCount);
 
             // Avatar background-color is a per-row inline style (8 fixed
             // colors, deterministic), kept here because it's the only way
@@ -959,7 +1086,7 @@
                          '<span data-testid="text-viewer-count-' + idx + '">' + escapeHtml(countLabel) + '</span>' +
                          (lastSeen
                             ? ' <span aria-hidden="true">·</span> ' +
-                              '<span><span class="sr-only">last viewed </span>' +
+                              '<span><span class="sr-only">' + escapeHtml(_t('dyn.ai_approvals.last_viewed_label')) + '</span>' +
                                 '<time datetime="' + escapeHtml(v.last_viewed_at || '') + '" ' +
                                 'data-testid="text-viewer-last-' + idx + '">' +
                                   escapeHtml(lastSeen) +
@@ -972,13 +1099,14 @@
         }).join('');
 
         return '<ol class="divide-y divide-gray-100" data-testid="list-prior-viewers" ' +
-                  'aria-label="Prior reviewers, most recent first">' + rows + '</ol>';
+                  'aria-label="' + escapeHtml(_t('dyn.ai_approvals.prior_reviewers_aria')) + '">' +
+                  rows + '</ol>';
     }
 
     function renderActionDetail(data) {
         if (!data || !data.action) {
             detailBody.innerHTML = '<div class="text-sm text-red-600 py-6 text-center" role="alert">' +
-                'Malformed response.' +
+                escapeHtml(_t('dyn.ai_approvals.malformed_response')) +
                 '</div>';
             return;
         }
@@ -1019,15 +1147,14 @@
             '<section aria-labelledby="actionDetailViewersHeading">' +
               '<div class="flex items-baseline justify-between mb-2">' +
                 '<h3 id="actionDetailViewersHeading" class="text-sm font-semibold text-gray-900">' +
-                  'Viewed by' +
+                  escapeHtml(_t('dyn.ai_approvals.viewed_by')) +
                 '</h3>' +
                 '<span class="text-xs text-gray-500" data-testid="text-prior-viewers-count">' +
-                  (viewers.length === 1 ? '1 reviewer' : (viewers.length + ' reviewers')) +
+                  escapeHtml(_plural('reviewer', viewers.length)) +
                 '</span>' +
               '</div>' +
               '<p class="text-xs text-gray-500 mb-2">' +
-                'Every Quality Manager or admin who has opened this action\'s detail page, ' +
-                'with the most recent view first. View counts include repeat visits.' +
+                escapeHtml(_t('dyn.ai_approvals.viewers_explainer')) +
               '</p>' +
               '<div aria-live="polite">' +
                 renderFullPriorViewers(viewers) +

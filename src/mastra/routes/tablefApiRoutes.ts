@@ -1,5 +1,14 @@
 import type { UserRole } from "../../utils/rbacDatabase";
 import { requireRole, forbiddenResponse } from "../../utils/rbacMiddleware";
+import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
+// All INSERT/UPDATE statements moved to src/utils/tablefDatabase.ts (Task
+// #746). Read-only endpoints below still use a per-request pool.
+import {
+  insertTablefKpi,
+  insertTablefPerformance,
+  updateTablefKpi,
+  updateTablefPerformance,
+} from "../../utils/tablefDatabase";
 
 import { logger } from "../../utils/logger";
 const TABLEF_READ_ROLES: UserRole[] = [
@@ -97,50 +106,20 @@ export const tablefApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { Pool } = await import("pg");
-          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-          const data = await c.req.json();
-          let result;
+          // Scrub deny-list keys / credential-shaped strings out of the
+          // user-supplied KPI payload BEFORE it touches Postgres. KPI rows
+          // store free-text columns (description, calculation_definition,
+          // owner_email, …) where a misbehaving operator could otherwise
+          // paste a JWT, GitHub PAT (`ghp_…`), bcrypt hash, etc.
+          const data = redactSensitiveDeep(await c.req.json());
+          let kpi;
           if (data.kpi_id) {
-            result = await pool.query(
-              `UPDATE tablef_kpis SET department_id=$1,name=$2,description=$3,category=$4,unit=$5,target_annual=$6,target_monthly=$7,weight=$8,owner_email=$9,data_source=$10,calculation_definition=$11,updated_at=CURRENT_TIMESTAMP WHERE kpi_id=$12 RETURNING *`,
-              [
-                data.department_id,
-                data.name,
-                data.description,
-                data.category,
-                data.unit,
-                data.target_annual,
-                data.target_monthly,
-                data.weight,
-                data.owner_email,
-                data.data_source,
-                data.calculation_definition,
-                data.kpi_id,
-              ],
-            );
+            kpi = await updateTablefKpi(data);
           } else {
             const kpiId = `KPI-${Date.now()}`;
-            result = await pool.query(
-              `INSERT INTO tablef_kpis (kpi_id,department_id,name,description,category,unit,target_annual,target_monthly,weight,owner_email,data_source,calculation_definition) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-              [
-                kpiId,
-                data.department_id,
-                data.name,
-                data.description,
-                data.category,
-                data.unit,
-                data.target_annual,
-                data.target_monthly,
-                data.weight,
-                data.owner_email,
-                data.data_source,
-                data.calculation_definition,
-              ],
-            );
+            kpi = await insertTablefKpi(kpiId, data);
           }
-          await pool.end();
-          return c.json({ success: true, kpi: result.rows[0] });
+          return c.json({ success: true, kpi });
         } catch (error) {
           logger.error("Error saving KPI:", error);
           return c.json({ error: "Failed to save KPI" }, 500);
@@ -179,7 +158,10 @@ export const tablefApiRoutes = [
         try {
           const { Pool } = await import("pg");
           const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-          const data = await c.req.json();
+          // Scrub deny-list keys / credential-shaped strings out of the
+          // user-supplied performance payload (comment, evidence_link, …)
+          // BEFORE it reaches the SQL layer.
+          const data = redactSensitiveDeep(await c.req.json());
           const variance = data.achieved - data.target;
           const variancePercent =
             data.target !== 0
@@ -203,38 +185,32 @@ export const tablefApiRoutes = [
             else if (data.achieved < prevAchieved) trend = "DOWN";
           }
           if (existingResult.rows.length > 0) {
-            await pool.query(
-              `UPDATE tablef_performance SET target=$1,achieved=$2,variance=$3,variance_percent=$4,status=$5,trend=$6,comment=$7,evidence_link=$8,updated_at=CURRENT_TIMESTAMP WHERE kpi_id=$9 AND period_month=$10`,
-              [
-                data.target,
-                data.achieved,
-                variance,
-                variancePercent,
-                status,
-                trend,
-                data.comment,
-                data.evidence_link,
-                data.kpi_id,
-                data.period_month,
-              ],
-            );
+            await updateTablefPerformance({
+              kpi_id: data.kpi_id,
+              period_month: data.period_month,
+              target: data.target,
+              achieved: data.achieved,
+              variance,
+              variance_percent: variancePercent,
+              status,
+              trend,
+              comment: data.comment,
+              evidence_link: data.evidence_link,
+            });
           } else {
-            await pool.query(
-              `INSERT INTO tablef_performance (kpi_id,department_id,period_month,target,achieved,variance,variance_percent,status,trend,comment,evidence_link) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-              [
-                data.kpi_id,
-                data.department_id,
-                data.period_month,
-                data.target,
-                data.achieved,
-                variance,
-                variancePercent,
-                status,
-                trend,
-                data.comment,
-                data.evidence_link,
-              ],
-            );
+            await insertTablefPerformance({
+              kpi_id: data.kpi_id,
+              department_id: data.department_id,
+              period_month: data.period_month,
+              target: data.target,
+              achieved: data.achieved,
+              variance,
+              variance_percent: variancePercent,
+              status,
+              trend,
+              comment: data.comment,
+              evidence_link: data.evidence_link,
+            });
           }
           await pool.end();
           return c.json({

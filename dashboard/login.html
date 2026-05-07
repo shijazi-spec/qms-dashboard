@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .google-btn {
@@ -137,11 +137,24 @@
             }
         });
 
-        // Translate error messages using i18n if available, with English fallback
+        // Translate error messages using i18n if available, with English fallback.
+        // Each known key is enumerated as a literal _t('full.key') call so the
+        // i18n guardrail can statically verify it.
         function _loginT(key, fallback) {
             try {
                 if (window.WalaPlusI18n && typeof window.WalaPlusI18n.t === 'function') {
-                    var v = window.WalaPlusI18n.t(key);
+                    var I18N = window.WalaPlusI18n;
+                    var v;
+                    switch (key) {
+                        case 'login.errors.auth_denied':       v = I18N.t('login.errors.auth_denied'); break;
+                        case 'login.errors.no_code':           v = I18N.t('login.errors.no_code'); break;
+                        case 'login.errors.no_email':          v = I18N.t('login.errors.no_email'); break;
+                        case 'login.errors.callback_failed':   v = I18N.t('login.errors.callback_failed'); break;
+                        case 'login.errors.invalid_state':     v = I18N.t('login.errors.invalid_state'); break;
+                        case 'login.errors.session_expired':   v = I18N.t('login.errors.session_expired'); break;
+                        case 'login.errors.invalid_admin_key': v = I18N.t('login.errors.invalid_admin_key'); break;
+                        case 'login.errors.auth_failed':       v = I18N.t('login.errors.auth_failed'); break;
+                    }
                     if (v && v !== key.split('.').pop()) return v;
                 }
             } catch (_) {}

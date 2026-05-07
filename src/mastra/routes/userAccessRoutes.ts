@@ -109,6 +109,90 @@ export const userAccessRoutes = [
   },
   {
     path: "/api/users/:id",
+    method: "PATCH" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return c.json({ error: "Authentication required" }, 401);
+          const logger = mastra?.getLogger();
+          const id = parseInt(c.req.param("id"));
+          const body = await c.req.json();
+
+          const patch: { full_name?: string; team?: string; role?: any } = {};
+          if (typeof body.full_name === "string")
+            patch.full_name = body.full_name.trim();
+          if (typeof body.team === "string") patch.team = body.team.trim();
+          if (typeof body.role === "string") patch.role = body.role;
+
+          if (Object.keys(patch).length === 0) {
+            return c.json({ error: "Nothing to update" }, 400);
+          }
+
+          logger?.info("✏️ [UserAccess] PATCH /api/users/:id", {
+            id,
+            fields: Object.keys(patch),
+          });
+
+          const user = await userDb.updateUserProfile(
+            id,
+            patch,
+            admin.email || "unknown",
+          );
+          if (!user) return c.json({ error: "User not found" }, 404);
+          return c.json({ success: true, user });
+        } catch (error: any) {
+          safeLogger.error("❌ [UserAccess] Error", { error });
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/users/:id",
+    method: "DELETE" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return c.json({ error: "Authentication required" }, 401);
+          const logger = mastra?.getLogger();
+          const id = parseInt(c.req.param("id"));
+
+          const confirmHeader = c.req.header("x-confirm-delete");
+          if (confirmHeader !== "true") {
+            return c.json(
+              {
+                error:
+                  "Hard delete requires 'x-confirm-delete: true' header.",
+              },
+              400,
+            );
+          }
+
+          if (admin.id === id) {
+            return c.json(
+              { error: "You cannot delete your own account." },
+              400,
+            );
+          }
+
+          logger?.info("🗑️ [UserAccess] DELETE /api/users/:id", { id });
+          const result = await userDb.deleteUser(
+            id,
+            admin.email || "unknown",
+          );
+          if (!result.deleted) return c.json({ error: "User not found" }, 404);
+          return c.json({ success: true, deleted_email: result.email });
+        } catch (error: any) {
+          safeLogger.error("❌ [UserAccess] Error", { error });
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/users/:id",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
@@ -292,6 +376,8 @@ export const userAccessRoutes = [
               success: true,
               invitation: maskedInvitation,
               email_sent: emailStatus.sent,
+              email_error: emailStatus.sent ? undefined : emailStatus.error,
+              invite_link: emailStatus.sent ? undefined : inviteLink,
               message: emailStatus.sent
                 ? `Invitation created and email sent to ${body.email}`
                 : `Invitation created but email could not be sent. The invite link has been generated for manual sharing.`,

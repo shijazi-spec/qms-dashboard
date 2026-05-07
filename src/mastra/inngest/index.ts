@@ -467,13 +467,16 @@ const aiCostSummaryFunction = inngest.createFunction(
       try {
         const { getAiMetricsTableStats } =
           await import("../../utils/aiTelemetry");
-        const { evaluateAndAlertStorageHealth } =
-          await import("../../utils/storageHealthAlerts");
+        const {
+          evaluateAndAlertStorageHealth,
+          repageStaleStorageHealthAlerts,
+        } = await import("../../utils/storageHealthAlerts");
         const {
           openAlertExistsByKey,
           createAIAlert,
           getOpenAlertsByKey,
           resolveAlert,
+          recordAlertNotificationResult,
         } = await import("../../utils/aiAlertsDatabase");
         const { createNotification } =
           await import("../../utils/notificationHub");
@@ -527,6 +530,52 @@ const aiCostSummaryFunction = inngest.createFunction(
             `[AI-Cost] Storage-health auto-resolved ${storageResult.alertsResolved} alert(s)`,
           );
         }
+
+        // Task #679: re-page on-call when a storage_health alert has sat
+        // in the open state past the configured threshold (default 24 h).
+        // The /ai-ops banner already surfaces it, but if no operator is
+        // looking, the dedupe in evaluateAndAlertStorageHealth means we
+        // never re-page. This sweep closes that gap.
+        const repageResult = await repageStaleStorageHealthAlerts({
+          getOpenAlertsByKey,
+          recordAlertNotified: (alertId, channel, whenMs) =>
+            recordAlertNotificationResult(alertId, channel, whenMs),
+          sendSlack: async (webhookUrl, text) => {
+            try {
+              const resp = await fetch(webhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text }),
+              });
+              return resp.ok;
+            } catch {
+              return false;
+            }
+          },
+          sendEmail: async ({ to, subject, html }) => {
+            const sendResult = await sendResendEmail({ to, subject, html });
+            return Boolean(sendResult?.success);
+          },
+        });
+        if (repageResult.alertsRepaged > 0) {
+          logger.warn(
+            `[AI-Cost] Storage-health re-paged ${repageResult.alertsRepaged} ` +
+              `stale alert(s) (slack=${repageResult.slackSent}, ` +
+              `email=${repageResult.emailSent}, ` +
+              `throttled=${repageResult.alertsThrottled}, ` +
+              `quietHours=${repageResult.alertsQuietHoursSuppressed})`,
+          );
+        } else if (repageResult.alertsConsidered > 0) {
+          logger.info(
+            `[AI-Cost] Storage-health re-page sweep: ` +
+              `considered=${repageResult.alertsConsidered}, ` +
+              `young=${repageResult.alertsSkippedYoung}, ` +
+              `acknowledged=${repageResult.alertsSkippedAcknowledged}, ` +
+              `throttled=${repageResult.alertsThrottled}, ` +
+              `quietHours=${repageResult.alertsQuietHoursSuppressed}, ` +
+              `disabled=${repageResult.disabled}`,
+          );
+        }
       } catch (storageErr) {
         logger.warn(
           "[AI-Cost] Storage-health evaluation failed (non-fatal):",
@@ -568,6 +617,42 @@ const aiCostSummaryFunction = inngest.createFunction(
         logger.warn(
           "[AI-Cost] ai_call_metrics redaction backfill failed (non-fatal):",
           backfillErr,
+        );
+      }
+
+      // Task #797: After the metrics sweep, run the feedback
+      // prompt-version backfill so legacy ai_response_feedback rows (and
+      // any newly-rated calls that briefly raced ahead of the consultant
+      // span) get `metadata.prompt_version` stamped from the linked
+      // ai_call_metrics row. Idempotent — quiet no-op once steady-state.
+      // Wrapped in its own try/catch so a failure here cannot mask the
+      // metrics sweep result above (mirrors that pattern exactly).
+      try {
+        const pg = await import("pg");
+        const { runFeedbackPromptVersionBackfill } =
+          await import("../../scripts/backfillAiResponseFeedbackPromptVersion");
+        const feedbackBackfillPool = new pg.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const feedbackResult =
+            await runFeedbackPromptVersionBackfill(feedbackBackfillPool);
+          if (feedbackResult.rows_updated > 0) {
+            logger.info(
+              `[AI-Cost] Feedback prompt-version backfill rewrote ` +
+                `${feedbackResult.rows_updated} ai_response_feedback rows ` +
+                `(scanned=${feedbackResult.scanned}, eligible=${feedbackResult.eligible}, ` +
+                `missing_source=${feedbackResult.missing_source}, ` +
+                `unlinked=${feedbackResult.unlinked})`,
+            );
+          }
+        } finally {
+          await feedbackBackfillPool.end();
+        }
+      } catch (feedbackBackfillErr) {
+        logger.warn(
+          "[AI-Cost] ai_response_feedback prompt-version backfill failed (non-fatal):",
+          feedbackBackfillErr,
         );
       }
 
@@ -986,6 +1071,29 @@ const rateLimit429SpikeAlertFunction = inngest.createFunction(
 );
 inngestFunctions.push(rateLimit429SpikeAlertFunction);
 
+// Export-endpoint p95 latency alert cron (Task #440) — scrapes the in-memory
+// rolling window populated by `instrumentExportResponseTiming` in
+// `src/utils/excelExport.ts` and pages on-call when any route's rolling p95
+// of TTFB or total duration exceeds `EXPORT_TTFB_BUDGET_MS` /
+// `EXPORT_TOTAL_BUDGET_MS`. Repeat-suppression is per-(route, reason) so a
+// sustained regression on one endpoint does not silence a fresh regression
+// on another. Runbook: docs/runbook-export-timing-alert.md.
+const exportTimingAlertFunction = inngest.createFunction(
+  { id: "export-timing-p95-alert" },
+  { cron: process.env.EXPORT_TIMING_ALERT_CRON || "*/5 * * * *" },
+  async ({ step }) => {
+    return await step.run("check-export-timing-p95", async () => {
+      const { runExportTimingAlertCheck } = await import(
+        "../../utils/exportTimingMetrics"
+      );
+      const result = await runExportTimingAlertCheck();
+      logger.info(`[ExportTimingAlert] Cron run complete:`, result);
+      return result;
+    });
+  },
+);
+inngestFunctions.push(exportTimingAlertFunction);
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Per-tool health alert cron — defined in workflows/toolHealthAlertsCron.ts
 // (kept there so all the threshold config + evaluation logic live together).
@@ -1001,6 +1109,7 @@ inngestFunctions.push(toolHealthAlertsCronFunction);
 // ──────────────────────────────────────────────────────────────────────────────
 inngestFunctions.push(promptRegressionAlertsCronFunction);
 
+ slack-digest-delivery
 async function runExecutiveDigestCadence(
   cadence: "weekly" | "monthly" | "quarterly",
 ): Promise<any> {
@@ -1038,6 +1147,65 @@ async function runExecutiveDigestCadence(
 
   return result;
 }
+// ──────────────────────────────────────────────────────────────────────────────
+// Storage-health morning digest (Task #604)
+//
+// Once per day, shortly after the configured quiet-hours window ends, push a
+// single Slack/email digest summarising every still-unresolved storage_health
+// alert that fired while pushes were suppressed. Closes the gap that Task
+// #579 introduced — ops who don't open /ai-ops first thing could miss a
+// breach that fired at 02:00 because the next storage-health cron pass
+// dedupes against the existing open alert and never re-pages.
+//
+// The digest is opt-out via STORAGE_HEALTH_MORNING_DIGEST_DISABLED for sites
+// that prefer pure in-app surfacing. When STORAGE_HEALTH_QUIET_HOURS_START/
+// END are unset the cron is a no-op (nothing to digest).
+//
+// Schedule: defaults to 05 07 * * * UTC (a few minutes after the default
+// 22→07 quiet-hours window ends). Overridable via
+// STORAGE_HEALTH_MORNING_DIGEST_CRON so deployments using a non-default
+// quiet-hours window can re-align the digest with their own end time.
+// ──────────────────────────────────────────────────────────────────────────────
+const storageHealthMorningDigestFunction = inngest.createFunction(
+  { id: "storage-health-morning-digest" },
+  { cron: process.env.STORAGE_HEALTH_MORNING_DIGEST_CRON || "5 7 * * *" },
+  async ({ step }) => {
+    return await step.run("send-storage-health-morning-digest", async () => {
+      const { runStorageHealthMorningDigest } = await import(
+        "../../utils/storageHealthMorningDigest"
+      );
+      const { getUnresolvedAlertsCreatedBetween } = await import(
+        "../../utils/aiAlertsDatabase"
+      );
+      const { sendResendEmail } = await import("../../utils/resendMail");
+
+      const result = await runStorageHealthMorningDigest({
+        getUnresolvedAlertsCreatedBetween,
+        sendSlack: async (webhookUrl, text) => {
+          try {
+            const resp = await fetch(webhookUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+            return resp.ok;
+          } catch {
+            return false;
+          }
+        },
+        sendEmail: async ({ to, subject, html }) => {
+          const sendResult = await sendResendEmail({ to, subject, html });
+          return Boolean(sendResult?.success);
+        },
+      });
+
+      logger.info("[StorageHealthMorningDigest] Cron pass complete", result);
+      return result;
+    });
+  },
+);
+inngestFunctions.push(storageHealthMorningDigestFunction);
+main
 
 const executiveDigestFunction = inngest.createFunction(
   { id: "weekly-executive-digest" },

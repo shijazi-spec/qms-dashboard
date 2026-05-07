@@ -72,13 +72,13 @@
         <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-        <script src="/js/i18n.js?v=1.0"></script>
+        <script src="/js/i18n.js?v=1.1"></script>
 </head>
     <body class="bg-gray-50 min-h-screen">
         <div id="walaplus-nav"></div>
         <script src="/js/a11y.js" defer></script>
         <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 WalaPlusNav.init('admin');
@@ -88,34 +88,34 @@
         <div class="max-w-7xl mx-auto px-4 py-6">
             <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="nav.items.admin">User &amp; Role Management</h1>
             <div class="border-b border-gray-200 mb-6">
-                <nav class="flex space-x-8">
+                <nav class="flex gap-8">
                     <button
                         data-on-click="switchTab" data-args="[&quot;documents&quot;]"
                         id="tab-documents"
                         class="py-3 px-1 tab-active font-medium text-sm"
                     >
-                        Governance Documents
+                        <span data-i18n="admin.tab_documents">Governance Documents</span>
                     </button>
                     <button
                         data-on-click="switchTab" data-args="[&quot;scorecard&quot;]"
                         id="tab-scorecard"
                         class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
                     >
-                        Evaluation Scorecard
+                        <span data-i18n="admin.tab_scorecard">Evaluation Scorecard</span>
                     </button>
                     <button
                         data-on-click="switchTab" data-args="[&quot;settings&quot;]"
                         id="tab-settings"
                         class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
                     >
-                        Settings
+                        <span data-i18n="admin.tab_settings">Settings</span>
                     </button>
                     <button
                         data-on-click="switchTab" data-args="[&quot;audit&quot;]"
                         id="tab-audit"
                         class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
                     >
-                        Audit Trail
+                        <span data-i18n="admin.tab_audit_trail">Audit Trail</span>
                     </button>
                     <button
                         data-on-click="switchTab" data-args='["rate-limits"]'
@@ -123,7 +123,7 @@
                         class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm"
                         data-testid="button-tab-rate-limits"
                     >
-                        Rate Limits
+                        <span data-i18n="admin.tab_rate_limits">Rate Limits</span>
                     </button>
                 </nav>
             </div>
@@ -132,17 +132,17 @@
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
                     <div class="flex items-center justify-between mb-6">
                         <div>
-                            <h2 class="text-lg font-semibold text-gray-900">
+                            <h2 class="text-lg font-semibold text-gray-900" data-i18n="admin.tab_documents">
                                 Governance Documents
                             </h2>
-                            <p class="text-sm text-gray-500">
+                            <p class="text-sm text-gray-500" data-i18n="admin.gov_docs_subtitle">
                                 Upload and manage governance documents for
                                 quality audits
                             </p>
                         </div>
                         <button
                             data-on-click="showUploadModal"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
                         >
                             <svg
                                 class="w-5 h-5"
@@ -157,26 +157,26 @@
                                     d="M12 4v16m8-8H4"
                                 />
                             </svg>
-                            <span>Upload New Version</span>
+                            <span data-i18n="admin.upload_new_version">Upload New Version</span>
                         </button>
                     </div>
 
                     <div id="documents-list" class="space-y-4">
-                        <div class="text-center py-8 text-gray-500">
+                        <div class="text-center py-8 text-gray-500" data-i18n="admin.loading_documents">
                             Loading documents...
                         </div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.active_doc_preview">
                         Active Document Preview
                     </h3>
                     <div
                         id="document-preview"
                         class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"
                     >
-                        <p class="text-gray-500">
+                        <p class="text-gray-500" data-i18n="admin.select_doc_preview">
                             Select a document to preview its rules
                         </p>
                     </div>
@@ -186,15 +186,15 @@
             <div id="content-scorecard" class="hidden fade-in">
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-gray-900">Department Scorecard Selection</h3>
-                        <div class="flex items-center space-x-2">
-                            <button data-on-click="showCreateScorecardModal" class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center space-x-1">
+                        <h3 class="text-lg font-semibold text-gray-900" data-i18n="admin.dept_scorecard_selection">Department Scorecard Selection</h3>
+                        <div class="flex items-center gap-2">
+                            <button data-on-click="showCreateScorecardModal" class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                                <span>Create New</span>
+                                <span data-i18n="admin.create_new">Create New</span>
                             </button>
-                            <button data-on-click="cloneCurrentScorecard" id="clone-scorecard-btn" class="bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 text-sm flex items-center space-x-1 hidden">
+                            <button data-on-click="cloneCurrentScorecard" id="clone-scorecard-btn" class="bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 text-sm flex items-center gap-1 hidden">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                                <span>Clone</span>
+                                <span data-i18n="admin.clone">Clone</span>
                             </button>
                         </div>
                     </div>
@@ -202,45 +202,45 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="admin.crm_module">CRM Module</label>
                             <select id="scorecard-crm-module" data-on-change="onModuleChange" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                <option value="Leads">Leads (SDR Team)</option>
-                                <option value="Deals">Deals (Sales Team)</option>
-                                <option value="Contacts">Contacts</option>
-                                <option value="Accounts">Accounts</option>
+                                <option value="Leads" data-i18n="admin.opt_leads_sdr">Leads (SDR Team)</option>
+                                <option value="Deals" data-i18n="admin.opt_deals_sales">Deals (Sales Team)</option>
+                                <option value="Contacts" data-i18n="admin.opt_contacts">Contacts</option>
+                                <option value="Accounts" data-i18n="admin.opt_accounts">Accounts</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="common.team">Team</label>
                             <select id="scorecard-team" data-on-change="loadScorecardsList" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                <option value="SDR">SDR Team</option>
-                                <option value="Sales">Sales Team</option>
-                                <option value="CS">CS Team</option>
-                                <option value="Marketplace">Marketplace Team</option>
+                                <option value="SDR" data-i18n="admin.opt_sdr_team">SDR Team</option>
+                                <option value="Sales" data-i18n="admin.opt_sales_team">Sales Team</option>
+                                <option value="CS" data-i18n="admin.opt_cs_team">CS Team</option>
+                                <option value="Marketplace" data-i18n="admin.opt_marketplace_team">Marketplace Team</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="admin.scorecard_name">Scorecard Name</label>
                             <select id="scorecard-name-select" data-on-change="onScorecardSelect" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                <option value="">Select scorecard...</option>
+                                <option value="" data-i18n="admin.opt_select_scorecard">Select scorecard...</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="admin.linked_doc">Linked Governance Doc</label>
                             <select id="scorecard-gov-doc" data-on-change="linkGovernanceDoc" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                <option value="">Select document...</option>
+                                <option value="" data-i18n="admin.opt_select_document">Select document...</option>
                             </select>
                         </div>
                     </div>
                     <div class="flex items-center justify-between mt-3">
-                        <p id="scorecard-dept-status" class="text-sm text-gray-500">Select a department to manage its scorecard</p>
-                        <div id="scorecard-actions" class="hidden flex items-center space-x-3">
+                        <p id="scorecard-dept-status" class="text-sm text-gray-500" data-i18n="admin.select_dept_scorecard_msg">Select a department to manage its scorecard</p>
+                        <div id="scorecard-actions" class="hidden flex items-center gap-3">
                             <span id="scorecard-version" class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">v1.0</span>
-                            <label class="flex items-center space-x-2 cursor-pointer">
+                            <label class="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" id="scorecard-active-toggle" data-on-change="toggleScorecardActive" class="w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500">
-                                <span class="text-sm font-medium text-gray-700">Set as Active</span>
+                                <span class="text-sm font-medium text-gray-700" data-i18n="admin.set_as_active">Set as Active</span>
                             </label>
-                            <button data-on-click="deleteCurrentScorecard" class="text-red-600 hover:text-red-800 text-sm flex items-center space-x-1">
+                            <button data-on-click="deleteCurrentScorecard" class="text-red-600 hover:text-red-800 text-sm flex items-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                <span>Delete</span>
+                                <span data-i18n="admin.delete">Delete</span>
                             </button>
                         </div>
                     </div>
@@ -248,7 +248,7 @@
                 
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                     <div class="bg-white rounded-xl shadow-sm border p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.dimension_weights">
                             Dimension Weights
                         </h3>
                         <div class="space-y-4">
@@ -256,7 +256,7 @@
                                 <label
                                     class="flex justify-between text-sm font-medium text-gray-700 mb-1"
                                 >
-                                    <span>People</span>
+                                    <span data-i18n="admin.dim_people">People</span>
                                     <span id="people-weight-value">25%</span>
                                 </label>
                                 <input
@@ -273,7 +273,7 @@
                                 <label
                                     class="flex justify-between text-sm font-medium text-gray-700 mb-1"
                                 >
-                                    <span>Process</span>
+                                    <span data-i18n="admin.dim_process">Process</span>
                                     <span id="process-weight-value">35%</span>
                                 </label>
                                 <input
@@ -290,7 +290,7 @@
                                 <label
                                     class="flex justify-between text-sm font-medium text-gray-700 mb-1"
                                 >
-                                    <span>Governance</span>
+                                    <span data-i18n="admin.dim_governance">Governance</span>
                                     <span id="governance-weight-value"
                                         >40%</span
                                     >
@@ -309,14 +309,14 @@
                                 id="weight-warning"
                                 class="hidden text-amber-600 text-sm mt-2"
                             >
-                                Total must equal 100%
+                                <span data-i18n="admin.total_must_100">Total must equal 100%</span>
                             </div>
                             <button
                                 data-on-click="saveWeights"
                                 id="save-weights-btn"
                                 class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mt-4"
                             >
-                                Save Weights
+                                <span data-i18n="admin.save_weights">Save Weights</span>
                             </button>
                         </div>
                     </div>
@@ -325,12 +325,12 @@
                         class="lg:col-span-2 bg-white rounded-xl shadow-sm border p-6"
                     >
                         <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-lg font-semibold text-gray-900">
+                            <h3 class="text-lg font-semibold text-gray-900" data-i18n="admin.scorecard_attributes">
                                 Scorecard Attributes
                             </h3>
                             <button
                                 data-on-click="showAttributeModal"
-                                class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center space-x-1"
+                                class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 text-sm flex items-center gap-1"
                             >
                                 <svg
                                     class="w-4 h-4"
@@ -345,14 +345,14 @@
                                         d="M12 4v16m8-8H4"
                                     />
                                 </svg>
-                                <span>Add Attribute</span>
+                                <span data-i18n="admin.add_attribute">Add Attribute</span>
                             </button>
                         </div>
                         <div
                             id="attributes-list"
                             class="space-y-2 max-h-96 overflow-y-auto"
                         >
-                            <div class="text-center py-8 text-gray-500">
+                            <div class="text-center py-8 text-gray-500" data-i18n="admin.loading_attributes">
                                 Loading attributes...
                             </div>
                         </div>
@@ -360,10 +360,10 @@
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.scorecard_config">
                         Scorecard Configuration
                     </h3>
-                    <div id="scorecard-info" class="text-gray-600">
+                    <div id="scorecard-info" class="text-gray-600" data-i18n="admin.loading_scorecard_info">
                         Loading scorecard information...
                     </div>
                 </div>
@@ -371,14 +371,14 @@
 
             <div id="content-settings" class="hidden fade-in">
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.audit_schedule">
                         Audit Schedule
                     </h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-2"
-                                >Cron Expression</label
+                                data-i18n="admin.cron_expression">Cron Expression</label
                             >
                             <input
                                 type="text"
@@ -386,14 +386,14 @@
                                 placeholder="0 8 * * 1"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
-                            <p class="text-sm text-gray-500 mt-1">
+                            <p class="text-sm text-gray-500 mt-1" data-i18n="admin.cron_current">
                                 Current: Mondays at 8 AM UTC
                             </p>
                         </div>
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-2"
-                                >Email Recipients</label
+                                data-i18n="admin.email_recipients">Email Recipients</label
                             >
                             <input
                                 type="text"
@@ -401,7 +401,7 @@
                                 placeholder="email@example.com"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
-                            <p class="text-sm text-gray-500 mt-1">
+                            <p class="text-sm text-gray-500 mt-1" data-i18n="admin.email_csv">
                                 Comma-separated email addresses
                             </p>
                         </div>
@@ -410,19 +410,19 @@
                         data-on-click="saveSettings"
                         class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                     >
-                        Save Settings
+                        <span data-i18n="admin.save_settings">Save Settings</span>
                     </button>
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.integration_status">
                         Integration Status
                     </h3>
                     <div class="space-y-3">
                         <div
                             class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-3">
                                 <div
                                     class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"
                                 >
@@ -458,7 +458,7 @@
                         <div
                             class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-3">
                                 <div
                                     class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center"
                                 >
@@ -494,7 +494,7 @@
                         <div
                             class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-3">
                                 <div
                                     class="w-10 h-10 bg-fuchsia-100 rounded-lg flex items-center justify-center"
                                 >
@@ -520,7 +520,7 @@
                         <div
                             class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-3">
                                 <div
                                     class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center"
                                 >
@@ -555,15 +555,77 @@
                     </div>
                 </div>
 
+                <div class="bg-white rounded-xl shadow-sm border p-6 mb-6" data-testid="panel-export-cache">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                Export Cache
+                            </h3>
+                            <p class="text-sm text-gray-500">
+                                Per-job temp-file cache backing streaming exports.
+                                Auto-refreshes every 60 seconds.
+                            </p>
+                        </div>
+                        <button
+                            data-on-click="loadExportCacheStats"
+                            class="px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm flex items-center gap-1"
+                            data-testid="button-refresh-export-cache">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            <span data-i18n="common.refresh">Refresh</span>
+                        </button>
+                    </div>
+
+                    <div id="export-cache-error" class="hidden mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700" data-testid="text-export-cache-error"></div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.active_entries">Active entries</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-entry-count" data-testid="text-export-cache-entry-count">—</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-active-reads" data-testid="text-export-cache-active-reads" data-i18n="admin.no_active_reads">No active reads</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.disk_usage">Disk usage</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-bytes" data-testid="text-export-cache-bytes">—</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-ondisk" data-testid="text-export-cache-ondisk" data-i18n="admin.on_disk">On disk: —</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.hits_misses">Hits / misses</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-hitmiss" data-testid="text-export-cache-hitmiss">—</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-hitrate" data-testid="text-export-cache-hitrate" data-i18n="admin.no_requests_yet">No requests yet</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border">
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.janitor_last_run">Janitor last run</p>
+                            <p class="text-2xl font-semibold text-gray-900 mt-1" id="export-cache-janitor-time" data-testid="text-export-cache-janitor-time">—</p>
+                            <p class="text-xs text-gray-500 mt-1" id="export-cache-janitor-detail" data-testid="text-export-cache-janitor-detail" data-i18n="admin.not_yet_run">Not yet run</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-500">
+                        <div>
+                            <span class="font-medium text-gray-600" data-i18n="admin.cache_directory">Cache directory:</span>
+                            <span class="font-mono break-all" id="export-cache-dir" data-testid="text-export-cache-dir">—</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-600" data-i18n="admin.ttl">TTL:</span>
+                            <span id="export-cache-ttl" data-testid="text-export-cache-ttl">—</span>
+                            <span class="ms-3 font-medium text-gray-600" data-i18n="admin.expired_waiting">Expired waiting:</span>
+                            <span id="export-cache-expired" data-testid="text-export-cache-expired">—</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-3" id="export-cache-updated" data-testid="text-export-cache-updated" data-i18n="admin.not_yet_refreshed">Not yet refreshed</p>
+                </div>
+
                 <div class="bg-white rounded-xl shadow-sm border p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="admin.quick_actions">
                         Quick Actions
                     </h3>
                     <div class="flex flex-wrap gap-3">
                         <button
                             data-on-click="triggerAudit"
                             id="trigger-audit-btn"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
                         >
                             <svg
                                 class="w-5 h-5"
@@ -584,11 +646,11 @@
                                     d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                                 />
                             </svg>
-                            <span>Run Audit Now</span>
+                            <span data-i18n="admin.run_audit_now">Run Audit Now</span>
                         </button>
                         <button
                             data-on-click="seedDefaultData"
-                            class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center space-x-2"
+                            class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
                         >
                             <svg
                                 class="w-5 h-5"
@@ -603,7 +665,7 @@
                                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                                 />
                             </svg>
-                            <span>Reset to Defaults</span>
+                            <span data-i18n="admin.reset_defaults">Reset to Defaults</span>
                         </button>
                     </div>
                 </div>
@@ -614,23 +676,23 @@
                     <div class="flex items-center justify-between mb-6">
                         <div>
                             <h2 class="text-lg font-semibold text-gray-900" data-i18n="admin.tab_audit">System Audit Trail</h2>
-                            <p class="text-sm text-gray-500">Complete activity log across all modules</p>
+                            <p class="text-sm text-gray-500" data-i18n="admin.audit_trail_subtitle">Complete activity log across all modules</p>
                         </div>
-                        <div class="flex items-center space-x-3">
+                        <div class="flex items-center gap-3">
                             <select id="auditModuleFilter" data-on-change="loadAuditTrail" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
-                                <option value="">All Modules</option>
-                                <option value="team">Team</option>
-                                <option value="training">Training</option>
-                                <option value="project">Projects</option>
-                                <option value="roi">ROI</option>
-                                <option value="qms">QMS</option>
-                                <option value="calls">Calls</option>
+                                <option value="" data-i18n="common.all_modules">All Modules</option>
+                                <option value="team" data-i18n="admin.team_label">Team</option>
+                                <option value="training" data-i18n="common.training_label">Training</option>
+                                <option value="project" data-i18n="common.projects_label">Projects</option>
+                                <option value="roi" data-i18n="common.roi_label">ROI</option>
+                                <option value="qms" data-i18n="common.qms_label">QMS</option>
+                                <option value="calls" data-i18n="common.calls_label">Calls</option>
                             </select>
                             <select id="auditActionFilter" data-on-change="loadAuditTrail" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
-                                <option value="">All Actions</option>
-                                <option value="create">Create</option>
-                                <option value="update">Update</option>
-                                <option value="delete">Delete</option>
+                                <option value="" data-i18n="common.all_actions">All Actions</option>
+                                <option value="create" data-i18n="admin.opt_create">Create</option>
+                                <option value="update" data-i18n="admin.opt_update">Update</option>
+                                <option value="delete" data-i18n="admin.opt_delete">Delete</option>
                             </select>
                             <button data-on-click="loadAuditTrail" class="px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -640,13 +702,13 @@
                         </div>
                     </div>
                     <div id="audit-trail-list" class="space-y-3">
-                        <div class="text-center py-8 text-gray-500">Loading audit trail...</div>
+                        <div class="text-center py-8 text-gray-500" data-i18n="admin.loading_audit_trail">Loading audit trail...</div>
                     </div>
                     <div class="mt-4 flex items-center justify-between">
-                        <p id="auditPagination" class="text-sm text-gray-500">Showing 0 entries</p>
-                        <div class="flex space-x-2">
-                            <button data-on-click="loadAuditTrail" data-args="[${Math.max(0, currentAuditOffset - 20)}]" class="px-3 py-1 text-sm border rounded hover:bg-gray-50">Previous</button>
-                            <button data-on-click="loadAuditTrail" data-args="[${currentAuditOffset + 20}]" class="px-3 py-1 text-sm border rounded hover:bg-gray-50">Next</button>
+                        <p id="auditPagination" class="text-sm text-gray-500" data-i18n="admin.showing_0_entries">Showing 0 entries</p>
+                        <div class="flex gap-2">
+                            <button data-on-click="loadAuditTrail" data-args="[${Math.max(0, currentAuditOffset - 20)}]" class="px-3 py-1 text-sm border rounded hover:bg-gray-50" data-i18n="admin.previous">Previous</button>
+                            <button data-on-click="loadAuditTrail" data-args="[${currentAuditOffset + 20}]" class="px-3 py-1 text-sm border rounded hover:bg-gray-50" data-i18n="admin.next">Next</button>
                         </div>
                     </div>
                 </div>
@@ -656,19 +718,19 @@
                 <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
                     <div class="flex items-center justify-between mb-6">
                         <div>
-                            <h2 class="text-lg font-semibold text-gray-900">Rate Limit Monitor</h2>
-                            <p class="text-sm text-gray-500">Live view of the distributed rate limiter — top offenders, fail-open events, and recent 429s.</p>
+                            <h2 class="text-lg font-semibold text-gray-900" data-i18n="admin.rate_limit_monitor">Rate Limit Monitor</h2>
+                            <p class="text-sm text-gray-500" data-i18n="admin.rate_limit_subtitle">Live view of the distributed rate limiter — top offenders, fail-open events, and recent 429s.</p>
                         </div>
-                        <div class="flex items-center space-x-3">
-                            <label class="flex items-center space-x-2 text-sm text-gray-600">
+                        <div class="flex items-center gap-3">
+                            <label class="flex items-center gap-2 text-sm text-gray-600">
                                 <input type="checkbox" id="rate-limits-autorefresh" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" data-testid="input-rate-limits-autorefresh"/>
-                                <span>Auto-refresh (10s)</span>
+                                <span data-i18n="admin.auto_refresh_10s">Auto-refresh (10s)</span>
                             </label>
                             <button data-on-click="loadRateLimitStats" class="px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm" data-testid="button-refresh-rate-limits">
                                 <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                                 </svg>
-                                <span class="ml-1">Refresh</span>
+                                <span class="ms-1" data-i18n="common.refresh">Refresh</span>
                             </button>
                         </div>
                     </div>
@@ -677,24 +739,24 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">Top key (current window)</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.top_key_window">Top key (current window)</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-top-count" data-testid="text-rate-limits-top-count">—</p>
-                            <p class="text-xs text-gray-500 mt-1 truncate" id="rate-limits-top-key" data-testid="text-rate-limits-top-key">No traffic in window</p>
+                            <p class="text-xs text-gray-500 mt-1 truncate" id="rate-limits-top-key" data-testid="text-rate-limits-top-key"><span data-i18n="admin.no_traffic_window">No traffic in window</span></p>
                         </div>
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">429s (last 5 min)</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.429s_last_5min">429s (last 5 min)</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-429-count" data-testid="text-rate-limits-429-count">—</p>
-                            <p class="text-xs text-gray-500 mt-1">From system_events</p>
+                            <p class="text-xs text-gray-500 mt-1" data-i18n="admin.from_system_events">From system_events</p>
                         </div>
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">Fail-open count</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.fail_open_count">Fail-open count</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-failopen" data-testid="text-rate-limits-failopen">—</p>
-                            <p class="text-xs text-gray-500 mt-1">Cumulative since last process start</p>
+                            <p class="text-xs text-gray-500 mt-1" data-i18n="admin.cumulative_since_start">Cumulative since last process start</p>
                         </div>
                         <div class="bg-gray-50 rounded-lg p-4 border">
-                            <p class="text-xs uppercase tracking-wide text-gray-500">Bucket rows total</p>
+                            <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.bucket_rows_total">Bucket rows total</p>
                             <p class="text-2xl font-semibold text-gray-900 mt-1" id="rate-limits-rows" data-testid="text-rate-limits-rows">—</p>
-                            <p class="text-xs text-gray-500 mt-1">All windows in rate_limit_buckets</p>
+                            <p class="text-xs text-gray-500 mt-1" data-i18n="admin.all_windows_buckets">All windows in rate_limit_buckets</p>
                         </div>
                     </div>
 
@@ -709,61 +771,82 @@
                             <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/></svg>
                             <div>
                                 <p class="font-semibold" id="spike24h-alert-title" data-testid="text-spike24h-alert-title">24h spike threshold exceeded</p>
-                                <p class="text-xs mt-0.5" id="spike24h-alert-detail" data-testid="text-spike24h-alert-detail">Ops have been notified.</p>
+                                <p class="text-xs mt-0.5" id="spike24h-alert-detail" data-testid="text-spike24h-alert-detail" data-i18n="admin.ops_notified">Ops have been notified.</p>
                             </div>
                         </div>
                         <div class="flex items-center justify-between px-4 py-3 bg-amber-50 border-b border-amber-100">
                             <div class="flex items-center gap-2">
                                 <span id="spike24h-badge" data-testid="badge-spike24h" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">24h Spike</span>
-                                <h3 class="text-sm font-semibold text-gray-700">Last 24 h — rate-limit spike summary</h3>
+                                <h3 class="text-sm font-semibold text-gray-700" data-i18n="admin.spike_summary_title">Last 24 h — rate-limit spike summary</h3>
                             </div>
                             <p class="text-xs text-gray-500" id="spike24h-threshold-hint" data-testid="text-spike24h-threshold-hint">From <code class="text-xs">system_events</code> audit rows</p>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-white">
                             <div class="bg-gray-50 rounded-lg p-4 border">
-                                <p class="text-xs uppercase tracking-wide text-gray-500">Total 429 events (24h)</p>
+                                <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.total_429_24h">Total 429 events (24h)</p>
                                 <p class="text-2xl font-semibold text-gray-900 mt-1" id="spike24h-total" data-testid="text-spike24h-total">—</p>
-                                <p class="text-xs text-gray-500 mt-1">Logged audit rows in the last 24 hours</p>
+                                <p class="text-xs text-gray-500 mt-1" data-i18n="admin.audit_logged_24h">Logged audit rows in the last 24 hours</p>
                             </div>
                             <div class="bg-gray-50 rounded-lg p-4 border">
-                                <p class="text-xs uppercase tracking-wide text-gray-500">Total suppressed (24h)</p>
+                                <p class="text-xs uppercase tracking-wide text-gray-500" data-i18n="admin.total_suppressed_24h">Total suppressed (24h)</p>
                                 <p class="text-2xl font-semibold text-gray-900 mt-1" id="spike24h-suppressed" data-testid="text-spike24h-suppressed">—</p>
                                 <p class="text-xs text-gray-500 mt-1">Sum of <code class="text-xs">suppressed_in_previous_minute</code></p>
                             </div>
                         </div>
+                        <div class="px-4 pb-4 bg-white">
+                            <div class="bg-gray-50 rounded-lg p-4 border">
+                                <div class="flex items-center justify-between mb-2">
+                                    <p class="text-xs uppercase tracking-wide text-gray-500">429s per hour (last 24 h)</p>
+                                    <p class="text-xs text-gray-500" id="spike24h-trend-summary" data-testid="text-spike24h-trend-summary">—</p>
+                                </div>
+                                <svg id="spike24h-sparkline"
+                                     data-testid="chart-spike24h-sparkline"
+                                     viewBox="0 0 240 48"
+                                     preserveAspectRatio="none"
+                                     class="w-full h-12"
+                                     role="img"
+                                     aria-label="429 events per hour over the last 24 hours">
+                                    <title id="spike24h-sparkline-title">429 events per hour — last 24 hours</title>
+                                </svg>
+                                <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+                                    <span data-testid="text-spike24h-axis-start">−24 h</span>
+                                    <span data-testid="text-spike24h-axis-end">now</span>
+                                </div>
+                            </div>
+                        </div>
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 px-4 pb-4 bg-white">
                             <div>
-                                <p class="text-xs font-semibold text-gray-600 mb-2">Top 5 offending IPs (24h)</p>
+                                <p class="text-xs font-semibold text-gray-600 mb-2" data-i18n="admin.top5_ips_24h">Top 5 offending IPs (24h)</p>
                                 <div class="overflow-x-auto border rounded-lg">
                                     <table class="min-w-full text-sm">
                                         <thead class="bg-gray-50 text-gray-600">
                                             <tr>
-                                                <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
-                                                <th scope="col" class="px-4 py-2 text-left font-medium">IP</th>
-                                                <th scope="col" class="px-4 py-2 text-right font-medium">Events</th>
-                                                <th scope="col" class="px-4 py-2 text-right font-medium">Suppressed</th>
+                                                <th scope="col" class="px-4 py-2 text-start font-medium">#</th>
+                                                <th scope="col" class="px-4 py-2 text-start font-medium" data-i18n="admin.col_ip">IP</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium" data-i18n="admin.col_events">Events</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium" data-i18n="admin.col_suppressed">Suppressed</th>
                                             </tr>
                                         </thead>
                                         <tbody id="spike24h-top-ips" data-testid="table-spike24h-top-ips">
-                                            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+                                            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500" data-i18n="admin.loading">Loading…</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                             <div>
-                                <p class="text-xs font-semibold text-gray-600 mb-2">Top 5 hammered paths (24h)</p>
+                                <p class="text-xs font-semibold text-gray-600 mb-2" data-i18n="admin.top5_paths_24h">Top 5 hammered paths (24h)</p>
                                 <div class="overflow-x-auto border rounded-lg">
                                     <table class="min-w-full text-sm">
                                         <thead class="bg-gray-50 text-gray-600">
                                             <tr>
-                                                <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
-                                                <th scope="col" class="px-4 py-2 text-left font-medium">Path</th>
-                                                <th scope="col" class="px-4 py-2 text-right font-medium">Events</th>
-                                                <th scope="col" class="px-4 py-2 text-right font-medium">Suppressed</th>
+                                                <th scope="col" class="px-4 py-2 text-start font-medium">#</th>
+                                                <th scope="col" class="px-4 py-2 text-start font-medium" data-i18n="admin.col_path">Path</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium" data-i18n="admin.col_events">Events</th>
+                                                <th scope="col" class="px-4 py-2 text-end font-medium" data-i18n="admin.col_suppressed">Suppressed</th>
                                             </tr>
                                         </thead>
                                         <tbody id="spike24h-top-paths" data-testid="table-spike24h-top-paths">
-                                            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+                                            <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500" data-i18n="admin.loading">Loading…</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -772,25 +855,25 @@
                     </div>
 
                     <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-sm font-semibold text-gray-700">Top 10 keys this window</h3>
-                        <p class="text-xs text-gray-500" id="rate-limits-window">Window: —</p>
+                        <h3 class="text-sm font-semibold text-gray-700" data-i18n="admin.top10_keys_window">Top 10 keys this window</h3>
+                        <p class="text-xs text-gray-500" id="rate-limits-window" data-i18n="admin.window_label">Window: —</p>
                     </div>
                     <div class="overflow-x-auto border rounded-lg">
                         <table class="min-w-full text-sm">
                             <thead class="bg-gray-50 text-gray-600">
                                 <tr>
-                                    <th scope="col" class="px-4 py-2 text-left font-medium">#</th>
-                                    <th scope="col" class="px-4 py-2 text-left font-medium">Key</th>
-                                    <th scope="col" class="px-4 py-2 text-right font-medium">Count</th>
+                                    <th scope="col" class="px-4 py-2 text-start font-medium">#</th>
+                                    <th scope="col" class="px-4 py-2 text-start font-medium" data-i18n="admin.col_key">Key</th>
+                                    <th scope="col" class="px-4 py-2 text-end font-medium" data-i18n="admin.col_count">Count</th>
                                 </tr>
                             </thead>
                             <tbody id="rate-limits-top-keys" data-testid="table-rate-limits-top-keys">
-                                <tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+                                <tr><td colspan="3" class="px-4 py-6 text-center text-gray-500" data-i18n="admin.loading">Loading…</td></tr>
                             </tbody>
                         </table>
                     </div>
 
-                    <p class="text-xs text-gray-400 mt-3" id="rate-limits-updated" data-testid="text-rate-limits-updated">Not yet refreshed</p>
+                    <p class="text-xs text-gray-400 mt-3" id="rate-limits-updated" data-testid="text-rate-limits-updated" data-i18n="admin.not_yet_refreshed">Not yet refreshed</p>
                 </div>
             </div>
         </div>
@@ -801,7 +884,7 @@
         >
             <div class="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 p-6">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-gray-900">
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="admin.upload_governance_document">
                         Upload Governance Document
                     </h3>
                     <button
@@ -828,7 +911,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Document Name</label
+                                data-i18n="admin.document_name">Document Name</label
                             >
                             <input
                                 type="text"
@@ -841,7 +924,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Version</label
+                                data-i18n="admin.version">Version</label
                             >
                             <input
                                 type="text"
@@ -854,32 +937,32 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Document Type</label
+                                data-i18n="admin.document_type">Document Type</label
                             >
                             <select
                                 id="doc-type"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             >
-                                <option value="sales">Sales</option>
-                                <option value="operations">Operations</option>
-                                <option value="governance">Governance</option>
-                                <option value="compliance">Compliance</option>
+                                <option value="sales" data-i18n="projects.dept_sales">Sales</option>
+                                <option value="operations" data-i18n="projects.dept_operations">Operations</option>
+                                <option value="governance" data-i18n="common.governance_label">Governance</option>
+                                <option value="compliance" data-i18n="common.compliance_label">Compliance</option>
                             </select>
                         </div>
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >CRM Module (AI Evaluation Target)</label
+                                data-i18n="admin.crm_module_target">CRM Module (AI Evaluation Target)</label
                             >
                             <select
                                 id="doc-crm-module"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             >
-                                <option value="">-- Select Module --</option>
-                                <option value="Leads">Leads (SDR Team)</option>
-                                <option value="Deals">Deals (Sales Team)</option>
-                                <option value="Contacts">Contacts</option>
-                                <option value="Accounts">Accounts</option>
+                                <option value="" data-i18n="admin.opt_select_module">-- Select Module --</option>
+                                <option value="Leads" data-i18n="admin.opt_leads_sdr">Leads (SDR Team)</option>
+                                <option value="Deals" data-i18n="admin.opt_deals_sales">Deals (Sales Team)</option>
+                                <option value="Contacts" data-i18n="admin.opt_contacts">Contacts</option>
+                                <option value="Accounts" data-i18n="admin.opt_accounts">Accounts</option>
                             </select>
                             <p class="text-sm text-gray-500 mt-1">
                                 AI will use this document when evaluating records from the selected CRM module
@@ -888,7 +971,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Team Name (Optional)</label
+                                data-i18n="admin.team_name_optional">Team Name (Optional)</label
                             >
                             <input
                                 type="text"
@@ -900,7 +983,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Governance Rules (JSON or Text)</label
+                                data-i18n="admin.governance_rules">Governance Rules (JSON or Text)</label
                             >
                             <textarea
                                 id="doc-content"
@@ -923,12 +1006,12 @@
                             />
                             <label
                                 for="doc-active"
-                                class="ml-2 text-sm text-gray-700"
-                                >Set as active document</label
+                                class="ms-2 text-sm text-gray-700"
+                                data-i18n="admin.set_active_document">Set as active document</label
                             >
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
+                    <div class="flex justify-end gap-3 mt-6">
                         <button
                             type="button"
                             data-on-click="closeUploadModal"
@@ -940,7 +1023,7 @@
                             type="submit"
                             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                         >
-                            Upload Document
+                            <span data-i18n="admin.upload_document">Upload Document</span>
                         </button>
                     </div>
                 </form>
@@ -984,7 +1067,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Attribute Name</label
+                                data-i18n="admin.attribute_name">Attribute Name</label
                             >
                             <input
                                 type="text"
@@ -997,7 +1080,7 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Description</label
+                                data-i18n="common.brief_desc">Description</label
                             >
                             <textarea
                                 id="attr-description"
@@ -1009,21 +1092,21 @@
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Dimension</label
+                                data-i18n="admin.dimension">Dimension</label
                             >
                             <select
                                 id="attr-dimension"
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             >
-                                <option value="people">People</option>
-                                <option value="process">Process</option>
-                                <option value="governance">Governance</option>
+                                <option value="people" data-i18n="admin.dim_people">People</option>
+                                <option value="process" data-i18n="admin.dim_process">Process</option>
+                                <option value="governance" data-i18n="common.governance_label">Governance</option>
                             </select>
                         </div>
                         <div>
                             <label
                                 class="block text-sm font-medium text-gray-700 mb-1"
-                                >Weight (within dimension)</label
+                                data-i18n="admin.weight_within_dim">Weight (within dimension)</label
                             >
                             <input
                                 type="number"
@@ -1063,11 +1146,11 @@
                         </div>
                         <div class="flex items-center">
                             <input type="checkbox" id="attr-is-active" checked class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                            <label for="attr-is-active" class="ml-2 text-sm text-gray-700">Active (include in evaluations)</label>
+                            <label for="attr-is-active" class="ms-2 text-sm text-gray-700" data-i18n="admin.active_in_eval">Active (include in evaluations)</label>
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
-                        <button type="button" data-on-click="closeAttributeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button type="button" data-on-click="closeAttributeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="projects.cancel">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="admin.save_attribute">Save Attribute</button>
                     </div>
                 </form>
@@ -1077,7 +1160,7 @@
         <div id="create-scorecard-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
             <div class="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 p-6">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-gray-900">Create New Scorecard</h3>
+                    <h3 class="text-lg font-semibold text-gray-900" data-i18n="admin.create_new_scorecard">Create New Scorecard</h3>
                     <button data-on-click="closeCreateScorecardModal" class="text-gray-400 hover:text-gray-600">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
@@ -1098,19 +1181,19 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.crm_module">CRM Module</label>
                                 <select id="new-scorecard-crm-module" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                    <option value="Leads">Leads</option>
-                                    <option value="Deals">Deals</option>
-                                    <option value="Contacts">Contacts</option>
-                                    <option value="Accounts">Accounts</option>
+                                    <option value="Leads" data-i18n="admin.opt_leads">Leads</option>
+                                    <option value="Deals" data-i18n="admin.opt_deals">Deals</option>
+                                    <option value="Contacts" data-i18n="admin.opt_contacts">Contacts</option>
+                                    <option value="Accounts" data-i18n="admin.opt_accounts">Accounts</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.team">Team</label>
                                 <select id="new-scorecard-team" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
-                                    <option value="SDR">SDR Team</option>
-                                    <option value="Sales">Sales Team</option>
-                                    <option value="CS">CS Team</option>
-                                    <option value="Marketplace">Marketplace Team</option>
+                                    <option value="SDR" data-i18n="admin.opt_sdr_team">SDR Team</option>
+                                    <option value="Sales" data-i18n="admin.opt_sales_team">Sales Team</option>
+                                    <option value="CS" data-i18n="admin.opt_cs_team">CS Team</option>
+                                    <option value="Marketplace" data-i18n="admin.opt_marketplace_team">Marketplace Team</option>
                                 </select>
                             </div>
                         </div>
@@ -1120,8 +1203,8 @@
                                 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
-                        <button type="button" data-on-click="closeCreateScorecardModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button type="button" data-on-click="closeCreateScorecardModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="projects.cancel">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700" data-i18n="admin.create_scorecard">Create Scorecard</button>
                     </div>
                 </form>
@@ -1130,13 +1213,12 @@
 
         <div
             id="toast"
-            class="hidden fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300"
+            class="hidden fixed bottom-4 end-4 px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300"
         >
             <span id="toast-message"></span>
         </div>
 
         <script>
-            const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
             let currentScorecard = null;
             let currentDocuments = [];
             let adminAuthenticated = false;
@@ -1169,7 +1251,7 @@
 
             async function promptForAdminKey() {
                 if (useSessionAuth) return;
-                const key = prompt(_t('dyn.admin.prompt_admin_api_key'));
+                const key = prompt(WalaPlusI18n.t('dyn.admin.prompt_admin_api_key'));
                 if (key) {
                     try {
                         const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
@@ -1231,12 +1313,17 @@
                 } else {
                     stopRateLimitAutoRefresh();
                 }
+                if (tab === "settings") {
+                    startExportCacheAutoRefresh();
+                } else {
+                    stopExportCacheAutoRefresh();
+                }
             }
 
             function showToast(message, type = "success") {
                 const toast = document.getElementById("toast");
                 const toastMsg = document.getElementById("toast-message");
-                toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 ${
+                toast.className = `fixed bottom-4 end-4 px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 ${
                     type === "success"
                         ? "bg-green-600 text-white"
                         : type === "error"
@@ -1264,7 +1351,7 @@
                 const title = document.getElementById("attribute-modal-title");
 
                 if (attr) {
-                    title.textContent = _t('dyn.admin.edit_attribute_title');
+                    title.textContent = WalaPlusI18n.t('dyn.admin.edit_attribute_title');
                     document.getElementById("attr-id").value = attr.id || "";
                     document.getElementById("attr-name").value =
                         attr.name || "";
@@ -1277,7 +1364,7 @@
                     document.getElementById("attr-target").value =
                         attr.target || 100;
                 } else {
-                    title.textContent = _t('dyn.admin.add_attribute_title');
+                    title.textContent = WalaPlusI18n.t('dyn.admin.add_attribute_title');
                     document.getElementById("attribute-form").reset();
                 }
                 modal.classList.remove("hidden");
@@ -1324,35 +1411,35 @@
                         'Contacts': 'bg-cyan-100 text-cyan-700',
                         'Accounts': 'bg-indigo-100 text-indigo-700'
                     };
-                    const teamLabel = doc.team_name ? ` (${doc.team_name})` : '';
-                    return `<span class="px-2 py-0.5 ${colors[doc.crm_module] || 'bg-gray-100 text-gray-700'} rounded text-xs font-medium">${doc.crm_module}${teamLabel}</span>`;
+                    const teamLabel = doc.team_name ? ` (${escapeHtml(doc.team_name)})` : '';
+                    return `<span class="px-2 py-0.5 ${colors[doc.crm_module] || 'bg-gray-100 text-gray-700'} rounded text-xs font-medium">${escapeHtml(doc.crm_module)}${teamLabel}</span>`;
                 };
 
                 container.innerHTML = documents
                     .map(
                         (doc) => `
                 <div class="flex items-center justify-between p-4 border rounded-lg ${doc.is_active ? "border-green-300 bg-green-50" : "border-gray-200"}">
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center gap-4">
                         <div class="w-12 h-12 ${doc.is_active ? "bg-green-100" : "bg-gray-100"} rounded-lg flex items-center justify-center">
                             <svg class="w-6 h-6 ${doc.is_active ? "text-green-600" : "text-gray-400"}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
                         </div>
                         <div>
-                            <div class="flex items-center space-x-2">
-                                <h4 class="font-medium text-gray-900">${doc.name}</h4>
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-medium text-gray-900">${escapeHtml(doc.name)}</h4>
                                 ${getModuleBadge(doc)}
                             </div>
-                            <div class="flex items-center space-x-3 text-sm text-gray-500">
-                                <span>Version ${doc.version}</span>
+                            <div class="flex items-center gap-3 text-sm text-gray-500">
+                                <span>Version ${escapeHtml(doc.version)}</span>
                                 <span>|</span>
-                                <span>${doc.document_type}</span>
+                                <span>${escapeHtml(doc.document_type)}</span>
                                 <span>|</span>
                                 <span>${new Date(doc.created_at).toLocaleDateString()}</span>
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center gap-2">
                         ${
                             doc.is_active
                                 ? '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">Active</span>'
@@ -1442,9 +1529,9 @@
                         typeof doc.rules_json === "string"
                             ? JSON.parse(doc.rules_json)
                             : doc.rules_json;
-                    content = `<pre class="text-sm text-gray-700 whitespace-pre-wrap">${JSON.stringify(rules, null, 2)}</pre>`;
+                    content = `<pre class="text-sm text-gray-700 whitespace-pre-wrap">${escapeHtml(JSON.stringify(rules, null, 2))}</pre>`;
                 } else if (doc.content_text) {
-                    content = `<pre class="text-sm text-gray-700 whitespace-pre-wrap">${doc.content_text}</pre>`;
+                    content = `<pre class="text-sm text-gray-700 whitespace-pre-wrap">${escapeHtml(doc.content_text)}</pre>`;
                 } else {
                     content =
                         '<p class="text-gray-500">No content available</p>';
@@ -1452,8 +1539,8 @@
 
                 preview.innerHTML = `
                 <div class="mb-4 pb-4 border-b">
-                    <h4 class="font-semibold text-gray-900">${doc.name}</h4>
-                    <p class="text-sm text-gray-500">Version ${doc.version} | ${doc.document_type}</p>
+                    <h4 class="font-semibold text-gray-900">${escapeHtml(doc.name)}</h4>
+                    <p class="text-sm text-gray-500">Version ${escapeHtml(doc.version)} | ${escapeHtml(doc.document_type)}</p>
                 </div>
                 ${content}
             `;
@@ -1514,19 +1601,19 @@
                 document.getElementById("scorecard-info").innerHTML = `
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <p class="text-sm text-gray-500">Name</p>
+                        <p class="text-sm text-gray-500" data-i18n="admin.lbl_name">Name</p>
                         <p class="font-medium">${scorecard.name || "Quality Scorecard"}</p>
                     </div>
                     <div>
-                        <p class="text-sm text-gray-500">Framework</p>
+                        <p class="text-sm text-gray-500" data-i18n="admin.lbl_framework">Framework</p>
                         <p class="font-medium">${dims.framework || "ISO 9001 + COPC"}</p>
                     </div>
                     <div>
-                        <p class="text-sm text-gray-500">Total Attributes</p>
+                        <p class="text-sm text-gray-500" data-i18n="admin.lbl_total_attributes">Total Attributes</p>
                         <p class="font-medium">${allAttributes.length}</p>
                     </div>
                     <div>
-                        <p class="text-sm text-gray-500">Last Updated</p>
+                        <p class="text-sm text-gray-500" data-i18n="admin.lbl_last_updated">Last Updated</p>
                         <p class="font-medium">${scorecard.created_at ? new Date(scorecard.created_at).toLocaleDateString() : "N/A"}</p>
                     </div>
                 </div>
@@ -1551,7 +1638,7 @@
                     .map(
                         (attr, index) => `
                 <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                    <div class="flex items-center space-x-3">
+                    <div class="flex items-center gap-3">
                         <span class="px-2 py-1 rounded-full text-xs font-medium ${dimColors[attr.dimension] || "bg-gray-100 text-gray-800"}">
                             ${attr.dimension}
                         </span>
@@ -1560,8 +1647,8 @@
                             <p class="text-xs text-gray-500">${attr.description || ""}</p>
                         </div>
                     </div>
-                    <div class="flex items-center space-x-4">
-                        <div class="text-right">
+                    <div class="flex items-center gap-4">
+                        <div class="text-end">
                             <p class="text-sm font-medium">${attr.weight || 0}%</p>
                             <p class="text-xs text-gray-500">weight</p>
                         </div>
@@ -1604,7 +1691,7 @@
                 const btn = document.getElementById("save-weights-btn");
 
                 if (total !== 100) {
-                    warning.textContent = _t('dyn.admin.weight_total_warning', { total });
+                    warning.textContent = WalaPlusI18n.t('dyn.admin.weight_total_warning', { total });
                     warning.classList.remove("hidden");
                     btn.disabled = true;
                     btn.classList.add("opacity-50", "cursor-not-allowed");
@@ -1713,7 +1800,7 @@
                 const btn = document.getElementById("trigger-audit-btn");
                 btn.disabled = true;
                 btn.innerHTML =
-                    '<span class="animate-spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full mr-2"></span>Running...';
+                    '<span class="animate-spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full me-2"></span>Running...';
 
                 try {
                     const response = await fetch("/api/audit/trigger", {
@@ -1763,7 +1850,7 @@
 
                     const container = document.getElementById('audit-trail-list');
                     if (!logs.length) {
-                        container.innerHTML = '<div class="text-center py-8 text-gray-500">' + _t('dyn.admin.no_audit_entries') + '</div>';
+                        container.innerHTML = '<div class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.admin.no_audit_entries') + '</div>';
                     } else {
                         container.innerHTML = logs.map(log => {
                             const actionColors = {
@@ -1777,21 +1864,21 @@
                             return `
                                 <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
                                     <div class="flex items-start justify-between mb-2">
-                                        <div class="flex items-center space-x-3">
-                                            <span class="${actionColor} px-2 py-1 rounded text-xs font-medium uppercase">${log.action_type}</span>
-                                            <span class="text-sm font-medium text-gray-900">${log.entity_type}</span>
-                                            <span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">${log.module}</span>
+                                        <div class="flex items-center gap-3">
+                                            <span class="${actionColor} px-2 py-1 rounded text-xs font-medium uppercase">${escapeHtml(log.action_type)}</span>
+                                            <span class="text-sm font-medium text-gray-900">${escapeHtml(log.entity_type)}</span>
+                                            <span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">${escapeHtml(log.module)}</span>
                                         </div>
                                         <span class="text-xs text-gray-400">${date}</span>
                                     </div>
-                                    <div class="flex items-center space-x-2 text-sm text-gray-600">
-                                        <span>ID: ${log.entity_id}</span>
-                                        ${log.user_name ? `<span>by ${log.user_name}</span>` : ''}
+                                    <div class="flex items-center gap-2 text-sm text-gray-600">
+                                        <span>ID: ${escapeHtml(log.entity_id)}</span>
+                                        ${log.user_name ? `<span>by ${escapeHtml(log.user_name)}</span>` : ''}
                                     </div>
                                     ${log.new_value ? `
                                         <details class="mt-2">
                                             <summary class="text-xs text-indigo-600 cursor-pointer hover:text-indigo-800">View Details</summary>
-                                            <pre class="mt-2 text-xs bg-white p-2 rounded border overflow-x-auto max-h-32">${JSON.stringify(log.new_value, null, 2)}</pre>
+                                            <pre class="mt-2 text-xs bg-white p-2 rounded border overflow-x-auto max-h-32">${escapeHtml(JSON.stringify(log.new_value, null, 2))}</pre>
                                         </details>
                                     ` : ''}
                                 </div>
@@ -1809,7 +1896,7 @@
             }
 
             async function seedDefaultData() {
-                if (!confirm(_t('dyn.admin.confirm_seed_defaults'))) return;
+                if (!confirm(WalaPlusI18n.t('dyn.admin.confirm_seed_defaults'))) return;
 
                 try {
                     const response = await fetch("/api/admin/seed-defaults", {
@@ -1837,11 +1924,11 @@
                     const zohoStatus = document.getElementById('zoho-status');
                     if (zohoStatus && data.zoho) {
                         if (data.zoho.connected) {
-                            zohoStatus.textContent = _t('dyn.admin.status_connected');
+                            zohoStatus.textContent = WalaPlusI18n.t('dyn.admin.status_connected');
                             zohoStatus.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
                             zohoStatus.title = data.zoho.message;
                         } else {
-                            zohoStatus.textContent = _t('dyn.admin.status_needs_token');
+                            zohoStatus.textContent = WalaPlusI18n.t('dyn.admin.status_needs_token');
                             zohoStatus.className = 'px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium';
                         }
                     }
@@ -1849,7 +1936,7 @@
                     const calendarStatus = document.getElementById('calendar-status');
                     if (calendarStatus && data.googleCalendar) {
                         if (data.googleCalendar.connected) {
-                            calendarStatus.textContent = _t('dyn.admin.status_connected');
+                            calendarStatus.textContent = WalaPlusI18n.t('dyn.admin.status_connected');
                             calendarStatus.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
                         }
                     }
@@ -1859,7 +1946,7 @@
                     if (slackStatus && data.slack) {
                         if (data.slack.connected) {
                             const hasMissing = data.slack.missingScopes && data.slack.missingScopes.length > 0;
-                            slackStatus.textContent = hasMissing ? _t('dyn.admin.status_connected_scopes_pending') : _t('dyn.admin.status_fully_connected');
+                            slackStatus.textContent = hasMissing ? WalaPlusI18n.t('dyn.admin.status_connected_scopes_pending') : WalaPlusI18n.t('dyn.admin.status_fully_connected');
                             slackStatus.className = hasMissing
                                 ? 'px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium'
                                 : 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
@@ -1870,9 +1957,9 @@
                                 slackDetail.textContent = detail;
                             }
                         } else {
-                            slackStatus.textContent = _t('dyn.admin.status_not_connected');
+                            slackStatus.textContent = WalaPlusI18n.t('dyn.admin.status_not_connected');
                             slackStatus.className = 'px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium';
-                            if (slackDetail) slackDetail.textContent = data.slack.message || _t('dyn.admin.token_not_configured');
+                            if (slackDetail) slackDetail.textContent = data.slack.message || WalaPlusI18n.t('dyn.admin.token_not_configured');
                         }
                     }
                 } catch (error) {
@@ -1901,7 +1988,7 @@
                 const select = document.getElementById('scorecard-name-select');
                 
                 try {
-                    statusEl.innerHTML = '<span class="text-blue-600">' + _t('dyn.admin.loading_scorecards') + '</span>';
+                    statusEl.innerHTML = '<span class="text-blue-600">' + WalaPlusI18n.t('dyn.admin.loading_scorecards') + '</span>';
                     
                     const response = await fetch(`/api/admin/scorecards?crm_module=${encodeURIComponent(crmModule)}&team_name=${encodeURIComponent(team)}`, {
                         headers: getAdminHeaders()
@@ -1912,11 +1999,11 @@
                     
                     scorecardsList = await response.json();
                     
-                    select.innerHTML = '<option value="">' + _t('dyn.admin.select_scorecard_placeholder') + '</option>';
+                    select.innerHTML = '<option value="">' + WalaPlusI18n.t('dyn.admin.select_scorecard_placeholder') + '</option>';
                     scorecardsList.forEach(sc => {
                         const opt = document.createElement('option');
                         opt.value = sc.id;
-                        opt.textContent = sc.name + ' (' + (sc.version || 'v1.0') + ')' + (sc.is_active ? ' - ' + _t('dyn.admin.label_active') : '');
+                        opt.textContent = sc.name + ' (' + (sc.version || 'v1.0') + ')' + (sc.is_active ? ' - ' + WalaPlusI18n.t('dyn.admin.label_active') : '');
                         select.appendChild(opt);
                     });
                     
@@ -1925,15 +2012,15 @@
                         select.value = activeScorecard.id;
                         onScorecardSelect();
                     } else if (scorecardsList.length > 0) {
-                        statusEl.innerHTML = `<span class="text-amber-600">${_t('dyn.admin.scorecards_found', { count: scorecardsList.length })}</span>`;
+                        statusEl.innerHTML = `<span class="text-amber-600">${WalaPlusI18n.t('dyn.admin.scorecards_found', { count: scorecardsList.length })}</span>`;
                         hideActionsPanel();
                     } else {
-                        statusEl.innerHTML = `<span class="text-amber-600">${_t('dyn.admin.no_scorecards_for_team', { team })}</span>`;
+                        statusEl.innerHTML = `<span class="text-amber-600">${WalaPlusI18n.t('dyn.admin.no_scorecards_for_team', { team })}</span>`;
                         hideActionsPanel();
                     }
                 } catch (error) {
                     console.error('Error loading scorecards:', error);
-                    statusEl.innerHTML = '<span class="text-red-600">' + _t('dyn.admin.error_loading_scorecards') + '</span>';
+                    statusEl.innerHTML = '<span class="text-red-600">' + WalaPlusI18n.t('dyn.admin.error_loading_scorecards') + '</span>';
                 }
             }
             
@@ -1959,7 +2046,7 @@
                 const team = document.getElementById('scorecard-team').value;
                 const crmModule = document.getElementById('scorecard-crm-module').value;
                 document.getElementById('scorecard-dept-status').innerHTML = 
-                    `<span class="${scorecard.is_active ? 'text-green-600' : 'text-blue-600'}">Editing: ${scorecard.name}${scorecard.is_active ? ' (Active)' : ''}</span>`;
+                    `<span class="${scorecard.is_active ? 'text-green-600' : 'text-blue-600'}">Editing: ${escapeHtml(scorecard.name)}${scorecard.is_active ? ' (Active)' : ''}</span>`;
                 
                 renderScorecard(scorecard);
                 loadScorecardAttributes(id);
@@ -1989,7 +2076,7 @@
             function renderScorecardAttributes(attributes) {
                 const container = document.getElementById("attributes-list");
                 if (!attributes || attributes.length === 0) {
-                    container.innerHTML = '<div class="text-center py-8 text-gray-500">' + _t('dyn.admin.no_attributes') + '</div>';
+                    container.innerHTML = '<div class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.admin.no_attributes') + '</div>';
                     return;
                 }
                 
@@ -2010,7 +2097,7 @@
                 
                 container.innerHTML = attributes.map((attr, index) => `
                     <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 ${!attr.is_active ? 'opacity-50' : ''}" draggable="true" data-id="${attr.id}">
-                        <div class="flex items-center space-x-3 flex-1">
+                        <div class="flex items-center gap-3 flex-1">
                             <div class="flex flex-col items-center space-y-1">
                                 <button data-on-click="moveAttribute" data-args="[${attr.id},&quot;up&quot;]" class="p-0.5 text-gray-400 hover:text-gray-600" title="Move up">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
@@ -2019,18 +2106,18 @@
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                 </button>
                             </div>
-                            <span class="px-2 py-1 rounded-full text-xs font-medium ${dimColors[attr.dimension] || 'bg-gray-100 text-gray-800'}">${attr.dimension}</span>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium ${dimColors[attr.dimension] || 'bg-gray-100 text-gray-800'}">${escapeHtml(attr.dimension)}</span>
                             <div class="flex-1">
-                                <div class="flex items-center space-x-2">
-                                    <p class="font-medium text-gray-900 text-sm">${attr.attribute_name}</p>
-                                    ${attr.severity ? `<span class="px-1.5 py-0.5 rounded text-xs ${severityColors[attr.severity] || 'bg-gray-100 text-gray-600'}">${attr.severity}</span>` : ''}
+                                <div class="flex items-center gap-2">
+                                    <p class="font-medium text-gray-900 text-sm">${escapeHtml(attr.attribute_name)}</p>
+                                    ${attr.severity ? `<span class="px-1.5 py-0.5 rounded text-xs ${severityColors[attr.severity] || 'bg-gray-100 text-gray-600'}">${escapeHtml(attr.severity)}</span>` : ''}
                                     ${!attr.is_active ? '<span class="px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500">Disabled</span>' : ''}
                                 </div>
-                                <p class="text-xs text-gray-500">${attr.description || ''}</p>
+                                <p class="text-xs text-gray-500">${escapeHtml(attr.description || '')}</p>
                             </div>
                         </div>
-                        <div class="flex items-center space-x-4">
-                            <div class="text-right">
+                        <div class="flex items-center gap-4">
+                            <div class="text-end">
                                 <p class="text-sm font-medium">${attr.weight || 0}%</p>
                                 <p class="text-xs text-gray-500">weight</p>
                             </div>
@@ -2072,7 +2159,7 @@
             
             async function deleteCurrentScorecard() {
                 if (!selectedScorecardId) return;
-                if (!confirm(_t('dyn.admin.confirm_delete_scorecard'))) return;
+                if (!confirm(WalaPlusI18n.t('dyn.admin.confirm_delete_scorecard'))) return;
                 
                 try {
                     const response = await fetch(`/api/admin/scorecards/${selectedScorecardId}`, {
@@ -2094,10 +2181,10 @@
             async function cloneCurrentScorecard() {
                 if (!selectedScorecardId) return;
                 
-                const name = prompt(_t('dyn.admin.prompt_clone_name'), currentDeptScorecard?.name + ' ' + _t('dyn.admin.clone_suffix'));
+                const name = prompt(WalaPlusI18n.t('dyn.admin.prompt_clone_name'), currentDeptScorecard?.name + ' ' + WalaPlusI18n.t('dyn.admin.clone_suffix'));
                 if (!name) return;
                 
-                const version = prompt(_t('dyn.admin.prompt_clone_version'), 'v1.0');
+                const version = prompt(WalaPlusI18n.t('dyn.admin.prompt_clone_version'), 'v1.0');
                 
                 try {
                     const response = await fetch(`/api/admin/scorecards/${selectedScorecardId}/clone`, {
@@ -2159,7 +2246,7 @@
             }
             
             function editAttribute(attr) {
-                document.getElementById('attribute-modal-title').textContent = _t('dyn.admin.edit_attribute_title');
+                document.getElementById('attribute-modal-title').textContent = WalaPlusI18n.t('dyn.admin.edit_attribute_title');
                 document.getElementById('attr-id').value = attr.id;
                 document.getElementById('attr-name').value = attr.attribute_name || attr.name || '';
                 document.getElementById('attr-description').value = attr.description || '';
@@ -2184,7 +2271,7 @@
             }
             
             async function deleteAttribute(id) {
-                if (!confirm(_t('dyn.admin.confirm_delete_attribute'))) return;
+                if (!confirm(WalaPlusI18n.t('dyn.admin.confirm_delete_attribute'))) return;
                 
                 try {
                     const response = await fetch(`/api/admin/attributes/${id}`, {
@@ -2216,11 +2303,11 @@
                     const docs = await response.json();
                     const select = document.getElementById('scorecard-gov-doc');
                     
-                    select.innerHTML = '<option value="">' + _t('dyn.admin.select_gov_doc_placeholder') + '</option>';
+                    select.innerHTML = '<option value="">' + WalaPlusI18n.t('dyn.admin.select_gov_doc_placeholder') + '</option>';
                     docs.forEach(doc => {
                         const opt = document.createElement('option');
                         opt.value = doc.id;
-                        opt.textContent = doc.name + ' (v' + doc.version + ')' + (doc.is_active ? ' - ' + _t('dyn.admin.label_active') : '');
+                        opt.textContent = doc.name + ' (v' + doc.version + ')' + (doc.is_active ? ' - ' + WalaPlusI18n.t('dyn.admin.label_active') : '');
                         select.appendChild(opt);
                     });
                 } catch (error) {
@@ -2269,6 +2356,152 @@
             });
 
             let rateLimitRefreshTimer = null;
+            let exportCacheRefreshTimer = null;
+
+            // Task #755 — auto-refresh the Export Cache stats panel only
+            // while the Settings tab is visible. Polling stops the moment
+            // the admin switches tabs so we don't burn CPU/log noise on
+            // a panel nobody is looking at.
+            function startExportCacheAutoRefresh() {
+                loadExportCacheStats();
+                if (exportCacheRefreshTimer) return;
+                exportCacheRefreshTimer = setInterval(loadExportCacheStats, 60000);
+            }
+
+            function stopExportCacheAutoRefresh() {
+                if (exportCacheRefreshTimer) {
+                    clearInterval(exportCacheRefreshTimer);
+                    exportCacheRefreshTimer = null;
+                }
+            }
+
+            function formatBytes(bytes) {
+                const n = Number(bytes);
+                if (!Number.isFinite(n) || n <= 0) return "0 B";
+                const units = ["B", "KB", "MB", "GB", "TB"];
+                let i = 0;
+                let val = n;
+                while (val >= 1024 && i < units.length - 1) {
+                    val /= 1024;
+                    i++;
+                }
+                const fixed = val >= 100 || i === 0 ? Math.round(val) : val.toFixed(1);
+                return fixed + " " + units[i];
+            }
+
+            function formatRelativeTime(ts) {
+                if (!ts) return "—";
+                const diff = Date.now() - Number(ts);
+                if (diff < 0) return "in the future";
+                const secs = Math.round(diff / 1000);
+                if (secs < 60) return secs + "s ago";
+                const mins = Math.round(secs / 60);
+                if (mins < 60) return mins + "m ago";
+                const hours = Math.round(mins / 60);
+                if (hours < 24) return hours + "h ago";
+                const days = Math.round(hours / 24);
+                return days + "d ago";
+            }
+
+            function formatDuration(ms) {
+                const n = Number(ms);
+                if (!Number.isFinite(n) || n <= 0) return "—";
+                const secs = Math.round(n / 1000);
+                if (secs < 60) return secs + "s";
+                const mins = Math.round(secs / 60);
+                if (mins < 60) return mins + "m";
+                const hours = Math.round(mins / 60);
+                return hours + "h";
+            }
+
+            async function loadExportCacheStats() {
+                const errEl = document.getElementById("export-cache-error");
+                if (!errEl) return;
+                try {
+                    const res = await fetch("/api/admin/export-cache/stats", {
+                        headers: getAdminHeaders(),
+                    });
+                    if (handleUnauthorized(res)) return;
+                    if (!res.ok) {
+                        throw new Error(`Request failed (${res.status})`);
+                    }
+                    const data = await res.json();
+                    renderExportCacheStats(data);
+                    errEl.classList.add("hidden");
+                    errEl.textContent = "";
+                } catch (err) {
+                    console.error("Error loading export cache stats:", err);
+                    errEl.textContent = "Failed to load export cache stats: " + (err && err.message ? err.message : err);
+                    errEl.classList.remove("hidden");
+                }
+            }
+
+            function renderExportCacheStats(data) {
+                const setText = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = value;
+                };
+
+                setText("export-cache-entry-count", String(data.entryCount ?? 0));
+                const activeReads = Number(data.activeReadCount ?? 0);
+                setText(
+                    "export-cache-active-reads",
+                    activeReads > 0
+                        ? activeReads + " currently streaming"
+                        : "No active reads",
+                );
+
+                setText("export-cache-bytes", formatBytes(data.totalBytes ?? 0));
+                setText(
+                    "export-cache-ondisk",
+                    "On disk: " +
+                        formatBytes(data.onDiskTotalBytes ?? 0) +
+                        " across " +
+                        String(data.onDiskFileCount ?? 0) +
+                        " file(s)",
+                );
+
+                const hits = Number(data.hitCount ?? 0);
+                const misses = Number(data.missCount ?? 0);
+                setText("export-cache-hitmiss", hits + " / " + misses);
+                if (data.hitRate === null || data.hitRate === undefined) {
+                    setText("export-cache-hitrate", "No requests yet");
+                } else {
+                    const pct = Math.round(Number(data.hitRate) * 1000) / 10;
+                    setText("export-cache-hitrate", "Hit rate " + pct + "%");
+                }
+
+                const lastRun = data.lastJanitorRunAt;
+                setText(
+                    "export-cache-janitor-time",
+                    lastRun ? formatRelativeTime(lastRun) : "Not yet",
+                );
+                if (lastRun) {
+                    const reaped = Number(data.lastJanitorReaped ?? 0);
+                    setText(
+                        "export-cache-janitor-detail",
+                        new Date(lastRun).toLocaleTimeString() +
+                            " — reaped " +
+                            reaped +
+                            " entr" +
+                            (reaped === 1 ? "y" : "ies"),
+                    );
+                } else {
+                    setText("export-cache-janitor-detail", "Janitor has not run since process start");
+                }
+
+                setText("export-cache-dir", String(data.cacheDir ?? "—"));
+                setText("export-cache-ttl", formatDuration(data.ttlMs));
+                setText(
+                    "export-cache-expired",
+                    String(data.expiredEntryCount ?? 0),
+                );
+
+                setText(
+                    "export-cache-updated",
+                    "Updated at " + new Date().toLocaleTimeString(),
+                );
+            }
 
             function startRateLimitAutoRefresh() {
                 loadRateLimitStats();
@@ -2310,7 +2543,7 @@
                     errEl.textContent = "";
                 } catch (err) {
                     console.error("Error loading rate limit stats:", err);
-                    errEl.textContent = _t('dyn.admin.failed_load_rate_stats', { msg: err && err.message ? err.message : err });
+                    errEl.textContent = WalaPlusI18n.t('dyn.admin.failed_load_rate_stats', { msg: err && err.message ? err.message : err });
                     errEl.classList.remove("hidden");
                 }
             }
@@ -2320,7 +2553,7 @@
                 document.getElementById("rate-limits-top-count").textContent =
                     top ? String(top.count) : "0";
                 document.getElementById("rate-limits-top-key").textContent =
-                    top ? top.key : "No traffic in window";
+                    top ? top.key : (window.WalaPlusI18n ? window.WalaPlusI18n.t("admin.no_traffic_window") : "No traffic in window");
                 document.getElementById("rate-limits-429-count").textContent =
                     String(data.recent429Count ?? 0);
                 document.getElementById("rate-limits-failopen").textContent =
@@ -2332,27 +2565,87 @@
                     ? new Date(data.windowStart).toLocaleTimeString()
                     : "—";
                 document.getElementById("rate-limits-window").textContent =
-                    _t('dyn.admin.window_started_at') + windowStartTxt + (data.windowMs ? " (" + Math.round(data.windowMs / 1000) + "s)" : "");
+                    WalaPlusI18n.t('dyn.admin.window_started_at') + windowStartTxt + (data.windowMs ? " (" + Math.round(data.windowMs / 1000) + "s)" : "");
 
                 const tbody = document.getElementById("rate-limits-top-keys");
                 if (!data.topKeys || data.topKeys.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">' + _t('dyn.admin.no_rate_limited_keys') + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">' + WalaPlusI18n.t('dyn.admin.no_rate_limited_keys') + '</td></tr>';
                 } else {
                     tbody.innerHTML = data.topKeys
                         .map((row, i) =>
                             '<tr class="border-t" data-testid="row-rate-limit-key-' + i + '">' +
                                 '<td class="px-4 py-2 text-gray-500">' + (i + 1) + '</td>' +
                                 '<td class="px-4 py-2 font-mono text-xs text-gray-800">' + escapeHtml(row.key) + '</td>' +
-                                '<td class="px-4 py-2 text-right font-semibold text-gray-900">' + escapeHtml(String(row.count)) + '</td>' +
+                                '<td class="px-4 py-2 text-end font-semibold text-gray-900">' + escapeHtml(String(row.count)) + '</td>' +
                             '</tr>'
                         )
                         .join("");
                 }
 
                 // 24h spike summary card
-                const spike = data.spike24h || { total429: 0, totalSuppressed: 0, topIps: [], topPaths: [], alertThreshold: 0, alertActive: false };
+                const spike = data.spike24h || { total429: 0, totalSuppressed: 0, topIps: [], topPaths: [], hourlyBuckets: [], alertThreshold: 0, alertActive: false };
                 document.getElementById("spike24h-total").textContent = String(spike.total429 ?? 0);
                 document.getElementById("spike24h-suppressed").textContent = String(spike.totalSuppressed ?? 0);
+
+                // Per-hour sparkline. We render bars (rather than a polyline)
+                // because (a) zero-traffic hours show up as visible empty
+                // slots instead of dipping to a confusing baseline, and
+                // (b) it scales sanely between 0 and "current storm" without
+                // needing axis labels. The trend summary text compares the
+                // most recent 6h against the previous 6h so ops can tell at
+                // a glance whether the storm is growing, steady, or fading.
+                (function renderSpike24hSparkline() {
+                    const svg = document.getElementById("spike24h-sparkline");
+                    const summaryEl = document.getElementById("spike24h-trend-summary");
+                    if (!svg) return;
+                    const buckets = Array.isArray(spike.hourlyBuckets) ? spike.hourlyBuckets : [];
+                    while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild);
+                    if (buckets.length === 0) {
+                        if (summaryEl) summaryEl.textContent = _t('dyn.admin.no_429_events') || 'No 429 events in window';
+                        return;
+                    }
+                    const W = 240, H = 48, GAP = 1;
+                    const barW = (W - GAP * (buckets.length - 1)) / buckets.length;
+                    const maxCount = buckets.reduce((m, b) => Math.max(m, Number(b.count) || 0), 0);
+                    const ns = "http://www.w3.org/2000/svg";
+                    buckets.forEach((b, i) => {
+                        const count = Number(b.count) || 0;
+                        const h = maxCount === 0 ? 1 : Math.max(1, Math.round((count / maxCount) * (H - 2)));
+                        const x = i * (barW + GAP);
+                        const y = H - h;
+                        const rect = document.createElementNS(ns, "rect");
+                        rect.setAttribute("x", String(x));
+                        rect.setAttribute("y", String(y));
+                        rect.setAttribute("width", String(barW));
+                        rect.setAttribute("height", String(h));
+                        rect.setAttribute("fill", count === 0 ? "#e5e7eb" : (spike.alertActive ? "#dc2626" : "#f59e0b"));
+                        rect.setAttribute("data-testid", "bar-spike24h-hour-" + i);
+                        rect.setAttribute("data-hour", String(b.hour));
+                        rect.setAttribute("data-count", String(count));
+                        const title = document.createElementNS(ns, "title");
+                        const hourLabel = (() => {
+                            try { return new Date(b.hour).toLocaleString(); } catch { return String(b.hour); }
+                        })();
+                        title.textContent = hourLabel + ' — ' + count + ' × 429';
+                        rect.appendChild(title);
+                        svg.appendChild(rect);
+                    });
+                    if (summaryEl) {
+                        const half = Math.floor(buckets.length / 2);
+                        const recent = buckets.slice(-half).reduce((s, b) => s + (Number(b.count) || 0), 0);
+                        const prior = buckets.slice(0, buckets.length - half).reduce((s, b) => s + (Number(b.count) || 0), 0);
+                        let trend;
+                        if (recent === 0 && prior === 0) trend = '→ quiet';
+                        else if (prior === 0) trend = '↑ growing';
+                        else {
+                            const ratio = recent / prior;
+                            if (ratio >= 1.25) trend = '↑ growing';
+                            else if (ratio <= 0.75) trend = '↓ subsiding';
+                            else trend = '→ steady';
+                        }
+                        summaryEl.textContent = 'recent ' + half + 'h: ' + recent + ' · prior ' + (buckets.length - half) + 'h: ' + prior + ' · ' + trend;
+                    }
+                })();
 
                 // Threshold-breach banner (Task #282) — surfaces the same
                 // condition that the rate-limit-429-spike-alert cron pages
@@ -2364,7 +2657,7 @@
                 const threshold = Number(spike.alertThreshold ?? 0);
                 if (spike.alertActive) {
                     banner.classList.remove("hidden");
-                    bannerDetail.textContent = _t('dyn.admin.spike_24h_alert_detail', {
+                    bannerDetail.textContent = WalaPlusI18n.t('dyn.admin.spike_24h_alert_detail', {
                         total: String(spike.total429 ?? 0),
                         threshold: String(threshold),
                     });
@@ -2372,37 +2665,37 @@
                     banner.classList.add("hidden");
                 }
                 if (threshold > 0) {
-                    thresholdHint.textContent = _t('dyn.admin.spike_24h_threshold_hint', {
+                    thresholdHint.textContent = WalaPlusI18n.t('dyn.admin.spike_24h_threshold_hint', {
                         threshold: String(threshold),
                     });
                 } else {
-                    thresholdHint.textContent = _t('dyn.admin.spike_24h_threshold_disabled');
+                    thresholdHint.textContent = WalaPlusI18n.t('dyn.admin.spike_24h_threshold_disabled');
                 }
 
                 // Colour the badge red when the 24h total is non-zero
                 const badge = document.getElementById("spike24h-badge");
                 if (spike.alertActive) {
                     badge.className = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200";
-                    badge.textContent = _t('dyn.admin.spike_24h_alert');
+                    badge.textContent = WalaPlusI18n.t('dyn.admin.spike_24h_alert');
                 } else if (spike.total429 > 0) {
                     badge.className = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200";
-                    badge.textContent = _t('dyn.admin.spike_24h_warn');
+                    badge.textContent = WalaPlusI18n.t('dyn.admin.spike_24h_warn');
                 } else {
                     badge.className = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200";
-                    badge.textContent = _t('dyn.admin.spike_24h_ok');
+                    badge.textContent = WalaPlusI18n.t('dyn.admin.spike_24h_ok');
                 }
 
                 const spikeTbody = document.getElementById("spike24h-top-ips");
                 if (!spike.topIps || spike.topIps.length === 0) {
-                    spikeTbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">' + _t('dyn.admin.no_429_events') + '</td></tr>';
+                    spikeTbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">' + WalaPlusI18n.t('dyn.admin.no_429_events') + '</td></tr>';
                 } else {
                     spikeTbody.innerHTML = spike.topIps
                         .map((row, i) =>
                             '<tr class="border-t" data-testid="row-spike24h-ip-' + i + '">' +
                                 '<td class="px-4 py-2 text-gray-500">' + (i + 1) + '</td>' +
                                 '<td class="px-4 py-2 font-mono text-xs text-gray-800">' + escapeHtml(row.ip) + '</td>' +
-                                '<td class="px-4 py-2 text-right font-semibold text-gray-900">' + escapeHtml(String(row.events)) + '</td>' +
-                                '<td class="px-4 py-2 text-right text-gray-700">' + escapeHtml(String(row.suppressed)) + '</td>' +
+                                '<td class="px-4 py-2 text-end font-semibold text-gray-900">' + escapeHtml(String(row.events)) + '</td>' +
+                                '<td class="px-4 py-2 text-end text-gray-700">' + escapeHtml(String(row.suppressed)) + '</td>' +
                             '</tr>'
                         )
                         .join("");
@@ -2410,15 +2703,15 @@
 
                 const spikePathsTbody = document.getElementById("spike24h-top-paths");
                 if (!spike.topPaths || spike.topPaths.length === 0) {
-                    spikePathsTbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">' + _t('dyn.admin.no_429_events') + '</td></tr>';
+                    spikePathsTbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">' + WalaPlusI18n.t('dyn.admin.no_429_events') + '</td></tr>';
                 } else {
                     spikePathsTbody.innerHTML = spike.topPaths
                         .map((row, i) =>
                             '<tr class="border-t" data-testid="row-spike24h-path-' + i + '">' +
                                 '<td class="px-4 py-2 text-gray-500">' + (i + 1) + '</td>' +
                                 '<td class="px-4 py-2 font-mono text-xs text-gray-800 break-all">' + escapeHtml(row.path) + '</td>' +
-                                '<td class="px-4 py-2 text-right font-semibold text-gray-900">' + escapeHtml(String(row.events)) + '</td>' +
-                                '<td class="px-4 py-2 text-right text-gray-700">' + escapeHtml(String(row.suppressed)) + '</td>' +
+                                '<td class="px-4 py-2 text-end font-semibold text-gray-900">' + escapeHtml(String(row.events)) + '</td>' +
+                                '<td class="px-4 py-2 text-end text-gray-700">' + escapeHtml(String(row.suppressed)) + '</td>' +
                             '</tr>'
                         )
                         .join("");
@@ -2428,9 +2721,9 @@
                 const updatedAt = new Date().toLocaleTimeString();
                 let suffix = "";
                 if (data.dbReachable === false) {
-                    suffix = " — " + _t('dyn.admin.db_unreachable') + (data.dbError || "unknown error");
+                    suffix = " — " + WalaPlusI18n.t('dyn.admin.db_unreachable') + (data.dbError || "unknown error");
                 }
-                updatedEl.textContent = _t('dyn.admin.updated_at') + updatedAt + suffix;
+                updatedEl.textContent = WalaPlusI18n.t('dyn.admin.updated_at') + updatedAt + suffix;
             }
         </script>
         <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>

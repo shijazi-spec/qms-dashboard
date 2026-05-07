@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -30,6 +30,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('fraud-rules');
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
         });
     </script>
 
@@ -122,17 +123,17 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_id">ID</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_name">Rule</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_type">Type</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_owner">Owner</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_status">Status</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_alert">Alert Threshold</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_block">Block Threshold</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_setting">Current → Target</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_last_tested">Last Tested</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_next_review">Next Review</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_actions">Actions</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_id">ID</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_name">Rule</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_type">Type</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_owner">Owner</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_status">Status</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_alert">Alert Threshold</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_block">Block Threshold</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_setting">Current → Target</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_last_tested">Last Tested</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_next_review">Next Review</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600" data-i18n="fraud_rules.col_actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="rulesTableBody" class="divide-y divide-gray-200 text-sm"></tbody>
@@ -259,8 +260,12 @@
 
         function fmtDate(s) {
             if (!s) return '—';
-            try { return new Date(s).toISOString().slice(0, 10); }
-            catch { return String(s); }
+            try {
+                if (window.WalaPlusI18n && WalaPlusI18n.formatDate) {
+                    return WalaPlusI18n.formatDate(s, { year: 'numeric', month: '2-digit', day: '2-digit' });
+                }
+                return new Date(s).toLocaleDateString();
+            } catch { return String(s); }
         }
 
         async function loadFraudRules() {
@@ -485,6 +490,11 @@
         window.submitRuleForm = submitRuleForm;
 
         document.addEventListener('DOMContentLoaded', loadFraudRules);
+    </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
     </script>
 </body>
 </html>

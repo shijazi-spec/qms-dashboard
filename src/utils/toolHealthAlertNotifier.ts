@@ -45,7 +45,7 @@
  * throttle map between runs.
  */
 
-import { sendSlackNotification } from "./slackNotifications";
+import { sendSlackNotification, postSlackMessage } from "./slackNotifications";
 import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
 import {
   type AlertSeverity,
@@ -55,6 +55,7 @@ import {
 import type {
   ToolHealthConfigOverrides,
   ToolHealthConfigAuditEntry,
+  ToolHealthAuditBreachDiff,
 } from "./toolHealthConfigDatabase";
 
 import { logger } from "./logger";
@@ -162,9 +163,12 @@ function readConfig() {
   // `link` is always emit-able (relative when no base URL is set); `linkIsAbsolute`
   // gates Slack's action button — Slack rejects blocks whose button.url is a
   // relative path, so we degrade to a plain mrkdwn link in that case.
+  // The AI Operations page was retired; point recipients at the main
+  // dashboard instead. The legacy `?tab=…` query suffix appended further
+  // down is harmless on /dashboard (the param is just ignored).
   const link = appUrl
-    ? `${appUrl}/dashboard/ai-ops.html`
-    : `/dashboard/ai-ops.html`;
+    ? `${appUrl}/dashboard`
+    : `/dashboard`;
   const linkIsAbsolute = /^https?:\/\//i.test(link);
   return {
     slackChannel: slackChannel || null,
@@ -187,6 +191,43 @@ const lastNotifiedAt = new Map<string, number>();
 /** Visible to tests so each case starts with a clean throttle window. */
 export function _resetToolHealthNotifierThrottleForTests(): void {
   lastNotifiedAt.clear();
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Recovery notification opt-out (Task #347)
+// ──────────────────────────────────────────────────────────────────────────────
+/**
+ * Treat the value as a deliberate "off" for `TOOL_HEALTH_RECOVERY_NOTIFY`.
+ * We accept the common falsy spellings (`0`, `false`, `no`, `off`,
+ * case-insensitive) so operators don't have to remember a single magic
+ * string. Everything else — including unset, empty, `1`, `true` — leaves
+ * recovery pages enabled, preserving the historical default.
+ */
+function isExplicitlyOff(raw: string | undefined): boolean {
+  if (raw == null) return false;
+  const v = raw.trim().toLowerCase();
+  return v === "0" || v === "false" || v === "no" || v === "off";
+}
+
+/**
+ * Returns `true` when recovery notifications must be suppressed for
+ * `toolName`, either because the global `TOOL_HEALTH_RECOVERY_NOTIFY`
+ * gate is off or because the tool appears in the comma-separated
+ * `TOOL_HEALTH_RECOVERY_SKIP_TOOLS` list.
+ *
+ * Exported for unit tests; production callers should go through
+ * {@link notifyToolHealthRecovery} which already consults this helper.
+ */
+export function recoveryNotificationsDisabled(toolName: string): boolean {
+  if (isExplicitlyOff(process.env.TOOL_HEALTH_RECOVERY_NOTIFY)) return true;
+  const skipRaw = (process.env.TOOL_HEALTH_RECOVERY_SKIP_TOOLS || "").trim();
+  if (!skipRaw) return false;
+  const needle = toolName.trim().toLowerCase();
+  if (!needle) return false;
+  return skipRaw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .some((entry) => entry !== "" && entry === needle);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -553,6 +594,15 @@ export interface ToolHealthConfigChangeNotification {
   note?: string | null;
   /** Audit-row id from `tool_health_config_audit` for traceability. */
   audit_id?: number | null;
+  /**
+   * Breach diff computed by the PUT handler comparing currently-open
+   * tool-health breaches under the old vs proposed thresholds (Task #208).
+   * When present, the notifier renders an "Impact" section so on-call can
+   * see at a glance whether tightening/loosening the floor opened or
+   * resolved any alerts. `null`/omitted means the aggregate query failed
+   * (or the diff wasn't computed) — the section is omitted gracefully.
+   */
+  breach_diff?: ToolHealthAuditBreachDiff | null;
 }
 
 export interface NotifyToolHealthConfigChangeResult {
@@ -567,7 +617,41 @@ export interface NotifyToolHealthConfigChangeResult {
 }
 
 export interface ToolHealthConfigChangeNotifierDeps {
+  /**
+   * Boolean-returning Slack send dep, kept for back-compat with existing
+   * test stubs. When provided AND `postSlack` is not, threading is
+   * disabled because we have no `ts` to persist — the post still goes
+   * out, it just starts a fresh root every time. Production wiring leaves
+   * both unset and falls through to `postSlackMessage`, which preserves
+   * threading.
+   */
   sendSlack?: typeof sendSlackNotification;
+  /**
+   * Threading-aware Slack send dep that returns the message `ts` so the
+   * notifier can persist a daily root and reply-thread under it on
+   * subsequent posts (Task #383). Defaults to `postSlackMessage`. Takes
+   * precedence over `sendSlack` when both are supplied.
+   */
+  postSlack?: typeof postSlackMessage;
+  /**
+   * Look up today's persisted Slack `ts` for the "config_change" notify
+   * key. Returns `null` when no root has been posted yet today. Defaults
+   * to `getNotifyThreadTs` from `toolHealthConfigDatabase`.
+   */
+  getThreadTs?: (notifyKey: string, day: string) => Promise<string | null>;
+  /**
+   * Persist a freshly-posted root message's `ts` so the next post the
+   * same UTC day folds into a thread reply. Defaults to
+   * `setNotifyThreadTs`.
+   */
+  setThreadTs?: (notifyKey: string, day: string, ts: string) => Promise<void>;
+  /**
+   * Wall-clock supplier used to compute today's UTC date for the thread
+   * key. Defaults to `Date.now`. Tests inject a deterministic clock so a
+   * "second post on the same day" scenario doesn't flap on a midnight
+   * boundary.
+   */
+  now?: () => number;
   /**
    * Fetches the most recent N audit entries, newest first. Defaults to
    * `getToolHealthConfigAudit` from `toolHealthConfigDatabase`. Tests can
@@ -578,6 +662,20 @@ export interface ToolHealthConfigChangeNotifierDeps {
   sendEmail?: (
     opts: ResendEmailOptions,
   ) => Promise<{ success: boolean; id?: string; error?: string }>;
+}
+
+/**
+ * Notify-key for the per-day Slack thread that folds together repeated
+ * threshold-tune messages (Task #383). Exported for tests / observability —
+ * other notification kinds (override expiry, breach, recovery) intentionally
+ * do not thread because each event is operationally meaningful in its own
+ * right.
+ */
+export const TOOL_HEALTH_CONFIG_THREAD_KEY = "config_change";
+
+/** UTC YYYY-MM-DD for the given epoch ms. Stable for use as a DB day key. */
+function utcDayKey(nowMs: number): string {
+  return new Date(nowMs).toISOString().slice(0, 10);
 }
 
 /**
@@ -636,6 +734,29 @@ function formatAuditEntrySummary(entry: ToolHealthConfigAuditEntry): string {
   return `• \`${dateStr}\` — ${who} (${fieldLabel})`;
 }
 
+/**
+ * Render the per-row counts of a breach diff into Slack mrkdwn lines for
+ * the "Impact" section. Returns `null` when the diff has zero entries
+ * across all three buckets so the caller can omit the section entirely
+ * rather than render an empty block.
+ */
+function formatBreachDiffImpactLines(
+  diff: ToolHealthAuditBreachDiff,
+): string | null {
+  const newCount = diff.new_breaches?.length ?? 0;
+  const resolvedCount = diff.resolved_breaches?.length ?? 0;
+  const sevChangeCount = diff.severity_changes?.length ?? 0;
+  if (newCount === 0 && resolvedCount === 0 && sevChangeCount === 0) {
+    return null;
+  }
+  const lines: string[] = [
+    `:rotating_light: *New alerts:* ${newCount}`,
+    `:white_check_mark: *Resolved alerts:* ${resolvedCount}`,
+    `:arrows_counterclockwise: *Severity changes:* ${sevChangeCount}`,
+  ];
+  return lines.join("\n");
+}
+
 function buildConfigChangeBlocks(
   n: ToolHealthConfigChangeNotification,
   changes: ReturnType<typeof _diffToolHealthConfigOverridesForTests>,
@@ -676,6 +797,22 @@ function buildConfigChangeBlocks(
       text: `*Changes (${changes.length}):*\n${diffLines.join("\n")}`,
     },
   });
+
+  // "Impact" section — when the PUT handler computed a breach diff
+  // (Task #208), surface counts so on-call sees at a glance whether this
+  // tightening/loosening of the floor opened or resolved alerts. When the
+  // diff is `null`/omitted (aggregate query failed) we skip the section
+  // entirely so the message degrades gracefully rather than render an
+  // empty or zero-only block.
+  if (n.breach_diff != null) {
+    const impactText = formatBreachDiffImpactLines(n.breach_diff);
+    if (impactText) {
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: `*Impact:*\n${impactText}` },
+      });
+    }
+  }
 
   if (n.note) {
     blocks.push({
@@ -846,7 +983,51 @@ export async function notifyToolHealthConfigChange(
   const link = `${cfg.link}?tab=thresholds`;
 
   if (cfg.slackChannel) {
-    const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+    // Resolve the Slack send. `postSlack` (returns ts) wins when supplied
+    // so the threading bookkeeping has something to persist. Otherwise fall
+    // through to `sendSlack` (legacy boolean) wrapped into the same shape —
+    // when only the legacy dep is provided we lose the ts and therefore
+    // can't fold the post into a thread, but the message still goes out so
+    // dev/test wiring keeps working unchanged.
+    const postSlack: typeof postSlackMessage =
+      depsOverride.postSlack ??
+      (depsOverride.sendSlack
+        ? async (channel, text, blocks, thread_ts) => ({
+            ok: await depsOverride.sendSlack!(channel, text, blocks, thread_ts),
+            ts: null,
+          })
+        : postSlackMessage);
+
+    // Look up today's persisted root ts (Task #383). Best-effort — a DB
+    // hiccup just means we start a fresh thread root, which is the correct
+    // fallback (channel still gets the message, just unthreaded).
+    const nowFn = depsOverride.now ?? Date.now;
+    const today = utcDayKey(nowFn());
+    const getThreadTs =
+      depsOverride.getThreadTs ??
+      (async (k, d) =>
+        (await import("./toolHealthConfigDatabase")).getNotifyThreadTs(k, d));
+    const setThreadTs =
+      depsOverride.setThreadTs ??
+      (async (k, d, ts) =>
+        (await import("./toolHealthConfigDatabase")).setNotifyThreadTs(
+          k,
+          d,
+          ts,
+        ));
+
+    let existingThreadTs: string | null = null;
+    try {
+      existingThreadTs = await getThreadTs(
+        TOOL_HEALTH_CONFIG_THREAD_KEY,
+        today,
+      );
+    } catch (err) {
+      logger.error(
+        "[ToolHealthNotifier] getThreadTs threw for config change (best-effort):",
+        err,
+      );
+    }
 
     // Fetch the last 3 audit entries from the DB (including the one just
     // written) so on-call can see "what's changed recently?" in a single
@@ -870,7 +1051,7 @@ export async function notifyToolHealthConfigChange(
       `:wrench: Tool-health alert thresholds updated by ${notification.changedBy || "—"} ` +
       `(${changes.length} change${changes.length === 1 ? "" : "s"})`;
     try {
-      result.slackSent = await sendSlack(
+      const r = await postSlack(
         cfg.slackChannel,
         fallback,
         buildConfigChangeBlocks(
@@ -880,7 +1061,24 @@ export async function notifyToolHealthConfigChange(
           cfg.linkIsAbsolute,
           recentAudit,
         ),
+        existingThreadTs ?? undefined,
       );
+      result.slackSent = r.ok;
+
+      // Persist the freshly-posted root only when we successfully posted
+      // a NEW root (no existing thread today) and Slack handed us a ts.
+      // Skipping on a thread reply keeps the row pinned to the original
+      // root so subsequent posts continue to thread under it.
+      if (r.ok && r.ts && !existingThreadTs) {
+        try {
+          await setThreadTs(TOOL_HEALTH_CONFIG_THREAD_KEY, today, r.ts);
+        } catch (err) {
+          logger.error(
+            "[ToolHealthNotifier] setThreadTs threw for config change (best-effort):",
+            err,
+          );
+        }
+      }
     } catch (err) {
       logger.error(
         "[ToolHealthNotifier] Slack send threw for config change notification:",
@@ -978,12 +1176,19 @@ export interface NotifyOverrideExpiredResult {
 export interface ToolHealthOverrideNotifierDeps {
   /** Defaults to `sendSlackNotification`. */
   sendSlack?: typeof sendSlackNotification;
+  /**
+   * Fetches the most recent N audit entries, newest first. Defaults to
+   * `getToolHealthConfigAudit` from `toolHealthConfigDatabase`. Tests can
+   * inject a stub so no real DB connection is required (Task #384).
+   */
+  getAudit?: (limit: number) => Promise<ToolHealthConfigAuditEntry[]>;
 }
 
 function buildOverrideExpiredSlackBlocks(
   n: ToolHealthOverrideExpiredNotification,
   link: string,
   linkIsAbsolute: boolean,
+  recentAudit: ToolHealthConfigAuditEntry[] = [],
 ): any[] {
   const setBy = n.previous_updated_by?.trim() || "_unknown_";
   const expiredAtIso =
@@ -1021,6 +1226,19 @@ function buildOverrideExpiredSlackBlocks(
       },
     },
   ];
+  // "Recent changes" — same pattern as the threshold-tuning notifier
+  // (Task #205). Surfaces the last few audit entries so on-call can see
+  // "what's been tuned recently?" without leaving Slack (Task #384).
+  if (recentAudit.length > 0) {
+    const lines = recentAudit.map(formatAuditEntrySummary);
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Recent changes (last ${recentAudit.length}):*\n${lines.join("\n")}`,
+      },
+    });
+  }
   // Slack rejects relative URLs in `actions.button.url`, so degrade to a
   // plain mrkdwn link when no public origin is configured (mirrors the
   // breach notifier's behavior — see buildSlackBlocks).
@@ -1118,11 +1336,33 @@ export async function notifyToolHealthOverrideExpired(
     `${setBy} just auto-reverted; alerts now using env baseline ` +
     `again. Cleared: ${describeClearedOverridesPlain(notification.cleared_overrides)}.`;
 
+  // Best-effort: pull the last 3 audit entries so the Slack message gives
+  // on-call the same "what's changed recently?" view the manual tune
+  // notification provides (Task #205 / Task #384). A DB hiccup must not
+  // block the Slack send — swallow the error and post without the block.
+  let recentAudit: ToolHealthConfigAuditEntry[] = [];
+  try {
+    const getAuditFn =
+      depsOverride.getAudit ??
+      (await import("./toolHealthConfigDatabase")).getToolHealthConfigAudit;
+    recentAudit = await getAuditFn(3);
+  } catch (auditErr) {
+    logger.error(
+      "[ToolHealthNotifier] Failed to load recent audit entries for override-expired Slack block (best-effort):",
+      auditErr,
+    );
+  }
+
   try {
     result.slackSent = await sendSlack(
       cfg.slackChannel,
       fallback,
-      buildOverrideExpiredSlackBlocks(notification, link, cfg.linkIsAbsolute),
+      buildOverrideExpiredSlackBlocks(
+        notification,
+        link,
+        cfg.linkIsAbsolute,
+        recentAudit,
+      ),
     );
   } catch (err) {
     logger.error(
@@ -1400,8 +1640,26 @@ export interface ToolHealthRecoveryNotification {
 export interface NotifyToolHealthRecoveryResult {
   slackSent: boolean;
   emailSent: boolean;
-  /** True when neither Slack nor email is configured. */
+  /**
+   * True when the recovery page was suppressed for any reason: neither
+   * Slack nor email is configured, OR the operator opted this tool (or
+   * all recoveries) out via `TOOL_HEALTH_RECOVERY_NOTIFY=0` /
+   * `TOOL_HEALTH_RECOVERY_SKIP_TOOLS=<csv>`.
+   *
+   * Callers that need to distinguish "no transport configured" from
+   * "explicitly opted out" should also inspect {@link disabled}.
+   */
   skipped: boolean;
+  /**
+   * True when the suppression was caused by an explicit opt-out
+   * (env-var gate or per-tool skip list). Distinct from the
+   * "no Slack channel & no email recipient" case so dashboards can
+   * surface "operator silenced this tool" separately from "ops needs
+   * to configure a transport".
+   *
+   * Always implies `skipped: true`.
+   */
+  disabled: boolean;
 }
 
 export interface ToolHealthRecoveryNotifierDeps {
@@ -1627,7 +1885,33 @@ export async function notifyToolHealthRecovery(
     slackSent: false,
     emailSent: false,
     skipped: false,
+    disabled: false,
   };
+
+  // Per-tool / global opt-out (Task #347).
+  //
+  // Mirrors the `TOOL_HEALTH_CONFIG_NOTIFY` env-var pattern used by the
+  // config-change notifier, except inverted: recoveries page by default
+  // (preserving today's behavior) and operators can silence them by
+  // setting either:
+  //   • `TOOL_HEALTH_RECOVERY_NOTIFY=0` — silence ALL recovery pages.
+  //     Any explicit "off" value (`0`, `false`, `no`, `off`,
+  //     case-insensitive) disables; everything else, including unset,
+  //     leaves recoveries enabled.
+  //   • `TOOL_HEALTH_RECOVERY_SKIP_TOOLS=tool_a,tool_b` — silence
+  //     recoveries only for the listed tools (matched case-insensitively
+  //     against `notification.tool_name`). Useful for noisy/flapping
+  //     tools whose breach pages remain valuable but whose rapid-fire
+  //     recoveries flood the channel.
+  //
+  // Breach pages are intentionally NOT gated by these flags — operators
+  // who silence recoveries for a flappy tool still want to know when it
+  // breaches.
+  if (recoveryNotificationsDisabled(notification.tool_name)) {
+    result.skipped = true;
+    result.disabled = true;
+    return result;
+  }
 
   if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
     result.skipped = true;

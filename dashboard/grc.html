@@ -62,14 +62,14 @@
         </style>
         <link rel="stylesheet" href="/css/navigation.css" />
         <link rel="stylesheet" href="/css/utilities.css">
-        <script src="/js/i18n.js?v=1.0"></script>
+        <script src="/js/i18n.js?v=1.1"></script>
         <script src="/js/csp-styles.js?v=1"></script>
     </head>
     <body class="bg-gray-100 min-h-screen">
         <div id="walaplus-nav"></div>
         <script src="/js/a11y.js" defer></script>
         <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
         <script>
             document.addEventListener("DOMContentLoaded", function () {
                 WalaPlusNav.init("grc");
@@ -122,7 +122,7 @@
                 class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"
             >
                 <div
-                    class="bg-white rounded-lg shadow p-4 border-l-4 module-risks"
+                    class="bg-white rounded-lg shadow p-4 border-s-4 module-risks"
                 >
                     <div class="text-sm text-gray-500" data-i18n="grc.active_risks">Active Risks</div>
                     <div
@@ -136,7 +136,7 @@
                     </div>
                 </div>
                 <div
-                    class="bg-white rounded-lg shadow p-4 border-l-4 module-policies"
+                    class="bg-white rounded-lg shadow p-4 border-s-4 module-policies"
                 >
                     <div class="text-sm text-gray-500" data-i18n="grc.active_policies">Active Policies</div>
                     <div
@@ -150,7 +150,7 @@
                     </div>
                 </div>
                 <div
-                    class="bg-white rounded-lg shadow p-4 border-l-4 module-compliance"
+                    class="bg-white rounded-lg shadow p-4 border-s-4 module-compliance"
                 >
                     <div class="text-sm text-gray-500" data-i18n="grc.compliance_score">Compliance Score</div>
                     <div
@@ -164,7 +164,7 @@
                     </div>
                 </div>
                 <div
-                    class="bg-white rounded-lg shadow p-4 border-l-4 module-audits"
+                    class="bg-white rounded-lg shadow p-4 border-s-4 module-audits"
                 >
                     <div class="text-sm text-gray-500" data-i18n="grc.open_findings">Open Findings</div>
                     <div
@@ -178,7 +178,7 @@
                     </div>
                 </div>
                 <div
-                    class="bg-white rounded-lg shadow p-4 border-l-4 module-vendors"
+                    class="bg-white rounded-lg shadow p-4 border-s-4 module-vendors"
                 >
                     <div class="text-sm text-gray-500" data-i18n="grc.active_vendors">Active Vendors</div>
                     <div
@@ -192,7 +192,7 @@
                     </div>
                 </div>
                 <div
-                    class="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-500"
+                    class="bg-white rounded-lg shadow p-4 border-s-4 border-indigo-500"
                 >
                     <div class="text-sm text-gray-500" data-i18n="grc.controls_active">Controls Active</div>
                     <div
@@ -229,7 +229,7 @@
                             Next audit, active certificates, expiring certifications, and readiness checklists — all in one place.
                         </p>
                     </div>
-                    <div class="flex gap-6 text-right">
+                    <div class="flex gap-6 text-end">
                         <div>
                             <div class="text-xs uppercase text-purple-100" data-i18n="grc.next_audit">Next Audit</div>
                             <div id="grcNextAudit" class="font-semibold mt-0.5">—</div>
@@ -298,7 +298,7 @@
                         </div>
 
                         <div
-                            class="text-xs text-right pr-2 text-gray-500 flex items-center justify-end"
+                            class="text-xs text-end pe-2 text-gray-500 flex items-center justify-end"
                             data-i18n="grc.risk_crit"
                         >
                             Crit
@@ -329,7 +329,7 @@
                         </div>
 
                         <div
-                            class="text-xs text-right pr-2 text-gray-500 flex items-center justify-end"
+                            class="text-xs text-end pe-2 text-gray-500 flex items-center justify-end"
                             data-i18n="grc.risk_high"
                         >
                             High
@@ -360,7 +360,7 @@
                         </div>
 
                         <div
-                            class="text-xs text-right pr-2 text-gray-500 flex items-center justify-end"
+                            class="text-xs text-end pe-2 text-gray-500 flex items-center justify-end"
                             data-i18n="grc.risk_med"
                         >
                             Med
@@ -391,7 +391,7 @@
                         </div>
 
                         <div
-                            class="text-xs text-right pr-2 text-gray-500 flex items-center justify-end"
+                            class="text-xs text-end pe-2 text-gray-500 flex items-center justify-end"
                             data-i18n="grc.risk_low"
                         >
                             Low
@@ -463,31 +463,31 @@
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th
-                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                                    <th scope="col"
+                                        class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase"
                                         data-i18n="grc.col_rule"
                                     >
                                         Rule
                                     </th>
-                                    <th
+                                    <th scope="col"
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
                                         data-i18n="grc.col_source"
                                     >
                                         Source
                                     </th>
-                                    <th
+                                    <th scope="col"
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
                                         data-i18n="grc.col_target"
                                     >
                                         Target
                                     </th>
-                                    <th
+                                    <th scope="col"
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
                                         data-i18n="grc.col_triggers"
                                     >
                                         Triggers
                                     </th>
-                                    <th
+                                    <th scope="col"
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
                                         data-i18n="grc.col_status"
                                     >
@@ -530,25 +530,25 @@
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th
-                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                                    <th scope="col"
+                                        class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase"
                                         data-i18n="grc.col_control"
                                     >
                                         Control
                                     </th>
-                                    <th
+                                    <th scope="col"
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
                                         data-i18n="grc.col_type"
                                     >
                                         Type
                                     </th>
-                                    <th
+                                    <th scope="col"
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
                                         data-i18n="grc.col_domain"
                                     >
                                         Domain
                                     </th>
-                                    <th
+                                    <th scope="col"
                                         class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase"
                                         data-i18n="grc.col_effectiveness"
                                     >
@@ -630,6 +630,16 @@
         <script>
             let moduleChart = null;
             const _gt = (k) => window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : k.split('.').pop();
+            const _grcStatusLabel = (s) => {
+                switch (s) {
+                    case 'completed': return _gt('grc.status_completed');
+                    case 'failed':    return _gt('grc.status_failed');
+                    case 'pending':   return _gt('grc.status_pending');
+                    case 'running':   return _gt('grc.status_running');
+                    case 'skipped':   return _gt('grc.status_skipped');
+                }
+                return s;
+            };
             const _gtd = (prefix, val) => window.WalaPlusI18n
                 ? window.WalaPlusI18n.tDynamic(prefix, val)
                 : (val ? String(val) : '');
@@ -904,8 +914,8 @@
                             <div class="text-xs text-gray-500">${_gtd("grc.modules", e.source_module)} → ${_gtd("grc.modules", e.target_module)}</div>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <span class="text-xs px-2 py-1 rounded-full ${e.status === "completed" ? "bg-green-100 text-green-700" : e.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}">${_gt("grc.status_" + e.status) || e.status}</span>
+                    <div class="text-end">
+                        <span class="text-xs px-2 py-1 rounded-full ${e.status === "completed" ? "bg-green-100 text-green-700" : e.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}">${_grcStatusLabel(e.status)}</span>
                         <div class="text-xs text-gray-400 mt-1">${new Date(e.created_at).toLocaleString((window.WalaPlusI18n && window.WalaPlusI18n.currentLang && window.WalaPlusI18n.currentLang() === 'ar') ? 'ar-SA' : 'en-US')}</div>
                     </div>
                 </div>
@@ -938,7 +948,7 @@
                             <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                                 <div class="${score >= 80 ? "bg-green-500" : score >= 60 ? "bg-amber-500" : "bg-red-500"} h-full rounded-full" data-style="width: ${score}%"></div>
                             </div>
-                            <span class="text-sm font-semibold w-10 text-right">${score}%</span>
+                            <span class="text-sm font-semibold w-10 text-end">${score}%</span>
                         </div>
                     </div>
                 `;

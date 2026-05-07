@@ -1021,4 +1021,201 @@ if (HAS_DB) {
   console.log("  (skipped) DB-gated getRecentNegativeFeedback verification — DATABASE_URL not set");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. DB-gated integration — Task #598 drill-down filters on
+//    getRecentNegativeFeedback({ agentName, days }).
+//
+// Verifies the new options-bag overload added for the AI Ops dashboard:
+//   * `agentName` narrows to a single agent (other agents must be excluded
+//     even when they have in-window thumbs_down rows in the same DB).
+//   * `days` is a real parameterized lookback that lets the 7/30/90 toggle
+//     widen or narrow the window — exercised at the 7d / 30d / 90d
+//     boundaries with rows seeded just inside and just outside each.
+//
+// Defence-in-depth: the legacy positional-limit form is also re-asserted
+// here so the back-compat shim never silently regresses.
+// ─────────────────────────────────────────────────────────────────────────────
+if (HAS_DB) {
+  const pg = await import("pg");
+  const { Pool } = pg.default;
+  const { ensureAiMetricsTable } = await import("../src/utils/aiTelemetry");
+
+  const RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // Two distinct agent names sharing a common prefix so the test can
+  // either narrow to one (via agentName) or grab both (via prefix scan).
+  const AGENT_A = `db_recentneg598_a_${RUN_ID}`;
+  const AGENT_B = `db_recentneg598_b_${RUN_ID}`;
+
+  const seedPool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+  await ensureAiMetricsTable();
+  // Force ensureFeedbackTable() (private) by hitting the production reader
+  // once — same trick block 7 uses.
+  await getRecentNegativeFeedback(1);
+
+  const seededCallIds: number[] = [];
+
+  // Boundary cohort plan. Each row is a thumbs_down so the rating filter
+  // never excludes them — every exclusion is driven by the day window or
+  // the agentName filter under test.
+  //
+  //   A_today    → AGENT_A, NOW()                       → in 7d, 30d, 90d
+  //   A_5d       → AGENT_A, NOW() - INTERVAL '5 days'   → in 7d, 30d, 90d
+  //   A_8d       → AGENT_A, NOW() - INTERVAL '8 days'   → out of 7d, in 30d, in 90d
+  //   A_31d      → AGENT_A, NOW() - INTERVAL '31 days'  → out of 7d, out of 30d, in 90d
+  //   A_91d      → AGENT_A, NOW() - INTERVAL '91 days'  → out of 7d, 30d, 90d
+  //   B_today    → AGENT_B, NOW()                       → in every window, but
+  //                                                       excluded by agentName=A
+  type Cohort = {
+    label: string;
+    agent: string;
+    createdAtSql: string;
+    latencyMs: number;
+  };
+
+  const cohorts: Cohort[] = [
+    { label: "A_today", agent: AGENT_A, createdAtSql: "NOW()",                          latencyMs: 101 },
+    { label: "A_5d",    agent: AGENT_A, createdAtSql: "NOW() - INTERVAL '5 days'",     latencyMs: 105 },
+    { label: "A_8d",    agent: AGENT_A, createdAtSql: "NOW() - INTERVAL '8 days'",     latencyMs: 108 },
+    { label: "A_31d",   agent: AGENT_A, createdAtSql: "NOW() - INTERVAL '31 days'",    latencyMs: 131 },
+    { label: "A_91d",   agent: AGENT_A, createdAtSql: "NOW() - INTERVAL '91 days'",    latencyMs: 191 },
+    { label: "B_today", agent: AGENT_B, createdAtSql: "NOW()",                          latencyMs: 201 },
+  ];
+
+  const callIdByLabel = new Map<string, string>();
+
+  async function seed598(): Promise<void> {
+    let userCounter = 0;
+    for (const c of cohorts) {
+      const metricRes = await seedPool.query(
+        `INSERT INTO ai_call_metrics
+           (agent_name, tool_name, model, latency_ms, success, error_class,
+            prompt_preview, started_at)
+         VALUES ($1, NULL, 'gpt-4o', $2, true, NULL, $3, NOW())
+         RETURNING id`,
+        [c.agent, c.latencyMs, `preview-${c.label}`],
+      );
+      const callId = Number(metricRes.rows[0].id);
+      seededCallIds.push(callId);
+      callIdByLabel.set(c.label, String(callId));
+
+      await seedPool.query(
+        `INSERT INTO ai_call_feedback (call_id, rating, user_hash, comment, created_at)
+         VALUES ($1, 'thumbs_down', $2, NULL, ${c.createdAtSql})`,
+        [callId, `db-recentneg598-${RUN_ID}-${userCounter++}`],
+      );
+    }
+  }
+
+  async function cleanup598(): Promise<void> {
+    try {
+      if (seededCallIds.length > 0) {
+        await seedPool.query(
+          `DELETE FROM ai_call_metrics WHERE id = ANY($1::bigint[])`,
+          [seededCallIds],
+        );
+        seededCallIds.length = 0;
+      }
+      await seedPool.query(
+        `DELETE FROM ai_call_metrics WHERE agent_name IN ($1, $2)`,
+        [AGENT_A, AGENT_B],
+      );
+    } finally {
+      await seedPool.end().catch(() => {});
+    }
+  }
+
+  try {
+    await seed598();
+
+    // ─── 8a. agentName filter narrows to one agent ────────────────────────
+    await suite.test("DB: getRecentNegativeFeedback — agentName narrows to a single agent", async () => {
+      // Use a 365d window so the agent filter is the only narrowing dimension.
+      const rows = await getRecentNegativeFeedback({
+        limit: 1000,
+        days: 365,
+        agentName: AGENT_A,
+      });
+      const seenAgents = new Set(rows.map((r) => r.agent_name));
+      // No B rows — even though AGENT_B has a fresh in-window thumbs_down.
+      suite.expect(
+        !seenAgents.has(AGENT_B),
+        `agentName=${AGENT_A} excludes rows from sibling agent ${AGENT_B}`,
+      );
+      // All 5 of agent A's seeded rows come back (every cohort fits within 365d).
+      const oursA = rows.filter((r) => r.agent_name === AGENT_A);
+      suite.expectEqual(oursA.length, 5, "all 5 AGENT_A rows visible at days=365");
+
+      // Sanity: omitting agentName surfaces both agents from our prefix.
+      const allRows = await getRecentNegativeFeedback({ limit: 1000, days: 365 });
+      const ours = allRows.filter(
+        (r) => r.agent_name === AGENT_A || r.agent_name === AGENT_B,
+      );
+      const aCount = ours.filter((r) => r.agent_name === AGENT_A).length;
+      const bCount = ours.filter((r) => r.agent_name === AGENT_B).length;
+      suite.expectEqual(aCount, 5, "no agentName: 5 AGENT_A rows visible");
+      suite.expectEqual(bCount, 1, "no agentName: 1 AGENT_B row visible");
+    });
+
+    // ─── 8b. day-window boundaries: 7d / 30d / 90d ────────────────────────
+    await suite.test("DB: getRecentNegativeFeedback — days window boundaries (7/30/90) include/exclude correctly", async () => {
+      const labelsAtWindow = async (days: number): Promise<Set<string>> => {
+        const rows = await getRecentNegativeFeedback({
+          limit: 1000,
+          days,
+          agentName: AGENT_A, // narrow to A so other tenants don't pollute
+        });
+        const ids = new Set(rows.map((r) => r.call_id));
+        const labels = new Set<string>();
+        for (const [label, callId] of callIdByLabel.entries()) {
+          if (label.startsWith("A_") && ids.has(callId)) labels.add(label);
+        }
+        return labels;
+      };
+
+      // 7-day window: A_today + A_5d in; A_8d / A_31d / A_91d out.
+      const w7 = await labelsAtWindow(7);
+      suite.expect(w7.has("A_today"), "days=7: A_today (NOW()) included");
+      suite.expect(w7.has("A_5d"),    "days=7: A_5d (5 days ago) included");
+      suite.expect(!w7.has("A_8d"),   "days=7: A_8d (8 days ago) excluded — just past boundary");
+      suite.expect(!w7.has("A_31d"),  "days=7: A_31d excluded");
+      suite.expect(!w7.has("A_91d"),  "days=7: A_91d excluded");
+
+      // 30-day window: A_today / A_5d / A_8d in; A_31d / A_91d out.
+      const w30 = await labelsAtWindow(30);
+      suite.expect(w30.has("A_today"), "days=30: A_today included");
+      suite.expect(w30.has("A_5d"),    "days=30: A_5d included");
+      suite.expect(w30.has("A_8d"),    "days=30: A_8d (8 days ago) now included");
+      suite.expect(!w30.has("A_31d"),  "days=30: A_31d (31 days ago) excluded — just past boundary");
+      suite.expect(!w30.has("A_91d"),  "days=30: A_91d excluded");
+
+      // 90-day window: everything except A_91d in.
+      const w90 = await labelsAtWindow(90);
+      suite.expect(w90.has("A_today"), "days=90: A_today included");
+      suite.expect(w90.has("A_5d"),    "days=90: A_5d included");
+      suite.expect(w90.has("A_8d"),    "days=90: A_8d included");
+      suite.expect(w90.has("A_31d"),   "days=90: A_31d (31 days ago) now included");
+      suite.expect(!w90.has("A_91d"),  "days=90: A_91d (91 days ago) excluded — just past boundary");
+
+      // Strictly monotonic: each wider window is a superset of the narrower one.
+      for (const lbl of w7)  suite.expect(w30.has(lbl), `30d window is a superset of 7d (missing ${lbl})`);
+      for (const lbl of w30) suite.expect(w90.has(lbl), `90d window is a superset of 30d (missing ${lbl})`);
+    });
+
+    // ─── 8c. legacy positional-limit form still works ─────────────────────
+    await suite.test("DB: getRecentNegativeFeedback — legacy positional-limit form preserved", async () => {
+      // Numeric first arg should still be treated as `limit` (back-compat
+      // for callers from before Task #598). We seeded 5 in-90d AGENT_A
+      // thumbs_down rows; with the default 30-day window only 3 are in
+      // scope (A_today, A_5d, A_8d). LIMIT 1 must therefore return ≤1 row.
+      const rows = await getRecentNegativeFeedback(1);
+      suite.expect(rows.length <= 1, "positional limit=1 honoured by back-compat shim");
+    });
+  } finally {
+    await cleanup598();
+  }
+} else {
+  console.log("  (skipped) DB-gated Task #598 drill-down filter verification — DATABASE_URL not set");
+}
+
 suite.finishOrExit();
