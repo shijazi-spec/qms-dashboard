@@ -7,15 +7,12 @@ import {
   fetchAllZohoRecords,
   type ZohoCRMRecord,
 } from "./zohoCRM";
- slack-audit-notification-alignment
 import { getGovernanceDocumentByModule } from "./database";
-
 import {
   getWeeklyFeedbackDigest,
   summarizeFeedbackTrend,
   type FeedbackTrendSummary,
 } from "./aiFeedbackDatabase";
- main
 
 const { Pool } = pg;
 
@@ -26,10 +23,6 @@ const pool = new Pool({
 const KSA_OFFSET_MS = 3 * 60 * 60 * 1000;
 const KSA_WEEKDAY_THURSDAY = 4;
 const DIGEST_DASHBOARD_LINK = process.env.DIGEST_DASHBOARD_URL || "/executive";
-
-function isAbsoluteHttpUrl(url: string): boolean {
-  return /^https?:\/\//i.test(url);
-}
 
 export type DigestCadence = "weekly" | "monthly" | "quarterly";
 export type DigestChannel = "email" | "slack";
@@ -1134,7 +1127,6 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         text: `*Quality snapshot:* NC Open ${data.nc_summary.open} ΓÇó CAPA Open ${data.capa_summary.open} ΓÇó Risks ${data.risk_summary.total_active} ΓÇó KPI Red ${data.kpi_summary.red}`,
       },
     },
- slack-audit-notification-alignment
   ];
   if (hasAbsoluteDashboardUrl) {
     blocks.push({
@@ -1148,23 +1140,6 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
       ],
     });
   }
-
-    ...(isAbsoluteHttpUrl(DIGEST_DASHBOARD_LINK)
-      ? [
-          {
-            type: "actions",
-            elements: [
-              {
-                type: "button",
-                text: { type: "plain_text", text: "Open Executive Dashboard", emoji: true },
-                url: DIGEST_DASHBOARD_LINK,
-              },
-            ],
-          },
-        ]
-      : []),
-  ];
- main
   if (findingTypeChunks.length > 0) {
     blocks.push({ type: "divider" });
     findingTypeChunks.forEach((chunk, idx) => {
