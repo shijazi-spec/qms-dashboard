@@ -14,7 +14,7 @@ PORT = "5000"
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["node", "./dist/index.cjs"]
+run = ["node", "--import=./.mastra/output/instrumentation.mjs", ".mastra/output/index.mjs"]
 build = ["npm", "run", "build"]
 
 [workflows]
