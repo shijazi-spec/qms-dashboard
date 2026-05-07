@@ -69,20 +69,61 @@ await suite.test("slack block payload renders 4 digest sections", async () => {
     top_alerts: [],
     capa_recurrences: 0,
     duplicate_clusters: 0,
+    business_overview: {
+      total_records: 14,
+      total_leads: 6,
+      total_deals: 8,
+      total_issues: 24,
+      severity_counts: { critical: 4, high: 7, medium: 9, low: 4, total: 24 },
+    },
     business_sections: [
-      { id: "sdr", title: "SDR (All leads)", total: 4, leads: 4, deals: 0, new_in_window: 4, progressed: 2, stalled: 1 },
-      { id: "walaplus_deals", title: "WalaPlus Deals", total: 3, leads: 0, deals: 3, new_in_window: 3, progressed: 1, stalled: 1 },
-      { id: "walaone_deals", title: "WalaOne Deals", total: 2, leads: 0, deals: 2, new_in_window: 2, progressed: 1, stalled: 0 },
-      { id: "marketplace_all", title: "MarketPlace (All leads & deals)", total: 5, leads: 2, deals: 3, new_in_window: 5, progressed: 2, stalled: 1 },
+      {
+        id: "sdr_leads_only",
+        title: "SDR Leads only",
+        total: 4,
+        leads: 4,
+        deals: 0,
+        new_in_window: 4,
+        progressed: 2,
+        stalled: 1,
+        health_score: 78,
+        severity_counts: { critical: 1, high: 2, medium: 3, low: 1, total: 7 },
+      },
+      {
+        id: "deals_corporates_only",
+        title: "Deals Corporates only",
+        total: 5,
+        leads: 0,
+        deals: 5,
+        new_in_window: 5,
+        progressed: 2,
+        stalled: 2,
+        health_score: 72,
+        severity_counts: { critical: 2, high: 3, medium: 4, low: 1, total: 10 },
+      },
+      {
+        id: "marketplace_all",
+        title: "MarketPlace Leads & Deals",
+        total: 5,
+        leads: 2,
+        deals: 3,
+        new_in_window: 5,
+        progressed: 2,
+        stalled: 1,
+        health_score: 76,
+        severity_counts: { critical: 1, high: 2, medium: 2, low: 2, total: 7 },
+      },
     ],
   };
 
   const blocks = buildDigestSlackBlocks(mockData);
   const textBlob = JSON.stringify(blocks);
-  suite.expect(textBlob.includes("SDR (All leads)"), "contains SDR section");
-  suite.expect(textBlob.includes("WalaPlus Deals"), "contains WalaPlus section");
-  suite.expect(textBlob.includes("WalaOne Deals"), "contains WalaOne section");
-  suite.expect(textBlob.includes("MarketPlace (All leads & deals)"), "contains MarketPlace section");
+  suite.expect(textBlob.includes("Period Covered"), "contains period covered label");
+  suite.expect(textBlob.includes("SDR Leads only"), "contains SDR section");
+  suite.expect(textBlob.includes("Deals Corporates only"), "contains corporate deals section");
+  suite.expect(textBlob.includes("MarketPlace Leads & Deals"), "contains MarketPlace section");
+  suite.expect(textBlob.includes("Severity"), "contains severity split");
+  suite.expect(textBlob.includes("Records Audited"), "contains top audited records summary");
 });
 
 await suite.test("fanout isolates channel failures (email fail, slack skipped)", async () => {
