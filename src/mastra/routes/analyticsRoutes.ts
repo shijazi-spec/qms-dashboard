@@ -196,6 +196,48 @@ export const analyticsRoutes = [
     },
   },
   {
+    path: "/api/analytics/executive-digest/runs",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...ANALYTICS_READ_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for executive digest run history",
+            );
+          const { getRecentDigestRuns } =
+            await import("../../utils/executiveDigest");
+          const periodQuery = String(
+            c.req.query("period") || "",
+          ).toLowerCase();
+          const cadence =
+            periodQuery === "weekly" ||
+            periodQuery === "monthly" ||
+            periodQuery === "quarterly"
+              ? periodQuery
+              : undefined;
+          const limitRaw = Number.parseInt(String(c.req.query("limit") || "30"), 10);
+          const limit = Number.isFinite(limitRaw) ? limitRaw : 30;
+          const runs = await getRecentDigestRuns(limit, cadence as any);
+          return c.json({
+            success: true,
+            count: runs.length,
+            runs,
+          });
+        } catch (error) {
+          return c.json(
+            { error: "Failed to fetch executive digest run history" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/analytics/executive-digest/send",
     method: "POST" as const,
     createHandler: async () => {

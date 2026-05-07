@@ -164,6 +164,17 @@ export interface DigestFanoutResult {
   slack: DigestSendResult;
 }
 
+export interface DigestRunRecord {
+  run_key: string;
+  cadence: string;
+  channel: string;
+  window_start: string;
+  window_end: string;
+  status: string;
+  error: string | null;
+  created_at: string;
+}
+
 export interface DigestDeliveryHealth {
   cadence: DigestCadence;
   window_start: string;
@@ -1052,12 +1063,12 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*${section.title}*\nΓÇó Total: *${section.total}* (Leads ${section.leads} / Deals ${section.deals})\nΓÇó New: *${section.new_in_window}*\nΓÇó Progressed: *${section.progressed}* | Stalled: *${section.stalled}*\nΓÇó Severity: C *${section.severity_counts.critical}* / H *${section.severity_counts.high}* / M *${section.severity_counts.medium}* / L *${section.severity_counts.low}*\nΓÇó Health: ${healthEmoji(section.health_score)} *${section.health_score}%*`,
+      text: `*${section.title}*\n- Total: *${section.total}* (Leads ${section.leads} / Deals ${section.deals})\n- New: *${section.new_in_window}*\n- Progressed: *${section.progressed}* | Stalled: *${section.stalled}*\n- Severity: C *${section.severity_counts.critical}* / H *${section.severity_counts.high}* / M *${section.severity_counts.medium}* / L *${section.severity_counts.low}*\n- Health: ${healthEmoji(section.health_score)} *${section.health_score}%*`,
     },
   }));
   const findingTypeLines = data.finding_types.map(
     (f) =>
-      `ΓÇó *${f.module}* / ${f.issue_type}: ${f.count} _(${f.severity})_`,
+      `- *${f.module}* / ${f.issue_type}: ${f.count} _(${f.severity})_`,
   );
   const findingTypeChunks: string[] = [];
   if (findingTypeLines.length > 0) {
@@ -1109,11 +1120,11 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         },
         {
           type: "mrkdwn",
-          text: `*Severity*\nC ${data.business_overview.severity_counts.critical} ΓÇó H ${data.business_overview.severity_counts.high} ΓÇó M ${data.business_overview.severity_counts.medium} ΓÇó L ${data.business_overview.severity_counts.low}`,
+          text: `*Severity*\nC ${data.business_overview.severity_counts.critical} - H ${data.business_overview.severity_counts.high} - M ${data.business_overview.severity_counts.medium} - L ${data.business_overview.severity_counts.low}`,
         },
         {
           type: "mrkdwn",
-          text: `*Audit Snapshot*\nScore ${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"} ΓÇó Trend ${data.audit_summary.trend}`,
+          text: `*Audit Snapshot*\nScore ${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"} - Trend ${data.audit_summary.trend}`,
         },
       ],
     },
@@ -1124,7 +1135,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*Quality snapshot:* NC Open ${data.nc_summary.open} ΓÇó CAPA Open ${data.capa_summary.open} ΓÇó Risks ${data.risk_summary.total_active} ΓÇó KPI Red ${data.kpi_summary.red}`,
+        text: `*Quality snapshot:* NC Open ${data.nc_summary.open} - CAPA Open ${data.capa_summary.open} - Risks ${data.risk_summary.total_active} - KPI Red ${data.kpi_summary.red}`,
       },
     },
   ];
@@ -1380,4 +1391,31 @@ export async function getDigestDeliveryHealth(
     idempotent_run_exists_slack: idempotentRunExistsSlack,
     idempotent_run_exists_email: idempotentRunExistsEmail,
   };
+}
+
+export async function getRecentDigestRuns(
+  limit = 30,
+  cadence?: DigestCadence,
+): Promise<DigestRunRecord[]> {
+  await initDigestRunsTable();
+  const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(1, Math.floor(limit)), 200) : 30;
+  if (cadence) {
+    const rows = await safeQuery(
+      `SELECT run_key, cadence, channel, window_start, window_end, status, error, created_at
+       FROM digest_delivery_runs
+       WHERE cadence = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [cadence, safeLimit],
+    );
+    return rows as DigestRunRecord[];
+  }
+  const rows = await safeQuery(
+    `SELECT run_key, cadence, channel, window_start, window_end, status, error, created_at
+     FROM digest_delivery_runs
+     ORDER BY created_at DESC
+     LIMIT $1`,
+    [safeLimit],
+  );
+  return rows as DigestRunRecord[];
 }
