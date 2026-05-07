@@ -59,11 +59,7 @@
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
- slack-audit-notification-alignment
-    <script src="/js/navigation.js?v=4.7"></script>
-
-        <script src="/js/navigation.js?v=5.0"></script>
- main
+    <script src="/js/navigation.js?v=5.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('compliance');
@@ -210,30 +206,30 @@
             </button>
         </div>
 
- slack-audit-notification-alignment
-        <!-- ─── Frameworks (replaces both Regulation Library list AND tab strip) -->
+        <!-- ─── Frameworks (with Regulation Library + frameworks grid) -->
         <section class="bg-white rounded-lg shadow mb-6" data-testid="section-frameworks">
             <div class="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.frameworks_title">Frameworks</h2>
                     <p class="text-xs text-gray-500" data-i18n="compliance.frameworks_subtitle">Each framework card shows its clauses, % assessed, and % compliant. Click a card to open its clauses & document mapping below.</p>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="lg:col-span-2 space-y-6">
-                <div class="bg-white rounded-lg shadow">
-                    <div class="p-4 border-b border-gray-200">
-                        <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.regulation_library">Regulation Library</h2>
-                    </div>
-                    <div id="regulationsList" class="divide-y divide-gray-200">
-                        <div class="p-4 text-center text-gray-400">Loading regulations...</div>
-                    </div>
-                    <input type="file" id="regulationDocFileInput" accept="application/pdf,.pdf" class="hidden" data-testid="input-regulation-document-file" />
- main
                 </div>
-                <a href="/document-mapping" class="text-xs text-emerald-700 hover:text-emerald-800 font-medium" data-testid="link-document-mapping" data-i18n="compliance.go_doc_mapping">Open Document Mapping →</a>
             </div>
-            <div id="frameworksGrid" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading frameworks…</div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-4">
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-white rounded-lg shadow">
+                        <div class="p-4 border-b border-gray-200">
+                            <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.regulation_library">Regulation Library</h2>
+                        </div>
+                        <div id="regulationsList" class="divide-y divide-gray-200">
+                            <div class="p-4 text-center text-gray-400">Loading regulations...</div>
+                        </div>
+                        <input type="file" id="regulationDocFileInput" accept="application/pdf,.pdf" class="hidden" data-testid="input-regulation-document-file" />
+                    </div>
+                    <a href="/document-mapping" class="text-xs text-emerald-700 hover:text-emerald-800 font-medium" data-testid="link-document-mapping" data-i18n="compliance.go_doc_mapping">Open Document Mapping →</a>
+                </div>
+                <div id="frameworksGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading frameworks…</div>
+                </div>
             </div>
         </section>
 
@@ -643,7 +639,6 @@
             }
         }
 
- slack-audit-notification-alignment
         async function loadAllData() {
             try {
                 const [regsRes, oblsRes, gapRes] = await Promise.all([
@@ -699,6 +694,12 @@
         async function loadDeadlines() {
             try {
                 const res = await fetch('/api/compliance/deadlines');
+                const data = await res.json();
+                renderDeadlines(data.upcoming || [], data.overdue || []);
+            } catch (e) {
+                console.error('Error loading deadlines:', e);
+            }
+        }
 
         function renderByRegulation(regs) {
             const container = document.getElementById('byRegulationChart');
@@ -758,11 +759,13 @@
             try {
                 if (currentUserRole === null) await loadCurrentUser();
                 const res = await fetch('/api/compliance/regulations');
- main
                 const data = await res.json();
-                renderDeadlines(data.upcoming || [], data.overdue || []);
+                const regs = data.regulations || [];
+                const container = document.getElementById('regulationsList');
+                if (!container) return;
+                renderRegulations(regs, container);
             } catch (e) {
-                console.error('Error loading deadlines:', e);
+                console.error('Error loading regulations:', e);
             }
         }
 
@@ -799,7 +802,6 @@
             onFilterChange();
         }
 
- slack-audit-notification-alignment
         function getFilteredRows() {
             return mergedRows.filter(function (r) {
                 if (filterState.framework  && String(r.regulation_id) !== String(filterState.framework)) return false;
@@ -810,7 +812,9 @@
                 if (filterState.owner      && (r.responsible_department || '') !== filterState.owner) return false;
                 return true;
             });
+        }
 
+        function renderRegulations(regs, container) {
             const canManage = canManageRegulationDocs();
             container.innerHTML = regs.map(r => {
                 const src = r.source_url ? String(r.source_url).trim() : '';
@@ -880,7 +884,6 @@
                     </div>
                 </div>
             `;}).join('');
- main
         }
 
         function renderFilterChips() {

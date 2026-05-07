@@ -282,14 +282,9 @@
                                     '<td class="px-3 py-2 text-gray-600">' + mapped + '</td>' +
                                     '<td class="px-3 py-2 text-gray-600">' + escapeHtml(d.uploaded_by || '') + '</td>' +
                                     '<td class="px-3 py-2 text-gray-600">' + escapeHtml(new Date(d.uploaded_at).toLocaleString()) + '</td>' +
- slack-audit-notification-alignment
-                                    '<td class="px-3 py-2 text-right">' +
-                                        '<a href="/api/qms-docs/' + Number(d.id) + '/download" class="text-blue-600 hover:underline text-sm mr-3" data-testid="link-download-' + Number(d.id) + '">Download</a>' +
-                                        '<button data-on-click="openSuggestMappingsModal" data-args="[' + Number(d.id) + ',&quot;' + escapeHtml(d.title) + '&quot;]" class="text-emerald-700 hover:underline text-sm mr-3" data-testid="button-suggest-' + Number(d.id) + '">Suggest mappings</button>' +
-
                                     '<td class="px-3 py-2 text-end">' +
                                         '<a href="/api/qms-docs/' + Number(d.id) + '/download" class="text-blue-600 hover:underline text-sm me-3" data-testid="link-download-' + Number(d.id) + '">Download</a>' +
- main
+                                        '<button data-on-click="openSuggestMappingsModal" data-args="[' + Number(d.id) + ',&quot;' + escapeHtml(d.title) + '&quot;]" class="text-emerald-700 hover:underline text-sm me-3" data-testid="button-suggest-' + Number(d.id) + '">Suggest mappings</button>' +
                                         '<button data-on-click="deleteDoc" data-args="[' + Number(d.id) + ']" class="text-red-600 hover:underline text-sm" data-testid="button-delete-' + Number(d.id) + '">Delete</button>' +
                                     '</td>' +
                                 '</tr>';

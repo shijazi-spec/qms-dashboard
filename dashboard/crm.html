@@ -159,13 +159,8 @@
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
                 <div class="flex items-center gap-4">
                     <div class="relative">
- slack-audit-notification-alignment
-                        <input type="text" id="searchInput" placeholder="Search records..." 
-                            class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-64"
-
                         <input type="text" id="searchInput" placeholder="Search records..."
                             class="ps-10 pe-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-64"
- main
                             data-on-keyup="filterTable" data-testid="input-search">
                         <svg class="absolute start-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -385,15 +380,9 @@
                 if (!data.success) throw new Error(data.error || 'Failed to fetch data');
                 
                 allRecords = data.records || [];
- slack-audit-notification-alignment
-                document.getElementById('recordCount').textContent = _t('dyn.crm.records_count', { count: _fn(allRecords.length) });
-                document.getElementById('lastUpdated').textContent = _t('dyn.crm.updated_at', { time: new Date().toLocaleTimeString() });
-                
-
                 document.getElementById('recordCount').textContent = WalaPlusI18n.t('dyn.crm.records_count', { count: _fn(allRecords.length) });
                 document.getElementById('lastUpdated').textContent = WalaPlusI18n.t('dyn.crm.updated_at', { time: new Date().toLocaleTimeString() });
 
- main
                 loadingEl.classList.add('hidden');
                 
                 if (allRecords.length === 0) {

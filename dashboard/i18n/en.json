@@ -1836,7 +1836,6 @@
     "reject": "Reject"
   },
   "compliance": {
- slack-audit-notification-alignment
     "title": "Regulatory Compliance",
     "subtitle": "PDPL, NCA/ECC, ISO standards tracking and obligation management",
     "export_csv": "Export CSV",
@@ -1921,7 +1920,6 @@
     "record_assessment": "Record Assessment",
     "create_obligation": "Create Obligation",
     "overall_score": "Overall Compliance Score",
- main
     "active_regulations": "Active Regulations",
     "all_regulations": "All Regulations",
     "by_priority": "By Priority",
@@ -1985,8 +1983,6 @@
     "s_partially_compliant": "Partially Compliant",
     "s_pending": "Pending",
     "s_pending_review": "Pending Review",
- slack-audit-notification-alignment
-    "s_exempt": "Exempt",
     "lbl_obligation": "Obligation:",
     "ingest_standard": "Ingest Standard",
     "ingest_modal_title": "Ingest Standard from Document",
@@ -2019,7 +2015,10 @@
     "assess_compliant": "Compliant",
     "assess_partial": "Partially",
     "assess_noncompliant": "Non-Compliant",
-    "assess_not": "Not Assessed"
+    "assess_not": "Not Assessed",
+    "select_regulation": "Select regulation",
+    "total_obligations": "Total Obligations",
+    "upcoming_deadlines": "Upcoming Deadlines"
   },
   "audit_readiness": {
     "title": "Audit Readiness",
@@ -2038,13 +2037,6 @@
     "f_scope": "Scope summary",
     "start": "Start Audit",
     "finalize": "Finalize"
-
-    "select_regulation": "Select regulation",
-    "subtitle": "PDPL, NCA/ECC, ISO standards tracking and obligation management",
-    "title": "Regulatory Compliance",
-    "total_obligations": "Total Obligations",
-    "upcoming_deadlines": "Upcoming Deadlines"
- main
   },
   "crm": {
     "subtitle": "Live CRM data enriched with quality scores & duplicate detection",

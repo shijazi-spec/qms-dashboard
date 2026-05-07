@@ -232,7 +232,6 @@ export async function initComplianceTables(): Promise<void> {
     `ALTER TABLE obligations ADD COLUMN IF NOT EXISTS clause_number VARCHAR(50)`,
   );
 
- slack-audit-notification-alignment
   // Compliance v2 — clause-source traceability. Records whether the
   // obligations under a regulation came from a curated seed, an
   // AI-assisted ingestion of a source PDF, or were entered manually.
@@ -295,6 +294,7 @@ export async function initComplianceTables(): Promise<void> {
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_dcc_obligation ON document_clause_citations (obligation_id)`,
+  );
 
   // Per-regulation uploaded official document (one PDF per row, replace on
   // re-upload). Added as nullable columns so existing rows keep working.
@@ -312,7 +312,6 @@ export async function initComplianceTables(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE regulations ADD COLUMN IF NOT EXISTS document_uploaded_by VARCHAR(255)`,
- main
   );
 
   await seedDefaultRegulations();

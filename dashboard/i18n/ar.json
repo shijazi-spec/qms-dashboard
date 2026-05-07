@@ -1836,7 +1836,6 @@
     "reject": "رفض"
   },
   "compliance": {
- slack-audit-notification-alignment
     "title": "الامتثال التنظيمي",
     "subtitle": "تتبع معايير PDPL وNCA/ECC وISO وإدارة الالتزامات",
     "export_csv": "تصدير CSV",
@@ -1921,7 +1920,6 @@
     "record_assessment": "تسجيل تقييم",
     "create_obligation": "إنشاء التزام",
     "overall_score": "درجة الامتثال الإجمالية",
- main
     "active_regulations": "اللوائح النشطة",
     "all_regulations": "جميع اللوائح",
     "by_priority": "حسب الأولوية",
@@ -1985,8 +1983,6 @@
     "s_partially_compliant": "ممتثل جزئياً",
     "s_pending": "قيد الانتظار",
     "s_pending_review": "بانتظار المراجعة",
- slack-audit-notification-alignment
-    "s_exempt": "مستثنى",
     "lbl_obligation": "الالتزام:",
     "ingest_standard": "استيعاب معيار",
     "ingest_modal_title": "استيعاب معيار من وثيقة",
@@ -2019,7 +2015,10 @@
     "assess_compliant": "ممتثل",
     "assess_partial": "جزئي",
     "assess_noncompliant": "غير ممتثل",
-    "assess_not": "غير مُقيَّم"
+    "assess_not": "غير مُقيَّم",
+    "select_regulation": "اختر اللائحة",
+    "total_obligations": "إجمالي الالتزامات",
+    "upcoming_deadlines": "المواعيد النهائية القادمة"
   },
   "audit_readiness": {
     "title": "جاهزية التدقيق",
@@ -2038,13 +2037,6 @@
     "f_scope": "ملخص النطاق",
     "start": "ابدأ التدقيق",
     "finalize": "إنهاء"
-
-    "select_regulation": "اختر اللائحة",
-    "subtitle": "تتبع معايير PDPL وNCA/ECC وISO وإدارة الالتزامات",
-    "title": "الامتثال التنظيمي",
-    "total_obligations": "إجمالي الالتزامات",
-    "upcoming_deadlines": "المواعيد النهائية القادمة"
- main
   },
   "crm": {
     "subtitle": "بيانات CRM المباشرة مع درجات الجودة وكشف التكرارات",
