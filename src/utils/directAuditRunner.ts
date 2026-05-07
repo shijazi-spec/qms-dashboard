@@ -701,8 +701,8 @@ export async function runDirectAudit(
                 type: "mrkdwn",
                 text:
                   idx === 0
-                    ? `*All Finding Types (${allFindingTypes.length})*\n${chunk}`
-                    : `*All Finding Types (continued ${idx + 1})*\n${chunk}`,
+                    ? `*--- All Finding Types (${allFindingTypes.length}) ---*\n${chunk}`
+                    : `*--- All Finding Types (continued ${idx + 1}) ---*\n${chunk}`,
               },
             });
           });
