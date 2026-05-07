@@ -110,6 +110,7 @@ MANUAL_INTAKE_DIR = "./data/manual-intake"
 
 [userenv.production]
 DIRECT_AUDIT_SLACK_NOTIFY = "false"
+DIGEST_DASHBOARD_URL = "https://qms-dashboard.replit.app/executive"
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
