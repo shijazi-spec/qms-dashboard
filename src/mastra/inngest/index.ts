@@ -1109,7 +1109,6 @@ inngestFunctions.push(toolHealthAlertsCronFunction);
 // ──────────────────────────────────────────────────────────────────────────────
 inngestFunctions.push(promptRegressionAlertsCronFunction);
 
- slack-digest-delivery
 async function runExecutiveDigestCadence(
   cadence: "weekly" | "monthly" | "quarterly",
 ): Promise<any> {
@@ -1205,7 +1204,6 @@ const storageHealthMorningDigestFunction = inngest.createFunction(
   },
 );
 inngestFunctions.push(storageHealthMorningDigestFunction);
-main
 
 const executiveDigestFunction = inngest.createFunction(
   { id: "weekly-executive-digest" },

@@ -1,17 +1,13 @@
- slack-digest-delivery
 import pg from "pg";
 import { logger } from "./logger";
 import { sendSlackNotification } from "./slackNotifications";
 import { fetchAllZohoRecords, type ZohoCRMRecord } from "./zohoCRM";
-
-
-import pg from 'pg';
 import {
   getWeeklyFeedbackDigest,
   summarizeFeedbackTrend,
   type FeedbackTrendSummary,
-} from './aiFeedbackDatabase';
- main
+} from "./aiFeedbackDatabase";
+
 const { Pool } = pg;
 
 const pool = new Pool({
@@ -85,8 +81,15 @@ export interface DigestData {
   top_alerts: Array<{ title: string; severity: string; module: string }>;
   capa_recurrences: number;
   duplicate_clusters: number;
- slack-digest-delivery
   business_sections: DigestBusinessSection[];
+  ai_feedback_summary: {
+    period: string;
+    total: number;
+    thumbs_up: number;
+    thumbs_down: number;
+    thumbs_up_pct: number;
+    trend: FeedbackTrendSummary;
+  };
 }
 
 export interface DigestBuildOptions {
@@ -178,16 +181,6 @@ function normalize(value: string | undefined | null): string {
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-
-  ai_feedback_summary: {
-    period: string;
-    total: number;
-    thumbs_up: number;
-    thumbs_down: number;
-    thumbs_up_pct: number;
-    trend: FeedbackTrendSummary;
-  };
- main
 }
 
 function isProgressed(statusText: string): boolean {
@@ -721,13 +714,9 @@ export async function generateDigestData(
     },
     top_alerts: alertRows,
     capa_recurrences: recurrenceRows.length,
- slack-digest-delivery
     duplicate_clusters: parseInt(duplicateClusters[0]?.cnt || "0", 10),
     business_sections: businessSections,
-
-    duplicate_clusters: parseInt(duplicateClusters[0]?.cnt || '0'),
     ai_feedback_summary: aiFeedbackSummary,
- main
   };
 }
 
@@ -757,14 +746,11 @@ export function buildDigestHTML(data: DigestData): string {
     )
     .join("");
 
- slack-digest-delivery
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WalaPlus ${cadenceLabel(data.cadence)} Quality Digest</title>
-
   const fb = data.ai_feedback_summary;
   const fbDir = fb.trend.direction;
-  const fbIcon = fbDir === 'improving' ? '↑' : fbDir === 'worsening' ? '↓' : fbDir === 'stable' ? '→' : '·';
-  const fbColor = fbDir === 'improving' ? '#047857' : fbDir === 'worsening' ? '#B91C1C' : '#6B7280';
-  const fbLabel = fbDir === 'insufficient_data' ? 'insufficient data' : fbDir;
+  const fbIcon = fbDir === "improving" ? "↑" : fbDir === "worsening" ? "↓" : fbDir === "stable" ? "→" : "·";
+  const fbColor = fbDir === "improving" ? "#047857" : fbDir === "worsening" ? "#B91C1C" : "#6B7280";
+  const fbLabel = fbDir === "insufficient_data" ? "insufficient data" : fbDir;
   const fbSection = fb.total === 0
     ? `<div class="card"><h3>AI Consultant Feedback</h3><p style="font-size:13px;color:#6B7280">No feedback this week.</p></div>`
     : `<div class="card">
@@ -773,11 +759,10 @@ export function buildDigestHTML(data: DigestData): string {
   <div class="metric-row"><span><span class="badge badge-green">Thumbs up</span></span><span class="metric-value">${fb.thumbs_up} (${fb.thumbs_up_pct}%)</span></div>
   <div class="metric-row"><span><span class="badge badge-red">Thumbs down</span></span><span class="metric-value">${fb.thumbs_down}</span></div>
   <div class="metric-row"><span>Trend</span><span class="metric-value" style="color:${fbColor}">${fbIcon} ${fbLabel}</span></div>
-  ${fb.trend.peak_negative_day && fb.trend.peak_negative_count > 0 ? `<div class="metric-row"><span>Peak negative day</span><span class="metric-value">${fb.trend.peak_negative_day} (${fb.trend.peak_negative_count})</span></div>` : ''}
+  ${fb.trend.peak_negative_day && fb.trend.peak_negative_count > 0 ? `<div class="metric-row"><span>Peak negative day</span><span class="metric-value">${fb.trend.peak_negative_day} (${fb.trend.peak_negative_count})</span></div>` : ""}
 </div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WalaPlus Weekly Quality Digest</title>
- main
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WalaPlus ${cadenceLabel(data.cadence)} Quality Digest</title>
 <style>
   body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; max-width: 760px; margin: 0 auto; padding: 20px; background: #f9fafb; }
   .header { background: linear-gradient(135deg, #1E3A8A, #3B82F6); color: white; padding: 24px; border-radius: 12px; margin-bottom: 20px; }
