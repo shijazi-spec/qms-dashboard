@@ -507,11 +507,20 @@ export async function runDirectAudit(logger?: any) {
     // the audit pipeline. This is in addition to the internal audit_notifications
     // table updated by fireAuditCompletedTrigger below.
     try {
-      const slackToken = process.env.SLACK_BOT_TOKEN;
-      const slackChannel = process.env.SLACK_CHANNEL_ID || process.env.SLACK_DEFAULT_CHANNEL;
-      if (slackToken && slackChannel) {
-        const { WebClient } = await import("@slack/web-api");
-        const slack = new WebClient(slackToken);
+      const slackFlag = String(
+        process.env.DIRECT_AUDIT_SLACK_NOTIFY ?? "true",
+      ).toLowerCase();
+      const directAuditSlackEnabled = !["0", "false", "off", "no"].includes(
+        slackFlag,
+      );
+      const slackToken = process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN;
+      const slackChannel =
+        process.env.DIRECT_AUDIT_SLACK_CHANNEL ||
+        process.env.SLACK_CHANNEL_ID ||
+        process.env.SLACK_DEFAULT_CHANNEL;
+
+      if (directAuditSlackEnabled && slackToken && slackChannel) {
+        const { sendSlackNotification } = await import("./slackNotifications");
         const score = qualityScores.overallScore || 0;
         const scoreEmoji = score >= 90 ? "🟢" : score >= 80 ? "🟡" : score >= 70 ? "🟠" : "🔴";
         const sevSummary = `Critical: ${criticalIssues} · High: ${highIssues} · Medium: ${mediumIssues} · Low: ${lowIssues}`;
@@ -591,12 +600,18 @@ export async function runDirectAudit(logger?: any) {
           ],
         });
 
-        await slack.chat.postMessage({
-          channel: slackChannel,
-          text: `${scoreEmoji} WalaPlus Quality Audit Completed — Score ${score.toFixed(1)}%`,
+        const sent = await sendSlackNotification(
+          slackChannel,
+          `${scoreEmoji} WalaPlus Quality Audit Completed — Score ${score.toFixed(1)}%`,
           blocks,
-        });
-        logger?.info("✅ [DirectAudit] Slack notification sent");
+        );
+        if (sent) {
+          logger?.info("✅ [DirectAudit] Slack notification sent");
+        } else {
+          logger?.warn("⚠️ [DirectAudit] Slack notification failed (helper returned false)");
+        }
+      } else if (!directAuditSlackEnabled) {
+        logger?.info("ℹ️ [DirectAudit] DIRECT_AUDIT_SLACK_NOTIFY=false — skipping direct Slack notification");
       } else {
         logger?.info("ℹ️ [DirectAudit] Slack not configured (SLACK_BOT_TOKEN / SLACK_CHANNEL_ID missing) — skipping Slack notification");
       }
