@@ -1001,35 +1001,89 @@ inngestFunctions.push(toolHealthAlertsCronFunction);
 // ──────────────────────────────────────────────────────────────────────────────
 inngestFunctions.push(promptRegressionAlertsCronFunction);
 
+async function runExecutiveDigestCadence(
+  cadence: "weekly" | "monthly" | "quarterly",
+): Promise<any> {
+  const now = new Date();
+  const { runDigestFanout } = await import("../../utils/executiveDigest");
+  const result = await runDigestFanout(cadence, { now });
+  logger.info("[Digest] Fanout result", {
+    cadence,
+    windowStart: result.window.start.toISOString(),
+    windowEnd: result.window.end.toISOString(),
+    email: result.email,
+    slack: result.slack,
+  });
+
+  const failedChannels = [result.email, result.slack].filter(
+    (r) => !r.success,
+  );
+  if (failedChannels.length > 0) {
+    try {
+      const { notifyEvent } = await import("../../utils/notificationHub");
+      await notifyEvent({
+        type: "digest_delivery_failed",
+        module: "analytics",
+        title: `${cadence.toUpperCase()} Digest channel delivery failed`,
+        message: failedChannels
+          .map((r) => `${r.method || "unknown"}: ${r.error || "unknown error"}`)
+          .join(" | "),
+        priority: "high",
+        actionUrl: "/executive",
+      });
+    } catch (err) {
+      logger.error("[Digest] Failed to raise digest delivery failure alert", err);
+    }
+  }
+
+  return result;
+}
+
 const executiveDigestFunction = inngest.createFunction(
   { id: "weekly-executive-digest" },
-  { cron: process.env.DIGEST_CRON || "0 7 * * 1" },
+  { cron: process.env.DIGEST_CRON || process.env.DIGEST_WEEKLY_CRON || "0 14 * * 4" },
   async ({ step }) => {
-    return await step.run("send-executive-digest", async () => {
-      logger.info("[Digest] Weekly executive quality digest triggered");
-      const { sendDigestEmail } = await import("../../utils/executiveDigest");
-      const result = await sendDigestEmail();
-      logger.info("[Digest] Result:", result);
-
-      if (result.success) {
-        try {
-          const { createNotification } =
-            await import("../../utils/notificationHub");
-          await createNotification({
-            type: "info",
-            title: "Weekly Quality Digest sent",
-            message: `Executive quality digest sent via ${result.method}.`,
-            link: "/executive",
-            severity: "low",
-          });
-        } catch {}
-      }
-
-      return result;
+    return await step.run("send-weekly-executive-digest", async () => {
+      logger.info("[Digest] Weekly executive digest triggered");
+      return runExecutiveDigestCadence("weekly");
     });
   },
 );
 inngestFunctions.push(executiveDigestFunction);
+
+const executiveDigestMonthlyFunction = inngest.createFunction(
+  { id: "monthly-executive-digest" },
+  { cron: process.env.DIGEST_MONTHLY_CRON || "0 14 * * 4" },
+  async ({ step }) => {
+    return await step.run("send-monthly-executive-digest", async () => {
+      const { isFirstThursdayInKsa } = await import("../../utils/executiveDigest");
+      if (!isFirstThursdayInKsa(new Date(), "monthly")) {
+        logger.info("[Digest] Monthly digest skipped (not first Thursday in KSA)");
+        return { skipped: true, reason: "not_first_thursday" };
+      }
+      logger.info("[Digest] Monthly executive digest triggered");
+      return runExecutiveDigestCadence("monthly");
+    });
+  },
+);
+inngestFunctions.push(executiveDigestMonthlyFunction);
+
+const executiveDigestQuarterlyFunction = inngest.createFunction(
+  { id: "quarterly-executive-digest" },
+  { cron: process.env.DIGEST_QUARTERLY_CRON || "0 14 * * 4" },
+  async ({ step }) => {
+    return await step.run("send-quarterly-executive-digest", async () => {
+      const { isFirstThursdayInKsa } = await import("../../utils/executiveDigest");
+      if (!isFirstThursdayInKsa(new Date(), "quarterly")) {
+        logger.info("[Digest] Quarterly digest skipped (not first quarter Thursday in KSA)");
+        return { skipped: true, reason: "not_first_quarter_thursday" };
+      }
+      logger.info("[Digest] Quarterly executive digest triggered");
+      return runExecutiveDigestCadence("quarterly");
+    });
+  },
+);
+inngestFunctions.push(executiveDigestQuarterlyFunction);
 
 const aiFeedbackDigestFunction = inngest.createFunction(
   { id: "ai-feedback-digest" },
@@ -1467,6 +1521,293 @@ const fraudKpiMonthlyReminderFunction = inngest.createFunction(
   },
 );
 inngestFunctions.push(fraudKpiMonthlyReminderFunction);
+
+// ──────────────────────────────────────────────────────────────────────
+// Phase 2.1 — Document text-extraction pipeline (compliance mapping)
+//
+//   qmsdocs-text-extract           triggered by `qmsdocs.uploaded` event
+//   qmsdocs-text-extract-backfill  daily 03:30 UTC; extracts any pending row
+//
+// Both functions read the binary file via documentTextExtractor, then
+// persist text + status into qms_uploaded_documents. Failures are
+// swallowed and stored as `failed`/`unsupported` so the upload flow is
+// never blocked by extractor errors.
+// ──────────────────────────────────────────────────────────────────────
+const qmsdocsTextExtractFunction = inngest.createFunction(
+  { id: "qmsdocs-text-extract", concurrency: 2, retries: 2 },
+  { event: "qmsdocs.uploaded" },
+  async ({ event, step }) => {
+    const documentId = Number(event.data?.document_id);
+    if (!Number.isFinite(documentId) || documentId <= 0) {
+      throw new NonRetriableError(
+        `qmsdocs.uploaded missing valid document_id: ${JSON.stringify(event.data)}`,
+      );
+    }
+    const extracted = await step.run("extract-text", async () => {
+      const { getDocumentById, setDocumentExtractionResult } = await import(
+        "../../utils/qmsDocsDatabase"
+      );
+      const { extractDocumentText } = await import(
+        "../../utils/documentTextExtractor"
+      );
+      const doc = await getDocumentById(documentId);
+      if (!doc) {
+        return { document_id: documentId, status: "missing" };
+      }
+      const result = await extractDocumentText(doc.file_path, doc.mime_type);
+      await setDocumentExtractionResult(
+        documentId,
+        result.status as any,
+        result.text,
+        result.hash,
+      );
+      return {
+        document_id: documentId,
+        status: result.status,
+        stored_chars: result.stored_chars ?? 0,
+      };
+    });
+    // Compliance v2 — Pillar 4: chained citation extraction step.
+    // Cheap (regex + small SQL); only runs when extraction succeeded.
+    if (extracted?.status === "extracted") {
+      try {
+        await step.run("extract-citations", async () => {
+          const { runCitationExtraction } = await import(
+            "../../utils/clauseCitationExtractor"
+          );
+          return await runCitationExtraction(documentId);
+        });
+      } catch (err) {
+        logger.warn(
+          `[qmsdocs-text-extract] citation extraction failed for doc ${documentId}: ${(err as Error).message}`,
+        );
+      }
+    }
+    return extracted;
+  },
+);
+inngestFunctions.push(qmsdocsTextExtractFunction);
+
+const qmsdocsTextExtractBackfillFunction = inngest.createFunction(
+  { id: "qmsdocs-text-extract-backfill" },
+  { cron: process.env.QMSDOCS_EXTRACT_BACKFILL_CRON || "30 3 * * *" },
+  async ({ step }) => {
+    return await step.run("extract-pending", async () => {
+      const {
+        listDocumentsPendingExtraction,
+        setDocumentExtractionResult,
+      } = await import("../../utils/qmsDocsDatabase");
+      const { extractDocumentText } = await import(
+        "../../utils/documentTextExtractor"
+      );
+      const batchSize = Number(process.env.QMSDOCS_EXTRACT_BACKFILL_BATCH || 25);
+      const pending = await listDocumentsPendingExtraction(batchSize);
+      let extracted = 0;
+      let failed = 0;
+      let unsupported = 0;
+      const { runCitationExtraction } = await import(
+        "../../utils/clauseCitationExtractor"
+      );
+      for (const doc of pending) {
+        try {
+          const r = await extractDocumentText(doc.file_path, doc.mime_type);
+          await setDocumentExtractionResult(
+            doc.id,
+            r.status as any,
+            r.text,
+            r.hash,
+          );
+          if (r.status === "extracted") {
+            extracted++;
+            // Best-effort: don't fail the whole batch if citation
+            // extraction errors on a single doc.
+            try {
+              await runCitationExtraction(doc.id);
+            } catch (citErr) {
+              logger.warn(
+                `[qmsdocs-extract-backfill] citation extraction failed for doc ${doc.id}: ${(citErr as Error).message}`,
+              );
+            }
+          } else if (r.status === "unsupported") unsupported++;
+          else failed++;
+        } catch (err) {
+          failed++;
+          logger.warn(
+            `[qmsdocs-extract-backfill] doc ${doc.id} failed: ${(err as Error).message}`,
+          );
+          try {
+            await setDocumentExtractionResult(doc.id, "failed", null, null);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      logger.info(
+        `[qmsdocs-extract-backfill] processed ${pending.length}: ${extracted} extracted, ${unsupported} unsupported, ${failed} failed`,
+      );
+      return {
+        processed: pending.length,
+        extracted,
+        unsupported,
+        failed,
+      };
+    });
+  },
+);
+inngestFunctions.push(qmsdocsTextExtractBackfillFunction);
+
+// ──────────────────────────────────────────────────────────────────────
+// Compliance v2 — Ingest Standard from Document
+//
+//   compliance-ingest-standard  triggered by `compliance.ingest.requested`
+//
+// Chains: text-extract (already done by qmsdocs-text-extract for any
+// uploaded doc) -> AI clause extraction -> persist draft into
+// regulation_imports for human review.
+// ──────────────────────────────────────────────────────────────────────
+const complianceIngestStandardFunction = inngest.createFunction(
+  { id: "compliance-ingest-standard", concurrency: 2, retries: 1 },
+  { event: "compliance.ingest.requested" },
+  async ({ event, step }) => {
+    const importId = Number(event.data?.import_id);
+    const documentId = Number(event.data?.document_id);
+    const regulationId =
+      event.data?.regulation_id != null
+        ? Number(event.data.regulation_id)
+        : null;
+    if (!Number.isFinite(importId) || importId <= 0) {
+      throw new NonRetriableError(
+        `compliance.ingest.requested missing valid import_id: ${JSON.stringify(event.data)}`,
+      );
+    }
+    if (!Number.isFinite(documentId) || documentId <= 0) {
+      throw new NonRetriableError(
+        `compliance.ingest.requested missing valid document_id: ${JSON.stringify(event.data)}`,
+      );
+    }
+    return await step.run("extract-and-persist", async () => {
+      const { setImportDraft, setImportError } = await import(
+        "../../utils/regulationImportsDatabase"
+      );
+      const { extractClausesForDocument } = await import(
+        "../../mastra/tools/extractClausesFromStandardTool"
+      );
+      try {
+        const { draft } = await extractClausesForDocument(
+          documentId,
+          regulationId,
+        );
+        // Default every row to accepted=true so the review UI can flip
+        // off the bad ones rather than the user clicking through every
+        // good one.
+        const draftWithAccept = draft.map((d) => ({ ...d, accepted: true }));
+        await setImportDraft(importId, draftWithAccept, "awaiting_review");
+        return {
+          import_id: importId,
+          document_id: documentId,
+          draft_count: draft.length,
+          status: "awaiting_review",
+        };
+      } catch (err) {
+        const msg = (err as Error).message || "unknown error";
+        await setImportError(importId, msg);
+        return {
+          import_id: importId,
+          document_id: documentId,
+          status: "failed",
+          error: msg,
+        };
+      }
+    });
+  },
+);
+inngestFunctions.push(complianceIngestStandardFunction);
+
+// ──────────────────────────────────────────────────────────────────────
+// Phase 3.2 — Compliance LLM judge functions
+//
+//   compliance-judge-link        triggered by `compliance.mapping.applied`
+//   compliance-judge-pending     daily 02:00 UTC; re-judges links older
+//                                than 30 days or never-judged
+// ──────────────────────────────────────────────────────────────────────
+const complianceJudgeLinkFunction = inngest.createFunction(
+  { id: "compliance-judge-link", concurrency: 2, retries: 2 },
+  { event: "compliance.mapping.applied" },
+  async ({ event, step }) => {
+    const obligationId = Number(event.data?.obligation_id);
+    const documentId = Number(event.data?.document_id);
+    const appliedBy = String(event.data?.applied_by || "ai-suggest");
+    if (
+      !Number.isFinite(obligationId) ||
+      obligationId <= 0 ||
+      !Number.isFinite(documentId) ||
+      documentId <= 0
+    ) {
+      throw new NonRetriableError(
+        `compliance.mapping.applied missing valid ids: ${JSON.stringify(event.data)}`,
+      );
+    }
+    return await step.run("judge", async () => {
+      const { judgeEvidence } = await import("../../utils/complianceJudge");
+      try {
+        const verdict = await judgeEvidence(
+          obligationId,
+          documentId,
+          appliedBy,
+        );
+        return {
+          obligation_id: obligationId,
+          document_id: documentId,
+          status: verdict.status,
+        };
+      } catch (err) {
+        logger.warn(
+          `[compliance-judge-link] failed for ob=${obligationId} doc=${documentId}: ${(err as Error).message}`,
+        );
+        return {
+          obligation_id: obligationId,
+          document_id: documentId,
+          status: "error",
+          error: (err as Error).message,
+        };
+      }
+    });
+  },
+);
+inngestFunctions.push(complianceJudgeLinkFunction);
+
+const complianceJudgePendingFunction = inngest.createFunction(
+  { id: "compliance-judge-pending" },
+  { cron: process.env.COMPLIANCE_JUDGE_CRON || "0 2 * * *" },
+  async ({ step }) => {
+    return await step.run("judge-pending", async () => {
+      const { listLinksPendingJudgement } = await import(
+        "../../utils/complianceQualityDatabase"
+      );
+      const { judgeEvidence } = await import("../../utils/complianceJudge");
+      const batchSize = Number(process.env.COMPLIANCE_JUDGE_BATCH || 25);
+      const pending = await listLinksPendingJudgement({ limit: batchSize });
+      let ok = 0;
+      let fail = 0;
+      for (const link of pending) {
+        try {
+          await judgeEvidence(link.obligation_id, link.document_id, "ai-judge-cron");
+          ok++;
+        } catch (err) {
+          fail++;
+          logger.warn(
+            `[compliance-judge-pending] failed: ${(err as Error).message}`,
+          );
+        }
+      }
+      logger.info(
+        `[compliance-judge-pending] processed ${pending.length}: ${ok} ok, ${fail} failed`,
+      );
+      return { processed: pending.length, ok, fail };
+    });
+  },
+);
+inngestFunctions.push(complianceJudgePendingFunction);
 
 export function inngestServe({
   mastra,
