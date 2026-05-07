@@ -184,7 +184,7 @@ This document serves as:
 #### QMS-019 — Client-Side Admin Key in localStorage
 - **Severity:** MEDIUM (CVSS 5.3)
 - **Issue:** Admin API key stored in browser localStorage, accessible to XSS attacks.
-- **Remediation:** Admin key migrated from localStorage to HttpOnly cookie. New POST /api/admin/auth endpoint sets `admin_key` cookie with HttpOnly, SameSite=Lax, 8-hour expiry. POST /api/admin/auth/logout clears the cookie. All dashboard files updated to cookie-based auth. `getAdminKey()` helper reads from both header and cookie.
+- **Remediation:** Admin key migrated from localStorage to HttpOnly cookie. New POST /api/admin/auth endpoint sets `admin_key` cookie with HttpOnly, Secure, SameSite=Strict, 8-hour expiry (subsequently tightened from the initial `SameSite=Lax` setting; see §5.7 Secrets Rotation Log for the precautionary `ADMIN_API_KEY` rotation that followed). POST /api/admin/auth/logout clears the cookie. All dashboard files updated to cookie-based auth. `getAdminKey()` helper reads from both header and cookie.
 - **Files Modified:** `src/mastra/index.ts`, `src/utils/rbacMiddleware.ts`, `dashboard/admin.html`, `dashboard/users.html`, `dashboard/login.html`, `dashboard/calls.html`, `dashboard/qms.html`
 - **Control:** HttpOnly cookie storage; no client-side JavaScript access to admin key.
 
@@ -770,7 +770,7 @@ env exports the flag with a truthy value.
 | Primary method | Google OAuth 2.0 |
 | Secondary method | Admin API Key (X-Admin-Key header or admin_key HttpOnly cookie) |
 | Session token | HMAC-SHA256 signed, 7-day expiry |
-| Cookie flags | HttpOnly, Secure (production), SameSite=Lax, Path=/ |
+| Cookie flags | HttpOnly, Secure (production), SameSite=Strict, Path=/ |
 | Admin key storage | HttpOnly cookie (migrated from localStorage) |
 | OAuth CSRF protection | state parameter validated against oauth_state cookie |
 | Logout | POST only (no GET-based logout) |
@@ -787,6 +787,43 @@ env exports the flag with a truthy value.
 - `src/mastra/routes/authRoutes.ts` — OAuth flow, session management
 - `src/mastra/index.ts` — Global auth middleware, public paths
 - `src/utils/rbacMiddleware.ts` — `getAdminKey()`, `requireAdminOrKey()`
+
+#### Auth Cookie Inventory
+
+The platform issues exactly three auth-related cookies. Each cookie has a
+fixed flag set; deviations require updating both this table and the matching
+guardrail script in the same change.
+
+| Cookie | Set by | Purpose | HttpOnly | Secure | SameSite | Path | Max-Age | Notes |
+|--------|--------|---------|----------|--------|----------|------|---------|-------|
+| `admin_key` | `src/mastra/routes/adminApiRoutes.ts` (`/api/admin/auth`, `/api/admin/auth/logout`) and `src/mastra/routes/authRoutes.ts` (`/api/auth/logout`, `/api/logout` clear it) | Carries the admin API key for the admin-key auth path. High-privilege bearer credential. | **always** | **always** (unconditional, even on local HTTP) | **Strict** (unconditional) | `/` | 28800 (set) / 0 (clear) | All three flags are unconditional and must never be made conditional on `isSecureDomain()`. Enforced by `scripts/check-admin-cookie-flags.sh` (`tests/adminCookieFlags.test.ts`). |
+| `walaplus_session` | `src/mastra/routes/authRoutes.ts` (`/api/callback` set; `/api/auth/logout` + `/api/logout` clear) | Signed OIDC session token (HMAC-SHA256, 7-day expiry). | **always** | conditional via `${secure ? "; Secure" : ""}` where `secure = isSecureDomain()` | **Lax** (top-level OIDC redirect must carry the cookie back) | `/` | `SESSION_MAX_AGE` (set) / 0 (clear) | `Secure` is omitted only on plain-HTTP local dev so the cookie still round-trips; production is always HTTPS so `isSecureDomain()` returns true and `Secure` is emitted. SameSite is `Lax` — not `Strict` — because the OIDC provider redirects the user agent back to `/api/callback` cross-site, and `Strict` would strip the cookie on that navigation. |
+| `oauth_data` | `src/mastra/routes/authRoutes.ts` (`/api/login` set; `/api/callback` clear) | Short-lived (600 s) PKCE/state/nonce envelope tying a `/api/login` request to its `/api/callback`. Cleared on success. | **always** | conditional via `${secure ? "; Secure" : ""}` | **Lax** (same OIDC top-level-redirect reason as `walaplus_session`) | `/` | 600 (set) / 0 (clear) | `Secure` is conditional for the same plain-HTTP-dev reason as `walaplus_session`. |
+
+**Why the conditional `Secure` is acceptable on `walaplus_session` /
+`oauth_data` but not on `admin_key`:** the admin key is a long-lived bearer
+credential that grants full admin access; we accept the inconvenience of
+local-dev breakage to guarantee it is never transmitted in cleartext, even
+by mistake. The OIDC session and the 600-second oauth_data envelope are
+issued only by the OIDC flow, which on production always runs over HTTPS
+(`isSecureDomain()` returns true), so the conditional adds dev ergonomics
+without weakening production security.
+
+**Static guardrails (CI-enforced on every PR via `tests/runIntegrationTests.ts`):**
+- `scripts/check-admin-cookie-flags.sh` — asserts every `admin_key`
+  `Set-Cookie` line in `src/mastra/routes/` carries `HttpOnly`, `Secure`,
+  and `SameSite=Strict` unconditionally. Wrapped by
+  `tests/adminCookieFlags.test.ts`.
+- `scripts/check-auth-cookie-flags.sh` — asserts every `walaplus_session`
+  and `oauth_data` `Set-Cookie` line in `src/mastra/routes/` carries
+  `HttpOnly`, `SameSite=Lax`, `Path=/`, and the literal token `Secure`
+  (matching either an unconditional emission or the documented
+  `${secure ? "; Secure" : ""}` ternary). Wrapped by
+  `tests/authCookieFlags.test.ts`.
+
+If a future change legitimately needs to alter any flag in this table, update
+this section, the matching guardrail script, and the inline `// Security:`
+comment on the cookie-emitting line in the same commit.
 
 #### Secrets Rotation Log
 
@@ -1063,6 +1100,51 @@ Operational guarantees:
 
 ---
 
+### 5.14 Streaming-Export Cache Location Health Check
+
+The platform stages streaming XLSX/CSV exports to a per-job temp file under
+`${tmpdir}/walaplus-export-cache` (or the override path in
+`STREAMING_EXPORT_CACHE_DIR`) so interrupted multi-GB downloads can resume
+via HTTP Range. The cache directory itself is locked down to mode `0o700`
+and every staged file to `0o600`, but those modes only protect the *contents*
+of the directory — the file *names* (which embed tenant + report identifiers
+via the cache key) are still discoverable through parent-directory traversal
+when an ancestor grants group/other read or execute.
+
+To catch the misconfiguration on day one rather than during an audit, the
+worker runs a one-shot health check at boot
+(`checkStagedExportCacheLocation()` in `src/utils/excelExport.ts`).
+
+| Aspect | Behaviour |
+|--------|-----------|
+| When it runs | Once during Mastra startup, alongside the ADMIN_API_KEY strength gate. The probe first calls `ensureStagedExportDir()` so the resolved path actually exists on disk before the ancestor walk — this materialises any missing segments at mode `0o700` (Node's `mkdir(recursive: true, mode: 0o700)` applies the mode to every newly-created intermediate, not just the leaf), so the worker hardens the operator's path on its own behalf. The walk then runs against the now-existing chain. |
+| When it stays silent | `STREAMING_EXPORT_CACHE_DIR` is unset (default `/tmp`-based path on a single-tenant box; `/tmp` is intentionally sticky-bit world-traversable). Also silent on `win32` where Node ignores fs modes, and silent whenever the operator-controlled portion of the configured path has any single owner-only (`0o700`) ancestor between the cache dir and the system boundary — that tight barrier blocks non-owners from traversing past it, so anything above it is irrelevant. Crucially: when the worker is the one that creates a missing parent segment, that segment comes out at `0o700` and contributes no findings. |
+| What the walk does | Walks parents upward from the resolved cache directory, reporting each ancestor whose mode has group/other read or execute (`mode & 0o055 ≠ 0`). The walk stops at the first owner-only ancestor (tight barrier) **and** at well-known system roots the operator cannot meaningfully `chmod` (`/`, the resolved `os.tmpdir()`, and the FHS roots `/var`, `/srv`, `/opt`, `/usr`, `/home`, `/mnt`, `/run`). Only the operator-controlled segments below those boundaries are scanned. |
+| When it warns | An ancestor of the cache dir was created out-of-band (by ops provisioning, `install -d`, an older build, a sibling service, etc.) at `0o755` (or otherwise group/other r+x) and the worker does not own it tightly enough to silently fix it. Example: env override `/srv/shared/exports` where `/srv/shared` was pre-provisioned by ops at `0o755 root:deploy`. The structured warning lists each offending ancestor with its octal mode and a recommended fix. |
+
+#### Recommended fix when the warning fires
+
+Pick whichever is simpler in your environment:
+
+1. **Tighten the offending ancestor.** `chmod o-rx,g-rx /srv/shared` (or
+   whichever path the warning lists). The worker should normally be the
+   owner — if not, `chown` it to the worker user as well. Re-run the worker;
+   the warning should disappear.
+2. **Re-point the cache under a tight parent.** Set
+   `STREAMING_EXPORT_CACHE_DIR` to a path whose immediate (or any) parent is
+   owned by the worker user and `chmod 0o700` — e.g.
+   `/var/lib/walaplus/export-cache` with `/var/lib/walaplus` chmod `0o700`.
+   The tight `0o700` barrier short-circuits the walk before it ever reaches
+   `/var/lib`, so no findings are produced.
+
+#### Implementation Files
+
+- `src/utils/excelExport.ts` — `checkStagedExportCacheLocation()` and the
+  `ExportCacheLocationCheckResult` shape it returns for tests.
+- `src/mastra/index.ts` — calls the check during the boot sequence.
+
+---
+
 ## 6. Cross-Reference Table — All 39 Findings
 
 | # | Finding ID | Title | Severity | CVSS | Domain | Status | Primary Files Modified |
@@ -1157,6 +1239,7 @@ Operational guarantees:
 | 4.3 | April 25, 2026 | WalaPlus Platform Engineering | §5.7 Authentication Policy: added **Secrets Rotation Log** subsection with rotation procedure and table; recorded the April 25, 2026 precautionary rotation of `ADMIN_API_KEY` following the `admin_key` cookie tightening from `SameSite=Lax` to `SameSite=Strict`. New high-entropy value (≥ 256 bits) installed in the platform secrets store; prior key no longer accepted by `/api/admin/auth`. |
 | 4.5 | April 26, 2026 | WalaPlus Platform Engineering | §5.7 Secrets Rotation Log: recorded the April 26, 2026 operator-usability rotation of `ADMIN_API_KEY` from the April 25 high-entropy 64-hex value to a memorable mnemonic passphrase (38 chars / 25 distinct — clears the startup strength gate). Workflow restarted; prior value verified rejected, new value verified accepted. |
 | 4.6 | April 26, 2026 | WalaPlus Platform Engineering | §5.13 Vendored Dependency Patches expanded with a second patch entry: `lazystream/lib/lazystream.js` (transitive via `exceljs` → `archiver` → `archiver-utils`) calls `require('readable-stream/passthrough')`, a subpath that only exists in `readable-stream@2.x`. Local Repl resolves it via lazystream's nested `readable-stream@2.3.8`; the production deploy bundle flattens to top-level `readable-stream@3.6.2` (no `passthrough.js` at root) and crash-loops with `ERR_MODULE_NOT_FOUND`. Patch rewrites the require to use the public `PassThrough` named export from `readable-stream`'s main entry — identical behaviour on v2 and v3. Applied via the existing `scripts/patch-mastra-core.mjs` postinstall hook (now multi-patch); idempotency reverified. Local app boot, admin auth, and export-route gate confirmed unaffected. |
+| 4.7 | May 3, 2026 | WalaPlus Platform Engineering | Documentation correction: synced stale `admin_key` cookie wording with the production code (`src/mastra/routes/adminApiRoutes.ts`). Updated the §5.7 Authentication Policy "Cookie flags" row from `SameSite=Lax` to `SameSite=Strict`, and rewrote the §4.2 QMS-019 remediation note to reflect the current Strict setting and cross-link the §5.7 Secrets Rotation Log entry for the precautionary `ADMIN_API_KEY` rotation. No code changes; SOP-only fix to remove the last stale `SameSite=Lax` references for the admin cookie. |
 | 4.4 | April 26, 2026 | WalaPlus Platform Engineering | Added §5.10 Storage Health Monitoring & Quiet Hours (`STORAGE_HEALTH_QUIET_HOURS_START/END/TZ`, critical-severity override, fail-open on misconfiguration); §5.11 AI Metrics Retention Pruning & Notifier (`AI_METRICS_RETENTION_PRUNE_NOTIFY`, manual-only gating, operator-identity capture, fail-open notifier); §5.12 Post-Restore Verification Alerts (per-table row-count deltas, amber/red thresholds, runbook deep links, baseline-required policy); §5.13 Vendored Dependency Patches (`scripts/patch-mastra-core.mjs` postinstall hook, idempotency + bounded-scope guarantees). Extended §5.6 with a Testing & validation subsection covering `RUN_RATE_LIMITER_INTEGRATION_E2E` and the `RATE_LIMIT_DISABLED` operational caveat. Added the corresponding implementation files to §7 References. |
 
 **Next Review:** June 2026 (Quarterly)

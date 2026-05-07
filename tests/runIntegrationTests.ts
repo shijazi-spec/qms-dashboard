@@ -67,6 +67,18 @@
  * Test validates DATABASE_URL itself; CI wires it via
  * `.github/workflows/ai-metrics-sweep.yml`.
  *
+ * Prompt-regression alert cron DB integration test (Task #365): if the env
+ * var `RUN_PROMPT_REGRESSION_E2E=1` is set we additionally run
+ * `tests/promptRegressionAlertsCron.integration.ts` against a real
+ * Postgres. It seeds two prompt versions for the same agent (one with a
+ * high thumbs-up rate, one regressed below threshold), runs
+ * `runPromptRegressionCheck()` with default deps so the production
+ * SQL → cron → alert path is exercised end-to-end, and asserts an
+ * `ai_alerts` row with `alert_type='prompt_regression'` is created.
+ * Notification side-effect deps (Slack/email + open-alerts sweep +
+ * overrides loader) are stubbed so the test cannot page on-call or
+ * disturb pre-existing alerts on a shared DB. Cleanup runs in `finally`.
+ *
  * RBAC HTTP integration tests: if the env var `RUN_RBAC_INTEGRATION_E2E=1`
  * is set we additionally run `tests/rbacRouteLockdown.integration.ts` and
  * `tests/rbacReportRoutes.integration.ts` against a running dev server.
@@ -90,6 +102,24 @@
  * Task #664 added — fails CI in the same run as the unit tests instead of
  * only being catchable by manually running `npx tsx tests/testRateLimiter*Http.ts`
  * with the secret flipped.
+ *
+ * Tool-health on-call notifier integration test: if the env var
+ * `RUN_TOOL_HEALTH_INTEGRATION_E2E=1` is set we additionally run
+ * `tests/toolHealthAlertNotifier.integration.ts` (via
+ * `scripts/run-tool-health-notifier-integration.sh`). The test posts to a
+ * real Slack channel and/or a real Resend inbox using the production
+ * Block Kit and plaintext renderers — NOT stubs — so broken Block Kit
+ * shapes, bad subject lines, plaintext truncation, and character-escaping
+ * bugs are caught before they page on-call at 3 AM. The file self-skips
+ * cleanly (exits 0) when none of the optional Slack/Resend credential
+ * pairs (SLACK_BOT_TOKEN+SLACK_TEST_CHANNEL or
+ * RESEND_API_KEY+RESEND_TEST_EMAIL) are configured, so wiring this flag
+ * on unconditionally in the standard test job is safe even on
+ * environments that don't have the secrets configured. The dedicated CI
+ * workflow `.github/workflows/tool-health-notifier-integration.yml`
+ * forwards the same secrets, and the main `.github/workflows/test.yml`
+ * also sets the flag so a renderer regression fails CI in the same run
+ * as the unit tests when credentials are present.
  *
  * AI approval-queue HTTP secret-leak integration test: if the env var
  * `RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1` is set we additionally run
@@ -331,6 +361,37 @@ function runRateLimiterIntegrationSuite(): Promise<RunResult> {
   });
 }
 
+function runToolHealthNotifierIntegration(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/toolHealthAlertNotifier.integration.ts";
+    const child = spawn(
+      "bash",
+      ["scripts/run-tool-health-notifier-integration.sh"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn tool-health notifier integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
 function runApprovalRedactionIntegration(): Promise<RunResult> {
   return new Promise((resolve) => {
     const started = Date.now();
@@ -382,6 +443,37 @@ function runAiMetricsSweep(): Promise<RunResult> {
     child.on("error", (err) => {
       console.error(
         `Failed to spawn ai-metrics-sweep integration suite: ${(err as Error).message}`,
+      );
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
+function runPromptRegressionCronIntegration(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/promptRegressionAlertsCron.integration.ts";
+    const child = spawn(
+      "npx",
+      ["tsx", "tests/promptRegressionAlertsCron.integration.ts"],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(
+        `Failed to spawn prompt-regression cron integration suite: ${(err as Error).message}`,
       );
       resolve({
         file: label,
@@ -489,6 +581,55 @@ function runStreamingDownloadSmoke(): Promise<RunResult> {
   });
 }
 
+/**
+ * Per-route, real-browser, client-observed-budget smoke for every export
+ * endpoint. Complements `runStreamingExportLatency` (server-only TTFB
+ * header) by measuring what the user actually sees through the live
+ * dashboard streaming-download client. See
+ * `tests/streamingDownloadPerRoute.spec.ts` for the full rationale.
+ *
+ * Pinned to --project=chromium because the client-budget regression
+ * class this catches (per-route TLS/edge buffering, SW round-trip
+ * overhead, browser disk-write throughput against a real backend) is
+ * engine-agnostic; cross-engine coverage of the streaming pipeline
+ * itself is already handled by `runStreamingDownloadSmoke` against the
+ * intercepted fixture.
+ */
+function runStreamingDownloadPerRoute(): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const label = "tests/streamingDownloadPerRoute.spec.ts (chromium)";
+    const child = spawn(
+      "npx",
+      [
+        "playwright",
+        "test",
+        "tests/streamingDownloadPerRoute.spec.ts",
+        "--project=chromium",
+        "--reporter=list",
+      ],
+      { stdio: "inherit", env: process.env },
+    );
+    child.on("exit", (code) => {
+      resolve({
+        file: label,
+        ok: code === 0,
+        code: code ?? -1,
+        durationMs: Date.now() - started,
+      });
+    });
+    child.on("error", (err) => {
+      console.error(`Failed to spawn playwright: ${(err as Error).message}`);
+      resolve({
+        file: label,
+        ok: false,
+        code: -1,
+        durationMs: Date.now() - started,
+      });
+    });
+  });
+}
+
 async function main(): Promise<void> {
   const overallStart = Date.now();
   const files = await discoverTestFiles();
@@ -536,6 +677,22 @@ async function main(): Promise<void> {
     );
   }
 
+  // Per-route, real-browser, client-observed-budget smoke. Gated on the
+  // same env flag as the server-side latency check above so the two
+  // layers (server X-Stream-TTFB-Ms header AND client-observed TTFB +
+  // total wall time through the live SW streaming-download client) are
+  // exercised in lock-step — a regression in either fails the same job.
+  if (process.env.RUN_STREAMING_EXPORT_LATENCY_E2E === "1") {
+    console.log(
+      `\n──── tests/streamingDownloadPerRoute.spec.ts (playwright, chromium) ────`,
+    );
+    results.push(await runStreamingDownloadPerRoute());
+  } else {
+    console.log(
+      `\n[skip] streaming-download per-route client-budget smoke — set RUN_STREAMING_EXPORT_LATENCY_E2E=1 (with ADMIN_API_KEY, DATABASE_URL, and the dev server running) to include the real-browser per-route client-budget smoke alongside the server-side check.`,
+    );
+  }
+
   if (process.env.RUN_AI_METRICS_SWEEP_E2E === "1") {
     console.log(
       `\n──── ai_call_metrics secret-sweep DB integration test ────`,
@@ -544,6 +701,17 @@ async function main(): Promise<void> {
   } else {
     console.log(
       `\n[skip] ai_call_metrics secret-sweep DB integration test — set RUN_AI_METRICS_SWEEP_E2E=1 with DATABASE_URL pointed at a real Postgres to verify redactAiCallMetrics() against live SQL.`,
+    );
+  }
+
+  if (process.env.RUN_PROMPT_REGRESSION_E2E === "1") {
+    console.log(
+      `\n──── Prompt-regression alert cron DB integration test (Task #365) ────`,
+    );
+    results.push(await runPromptRegressionCronIntegration());
+  } else {
+    console.log(
+      `\n[skip] prompt-regression alert cron DB integration test — set RUN_PROMPT_REGRESSION_E2E=1 with DATABASE_URL pointed at a real Postgres to seed two prompt versions and verify runPromptRegressionCheck() opens an ai_alerts row end-to-end.`,
     );
   }
 
@@ -566,6 +734,17 @@ async function main(): Promise<void> {
   } else {
     console.log(
       `\n[skip] RBAC HTTP integration tests — set RUN_RBAC_INTEGRATION_E2E=1 with DATABASE_URL, SESSION_SECRET, and the dev server running to include them.`,
+    );
+  }
+
+  if (process.env.RUN_TOOL_HEALTH_INTEGRATION_E2E === "1") {
+    console.log(
+      `\n──── Tool-health on-call notifier integration test (Slack/Resend Block Kit + plaintext renderers) ────`,
+    );
+    results.push(await runToolHealthNotifierIntegration());
+  } else {
+    console.log(
+      `\n[skip] Tool-health on-call notifier integration test — set RUN_TOOL_HEALTH_INTEGRATION_E2E=1 to include it (the underlying test self-skips cleanly when no Slack/Resend credentials are configured).`,
     );
   }
 

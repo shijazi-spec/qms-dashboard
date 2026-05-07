@@ -87,6 +87,103 @@ function makeScorecard(overrides: Partial<QualityScorecard> = {}): QualityScorec
   };
 }
 
+type ErrorCase = {
+  name: string;
+  path: string;
+  method: string;
+  getMock: (db: typeof import("../../src/utils/database")) => ReturnType<typeof vi.fn>;
+  errorBody: { error: string };
+  body?: unknown;
+  params?: Record<string, string>;
+  query?: Record<string, string>;
+};
+
+const ERROR_CASES: ErrorCase[] = [
+  {
+    name: "GET /api/dashboard",
+    path: "/api/dashboard",
+    method: "GET",
+    getMock: (db) => db.getDashboardData as unknown as ReturnType<typeof vi.fn>,
+    errorBody: { error: "Failed to fetch dashboard data" },
+  },
+  {
+    name: "GET /api/audit/latest",
+    path: "/api/audit/latest",
+    method: "GET",
+    getMock: (db) => db.getLatestAuditResult as unknown as ReturnType<typeof vi.fn>,
+    errorBody: { error: "Failed to fetch latest audit" },
+  },
+  {
+    name: "GET /api/audit/history",
+    path: "/api/audit/history",
+    method: "GET",
+    getMock: (db) => db.getAuditHistory as unknown as ReturnType<typeof vi.fn>,
+    errorBody: { error: "Failed to fetch audit history" },
+  },
+  {
+    name: "GET /api/dashboard/quality-trend",
+    path: "/api/dashboard/quality-trend",
+    method: "GET",
+    getMock: (db) => db.pool.query as unknown as ReturnType<typeof vi.fn>,
+    errorBody: { error: "Failed to fetch quality trend" },
+  },
+  {
+    name: "GET /api/dashboard/issues-category-trend",
+    path: "/api/dashboard/issues-category-trend",
+    method: "GET",
+    getMock: (db) => db.pool.query as unknown as ReturnType<typeof vi.fn>,
+    errorBody: { error: "Failed to fetch category trend" },
+  },
+  {
+    name: "GET /api/scorecards",
+    path: "/api/scorecards",
+    method: "GET",
+    getMock: (db) => db.getActiveScorecardsAll as unknown as ReturnType<typeof vi.fn>,
+    errorBody: { error: "Failed to fetch scorecards" },
+  },
+  {
+    name: "GET /api/governance",
+    path: "/api/governance",
+    method: "GET",
+    getMock: (db) => db.getActiveGovernanceDocument as unknown as ReturnType<typeof vi.fn>,
+    errorBody: { error: "Failed to fetch governance document" },
+  },
+  {
+    name: "GET /api/scorecard",
+    path: "/api/scorecard",
+    method: "GET",
+    getMock: (db) => db.getActiveScorecard as unknown as ReturnType<typeof vi.fn>,
+    errorBody: { error: "Failed to fetch scorecard" },
+  },
+  {
+    name: "GET /api/audit/recommendations",
+    path: "/api/audit/recommendations",
+    method: "GET",
+    getMock: (db) => db.getLatestAuditResult as unknown as ReturnType<typeof vi.fn>,
+    errorBody: { error: "Failed to fetch recommendations" },
+  },
+];
+
+describe("error-path coverage — every db-backed dashboard route returns deterministic 500 body", () => {
+  test.each(ERROR_CASES)(
+    "$name returns 500 with exact error body when its dependency rejects",
+    async ({ path, method, getMock, errorBody, body, params, query }) => {
+      const fn = getMock(db);
+      fn.mockRejectedValueOnce(new Error("simulated db failure"));
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      const handler = await buildHandler(dashboardApiRoutes, path, method);
+      const res = await handler(
+        makeContext({ method, headers: ADMIN_HEADERS, body, params, query }),
+      );
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual(errorBody);
+      errSpy.mockRestore();
+    },
+  );
+});
+
 describe("GET /api/dashboard", () => {
   test("200 returns getDashboardData() result directly", async () => {
     const data = {
@@ -158,7 +255,10 @@ describe("GET /api/audit/history", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toBe(history);
-    expect(db.getAuditHistory).toHaveBeenCalledWith(5);
+    // The route was extended to forward an optional date-range filter as a
+    // second argument (`{ startDate, endDate }`); the assertion only cares
+    // about the `limit` here, so we accept any second-arg shape.
+    expect(db.getAuditHistory).toHaveBeenCalledWith(5, expect.anything());
   });
 
   test("200 defaults limit to 20 when query param absent", async () => {
@@ -167,7 +267,9 @@ describe("GET /api/audit/history", () => {
     const handler = await buildHandler(dashboardApiRoutes, "/api/audit/history", "GET");
     await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
 
-    expect(db.getAuditHistory).toHaveBeenCalledWith(20);
+    // Same date-range second-arg as above — only the default limit is being
+    // asserted here.
+    expect(db.getAuditHistory).toHaveBeenCalledWith(20, expect.anything());
   });
 });
 

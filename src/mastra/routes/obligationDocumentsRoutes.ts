@@ -177,6 +177,13 @@ export const obligationDocumentsRoutes = [
 
           await initQmsDocsTable();
 
+          const rawBatchLen = c.req.header('Content-Length');
+          if (!rawBatchLen) return c.json({ error: 'Content-Length header required for file uploads' }, 411);
+          const batchContentLen = parseInt(rawBatchLen, 10);
+          if (!Number.isFinite(batchContentLen) || batchContentLen > MAX_TOTAL_BYTES_PER_REQUEST) {
+            return c.json({ error: 'Request body too large (max 250 MB total)' }, 413);
+          }
+
           const formData = await c.req.formData();
           const rawCategory = String(
             formData.get("category") || "documents",

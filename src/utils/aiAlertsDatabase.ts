@@ -139,6 +139,29 @@ export async function getAIAlerts(filters?: {
   status?: AlertStatus;
   severity?: AlertSeverity;
   alert_type?: AlertType;
+  /**
+   * Auto-vs-manual resolution-source filter for closed alerts. When set,
+   * pushes the same `resolution_note ILIKE 'auto-resolved%'` check the
+   * dashboard previously applied client-side (after the 50-row cap) into
+   * the SQL WHERE so the filter never silently drops matches when closed
+   * alert volume crosses the page size in a single status (Task #417).
+   *
+   * Semantics mirror the All Alerts modal's pre-existing client-side
+   * `isAutoResolved` helper:
+   *   - 'auto'   → status='resolved' AND resolution_note starts with
+   *                'auto-resolved' (the prefix both auto-resolve crons
+   *                stamp on the row).
+   *   - 'manual' → dismissed rows (always human) OR resolved rows whose
+   *                resolution_note is missing or does NOT start with
+   *                'auto-resolved'. Acknowledged/open rows are excluded
+   *                because the auto/manual distinction is only
+   *                meaningful for closed alerts.
+   *
+   * When the caller also passes `status`, the resolution clause stacks on
+   * top — e.g. status='resolved' + resolution='manual' yields only the
+   * human-resolved rows.
+   */
+  resolution?: 'auto' | 'manual';
   limit?: number;
   offset?: number;
 }): Promise<{ alerts: AIAlert[]; total: number }> {
@@ -157,6 +180,15 @@ export async function getAIAlerts(filters?: {
   if (filters?.alert_type) {
     conditions.push(`alert_type = $${paramIdx++}`);
     params.push(filters.alert_type);
+  }
+  if (filters?.resolution === 'auto') {
+    conditions.push(
+      `status = 'resolved' AND resolution_note ILIKE 'auto-resolved%'`,
+    );
+  } else if (filters?.resolution === 'manual') {
+    conditions.push(
+      `(status = 'dismissed' OR (status = 'resolved' AND (resolution_note IS NULL OR resolution_note NOT ILIKE 'auto-resolved%')))`,
+    );
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -452,30 +484,56 @@ export async function getToolHealthAlertHistory(
   days = 7,
   limit = 20,
   severity?: string,
+  resolution?: 'auto' | 'manual',
+  options?: { includeDismissed?: boolean },
 ): Promise<AIAlert[]> {
+  // Build the WHERE/params dynamically so the optional `resolution` filter
+  // (Task #417) can stack on top of the severity filter and the Task #324
+  // `includeDismissed` opt-in without an explosion of query permutations.
+  //
+  // - Task #324: when `includeDismissed` is set, the status whitelist also
+  //   admits 'dismissed' rows so the AI Ops "Recently triaged" panel can
+  //   show every closed alert (and its resolution_note) in one place.
+  //   Default stays acknowledged + resolved to preserve the historical
+  //   wire shape for any consumer that hasn't opted in.
+  // - Task #417: the resolution clause mirrors getAIAlerts(): 'auto'
+  //   requires a resolved row whose resolution_note starts with
+  //   'auto-resolved'; 'manual' requires an acknowledged or resolved row
+  //   whose note does NOT start with that prefix (acknowledged rows are
+  //   always treated as manual triage since the cron auto-resolve path
+  //   skips the acknowledge step).
+  const includeDismissed = options?.includeDismissed === true;
+  const statusList = includeDismissed
+    ? ['acknowledged', 'resolved', 'dismissed']
+    : ['acknowledged', 'resolved'];
+  const conditions: string[] = [
+    `alert_type = 'tool_health'`,
+    `COALESCE(resolved_at, acknowledged_at, created_at) >= NOW() - ($1 || ' days')::INTERVAL`,
+  ];
+  const params: any[] = [days, limit];
+  let paramIdx = 3;
+  conditions.push(`status = ANY($${paramIdx++}::text[])`);
+  params.push(statusList);
   if (severity) {
-    const result = await pool.query(
-      `SELECT *
-         FROM ai_alerts
-        WHERE alert_type = 'tool_health'
-          AND status IN ('acknowledged', 'resolved')
-          AND severity = $3
-          AND COALESCE(resolved_at, acknowledged_at, created_at) >= NOW() - ($1 || ' days')::INTERVAL
-        ORDER BY COALESCE(resolved_at, acknowledged_at, created_at) DESC
-        LIMIT $2`,
-      [days, limit, severity],
+    conditions.push(`severity = $${paramIdx++}`);
+    params.push(severity);
+  }
+  if (resolution === 'auto') {
+    conditions.push(
+      `status = 'resolved' AND resolution_note ILIKE 'auto-resolved%'`,
     );
-    return result.rows;
+  } else if (resolution === 'manual') {
+    conditions.push(
+      `(status = 'acknowledged' OR status = 'dismissed' OR (status = 'resolved' AND (resolution_note IS NULL OR resolution_note NOT ILIKE 'auto-resolved%')))`,
+    );
   }
   const result = await pool.query(
     `SELECT *
        FROM ai_alerts
-      WHERE alert_type = 'tool_health'
-        AND status IN ('acknowledged', 'resolved')
-        AND COALESCE(resolved_at, acknowledged_at, created_at) >= NOW() - ($1 || ' days')::INTERVAL
+      WHERE ${conditions.join(' AND ')}
       ORDER BY COALESCE(resolved_at, acknowledged_at, created_at) DESC
       LIMIT $2`,
-    [days, limit],
+    params,
   );
   return result.rows;
 }
@@ -644,6 +702,45 @@ export async function getToolHealthAlertTrend(
 }
 
 /**
+ * Count ai_alerts rows that the tool-health silent-tool sweep auto-resolved
+ * within the last 24 hours and the last 7 days. Powers the
+ * "Silent-tool auto-resolutions" tile on /ai-ops (Task #346).
+ *
+ * Match criterion mirrors the canonical resolution_note prefix the sweep
+ * stamps (`auto-resolved: tool went silent`); see
+ * src/mastra/workflows/toolHealthAlertsCron.ts → runSilentToolSweep.
+ *
+ * Both windows are computed in a single round-trip via FILTER clauses so the
+ * tile costs one query regardless of dashboard refresh frequency.
+ */
+export interface SilentToolAutoResolutionCounts {
+  last24h: number;
+  last7d: number;
+}
+
+export async function getSilentToolAutoResolutionCounts(): Promise<SilentToolAutoResolutionCounts> {
+  const result = await pool.query(
+    `SELECT
+       COUNT(*) FILTER (
+         WHERE resolved_at >= NOW() - INTERVAL '24 hours'
+       )::int AS last_24h,
+       COUNT(*) FILTER (
+         WHERE resolved_at >= NOW() - INTERVAL '7 days'
+       )::int AS last_7d
+     FROM ai_alerts
+     WHERE alert_type = 'tool_health'
+       AND status = 'resolved'
+       AND resolved_at IS NOT NULL
+       AND resolution_note ILIKE 'auto-resolved: tool went silent%'`,
+  );
+  const row = result.rows[0] || {};
+  return {
+    last24h: Number(row.last_24h ?? 0),
+    last7d: Number(row.last_7d ?? 0),
+  };
+}
+
+/**
  * Fetch every open / acknowledged alert for a given `alert_type`. Used by
  * the tool-health "silent tool" sweep so the cron can find alerts whose
  * associated tool has stopped being called and resolve them.
@@ -690,6 +787,47 @@ export async function getOpenAlertsByType(
  * the rolling window length here so a tool is only auto-resolved once the
  * entire window of fresh metrics is post-recovery.
  */
+/**
+ * Fetch every still-unresolved alert (status `open` or `acknowledged`) of the
+ * given `alertType`s that was *created* inside the half-open time range
+ * `[fromMs, toMs)`.
+ *
+ * Used by the storage-health morning digest cron (Task #604): once the
+ * configured quiet-hours window closes, the digest needs to enumerate every
+ * alert that fired during that window so it can summarise them in a single
+ * Slack/email push instead of relying on the operator to open `/ai-ops` first
+ * thing in the morning. Alerts that were already auto-resolved by the next
+ * cron pass before the digest runs are intentionally excluded — they are no
+ * longer actionable.
+ *
+ * `alertTypes` is an array so the digest can grow to cover prompt-regression /
+ * tool-health alerts later without a second helper. The implementation uses
+ * `ANY($1::text[])` so a single round-trip handles 1..N types.
+ */
+export async function getUnresolvedAlertsCreatedBetween(
+  alertTypes: AlertType[],
+  fromMs: number,
+  toMs: number,
+): Promise<AIAlert[]> {
+  if (alertTypes.length === 0) return [];
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) {
+    return [];
+  }
+  const result = await pool.query(
+    `SELECT *
+       FROM ai_alerts
+      WHERE alert_type = ANY($1::text[])
+        AND status IN ('open', 'acknowledged')
+        AND created_at >= TO_TIMESTAMP($2 / 1000.0)
+        AND created_at <  TO_TIMESTAMP($3 / 1000.0)
+      ORDER BY
+        CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+        created_at ASC`,
+    [alertTypes, fromMs, toMs],
+  );
+  return result.rows;
+}
+
 export async function getOpenAlertsByKey(
   alertType: AlertType,
   relatedRecordId: string,

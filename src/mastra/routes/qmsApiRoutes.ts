@@ -104,7 +104,13 @@ export const qmsApiRoutes = [
     },
   },
   {
-    path: "/api/qms/capa/:id",
+    // Constrain :id to digits so the literal `/api/qms/capa/export` (and any
+    // other future literal segment) is not swallowed by this dynamic pattern.
+    // See task-443 — without this, /api/qms/capa/export was shadowed by this
+    // GET handler (which only allows admin via isAdminAuthorized), making the
+    // export endpoint unreachable for governance-write roles even though
+    // ROUTE_PERMISSION_MAP allows them.
+    path: "/api/qms/capa/:id{[0-9]+}",
     method: "GET",
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {

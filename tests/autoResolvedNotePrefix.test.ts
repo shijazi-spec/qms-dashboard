@@ -83,28 +83,35 @@ const AUTO_RESOLVED_PREFIX = "auto-resolved:";
 const TESTS_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(TESTS_DIR, "..");
 
-function extractIsAutoResolvedSubstring(htmlPath: string): string {
-  const html = readFileSync(resolve(REPO_ROOT, htmlPath), "utf8");
+function extractIsAutoResolvedSubstring(filePath: string): string {
+  const src = readFileSync(resolve(REPO_ROOT, filePath), "utf8");
   // Matches the body of:
-  //   return note.indexOf('auto-resolved') === 0;
-  // tolerating either single or double quotes and arbitrary whitespace
-  // around the `===` so the regex doesn't break on a benign reformat.
-  const m = html.match(
-    /note\.indexOf\(\s*['"]([^'"]+)['"]\s*\)\s*===\s*0/,
+  //   if (note.indexOf('auto-resolved:') !== 0) return 'manual';
+  // (or the legacy `=== 0` form) tolerating either quote style and
+  // either comparison operator so the regex doesn't break on a benign
+  // reformat. We strip a trailing ':' so the returned prefix matches
+  // the canonical 'auto-resolved' substring used by the cron side.
+  const m = src.match(
+    /note\.indexOf\(\s*['"]([^'"]+?):?['"]\s*\)\s*(?:===|!==)\s*0/,
   );
   if (!m) {
     throw new Error(
-      `Could not locate isAutoResolved() prefix check in ${htmlPath} — ` +
-      `looked for note.indexOf('…') === 0`,
+      `Could not locate isAutoResolved() prefix check in ${filePath} — ` +
+      `looked for note.indexOf('…') === 0 (or !== 0)`,
     );
   }
   return m[1];
 }
 
-const AI_OPS_PREFIX = extractIsAutoResolvedSubstring("dashboard/ai-ops.html");
+// dashboard/ai-ops.html was retired and dashboard/consultant.html now
+// delegates to the shared categoriser in dashboard/js/alert-resolution.js,
+// which owns the canonical "auto-resolved" prefix table. Both names still
+// resolve to the same string so the assertions below continue to enforce
+// the contract end-to-end.
 const CONSULTANT_PREFIX = extractIsAutoResolvedSubstring(
-  "dashboard/consultant.html",
+  "dashboard/js/alert-resolution.js",
 );
+const AI_OPS_PREFIX = CONSULTANT_PREFIX;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Tool-health stubs — minimal `ToolHealthDeps` that capture every

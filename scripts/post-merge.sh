@@ -25,34 +25,21 @@ bash scripts/check-db-test-coverage.sh
 # A failure in any file blocks the merge.
 # ----------------------------------------------------------------------------
 echo ""
-echo "▶ CI gate: full test suite (npm test)"
-npm test
+echo "▶ CI gate: full test suite (tests/runIntegrationTests.ts)"
+npx tsx tests/runIntegrationTests.ts
 
 # ----------------------------------------------------------------------------
-# CI gate — i18n coverage guardrail (Task #125 / #150 / #345)
+# CI gate — i18n coverage guardrail (Task #125 / #150 / #345 / #373)
 #
-# Blocks merges that:
-#   * Add a `dashboard/*.html` page without `/js/i18n.js` + the
-#     `WalaPlusI18n.init().then(applyToDOM)` bootstrap.
-#   * Reference a `data-i18n="ns.key"` whose key is missing from
-#     `dashboard/i18n/en.json` or `dashboard/i18n/ar.json`.
-#   * Drift the `en.json` / `ar.json` key trees apart (orphans either way,
-#     or a leaf turning into a sub-object on one side only).
-#   * Use a static `WalaPlusI18n.t('ns.key')` call in `dashboard/js/*.js` or
-#     an inline <script> block whose key is missing from en.json / ar.json.
-#     Dynamic t(variable) calls are surfaced as non-blocking ⚠ warnings.
-#   * Add a NEW orphan key to en.json / ar.json that is not referenced by any
-#     data-i18n attribute or static t('...') call, AND is not listed in
-#     `scripts/i18n-unused-baseline.json` (Task #345). Pre-existing orphans
-#     stay as ⚠ warnings until the cleanup task drains them.
-#
-# All six checks live in `scripts/check-i18n.cjs` and are also covered by
-# `tests/i18nCoverage.test.ts` (auto-discovered by `npm test`). To register
-# a new dynamic-lookup prefix, edit `dashboard/i18n/.referenced-dynamically.json`.
+# The full i18n guardrail (`scripts/check-i18n.cjs --report-unused`) is run
+# as part of the integration suite above via `tests/i18nCoverage.test.ts`,
+# which spawns the script with `--report-unused` and bubbles up its exit
+# code. The previously-explicit `node scripts/check-i18n.cjs --report-unused`
+# call here was removed in Task #373 because it executed the same six checks
+# a second time, doubling the i18n wall-clock cost without adding coverage.
+# To register a new dynamic-lookup prefix, edit
+# `dashboard/i18n/.referenced-dynamically.json`.
 # ----------------------------------------------------------------------------
-echo ""
-echo "▶ CI gate: i18n coverage (Task #125 / #150 / #345)"
-node scripts/check-i18n.cjs --report-unused
 
 # ----------------------------------------------------------------------------
 # CI gate — dashboard inline-handler + inline-<script> CSP guard
@@ -101,10 +88,10 @@ bash scripts/check-console-logs.sh
 npx tsx tests/safeLoggerRedaction.test.ts
 
 # ----------------------------------------------------------------------------
-# CI gate — dashboard RTL physical-direction class guard (Task #315)
+# CI gate — dashboard RTL physical-direction class guard (Tasks #315 / #628 / #743)
 #
 # Blocks merges that reintroduce physical-direction Tailwind classes on the
-# the highest-impact dashboard surfaces (Tasks #315 / #628):
+# the highest-impact dashboard surfaces:
 #   * `<th>` headers using `text-left` / `text-right`
 #   * stat-card borders using `border-l-4` / `border-r-4`
 #   * `<button>` icon gutters using `ml-<n>` / `mr-<n>`
@@ -121,11 +108,50 @@ npx tsx tests/safeLoggerRedaction.test.ts
 # `border-s-4`, `ms-<n>`, `me-<n>`, `gap-<n>`, `rounded-s-*` (see
 # replit.md → "RTL Layout Convention").
 #
+# Task #743 extends the gate with a SECOND PASS that parses every inline
+# `<script>` body with acorn and re-applies the forbidden-class rules to
+# every JS string literal + template-literal quasi. The dashboard renders
+# most of its row-level UI from JS template strings, so without this pass
+# a `mr-2` dropped into a button template would ship silently. Running the
+# script with no flags executes both passes (HTML + JS-string) — there is
+# no separate command to wire in.
+#
 # All currently-violating pages are grandfathered via per-rule allowlists in
-# the script; new dashboard HTML files (or removing one from the allowlist)
-# are subject to the full rule. Also covered by
+# the script (HTML rules: `ALLOWLISTS`; JS-string rules: `JS_ALLOWLISTS`);
+# new dashboard HTML files (or removing one from an allowlist) are subject
+# to the full rule. Also covered by
 # `tests/noPhysicalDirectionClasses.test.ts` (auto-discovered by `npm test`).
 # ----------------------------------------------------------------------------
 echo ""
-echo "▶ CI gate: dashboard RTL physical-direction class guard (Tasks #315 / #628)"
+echo "▶ CI gate: dashboard RTL physical-direction class guard (Tasks #315 / #628 / #743)"
 node scripts/check-rtl-classes.cjs
+
+# ----------------------------------------------------------------------------
+# CI gate — dashboard <th scope> accessibility guardrail (Task #757)
+#
+# Hardens Task #46 / Task #263 (which added `scope="col|row"` by hand to
+# every existing `<th>` in dashboard/*.html). Without `scope`, screen
+# readers (NVDA, JAWS, VoiceOver, TalkBack) fall back to a positional
+# heuristic that silently mis-associates headers with cells in any table
+# that has a corner spacer cell, multiple header rows, or row headers —
+# making the table unusable for assistive-tech users.
+#
+# This gate runs two passes against `dashboard/*.html`:
+#   1. HTML pass — every `<th …>` opening tag must carry a valid
+#      `scope="col|row|colgroup|rowgroup"` attribute.
+#   2. JS-string pass — every `<th …>` rendered from a JS template
+#      string inside an inline `<script>` block must carry the same
+#      (the dashboard renders many tables this way: crm.html,
+#      duplicates.html, ai-ops.html, …).
+#
+# All currently-shipping pages pass both passes (Task #263 finished the
+# migration). Adding a new dashboard HTML file or a new `<th>` without
+# `scope` fails the build. Per-line opt-out marker `th-scope-safe: <reason>`
+# is available for the rare presentational <th> in a non-data table.
+#
+# Also covered by `tests/thScopeAccessibility.test.ts` (auto-discovered by
+# the integration-test runner).
+# ----------------------------------------------------------------------------
+echo ""
+echo "▶ CI gate: dashboard <th scope> accessibility guardrail (Task #757)"
+node scripts/check-th-scope.cjs

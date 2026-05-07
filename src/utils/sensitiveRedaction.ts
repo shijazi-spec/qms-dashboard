@@ -527,6 +527,31 @@ export function redactSensitiveDeep(payload: any, fieldName?: string): any {
   }
 
   if (typeof payload === "string") {
+    // Detect string values that are themselves JSON (e.g. an audit row's
+    // `description` whose author serialised an object into prose like
+    // `{"mfa_secret":"..."}`). Without this branch the string is treated as
+    // an opaque leaf and only the regex/heuristic pass runs against it,
+    // missing key-name-based deny-list hits like `mfa_secret` whose VALUE is
+    // a plain UUID with no distinctive shape (Task #741).
+    //
+    // Length guards keep us from spending time on multi-MB blobs that almost
+    // certainly aren't JSON; the JSON.parse branch is also wrapped so a
+    // value that merely happens to start with `{`/`[` (e.g. an interpolated
+    // template literal) falls through unchanged to the regex pass.
+    const trimmed = payload.length > 0 && payload.length < 1_000_000 ? payload.trimStart() : "";
+    if (trimmed.length > 0 && (trimmed.charCodeAt(0) === 0x7b /* { */ || trimmed.charCodeAt(0) === 0x5b /* [ */)) {
+      try {
+        const parsed = JSON.parse(payload);
+        if (parsed !== null && typeof parsed === "object") {
+          // Recurse — `redactSensitiveDeep` will itself re-detect any
+          // further JSON-string leaves, so JSON-of-JSON-of-… nests collapse
+          // in a single top-level call.
+          return JSON.stringify(redactSensitiveDeep(parsed));
+        }
+      } catch {
+        /* not valid JSON — fall through to the regex pass */
+      }
+    }
     return redactSecretLikeStrings(payload);
   }
 

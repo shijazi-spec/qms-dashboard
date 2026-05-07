@@ -501,9 +501,42 @@
         } catch (_) { /* ignore */ }
     }
 
-    // Fetch server-side entries and merge them into local storage, then push
-    // the merged result back so both sides stay in sync. Called once per
-    // setHistoryUser() invocation, i.e. on login / page load with a known user.
+    // Pick the "newer" of two entries that share an id. Prefers the side
+    // with a real `finishedAt` (a final status), falling back to the latest
+    // `startedAt`. Used by both the initial server merge and the polling
+    // sync so a status flip on another device is reflected here.
+    function pickNewerEntry(localEntry, serverEntry) {
+        if (!localEntry) return serverEntry || null;
+        if (!serverEntry) return localEntry || null;
+        var localFin = Date.parse((localEntry && localEntry.finishedAt) || '') || 0;
+        var serverFin = Date.parse((serverEntry && serverEntry.finishedAt) || '') || 0;
+        if (localFin || serverFin) return serverFin > localFin ? serverEntry : localEntry;
+        var localStart = Date.parse((localEntry && localEntry.startedAt) || '') || 0;
+        var serverStart = Date.parse((serverEntry && serverEntry.startedAt) || '') || 0;
+        return serverStart > localStart ? serverEntry : localEntry;
+    }
+
+    // Shallow signature of an entry's user-visible state. Used by the
+    // poller to detect "real" changes (new ids, status flips, finished
+    // timestamps) instead of re-rendering on every tick.
+    function entrySignature(arr) {
+        if (!Array.isArray(arr) || !arr.length) return '';
+        var parts = [];
+        for (var i = 0; i < arr.length; i++) {
+            var e = arr[i];
+            if (!e || !e.id) continue;
+            parts.push(e.id + ':' + (e.status || '') + ':' + (e.finishedAt || ''));
+        }
+        parts.sort();
+        return parts.join('|');
+    }
+
+    // Fetch server-side entries and merge them into local storage. Called
+    // once per setHistoryUser() invocation (login / page load) and again
+    // every poll tick. Picks the newer of each pair by finishedAt/startedAt
+    // so status flips from another device propagate. Pushes the merged
+    // result back only when we actually contributed new ids the server
+    // hadn't seen, to avoid feedback loops between polling tabs.
     function fetchAndMergeFromServer() {
         if (!currentHistoryUserKey || !isServerSyncEnabled()) return;
         try {
@@ -514,31 +547,114 @@
                 if (!res.ok) return null;
                 return res.json();
             }).then(function (data) {
-                if (!data || !Array.isArray(data.entries) || !data.entries.length) return;
+                if (!data || !Array.isArray(data.entries)) return;
                 var serverEntries = data.entries;
                 var local = loadHistory();
-                var seen = Object.create(null);
-                local.forEach(function (e) { if (e && e.id) seen[e.id] = true; });
-                var merged = local.slice();
+                var byId = Object.create(null);
+                local.forEach(function (e) { if (e && e.id) byId[e.id] = e; });
+                var serverIds = Object.create(null);
+                var localGainedIds = false;
                 serverEntries.forEach(function (e) {
-                    if (e && e.id && !seen[e.id]) {
-                        merged.push(e);
-                        seen[e.id] = true;
-                    }
+                    if (!e || !e.id) return;
+                    serverIds[e.id] = true;
+                    byId[e.id] = pickNewerEntry(byId[e.id], e);
                 });
+                // Anything purely local that the server hasn't seen yet
+                // counts as "we have new ids to push back".
+                Object.keys(byId).forEach(function (id) {
+                    if (!serverIds[id]) localGainedIds = true;
+                });
+                var merged = Object.keys(byId).map(function (k) { return byId[k]; });
                 merged.sort(function (a, b) {
                     var aT = Date.parse((a && (a.startedAt || a.finishedAt)) || '') || 0;
                     var bT = Date.parse((b && (b.startedAt || b.finishedAt)) || '') || 0;
                     return bT - aT;
                 });
                 var pruned = pruneEntries(merged).slice(0, HISTORY_LIMIT);
-                if (pruned.length > local.length) {
-                    saveHistory(pruned);
-                    pushToServer(pruned);
-                    try { renderHistoryTray(); } catch (_) { /* ignore */ }
-                }
+                var beforeSig = entrySignature(local);
+                var afterSig = entrySignature(pruned);
+                if (beforeSig === afterSig) return;
+                saveHistory(pruned);
+                if (localGainedIds) pushToServer(pruned);
+                try { renderHistoryTray(); } catch (_) { /* ignore */ }
             }).catch(function () { /* ignore network errors */ });
         } catch (_) { /* ignore */ }
+    }
+
+    // --- Cross-device polling ---------------------------------------------
+    // When a user is signed in, periodically re-pull the server snapshot
+    // so a download that finishes on another device shows up here without
+    // a page reload. Pauses while the page is hidden (Page Visibility API)
+    // and while no user is wired up.
+    var DEFAULT_POLL_INTERVAL_MS = 30 * 1000;
+    var MIN_POLL_INTERVAL_MS = 5 * 1000;
+    var serverPollTimer = null;
+    var serverPollVisibilityHandler = null;
+
+    function serverPollIntervalMs() {
+        var override = global.STREAMING_DOWNLOAD_POLL_INTERVAL_MS;
+        if (typeof override === 'number' && isFinite(override) && override > 0) {
+            return Math.max(MIN_POLL_INTERVAL_MS, Math.floor(override));
+        }
+        return DEFAULT_POLL_INTERVAL_MS;
+    }
+
+    function pageIsVisible() {
+        if (typeof document === 'undefined') return true;
+        // Treat 'prerender' / unknown as visible — the only state we want
+        // to actively pause for is an explicitly-hidden tab.
+        return document.visibilityState !== 'hidden';
+    }
+
+    function stopServerPoller() {
+        if (serverPollTimer) {
+            try { clearInterval(serverPollTimer); } catch (_) { /* ignore */ }
+            serverPollTimer = null;
+        }
+    }
+
+    function startServerPollerIfVisible() {
+        if (serverPollTimer) return;
+        if (!currentHistoryUserKey || !isServerSyncEnabled()) return;
+        if (!pageIsVisible()) return;
+        var interval = serverPollIntervalMs();
+        serverPollTimer = setInterval(function () {
+            if (!currentHistoryUserKey || !isServerSyncEnabled()) {
+                stopServerPoller();
+                return;
+            }
+            if (!pageIsVisible()) return;
+            try { fetchAndMergeFromServer(); } catch (_) { /* ignore */ }
+        }, interval);
+    }
+
+    function ensureServerPoller() {
+        if (typeof window === 'undefined') return;
+        if (!currentHistoryUserKey || !isServerSyncEnabled()) {
+            stopServerPoller();
+            return;
+        }
+        if (!serverPollVisibilityHandler && typeof document !== 'undefined' &&
+            typeof document.addEventListener === 'function') {
+            serverPollVisibilityHandler = function () {
+                if (!currentHistoryUserKey || !isServerSyncEnabled()) {
+                    stopServerPoller();
+                    return;
+                }
+                if (pageIsVisible()) {
+                    // Catch up immediately on tab refocus so the user
+                    // doesn't have to wait a full interval to see updates.
+                    try { fetchAndMergeFromServer(); } catch (_) { /* ignore */ }
+                    startServerPollerIfVisible();
+                } else {
+                    stopServerPoller();
+                }
+            };
+            try {
+                document.addEventListener('visibilitychange', serverPollVisibilityHandler);
+            } catch (_) { /* ignore */ }
+        }
+        startServerPollerIfVisible();
     }
 
     function ensureProgressContainer() {
@@ -1176,6 +1292,9 @@
             try { migrateAnonymousHistoryToUser(); } catch (_) { /* ignore */ }
             try { ensureCrossTabListener(); } catch (_) { /* ignore */ }
             try { fetchAndMergeFromServer(); } catch (_) { /* ignore */ }
+            try { ensureServerPoller(); } catch (_) { /* ignore */ }
+        } else {
+            try { stopServerPoller(); } catch (_) { /* ignore */ }
         }
         try { reconcileHistoryOnLoad(); } catch (_) { /* ignore */ }
         try { renderHistoryTray(); } catch (_) { /* ignore */ }
@@ -1366,7 +1485,12 @@
         if (c) return c;
         c = document.createElement('div');
         c.id = TRAY_CONTAINER_ID;
-        c.className = 'fixed bottom-4 left-4 z-50 w-80 max-w-[calc(100vw-2rem)]';
+        // Use logical-direction positioning so the tray pins to the
+        // inline-start corner in both LTR (left) and RTL (right) layouts.
+        // Tailwind's compiled bundle here doesn't ship `start-*` utilities,
+        // so set the inset via inline style.
+        c.className = 'fixed bottom-4 z-50 w-80 max-w-[calc(100vw-2rem)]';
+        c.style.insetInlineStart = '1rem';
         c.setAttribute('aria-label', 'Recent downloads');
         c.setAttribute('data-testid', 'tray-recent-downloads');
         document.body.appendChild(c);
@@ -2239,7 +2363,7 @@
         if (!hint) {
             hint = document.createElement('span');
             hint.setAttribute('data-size-hint', '');
-            hint.className = 'ml-2 text-xs text-gray-500 dark:text-gray-400';
+            hint.className = 'streaming-ms-2 text-xs text-gray-500 dark:text-gray-400';
             el.appendChild(hint);
         }
         hint.textContent = '(' + label + ')';
@@ -2647,6 +2771,127 @@
             return true;
         }
 
+        // Build and display an accessible, styled confirm modal for large
+        // exports using the project's WalaPlusA11y modal API. Renders the
+        // estimated size and row count as a clearly formatted metric line and
+        // includes a "Tighten filters first" hint so users on slow connections
+        // can back out before consuming bandwidth or triggering a disk write.
+        // Returns a Promise<boolean> (true = continue, false = cancel).
+        // Falls back to window.confirm synchronously when the a11y module is
+        // absent (e.g. unit-test environments) so existing call-sites still work.
+        function buildDefaultConfirmLargeExportModal(message, estimate) {
+            var a11y = (typeof global !== 'undefined' && global.WalaPlusA11y) ||
+                       (typeof window !== 'undefined' && window.WalaPlusA11y);
+            var doc = (typeof document !== 'undefined') ? document : null;
+            if (a11y && typeof a11y.openModal === 'function' && doc) {
+                return new Promise(function (resolve) {
+                    var resolved = false;
+                    function finish(result) {
+                        if (resolved) return;
+                        resolved = true;
+                        try { a11y.closeModal(modal); } catch (_) {}
+                        setTimeout(function () {
+                            try { doc.body.removeChild(modal); } catch (_) {}
+                        }, 0);
+                        resolve(result);
+                    }
+
+                    var bytes = (estimate && estimate.bytes > 0) ? estimate.bytes : 0;
+                    var rows  = (estimate && estimate.rows  > 0) ? estimate.rows  : 0;
+
+                    var modal = doc.createElement('div');
+                    modal.setAttribute('role', 'dialog');
+                    modal.setAttribute('aria-modal', 'true');
+                    modal.setAttribute('aria-labelledby', 'sd-confirm-large-title');
+                    modal.setAttribute('data-testid', 'modal-confirm-large-export');
+                    modal.className = 'hidden fixed inset-0 z-[9999] flex items-center justify-center';
+
+                    var backdrop = doc.createElement('div');
+                    backdrop.className = 'fixed inset-0 bg-black bg-opacity-50';
+                    backdrop.setAttribute('aria-hidden', 'true');
+                    modal.appendChild(backdrop);
+
+                    var panel = doc.createElement('div');
+                    panel.className = 'relative bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md mx-4 w-full';
+
+                    var title = doc.createElement('h2');
+                    title.id = 'sd-confirm-large-title';
+                    title.className = 'text-base font-semibold text-gray-900 dark:text-gray-100 mb-2';
+                    title.textContent = tr('downloads.large_export_modal_title', 'Large export');
+                    panel.appendChild(title);
+
+                    var body = doc.createElement('p');
+                    body.className = 'text-sm text-gray-600 dark:text-gray-300 mb-3';
+                    body.textContent = tr('downloads.large_export_modal_body',
+                        'This export is bigger than usual and may take a moment to download.');
+                    panel.appendChild(body);
+
+                    if (bytes > 0 || rows > 0) {
+                        var metricsParts = [];
+                        if (bytes > 0) metricsParts.push('≈ ' + formatBytes(bytes));
+                        if (rows > 0) {
+                            metricsParts.push(tr('downloads.rows',
+                                '{count} rows',
+                                { count: rows.toLocaleString() }));
+                        }
+                        var metrics = doc.createElement('div');
+                        metrics.className = 'text-sm font-medium text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 mb-3';
+                        metrics.setAttribute('data-testid', 'text-large-export-metrics');
+                        metrics.textContent = metricsParts.join(' · ');
+                        panel.appendChild(metrics);
+                    }
+
+                    var hint = doc.createElement('p');
+                    hint.className = 'text-xs text-gray-500 dark:text-gray-400 mb-6';
+                    hint.textContent = tr('downloads.large_export_modal_hint',
+                        'Tip: Cancel and tighten your filters first to download a smaller file.');
+                    panel.appendChild(hint);
+
+                    var actions = doc.createElement('div');
+                    actions.className = 'flex justify-end gap-3';
+
+                    var cancelBtn = doc.createElement('button');
+                    cancelBtn.type = 'button';
+                    cancelBtn.setAttribute('data-testid', 'button-cancel-large-export');
+                    cancelBtn.className = 'px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500';
+                    cancelBtn.textContent = tr('downloads.large_export_modal_cancel', 'Cancel');
+                    cancelBtn.addEventListener('click', function () { finish(false); });
+                    actions.appendChild(cancelBtn);
+
+                    var continueBtn = doc.createElement('button');
+                    continueBtn.type = 'button';
+                    continueBtn.setAttribute('data-testid', 'button-continue-large-export');
+                    continueBtn.className = 'px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500';
+                    continueBtn.textContent = tr('downloads.large_export_modal_continue', 'Continue download');
+                    continueBtn.addEventListener('click', function () { finish(true); });
+                    actions.appendChild(continueBtn);
+
+                    panel.appendChild(actions);
+                    modal.appendChild(panel);
+                    doc.body.appendChild(modal);
+
+                    // Treat Escape / backdrop close as "Cancel" so the export
+                    // does not silently kick off when the user dismisses the
+                    // dialog.
+                    var observer = new MutationObserver(function () {
+                        if (modal.classList.contains('hidden')) {
+                            observer.disconnect();
+                            finish(false);
+                        }
+                    });
+                    observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+
+                    a11y.openModal(modal, (typeof document !== 'undefined' && document.activeElement) || null);
+                });
+            }
+            // Fallback: synchronous window.confirm (used in test environments and
+            // pages that have not loaded a11y.js).
+            if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+                return window.confirm(message);
+            }
+            return true;
+        }
+
         // Decide whether the download is "far enough along" that a stray
         // click should not be allowed to silently throw away progress.
         // Either threshold trips the confirm prompt:
@@ -2812,14 +3057,20 @@
 
                 var confirmLarge = (typeof options.confirmLargeExport === 'function')
                     ? options.confirmLargeExport
-                    : ((typeof window !== 'undefined' && typeof window.confirm === 'function')
-                        ? window.confirm.bind(window)
-                        : null);
+                    : buildDefaultConfirmLargeExportModal;
 
                 var proceed = true;
                 if (confirmLarge) {
-                    try { proceed = !!confirmLarge(confirmMsg, preflightEstimate); }
-                    catch (_) { proceed = true; }
+                    try {
+                        var rawProceed = confirmLarge(confirmMsg, preflightEstimate);
+                        // Async path — modal returned a Promise. Await it so
+                        // the gate honours the user's choice instead of
+                        // treating the pending Promise as truthy.
+                        if (rawProceed && typeof rawProceed.then === 'function') {
+                            rawProceed = await rawProceed;
+                        }
+                        proceed = !!rawProceed;
+                    } catch (_) { proceed = true; }
                 }
 
                 if (!proceed) {

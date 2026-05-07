@@ -43,13 +43,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-100">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-    <script src="/js/navigation.js?v=4.7"></script>
+    <script src="/js/navigation.js?v=5.0"></script>
     <script src="/js/streaming-download.js?v=2.2.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -136,7 +136,7 @@
                 Sync Status:
             </span>
             <div id="syncModuleChips" class="flex gap-2 flex-wrap"></div>
-            <span id="syncLastRun" class="text-xs text-gray-500 ml-auto" data-testid="text-sync-last-run"></span>
+            <span id="syncLastRun" class="text-xs text-gray-500 ms-auto" data-testid="text-sync-last-run"></span>
             <span id="syncStaleWarning" class="hidden text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded">⚠ Data may be stale — click "Sync Now"</span>
         </div>
 
@@ -221,7 +221,7 @@
         <!-- ═══ EXECUTIVE SUMMARY TAB (D4 enhanced) ═══ -->
         <div id="content-summary" class="tab-content">
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-                <div class="bg-white rounded-lg shadow p-3 border-l-4 border-blue-600">
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-blue-600">
                     <div class="text-xs text-gray-500" data-i18n="duplicates.true_duplicates">True Duplicates</div>
                     <div id="totalClusters" data-testid="text-total-clusters" class="text-xl font-bold text-blue-600">-</div>
                     <div class="text-xs text-gray-600">clusters</div>
@@ -230,35 +230,35 @@
                         <div id="clustersDelta" data-testid="delta-clusters"></div>
                     </div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-l-4 border-amber-500">
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-amber-500">
                     <div class="text-xs text-gray-500" data-i18n="duplicates.dup_leads">Dup Leads</div>
                     <div id="totalLeads" data-testid="text-total-leads" class="text-xl font-bold text-amber-600">-</div>
                     <div id="leadRate" class="text-xs text-amber-700">-% rate</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-l-4 border-red-500">
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-red-500">
                     <div class="text-xs text-gray-500" data-i18n="duplicates.dup_deals">Dup Deals</div>
                     <div id="totalDeals" data-testid="text-total-deals" class="text-xl font-bold text-red-600">-</div>
                     <div id="dealRate" class="text-xs text-red-600">-% rate</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-l-4 border-teal-500">
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-teal-500">
                     <div class="text-xs text-gray-500" data-i18n="duplicates.dup_contacts">Dup Contacts</div>
                     <div id="totalContacts" data-testid="text-total-contacts" class="text-xl font-bold text-teal-600">-</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-l-4 border-indigo-500">
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-indigo-500">
                     <div class="text-xs text-gray-500" data-i18n="duplicates.dup_accounts">Dup Accounts</div>
                     <div id="totalAccounts" data-testid="text-total-accounts" class="text-xl font-bold text-indigo-600">-</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-l-4 border-red-500">
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-red-500">
                     <div class="text-xs text-gray-500">Strong</div>
                     <div id="highConfidence" data-testid="text-high-confidence" class="text-xl font-bold text-red-600">-</div>
                     <div class="text-xs text-red-600">≥90%</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-l-4 border-yellow-500">
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-yellow-500">
                     <div class="text-xs text-gray-500">Moderate</div>
                     <div id="mediumConfidence" data-testid="text-medium-confidence" class="text-xl font-bold text-yellow-800">-</div>
                     <div class="text-xs text-yellow-700">60-89%</div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-3 border-l-4 border-purple-500">
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-purple-500">
                     <div class="text-xs text-gray-500" data-i18n="duplicates.pipeline_inflation">Pipeline Inflation</div>
                     <div id="pipelineInflation" data-testid="text-pipeline-inflation" class="text-xl font-bold text-purple-600">-</div>
                 </div>
@@ -281,7 +281,7 @@
                         <div class="flex-1">
                             <div class="w-full bg-gray-200 rounded-full h-4 relative">
                                 <div id="kpiGaugeBar" class="h-4 rounded-full transition-all duration-500 w-0 bg-green-500"></div>
-                                <div class="absolute top-0 left-[50%] h-4 w-0.5 bg-red-500" title="2% KPI target"></div>
+                                <div class="absolute top-0 start-[50%] h-4 w-0.5 bg-red-500" title="2% KPI target"></div>
                             </div>
                             <div class="flex justify-between text-xs text-gray-400 mt-1">
                                 <span>0%</span>
@@ -301,11 +301,11 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4" data-i18n="duplicates.sec_by_source">Duplicates by Source</h3>
-                    <div class="chart-container"><canvas id="sourceChart"></canvas></div>
+                    <div class="chart-container"><canvas id="sourceChart" role="img" aria-label="Duplicates by Source: bar chart showing duplicate counts grouped by source system" aria-describedby="sourceChart-summary"></canvas><table id="sourceChart-summary" class="sr-only"><caption>Duplicates by Source</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table></div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4" data-i18n="duplicates.sec_similarity">Similarity Score Distribution</h3>
-                    <div class="chart-container"><canvas id="confidenceChart"></canvas></div>
+                    <div class="chart-container"><canvas id="confidenceChart" role="img" aria-label="Similarity Score Distribution: doughnut chart showing strong, moderate, and weak match confidence counts" aria-describedby="confidenceChart-summary"></canvas><table id="confidenceChart-summary" class="sr-only"><caption>Similarity Score Distribution</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table></div>
                 </div>
             </div>
 
@@ -387,13 +387,13 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Name</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
                             </tr>
                         </thead>
                         <tbody id="searchResultsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -436,16 +436,16 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lead Name</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Lead Name</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created By</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Primary</th>
                         </tr>
                     </thead>
                     <tbody id="leadsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -460,16 +460,16 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deal Name</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stage</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Deal Name</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Stage</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Value</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created By</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Primary</th>
                         </tr>
                     </thead>
                     <tbody id="dealsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -484,16 +484,16 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact Name</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Contact Name</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created By</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Primary</th>
                         </tr>
                     </thead>
                     <tbody id="contactsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -508,16 +508,16 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account Name</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Similarity</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Account Name</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Source</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created By</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Primary</th>
                         </tr>
                     </thead>
                     <tbody id="accountsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -532,15 +532,15 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Records</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duplicates</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dup Rate</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">KPI Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">High Conf.</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Waste Value</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Export</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Total Records</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Duplicates</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Dup Rate</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">KPI Status</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">High Conf.</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Waste Value</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Export</th>
                         </tr>
                     </thead>
                     <tbody id="ownersTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -557,7 +557,7 @@
                     <div><label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label><input type="date" id="exportStartDate" aria-label="Export start date" data-testid="input-export-start" class="w-full border rounded-lg px-3 py-2"></div>
                     <div><label class="block text-sm font-medium text-gray-700 mb-2">End Date</label><input type="date" id="exportEndDate" aria-label="Export end date" data-testid="input-export-end" class="w-full border rounded-lg px-3 py-2"></div>
                 </div>
-                <button id="downloadExportBtn" data-on-click="downloadExport" data-pass-event="true" data-testid="button-download-export" class="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium">Download CSV Export <span data-size-hint class="ml-1 text-xs opacity-90"></span></button>
+                <button id="downloadExportBtn" data-on-click="downloadExport" data-pass-event="true" data-testid="button-download-export" class="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium">Download CSV Export <span data-size-hint class="ms-1 text-xs opacity-90"></span></button>
             </div>
         </div>
 
@@ -567,13 +567,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Records</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clusters</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duplicates</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Type</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Records</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Clusters</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Duplicates</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Duration</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
                         </tr>
                     </thead>
                     <tbody id="logsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -618,7 +618,6 @@
     </div>
 
     <script>
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
@@ -693,12 +692,12 @@
             const last = valid[valid.length - 1];
             const prev = valid[valid.length - 2];
             const diff = last - prev;
-            if (diff === 0) return `<span class="text-[10px] text-gray-400" title="${escapeHtml(_t('dyn.duplicates.no_change_tip'))}">${escapeHtml(_t('dyn.duplicates.no_change'))}</span>`;
+            if (diff === 0) return `<span class="text-[10px] text-gray-400" title="${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_change_tip'))}">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_change'))}</span>`;
             const improving = diff < 0;
             const arrow = improving ? '▼' : '▲';
             const cls = improving ? 'text-green-600' : 'text-red-500';
             const sign = improving ? '' : '+';
-            return `<span class="text-[10px] font-semibold ${cls}" title="${escapeHtml(_t('dyn.duplicates.vs_prev_scan'))}">${arrow} ${sign}${_fn(diff)}</span>`;
+            return `<span class="text-[10px] font-semibold ${cls}" title="${escapeHtml(WalaPlusI18n.t('dyn.duplicates.vs_prev_scan'))}">${arrow} ${sign}${_fn(diff)}</span>`;
         }
         async function loadClustersTrendSparkline() {
             try {
@@ -726,8 +725,8 @@
             document.getElementById('mediumConfidence').textContent = _fn(data.mediumConfidence || 0);
             document.getElementById('pipelineInflation').textContent = formatCurrency(data.estimatedPipelineInflation || 0);
 
-            document.getElementById('leadRate').textContent = _t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateLeadRate || data.kpis?.duplicateLeadRate || 0) });
-            document.getElementById('dealRate').textContent = _t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateDealRate || data.kpis?.duplicateDealRate || 0) });
+            document.getElementById('leadRate').textContent = WalaPlusI18n.t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateLeadRate || data.kpis?.duplicateLeadRate || 0) });
+            document.getElementById('dealRate').textContent = WalaPlusI18n.t('dyn.duplicates.rate_label', { pct: _fn(data.duplicateDealRate || data.kpis?.duplicateDealRate || 0) });
 
             document.getElementById('kpiLeadRate').textContent = _fn(data.kpis?.duplicateLeadRate || data.duplicateLeadRate || 0) + '%';
             document.getElementById('kpiDealRate').textContent = _fn(data.kpis?.duplicateDealRate || data.duplicateDealRate || 0) + '%';
@@ -751,7 +750,7 @@
             if (data.lastScanInfo) {
                 const scanDate = new Date(data.lastScanInfo.completed_at);
                 document.getElementById('lastScanDate').textContent = _fd(scanDate, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                document.getElementById('lastScanDetails').textContent = _t('dyn.duplicates.scan_summary', { records: _fn(data.lastScanInfo.total_records_scanned || 0), dur: _fn(Math.round((data.lastScanInfo.detection_duration_ms || 0) / 1000)), dup: _fn(data.lastScanInfo.total_duplicates_detected || 0) });
+                document.getElementById('lastScanDetails').textContent = WalaPlusI18n.t('dyn.duplicates.scan_summary', { records: _fn(data.lastScanInfo.total_records_scanned || 0), dur: _fn(Math.round((data.lastScanInfo.detection_duration_ms || 0) / 1000)), dup: _fn(data.lastScanInfo.total_duplicates_detected || 0) });
             } else if (data.lastScanDate) {
                 document.getElementById('lastScanDate').textContent = _fd(new Date(data.lastScanDate), { day: 'numeric', month: 'short', year: 'numeric' });
             }
@@ -759,17 +758,17 @@
             // D4: Top signals
             const topSignalsEl = document.getElementById('topSignals');
             const signals = data.topSignals || {};
-            const signalLabels = { exact_email: _t('dyn.duplicates.signals.exact_email'), domain_match: _t('dyn.duplicates.signals.domain_match'), phone_match: _t('dyn.duplicates.signals.phone_match'), company_exact: _t('dyn.duplicates.signals.company_exact'), company_fuzzy: _t('dyn.duplicates.signals.company_fuzzy') };
+            const signalLabels = { exact_email: WalaPlusI18n.t('dyn.duplicates.signals.exact_email'), domain_match: WalaPlusI18n.t('dyn.duplicates.signals.domain_match'), phone_match: WalaPlusI18n.t('dyn.duplicates.signals.phone_match'), company_exact: WalaPlusI18n.t('dyn.duplicates.signals.company_exact'), company_fuzzy: WalaPlusI18n.t('dyn.duplicates.signals.company_fuzzy') };
             const signalColors = { exact_email: 'bg-blue-100 text-blue-800', domain_match: 'bg-green-100 text-green-800', phone_match: 'bg-purple-100 text-purple-800', company_exact: 'bg-amber-100 text-amber-800', company_fuzzy: 'bg-orange-100 text-orange-800' };
             const sortedSignals = Object.entries(signals).sort((a, b) => b[1] - a[1]);
-            topSignalsEl.innerHTML = sortedSignals.length === 0 ? `<p class="text-sm text-gray-400">${escapeHtml(_t('dyn.duplicates.no_signal_data'))}</p>` :
+            topSignalsEl.innerHTML = sortedSignals.length === 0 ? `<p class="text-sm text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_signal_data'))}</p>` :
                 sortedSignals.map(([key, count]) => `<div class="flex justify-between items-center cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-1 rounded" data-on-click="openClustersBySignalModal" data-args="${escAttr(JSON.stringify([key, signalLabels[key] || key]))}" data-testid="row-signal-${key}" title="Click to see all clusters with this signal"><span class="px-2 py-1 rounded text-xs font-medium ${signalColors[key] || 'bg-gray-100 text-gray-700'}">${escapeHtml(signalLabels[key] || key)}</span><span class="text-sm font-bold text-gray-700">${_fn(count)} →</span></div>`).join('');
 
             // D4: Top clusters by inflation
             const topClustersEl = document.getElementById('topClustersInflation');
             const topC = data.topClustersByInflation || [];
-            topClustersEl.innerHTML = topC.length === 0 ? `<p class="text-sm text-gray-400">${escapeHtml(_t('dyn.duplicates.no_pipeline_inflation'))}</p>` :
-                topC.map(c => `<div class="flex justify-between items-center p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100" data-on-click="showClusterDetails" data-args="[${c.id}]"><div><span class="font-medium text-sm">${escapeHtml(c.company_name || c.domain)}</span><span class="text-xs text-gray-400 ml-2">${escapeHtml(_t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))}</span></div><span class="text-sm font-bold text-purple-600">${formatCurrency(c.estimated_pipeline_value)}</span></div>`).join('');
+            topClustersEl.innerHTML = topC.length === 0 ? `<p class="text-sm text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_pipeline_inflation'))}</p>` :
+                topC.map(c => `<div class="flex justify-between items-center p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100" data-on-click="showClusterDetails" data-args="[${c.id}]"><div><span class="font-medium text-sm">${escapeHtml(c.company_name || c.domain)}</span><span class="text-xs text-gray-400 ms-2">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))}</span></div><span class="text-sm font-bold text-purple-600">${formatCurrency(c.estimated_pipeline_value)}</span></div>`).join('');
 
             updateCharts(data);
         }
@@ -779,16 +778,19 @@
             if (sourceChart) sourceChart.destroy();
             sourceChart = new Chart(document.getElementById('sourceChart'), {
                 type: 'bar',
-                data: { labels: sourceData.map(s => s.source || _t('dyn.duplicates.unknown')), datasets: [{ label: _t('dyn.duplicates.duplicates_chart_label'), data: sourceData.map(s => parseInt(s.total) || 0), backgroundColor: ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4'] }] },
+                data: { labels: sourceData.map(s => s.source || WalaPlusI18n.t('dyn.duplicates.unknown')), datasets: [{ label: WalaPlusI18n.t('dyn.duplicates.duplicates_chart_label'), data: sourceData.map(s => parseInt(s.total) || 0), backgroundColor: ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4'] }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
             });
+
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('sourceChart', sourceChart, 'Duplicates by Source');
 
             if (confidenceChart) confidenceChart.destroy();
             confidenceChart = new Chart(document.getElementById('confidenceChart'), {
                 type: 'doughnut',
-                data: { labels: [_t('dyn.duplicates.conf_strong'), _t('dyn.duplicates.conf_moderate'), _t('dyn.duplicates.conf_weak')], datasets: [{ data: [data.highConfidence||0, data.mediumConfidence||0, data.lowConfidence||0], backgroundColor: ['#EF4444','#F59E0B','#22C55E'] }] },
+                data: { labels: [WalaPlusI18n.t('dyn.duplicates.conf_strong'), WalaPlusI18n.t('dyn.duplicates.conf_moderate'), WalaPlusI18n.t('dyn.duplicates.conf_weak')], datasets: [{ data: [data.highConfidence||0, data.mediumConfidence||0, data.lowConfidence||0], backgroundColor: ['#EF4444','#F59E0B','#22C55E'] }] },
                 options: { responsive: true, maintainAspectRatio: false }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('confidenceChart', confidenceChart, 'Similarity Score Distribution');
         }
 
         // C4: Paginated cluster loading
@@ -810,7 +812,7 @@
             renderClusters(data.clusters || []);
             renderPagination('clustersPagination', page, data.pages || 1, loadClusters);
             const hint = document.getElementById('layoutFilterHint');
-            if (hint) hint.textContent = layout ? _t('dyn.duplicates.filtered_in_layout', { n: _fn(data.total ?? 0), layout: layout }) : '';
+            if (hint) hint.textContent = layout ? WalaPlusI18n.t('dyn.duplicates.filtered_in_layout', { n: _fn(data.total ?? 0), layout: layout }) : '';
         }
 
         async function populateLayoutFilter() {
@@ -841,24 +843,24 @@
                         <span class="confidence-${['high','medium','low'].includes(c.confidence_level)?c.confidence_level:'low'} px-2 py-1 rounded text-xs font-medium">${c.confidence_score}%</span>
                     </div>
                     <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div><span class="text-gray-500">${escapeHtml(_t('dyn.duplicates.leads'))}</span> <span class="font-medium text-amber-600">${_fn(c.total_leads)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(_t('dyn.duplicates.deals'))}</span> <span class="font-medium text-red-600">${_fn(c.total_deals)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(_t('dyn.duplicates.contacts'))}</span> <span class="font-medium text-teal-600">${_fn(c.total_contacts||0)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(_t('dyn.duplicates.accounts'))}</span> <span class="font-medium text-indigo-600">${_fn(c.total_accounts||0)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(_t('dyn.duplicates.status_kw'))}</span> <span class="font-medium capitalize">${escapeHtml(c.status)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(_t('dyn.duplicates.value_kw'))}</span> <span class="font-medium">${formatCurrency(c.estimated_pipeline_value||0)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.leads'))}</span> <span class="font-medium text-amber-600">${_fn(c.total_leads)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.deals'))}</span> <span class="font-medium text-red-600">${_fn(c.total_deals)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.contacts'))}</span> <span class="font-medium text-teal-600">${_fn(c.total_contacts||0)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.accounts'))}</span> <span class="font-medium text-indigo-600">${_fn(c.total_accounts||0)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.status_kw'))}</span> <span class="font-medium capitalize">${escapeHtml(c.status)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.value_kw'))}</span> <span class="font-medium">${formatCurrency(c.estimated_pipeline_value||0)}</span></div>
                     </div>
                 </div>
-            `).join('') || `<div class="col-span-3 text-center py-8 text-gray-400">${escapeHtml(_t('dyn.duplicates.no_clusters_found'))}</div>`;
+            `).join('') || `<div class="col-span-3 text-center py-8 text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_clusters_found'))}</div>`;
         }
 
         function renderPagination(containerId, currentPage, totalPages, callback) {
             const el = document.getElementById(containerId);
             if (totalPages <= 1) { el.innerHTML = ''; return; }
             let html = '';
-            if (currentPage > 0) html += `<button data-on-click="${callback.name}" data-args="[${currentPage-1}]" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm">${escapeHtml(_t('dyn.common.prev_short'))}</button>`;
-            html += `<span class="px-3 py-1 text-sm text-gray-500">${escapeHtml(_t('dyn.common.page_x_of_y', { current: _fn(currentPage+1), total: _fn(totalPages) }))}</span>`;
-            if (currentPage < totalPages - 1) html += `<button data-on-click="${callback.name}" data-args="[${currentPage+1}]" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm">${escapeHtml(_t('dyn.common.next_short'))}</button>`;
+            if (currentPage > 0) html += `<button data-on-click="${callback.name}" data-args="[${currentPage-1}]" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm">${escapeHtml(WalaPlusI18n.t('dyn.common.prev_short'))}</button>`;
+            html += `<span class="px-3 py-1 text-sm text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.common.page_x_of_y', { current: _fn(currentPage+1), total: _fn(totalPages) }))}</span>`;
+            if (currentPage < totalPages - 1) html += `<button data-on-click="${callback.name}" data-args="[${currentPage+1}]" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm">${escapeHtml(WalaPlusI18n.t('dyn.common.next_short'))}</button>`;
             el.innerHTML = html;
         }
 
@@ -915,36 +917,36 @@
             const tbody = document.getElementById('leadsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.leads || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(_t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(_t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
             }
-            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(_t('dyn.duplicates.no_dup_leads'))}</td></tr>`;
+            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_leads'))}</td></tr>`;
         }
 
         function renderDealRows(groups) {
             const tbody = document.getElementById('dealsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.deals || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Deals')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${escapeHtml(r.stage||'-')}</span></td><td class="px-4 py-3 text-sm font-medium">${formatCurrency(r.deal_value||0)}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(_t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(_t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Deals')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${escapeHtml(r.stage||'-')}</span></td><td class="px-4 py-3 text-sm font-medium">${formatCurrency(r.deal_value||0)}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
             }
-            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(_t('dyn.duplicates.no_dup_deals'))}</td></tr>`;
+            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_deals'))}</td></tr>`;
         }
 
         function renderContactRows(groups) {
             const tbody = document.getElementById('contactsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.contacts || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Contacts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(_t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(_t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Contacts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
             }
-            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(_t('dyn.duplicates.no_dup_contacts'))}</td></tr>`;
+            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_contacts'))}</td></tr>`;
         }
 
         function renderAccountRows(groups) {
             const tbody = document.getElementById('accountsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.accounts || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Accounts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.source||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(_t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(_t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Accounts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.source||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
             }
-            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(_t('dyn.duplicates.no_dup_accounts'))}</td></tr>`;
+            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_accounts'))}</td></tr>`;
         }
 
         // C3: Owner accountability with RAG status
@@ -957,12 +959,12 @@
                     <td class="px-6 py-3 text-sm">${o.total_records}</td>
                     <td class="px-6 py-3 text-sm font-medium">${o.duplicate_records}</td>
                     <td class="px-6 py-3 text-sm font-bold">${_fn(o.duplicate_rate)}%</td>
-                    <td class="px-6 py-3 text-sm"><span class="rag-${['green','amber','red'].includes(o.rag_status)?o.rag_status:'red'} px-2 py-1 rounded text-xs font-medium">${escapeHtml(o.rag_status === 'green' ? _t('dyn.duplicates.rag_green') : o.rag_status === 'amber' ? _t('dyn.duplicates.rag_amber') : _t('dyn.duplicates.rag_red'))}</span></td>
+                    <td class="px-6 py-3 text-sm"><span class="rag-${['green','amber','red'].includes(o.rag_status)?o.rag_status:'red'} px-2 py-1 rounded text-xs font-medium">${escapeHtml(o.rag_status === 'green' ? WalaPlusI18n.t('dyn.duplicates.rag_green') : o.rag_status === 'amber' ? WalaPlusI18n.t('dyn.duplicates.rag_amber') : WalaPlusI18n.t('dyn.duplicates.rag_red'))}</span></td>
                     <td class="px-6 py-3 text-sm">${_fn(o.high_confidence_duplicates)}</td>
                     <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}</td>
-                    <td class="px-6 py-3 text-sm"><a href="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" data-owner="${escAttr(o.owner_name)}" data-on-click="exportOwner" data-args='["@this"]' data-pass-event="true" data-estimate-url="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" class="text-blue-600 hover:underline text-xs" data-testid="link-export-owner-${escAttr(o.owner_name)}">${escapeHtml(_t('dyn.duplicates.export'))} <span data-size-hint class="ml-1 opacity-75"></span></a></td>
+                    <td class="px-6 py-3 text-sm"><a href="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" data-owner="${escAttr(o.owner_name)}" data-on-click="exportOwner" data-args='["@this"]' data-pass-event="true" data-estimate-url="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" class="text-blue-600 hover:underline text-xs" data-testid="link-export-owner-${escAttr(o.owner_name)}">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.export'))} <span data-size-hint class="ms-1 opacity-75"></span></a></td>
                 </tr>
-            `).join('') || `<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">${escapeHtml(_t('dyn.duplicates.no_owner_data'))}</td></tr>`;
+            `).join('') || `<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_owner_data'))}</td></tr>`;
             if (window.streamingDownload && streamingDownload.attachSizeHints) {
                 streamingDownload.attachSizeHints(tbody);
             }
@@ -984,13 +986,13 @@
                     <td class="px-6 py-3 text-sm">${l.detection_duration_ms ? _fn((l.detection_duration_ms / 1000).toFixed(1)) + 's' : '-'}</td>
                     <td class="px-6 py-3 text-sm"><span class="px-2 py-1 rounded text-xs ${statusClass}">${escapeHtml(safeStatus)}</span></td>
                 </tr>`;
-            }).join('') || `<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">${escapeHtml(_t('dyn.duplicates.no_scan_logs'))}</td></tr>`;
+            }).join('') || `<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_scan_logs'))}</td></tr>`;
         }
 
         // D2: Enhanced cluster modal with side-by-side comparison + AI recommendations
         async function showClusterDetails(id) {
             document.getElementById('clusterModal').classList.remove('hidden');
-            document.getElementById('modalContent').innerHTML = `<div class="text-center py-8 text-gray-400">${escapeHtml(_t('dyn.duplicates.loading_dots'))}</div>`;
+            document.getElementById('modalContent').innerHTML = `<div class="text-center py-8 text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.loading_dots'))}</div>`;
 
             const res = await fetch(`/api/duplicates/clusters/${id}`);
             const data = await res.json();
@@ -999,27 +1001,27 @@
             window.__currentMixedSignal = mixed_signal || { domains: [], phones: [], domain_groups: {} };
 
             document.getElementById('modalTitle').textContent = cluster.company_name || cluster.domain;
-            document.getElementById('modalDomain').textContent = `${_t('dyn.duplicates.domain_kw')} ${cluster.domain} | ${_t('dyn.duplicates.score_kw')} ${_fn(cluster.confidence_score)}% | ${_t('dyn.duplicates.status_kw')} ${cluster.status}`;
+            document.getElementById('modalDomain').textContent = `${WalaPlusI18n.t('dyn.duplicates.domain_kw')} ${cluster.domain} | ${WalaPlusI18n.t('dyn.duplicates.score_kw')} ${_fn(cluster.confidence_score)}% | ${WalaPlusI18n.t('dyn.duplicates.status_kw')} ${cluster.status}`;
 
             const recMap = {};
             (recommendations || []).forEach(r => { recMap[r.record_id] = r; });
 
             let html = `<div class="mb-4 flex flex-wrap gap-2 items-center">
-                <span class="confidence-${['high','medium','low'].includes(cluster.confidence_level)?cluster.confidence_level:'low'} px-3 py-1 rounded-full text-sm font-medium">${cluster.confidence_score}% match</span>
-                <span class="px-3 py-1 rounded-full text-sm bg-gray-100">${records.length} records</span>
-                <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">${formatCurrency(cluster.estimated_pipeline_value||0)} inflation</span>
-                ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">Primary: ${escapeHtml(primary_type)}</span>` : ''}
+                <span class="confidence-${['high','medium','low'].includes(cluster.confidence_level)?cluster.confidence_level:'low'} px-3 py-1 rounded-full text-sm font-medium">${_t('dyn.duplicates.badge_match', { score: _fn(cluster.confidence_score) })}</span>
+                <span class="px-3 py-1 rounded-full text-sm bg-gray-100">${_t('dyn.duplicates.badge_records', { n: _fn(records.length) })}</span>
+                <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">${_t('dyn.duplicates.badge_inflation', { value: formatCurrency(cluster.estimated_pipeline_value||0) })}</span>
+                ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">${_t('dyn.duplicates.badge_primary', { type: escapeHtml(primary_type) })}</span>` : ''}
                 ${is_cross_module ? `<span data-testid="badge-cross-module" class="px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-800 font-medium">Cross-module cluster (${(record_types||[]).map(t => escapeHtml(t)).join(' + ')})</span>` : ''}
             </div>`;
 
             if (is_cross_module) {
                 html += `<div data-testid="banner-cross-module" class="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900">
-                    <strong>${_t('dyn.duplicates.cross_module_heads_up')}:</strong> ${_t('dyn.duplicates.cross_module_no_cross_merge')}
-                    <strong>MERGE</strong>. ${_t('dyn.duplicates.cross_module_cross_children')}
-                    <strong>LINK</strong> ${_t('dyn.duplicates.cross_module_set_the')}
+                    <strong>${WalaPlusI18n.t('dyn.duplicates.cross_module_heads_up')}:</strong> ${WalaPlusI18n.t('dyn.duplicates.cross_module_no_cross_merge')}
+                    <strong>MERGE</strong>. ${WalaPlusI18n.t('dyn.duplicates.cross_module_cross_children')}
+                    <strong>LINK</strong> ${WalaPlusI18n.t('dyn.duplicates.cross_module_set_the')}
                     <code class="bg-amber-100 px-1 rounded">Account_Name</code> /
-                    <code class="bg-amber-100 px-1 rounded">Contact_Name</code> ${_t('dyn.duplicates.cross_module_field_in_zoho')}
-                    ${_t('dyn.duplicates.cross_module_lead_superseded')} <strong>CLOSED</strong> ${_t('dyn.duplicates.cross_module_or_converted')}
+                    <code class="bg-amber-100 px-1 rounded">Contact_Name</code> ${WalaPlusI18n.t('dyn.duplicates.cross_module_field_in_zoho')}
+                    ${WalaPlusI18n.t('dyn.duplicates.cross_module_lead_superseded')} <strong>CLOSED</strong> ${WalaPlusI18n.t('dyn.duplicates.cross_module_or_converted')}
                 </div>`;
             }
 
@@ -1052,37 +1054,37 @@
 
             // Side-by-side comparison table
             html += `<div class="overflow-x-auto mb-6"><table class="min-w-full text-sm border"><thead class="bg-gray-50"><tr>
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">${_t('dyn.duplicates.col_field')}</th>`;
+                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500">${WalaPlusI18n.t('dyn.duplicates.col_field')}</th>`;
             records.forEach((r, i) => {
-                html += `<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 border-l">${r.is_primary ? '★ ' : ''}Record ${i+1} (${escapeHtml(r.record_type)})</th>`;
+                html += `<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 border-l">${r.is_primary ? '★ ' : ''}${_t('dyn.duplicates.record_n_header', { n: _fn(i+1) })} (${escapeHtml(r.record_type)})</th>`;
             });
             html += '</tr></thead><tbody>';
 
             const fields = [
-                { key: 'record_name', label: _t('dyn.duplicates.field_name') },
-                { key: 'zoho_record_id', label: _t('dyn.duplicates.field_zoho_id'), render: (v, r) => zohoLink(v, r.record_type === 'lead' ? 'Leads' : r.record_type === 'deal' ? 'Deals' : r.record_type === 'contact' ? 'Contacts' : 'Accounts') },
-                { key: 'company_name', label: _t('dyn.duplicates.field_company') },
-                { key: 'email', label: _t('dyn.duplicates.field_email') },
-                { key: 'phone', label: _t('dyn.duplicates.field_phone') },
-                { key: 'mobile', label: _t('dyn.duplicates.field_mobile') },
-                { key: 'owner_name', label: _t('dyn.duplicates.field_owner') },
-                { key: 'status', label: _t('dyn.duplicates.field_status') },
-                { key: 'stage', label: _t('dyn.duplicates.field_stage') },
-                { key: 'deal_value', label: _t('dyn.duplicates.field_value'), render: v => v ? formatCurrency(v) : '-' },
-                { key: 'source', label: _t('dyn.duplicates.field_source') },
-                { key: 'layout_name', label: _t('dyn.duplicates.field_layout') },
-                { key: 'zoho_module', label: _t('dyn.duplicates.field_module') },
-                { key: 'pipeline', label: _t('dyn.duplicates.field_pipeline') },
-                { key: 'contact_name', label: _t('dyn.duplicates.field_contact') },
-                { key: 'account_name', label: _t('dyn.duplicates.field_account') },
-                { key: 'cr_number', label: _t('dyn.duplicates.field_cr_number') },
-                { key: 'vat_number', label: _t('dyn.duplicates.field_vat_number') },
-                { key: 'website', label: _t('dyn.duplicates.field_website') },
-                { key: 'country', label: _t('dyn.duplicates.field_country') },
-                { key: 'industry', label: _t('dyn.duplicates.field_industry') },
-                { key: 'title', label: _t('dyn.duplicates.field_title') },
-                { key: 'created_date', label: _t('dyn.duplicates.field_created'), render: v => formatDate(v) },
-                { key: 'modified_date', label: _t('dyn.duplicates.field_modified'), render: v => formatDate(v) },
+                { key: 'record_name', label: WalaPlusI18n.t('dyn.duplicates.field_name') },
+                { key: 'zoho_record_id', label: WalaPlusI18n.t('dyn.duplicates.field_zoho_id'), render: (v, r) => zohoLink(v, r.record_type === 'lead' ? 'Leads' : r.record_type === 'deal' ? 'Deals' : r.record_type === 'contact' ? 'Contacts' : 'Accounts') },
+                { key: 'company_name', label: WalaPlusI18n.t('dyn.duplicates.field_company') },
+                { key: 'email', label: WalaPlusI18n.t('dyn.duplicates.field_email') },
+                { key: 'phone', label: WalaPlusI18n.t('dyn.duplicates.field_phone') },
+                { key: 'mobile', label: WalaPlusI18n.t('dyn.duplicates.field_mobile') },
+                { key: 'owner_name', label: WalaPlusI18n.t('dyn.duplicates.field_owner') },
+                { key: 'status', label: WalaPlusI18n.t('dyn.duplicates.field_status') },
+                { key: 'stage', label: WalaPlusI18n.t('dyn.duplicates.field_stage') },
+                { key: 'deal_value', label: WalaPlusI18n.t('dyn.duplicates.field_value'), render: v => v ? formatCurrency(v) : '-' },
+                { key: 'source', label: WalaPlusI18n.t('dyn.duplicates.field_source') },
+                { key: 'layout_name', label: WalaPlusI18n.t('dyn.duplicates.field_layout') },
+                { key: 'zoho_module', label: WalaPlusI18n.t('dyn.duplicates.field_module') },
+                { key: 'pipeline', label: WalaPlusI18n.t('dyn.duplicates.field_pipeline') },
+                { key: 'contact_name', label: WalaPlusI18n.t('dyn.duplicates.field_contact') },
+                { key: 'account_name', label: WalaPlusI18n.t('dyn.duplicates.field_account') },
+                { key: 'cr_number', label: WalaPlusI18n.t('dyn.duplicates.field_cr_number') },
+                { key: 'vat_number', label: WalaPlusI18n.t('dyn.duplicates.field_vat_number') },
+                { key: 'website', label: WalaPlusI18n.t('dyn.duplicates.field_website') },
+                { key: 'country', label: WalaPlusI18n.t('dyn.duplicates.field_country') },
+                { key: 'industry', label: WalaPlusI18n.t('dyn.duplicates.field_industry') },
+                { key: 'title', label: WalaPlusI18n.t('dyn.duplicates.field_title') },
+                { key: 'created_date', label: WalaPlusI18n.t('dyn.duplicates.field_created'), render: v => formatDate(v) },
+                { key: 'modified_date', label: WalaPlusI18n.t('dyn.duplicates.field_modified'), render: v => formatDate(v) },
             ];
 
             fields.forEach(f => {
@@ -1095,13 +1097,13 @@
             });
 
             // AI recommendation row
-            html += `<tr class="border-t bg-blue-50"><td class="px-3 py-2 font-medium text-blue-700">${_t('dyn.duplicates.ai_recommendation')}</td>`;
+            html += `<tr class="border-t bg-blue-50"><td class="px-3 py-2 font-medium text-blue-700">${WalaPlusI18n.t('dyn.duplicates.ai_recommendation')}</td>`;
             records.forEach(r => {
                 const rec = recMap[r.id];
                 if (rec) {
                     const actionClass = `action-${escAttr(rec.action_type)}`;
                     const typeTag = r.record_type
-                        ? `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 uppercase tracking-wide">${escapeHtml(r.record_type)}</span>`
+                        ? `<span class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 uppercase tracking-wide">${escapeHtml(r.record_type)}</span>`
                         : '';
                     html += `<td class="px-3 py-2 border-l"><span class="${actionClass} px-2 py-1 rounded text-xs font-bold">${escapeHtml(rec.action_type).toUpperCase()}</span>${typeTag}<div class="text-xs text-gray-500 mt-1">${escapeHtml(rec.recommendation)}</div>`;
                     if (rec.reasons?.length) html += `<div class="text-xs text-gray-400 mt-1">${rec.reasons.map(reason => escapeHtml(reason)).join(', ')}</div>`;
@@ -1115,15 +1117,15 @@
             // Action buttons — label depends on whether the cluster is cross-module
             if (cluster.status === 'active') {
                 const resolveLabel = is_cross_module
-                    ? _t('dyn.duplicates.resolve_label_cross')
-                    : _t('dyn.duplicates.resolve_label_simple');
+                    ? WalaPlusI18n.t('dyn.duplicates.resolve_label_cross')
+                    : WalaPlusI18n.t('dyn.duplicates.resolve_label_simple');
                 html += `<div class="border-t pt-4">
                     <div class="flex flex-wrap gap-3 mb-2">
                         <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;resolve&quot;]" data-testid="button-resolve-${cluster.id}" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">${resolveLabel}</button>
-                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;ignore&quot;]" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">${_t('dyn.duplicates.ignore_label')}</button>
+                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;ignore&quot;]" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">${WalaPlusI18n.t('dyn.duplicates.ignore_label')}</button>
                     </div>
                     <p data-testid="text-post-merge-hint" class="text-xs text-gray-500 italic">
-                        ${_t('dyn.duplicates.post_merge_hint')}
+                        ${WalaPlusI18n.t('dyn.duplicates.post_merge_hint')}
                     </p>
                 </div>`;
             }
@@ -1154,7 +1156,7 @@
                 `\n\nThis cannot be undone automatically (you'd have to re-scan or merge them back manually).`;
             if (!confirm(summary)) return;
 
-            const adminKey = prompt(_t('dyn.duplicates.prompt_admin_key'));
+            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
             if (!adminKey) return;
 
             try {
@@ -1177,7 +1179,7 @@
         }
 
         async function resolveClusterAction(clusterId, action) {
-            const adminKey = prompt(_t('dyn.duplicates.prompt_admin_key'));
+            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
             if (!adminKey) return;
             const res = await fetch(`/api/duplicates/clusters/${clusterId}/resolve`, {
                 method: 'POST',
@@ -1186,11 +1188,11 @@
             });
             const data = await res.json();
             if (data.success) {
-                alert(action === 'resolve' ? _t('dyn.duplicates.cluster_resolved') : _t('dyn.duplicates.cluster_ignored'));
+                alert(action === 'resolve' ? WalaPlusI18n.t('dyn.duplicates.cluster_resolved') : WalaPlusI18n.t('dyn.duplicates.cluster_ignored'));
                 closeModal();
                 refreshData();
             } else {
-                alert(data.error || _t('dyn.duplicates.failed_action'));
+                alert(data.error || WalaPlusI18n.t('dyn.duplicates.failed_action'));
             }
         }
 
@@ -1200,23 +1202,23 @@
         function openListModal(title, subtitle) {
             document.getElementById('listModalTitle').textContent = title;
             document.getElementById('listModalSubtitle').textContent = subtitle || '';
-            document.getElementById('listModalBody').innerHTML = `<div class="text-center text-gray-400 py-8">${escapeHtml(_t('dyn.duplicates.loading_dots'))}</div>`;
+            document.getElementById('listModalBody').innerHTML = `<div class="text-center text-gray-400 py-8">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.loading_dots'))}</div>`;
             document.getElementById('listModal').classList.remove('hidden');
         }
         function closeListModal() { document.getElementById('listModal').classList.add('hidden'); }
 
         function renderClusterListRows(clusters, opts = {}) {
             if (!clusters || clusters.length === 0) {
-                return `<p class="text-sm text-gray-400 text-center py-6">${escapeHtml(_t('dyn.duplicates.no_clusters_found_dot'))}</p>`;
+                return `<p class="text-sm text-gray-400 text-center py-6">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_clusters_found_dot'))}</p>`;
             }
             const showInflation = opts.showInflation !== false;
             const rows = clusters.map((c, i) => {
                 const name = c.company_name || c.company_name_arabic || c.domain || 'Unknown';
                 const moduleParts = [];
-                if (c.total_accounts) moduleParts.push(_t('dyn.duplicates.acc_short', { n: _fn(c.total_accounts) }));
-                if (c.total_contacts) moduleParts.push(_t('dyn.duplicates.con_short', { n: _fn(c.total_contacts) }));
-                if (c.total_deals) moduleParts.push(_t('dyn.duplicates.deal_short', { n: _fn(c.total_deals) }));
-                if (c.total_leads) moduleParts.push(_t('dyn.duplicates.lead_short', { n: _fn(c.total_leads) }));
+                if (c.total_accounts) moduleParts.push(WalaPlusI18n.t('dyn.duplicates.acc_short', { n: _fn(c.total_accounts) }));
+                if (c.total_contacts) moduleParts.push(WalaPlusI18n.t('dyn.duplicates.con_short', { n: _fn(c.total_contacts) }));
+                if (c.total_deals) moduleParts.push(WalaPlusI18n.t('dyn.duplicates.deal_short', { n: _fn(c.total_deals) }));
+                if (c.total_leads) moduleParts.push(WalaPlusI18n.t('dyn.duplicates.lead_short', { n: _fn(c.total_leads) }));
                 const breakdown = moduleParts.join(' · ');
                 const conf = c.confidence_score != null ? `${c.confidence_score}%` : '—';
                 const status = c.status || 'active';
@@ -1224,67 +1226,67 @@
                     : status === 'ignored' ? 'bg-gray-100 text-gray-700'
                     : 'bg-blue-100 text-blue-800';
                 return `<tr class="border-t hover:bg-gray-50 cursor-pointer" data-on-click="closeListModal,showClusterDetails" data-args="[[],[${c.id}]]" data-testid="row-list-cluster-${c.id}">
-                    <td class="px-3 py-2 text-xs text-gray-400 text-right">${i + 1}</td>
+                    <td class="px-3 py-2 text-xs text-gray-400 text-end">${i + 1}</td>
                     <td class="px-3 py-2 text-sm font-medium text-gray-800">${escapeHtml(name)}<div class="text-xs text-gray-400">${escapeHtml(c.domain || '')}</div></td>
-                    <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${escapeHtml(_t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))}${breakdown ? ` <span class="text-gray-400">(${escapeHtml(breakdown)})</span>` : ''}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))}${breakdown ? ` <span class="text-gray-400">(${escapeHtml(breakdown)})</span>` : ''}</td>
                     <td class="px-3 py-2 text-xs text-center"><span class="px-2 py-0.5 rounded ${statusClr}">${escapeHtml(status)}</span></td>
                     <td class="px-3 py-2 text-xs text-center font-semibold text-gray-700">${conf}</td>
-                    ${showInflation ? `<td class="px-3 py-2 text-sm font-bold text-purple-600 text-right whitespace-nowrap">${formatCurrency(c.estimated_pipeline_value || 0)}</td>` : ''}
+                    ${showInflation ? `<td class="px-3 py-2 text-sm font-bold text-purple-600 text-end whitespace-nowrap">${formatCurrency(c.estimated_pipeline_value || 0)}</td>` : ''}
                 </tr>`;
             }).join('');
             return `<div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr>
-                <th class="px-3 py-2 text-right">#</th>
-                <th class="px-3 py-2 text-left">${escapeHtml(_t('dyn.duplicates.table_header_cluster'))}</th>
-                <th class="px-3 py-2 text-left">${escapeHtml(_t('dyn.duplicates.table_header_records'))}</th>
-                <th class="px-3 py-2 text-center">${escapeHtml(_t('dyn.duplicates.table_header_status'))}</th>
-                <th class="px-3 py-2 text-center">${escapeHtml(_t('dyn.duplicates.table_header_score'))}</th>
-                ${showInflation ? `<th class="px-3 py-2 text-right">${escapeHtml(_t('dyn.duplicates.table_header_inflation'))}</th>` : ''}
+                <th scope="col" class="px-3 py-2 text-end">#</th>
+                <th scope="col" class="px-3 py-2 text-start">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_cluster'))}</th>
+                <th scope="col" class="px-3 py-2 text-start">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_records'))}</th>
+                <th scope="col" class="px-3 py-2 text-center">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_status'))}</th>
+                <th scope="col" class="px-3 py-2 text-center">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_score'))}</th>
+                ${showInflation ? `<th scope="col" class="px-3 py-2 text-end">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_inflation'))}</th>` : ''}
             </tr></thead><tbody>${rows}</tbody></table></div>`;
         }
 
         async function openInflationListModal() {
-            openListModal(_t('dyn.duplicates.modal_inflation_title'), _t('dyn.duplicates.modal_inflation_subtitle'));
+            openListModal(WalaPlusI18n.t('dyn.duplicates.modal_inflation_title'), WalaPlusI18n.t('dyn.duplicates.modal_inflation_subtitle'));
             try {
                 const res = await fetch('/api/duplicates/clusters-by-inflation?limit=500');
                 const data = await res.json();
                 const clusters = data.clusters || [];
                 const totalInflation = clusters.reduce((s, c) => s + parseFloat(c.estimated_pipeline_value || 0), 0);
-                document.getElementById('listModalSubtitle').textContent = _t('dyn.duplicates.inflation_summary', { n: _fn(clusters.length), val: formatCurrency(totalInflation) });
+                document.getElementById('listModalSubtitle').textContent = WalaPlusI18n.t('dyn.duplicates.inflation_summary', { n: _fn(clusters.length), val: formatCurrency(totalInflation) });
                 document.getElementById('listModalBody').innerHTML = renderClusterListRows(clusters, { showInflation: true });
             } catch (e) {
-                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(_t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
+                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
             }
         }
 
         async function openClustersBySignalModal(signal, label) {
-            openListModal(_t('dyn.duplicates.modal_signal_title', { label: label }), _t('dyn.duplicates.modal_signal_subtitle', { key: signal }));
+            openListModal(WalaPlusI18n.t('dyn.duplicates.modal_signal_title', { label: label }), WalaPlusI18n.t('dyn.duplicates.modal_signal_subtitle', { key: signal }));
             try {
                 const res = await fetch(`/api/duplicates/clusters-by-signal/${encodeURIComponent(signal)}?limit=500`);
                 const data = await res.json();
                 const clusters = data.clusters || [];
-                document.getElementById('listModalSubtitle').textContent = _t('dyn.duplicates.signal_match_count', { n: _fn(clusters.length), label: label });
+                document.getElementById('listModalSubtitle').textContent = WalaPlusI18n.t('dyn.duplicates.signal_match_count', { n: _fn(clusters.length), label: label });
                 document.getElementById('listModalBody').innerHTML = renderClusterListRows(clusters, { showInflation: true });
             } catch (e) {
-                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(_t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
+                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
             }
         }
 
         async function openSignalsListModal() {
             // Aggregate of every signal type with click-through to per-signal cluster lists.
-            openListModal(_t('dyn.duplicates.modal_signals_title'), _t('dyn.duplicates.modal_signals_subtitle'));
+            openListModal(WalaPlusI18n.t('dyn.duplicates.modal_signals_title'), WalaPlusI18n.t('dyn.duplicates.modal_signals_subtitle'));
             try {
                 const res = await fetch('/api/duplicates/summary');
                 const data = await res.json();
                 const signals = data.topSignals || {};
-                const labels = { exact_email: _t('dyn.duplicates.signals.exact_email'), domain_match: _t('dyn.duplicates.signals.domain_match'), phone_match: _t('dyn.duplicates.signals.phone_match'), company_exact: _t('dyn.duplicates.signals.company_exact'), company_fuzzy: _t('dyn.duplicates.signals.company_fuzzy') };
+                const labels = { exact_email: WalaPlusI18n.t('dyn.duplicates.signals.exact_email'), domain_match: WalaPlusI18n.t('dyn.duplicates.signals.domain_match'), phone_match: WalaPlusI18n.t('dyn.duplicates.signals.phone_match'), company_exact: WalaPlusI18n.t('dyn.duplicates.signals.company_exact'), company_fuzzy: WalaPlusI18n.t('dyn.duplicates.signals.company_fuzzy') };
                 const colors = { exact_email: 'bg-blue-100 text-blue-800', domain_match: 'bg-green-100 text-green-800', phone_match: 'bg-purple-100 text-purple-800', company_exact: 'bg-amber-100 text-amber-800', company_fuzzy: 'bg-orange-100 text-orange-800' };
                 const sorted = Object.entries(signals).sort((a, b) => b[1] - a[1]);
                 if (sorted.length === 0) {
-                    document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-gray-400 text-center py-6">${escapeHtml(_t('dyn.duplicates.no_signal_data_dot'))}</p>`;
+                    document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-gray-400 text-center py-6">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_signal_data_dot'))}</p>`;
                     return;
                 }
                 const total = sorted.reduce((s, [, n]) => s + n, 0);
-                document.getElementById('listModalSubtitle').textContent = _t('dyn.duplicates.signal_summary', { n: _fn(sorted.length), total: _fn(total) });
+                document.getElementById('listModalSubtitle').textContent = WalaPlusI18n.t('dyn.duplicates.signal_summary', { n: _fn(sorted.length), total: _fn(total) });
                 const rows = sorted.map(([key, count]) => {
                     const lbl = labels[key] || key;
                     const clr = colors[key] || 'bg-gray-100 text-gray-700';
@@ -1292,20 +1294,20 @@
                     return `<tr class="border-t hover:bg-gray-50 cursor-pointer" data-on-click="openClustersBySignalModal" data-args="${escAttr(JSON.stringify([key, lbl]))}" data-testid="row-signal-detail-${key}">
                         <td class="px-3 py-2"><span class="px-2 py-1 rounded text-xs font-medium ${clr}">${escapeHtml(lbl)}</span></td>
                         <td class="px-3 py-2 text-xs text-gray-500"><code class="bg-gray-100 px-1 rounded">${escapeHtml(key)}</code></td>
-                        <td class="px-3 py-2 text-sm text-right font-bold text-gray-700">${_fn(count)}</td>
-                        <td class="px-3 py-2 text-xs text-right text-gray-500">${_fn(pct)}%</td>
-                        <td class="px-3 py-2 text-xs text-right text-blue-600 font-medium">${escapeHtml(_t('dyn.duplicates.view_clusters'))}</td>
+                        <td class="px-3 py-2 text-sm text-end font-bold text-gray-700">${_fn(count)}</td>
+                        <td class="px-3 py-2 text-xs text-end text-gray-500">${_fn(pct)}%</td>
+                        <td class="px-3 py-2 text-xs text-end text-blue-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.view_clusters'))}</td>
                     </tr>`;
                 }).join('');
                 document.getElementById('listModalBody').innerHTML = `<div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr>
-                    <th class="px-3 py-2 text-left">${escapeHtml(_t('dyn.duplicates.table_header_signal'))}</th>
-                    <th class="px-3 py-2 text-left">${escapeHtml(_t('dyn.duplicates.table_header_key'))}</th>
-                    <th class="px-3 py-2 text-right">${escapeHtml(_t('dyn.duplicates.table_header_hits'))}</th>
-                    <th class="px-3 py-2 text-right">${escapeHtml(_t('dyn.duplicates.table_header_share'))}</th>
-                    <th class="px-3 py-2 text-right"></th>
+                    <th scope="col" class="px-3 py-2 text-start">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_signal'))}</th>
+                    <th scope="col" class="px-3 py-2 text-start">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_key'))}</th>
+                    <th scope="col" class="px-3 py-2 text-end">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_hits'))}</th>
+                    <th scope="col" class="px-3 py-2 text-end">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.table_header_share'))}</th>
+                    <th scope="col" class="px-3 py-2 text-end"></th>
                 </tr></thead><tbody>${rows}</tbody></table></div>`;
             } catch (e) {
-                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(_t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
+                document.getElementById('listModalBody').innerHTML = `<p class="text-sm text-red-600 text-center py-6">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.load_failed', { err: e.message }))}</p>`;
             }
         }
         // close on backdrop click
@@ -1324,12 +1326,12 @@
 
         // D1: Scan with progress bar
         async function scanZohoCRM() {
-            const adminKey = prompt(_t('dyn.duplicates.prompt_admin_key_scan'));
+            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key_scan'));
             if (!adminKey) return;
 
             const btn = document.getElementById('scanZohoBtn');
             btn.disabled = true;
-            btn.textContent = _t('dyn.duplicates.scanning');
+            btn.textContent = WalaPlusI18n.t('dyn.duplicates.scanning');
 
             try {
                 const res = await fetch('/api/duplicates/scan-zoho', {
@@ -1348,22 +1350,22 @@
                 document.getElementById('scanProgressBar').classList.remove('hidden');
                 startScanPolling();
             } catch (e) {
-                alert(_t('dyn.duplicates.error_starting_scan'));
+                alert(WalaPlusI18n.t('dyn.duplicates.error_starting_scan'));
                 btn.disabled = false;
-                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> ' + escapeHtml(_t('dyn.duplicates.scan_zoho_btn'));
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.scan_zoho_btn'));
             }
         }
 
         async function rebuildClusters() {
-            const confirmed = confirm(_t('dyn.duplicates.rebuild_confirm_full'));
+            const confirmed = confirm(WalaPlusI18n.t('dyn.duplicates.rebuild_confirm_full'));
             if (!confirmed) return;
 
-            const adminKey = prompt(_t('dyn.duplicates.prompt_admin_key_rebuild'));
+            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key_rebuild'));
             if (!adminKey) return;
 
             const btn = document.getElementById('rebuildBtn');
             btn.disabled = true;
-            btn.textContent = _t('dyn.duplicates.rebuild_starting');
+            btn.textContent = WalaPlusI18n.t('dyn.duplicates.rebuild_starting');
 
             try {
                 const res = await fetch('/api/duplicates/rebuild', {
@@ -1372,19 +1374,19 @@
                 });
                 const data = await res.json();
                 if (!data.success) {
-                    alert(data.error || _t('dyn.duplicates.failed_rebuild'));
+                    alert(data.error || WalaPlusI18n.t('dyn.duplicates.failed_rebuild'));
                     btn.disabled = false;
-                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> ' + escapeHtml(_t('dyn.duplicates.rebuild_clusters_btn'));
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.rebuild_clusters_btn'));
                     return;
                 }
 
                 document.getElementById('scanProgressBar').classList.remove('hidden');
-                document.getElementById('scanProgressText').textContent = _t('dyn.duplicates.tables_wiped');
+                document.getElementById('scanProgressText').textContent = WalaPlusI18n.t('dyn.duplicates.tables_wiped');
                 startScanPolling();
             } catch (e) {
-                alert(_t('dyn.duplicates.error_rebuild'));
+                alert(WalaPlusI18n.t('dyn.duplicates.error_rebuild'));
                 btn.disabled = false;
-                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> ' + escapeHtml(_t('dyn.duplicates.rebuild_clusters_btn'));
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.rebuild_clusters_btn'));
             }
         }
 
@@ -1395,7 +1397,7 @@
                     const res = await fetch('/api/duplicates/scan-status');
                     const data = await res.json();
 
-                    document.getElementById('scanProgressText').textContent = data.progress || _t('dyn.duplicates.processing');
+                    document.getElementById('scanProgressText').textContent = data.progress || WalaPlusI18n.t('dyn.duplicates.processing');
                     document.getElementById('scanPct').textContent = _fn(data.percentage || 0) + '%';
                     document.getElementById('scanProgressFill').style.width = (data.percentage || 0) + '%';
 
@@ -1419,7 +1421,7 @@
 
                         const btn = document.getElementById('scanZohoBtn');
                         btn.disabled = false;
-                        btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> ' + escapeHtml(_t('dyn.duplicates.scan_zoho_btn'));
+                        btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.scan_zoho_btn'));
 
                         if (data.status === 'completed') refreshData();
                     }
@@ -1434,7 +1436,12 @@
             let url = '/api/duplicates/export-xlsx';
             if (range.from) url += `?start_date=${range.from}`;
             if (range.to) url += (url.includes('?') ? '&' : '?') + `end_date=${range.to}`;
-            return streamingDownloadFromEvent(event, url, { filename: 'duplicates.xlsx' });
+            // Multi-sheet XLSX builds are heavy on both server and client and
+            // are a frequent source of mid-download disconnects, so warm up
+            // autoResume here. Lighter CSV exports below intentionally keep
+            // the default (opt-out) behavior so users on metered/mobile
+            // connections aren't surprised by background retries.
+            return streamingDownloadFromEvent(event, url, { filename: 'duplicates.xlsx', autoResume: true });
         }
 
         function exportData(event) {
@@ -1490,7 +1497,7 @@
             };
 
             const hasValue = Object.values(params).some(v => v && v.trim());
-            if (!hasValue) { alert(_t('dyn.duplicates.search_no_criteria')); return; }
+            if (!hasValue) { alert(WalaPlusI18n.t('dyn.duplicates.search_no_criteria')); return; }
 
             const res = await fetch('/api/duplicates/search', {
                 method: 'POST',
@@ -1502,13 +1509,13 @@
             if (data.records?.length > 0) {
                 document.getElementById('searchResults').classList.remove('hidden');
                 document.getElementById('noSearchResults').classList.add('hidden');
-                document.getElementById('searchResultsCount').textContent = _t('dyn.duplicates.search_results_count', { n: _fn(data.records.length) });
-                document.getElementById('searchClusterInfo').textContent = _t('dyn.duplicates.search_clusters_count', { n: _fn(data.clusters?.length || 0) });
+                document.getElementById('searchResultsCount').textContent = WalaPlusI18n.t('dyn.duplicates.search_results_count', { n: _fn(data.records.length) });
+                document.getElementById('searchClusterInfo').textContent = WalaPlusI18n.t('dyn.duplicates.search_clusters_count', { n: _fn(data.clusters?.length || 0) });
 
                 document.getElementById('searchClustersGrid').innerHTML = (data.clusters || []).map(c => `
                     <div class="bg-gray-50 border rounded-lg p-3 cursor-pointer hover:bg-gray-100" data-on-click="showClusterDetails" data-args="[${c.id}]">
                         <div class="font-medium">${escapeHtml(c.domain)}</div>
-                        <div class="text-xs text-gray-500">${escapeHtml(_t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))} | ${_fn(c.confidence_score)}%</div>
+                        <div class="text-xs text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))} | ${_fn(c.confidence_score)}%</div>
                     </div>
                 `).join('');
 
@@ -1666,13 +1673,13 @@
             showTab('clusters');
             renderClusters(clusters);
             const pagEl = document.getElementById('clustersPagination');
-            if (pagEl) pagEl.innerHTML = `<span class="text-sm text-gray-500">${escapeHtml(_t('dyn.duplicates.showing_filtered', { shown: _fn(clusters.length), total: _fn(total) }))}</span>`;
+            if (pagEl) pagEl.innerHTML = `<span class="text-sm text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.showing_filtered', { shown: _fn(clusters.length), total: _fn(total) }))}</span>`;
         }
 
         function updateFilteredSummaryBadge(data) {
             const badge = document.getElementById('activeFilterCount');
             if (badge && data.totalClusters !== undefined) {
-                badge.textContent = _t('dyn.duplicates.filter_count_with_clusters', { count: _fn(countActiveFilters()), total: _fn(data.totalClusters) });
+                badge.textContent = WalaPlusI18n.t('dyn.duplicates.filter_count_with_clusters', { count: _fn(countActiveFilters()), total: _fn(data.totalClusters) });
                 badge.classList.remove('hidden');
             }
         }
@@ -1703,12 +1710,12 @@
             const now = Date.now();
             const diffMs = now - then;
             const mins = Math.floor(diffMs / 60000);
-            if (mins < 1) return _t('dyn.duplicates.just_now');
-            if (mins < 60) return _t('dyn.duplicates.mins_ago', { n: _fn(mins) });
+            if (mins < 1) return WalaPlusI18n.t('dyn.duplicates.just_now');
+            if (mins < 60) return WalaPlusI18n.t('dyn.duplicates.mins_ago', { n: _fn(mins) });
             const hours = Math.floor(mins / 60);
-            if (hours < 24) return _t('dyn.duplicates.hours_ago', { n: _fn(hours) });
+            if (hours < 24) return WalaPlusI18n.t('dyn.duplicates.hours_ago', { n: _fn(hours) });
             const days = Math.floor(hours / 24);
-            return _t('dyn.duplicates.days_ago', { n: _fn(days) });
+            return WalaPlusI18n.t('dyn.duplicates.days_ago', { n: _fn(days) });
         }
 
         async function loadSyncStatus() {
@@ -1723,7 +1730,7 @@
                 const statusColors = { completed: 'bg-green-100 text-green-700', syncing: 'bg-blue-100 text-blue-700 animate-pulse', failed: 'bg-red-100 text-red-700', idle: 'bg-gray-100 text-gray-600' };
                 chipsEl.innerHTML = states.map(s => {
                     const color = statusColors[s.sync_status] || statusColors.idle;
-                    return `<span class="px-2 py-1 rounded-full text-xs font-medium ${color}">${escapeHtml(_t('dyn.duplicates.sync_chip', { module: s.module, n: _fn(s.total_synced), status: s.sync_status }))}</span>`;
+                    return `<span class="px-2 py-1 rounded-full text-xs font-medium ${color}">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.sync_chip', { module: s.module, n: _fn(s.total_synced), status: s.sync_status }))}</span>`;
                 }).join('');
 
                 const latestSync = states.filter(s => s.last_sync_at).sort((a, b) => new Date(b.last_sync_at) - new Date(a.last_sync_at))[0];
@@ -1731,7 +1738,7 @@
                     const ts = latestSync.last_sync_at;
                     const ageHours = (Date.now() - new Date(ts).getTime()) / 3600000;
                     const lastRunEl = document.getElementById('syncLastRun');
-                    lastRunEl.textContent = _t('dyn.duplicates.last_synced', { ago: formatRelativeTime(ts), when: _fd(new Date(ts), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) });
+                    lastRunEl.textContent = WalaPlusI18n.t('dyn.duplicates.last_synced', { ago: formatRelativeTime(ts), when: _fd(new Date(ts), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) });
                     const dot = document.getElementById('syncStatusDot');
                     const warn = document.getElementById('syncStaleWarning');
                     if (ageHours > 8) {
@@ -1753,12 +1760,12 @@
             const btn = document.getElementById('syncNowBtn');
             const originalHTML = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> ' + escapeHtml(_t('dyn.duplicates.syncing'));
+            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.syncing'));
             try {
                 const res = await fetch('/api/duplicates/scan-zoho', { method: 'POST', credentials: 'same-origin' });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
-                    alert(err.error || _t('dyn.duplicates.sync_failed'));
+                    alert(err.error || WalaPlusI18n.t('dyn.duplicates.sync_failed'));
                     btn.disabled = false;
                     btn.innerHTML = originalHTML;
                     return;
@@ -1780,7 +1787,7 @@
                 }, 2000);
                 setTimeout(() => { btn.disabled = false; btn.innerHTML = originalHTML; clearInterval(restoreBtn); }, 600000);
             } catch (e) {
-                alert(_t('dyn.duplicates.sync_failed_msg', { msg: e.message || e }));
+                alert(WalaPlusI18n.t('dyn.duplicates.sync_failed_msg', { msg: e.message || e }));
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
             }
@@ -1793,7 +1800,7 @@
                 if (data.status === 'scanning') {
                     document.getElementById('scanProgressBar').classList.remove('hidden');
                     document.getElementById('scanZohoBtn').disabled = true;
-                    document.getElementById('scanZohoBtn').textContent = _t('dyn.duplicates.scanning');
+                    document.getElementById('scanZohoBtn').textContent = WalaPlusI18n.t('dyn.duplicates.scanning');
                     startScanPolling();
                 }
             } catch {}

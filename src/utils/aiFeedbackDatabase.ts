@@ -337,12 +337,52 @@ export interface FeedbackStats {
    * prompt-version breakdown.
    */
   client_surfaces: FeedbackClientSurfaceBreakdown[];
+  /**
+   * Per-(prompt_version × client_surface) cross-tab breakdown for the same
+   * window as the headline totals (Task #732).
+   *
+   * Lets an operator answer "is the new prompt revision worse on mobile
+   * specifically, or equally bad everywhere?" without having to
+   * manually intersect the sibling `prompt_versions` and
+   * `client_surfaces` rollups. Each row carries the same shape as the
+   * one-dimensional rollups so the dashboard can reuse the existing
+   * red/amber/green ratio colour scale.
+   *
+   * Rows where either field is NULL or blank are bucketed under the
+   * literal `unknown` (same convention as the sibling rollups) so
+   * legacy rows from before Task #590 still contribute to the totals.
+   */
+  prompt_version_surfaces: FeedbackPromptVersionSurfaceBreakdown[];
 }
 
-export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
+export interface FeedbackPromptVersionSurfaceBreakdown {
+  prompt_version: string;
+  client_surface: string;
+  total: number;
+  thumbs_up: number;
+  thumbs_down: number;
+  thumbs_up_ratio: number;
+}
+
+export async function getFeedbackStats(
+  days = 30,
+  agent?: string | null,
+): Promise<FeedbackStats> {
   await initAIFeedbackTable();
 
   const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 30)));
+  // Optional agent filter (Task #423). Mirrors the trim/cap used by
+  // `getFeedbackTrend()` so the stats endpoint, recent thumbs-down list,
+  // and the trend chart all narrow on the same agent value when an admin
+  // picks one from the AI Ops dropdown.
+  const agentFilter =
+    agent && typeof agent === "string" && agent.trim()
+      ? agent.trim().substring(0, 100)
+      : null;
+  const agentClause = agentFilter ? ` AND agent = $2` : "";
+  const params: (number | string)[] = agentFilter
+    ? [safeDays, agentFilter]
+    : [safeDays];
 
   const totals = await pool.query(
     `SELECT
@@ -350,8 +390,8 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
        COUNT(*) FILTER (WHERE rating='up')                      AS thumbs_up,
        COUNT(*) FILTER (WHERE rating='down')                    AS thumbs_down
      FROM ai_response_feedback
-     WHERE created_at >= NOW() - make_interval(days => $1)`,
-    [safeDays],
+     WHERE created_at >= NOW() - make_interval(days => $1)${agentClause}`,
+    params,
   );
 
   const cats = await pool.query(
@@ -359,11 +399,11 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
      FROM ai_response_feedback
      WHERE rating='down'
        AND category IS NOT NULL
-       AND created_at >= NOW() - make_interval(days => $1)
+       AND created_at >= NOW() - make_interval(days => $1)${agentClause}
      GROUP BY category
      ORDER BY cnt DESC
      LIMIT 6`,
-    [safeDays],
+    params,
   );
 
   // Per-prompt-version breakdown (Task #661).
@@ -382,11 +422,11 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
        COUNT(*) FILTER (WHERE rating='up')                                 AS thumbs_up,
        COUNT(*) FILTER (WHERE rating='down')                               AS thumbs_down
      FROM ai_response_feedback
-     WHERE created_at >= NOW() - make_interval(days => $1)
+     WHERE created_at >= NOW() - make_interval(days => $1)${agentClause}
      GROUP BY 1
      ORDER BY total DESC, prompt_version ASC
      LIMIT 12`,
-    [safeDays],
+    params,
   );
 
   // Per-client-surface breakdown (Task #726). Same shape and 'unknown'
@@ -402,11 +442,32 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
        COUNT(*) FILTER (WHERE rating='up')                                 AS thumbs_up,
        COUNT(*) FILTER (WHERE rating='down')                               AS thumbs_down
      FROM ai_response_feedback
-     WHERE created_at >= NOW() - make_interval(days => $1)
+     WHERE created_at >= NOW() - make_interval(days => $1)${agentClause}
      GROUP BY 1
      ORDER BY total DESC, client_surface ASC
      LIMIT 12`,
-    [safeDays],
+    params,
+  );
+
+  // Per-(prompt_version × client_surface) cross-tab breakdown (Task #732).
+  // Same window, agent filter, 'unknown' sentinel handling, and red/amber/
+  // green ratio fan-out as the one-dimensional rollups above. Cap at 60
+  // rows (≈ 12 prompt versions × 5 surfaces) so a long tail can't blow up
+  // the dashboard payload while still leaving plenty of headroom for the
+  // realistic web/slack/mobile/unknown × handful-of-revisions matrix.
+  const versionSurfaces = await pool.query(
+    `SELECT
+       COALESCE(NULLIF(TRIM(metadata->>'prompt_version'),  ''), 'unknown') AS prompt_version,
+       COALESCE(NULLIF(TRIM(metadata->>'client_surface'),  ''), 'unknown') AS client_surface,
+       COUNT(*)                                                            AS total,
+       COUNT(*) FILTER (WHERE rating='up')                                 AS thumbs_up,
+       COUNT(*) FILTER (WHERE rating='down')                               AS thumbs_down
+     FROM ai_response_feedback
+     WHERE created_at >= NOW() - make_interval(days => $1)${agentClause}
+     GROUP BY 1, 2
+     ORDER BY total DESC, prompt_version ASC, client_surface ASC
+     LIMIT 60`,
+    params,
   );
 
   const total = parseInt(totals.rows[0].total) || 0;
@@ -429,6 +490,20 @@ export async function getFeedbackStats(days = 30): Promise<FeedbackStats> {
       const rowDown = parseInt(r.thumbs_down) || 0;
       return {
         prompt_version: String(r.prompt_version),
+        total: rowTotal,
+        thumbs_up: rowUp,
+        thumbs_down: rowDown,
+        thumbs_up_ratio:
+          rowTotal > 0 ? Math.round((rowUp / rowTotal) * 100) : 0,
+      };
+    }),
+    prompt_version_surfaces: versionSurfaces.rows.map((r) => {
+      const rowTotal = parseInt(r.total) || 0;
+      const rowUp = parseInt(r.thumbs_up) || 0;
+      const rowDown = parseInt(r.thumbs_down) || 0;
+      return {
+        prompt_version: String(r.prompt_version),
+        client_surface: String(r.client_surface),
         total: rowTotal,
         thumbs_up: rowUp,
         thumbs_down: rowDown,
@@ -491,16 +566,36 @@ export interface RecentThumbsDown {
 /**
  * Optional filters for the recent thumbs-down report. Each filter narrows the
  * report down to feedback whose `metadata->>'prompt_version'` (resp.
- * `metadata->>'feature_flag'`) matches the provided value exactly. Used by the
- * AI Operations dashboard so an operator triaging a regression can pivot from
- * the "all recent thumbs-down" list to the rows tied to a specific prompt
- * revision or feature-flag bucket. Empty / whitespace-only strings are treated
- * as "no filter" so the dashboard can blindly forward the input box value
+ * `metadata->>'feature_flag'`, `metadata->>'client_surface'`) matches the
+ * provided value exactly. Used by the AI Operations dashboard so an operator
+ * triaging a regression can pivot from the "all recent thumbs-down" list to
+ * the rows tied to a specific prompt revision, feature-flag bucket, or client
+ * surface (web / slack / mobile). Empty / whitespace-only strings are treated
+ * as "no filter" so the dashboard can blindly forward the input/select value
  * without trimming.
  */
 export interface RecentThumbsDownFilters {
   promptVersion?: string | null;
   featureFlag?: string | null;
+  clientSurface?: string | null;
+  /**
+   * Optional `metadata->>'rating_source'` filter (Task #767). Lets an admin
+   * triaging a regression narrow the recent thumbs-down list down to a
+   * specific rating surface (e.g. `inline_thumbs` vs `comment_modal`) — the
+   * third dimension already surfaced as a per-row badge by Task #661 and as
+   * a metadata chip by Task #580. Mirrors the existing prompt_version /
+   * client_surface filters and obeys the same trim / 200-char cap /
+   * parameterised-binding contract enforced by `normalizeMetadataFilter()`.
+   */
+  ratingSource?: string | null;
+  /**
+   * Optional `agent` filter (Task #423). Lets the AI Ops feedback tab narrow
+   * the recent thumbs-down list to a single agent — same dimension already
+   * filtered on the trend chart by `getFeedbackTrend()`. Trim/cap is handled
+   * by the call-site so the same value can be threaded into the WHERE clause
+   * via a parameterised binding.
+   */
+  agent?: string | null;
 }
 
 export async function getFeedbackByMessageId(
@@ -555,6 +650,15 @@ export async function getRecentThumbsDown(
 
   const promptVersion = normalizeMetadataFilter(filters.promptVersion);
   const featureFlag = normalizeMetadataFilter(filters.featureFlag);
+  const clientSurface = normalizeMetadataFilter(filters.clientSurface);
+  const ratingSource = normalizeMetadataFilter(filters.ratingSource);
+  // Task #423: agent filter shares `normalizeMetadataFilter()`'s trim /
+  // empty-as-null contract even though it targets a top-level column instead
+  // of a JSONB key, so the AI Ops dashboard can blindly forward the
+  // dropdown's "all" sentinel as an empty string.
+  const agentFilterRaw = normalizeMetadataFilter(filters.agent);
+  const agentFilter =
+    agentFilterRaw && agentFilterRaw !== "all" ? agentFilterRaw : null;
 
   // Build the dynamic WHERE clauses with bind parameters so the
   // operator-supplied filter values can never be interpolated into SQL.
@@ -568,6 +672,24 @@ export async function getRecentThumbsDown(
   if (featureFlag !== null) {
     params.push(featureFlag);
     extraClauses.push(`metadata->>'feature_flag' = $${params.length}`);
+  }
+  if (clientSurface !== null) {
+    params.push(clientSurface);
+    extraClauses.push(`metadata->>'client_surface' = $${params.length}`);
+  }
+  if (ratingSource !== null) {
+    // Task #767: third triage dimension. Same JSONB-extractor pattern as the
+    // sibling prompt_version / client_surface filters above so the
+    // dashboard's filter behaviour stays consistent across all three.
+    params.push(ratingSource);
+    extraClauses.push(`metadata->>'rating_source' = $${params.length}`);
+  }
+  if (agentFilter !== null) {
+    // Task #423: top-level `agent` column rather than a JSONB key, so the
+    // operator can scope the recent thumbs-down list to the same agent
+    // already filtered on the trend chart by `getFeedbackTrend()`.
+    params.push(agentFilter);
+    extraClauses.push(`agent = $${params.length}`);
   }
   const extraSql = extraClauses.length
     ? ` AND ${extraClauses.join(" AND ")}`

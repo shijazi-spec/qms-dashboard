@@ -113,6 +113,15 @@ export interface QualityAuditResult {
   recommendations?: any;
   calendar_events_count?: number;
   raw_audit_data?: any;
+  // The user-selected date filter (from the upper-area Created/Modified
+  // pickers) that was active when this audit was triggered. Persisted so
+  // the Audit History "Period Covered" column can show exactly which
+  // records the audit covered, instead of the gap between consecutive
+  // audit_date timestamps. Null on cron/legacy audits ⇒ "All Data".
+  period_created_start?: string | null;
+  period_created_end?: string | null;
+  period_modified_start?: string | null;
+  period_modified_end?: string | null;
 }
 
 export async function getActiveGovernanceDocument(): Promise<GovernanceDocument | null> {
@@ -258,8 +267,9 @@ export async function saveAuditResult(
     `INSERT INTO quality_audit_results 
      (scorecard_id, governance_doc_id, total_records_audited, total_issues_found, 
       people_score, process_score, governance_score, overall_score, 
-      dimension_details, issues_by_category, recommendations, calendar_events_count, raw_audit_data)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      dimension_details, issues_by_category, recommendations, calendar_events_count, raw_audit_data,
+      period_created_start, period_created_end, period_modified_start, period_modified_end)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
      RETURNING *`,
     [
       audit.scorecard_id,
@@ -275,6 +285,10 @@ export async function saveAuditResult(
       JSON.stringify(audit.recommendations),
       audit.calendar_events_count,
       JSON.stringify(audit.raw_audit_data),
+      audit.period_created_start ?? null,
+      audit.period_created_end ?? null,
+      audit.period_modified_start ?? null,
+      audit.period_modified_end ?? null,
     ],
   );
 
