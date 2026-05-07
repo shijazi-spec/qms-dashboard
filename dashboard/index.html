@@ -151,6 +151,98 @@
         }
         .info-icon:hover::after,
         .info-icon:hover::before { opacity: 1; }
+
+        /* --- Phase 1 polish: skeleton, heatmap cells, line-clamp, dim bars --- */
+        .skeleton-block {
+            background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.6s ease-in-out infinite;
+            border-radius: 1rem;
+        }
+        @keyframes skeleton-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .history-scroll {
+            max-height: 480px;
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+        .history-scroll table thead th {
+            position: sticky;
+            top: 0;
+            background: #f9fafb;
+            z-index: 1;
+            box-shadow: inset 0 -1px 0 #e5e7eb;
+        }
+        .history-scroll tbody tr:nth-child(even) { background-color: #f9fafb; }
+        .history-scroll tbody tr:hover { background-color: #eef2ff; }
+        .score-cell-bar {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .score-cell-bar .bar {
+            width: 4px;
+            height: 22px;
+            border-radius: 2px;
+            background: var(--cell-color, #9ca3af);
+        }
+        .score-cell-bar .val {
+            color: var(--cell-color, #374151);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+        .rec-card .rec-title,
+        .rec-card .rec-desc {
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+        .rec-card .rec-title { -webkit-line-clamp: 2; }
+        .rec-card .rec-desc  { -webkit-line-clamp: 3; }
+        .rec-card.expanded .rec-title,
+        .rec-card.expanded .rec-desc {
+            -webkit-line-clamp: unset;
+            display: block;
+        }
+        .rec-card .rec-toggle {
+            font-size: 11px;
+            color: #4f46e5;
+            cursor: pointer;
+            margin-top: 6px;
+            font-weight: 500;
+            user-select: none;
+        }
+        .rec-card .rec-toggle:hover { text-decoration: underline; }
+        .dim-bar-fill {
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 0.5s ease, background-color 0.3s ease;
+            background: var(--bar-color, #6366f1);
+        }
+        .filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            border: 1px solid;
+        }
+        .filter-chip.created { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+        .filter-chip.modified { background:#ecfdf5; color:#047857; border-color:#a7f3d0; }
+        .cache-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            color: #9ca3af;
+            cursor: help;
+        }
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
@@ -305,11 +397,20 @@
         </div>
 
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div id="loading" class="flex justify-center items-center py-20">
-                <div class="text-center">
-                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p class="mt-4 text-gray-600">Loading quality data...</p>
+            <div id="loading" class="space-y-6" aria-busy="true" aria-live="polite">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <div class="skeleton-block lg:col-span-1 h-72"></div>
+                    <div class="skeleton-block lg:col-span-3 h-72"></div>
                 </div>
+                <div class="skeleton-block h-32"></div>
+                <div class="skeleton-block h-72"></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="skeleton-block h-64"></div>
+                    <div class="skeleton-block h-64"></div>
+                </div>
+                <div class="skeleton-block h-48"></div>
+                <div class="skeleton-block h-64"></div>
+                <p class="text-center text-xs text-gray-500">Loading quality data…</p>
             </div>
 
             <div id="noData" class="hidden text-center py-20">
@@ -332,33 +433,13 @@
                         <p id="lastUpdated" class="text-xs text-gray-400 mt-0.5"></p>
                     </div>
                     <div class="flex flex-wrap items-center gap-3">
-                        <!-- Created Date Filter -->
-                        <div class="flex items-center gap-2 bg-white border border-blue-200 rounded-lg px-3 py-2 shadow-sm">
-                            <div class="flex items-center gap-1">
-                                <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                                </svg>
-                                <span class="text-xs font-medium text-blue-600">Created:</span>
-                            </div>
-                            <input type="date" id="createdStartDate" aria-label="Filter created from date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
-                            <span class="text-gray-600 text-xs">to</span>
-                            <input type="date" id="createdEndDate" aria-label="Filter created to date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
-                        </div>
-                        <!-- Modified Date Filter -->
-                        <div class="flex items-center gap-2 bg-white border border-green-200 rounded-lg px-3 py-2 shadow-sm">
-                            <div class="flex items-center gap-1">
-                                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                </svg>
-                                <span class="text-xs font-medium text-green-700">Modified:</span>
-                            </div>
-                            <input type="date" id="modifiedStartDate" aria-label="Filter modified from date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
-                            <span class="text-gray-600 text-xs">to</span>
-                            <input type="date" id="modifiedEndDate" aria-label="Filter modified to date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
-                        </div>
-                        <!-- Apply and Clear Filters Buttons -->
-                        <button data-on-click="applyDateFilters" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700">Apply Filters</button>
-                        <button data-on-click="clearDateFilters" class="text-xs text-gray-500 hover:text-red-500 underline">Clear</button>
+                        <button data-on-click="toggleFiltersPanel" id="filtersToggleBtn" data-testid="button-toggle-filters" class="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                            </svg>
+                            <span>Filters</span>
+                            <span id="filterActiveDot" class="hidden w-2 h-2 rounded-full bg-indigo-600"></span>
+                        </button>
                         <button data-on-click="runManualAudit" id="manualAuditBtn" data-testid="button-run-ai-audit" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 font-medium flex items-center gap-2 shadow-lg transition-all">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
@@ -380,6 +461,27 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- Collapsible Filters Panel -->
+                <div id="filtersPanel" class="hidden bg-white border border-gray-200 rounded-lg p-4 mb-4 shadow-sm">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                            <span class="text-xs font-medium text-blue-700">Created:</span>
+                            <input type="date" id="createdStartDate" aria-label="Filter created from date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                            <span class="text-gray-600 text-xs">to</span>
+                            <input type="date" id="createdEndDate" aria-label="Filter created to date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                        </div>
+                        <div class="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                            <span class="text-xs font-medium text-green-700">Modified:</span>
+                            <input type="date" id="modifiedStartDate" aria-label="Filter modified from date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                            <span class="text-gray-600 text-xs">to</span>
+                            <input type="date" id="modifiedEndDate" aria-label="Filter modified to date" data-on-change="handleDateFilterChange" class="text-sm border-0 bg-transparent focus:ring-0 text-gray-700 cursor-pointer w-32" />
+                        </div>
+                        <button data-on-click="applyDateFilters" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700">Apply Filters</button>
+                        <button data-on-click="clearDateFilters" class="text-xs text-gray-500 hover:text-red-500 underline">Clear</button>
+                    </div>
+                </div>
+                <div id="activeFilterChips" class="hidden flex flex-wrap gap-2 mb-4"></div>
 
                 <!-- Customizable Widget Container -->
                 <div id="widgetContainer" class="space-y-6">
@@ -421,7 +523,7 @@
                                         <div class="text-sm text-gray-600 mt-1">People Score</div>
                                         <div class="text-xs text-gray-700 mt-1">Weight: 30%</div>
                                         <div class="mt-3 bg-gray-200 rounded-full h-2">
-                                            <div id="peopleBar" class="bg-blue-600 h-2 rounded-full transition-all duration-500 w-0"></div>
+                                            <div id="peopleBar" class="dim-bar-fill w-0"></div>
                                         </div>
                                     </div>
                                     <div class="text-center p-4 bg-purple-50 rounded-xl">
@@ -429,7 +531,7 @@
                                         <div class="text-sm text-gray-600 mt-1">Process Score</div>
                                         <div class="text-xs text-gray-700 mt-1">Weight: 30%</div>
                                         <div class="mt-3 bg-gray-200 rounded-full h-2">
-                                            <div id="processBar" class="bg-purple-600 h-2 rounded-full transition-all duration-500 w-0"></div>
+                                            <div id="processBar" class="dim-bar-fill w-0"></div>
                                         </div>
                                     </div>
                                     <div class="text-center p-4 bg-green-50 rounded-xl">
@@ -437,7 +539,7 @@
                                         <div class="text-sm text-gray-600 mt-1">Governance Score</div>
                                         <div class="text-xs text-gray-500 mt-1">Weight: 40%</div>
                                         <div class="mt-3 bg-gray-200 rounded-full h-2">
-                                            <div id="governanceBar" class="bg-green-600 h-2 rounded-full transition-all duration-500 w-0"></div>
+                                            <div id="governanceBar" class="dim-bar-fill w-0"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -706,18 +808,18 @@
                                 </svg>
                             </div>
                             <div class="p-6">
-                                <div class="overflow-x-auto">
+                                <div class="history-scroll">
                                     <table class="min-w-full divide-y divide-gray-200">
                                         <thead class="bg-gray-50">
                                             <tr>
                                                 <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
                                                 <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider" title="The Created/Modified date window the user picked when this audit was run. 'All Data' = no filter was applied (or the audit predates this feature).">Period Covered</th>
-                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Overall</th>
-                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">People</th>
-                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Process</th>
-                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Governance</th>
-                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
-                                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
+                                                <th scope="col" class="px-6 py-3 text-end text-xs font-medium text-gray-500 uppercase tracking-wider">Overall</th>
+                                                <th scope="col" class="px-6 py-3 text-end text-xs font-medium text-gray-500 uppercase tracking-wider">People</th>
+                                                <th scope="col" class="px-6 py-3 text-end text-xs font-medium text-gray-500 uppercase tracking-wider">Process</th>
+                                                <th scope="col" class="px-6 py-3 text-end text-xs font-medium text-gray-500 uppercase tracking-wider">Governance</th>
+                                                <th scope="col" class="px-6 py-3 text-end text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
+                                                <th scope="col" class="px-6 py-3 text-end text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
                                             </tr>
                                         </thead>
                                         <tbody id="historyTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -906,6 +1008,7 @@
                 modified: { start: null, end: null }
             };
             console.log('Date filters cleared');
+            updateFilterChips();
             refreshDashboard();
         }
         
@@ -921,6 +1024,7 @@
         // Apply date filters and refresh dashboard
         function applyDateFilters() {
             handleDateFilterChange();
+            updateFilterChips();
             refreshDashboard();
         }
         
@@ -1085,7 +1189,7 @@
                     v => Number(v).toLocaleString(), true);
                 setStat('trendInflationNow', 'trendInflationDelta',
                     lastDup?.pipeline_inflation_sar, prevDup?.pipeline_inflation_sar,
-                    v => Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 }), true);
+                    v => formatCompact(v), true);
 
                 // J2: "as of" timestamp — show whichever data point is freshest
                 const asOfEl = document.getElementById('qualityTrendAsOf');
@@ -2247,6 +2351,65 @@
             }
         }
 
+        // --- Phase 1 helpers: number formatting, word-aware truncate, filter UI ---
+        function formatNumber(n) {
+            const num = Number(n);
+            if (!isFinite(num)) return '--';
+            return num.toLocaleString();
+        }
+        function formatCompact(n, suffix) {
+            const num = Number(n);
+            if (!isFinite(num)) return '--';
+            const abs = Math.abs(num);
+            const tail = suffix ? ' ' + suffix : '';
+            if (abs >= 1e9) return (num / 1e9).toFixed(abs >= 1e10 ? 0 : 1).replace(/\.0$/, '') + 'B' + tail;
+            if (abs >= 1e6) return (num / 1e6).toFixed(abs >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M' + tail;
+            if (abs >= 1e4) return (num / 1e3).toFixed(0) + 'K' + tail;
+            return num.toLocaleString() + tail;
+        }
+        function truncateAtWord(str, max) {
+            if (!str) return '';
+            const s = String(str);
+            if (s.length <= max) return s;
+            const cut = s.slice(0, max);
+            const lastSpace = cut.lastIndexOf(' ');
+            return (lastSpace > max * 0.5 ? cut.slice(0, lastSpace) : cut).trim() + '…';
+        }
+        function toggleFiltersPanel() {
+            const panel = document.getElementById('filtersPanel');
+            if (panel) panel.classList.toggle('hidden');
+        }
+        function updateFilterChips() {
+            const cs = (document.getElementById('createdStartDate') || {}).value || '';
+            const ce = (document.getElementById('createdEndDate') || {}).value || '';
+            const ms = (document.getElementById('modifiedStartDate') || {}).value || '';
+            const me = (document.getElementById('modifiedEndDate') || {}).value || '';
+            const chips = [];
+            if (cs || ce) chips.push({ cls: 'created', label: 'Created', val: (cs || '…') + ' → ' + (ce || '…') });
+            if (ms || me) chips.push({ cls: 'modified', label: 'Modified', val: (ms || '…') + ' → ' + (me || '…') });
+            const container = document.getElementById('activeFilterChips');
+            const dot = document.getElementById('filterActiveDot');
+            if (!container || !dot) return;
+            if (chips.length === 0) {
+                container.classList.add('hidden');
+                container.innerHTML = '';
+                dot.classList.add('hidden');
+                return;
+            }
+            container.classList.remove('hidden');
+            dot.classList.remove('hidden');
+            container.innerHTML = chips.map(c =>
+                `<span class="filter-chip ${c.cls}"><strong>${c.label}:</strong> ${c.val}</span>`
+            ).join('');
+        }
+        function toggleRecExpand(idx) {
+            const el = document.querySelector('[data-rec-card="' + idx + '"]');
+            if (!el) return;
+            const expanded = el.classList.toggle('expanded');
+            const tog = el.querySelector('.rec-toggle');
+            if (tog) tog.textContent = expanded ? 'Show less' : 'Read more';
+        }
+
         function getScoreColor(score) {
             if (score >= 90) return '#22c55e';
             if (score >= 80) return '#84cc16';
@@ -2302,12 +2465,18 @@
             document.getElementById('processScore').textContent = processScore.toFixed(1) + '%';
             document.getElementById('governanceScore').textContent = governanceScore.toFixed(1) + '%';
 
-            document.getElementById('peopleBar').style.width = peopleScore + '%';
-            document.getElementById('processBar').style.width = processScore + '%';
-            document.getElementById('governanceBar').style.width = governanceScore + '%';
+            const setDimBar = (id, score) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.style.width = score + '%';
+                el.style.background = getScoreColor(score);
+            };
+            setDimBar('peopleBar', peopleScore);
+            setDimBar('processBar', processScore);
+            setDimBar('governanceBar', governanceScore);
 
-            document.getElementById('recordsAudited').textContent = audit.total_records_audited || 0;
-            document.getElementById('issuesFound').textContent = audit.total_issues_found || 0;
+            document.getElementById('recordsAudited').textContent = formatNumber(audit.total_records_audited || 0);
+            document.getElementById('issuesFound').textContent = formatNumber(audit.total_issues_found || 0);
 
             // Compute records-with-issues FIRST so the compliance rate uses
             // unique-record counts (consistent with the "Records With Issues"
@@ -2475,7 +2644,9 @@
 
                 if (subtitle) {
                     const when = data.cachedAtMs ? new Date(data.cachedAtMs).toLocaleTimeString() : '';
-                    subtitle.textContent = (data.cached ? 'Cached · ' : 'Live · ') + when;
+                    const tip = (data.cached ? 'Cached' : 'Live') + (when ? ' · ' + when : '');
+                    subtitle.textContent = '';
+                    subtitle.innerHTML = '<span class="cache-icon" title="' + tip + '" aria-label="' + tip + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/></svg></span>';
                 }
             } catch (err) {
                 // Silent retry once after 2s — first paint can race with auth cookie warm-up.
@@ -2814,7 +2985,12 @@
 
             const priorities = ['high', 'medium', 'low'];
 
-            container.innerHTML = recs.map((rec, idx) => {
+            // DOM-safe construction: AI-generated recommendation titles and
+            // descriptions come from upstream models / DB rows and must NOT be
+            // interpolated into innerHTML. Use textContent / setAttribute so
+            // any HTML or quote payload is rendered as inert text.
+            container.replaceChildren();
+            recs.forEach((rec, idx) => {
                 let title, description, priority;
                 if (typeof rec === 'string') {
                     const parts = rec.split(' - ');
@@ -2822,7 +2998,7 @@
                         title = parts[0];
                         description = parts.slice(1).join(' - ');
                     } else {
-                        title = rec.length > 60 ? rec.substring(0, 60) + '...' : rec;
+                        title = truncateAtWord(rec, 80);
                         description = rec;
                     }
                     priority = priorities[Math.min(idx, priorities.length - 1)];
@@ -2831,12 +3007,37 @@
                     description = rec.description || '';
                     priority = rec.priority || priorities[Math.min(idx, priorities.length - 1)];
                 }
-                return `
-                <div class="p-4 border-s-4 rounded-lg ${priorityColors[priority] || priorityColors.medium}">
-                    <h4 class="font-medium text-gray-900">${title}</h4>
-                    <p class="text-sm text-gray-600 mt-1">${description}</p>
-                </div>`;
-            }).join('');
+                const needsToggle = (title && title.length > 80) || (description && description.length > 140);
+                const colorClasses = (priorityColors[priority] || priorityColors.medium).split(/\s+/).filter(Boolean);
+
+                const card = document.createElement('div');
+                card.className = 'rec-card p-4 border-s-4 rounded-lg ' + colorClasses.join(' ');
+                card.setAttribute('data-rec-card', String(idx));
+
+                const titleEl = document.createElement('h4');
+                titleEl.className = 'rec-title font-medium text-gray-900';
+                titleEl.textContent = title;
+                titleEl.setAttribute('title', title);
+
+                const descEl = document.createElement('p');
+                descEl.className = 'rec-desc text-sm text-gray-600 mt-1';
+                descEl.textContent = description;
+                descEl.setAttribute('title', description);
+
+                card.appendChild(titleEl);
+                card.appendChild(descEl);
+
+                if (needsToggle) {
+                    const tog = document.createElement('div');
+                    tog.className = 'rec-toggle';
+                    tog.setAttribute('data-on-click', 'toggleRecExpand');
+                    tog.setAttribute('data-args', '[' + idx + ']');
+                    tog.textContent = 'Read more';
+                    card.appendChild(tog);
+                }
+
+                container.appendChild(card);
+            });
         }
 
         // Render the "Period Covered" cell for one Audit History row.
@@ -2872,6 +3073,48 @@
             return lines.join('');
         }
 
+        // Collapse consecutive identical audit scans (same period + same scores
+        // + same record/issue counts) into a single row with a ×N badge so the
+        // history table doesn't repeat the same numbers nine times in a row.
+        function dedupeAuditHistory(rows) {
+            const out = [];
+            let prev = null;
+            for (const r of rows) {
+                const key = [
+                    Number(r.overall_score).toFixed(1),
+                    Number(r.people_score).toFixed(1),
+                    Number(r.process_score).toFixed(1),
+                    Number(r.governance_score).toFixed(1),
+                    r.total_records_audited,
+                    r.total_issues_found,
+                    r.period_created_start || '',
+                    r.period_created_end || '',
+                    r.period_modified_start || '',
+                    r.period_modified_end || ''
+                ].join('|');
+                if (prev && prev._dedupKey === key) {
+                    prev._dupCount = (prev._dupCount || 1) + 1;
+                    prev._dupTimestamps = (prev._dupTimestamps || [prev.audit_date]).concat(r.audit_date);
+                } else {
+                    const cloned = Object.assign({}, r, { _dedupKey: key, _dupCount: 1, _dupTimestamps: [r.audit_date] });
+                    out.push(cloned);
+                    prev = cloned;
+                }
+            }
+            return out;
+        }
+
+        function scoreCell(scoreRaw) {
+            const score = parseFloat(scoreRaw) || 0;
+            const color = getScoreColor(score);
+            return `<td class="px-6 py-4 whitespace-nowrap text-end">
+                <span class="score-cell-bar" data-style="--cell-color: ${color}">
+                    <span class="bar"></span>
+                    <span class="val">${score.toFixed(1)}%</span>
+                </span>
+            </td>`;
+        }
+
         function updateHistory(history) {
             const tbody = document.getElementById('historyTable');
             
@@ -2884,29 +3127,37 @@
             // the user-selected Created/Modified window that was active
             // when the audit was triggered (persisted on the audit row),
             // not the gap between consecutive audit timestamps.
-            const visible = history.slice(0, 10);
+            const visible = dedupeAuditHistory(history.slice(0, 25)).slice(0, 10);
             tbody.innerHTML = visible.map((audit) => {
                 const periodCell = formatAuditPeriod(audit);
+                const overallScore = parseFloat(audit.overall_score) || 0;
+                const overallColor = getScoreColor(overallScore);
+                const dupBadge = audit._dupCount > 1
+                    ? ` <span class="ms-2 inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-200 text-gray-700 align-middle" title="${audit._dupCount} identical scans${audit._dupTimestamps ? ': ' + audit._dupTimestamps.map(t => new Date(t).toLocaleString()).join(' · ') : ''}">×${audit._dupCount}</span>`
+                    : '';
                 return `
                 <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${new Date(audit.audit_date).toLocaleString()}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${new Date(audit.audit_date).toLocaleString()}${dupBadge}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${periodCell}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-2 py-1 rounded text-sm font-medium ${getScoreRating(audit.overall_score).class}">
-                            ${parseFloat(audit.overall_score).toFixed(1)}%
+                    <td class="px-6 py-4 whitespace-nowrap text-end">
+                        <span class="score-cell-bar" data-style="--cell-color: ${overallColor}">
+                            <span class="bar"></span>
+                            <span class="val">${overallScore.toFixed(1)}%</span>
                         </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${parseFloat(audit.people_score).toFixed(1)}%</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${parseFloat(audit.process_score).toFixed(1)}%</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${parseFloat(audit.governance_score).toFixed(1)}%</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${audit.total_records_audited}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">${audit.total_issues_found}</td>
+                    ${scoreCell(audit.people_score)}
+                    ${scoreCell(audit.process_score)}
+                    ${scoreCell(audit.governance_score)}
+                    <td class="px-6 py-4 whitespace-nowrap text-end text-sm text-gray-700 tabular-nums">${formatNumber(audit.total_records_audited)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-end text-sm font-medium text-red-600 tabular-nums">${formatNumber(audit.total_issues_found)}</td>
                 </tr>`;
             }).join('');
         }
 
         async function refreshDashboard() {
-            document.getElementById('loading').classList.remove('hidden');
+            const loadingEl = document.getElementById('loading');
+            loadingEl.classList.remove('hidden');
+            loadingEl.style.removeProperty('display');
             document.getElementById('dashboard').classList.add('hidden');
             document.getElementById('noData').classList.add('hidden');
             
