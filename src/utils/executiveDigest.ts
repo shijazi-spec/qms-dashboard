@@ -1068,7 +1068,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*${section.title}*\n- Total: *${section.total}* (Leads *${section.leads}* / Deals *${section.deals}*)\n- New: *${section.new_in_window}*\n- Progressed: *${section.progressed}*\n- Stalled: *${section.stalled}*\n- Severity: 🔴 Critical *${section.severity_counts.critical}* | 🟠 High *${section.severity_counts.high}* | 🟡 Medium *${section.severity_counts.medium}* | 🟢 Low *${section.severity_counts.low}*\n- Health: ${healthEmoji(section.health_score)} *${section.health_score}%*`,
+      text: `*--- ${section.title} ---*\n- Total: *${section.total}* (Leads *${section.leads}* / Deals *${section.deals}*)\n- New: *${section.new_in_window}*\n- Progressed: *${section.progressed}*\n- Stalled: *${section.stalled}*\n- Severity: 🔴 Critical *${section.severity_counts.critical}* | 🟠 High *${section.severity_counts.high}* | 🟡 Medium *${section.severity_counts.medium}* | 🟢 Low *${section.severity_counts.low}*\n- Health: ${healthEmoji(section.health_score)} *${section.health_score}%*`,
     },
   }));
   const findingTypeLines = data.finding_types.map(
@@ -1174,8 +1174,8 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
           type: "mrkdwn",
           text:
             idx === 0
-              ? `*All Finding Types (${data.finding_types.length})*\n${chunk}`
-              : `*All Finding Types (continued ${idx + 1})*\n${chunk}`,
+              ? `*--- All Finding Types (${data.finding_types.length}) ---*\n${chunk}`
+              : `*--- All Finding Types (continued ${idx + 1}) ---*\n${chunk}`,
         },
       });
     });

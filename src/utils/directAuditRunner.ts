@@ -648,7 +648,7 @@ export async function runDirectAudit(
           const digestData = await generateDigestData({ cadence: "weekly", now: new Date() });
           const sectionLines = digestData.business_sections.map(
             (section) =>
-              `• *${section.title}*\n  - Total ${section.total} (Leads ${section.leads} / Deals ${section.deals})\n  - New ${section.new_in_window}\n  - Progressed ${section.progressed}\n  - Stalled ${section.stalled}\n  - Severity: 🔴 Critical ${section.severity_counts.critical} | 🟠 High ${section.severity_counts.high} | 🟡 Medium ${section.severity_counts.medium} | 🟢 Low ${section.severity_counts.low}`,
+              `• *--- ${section.title} ---*\n  - Total ${section.total} (Leads ${section.leads} / Deals ${section.deals})\n  - New ${section.new_in_window}\n  - Progressed ${section.progressed}\n  - Stalled ${section.stalled}\n  - Severity: 🔴 Critical ${section.severity_counts.critical} | 🟠 High ${section.severity_counts.high} | 🟡 Medium ${section.severity_counts.medium} | 🟢 Low ${section.severity_counts.low}`,
           );
           executiveSectionText = `*Period Covered (KSA):*\n${digestData.window_start} -> ${digestData.window_end}\n\n*Executive Segments (Dashboard-aligned):*\n${sectionLines.join("\n")}\n\n*Definitions:*\nProgressed = records in advancing stages (Qualified, Proposal, Negotiation, Won/Converted/Contract/Onboarding).\nStalled = records in non-progress stages (On hold, Lost, Not Interested, Junk, Unqualified, Inactive).`;
         } catch (digestErr) {
