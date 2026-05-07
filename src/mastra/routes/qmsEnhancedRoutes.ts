@@ -65,7 +65,11 @@ function qmsGate<
   let roles: UserRole[];
   const p = route.path;
   const m = route.method;
-  if (p === "/api/pdpl/export" || p === "/api/pdpl/export/estimate") {
+  if (
+    p === "/api/pdpl/export" ||
+    p === "/api/pdpl/export/estimate" ||
+    p === "/api/pdpl/export-xlsx/estimate"
+  ) {
     roles = ["admin"];
   } else if (
     p.startsWith("/api/qms/nc/export") ||
@@ -396,6 +400,51 @@ const _qmsEnhancedRoutesRaw = [
         );
       } catch (e) {
         logger.error("PDPL estimate error:", e);
+        return c.json({ error: "Failed to estimate export size" }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/compliance/export-xlsx/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse } =
+          await import("../../utils/rbacMiddleware");
+        if (!(await requireAdminOrKey(c))) return unauthorizedResponse(c);
+        const { initComplianceTables } =
+          await import("../../utils/complianceDatabase");
+        await initComplianceTables();
+        return await qmsEstimateResponse(
+          `SELECT COUNT(*)::int AS total FROM obligations`,
+          [],
+          "xlsx",
+          200,
+        );
+      } catch (e) {
+        logger.error("Compliance XLSX estimate error:", e);
+        return c.json({ error: "Failed to estimate export size" }, 500);
+      }
+    },
+  },
+  {
+    path: "/api/pdpl/export-xlsx/estimate",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse } =
+          await import("../../utils/rbacMiddleware");
+        if (!(await requireAdminOrKey(c))) return unauthorizedResponse(c);
+        const { initPdplTables } = await import("../../utils/pdplDatabase");
+        await initPdplTables();
+        return await qmsEstimateResponse(
+          `SELECT COUNT(*)::int AS total FROM data_inventory`,
+          [],
+          "xlsx",
+          200,
+        );
+      } catch (e) {
+        logger.error("PDPL XLSX estimate error:", e);
         return c.json({ error: "Failed to estimate export size" }, 500);
       }
     },
@@ -1467,33 +1516,33 @@ const _qmsEnhancedRoutesRaw = [
               400,
             );
           }
-          const pg = await import("pg");
-          const pool = new pg.default.Pool({
-            connectionString: process.env.DATABASE_URL,
-          });
+          // Scrub deny-list keys / credential-shaped strings out of the
+          // user-supplied status value BEFORE it touches the SQL UPDATE.
+          // `status` is meant to be a short enum like "open"/"closed", but
+          // the endpoint never validated it, so a misbehaving client could
+          // otherwise paste a JWT, GitHub PAT (`ghp_…`), bcrypt hash, etc.
+          // straight into nonconformance_records.status.
+          const { redactSensitiveDeep: redact } = await import(
+            "../../utils/sensitiveRedaction"
+          );
+          const safeStatus = redact(status) as string;
+          // Delegated to qmsDatabase.bulkUpdateNCStatus so the UPDATE lives
+          // alongside the rest of the QMS writes (Task #746).
+          const { bulkUpdateNCStatus } = await import(
+            "../../utils/qmsDatabase"
+          );
+          const rows = await bulkUpdateNCStatus(ids, safeStatus);
           try {
-            const placeholders = ids
-              .map((_: any, i: number) => `$${i + 2}`)
-              .join(",");
-            const result = await pool.query(
-              `UPDATE nonconformance_records SET status = $1, updated_at = NOW() WHERE id IN (${placeholders}) RETURNING id, status`,
-              [status, ...ids],
-            );
-            try {
-              const { logEvent } =
-                await import("../../utils/eventLogsDatabase");
-              await logEvent({
-                actionType: "UPDATE",
-                entityType: "CAPA",
-                description: `Bulk NC status update to ${status}: ${ids.length} records`,
-                module: "qms",
-                severity: "INFO",
-              });
-            } catch {}
-            return c.json({ success: true, updated: result.rows.length });
-          } finally {
-            await pool.end();
-          }
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({
+              actionType: "UPDATE",
+              entityType: "CAPA",
+              description: `Bulk NC status update to ${status}: ${ids.length} records`,
+              module: "qms",
+              severity: "INFO",
+            });
+          } catch {}
+          return c.json({ success: true, updated: rows.length });
         } catch (error) {
           return c.json({ error: "Bulk update failed" }, 500);
         }
@@ -1515,33 +1564,27 @@ const _qmsEnhancedRoutesRaw = [
               400,
             );
           }
-          const pg = await import("pg");
-          const pool = new pg.default.Pool({
-            connectionString: process.env.DATABASE_URL,
-          });
+          // See nc/bulk-update above — same redaction rationale.
+          const { redactSensitiveDeep: redact } = await import(
+            "../../utils/sensitiveRedaction"
+          );
+          const safeStatus = redact(status) as string;
+          // Delegated to qmsDatabase.bulkUpdateCAPAStatus (Task #746).
+          const { bulkUpdateCAPAStatus } = await import(
+            "../../utils/qmsDatabase"
+          );
+          const rows = await bulkUpdateCAPAStatus(ids, safeStatus);
           try {
-            const placeholders = ids
-              .map((_: any, i: number) => `$${i + 2}`)
-              .join(",");
-            const result = await pool.query(
-              `UPDATE capa_records SET status = $1, updated_at = NOW() WHERE id IN (${placeholders}) RETURNING id, status`,
-              [status, ...ids],
-            );
-            try {
-              const { logEvent } =
-                await import("../../utils/eventLogsDatabase");
-              await logEvent({
-                actionType: "UPDATE",
-                entityType: "CAPA",
-                description: `Bulk CAPA status update to ${status}: ${ids.length} records`,
-                module: "qms",
-                severity: "INFO",
-              });
-            } catch {}
-            return c.json({ success: true, updated: result.rows.length });
-          } finally {
-            await pool.end();
-          }
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({
+              actionType: "UPDATE",
+              entityType: "CAPA",
+              description: `Bulk CAPA status update to ${status}: ${ids.length} records`,
+              module: "qms",
+              severity: "INFO",
+            });
+          } catch {}
+          return c.json({ success: true, updated: rows.length });
         } catch (error) {
           return c.json({ error: "Bulk update failed" }, 500);
         }

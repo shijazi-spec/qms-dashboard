@@ -291,18 +291,8 @@ const ADDITIONAL_EXPORT_ROUTES: AdditionalSmokeCase[] = [
   // qmsEnhancedRoutes.ts — wrapped by `qmsGate` → `requireRole`, so the
   // X-Admin-Key header (not just the cookie) is required for these to pass.
   { label: 'QMS NC CSV',   path: '/api/qms/nc/export',     format: 'csv'  },
-  {
-    label: 'QMS CAPA CSV',
-    path: '/api/qms/capa/export',
-    format: 'csv',
-    expectedFailureReason: 'shadowed by GET /api/qms/capa/:id (parses "export" as id)',
-  },
-  {
-    label: 'KPIs CSV',
-    path: '/api/kpis/export',
-    format: 'csv',
-    expectedFailureReason: 'shadowed by GET /api/kpis/:id (parses "export" as id)',
-  },
+  { label: 'QMS CAPA CSV', path: '/api/qms/capa/export', format: 'csv' },
+  { label: 'KPIs CSV',     path: '/api/kpis/export',     format: 'csv' },
 ];
 
 /**

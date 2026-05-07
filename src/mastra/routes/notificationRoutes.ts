@@ -81,13 +81,37 @@ export const notificationRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, forbiddenResponse, hasValidAdminApiKey } =
+            await import("../../utils/rbacMiddleware");
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
-          const { dismissNotification } =
+
+          const { getNotificationById, dismissNotification } =
             await import("../../utils/notificationHub");
-          const notif = await dismissNotification(id);
+
+          const notif = await getNotificationById(id);
           if (!notif) return c.json({ error: "Not found" }, 404);
-          return c.json({ success: true, notification: notif });
+
+          const isAdminKey = hasValidAdminApiKey(c);
+          if (!isAdminKey) {
+            const user = getSessionUser(c);
+            if (!user) return c.json({ error: "Authentication required" }, 401);
+
+            const isAdmin = user.role === "admin";
+            const isRecipient =
+              notif.recipient && notif.recipient === user.email;
+
+            if (!isAdmin && !isRecipient) {
+              return forbiddenResponse(
+                c,
+                "You may only dismiss notifications addressed to you",
+              );
+            }
+          }
+
+          const dismissed = await dismissNotification(id);
+          return c.json({ success: true, notification: dismissed });
         } catch (error) {
           return c.json({ error: "Failed to dismiss" }, 500);
         }

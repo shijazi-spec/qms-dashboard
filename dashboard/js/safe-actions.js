@@ -4,7 +4,8 @@
  * The dashboard CSP no longer allows `script-src 'unsafe-inline'`, so
  * `onclick="..."`, `onchange="..."`, etc. are silently blocked by browsers. // csp-safe-inline-handler: JSDoc comment text, not actual attributes
  * This module wires up a single delegated listener per event type that reads
- * `data-on-{event}` attributes and invokes the named function from `window`.
+ * `data-on-{event}` attributes and invokes the named function from a strict
+ * allowlist registry, never from arbitrary global scope.
  *
  * Usage:
  *   <button data-on-click="loadFeedback">Refresh</button>
@@ -19,6 +20,13 @@
  * `data-pass-event="true"` appends the DOM event as the last argument.
  *
  * For `submit` events, `event.preventDefault()` is called automatically.
+ *
+ * Security model:
+ *   Only functions registered via SafeActions.register() or SafeActions.registerAll()
+ *   can be invoked through data-on-* attributes. The registry is populated at
+ *   DOMContentLoaded time from page-defined (non-native) globals, freezing the
+ *   callable set before any user-supplied HTML can be injected. Native browser
+ *   functions (fetch, eval, XMLHttpRequest, etc.) are never registered.
  */
 (function (global) {
   'use strict';
@@ -29,6 +37,9 @@
   ];
   // Focus/blur do not bubble; use focusin/focusout instead.
   var FOCUS_ALIASES = { focus: 'focusin', blur: 'focusout' };
+
+  // Strict allowlist: only functions explicitly registered here can be dispatched.
+  var registry = Object.create(null);
 
   function parseArgs(el) {
     var raw = el.getAttribute('data-args');
@@ -68,12 +79,31 @@
     });
   }
 
+  function isNativeFn(fn) {
+    try {
+      return /\{\s*\[native code\]\s*\}/.test(Function.prototype.toString.call(fn));
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /**
+   * Resolve a function name against the strict registry only.
+   * Dot-notation (e.g. "ns.method") traverses from the top-level registry key.
+   */
   function resolveFn(name) {
     if (!name) return null;
     var parts = String(name).split('.');
-    var ctx = global;
-    var fn = global;
-    for (var i = 0; i < parts.length; i++) {
+    var key = parts[0];
+
+    if (!Object.prototype.hasOwnProperty.call(registry, key)) {
+      try { console.warn('safe-actions: function not registered', name); } catch (_) {}
+      return null;
+    }
+
+    var fn = registry[key];
+    var ctx = registry;
+    for (var i = 1; i < parts.length; i++) {
       ctx = fn;
       fn = fn && fn[parts[i]];
       if (fn === undefined || fn === null) return null;
@@ -84,7 +114,7 @@
   function callOne(name, args) {
     var resolved = resolveFn(name);
     if (!resolved) {
-      try { console.warn('safe-actions: function not found', name); } catch (_) {}
+      try { console.warn('safe-actions: function not found or not registered', name); } catch (_) {}
       return;
     }
     try {
@@ -130,7 +160,29 @@
     document.addEventListener(listenName, function (e) { dispatch(eventName, e); }, true);
   }
 
+  /**
+   * Scan `ns` and register every non-native own function into the allowlist.
+   * Called at init time with `global` to capture page-defined handlers before
+   * any dynamic HTML is injected. Native browser APIs are never registered.
+   */
+  function registerAllFrom(ns) {
+    for (var key in ns) {
+      try {
+        var val = ns[key];
+        if (typeof val === 'function' && !isNativeFn(val)) {
+          if (!Object.prototype.hasOwnProperty.call(registry, key)) {
+            registry[key] = val;
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
   function init() {
+    // Freeze the callable set to functions already defined at DOMContentLoaded.
+    // innerHTML-injected markup added later cannot introduce new window functions,
+    // so attacker-supplied data-on-* attributes cannot invoke arbitrary globals.
+    registerAllFrom(global);
     BUBBLING_EVENTS.forEach(bind);
     bind('focus');
     bind('blur');
@@ -143,7 +195,16 @@
   }
 
   global.SafeActions = {
-    call: function (name, args) { callOne(name, args || []); }
+    /** Invoke a registered handler by name (used by pages that need programmatic dispatch). */
+    call: function (name, args) { callOne(name, args || []); },
+    /** Explicitly register a single handler function under the given name. */
+    register: function (name, fn) {
+      if (typeof fn === 'function' && !isNativeFn(fn)) {
+        registry[name] = fn;
+      }
+    },
+    /** Register all non-native functions from a namespace object into the allowlist. */
+    registerAll: function (ns) { registerAllFrom(ns); }
   };
 
   // Convenience helpers exposed for inline-handler migrations that previously

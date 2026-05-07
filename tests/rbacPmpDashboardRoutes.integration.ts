@@ -686,18 +686,16 @@ async function main(): Promise<void> {
       expect403: [viewer, exec, auditor, qspec, tlead, bu, ai],
     },
     {
-      // NOTE: /api/qms/capa/export is shadowed at the HTTP layer by the more
-      // generic /api/qms/capa/:id handler (qmsApiRoutes.ts), which only allows
-      // admin via isAdminAuthorized. So even though ROUTE_PERMISSION_MAP
-      // allows qm/grc/hoq for /api/qms/capa/export, the inner handler rejects
-      // them with 403. We assert the OBSERVED HTTP behavior here. See the
-      // accompanying follow-up task for fixing the route registration order.
-      label: "GET /api/qms/capa/export — admin only (route shadowed by /api/qms/capa/:id)",
+      // task-443 fixed the shadowing: the /api/qms/capa/:id GET handler now
+      // only matches numeric ids (`/:id{[0-9]+}`), so the literal "export"
+      // segment falls through to the qmsEnhancedRoutes streaming export
+      // handler that allows QMS_GOVERNANCE_WRITE.
+      label: "GET /api/qms/capa/export — governance write, executive blocked",
       method: "GET",
       path: "/api/qms/capa/export",
       allowedStatuses: [200, 500],
-      expect200: ADMIN_ONLY,
-      expect403: [qm, grc, hoq, viewer, exec, auditor, qspec, tlead, bu, ai],
+      expect200: QMS_GOVERNANCE_WRITE,
+      expect403: [viewer, exec, auditor, qspec, tlead, bu, ai],
     },
     {
       label: "GET /api/compliance/export — governance write, executive blocked",
@@ -708,29 +706,26 @@ async function main(): Promise<void> {
       expect403: [viewer, exec, auditor, qspec, tlead, bu, ai],
     },
     {
-      // NOTE: /api/vendors/export is shadowed at the HTTP layer by the more
-      // generic /api/vendors/:id handler, which returns 404 "Vendor not found"
-      // for the literal id "export". Authorization is still enforced by the
-      // global middleware (qm/grc/hoq/admin pass), but authorized roles see a
-      // 404 instead of a 200 response. We accept 404 in allowedStatuses here.
+      // task-443 fixed the shadowing: /api/vendors/:id GET is now constrained
+      // to numeric ids or UUIDs, so the literal "export" segment falls
+      // through to the qmsEnhancedRoutes streaming export handler.
       label: "GET /api/vendors/export — governance write, executive blocked",
       method: "GET",
       path: "/api/vendors/export",
-      allowedStatuses: [200, 404, 500],
+      allowedStatuses: [200, 500],
       expect200: QMS_GOVERNANCE_WRITE,
       expect403: [viewer, exec, auditor, qspec, tlead, bu, ai],
     },
 
     // ─── KPI exports (governance read — executive allowed) ────────────────────
     {
-      // NOTE: /api/kpis/export is shadowed at the HTTP layer by the more
-      // generic /api/kpis/:id handler, which fails to parse "export" as an
-      // integer ID and returns 400 "Invalid KPI ID". Authorization is still
-      // enforced by the global middleware. We accept 400 in allowedStatuses.
+      // task-443 fixed the shadowing: /api/kpis/:id GET is now constrained to
+      // numeric ids, so /api/kpis/export and /api/kpis/export-xlsx route to
+      // the qmsEnhancedRoutes streaming export handlers (QMS_GOVERNANCE_READ).
       label: "GET /api/kpis/export — executive allowed",
       method: "GET",
       path: "/api/kpis/export",
-      allowedStatuses: [200, 400, 500],
+      allowedStatuses: [200, 500],
       expect200: QMS_GOVERNANCE_READ,
       expect403: [viewer, auditor, qspec, tlead, bu, ai],
     },
@@ -743,13 +738,10 @@ async function main(): Promise<void> {
       expect403: [viewer, auditor, qspec, tlead, bu, ai],
     },
     {
-      // NOTE: /api/kpis/export-xlsx is shadowed at the HTTP layer by the more
-      // generic /api/kpis/:id handler — same root cause as /api/kpis/export.
-      // Returns 400 "Invalid KPI ID" for authorized roles.
       label: "GET /api/kpis/export-xlsx",
       method: "GET",
       path: "/api/kpis/export-xlsx",
-      allowedStatuses: [200, 400, 500],
+      allowedStatuses: [200, 500],
       expect200: QMS_GOVERNANCE_READ,
       expect403: [viewer, auditor, qspec, tlead, bu, ai],
     },

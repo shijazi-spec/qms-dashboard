@@ -46,13 +46,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('roi');
@@ -120,13 +120,15 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="roi.sec_ai_recs">AI Recommendations</h3>
                 <div class="chart-container">
-                    <canvas id="recommendationChart"></canvas>
+                    <canvas id="recommendationChart" role="img" aria-label="AI Recommendations: doughnut chart showing approve, evaluate, and reject counts" aria-describedby="recommendationChart-summary"></canvas>
+                    <table id="recommendationChart-summary" class="sr-only"><caption>AI Recommendations</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                 </div>
             </div>
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 lg:col-span-2">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="roi.sec_npv_by_dept">NPV by Department</h3>
                 <div class="chart-container">
-                    <canvas id="departmentChart"></canvas>
+                    <canvas id="departmentChart" role="img" aria-label="NPV by Department: bar chart showing total NPV in SAR per department" aria-describedby="departmentChart-summary"></canvas>
+                    <table id="departmentChart-summary" class="sr-only"><caption>NPV by Department</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                 </div>
             </div>
         </div>
@@ -134,18 +136,18 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-gray-900" data-i18n="roi.sec_initiatives">Initiatives</h3>
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center gap-4">
                     <select id="filterRecommendation" data-on-change="loadInitiatives" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
-                        <option value="">All Recommendations</option>
-                        <option value="approve">Approve</option>
-                        <option value="evaluate">Evaluate</option>
-                        <option value="reject">Reject</option>
+                        <option value="" data-i18n="roi.opt_all_recommendations">All Recommendations</option>
+                        <option value="approve" data-i18n="roi.opt_approve">Approve</option>
+                        <option value="evaluate" data-i18n="roi.opt_evaluate">Evaluate</option>
+                        <option value="reject" data-i18n="roi.opt_reject">Reject</option>
                     </select>
                     <select id="sortBy" data-on-change="loadInitiatives" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
-                        <option value="created">Recently Added</option>
-                        <option value="roi">Highest ROI</option>
-                        <option value="npv">Highest NPV</option>
-                        <option value="payback">Shortest Payback</option>
+                        <option value="created" data-i18n="roi.opt_recently_added">Recently Added</option>
+                        <option value="roi" data-i18n="roi.opt_highest_roi">Highest ROI</option>
+                        <option value="npv" data-i18n="roi.opt_highest_npv">Highest NPV</option>
+                        <option value="payback" data-i18n="roi.opt_shortest_payback">Shortest Payback</option>
                     </select>
                 </div>
             </div>
@@ -153,14 +155,14 @@
                 <table class="w-full">
                     <thead class="bg-gray-50 border-b border-gray-200">
                         <tr>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_project">Project</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="common.department">Department</th>
-                            <th class="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_roi">ROI %</th>
-                            <th class="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_npv">NPV (SAR)</th>
-                            <th class="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_payback">Payback</th>
-                            <th class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_ai_rec">AI Recommendation</th>
-                            <th class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="common.status">Status</th>
-                            <th class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_project">Project</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="common.department">Department</th>
+                            <th scope="col" class="text-end px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_roi">ROI %</th>
+                            <th scope="col" class="text-end px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_npv">NPV (SAR)</th>
+                            <th scope="col" class="text-end px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_payback">Payback</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_ai_rec">AI Recommendation</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase" data-i18n="roi.col_actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="initiativesTable" class="divide-y divide-gray-200">
@@ -170,7 +172,7 @@
                                     <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                     </svg>
-                                    <p>No initiatives found. Create your first ROI evaluation.</p>
+                                    <p data-i18n="roi.no_initiatives">No initiatives found. Create your first ROI evaluation.</p>
                                 </div>
                             </td>
                         </tr>
@@ -199,27 +201,27 @@
                             <input type="text" name="project_name" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Department *</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_department_req">Department *</label>
                             <select name="department" required class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="">Select Department</option>
-                                <option value="Quality">Quality</option>
-                                <option value="Sales">Sales</option>
-                                <option value="Marketplace">Marketplace</option>
-                                <option value="CS">Customer Service</option>
-                                <option value="BD">Business Development</option>
-                                <option value="WalaOne">WalaOne</option>
-                                <option value="Operations">Operations</option>
+                                <option value="" data-i18n="roi.opt_select_dept">Select Department</option>
+                                <option value="Quality" data-i18n="roi.dept_quality">Quality</option>
+                                <option value="Sales" data-i18n="projects.dept_sales">Sales</option>
+                                <option value="Marketplace" data-i18n="roi.dept_marketplace">Marketplace</option>
+                                <option value="CS" data-i18n="roi.dept_cs">Customer Service</option>
+                                <option value="BD" data-i18n="roi.dept_bd">Business Development</option>
+                                <option value="WalaOne" data-i18n="roi.dept_walaone">WalaOne</option>
+                                <option value="Operations" data-i18n="projects.dept_operations">Operations</option>
                                 <option value="IT">IT</option>
                                 <option value="HR">HR</option>
-                                <option value="Finance">Finance</option>
+                                <option value="Finance" data-i18n="projects.dept_finance">Finance</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="common.priority">Priority</label>
                             <select name="priority" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="low">Low</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="high">High</option>
+                                <option value="low" data-i18n="common.low">Low</option>
+                                <option value="medium" selected data-i18n="common.medium">Medium</option>
+                                <option value="high" data-i18n="common.high">High</option>
                             </select>
                         </div>
                         <div class="col-span-2">
@@ -228,7 +230,7 @@
                         </div>
                         <div class="field-with-tooltip">
                             <label class="block text-sm font-medium text-gray-700 mb-1">
-                                <span>Expected Monthly Savings - High Level (SAR)</span>
+                                <span data-i18n="roi.f_expected_savings">Expected Monthly Savings - High Level (SAR)</span>
                                 <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;expected_savings_monthly&quot;]" data-pass-event="true">
                                     <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                 </span>
@@ -237,7 +239,7 @@
                         </div>
                         <div class="field-with-tooltip">
                             <label class="block text-sm font-medium text-gray-700 mb-1">
-                                <span>High-Level Implementation Cost (SAR)</span>
+                                <span data-i18n="roi.f_high_level_cost">High-Level Implementation Cost (SAR)</span>
                                 <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;implementation_cost&quot;]" data-pass-event="true">
                                     <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                 </span>
@@ -246,7 +248,7 @@
                         </div>
                         <div class="field-with-tooltip">
                             <label class="block text-sm font-medium text-gray-700 mb-1">
-                                <span>Project Duration (months)</span>
+                                <span data-i18n="roi.f_project_duration">Project Duration (months)</span>
                                 <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;project_duration_months&quot;]" data-pass-event="true">
                                     <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                 </span>
@@ -255,7 +257,7 @@
                         </div>
                         <div class="field-with-tooltip">
                             <label class="block text-sm font-medium text-gray-700 mb-1">
-                                <span>Discount Rate (%)</span>
+                                <span data-i18n="roi.f_discount_rate">Discount Rate (%)</span>
                                 <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;discount_rate&quot;]" data-pass-event="true">
                                     <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                 </span>
@@ -265,7 +267,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;manpowerSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;manpowerSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">B. Manpower Cost Breakdown</span>
                             <svg id="manpowerSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -274,32 +276,32 @@
                         <div id="manpowerSection" class="hidden mt-4 space-y-4">
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Average Monthly Salary (SAR)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_avg_monthly_salary">Average Monthly Salary (SAR)</label>
                                     <input type="number" name="avg_monthly_salary" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">GOSI % </label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_gosi">GOSI % </label>
                                     <input type="number" name="gosi_percent" value="12" min="0" max="100" step="0.1" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Insurance Cost (SAR/month)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_insurance_cost">Insurance Cost (SAR/month)</label>
                                     <input type="number" name="insurance_cost" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Laptop & Equipment (amortized/month)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_laptop">Laptop & Equipment (amortized/month)</label>
                                     <input type="number" name="equipment_cost" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Software Seat Cost (SAR/month)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_software">Software Seat Cost (SAR/month)</label>
                                     <input type="number" name="software_seat_cost" value="0" min="0" step="0.01" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Hours Wasted/Employee/Week</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_hours_wasted">Hours Wasted/Employee/Week</label>
                                     <input type="number" name="hours_wasted_per_week" value="0" min="0" step="0.1" data-on-input="calculateManpowerCosts" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div class="field-with-tooltip">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        <span>Number of Employees Impacted</span>
+                                        <span data-i18n="roi.f_employees_impacted">Number of Employees Impacted</span>
                                         <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;headcount_affected&quot;]" data-pass-event="true">
                                             <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                         </span>
@@ -309,15 +311,15 @@
                             </div>
                             <div class="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-500 mb-1">Fully Loaded Salary</label>
+                                    <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_loaded_salary">Fully Loaded Salary</label>
                                     <input type="text" name="fully_loaded_salary" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-500 mb-1">Cost per Hour</label>
+                                    <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_cost_per_hour">Cost per Hour</label>
                                     <input type="text" name="cost_per_hour" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-500 mb-1">Monthly Time Loss Cost</label>
+                                    <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_monthly_time_loss">Monthly Time Loss Cost</label>
                                     <input type="text" name="monthly_time_loss_cost" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 font-semibold">
                                 </div>
                             </div>
@@ -325,7 +327,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;platformSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;platformSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">C. Platform & Tool Costs</span>
                             <svg id="platformSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -333,7 +335,7 @@
                         </button>
                         <div id="platformSection" class="hidden mt-4 space-y-4">
                             <div id="platformToolsList" class="space-y-3"></div>
-                            <button type="button" data-on-click="addPlatformTool" class="flex items-center space-x-2 text-indigo-600 hover:text-indigo-800 font-medium">
+                            <button type="button" data-on-click="addPlatformTool" class="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                                 </svg>
@@ -343,7 +345,7 @@
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;errorSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;errorSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">D. Error, Rework & SLA Costs</span>
                             <svg id="errorSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -353,7 +355,7 @@
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 <div class="field-with-tooltip">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        <span>Current Error Rate (%)</span>
+                                        <span data-i18n="roi.f_current_error_rate">Current Error Rate (%)</span>
                                         <span class="tooltip-icon text-purple-500 hover:text-purple-700" data-on-click="showTooltip" data-args="[&quot;error_rate_percent&quot;]" data-pass-event="true">
                                             <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                         </span>
@@ -361,35 +363,35 @@
                                     <input type="number" name="current_error_rate" value="0" min="0" max="100" step="0.1" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Monthly Transactions</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_monthly_transactions">Monthly Transactions</label>
                                     <input type="number" name="monthly_transactions" value="0" min="0" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Cost per Error (SAR)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_cost_per_error">Cost per Error (SAR)</label>
                                     <input type="number" name="cost_per_error" value="0" min="0" step="0.01" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Rework Hours per Error</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_rework_hours">Rework Hours per Error</label>
                                     <input type="number" name="rework_hours_per_error" value="0" min="0" step="0.1" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">SLA Penalties (SAR/month)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_sla_penalties">SLA Penalties (SAR/month)</label>
                                     <input type="number" name="sla_penalties" value="0" min="0" step="0.01" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Expected Reduction (%)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_expected_reduction">Expected Reduction (%)</label>
                                     <input type="number" name="expected_error_reduction" value="0" min="0" max="100" step="0.1" data-on-input="calculateErrorSavings" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                             </div>
                             <div class="pt-4 border-t border-gray-100">
-                                <label class="block text-sm font-medium text-gray-500 mb-1">Calculated Error Savings (SAR/month)</label>
+                                <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_calculated_error_savings">Calculated Error Savings (SAR/month)</label>
                                 <input type="text" name="calculated_error_savings" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 font-semibold">
                             </div>
                         </div>
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;revenueSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;revenueSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">E. Revenue Impact</span>
                             <svg id="revenueSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -398,35 +400,35 @@
                         <div id="revenueSection" class="hidden mt-4 space-y-4">
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Leads Saved</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_leads_saved">Leads Saved</label>
                                     <input type="number" name="leads_saved" value="0" min="0" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Conversion Rate (%)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_conversion_rate">Conversion Rate (%)</label>
                                     <input type="number" name="conversion_rate" value="0" min="0" max="100" step="0.1" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Revenue per Lead (SAR)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_revenue_per_lead">Revenue per Lead (SAR)</label>
                                     <input type="number" name="revenue_per_lead" value="0" min="0" step="0.01" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Churn Reduction (%)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_churn_reduction">Churn Reduction (%)</label>
                                     <input type="number" name="churn_reduction" value="0" min="0" max="100" step="0.1" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Upsell Opportunities</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_upsell_opps">Upsell Opportunities</label>
                                     <input type="number" name="upsell_opportunities" value="0" min="0" data-on-input="calculateRevenueImpact" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                             </div>
                             <div class="pt-4 border-t border-gray-100">
-                                <label class="block text-sm font-medium text-gray-500 mb-1">Calculated Revenue Impact (SAR/month)</label>
+                                <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_calculated_revenue_impact">Calculated Revenue Impact (SAR/month)</label>
                                 <input type="text" name="calculated_revenue_impact" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 font-semibold">
                             </div>
                         </div>
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;implementationSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;implementationSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">F. Implementation Breakdown</span>
                             <svg id="implementationSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -435,75 +437,75 @@
                         <div id="implementationSection" class="hidden mt-4 space-y-4">
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Vendor Costs (SAR)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_vendor_costs">Vendor Costs (SAR)</label>
                                     <input type="number" name="vendor_costs" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Setup Fees (SAR)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_setup_fees">Setup Fees (SAR)</label>
                                     <input type="number" name="setup_fees" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">API/License Fees (SAR)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_api_fees">API/License Fees (SAR)</label>
                                     <input type="number" name="api_license_fees" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div class="col-span-2 md:col-span-3 grid grid-cols-4 gap-2">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Developer Hours</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_developer_hours">Developer Hours</label>
                                         <input type="number" name="developer_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Rate (SAR/hr)</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_rate_sar_hr">Rate (SAR/hr)</label>
                                         <input type="number" name="developer_rate" value="150" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">QA Hours</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_qa_hours">QA Hours</label>
                                         <input type="number" name="qa_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Rate (SAR/hr)</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_rate_sar_hr">Rate (SAR/hr)</label>
                                         <input type="number" name="qa_rate" value="100" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                 </div>
                                 <div class="col-span-2 md:col-span-3 grid grid-cols-4 gap-2">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Product Hours</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_product_hours">Product Hours</label>
                                         <input type="number" name="product_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Rate (SAR/hr)</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_rate_sar_hr">Rate (SAR/hr)</label>
                                         <input type="number" name="product_rate" value="120" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Architect Hours</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_architect_hours">Architect Hours</label>
                                         <input type="number" name="architect_hours" value="0" min="0" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Rate (SAR/hr)</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_rate_sar_hr">Rate (SAR/hr)</label>
                                         <input type="number" name="architect_rate" value="200" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Training Cost (SAR)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_training_cost">Training Cost (SAR)</label>
                                     <input type="number" name="training_cost" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Change Management Cost (SAR)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_change_mgmt">Change Management Cost (SAR)</label>
                                     <input type="number" name="change_management_cost" value="0" min="0" step="0.01" data-on-input="calculateImplementationCost" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Monthly Recurring Cost (SAR)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_monthly_recurring">Monthly Recurring Cost (SAR)</label>
                                     <input type="number" name="monthly_recurring_cost" value="0" min="0" step="0.01" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                             </div>
                             <div class="pt-4 border-t border-gray-100">
-                                <label class="block text-sm font-medium text-gray-500 mb-1">Calculated Total Implementation (SAR)</label>
+                                <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_calc_total_impl">Calculated Total Implementation (SAR)</label>
                                 <input type="text" name="calculated_implementation_total" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 font-semibold">
                             </div>
                         </div>
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
-                        <button type="button" data-on-click="toggleSection" data-args="[&quot;riskSection&quot;]" class="w-full flex items-center justify-between py-2 text-left">
+                        <button type="button" data-on-click="toggleSection" data-args="[&quot;riskSection&quot;]" class="w-full flex items-center justify-between py-2 text-start">
                             <span class="text-lg font-semibold text-gray-900">G. Risk & Confidence Inputs</span>
                             <svg id="riskSection-icon" class="w-5 h-5 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -512,50 +514,50 @@
                         <div id="riskSection" class="hidden mt-4 space-y-4">
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Confidence Level</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_confidence_level">Confidence Level</label>
                                     <select name="confidence_level" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                        <option value="low">Low</option>
-                                        <option value="medium" selected>Medium</option>
-                                        <option value="high">High</option>
+                                        <option value="low" data-i18n="common.low">Low</option>
+                                        <option value="medium" selected data-i18n="common.medium">Medium</option>
+                                        <option value="high" data-i18n="common.high">High</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Probability of Success (%)</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_prob_success">Probability of Success (%)</label>
                                     <input type="number" name="probability_of_success" value="70" min="0" max="100" step="1" data-on-input="calculateRiskAdjustedNPV" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Risk Adjustment Factor</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_risk_factor">Risk Adjustment Factor</label>
                                     <input type="number" name="risk_adjustment_factor" value="1.0" min="0" max="2" step="0.1" data-on-input="calculateRiskAdjustedNPV" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div class="col-span-2 md:col-span-3">
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Dependencies</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="roi.f_dependencies">Dependencies</label>
                                     <textarea name="dependencies" rows="2" placeholder="List key dependencies, blockers, or assumptions..." class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
                                 </div>
                             </div>
                             <div class="pt-4 border-t border-gray-100">
-                                <label class="block text-sm font-medium text-gray-500 mb-1">Risk-Adjusted NPV (SAR)</label>
+                                <label class="block text-sm font-medium text-gray-500 mb-1" data-i18n="roi.f_risk_adj_npv">Risk-Adjusted NPV (SAR)</label>
                                 <input type="text" name="risk_adjusted_npv" readonly class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 font-semibold">
                             </div>
                         </div>
                     </div>
 
                     <div id="previewSection" class="hidden border-t border-gray-200 pt-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">AI Calculation Preview</h3>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="roi.sec_ai_calc_preview">AI Calculation Preview</h3>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                             <div class="bg-gray-50 rounded-lg p-4 text-center">
-                                <p class="text-sm text-gray-500">ROI</p>
+                                <p class="text-sm text-gray-500" data-i18n="roi.k_roi">ROI</p>
                                 <p id="previewROI" class="text-xl font-bold text-green-600">0%</p>
                             </div>
                             <div class="bg-gray-50 rounded-lg p-4 text-center">
-                                <p class="text-sm text-gray-500">NPV</p>
+                                <p class="text-sm text-gray-500" data-i18n="roi.k_npv">NPV</p>
                                 <p id="previewNPV" class="text-xl font-bold text-indigo-600">SAR 0</p>
                             </div>
                             <div class="bg-gray-50 rounded-lg p-4 text-center">
-                                <p class="text-sm text-gray-500">Payback</p>
+                                <p class="text-sm text-gray-500" data-i18n="roi.k_payback">Payback</p>
                                 <p id="previewPayback" class="text-xl font-bold text-amber-600">0 mo</p>
                             </div>
                             <div class="bg-gray-50 rounded-lg p-4 text-center">
-                                <p class="text-sm text-gray-500">Recommendation</p>
+                                <p class="text-sm text-gray-500" data-i18n="roi.k_recommendation">Recommendation</p>
                                 <p id="previewRecommendation" class="text-xl font-bold">-</p>
                             </div>
                         </div>
@@ -564,7 +566,7 @@
 
                     <div id="validationSection" class="hidden border-t border-gray-200 pt-6">
                         <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <svg class="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-5 h-5 me-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                             </svg>
                             AI Validation Results
@@ -573,23 +575,23 @@
                     </div>
 
                     <div class="flex items-center justify-between border-t border-gray-200 pt-6">
-                        <div class="flex space-x-3">
+                        <div class="flex gap-3">
                             <button type="button" data-on-click="calculatePreview" class="text-indigo-600 hover:text-indigo-800 font-medium flex items-center">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                                 </svg>
-                                Calculate Preview
+                                <span data-i18n="roi.calculate_preview">Calculate Preview</span>
                             </button>
                             <button type="button" data-on-click="runAIValidation" class="text-purple-600 hover:text-purple-800 font-medium flex items-center" id="validateBtn">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                                 </svg>
-                                AI Validate Inputs
+                                <span data-i18n="roi.ai_validate_inputs">AI Validate Inputs</span>
                             </button>
                         </div>
-                        <div class="flex space-x-3">
-                            <button type="button" data-on-click="closeNewInitiativeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Initiative</button>
+                        <div class="flex gap-3">
+                            <button type="button" data-on-click="closeNewInitiativeModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="roi.cancel">Cancel</button>
+                            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" data-i18n="roi.create_initiative">Create Initiative</button>
                         </div>
                     </div>
                 </form>
@@ -598,7 +600,6 @@
     </div>
 
     <script>
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         let recommendationChart = null;
         let departmentChart = null;
         let platformTools = [];
@@ -655,7 +656,7 @@
                 <div class="p-4">
                     <div class="flex items-start justify-between mb-2">
                         <div class="flex items-center gap-2">
-                            <span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-medium">AI Help</span>
+                            <span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-medium" data-i18n="roi.ai_help">AI Help</span>
                             <h4 class="font-semibold text-gray-900 text-sm">${tooltip.field_label || fieldId.replace(/_/g, ' ')}</h4>
                         </div>
                         <button data-on-click="hideActiveTooltip" class="text-gray-400 hover:text-gray-600">
@@ -665,12 +666,12 @@
                     <p class="text-gray-700 text-sm mb-3">${tooltip.tooltip_text}</p>
                     ${tooltip.calculation_hint ? `
                     <div class="bg-blue-50 border border-blue-100 rounded-lg p-2 mb-2">
-                        <p class="text-xs font-medium text-blue-800 mb-1">How to calculate:</p>
+                        <p class="text-xs font-medium text-blue-800 mb-1" data-i18n="roi.how_to_calc">How to calculate:</p>
                         <p class="text-xs text-blue-700">${tooltip.calculation_hint}</p>
                     </div>` : ''}
                     ${tooltip.data_source_hint ? `
                     <div class="bg-green-50 border border-green-100 rounded-lg p-2">
-                        <p class="text-xs font-medium text-green-800 mb-1">Where to find data:</p>
+                        <p class="text-xs font-medium text-green-800 mb-1" data-i18n="roi.where_data">Where to find data:</p>
                         <p class="text-xs text-green-700">${tooltip.data_source_hint}</p>
                     </div>` : ''}
                 </div>
@@ -834,32 +835,32 @@
             const container = document.getElementById('platformToolsList');
             container.innerHTML = platformTools.map((tool, index) => `
                 <div class="bg-gray-50 rounded-lg p-4 relative">
-                    <button type="button" data-on-click="removePlatformTool" data-args="[${index}]" class="absolute top-2 right-2 text-red-500 hover:text-red-700">
+                    <button type="button" data-on-click="removePlatformTool" data-args="[${index}]" class="absolute top-2 end-2 text-red-500 hover:text-red-700">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
                     </button>
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                         <div class="col-span-2 md:col-span-1">
-                            <label class="block text-xs font-medium text-gray-600 mb-1">Tool Name</label>
+                            <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="roi.tool_name">Tool Name</label>
                             <input type="text" value="${tool.name}" data-on-change="updatePlatformTool" data-args="[${index},&quot;name&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">Cost/Month (SAR)</label>
+                            <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="roi.cost_per_month">Cost/Month (SAR)</label>
                             <input type="number" value="${tool.cost}" data-on-change="updatePlatformTool" data-args="[${index},&quot;cost&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">Seats Impacted</label>
+                            <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="roi.seats_impacted">Seats Impacted</label>
                             <input type="number" value="${tool.seats}" data-on-change="updatePlatformTool" data-args="[${index},&quot;seats&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">Vendor Support</label>
+                            <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="roi.vendor_support">Vendor Support</label>
                             <input type="number" value="${tool.vendorSupport}" data-on-change="updatePlatformTool" data-args="[${index},&quot;vendorSupport&quot;,&quot;@this.value&quot;]" class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500">
                         </div>
                         <div class="flex items-center">
-                            <label class="flex items-center space-x-2 text-sm text-gray-700">
+                            <label class="flex items-center gap-2 text-sm text-gray-700">
                                 <input type="checkbox" ${tool.toBeRemoved ? 'checked' : ''} data-on-change="updatePlatformTool" data-args="[${index},&quot;toBeRemoved&quot;,&quot;@this.checked&quot;]" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                <span>To Be Removed</span>
+                                <span data-i18n="roi.to_be_removed">To Be Removed</span>
                             </label>
                         </div>
                     </div>
@@ -874,7 +875,7 @@
 
                 document.getElementById('totalInitiatives').textContent = data.totalInitiatives || 0;
                 document.getElementById('avgROI').textContent = `${(data.avgROI || 0).toFixed(1)}%`;
-                document.getElementById('totalNPV').textContent = _t('dyn.roi.currency_prefix') + (data.totalNPV || 0).toLocaleString();
+                document.getElementById('totalNPV').textContent = WalaPlusI18n.t('dyn.roi.currency_prefix') + (data.totalNPV || 0).toLocaleString();
                 document.getElementById('avgPayback').textContent = `${(data.avgPayback || 0).toFixed(1)} mo`;
 
                 if (recommendationChart) recommendationChart.destroy();
@@ -901,6 +902,7 @@
                         }
                     }
                 });
+                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('recommendationChart', recommendationChart, 'AI Recommendations');
 
                 if (departmentChart) departmentChart.destroy();
                 const deptCtx = document.getElementById('departmentChart').getContext('2d');
@@ -931,6 +933,7 @@
                         }
                     }
                 });
+                if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('departmentChart', departmentChart, 'NPV by Department');
             } catch (error) {
                 console.error('Error loading analytics:', error);
             }
@@ -957,7 +960,7 @@
                                     <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                     </svg>
-                                    <p>No initiatives found. Create your first ROI evaluation.</p>
+                                    <p data-i18n="roi.no_initiatives">No initiatives found. Create your first ROI evaluation.</p>
                                 </div>
                             </td>
                         </tr>
@@ -972,17 +975,17 @@
                             <div class="text-sm text-gray-500">${i.owner}</div>
                         </td>
                         <td class="px-6 py-4 text-sm text-gray-600">${i.department}</td>
-                        <td class="px-6 py-4 text-right">
+                        <td class="px-6 py-4 text-end">
                             <span class="${parseFloat(i.roi_percentage) >= 0 ? 'text-green-600' : 'text-red-600'} font-semibold">
                                 ${parseFloat(i.roi_percentage).toFixed(1)}%
                             </span>
                         </td>
-                        <td class="px-6 py-4 text-right">
+                        <td class="px-6 py-4 text-end">
                             <span class="${parseFloat(i.npv) >= 0 ? 'text-indigo-600' : 'text-red-600'} font-semibold">
                                 ${parseFloat(i.npv).toLocaleString()}
                             </span>
                         </td>
-                        <td class="px-6 py-4 text-right text-gray-600">${parseFloat(i.payback_period_months).toFixed(1)} mo</td>
+                        <td class="px-6 py-4 text-end text-gray-600">${parseFloat(i.payback_period_months).toFixed(1)} mo</td>
                         <td class="px-6 py-4 text-center">
                             <span class="px-3 py-1 rounded-full text-xs font-medium badge-${i.ai_recommendation}">
                                 ${i.ai_recommendation?.charAt(0).toUpperCase() + i.ai_recommendation?.slice(1)}
@@ -994,8 +997,8 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 text-center">
-                            <button data-on-click="viewInitiative" data-args="[${i.id}]" class="text-indigo-600 hover:text-indigo-800 mr-2">View</button>
-                            <button data-on-click="deleteInitiative" data-args="[${i.id}]" class="text-red-600 hover:text-red-800">Delete</button>
+                            <button data-on-click="viewInitiative" data-args="[${i.id}]" class="text-indigo-600 hover:text-indigo-800 me-2">${_t('roi.view','View')}</button>
+                            <button data-on-click="deleteInitiative" data-args="[${i.id}]" class="text-red-600 hover:text-red-800">${_t('roi.delete','Delete')}</button>
                         </td>
                     </tr>
                 `).join('');
@@ -1028,7 +1031,7 @@
             const validateBtn = document.getElementById('validateBtn');
             validateBtn.disabled = true;
             validateBtn.innerHTML = `
-                <svg class="w-4 h-4 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4 me-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
                 Validating...
@@ -1139,7 +1142,7 @@
                              r.type === 'success' ? '✅' : 'ℹ️';
                 return `
                     <div class="${bgColor} border rounded-lg p-3 flex items-start">
-                        <span class="mr-2 text-lg">${icon}</span>
+                        <span class="me-2 text-lg">${icon}</span>
                         <div>
                             <span class="font-semibold ${textColor}">${r.field}:</span>
                             <span class="${textColor}">${r.message}</span>
@@ -1153,7 +1156,7 @@
             
             validateBtn.disabled = false;
             validateBtn.innerHTML = `
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                 </svg>
                 AI Validate Inputs
@@ -1182,7 +1185,7 @@
 
                 document.getElementById('previewROI').textContent = `${result.roi_percentage?.toFixed(1)}%`;
                 document.getElementById('previewROI').className = `text-xl font-bold ${result.roi_percentage >= 0 ? 'text-green-600' : 'text-red-600'}`;
-                document.getElementById('previewNPV').textContent = _t('dyn.roi.currency_prefix') + result.npv?.toLocaleString();
+                document.getElementById('previewNPV').textContent = WalaPlusI18n.t('dyn.roi.currency_prefix') + result.npv?.toLocaleString();
                 document.getElementById('previewNPV').className = `text-xl font-bold ${result.npv >= 0 ? 'text-indigo-600' : 'text-red-600'}`;
                 document.getElementById('previewPayback').textContent = `${result.payback_period_months?.toFixed(1)} mo`;
                 
@@ -1297,11 +1300,11 @@
                     loadInitiatives();
                 } else {
                     const error = await response.json();
-                    alert(error.error || _t('dyn.roi.failed_create_initiative'));
+                    alert(error.error || WalaPlusI18n.t('dyn.roi.failed_create_initiative'));
                 }
             } catch (error) {
                 console.error('Error creating initiative:', error);
-                alert(_t('dyn.roi.failed_create_initiative'));
+                alert(WalaPlusI18n.t('dyn.roi.failed_create_initiative'));
             }
         }
 
@@ -1309,14 +1312,14 @@
             try {
                 const response = await fetch(`/api/roi/${id}`);
                 const data = await response.json();
-                alert(_t('dyn.roi.initiative_summary', { name: data.project_name, roi: data.roi_percentage, npv: parseFloat(data.npv).toLocaleString(), payback: data.payback_period_months, insights: data.ai_insights }));
+                alert(WalaPlusI18n.t('dyn.roi.initiative_summary', { name: data.project_name, roi: data.roi_percentage, npv: parseFloat(data.npv).toLocaleString(), payback: data.payback_period_months, insights: data.ai_insights }));
             } catch (error) {
                 console.error('Error viewing initiative:', error);
             }
         }
 
         async function deleteInitiative(id) {
-            if (!confirm(_t('dyn.roi.confirm_delete_initiative'))) return;
+            if (!confirm(WalaPlusI18n.t('dyn.roi.confirm_delete_initiative'))) return;
             
             try {
                 const response = await fetch(`/api/roi/${id}`, { method: 'DELETE' });
@@ -1324,7 +1327,7 @@
                     loadAnalytics();
                     loadInitiatives();
                 } else {
-                    alert(_t('dyn.roi.failed_delete_initiative'));
+                    alert(WalaPlusI18n.t('dyn.roi.failed_delete_initiative'));
                 }
             } catch (error) {
                 console.error('Error deleting initiative:', error);

@@ -407,6 +407,7 @@ export async function getAllPolicies(filters?: {
   search?: string;
   limit?: number;
   offset?: number;
+  allowedConfidentiality?: string[];
 }): Promise<{ policies: Policy[]; total: number }> {
   logger.info("📊 [PolicyDB] Fetching policies with filters:", filters);
 
@@ -439,6 +440,14 @@ export async function getAllPolicies(filters?: {
       `(title ILIKE $${paramCount} OR policy_number ILIKE $${paramCount} OR document_number ILIKE $${paramCount})`,
     );
     values.push(`%${filters.search}%`);
+    paramCount++;
+  }
+  if (
+    filters?.allowedConfidentiality &&
+    filters.allowedConfidentiality.length > 0
+  ) {
+    whereConditions.push(`confidentiality = ANY($${paramCount}::text[])`);
+    values.push(filters.allowedConfidentiality);
     paramCount++;
   }
 

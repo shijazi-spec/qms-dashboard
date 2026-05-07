@@ -1,3 +1,4 @@
+ slack-audit-notification-alignment
 name: Streaming Download Smoke
 
 on:
@@ -87,3 +88,12 @@ jobs:
             /tmp/dev-server.log
             playwright-report
             test-results
+
+ls -la /tmp/wf-backup/
+total 56
+drwxr-xr-x 1 runner runner   144 May  3 09:20 .
+drwxrwxrwx 1 runner runner 28780 May  3 09:10 ..
+-rw-r--r-- 1 runner runner 19252 May  3 09:20 streaming-download-smoke.yml
+-rw-r--r-- 1 runner runner 10769 May  3 09:04 test.yml
+-rw-r--r-- 1 runner runner  2759 May  3 09:04 tool-health-notifier-integration.yml
+ main

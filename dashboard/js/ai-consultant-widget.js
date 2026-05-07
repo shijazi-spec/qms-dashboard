@@ -328,8 +328,64 @@
 
     window._closeAIWidget = function() { setWidgetOpen(false); };
 
+    /**
+     * Re-hydrate the widget transcript from the server when the user
+     * returns to a page (or opens the widget after a refresh). Uses the
+     * threadId persisted in sessionStorage under widget_consultant_threadId
+     * so the conversation — including feedback bars on assistant turns —
+     * survives page reloads. Loaded lazily on first widget open to avoid
+     * a wasted request on pages where the user never opens the chat.
+     * Mirrors loadThreadHistory() on the full consultant page.
+     */
+    // Tracks whether the history fetch has *successfully* completed
+    // for this page load. We deliberately flip this flag only after
+    // a successful fetch (not before) so that a transient network or
+    // server failure on the first widget open still allows a retry the
+    // next time the user opens the widget within the same session.
+    var widgetHistoryLoaded = false;
+    var widgetHistoryInflight = false;
+    async function widgetLoadThreadHistory() {
+        if (widgetHistoryLoaded || widgetHistoryInflight) return;
+        var tid = sessionStorage.getItem('widget_consultant_threadId');
+        if (!tid) return;
+        widgetHistoryInflight = true;
+        try {
+            var res = await fetch('/api/consultant/history/' + encodeURIComponent(tid), {
+                credentials: 'same-origin'
+            });
+            if (!res.ok) return;
+            var data = await res.json();
+            var msgs = (data && data.messages) || [];
+            widgetHistoryLoaded = true;
+            if (!msgs.length) return;
+            threadId = tid;
+            var pv = data.promptVersion || null;
+            var welcome = document.getElementById('ai-widget-welcome');
+            if (welcome) welcome.remove();
+            msgs.forEach(function(m) {
+                if (m.role === 'user') {
+                    widgetAppendUser(m.content);
+                } else if (m.role === 'assistant') {
+                    var bubble = widgetCreateAI();
+                    bubble.innerHTML = renderMarkdown(m.content);
+                    if (isArabic(m.content)) bubble.setAttribute('dir', 'rtl');
+                    chatMessages.push({ role: 'assistant', content: m.content, time: m.createdAt || new Date().toISOString() });
+                    if (m.messageId && m.content && m.content.trim()) {
+                        widgetAttachFeedback(bubble, m.messageId, '', m.content, pv);
+                    }
+                }
+            });
+            widgetScrollBottom();
+        } catch (e) {
+            /* best-effort: failures fall back to empty welcome */
+        } finally {
+            widgetHistoryInflight = false;
+        }
+    }
+
     btn.addEventListener('click', function() {
         setWidgetOpen(!isOpen);
+        if (isOpen) widgetLoadThreadHistory();
     });
 
     inputEl.addEventListener('input', function() {
@@ -374,15 +430,15 @@
         if (wTitle) wTitle.textContent = _t('consultant.widget_welcome_title', 'WalaPlus QMS Consultant');
         var wSub = widget.querySelector('#ai-widget-welcome p');
         if (wSub) wSub.textContent = _t('consultant.widget_welcome_sub', 'Ask about quality management, compliance, CRM data hygiene, or SOPs.');
-        var qBtns = {
-            'button-quick-quality':    'consultant.quick_quality',
-            'button-quick-compliance': 'consultant.quick_compliance',
-            'button-quick-crm':        'consultant.quick_crm',
-            'button-quick-iso':        'consultant.quick_iso'
-        };
-        Object.keys(qBtns).forEach(function(tid) {
-            var el = widget.querySelector('[data-testid="' + tid + '"]');
-            if (el) el.textContent = _t(qBtns[tid], el.textContent);
+        var qBtnSpecs = [
+            { tid: 'button-quick-quality',    label: function(fb) { return _t('consultant.quick_quality', fb); } },
+            { tid: 'button-quick-compliance', label: function(fb) { return _t('consultant.quick_compliance', fb); } },
+            { tid: 'button-quick-crm',        label: function(fb) { return _t('consultant.quick_crm', fb); } },
+            { tid: 'button-quick-iso',        label: function(fb) { return _t('consultant.quick_iso', fb); } }
+        ];
+        qBtnSpecs.forEach(function(spec) {
+            var el = widget.querySelector('[data-testid="' + spec.tid + '"]');
+            if (el) el.textContent = spec.label(el.textContent);
         });
         var inp = widget.querySelector('#ai-widget-input');
         if (inp) inp.placeholder = _t('consultant.widget_placeholder', 'Ask anything...');

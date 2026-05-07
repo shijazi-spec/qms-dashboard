@@ -268,40 +268,55 @@ test.describe('Auto-resolved vs manually-resolved alert badges (Task #325)', () 
     await expect(autoCard, 'auto-resolved card should render in the history list').toBeVisible({ timeout: 15000 });
     await expect(manualCard, 'manually-resolved card should render in the history list').toBeVisible();
 
-    // AUTO badge — text says "Auto-resolved", carries the purple-pill class
-    // (`bg-purple-100 text-purple-700`) so it stands out from the green
-    // "resolved" status pill, and the title attribute exposes the seeded
-    // resolution_note for the hover tooltip.
-    const autoBadge = page.locator(`[data-testid="badge-history-auto-${autoAlertId}"]`);
-    await expect(autoBadge, 'AI Ops auto badge should render for the auto-resolved row').toBeVisible();
-    await expect(autoBadge).toHaveText(/Auto-resolved/);
-    await expect(autoBadge).toHaveClass(/bg-purple-100/);
-    await expect(autoBadge).toHaveClass(/text-purple-700/);
+    // AUTO row — the seeded note "auto-resolved: error rate recovered …"
+    // routes to the "recovered" category (Task #346), which renders a
+    // green pill with the text "Recovered" plus a green inline
+    // resolved-at line.
+    const autoBadge = page.locator(`[data-testid="badge-history-recovered-${autoAlertId}"]`);
+    await expect(autoBadge, 'AI Ops recovered badge should render for the auto-resolved row').toBeVisible();
+    await expect(autoBadge).toHaveText(/Recovered/);
+    await expect(autoBadge).toHaveClass(/bg-green-100/);
+    await expect(autoBadge).toHaveClass(/text-green-800/);
     await expect(autoBadge).toHaveAttribute('title', AUTO_NOTE);
+    await expect(autoBadge).toHaveAttribute('data-resolution-category', 'recovered');
 
-    // The auto card must NOT also carry the manual pill — these are
-    // mutually-exclusive renderings of the same column.
+    // The recovery row should also surface an inline green resolved-at
+    // timestamp line so operators can spot self-healing events without
+    // reading the right-aligned metadata column.
     await expect(
-      page.locator(`[data-testid="badge-history-manual-${autoAlertId}"]`),
-      'auto-resolved row should not also render the Manual pill',
+      page.locator(`[data-testid="text-history-resolved-at-${autoAlertId}"]`),
+      'recovery row should surface the inline resolved-at timestamp',
+    ).toBeVisible();
+
+    // The auto card must NOT carry a *visible* manual pill. The
+    // backwards-compatibility hidden <span class="sr-only"
+    // data-testid="badge-history-manual-…"> still exists for legacy
+    // selectors but its sr-only class clips it from the visual tree.
+    await expect(
+      page.locator(
+        `[data-testid="badge-history-manual-${autoAlertId}"]:not(.sr-only)`,
+      ),
+      'auto-resolved row should not render a visible Manual pill',
     ).toHaveCount(0);
 
-    // MANUAL badge — text says "Manual", carries the emerald-pill class
-    // (`bg-emerald-50 text-emerald-700`), and the title attribute falls
-    // back to "Closed by an operator." because the seed left
-    // resolution_note NULL.
+    // MANUAL row — uses the new "manual" category which renders a neutral
+    // gray pill so it visually contrasts with the green recovery pills.
     const manualBadge = page.locator(`[data-testid="badge-history-manual-${manualAlertId}"]`);
-    await expect(manualBadge, 'AI Ops manual badge should render for the manually-resolved row').toBeVisible();
-    await expect(manualBadge).toHaveText(/Manual/);
-    await expect(manualBadge).toHaveClass(/bg-emerald-50/);
-    await expect(manualBadge).toHaveClass(/text-emerald-700/);
-    await expect(manualBadge).toHaveAttribute('title', 'Closed by an operator.');
+    await expect(manualBadge.first(), 'AI Ops manual badge should render for the manually-resolved row').toBeVisible();
+    const manualCategoryBadge = page.locator(`[data-testid="badge-history-manual-${manualAlertId}"]:not(.sr-only)`);
+    await expect(manualCategoryBadge).toHaveText(/Manual/);
+    await expect(manualCategoryBadge).toHaveClass(/bg-gray-100/);
+    await expect(manualCategoryBadge).toHaveClass(/text-gray-700/);
+    await expect(manualCategoryBadge).toHaveAttribute('title', 'Closed by an operator.');
+    await expect(manualCategoryBadge).toHaveAttribute('data-resolution-category', 'manual');
 
-    // Symmetric guard — the manual card must NOT also carry the auto pill.
-    await expect(
-      page.locator(`[data-testid="badge-history-auto-${manualAlertId}"]`),
-      'manually-resolved row should not also render the Auto pill',
-    ).toHaveCount(0);
+    // Manual row must NOT carry any of the auto category badges.
+    for (const slug of ['recovered', 'went-silent', 'prompt-regression']) {
+      await expect(
+        page.locator(`[data-testid="badge-history-${slug}-${manualAlertId}"]`),
+        `manually-resolved row should not also render the ${slug} pill`,
+      ).toHaveCount(0);
+    }
   });
 
   test('Consultant All Alerts modal renders the Auto-resolved pill for auto-closed alerts and the Manually resolved pill for human-closed alerts (and the resolution-source filter agrees)', async ({ page }) => {
@@ -350,44 +365,53 @@ test.describe('Auto-resolved vs manually-resolved alert badges (Task #325)', () 
     await expect(autoCard, 'auto-resolved card should render in the All Alerts modal').toBeVisible({ timeout: 15000 });
     await expect(manualCard, 'manually-resolved card should render in the All Alerts modal').toBeVisible();
 
-    // AUTO badge — text "Auto-resolved", purple pill class, title attr
-    // mirrors the seeded resolution_note. The inline note line below
-    // the row also surfaces the note verbatim (Task #320 behavior).
-    const autoBadge = page.locator(`[data-testid="badge-resolution-auto-${autoAlertId}"]`);
-    await expect(autoBadge, 'consultant auto badge should render for the auto-resolved row').toBeVisible();
+    // AUTO row — the seeded note routes to the "recovered" category
+    // (Task #346). Visible pill is green and uses the new category
+    // testid; copy is still i18n-driven ("Auto-resolved") so the
+    // consultant translation keeps working.
+    const autoBadge = page.locator(`[data-testid="badge-resolution-recovered-${autoAlertId}"]`);
+    await expect(autoBadge, 'consultant recovered badge should render for the auto-resolved row').toBeVisible();
     await expect(autoBadge).toHaveText(/Auto-resolved/);
-    await expect(autoBadge).toHaveClass(/bg-purple-100/);
-    await expect(autoBadge).toHaveClass(/text-purple-700/);
+    await expect(autoBadge).toHaveClass(/bg-green-100/);
+    await expect(autoBadge).toHaveClass(/text-green-800/);
     await expect(autoBadge).toHaveAttribute('title', AUTO_NOTE);
+    await expect(autoBadge).toHaveAttribute('data-resolution-category', 'recovered');
     await expect(
       page.locator(`[data-testid="text-resolution-note-${autoAlertId}"]`),
       'inline resolution-note line should echo the auto note',
     ).toContainText(AUTO_NOTE);
+    // Inline green resolved-at timestamp for recovery events.
+    await expect(
+      page.locator(`[data-testid="text-resolution-resolved-at-${autoAlertId}"]`),
+      'recovery row should surface inline resolved-at line',
+    ).toBeVisible();
 
-    // MANUAL badge — text "Manually resolved", emerald pill class, title
-    // falls back to "Closed by an operator." because resolution_note is
-    // NULL. There must be NO inline note line for this row (the consultant
-    // UI only renders one when resolution_note is non-empty).
-    const manualBadge = page.locator(`[data-testid="badge-resolution-manual-${manualAlertId}"]`);
+    // MANUAL row — neutral gray "manual" category pill.
+    const manualBadge = page.locator(`[data-testid="badge-resolution-manual-${manualAlertId}"]:not(.sr-only)`);
     await expect(manualBadge, 'consultant manual badge should render for the manually-resolved row').toBeVisible();
     await expect(manualBadge).toHaveText(/Manually resolved/);
-    await expect(manualBadge).toHaveClass(/bg-emerald-50/);
-    await expect(manualBadge).toHaveClass(/text-emerald-700/);
+    await expect(manualBadge).toHaveClass(/bg-gray-100/);
+    await expect(manualBadge).toHaveClass(/text-gray-700/);
     await expect(manualBadge).toHaveAttribute('title', 'Closed by an operator.');
+    await expect(manualBadge).toHaveAttribute('data-resolution-category', 'manual');
     await expect(
       page.locator(`[data-testid="text-resolution-note-${manualAlertId}"]`),
       'manually-resolved row should not show an inline note (resolution_note is NULL)',
     ).toHaveCount(0);
 
-    // Mutual-exclusivity guards — same idea as the AI Ops case.
+    // Mutual-exclusivity guards — the recovered row must not also carry
+    // the manual category pill (visible), and the manual row must not
+    // carry any of the auto category pills.
     await expect(
-      page.locator(`[data-testid="badge-resolution-manual-${autoAlertId}"]`),
-      'auto-resolved row should not also render the Manually resolved pill',
+      page.locator(`[data-testid="badge-resolution-manual-${autoAlertId}"]:not(.sr-only)`),
+      'auto-resolved row should not render a visible manual pill',
     ).toHaveCount(0);
-    await expect(
-      page.locator(`[data-testid="badge-resolution-auto-${manualAlertId}"]`),
-      'manually-resolved row should not also render the Auto-resolved pill',
-    ).toHaveCount(0);
+    for (const slug of ['recovered', 'went-silent', 'prompt-regression']) {
+      await expect(
+        page.locator(`[data-testid="badge-resolution-${slug}-${manualAlertId}"]`),
+        `manually-resolved row should not render the ${slug} pill`,
+      ).toHaveCount(0);
+    }
 
     // ── Resolution-source filter dropdown ────────────────────────────
     // Same isAutoResolved() prefix check, exercised from the filter side.

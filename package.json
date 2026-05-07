@@ -24,6 +24,7 @@
     "@mastra/memory": "^0.15.13",
     "@mastra/pg": "^0.17.10",
     "@openrouter/ai-sdk-provider": "^2.2.3",
+    "@playwright/test": "^1.59.1",
     "@slack/web-api": "^7.14.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/connect-pg-simple": "^7.0.3",
@@ -31,6 +32,7 @@
     "@types/memoizee": "^0.4.12",
     "@types/passport": "^1.0.17",
     "@types/pg": "^8.16.0",
+    "acorn": "^8.16.0",
     "ai": "^6.0.86",
     "bcryptjs": "^3.0.3",
     "connect-pg-simple": "^10.0.0",
@@ -40,19 +42,26 @@
     "express-session": "^1.19.0",
     "inngest": "^3.52.0",
     "inngest-cli": "^1.17.0",
+ slack-audit-notification-alignment
     "mammoth": "^1.8.0",
+
+    "jsdom": "^29.1.1",
+ main
     "mastra": "^0.18.9",
     "memoizee": "^0.4.17",
     "openai": "^6.22.0",
     "openid-client": "^6.8.2",
+    "p-limit": "^7.3.0",
     "passport": "^0.7.0",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
     "pg": "^8.16.3",
     "pino": "^10.3.1",
+    "playwright": "^1.59.1",
     "prettier": "^3.8.1",
     "readable-stream": "^4.5.2",
     "resend": "^6.9.2",
+    "vitest": "^3.2.4",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -61,6 +70,9 @@
     "typescript": "^5.9.3"
   },
   "overrides": {
-    "rollup": "^4.59.0"
+    "rollup": "^4.59.0",
+    "uuid": "14.0.0",
+    "jsondiffpatch": "0.7.3",
+    "ai": "^6.0.86"
   }
 }

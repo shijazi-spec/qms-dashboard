@@ -25,14 +25,17 @@
  *      unchanged so an exact-match `WHERE password_hash = $1` lookup
  *      against the existing audit row continues to behave identically.
  *
- *   2. Each positional param is run through a redaction step that:
- *        - if string: tries `JSON.parse` for `{`/`[`-prefixed values, walks
- *          the parsed graph via `redactSensitiveDeep`, re-stringifies; for
- *          plain strings, runs `redactSecretLikeStrings` (vendor-prefix
- *          regex + entropy/password heuristic).
- *        - if object/array: walks via `redactSensitiveDeep` (key-based
- *          deny list + recursive regex scrub of every string leaf).
- *        - other primitives (number, boolean, Buffer, Date) pass through.
+ *   2. Each positional param is delegated to `redactSensitiveDeep`, which
+ *      handles every input shape uniformly:
+ *        - strings: scrubbed via `redactSecretLikeStrings`; `{`/`[`-prefixed
+ *          values that parse as JSON are walked recursively and
+ *          re-stringified (Task #741 moved this JSON-of-JSON branch into
+ *          `redactSensitiveDeep` itself, so this wrapper no longer needs a
+ *          parallel hand-rolled copy).
+ *        - object/array: walked via the key-based deny list with a
+ *          recursive regex scrub of every string leaf.
+ *        - other primitives (number, boolean, Buffer, Date, typed arrays)
+ *          pass through unchanged.
  *
  *   3. The instance is tagged with `Symbol.for('@walaplus/redacted-pool')`
  *      so wrapping is idempotent — re-wrapping a shared pool from multiple
@@ -40,12 +43,11 @@
  */
 
 import pg from 'pg';
-import { redactSensitiveDeep, redactSecretLikeStrings } from './eventLogsDatabase';
+import { redactSensitiveDeep } from './eventLogsDatabase';
 
 const { Pool } = pg;
 
 const WRITE_HEAD_RE = /^\s*(?:INSERT|UPDATE|UPSERT|MERGE|WITH\b)/i;
-const JSON_LEAD_RE = /^\s*[\[{]/;
 const REDACTED_FLAG = Symbol.for('@walaplus/redacted-pool');
 
 function isWriteSql(sql: unknown): boolean {
@@ -65,20 +67,6 @@ function isWriteSql(sql: unknown): boolean {
  */
 export function redactPgParam(value: unknown): unknown {
   if (value === null || value === undefined) return value;
-  if (typeof value === 'string') {
-    if (value.length > 1 && value.length < 1_000_000 && JSON_LEAD_RE.test(value)) {
-      try {
-        const parsed = JSON.parse(value);
-        if (parsed !== null && typeof parsed === 'object') {
-          return JSON.stringify(redactSensitiveDeep(parsed));
-        }
-      } catch {
-        /* not JSON — fall through to the regex pass */
-      }
-    }
-    const scrubbed = redactSecretLikeStrings(value);
-    return typeof scrubbed === 'string' ? scrubbed : value;
-  }
   if (typeof value === 'object') {
     // Per the param-handling contract documented above, non-plain objects
     // (Date, Buffer, typed arrays) pass through to pg's native serializer
@@ -89,6 +77,14 @@ export function redactPgParam(value: unknown): unknown {
     if (Buffer.isBuffer(value)) return value;
     if (ArrayBuffer.isView(value)) return value;
     return redactSensitiveDeep(value);
+  }
+  if (typeof value === 'string') {
+    // `redactSensitiveDeep` already detects `{`/`[`-prefixed JSON-string
+    // values, walks them recursively, and re-stringifies the result
+    // (Task #741) — so a single delegating call covers both the JSON-of-JSON
+    // case and the plain-string regex/heuristic scrub.
+    const scrubbed = redactSensitiveDeep(value);
+    return typeof scrubbed === 'string' ? scrubbed : value;
   }
   return value;
 }

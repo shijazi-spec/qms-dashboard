@@ -140,7 +140,12 @@ export const kpiRoutes = [
     },
   },
   {
-    path: "/api/kpis/:id",
+    // Constrain :id to digits so literal segments like `/api/kpis/export`
+    // and `/api/kpis/export-xlsx` are not swallowed by this dynamic GET
+    // handler. See task-443 — without this, the KPI export endpoints were
+    // shadowed and authorized roles received 400 "Invalid KPI ID" instead
+    // of the export stream.
+    path: "/api/kpis/:id{[0-9]+}",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {

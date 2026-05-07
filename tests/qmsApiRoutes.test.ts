@@ -68,7 +68,7 @@ await suite.test("GET /api/qms/capa/:id — 403 without auth", async () => {
   const original = process.env.ADMIN_API_KEY;
   process.env.ADMIN_API_KEY = ADMIN_KEY;
   try {
-    const handler = await buildHandler(qmsApiRoutes, "/api/qms/capa/:id", "GET");
+    const handler = await buildHandler(qmsApiRoutes, "/api/qms/capa/:id{[0-9]+}", "GET");
     const res = await handler(makeContext({ method: "GET", params: { id: "1" } }));
     suite.expectEqual(res.status, 403, "status");
     suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");

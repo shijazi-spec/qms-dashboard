@@ -10,6 +10,8 @@ import {
   getRecentNegativeFeedback,
   getCallById,
   insertCallFeedback,
+  setCallPromptVersionIfMissing,
+  setCallClientSurfaceIfMissing,
   getChildToolCallsForParent,
   getParentCallsForTool,
   getKnownAgentNames,
@@ -26,6 +28,7 @@ import {
   acknowledgeAlert,
   resolveAlert,
   dismissAlert,
+  getSilentToolAutoResolutionCounts,
   type AIAlert,
 } from "../../utils/aiAlertsDatabase";
 import { STORAGE_HEALTH_DEDUPE_KEY } from "../../utils/storageHealthAlerts";
@@ -44,6 +47,7 @@ import { join } from "path";
 import { existsSync, readFileSync } from "fs";
 
 import { logger } from "../../utils/logger";
+import { getToolGovernanceOverview } from "../../utils/aiToolGovernance";
 // Sourced from the central registry so adding a new agent only requires a
 // single edit in src/mastra/agents/promptVersionRegistry.ts. See that file
 // for the maintenance contract this endpoint shares with the prompt-version
@@ -312,23 +316,16 @@ function summarizeBreachCandidates(candidates: ToolHealthBreachCandidate[]): {
 
 export const aiOpsRoutes = [
   {
+    // The AI Operations page (dashboard/ai-ops.html) was retired by user
+    // request. The backend `/api/ai-ops/*` routes below remain — they're
+    // still consumed by the tool-health / prompt-regression cron jobs,
+    // mobile routes, the consultant feedback writer, and the Slack
+    // 👍/👎 handler. To keep historical alert email and Slack links
+    // working we 302 the old `/ai-ops` URL to the main dashboard.
     path: "/ai-ops",
     method: "GET" as const,
     createHandler: async () => {
-      return async (c: any) => {
-        const user = await requireRole(c, AI_OPS_ROLES);
-        if (!user) return c.json({ error: "Insufficient permissions" }, 403);
-        const possiblePaths = [
-          join(process.cwd(), "dashboard", "ai-ops.html"),
-          "/home/runner/workspace/dashboard/ai-ops.html",
-        ];
-        for (const p of possiblePaths) {
-          if (existsSync(p)) {
-            return c.html(readFileSync(p, "utf-8"));
-          }
-        }
-        return c.text("AI Operations page not found", 404);
-      };
+      return async (c: any) => c.redirect("/dashboard", 302);
     },
   },
 
@@ -378,6 +375,38 @@ export const aiOpsRoutes = [
     },
   },
 
+  /**
+   * Silent-tool auto-resolutions tile (Task #346).
+   *
+   * Counts ai_alerts rows whose `resolution_note` starts with the canonical
+   * silent-tool sweep prefix (`auto-resolved: tool went silent`). Returns
+   * counts for the last 24 hours and the last 7 days so the AI Ops summary
+   * tile can show both windows at a glance. Authenticated callers only.
+   */
+  {
+    path: "/api/ai-ops/silent-tool-auto-resolutions",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const data = await getSilentToolAutoResolutionCounts();
+          return c.json({ data });
+        } catch (error) {
+          logger.error(
+            "[AI-Ops] silent-tool-auto-resolutions error:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to fetch silent-tool auto-resolution counts" },
+            500,
+          );
+        }
+      };
+    },
+  },
+
   {
     path: "/api/ai-ops/cost-trend",
     method: "GET" as const,
@@ -405,9 +434,15 @@ export const aiOpsRoutes = [
         try {
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          // Task #598: thread the same `?days=` window the dashboard's
+          // Recent Negative Feedback panel uses through the per-agent
+          // feedback-rate path so both panels stay window-consistent.
+          // Defaults to 30 (legacy behaviour) and is clamped 1..365 by
+          // safeInt + the loader's own clamp.
+          const days = safeInt(c.req.query("days"), 30, 1, 365);
           const [latency, feedback] = await Promise.all([
             getAgentLatencyPercentiles(),
-            getFeedbackRateByAgent(),
+            getFeedbackRateByAgent(days),
           ]);
           const fbMap = new Map(feedback.map((f) => [f.agent_name, f]));
           const data = latency.map((row) => ({
@@ -435,6 +470,23 @@ export const aiOpsRoutes = [
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const body = await c.req.json();
           const { callId, rating, comment } = body;
+          // Accept either camelCase (`promptVersion`, what the consultant
+          // chat client sends) or snake_case (`prompt_version`, the shape
+          // analytics SQL already uses) so future surfaces wiring up to
+          // this endpoint don't have to remember which spelling won.
+          const promptVersionRaw =
+            body.promptVersion ?? body.prompt_version;
+          // Task #763: non-web rating surfaces (Slack thumbs-up/down bot,
+          // mobile app, embedded widget) tag their POST with
+          // `clientSurface` so the per-surface breakdown in the AI Ops
+          // dashboard (`getFeedbackBreakdownByPromptVersion()
+          // .client_surfaces`) attributes those ratings to the right
+          // bucket. Accept either spelling for parity with the
+          // promptVersion field above. Web callers omit it; the
+          // sibling /api/consultant/feedback path defaults to 'web' so
+          // the call-id endpoint follows the same convention here.
+          const clientSurfaceRaw =
+            body.clientSurface ?? body.client_surface;
           const parsedCallId = parseInt(String(callId ?? ""), 10);
           if (
             !Number.isFinite(parsedCallId) ||
@@ -464,12 +516,67 @@ export const aiOpsRoutes = [
             }
             cleanComment = comment;
           }
+          // Validate the optional prompt-version echo before any DB write
+          // so a malformed value (non-string, multi-MB blob) is rejected
+          // up front instead of silently dropped by the helper. Length cap
+          // matches the consultant-feedback path (`safeMetaString` in
+          // consultantRoutes) so both surfaces enforce the same ceiling.
+          let cleanPromptVersion: string | undefined;
+          if (promptVersionRaw != null) {
+            if (typeof promptVersionRaw !== "string") {
+              return c.json(
+                { error: "promptVersion must be a string" },
+                400,
+              );
+            }
+            const trimmed = promptVersionRaw.trim();
+            if (trimmed) cleanPromptVersion = trimmed.slice(0, 100);
+          }
+          // Same validate-then-clamp shape as promptVersion above. Length
+          // cap matches the consultant-feedback path's safeMetaString(50)
+          // so both surfaces enforce a single ceiling on the value that
+          // ends up in `metadata->>'client_surface'`.
+          let cleanClientSurface: string | undefined;
+          if (clientSurfaceRaw != null) {
+            if (typeof clientSurfaceRaw !== "string") {
+              return c.json(
+                { error: "clientSurface must be a string" },
+                400,
+              );
+            }
+            const trimmed = clientSurfaceRaw.trim();
+            if (trimmed) cleanClientSurface = trimmed.slice(0, 50);
+          }
           const ok = await insertCallFeedback(
             parsedCallId,
             rating as "thumbs_up" | "thumbs_down",
             user.userId,
             cleanComment,
           );
+          // Best-effort: backfill `metadata.prompt_version` on the rated
+          // call when the client echoed the version it actually saw and
+          // the row didn't already carry one (see
+          // setCallPromptVersionIfMissing for the integrity rationale).
+          // A failure here must not flip the feedback insert to a 500 —
+          // the rating itself is recorded; analytics attribution is the
+          // nice-to-have layered on top.
+          if (cleanPromptVersion) {
+            await setCallPromptVersionIfMissing(
+              parsedCallId,
+              cleanPromptVersion,
+            );
+          }
+          // Mirror the prompt_version backfill for the surface marker so
+          // a Slack/mobile/embedded rating is attributed to its UI in
+          // the per-surface dashboard breakdown. Same rationale as
+          // setCallPromptVersionIfMissing: never overwrite a value the
+          // server already wrote at span open — only fill when absent.
+          if (cleanClientSurface) {
+            await setCallClientSurfaceIfMissing(
+              parsedCallId,
+              cleanClientSurface,
+            );
+          }
           return c.json({ success: ok });
         } catch (error) {
           logger.error("[AI-Ops] feedback error:", error);
@@ -556,24 +663,57 @@ export const aiOpsRoutes = [
     },
   },
 
-  {
-    path: "/api/ai-ops/negative-feedback",
-    method: "GET" as const,
-    createHandler: async () => {
+  // Task #598: shared handler for the Recent Thumbs-Down feed.
+  // Exposed under the new canonical path
+  // `/api/ai-ops/feedback/recent-negative` AND the legacy
+  // `/api/ai-ops/negative-feedback` alias so any existing dashboard code,
+  // bookmarks, or external consumers keep working through the cutover.
+  // Both routes share the same handler factory below.
+  ...((): any[] => {
+    const recentNegativeHandler = async () => {
       return async (c: any) => {
         try {
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const limit = safeInt(c.req.query("limit"), 25, 1, 100);
-          const data = await getRecentNegativeFeedback(limit);
-          return c.json({ data });
+          // Task #598: dashboard-driven drill-down filters. `days` mirrors
+          // the 7/30/90 window toggle on the panel (clamped to 1..365 so
+          // the loader's parameterized INTERVAL stays sensible) and
+          // `agentName` mirrors the per-agent dropdown — populated client
+          // side from the same agents already shown in the per-agent
+          // feedback-rate panel. Both default to the historical 30-day
+          // combined-list behaviour when omitted.
+          const days = safeInt(c.req.query("days"), 30, 1, 365);
+          const agentNameRaw = c.req.query("agentName");
+          const agentName =
+            typeof agentNameRaw === "string" && agentNameRaw.trim()
+              ? agentNameRaw.trim().slice(0, 100)
+              : null;
+          const data = await getRecentNegativeFeedback({
+            limit,
+            days,
+            agentName,
+          });
+          return c.json({ data, days, agentName });
         } catch (error) {
           logger.error("[AI-Ops] negative-feedback error:", error);
           return c.json({ error: "Failed to fetch negative feedback" }, 500);
         }
       };
-    },
-  },
+    };
+    return [
+      {
+        path: "/api/ai-ops/feedback/recent-negative",
+        method: "GET" as const,
+        createHandler: recentNegativeHandler,
+      },
+      {
+        path: "/api/ai-ops/negative-feedback",
+        method: "GET" as const,
+        createHandler: recentNegativeHandler,
+      },
+    ];
+  })(),
 
   {
     path: "/api/ai-ops/call/:id",
@@ -639,8 +779,9 @@ export const aiOpsRoutes = [
             return c.json({ error: "Tool name is required" }, 400);
           }
           const limit = safeInt(c.req.query("limit"), 20, 1, 50);
-          const data = await getParentCallsForTool(toolName, limit);
-          return c.json({ data });
+          const days = safeInt(c.req.query("days"), 7, 1, 90);
+          const data = await getParentCallsForTool(toolName, limit, days);
+          return c.json({ data, days });
         } catch (error) {
           logger.error("[AI-Ops] tool parents error:", error);
           return c.json(
@@ -778,13 +919,46 @@ export const aiOpsRoutes = [
           )
             ? sevRaw
             : undefined;
-          const alerts = await getToolHealthAlertHistory(days, limit, severity);
+          // Resolution-source filter (Task #417). Whitelist here so only
+          // the two valid values reach the SQL — the database helper
+          // pushes the `resolution_note ILIKE 'auto-resolved%'` check
+          // into the WHERE clause so the filter never silently drops
+          // matches when closed-alert volume crosses the page cap.
+          const resolutionRaw = (c.req.query("resolution") || "").toLowerCase();
+          const resolution =
+            resolutionRaw === "auto" || resolutionRaw === "manual"
+              ? (resolutionRaw as "auto" | "manual")
+              : undefined;
+          // Task #324: opt-in flag so the "Recently triaged" panel can also
+          // surface dismissed tool-health alerts (and their resolution_note)
+          // alongside acknowledged + resolved rows. Accept the common truthy
+          // spellings so both `?includeDismissed=1` and `?includeDismissed=true`
+          // work from the dashboard URL params.
+          const includeDismissedRaw = (c.req.query("includeDismissed") || "")
+            .toString()
+            .toLowerCase();
+          const includeDismissed =
+            includeDismissedRaw === "1" ||
+            includeDismissedRaw === "true" ||
+            includeDismissedRaw === "yes";
+          const alerts = await getToolHealthAlertHistory(
+            days,
+            limit,
+            severity,
+            resolution,
+            { includeDismissed },
+          );
           const data = alerts.map((a: AIAlert) => {
             const parsed = parseToolHealthRelatedId(a.related_record_id);
+            // Dismissed rows (Task #324) don't have a `resolved_at` and
+            // typically lack `acknowledged_at` too — fall through to
+            // `created_at` so the dashboard always has a timestamp to render.
             const triagedAt =
               a.status === "resolved"
-                ? (a.resolved_at ?? null)
-                : (a.acknowledged_at ?? null);
+                ? (a.resolved_at ?? a.acknowledged_at ?? a.created_at ?? null)
+                : a.status === "dismissed"
+                  ? (a.acknowledged_at ?? a.created_at ?? null)
+                  : (a.acknowledged_at ?? null);
             return {
               id: a.id,
               severity: a.severity,
@@ -800,6 +974,12 @@ export const aiOpsRoutes = [
               // tool-health and prompt-regression auto-resolve sweeps
               // stamp this with an "auto-resolved" prefix.
               resolution_note: a.resolution_note ?? null,
+              // Notification delivery surface (Task #526): expose the same
+              // notified_at / notified_channel pair the open-alerts endpoint
+              // returns so the history table can render the shared
+              // renderToolHealthNotified() pill for after-action review.
+              notified_at: a.notified_at ?? null,
+              notified_channel: a.notified_channel ?? null,
             };
           });
           return c.json({ data, days, severity: severity ?? null });
@@ -897,7 +1077,25 @@ export const aiOpsRoutes = [
             return c.json({ error: "Invalid alert id" }, 400);
           }
           const resolvedBy = user.name || user.email;
-          const alert = await resolveAlert(id, undefined, resolvedBy);
+          // Task #324: optional resolution note from the manual-resolve
+          // popover. Trim and clamp so the UI can't push an unbounded
+          // blob into the column; treat empty / non-string as "no note"
+          // so resolveAlert() preserves any prior value via COALESCE.
+          let note: string | undefined;
+          try {
+            const body = await c.req.json().catch(() => null);
+            const raw = body?.note;
+            if (typeof raw === "string") {
+              const trimmed = raw.trim();
+              if (trimmed.length > 0) {
+                note = trimmed.slice(0, 1000);
+              }
+            }
+          } catch {
+            // No body / invalid JSON — fall through with no note. The
+            // legacy clients that POST without a body must still work.
+          }
+          const alert = await resolveAlert(id, note, resolvedBy);
           if (!alert) return c.json({ error: "Alert not found" }, 404);
           return c.json({ success: true, alert });
         } catch (error) {
@@ -1013,25 +1211,50 @@ export const aiOpsRoutes = [
           const severity = (ALLOWED_SEVERITIES as readonly string[]).includes(sevRaw)
             ? sevRaw
             : undefined;
-          // Pull a generous window then filter in memory — `getAIAlerts`
-          // already orders by severity tier + created_at DESC and storage
-          // health typically has a handful of rows at most (it's a single
-          // dedupe-keyed alert), so the extra filtering cost is negligible.
-          const { alerts } = await getAIAlerts({
-            alert_type: 'storage_health',
-            limit: 100,
-          });
+          // Pull each closed-status bucket separately so the in-memory
+          // filter below never silently drops rows when the volume of
+          // a single status exceeds a single page. Storage-health was
+          // originally assumed to be a single dedupe-keyed alert, but
+          // long-running deployments accumulate hundreds of rows and
+          // a fixed `limit:100` would crop newer/lower-severity entries
+          // out of the response before the status filter ever ran.
+          const [{ alerts: ackAlerts }, { alerts: resolvedAlerts }] =
+            await Promise.all([
+              getAIAlerts({
+                alert_type: 'storage_health',
+                status: 'acknowledged',
+                limit: 500,
+              }),
+              getAIAlerts({
+                alert_type: 'storage_health',
+                status: 'resolved',
+                limit: 500,
+              }),
+            ]);
+          const alerts = [...ackAlerts, ...resolvedAlerts];
           const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+          // Compute the canonical triage timestamp once per row so the
+          // status-window filter, the ordering, and the response shape
+          // all agree on which event closed the alert.
+          const triageMs = (a: AIAlert): number => {
+            const raw = a.status === 'resolved'
+              ? (a.resolved_at ?? a.acknowledged_at ?? a.created_at)
+              : (a.acknowledged_at ?? a.created_at);
+            return raw ? new Date(raw).getTime() : 0;
+          };
           const data = alerts
             .filter((a) => {
               if (a.status !== 'acknowledged' && a.status !== 'resolved') return false;
               if (severity && a.severity !== severity) return false;
-              const triagedRaw = a.status === 'resolved'
-                ? (a.resolved_at ?? a.acknowledged_at ?? a.created_at)
-                : (a.acknowledged_at ?? a.created_at);
-              const ts = triagedRaw ? new Date(triagedRaw).getTime() : 0;
-              return ts >= cutoffMs;
+              return triageMs(a) >= cutoffMs;
             })
+            // Sort by triage time DESC across BOTH status buckets so the
+            // newest closures surface first regardless of which bucket
+            // they came from. Without this re-sort the bucket-merge
+            // would always rank acknowledged rows above resolved ones
+            // and starve recent resolutions when acknowledged volume
+            // exceeds `limit`.
+            .sort((a, b) => triageMs(b) - triageMs(a))
             .slice(0, limit)
             .map((a: AIAlert) => {
               const triagedAt = a.status === 'resolved'
@@ -1071,12 +1294,46 @@ export const aiOpsRoutes = [
           const user = await requireRole(c, AI_OPS_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
           const limit = safeInt(c.req.query("limit"), 10, 1, 50);
-          const { alerts } = await getAIAlerts({
-            alert_type: "tool_health",
-            status: "resolved",
+          // Task #324: opt-in flag mirroring the history endpoint so callers
+          // can also surface dismissed tool-health alerts (and their
+          // resolution_note) in the resolved-alerts feed. Defaults off so
+          // legacy consumers keep getting just status='resolved'.
+          const includeDismissedRaw = (c.req.query("includeDismissed") || "")
+            .toString()
+            .toLowerCase();
+          const includeDismissed =
+            includeDismissedRaw === "1" ||
+            includeDismissedRaw === "true" ||
+            includeDismissedRaw === "yes";
+          const baseFilter = {
+            alert_type: "tool_health" as const,
             limit,
+          };
+          const { alerts: resolved } = await getAIAlerts({
+            ...baseFilter,
+            status: "resolved",
           });
-          const data = alerts.map((a: AIAlert) => {
+          let combined: AIAlert[] = resolved;
+          if (includeDismissed) {
+            const { alerts: dismissed } = await getAIAlerts({
+              ...baseFilter,
+              status: "dismissed",
+            });
+            // Merge + sort by closure time (resolved_at for resolved rows,
+            // acknowledged_at then created_at for dismissed) descending so
+            // the most recently closed entries surface first, then clamp
+            // back to `limit`.
+            const closureTime = (a: AIAlert): number => {
+              const t = a.resolved_at ?? a.acknowledged_at ?? a.created_at;
+              if (!t) return 0;
+              const ms = t instanceof Date ? t.getTime() : new Date(t).getTime();
+              return Number.isFinite(ms) ? ms : 0;
+            };
+            combined = [...resolved, ...dismissed]
+              .sort((a, b) => closureTime(b) - closureTime(a))
+              .slice(0, limit);
+          }
+          const data = combined.map((a: AIAlert) => {
             const parsed = parseToolHealthRelatedId(a.related_record_id);
             return {
               id: a.id,
@@ -1434,6 +1691,11 @@ export const aiOpsRoutes = [
               after: result.after,
               note,
               audit_id: result.audit_id,
+              // Forward the breach diff (Task #208) so the Slack message
+              // can render an "Impact" section showing how many alerts
+              // this threshold change opened/resolved. `null` when the
+              // aggregate query failed — notifier omits the section.
+              breach_diff: breachDiff ?? null,
             });
           } catch (notifyErr) {
             logger.error(
@@ -1482,6 +1744,246 @@ export const aiOpsRoutes = [
         } catch (error) {
           logger.error("[AI-Ops] tool-health-config audit error:", error);
           return c.json({ error: "Failed to load config audit" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Prompt-regression threshold tuning — read endpoint (Task #754).
+   *
+   * Mirrors the tool-health threshold GET shape so the dashboard can
+   * render the same "currently effective", "your override", "env baseline",
+   * "compile-time default" 4-up the operator already knows. Available to
+   * AI_OPS_ROLES so non-admin ops can verify the live floor while triaging
+   * a prompt-regression alert, even if they can't edit it.
+   */
+  {
+    path: "/api/ai-ops/prompt-regression-config",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const {
+            getPromptRegressionConfigRow,
+            getPromptRegressionConfigAudit,
+            PROMPT_REGRESSION_CONFIG_FIELDS,
+          } = await import("../../utils/promptRegressionConfigDatabase");
+          const {
+            PROMPT_REGRESSION_DEFAULTS,
+            PROMPT_REGRESSION_ENV_BASELINE,
+            PROMPT_REGRESSION_BOUNDS,
+            mergePromptRegressionOverrides,
+          } = await import(
+            "../../mastra/workflows/promptRegressionAlertsCron"
+          );
+
+          const [row, audit] = await Promise.all([
+            getPromptRegressionConfigRow(),
+            getPromptRegressionConfigAudit(25),
+          ]);
+          const effective = mergePromptRegressionOverrides(row.overrides);
+
+          return c.json({
+            data: {
+              defaults: PROMPT_REGRESSION_DEFAULTS,
+              env_baseline: PROMPT_REGRESSION_ENV_BASELINE,
+              overrides: row.overrides,
+              effective,
+              updated_by: row.updated_by,
+              updated_at: row.updated_at,
+              bounds: PROMPT_REGRESSION_BOUNDS,
+              fields: PROMPT_REGRESSION_CONFIG_FIELDS,
+              audit,
+              can_edit: TOOL_HEALTH_CONFIG_WRITE_ROLES.includes(
+                user.role as UserRole,
+              ),
+            },
+          });
+        } catch (error) {
+          logger.error(
+            "[AI-Ops] prompt-regression-config GET error:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to load prompt-regression config" },
+            500,
+          );
+        }
+      };
+    },
+  },
+
+  /**
+   * Prompt-regression threshold tuning — write endpoint (Task #754).
+   *
+   * Body: { overrides: { <field>: number | null, ... }, note?: string }
+   * - A `number` sets/replaces the override for that field.
+   * - `null` clears the override (falls back to env baseline).
+   * - Fields not listed in `overrides` are left as-is.
+   *
+   * Validates each provided field against PROMPT_REGRESSION_BOUNDS. Each
+   * write inserts an audit row capturing before/after JSON and the
+   * operator's name/email. Admin-only (TOOL_HEALTH_CONFIG_WRITE_ROLES) so
+   * the same role gate that protects tool-health thresholds protects this.
+   */
+  {
+    path: "/api/ai-ops/prompt-regression-config",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, TOOL_HEALTH_CONFIG_WRITE_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          let body: any;
+          try {
+            body = await c.req.json();
+          } catch {
+            return c.json({ error: "Request body must be valid JSON" }, 400);
+          }
+          if (!body || typeof body !== "object") {
+            return c.json({ error: "Request body must be a JSON object" }, 400);
+          }
+
+          let note: string | null = null;
+          if (body.note != null) {
+            if (typeof body.note !== "string") {
+              return c.json({ error: "note must be a string" }, 400);
+            }
+            note = body.note.length > 500 ? body.note.slice(0, 500) : body.note;
+          }
+
+          const overridesIn = body.overrides;
+          if (
+            overridesIn == null ||
+            typeof overridesIn !== "object" ||
+            Array.isArray(overridesIn)
+          ) {
+            return c.json(
+              { error: "overrides must be an object" },
+              400,
+            );
+          }
+
+          const {
+            PROMPT_REGRESSION_BOUNDS,
+            PROMPT_REGRESSION_DEFAULTS,
+          } = await import(
+            "../../mastra/workflows/promptRegressionAlertsCron"
+          );
+          const validFields = Object.keys(
+            PROMPT_REGRESSION_DEFAULTS,
+          ) as Array<keyof typeof PROMPT_REGRESSION_DEFAULTS>;
+
+          const cleanOverrides: {
+            [K in keyof typeof PROMPT_REGRESSION_DEFAULTS]?: number | null;
+          } = {};
+          for (const field of validFields) {
+            if (!Object.prototype.hasOwnProperty.call(overridesIn, field)) {
+              continue;
+            }
+            const raw = overridesIn[field];
+            if (raw === null) {
+              cleanOverrides[field] = null;
+              continue;
+            }
+            if (typeof raw !== "number" || !Number.isFinite(raw)) {
+              return c.json(
+                { error: `${field} must be an integer or null` },
+                400,
+              );
+            }
+            const n = Math.floor(raw);
+            if (n !== raw) {
+              return c.json(
+                { error: `${field} must be an integer` },
+                400,
+              );
+            }
+            const bounds = PROMPT_REGRESSION_BOUNDS[field];
+            if (n < bounds.min || n > bounds.max) {
+              return c.json(
+                {
+                  error: `${field} must be between ${bounds.min} and ${bounds.max}`,
+                },
+                400,
+              );
+            }
+            cleanOverrides[field] = n;
+          }
+
+          const {
+            setPromptRegressionConfigOverrides,
+            getPromptRegressionConfigRow,
+          } = await import("../../utils/promptRegressionConfigDatabase");
+          const { mergePromptRegressionOverrides } = await import(
+            "../../mastra/workflows/promptRegressionAlertsCron"
+          );
+
+          const changedBy = user.name || user.email || `user:${user.userId}`;
+          const result = await setPromptRegressionConfigOverrides({
+            overrides: cleanOverrides,
+            changedBy,
+            note,
+          });
+          const refreshed = await getPromptRegressionConfigRow();
+          const effective = mergePromptRegressionOverrides(refreshed.overrides);
+
+          return c.json({
+            success: true,
+            before: result.before,
+            after: result.after,
+            effective,
+            audit_id: result.audit_id,
+          });
+        } catch (error) {
+          logger.error(
+            "[AI-Ops] prompt-regression-config PUT error:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to update prompt-regression config" },
+            500,
+          );
+        }
+      };
+    },
+  },
+
+  /**
+   * Prompt-regression threshold tuning — audit endpoint (Task #754).
+   *
+   * Returns the most recent N change rows, newest first. Same role gate as
+   * the GET endpoint so non-admin ops can audit the change history while
+   * triaging an alert without being able to flip the floor themselves.
+   */
+  {
+    path: "/api/ai-ops/prompt-regression-config/audit",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const limit = safeInt(c.req.query("limit"), 25, 1, 200);
+          const { getPromptRegressionConfigAudit } = await import(
+            "../../utils/promptRegressionConfigDatabase"
+          );
+          const data = await getPromptRegressionConfigAudit(limit);
+          return c.json({ data });
+        } catch (error) {
+          logger.error(
+            "[AI-Ops] prompt-regression-config audit error:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to load prompt-regression config audit" },
+            500,
+          );
         }
       };
     },
@@ -1877,6 +2379,155 @@ export const aiOpsRoutes = [
         } catch (error) {
           logger.error("[AI-Ops] metrics-retention GET error:", error);
           return c.json({ error: "Failed to load retention config" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * AI usage history retention — CSV export endpoint (Task #652).
+   *
+   * Streams the full retention audit history (config changes + manual
+   * "Prune now" rows) matching the supplied date-range filter as a CSV
+   * attachment so admins can hand the timeline to compliance / management
+   * during an incident review without DB access.
+   *
+   * Mirrors the GET endpoint's `from` / `to` validation (ISO-8601, from
+   * must be on or before to) but intentionally does NOT accept `limit`
+   * or `offset` — the export is meant to bypass the 100-row paging
+   * ceiling and return every matching row in one shot. Streaming is
+   * server-side via {@link streamAiMetricsRetentionAudit} so a multi-year
+   * history doesn't have to fit in memory.
+   *
+   * The CSV columns mirror the dashboard audit row layout
+   * (timestamp, operator, before days, after days, note). Filename
+   * encodes the active filter window (or `all` when unfiltered) so an
+   * exported file is self-describing.
+   *
+   * Gated by AI_OPS_ROLES — same authorization gate as the GET endpoint.
+   */
+  {
+    path: "/api/ai-ops/metrics-retention/export.csv",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const rawFrom = c.req.query("from");
+          const rawTo = c.req.query("to");
+
+          let auditFrom: Date | null = null;
+          if (rawFrom != null && String(rawFrom).trim() !== "") {
+            const d = new Date(String(rawFrom));
+            if (Number.isNaN(d.getTime())) {
+              return c.json(
+                { error: "from must be a valid ISO-8601 timestamp" },
+                400,
+              );
+            }
+            auditFrom = d;
+          }
+
+          let auditTo: Date | null = null;
+          if (rawTo != null && String(rawTo).trim() !== "") {
+            const d = new Date(String(rawTo));
+            if (Number.isNaN(d.getTime())) {
+              return c.json(
+                { error: "to must be a valid ISO-8601 timestamp" },
+                400,
+              );
+            }
+            auditTo = d;
+          }
+          if (auditFrom && auditTo && auditFrom.getTime() > auditTo.getTime()) {
+            return c.json(
+              { error: "from must be on or before to" },
+              400,
+            );
+          }
+
+          const { streamAiMetricsRetentionAudit } = await import(
+            "../../utils/aiMetricsRetentionConfig"
+          );
+
+          // RFC 4180 quoting — wrap every field in quotes and double any
+          // embedded quote so audit notes containing commas, newlines, or
+          // quote characters round-trip cleanly into Excel / Sheets.
+          const csvField = (raw: unknown): string => {
+            if (raw == null) return '""';
+            const s = String(raw);
+            return '"' + s.replace(/"/g, '""') + '"';
+          };
+
+          const lines: string[] = [];
+          lines.push(
+            ["timestamp", "operator", "before_days", "after_days", "note"]
+              .map(csvField)
+              .join(","),
+          );
+
+          // Normalize the audit row's `changed_at` to an ISO-8601 string
+          // without an `any` escape hatch — pg can hand back either a
+          // `Date` (default) or a string when type parsers are
+          // overridden, so accept both explicitly and reject anything
+          // else with a typed error rather than silently coercing
+          // `null`/`undefined` into "Invalid Date".
+          const toIsoTimestamp = (value: Date | string): string => {
+            if (value instanceof Date) return value.toISOString();
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) {
+              throw new TypeError(
+                `Unparseable changed_at value in retention audit row: ${String(value)}`,
+              );
+            }
+            return parsed.toISOString();
+          };
+
+          for await (const row of streamAiMetricsRetentionAudit({
+            from: auditFrom,
+            to: auditTo,
+          })) {
+            const ts = toIsoTimestamp(row.changed_at);
+            lines.push(
+              [
+                csvField(ts),
+                csvField(row.changed_by),
+                csvField(row.before_days == null ? "" : row.before_days),
+                csvField(row.after_days == null ? "" : row.after_days),
+                csvField(row.note ?? ""),
+              ].join(","),
+            );
+          }
+
+          // Filename window — date-only stamp keeps the name short, and
+          // the `all` sentinel is used when neither bound was supplied so
+          // the file is still self-describing in that case. Includes the
+          // export instant so two exports taken back-to-back don't collide
+          // in a downloads folder.
+          const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+          const fromTag = auditFrom ? isoDay(auditFrom) : "all";
+          const toTag = auditTo ? isoDay(auditTo) : "all";
+          const stamp = new Date()
+            .toISOString()
+            .replace(/[:.]/g, "-");
+          const filename = `ai-metrics-retention-audit_${fromTag}_to_${toTag}_${stamp}.csv`;
+
+          // Trailing newline per RFC 4180 §2.2 — some parsers (notably
+          // older Excel imports) silently drop the final record without it.
+          const body = lines.join("\r\n") + "\r\n";
+
+          c.header("Content-Type", "text/csv; charset=utf-8");
+          c.header("Content-Disposition", `attachment; filename="${filename}"`);
+          c.header("Cache-Control", "no-store");
+          return c.body(body, 200);
+        } catch (error) {
+          logger.error(
+            "[AI-Ops] metrics-retention export.csv error",
+            error as Error,
+          );
+          return c.json({ error: "Failed to export retention audit" }, 500);
         }
       };
     },
@@ -2301,9 +2952,9 @@ export const aiOpsRoutes = [
               audit_id,
             });
           } catch (notifyErr) {
-            console.error(
-              "[AI-Ops] metrics-retention prune-now notify error (best-effort):",
-              notifyErr,
+            logger.error(
+              "[AI-Ops] metrics-retention prune-now notify error (best-effort)",
+              { error: notifyErr instanceof Error ? notifyErr.message : String(notifyErr) },
             );
           }
 
@@ -2317,6 +2968,39 @@ export const aiOpsRoutes = [
         } catch (error) {
           logger.error("[AI-Ops] metrics-retention prune-now error", error as Error);
           return c.json({ error: "Failed to run manual prune" }, 500);
+        }
+      };
+    },
+  },
+
+  /**
+   * Read-only audit view of TOOL_GOVERNANCE_POLICIES (Task #651).
+   *
+   * Powers the "Tool Governance" tab on /ai-ops, which lists every AI
+   * tool the consultant agent can invoke, grouped by gate disposition
+   * (HIGH/MEDIUM/LOW gated, gate-exempt, read-only allowlisted) so
+   * auditors and admins can see at a glance which tools require human
+   * approval and which bypass the gate. The view is derived from the
+   * same registry the runtime gate consults (see
+   * src/utils/aiToolGovernance.ts) so it can never drift from the file.
+   *
+   * Open to all AI_OPS_ROLES because the underlying governance file is
+   * already source-controlled and visible to every engineer with repo
+   * access — this endpoint just renders that audit artifact.
+   */
+  {
+    path: "/api/ai-ops/tool-governance",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, AI_OPS_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+          const overview = getToolGovernanceOverview();
+          return c.json(overview);
+        } catch (error) {
+          logger.error("[AI-Ops] tool-governance error:", error);
+          return c.json({ error: "Failed to load tool governance overview" }, 500);
         }
       };
     },

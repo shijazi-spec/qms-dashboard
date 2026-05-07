@@ -287,8 +287,68 @@ async function runAttachmentAudit(
   };
 }
 
-export async function runDirectAudit(logger?: any) {
-  logger?.info("🔍 [DirectAudit] Starting direct quality audit...");
+// User-selected date filter forwarded from the dashboard's upper-area
+// Created/Modified pickers via /api/audit/trigger. Either pair (or both)
+// may be set; both being set means a record must match BOTH ranges.
+// When unset (cron-driven audits), all records are scanned.
+export interface AuditDateFilters {
+  created?: { start?: string | null; end?: string | null };
+  modified?: { start?: string | null; end?: string | null };
+}
+
+function hasAnyAuditFilter(f?: AuditDateFilters): boolean {
+  if (!f) return false;
+  const c = f.created || {};
+  const m = f.modified || {};
+  return !!(c.start || c.end || m.start || m.end);
+}
+
+// Apply the user-selected created/modified window to the records actually
+// scanned by this audit run. Mirrors the semantics of
+// isRecordInSeparateDateFilters in src/data/index.ts but operates on
+// ZohoCRMRecord (which nests timestamps under .data) so the live Zoho
+// pipeline and the cached-leads pipeline stay consistent.
+function filterRecordsByAuditDateFilters(
+  records: ZohoCRMRecord[],
+  filters: AuditDateFilters,
+): ZohoCRMRecord[] {
+  const cStart = filters.created?.start || null;
+  const cEnd = filters.created?.end || null;
+  const mStart = filters.modified?.start || null;
+  const mEnd = filters.modified?.end || null;
+  const hasC = !!(cStart && cEnd);
+  const hasM = !!(mStart && mEnd);
+  if (!hasC && !hasM) return records;
+
+  const inRange = (iso: string | undefined | null, s: string, e: string) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return false;
+    const start = new Date(s); start.setHours(0, 0, 0, 0);
+    const end = new Date(e); end.setHours(23, 59, 59, 999);
+    return d >= start && d <= end;
+  };
+
+  return records.filter((rec) => {
+    const created = rec.data?.Created_Time || rec.createdTime || null;
+    const modified = rec.data?.Modified_Time || rec.modifiedTime || null;
+    let cMatch = true;
+    let mMatch = true;
+    if (hasC) cMatch = inRange(created, cStart!, cEnd!);
+    if (hasM) mMatch = inRange(modified, mStart!, mEnd!);
+    if (hasC && hasM) return cMatch && mMatch;
+    return hasC ? cMatch : mMatch;
+  });
+}
+
+export async function runDirectAudit(
+  logger?: any,
+  dateFilters?: AuditDateFilters,
+) {
+  logger?.info("🔍 [DirectAudit] Starting direct quality audit...", {
+    dateFiltersApplied: hasAnyAuditFilter(dateFilters),
+    filters: dateFilters || null,
+  });
 
   const hasZohoCredentials = !!(process.env.ZOHO_ACCESS_TOKEN || (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN));
 
@@ -359,6 +419,21 @@ export async function runDirectAudit(logger?: any) {
             }
           }
           if (!allRecords) throw lastErr || new Error(`Failed to fetch ${moduleName}`);
+
+          // Scope the records actually audited to the user-selected
+          // Created/Modified window when one is supplied. This is what
+          // makes "Period Covered" in Audit History line up with the
+          // upper-area filter the user picked when they clicked
+          // "Run AI Audit" — and keeps every downstream count
+          // (records audited, issues, scores) consistent with that window.
+          if (hasAnyAuditFilter(dateFilters)) {
+            const before = allRecords.length;
+            allRecords = filterRecordsByAuditDateFilters(allRecords, dateFilters!);
+            logger?.info(
+              `🔎 [DirectAudit] ${moduleName}: filtered ${before} → ${allRecords.length} records by user-selected period`,
+            );
+          }
+
           const recordCount = allRecords.length;
           totalRecordsAudited += recordCount;
 
@@ -499,7 +574,16 @@ export async function runDirectAudit(logger?: any) {
       },
     };
 
-    const savedResult = await saveAuditResult(auditData);
+    const savedResult = await saveAuditResult({
+      ...auditData,
+      // Persist the user-selected period (from the upper-area Created /
+      // Modified pickers) so Audit History can render an accurate
+      // "Period Covered" cell instead of falling back to "All Data".
+      period_created_start: dateFilters?.created?.start ?? null,
+      period_created_end: dateFilters?.created?.end ?? null,
+      period_modified_start: dateFilters?.modified?.start ?? null,
+      period_modified_end: dateFilters?.modified?.end ?? null,
+    });
     logger?.info("✅ [DirectAudit] Audit results saved to database successfully");
 
     // Slack notification — audit completed. Posts to SLACK_CHANNEL_ID using
