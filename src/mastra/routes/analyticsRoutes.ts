@@ -1,3 +1,5 @@
+import "../../utils/executiveDigest";
+
 const ANALYTICS_READ_ROLES = [
   "admin",
   "quality_manager",
@@ -194,7 +196,11 @@ export const analyticsRoutes = [
             ),
           );
         } catch (error) {
-          return c.json({ error: "Failed to export digest issues to XLSX" }, 500);
+          console.error("[digest/issues.xlsx] export failed:", error);
+          return c.json({
+            error: "Failed to export digest issues to XLSX",
+            detail: error instanceof Error ? error.message : String(error),
+          }, 500);
         }
       };
     },
