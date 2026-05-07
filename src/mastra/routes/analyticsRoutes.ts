@@ -150,6 +150,52 @@ export const analyticsRoutes = [
     },
   },
   {
+    path: "/api/analytics/executive-digest/health",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...ANALYTICS_READ_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for executive digest diagnostics",
+            );
+          const { getDigestDeliveryHealth } =
+            await import("../../utils/executiveDigest");
+          const periodQuery = String(
+            c.req.query("period") || "weekly",
+          ).toLowerCase();
+          const cadence =
+            periodQuery === "monthly" || periodQuery === "quarterly"
+              ? periodQuery
+              : "weekly";
+          const health = await getDigestDeliveryHealth(cadence as any, new Date());
+          return c.json({
+            success: true,
+            health,
+            guidance: {
+              manual_force_send_endpoint: "/api/analytics/executive-digest/send",
+              manual_force_send_payload: {
+                target: "slack",
+                period: cadence,
+                preview: false,
+                force: true,
+              },
+            },
+          });
+        } catch (error) {
+          return c.json(
+            { error: "Failed to fetch executive digest diagnostics" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/analytics/executive-digest/send",
     method: "POST" as const,
     createHandler: async () => {
@@ -179,18 +225,21 @@ export const analyticsRoutes = [
           const target = String(body.target || "email").toLowerCase();
           const period = String(body.period || "weekly").toLowerCase();
           const preview = !!body.preview;
+          const force = !!body.force;
           const cadence =
             period === "monthly" || period === "quarterly"
               ? period
               : "weekly";
           const now = new Date();
           const window = computeDigestWindow(cadence as any, now);
+          const enforceIdempotency = !force;
           if (target === "slack") {
             const result = await sendDigestSlack({
               cadence: cadence as any,
               now,
               window,
               preview,
+              enforceIdempotency,
             });
             return c.json(result);
           }
@@ -199,6 +248,7 @@ export const analyticsRoutes = [
               now,
               window,
               preview,
+              enforceIdempotency,
             });
             return c.json(result);
           }
@@ -206,6 +256,7 @@ export const analyticsRoutes = [
             cadence: cadence as any,
             now,
             window,
+            enforceIdempotency,
           });
           return c.json(result);
         } catch (error) {

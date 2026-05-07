@@ -76,6 +76,11 @@ await suite.test("slack block payload renders 4 digest sections", async () => {
       total_issues: 24,
       severity_counts: { critical: 4, high: 7, medium: 9, low: 4, total: 24 },
     },
+    finding_types: [
+      { module: "Deals", issue_type: "missing_required_document", severity: "high", count: 6 },
+      { module: "Leads", issue_type: "invalid_email_format", severity: "medium", count: 5 },
+      { module: "Deals", issue_type: "stale_stage", severity: "high", count: 4 },
+    ],
     business_sections: [
       {
         id: "sdr_leads_only",
@@ -124,6 +129,7 @@ await suite.test("slack block payload renders 4 digest sections", async () => {
   suite.expect(textBlob.includes("MarketPlace Leads & Deals"), "contains MarketPlace section");
   suite.expect(textBlob.includes("Severity"), "contains severity split");
   suite.expect(textBlob.includes("Records Audited"), "contains top audited records summary");
+  suite.expect(textBlob.includes("All Finding Types"), "contains all finding types section");
 });
 
 await suite.test("fanout isolates channel failures (email fail, slack skipped)", async () => {

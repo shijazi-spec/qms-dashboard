@@ -306,6 +306,7 @@ export async function runDirectAudit(logger?: any) {
   let lowIssues = 0;
   const moduleBreakdown: Array<{ module: string; recordsAudited: number; issuesFound: number }> = [];
   const topIssues: Array<{ module: string; issueType: string; count: number; severity: string }> = [];
+  let allFindingTypes: Array<{ module: string; issueType: string; count: number; severity: string }> = [];
   let auditSuccess = false;
   let skipReason = "";
   const detailedIssues: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; stage: string; pipeline: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }> = [];
@@ -456,17 +457,16 @@ export async function runDirectAudit(logger?: any) {
         totalRecordsAudited
       );
 
-      topIssues.push(
-        ...Object.entries(issueTypeCounts)
-          .map(([key, data]) => ({
-            module: data.module,
-            issueType: key.split('-').slice(1).join('-'),
-            count: data.count,
-            severity: data.severity,
-          }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 10)
-      );
+      allFindingTypes = Object.entries(issueTypeCounts)
+        .map(([key, data]) => ({
+          module: data.module,
+          issueType: key.split("-").slice(1).join("-"),
+          count: data.count,
+          severity: data.severity,
+        }))
+        .sort((a, b) => b.count - a.count);
+
+      topIssues.push(...allFindingTypes.slice(0, 10));
 
       auditSuccess = true;
     } catch (error) {
@@ -528,6 +528,24 @@ export async function runDirectAudit(logger?: any) {
           .filter((m: any) => m.recordsAudited > 0)
           .map((m: any) => `• *${m.module}*: ${m.recordsAudited.toLocaleString()} records, ${m.issuesFound.toLocaleString()} issues`)
           .join("\n");
+        const findingTypeLines = allFindingTypes.map(
+          (f) =>
+            `• *${f.module}* / ${f.issueType}: ${f.count.toLocaleString()} _(${f.severity})_`,
+        );
+        const findingTypeChunks: string[] = [];
+        if (findingTypeLines.length > 0) {
+          let currentChunk = "";
+          for (const line of findingTypeLines) {
+            const candidate = currentChunk ? `${currentChunk}\n${line}` : line;
+            if (candidate.length > 2800) {
+              if (currentChunk) findingTypeChunks.push(currentChunk);
+              currentChunk = line;
+            } else {
+              currentChunk = candidate;
+            }
+          }
+          if (currentChunk) findingTypeChunks.push(currentChunk);
+        }
         const dashUrl = process.env.PUBLIC_DASHBOARD_URL || "https://qms-dashboard.replit.app/";
         const generatedAtKsa = new Date().toLocaleString("en-GB", {
           timeZone: "Asia/Riyadh",
@@ -586,6 +604,22 @@ export async function runDirectAudit(logger?: any) {
           blocks.push({
             type: "section",
             text: { type: "mrkdwn", text: `*Module Breakdown:*\n${moduleSummary}` },
+          });
+        }
+
+        if (findingTypeChunks.length > 0) {
+          blocks.push({ type: "divider" });
+          findingTypeChunks.forEach((chunk, idx) => {
+            blocks.push({
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text:
+                  idx === 0
+                    ? `*All Finding Types (${allFindingTypes.length})*\n${chunk}`
+                    : `*All Finding Types (continued ${idx + 1})*\n${chunk}`,
+              },
+            });
           });
         }
 

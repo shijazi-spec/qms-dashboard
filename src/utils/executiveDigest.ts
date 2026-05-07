@@ -7,6 +7,7 @@ import {
   fetchAllZohoRecords,
   type ZohoCRMRecord,
 } from "./zohoCRM";
+import { getGovernanceDocumentByModule } from "./database";
 
 const { Pool } = pg;
 
@@ -105,6 +106,12 @@ export interface DigestData {
     total_issues: number;
     severity_counts: DigestSeveritySummary;
   };
+  finding_types: Array<{
+    module: string;
+    issue_type: string;
+    severity: string;
+    count: number;
+  }>;
   business_sections: DigestBusinessSection[];
 }
 
@@ -142,6 +149,21 @@ export interface DigestFanoutResult {
   window: DigestWindow;
   email: DigestSendResult;
   slack: DigestSendResult;
+}
+
+export interface DigestDeliveryHealth {
+  cadence: DigestCadence;
+  window_start: string;
+  window_end: string;
+  run_key_slack: string;
+  run_key_email: string;
+  slack_enabled: boolean;
+  direct_audit_slack_enabled: boolean;
+  has_slack_credentials: boolean;
+  slack_channel_resolved: string | null;
+  has_digest_email_recipient: boolean;
+  idempotent_run_exists_slack: boolean;
+  idempotent_run_exists_email: boolean;
 }
 
 function toKsaShifted(date: Date): Date {
@@ -334,13 +356,16 @@ function matchesRule(record: ZohoCRMRecord, rule: DigestSectionRule): boolean {
 function buildBusinessSections(
   records: ZohoCRMRecord[],
   rules: DigestSectionRule[],
+  governanceRulesByModule: Record<string, any[]>,
 ): DigestBusinessSection[] {
   const recordSeverityMap = new Map<
     string,
     { critical: number; high: number; medium: number; low: number; total: number }
   >();
   for (const record of records) {
-    const issues = analyzeRecordHygiene(record, DEFAULT_GOVERNANCE_RULES);
+    const governanceRules =
+      governanceRulesByModule[record.module] || DEFAULT_GOVERNANCE_RULES;
+    const issues = analyzeRecordHygiene(record, governanceRules);
     const sev = { critical: 0, high: 0, medium: 0, low: 0, total: 0 };
     for (const issue of issues) {
       sev.total++;
@@ -390,6 +415,65 @@ function buildBusinessSections(
       health_score: itemHealth,
     };
   });
+}
+
+async function resolveDigestGovernanceRulesByModule(): Promise<
+  Record<string, any[]>
+> {
+  const modules = ["Leads", "Deals"] as const;
+  const byModule: Record<string, any[]> = {
+    Leads: DEFAULT_GOVERNANCE_RULES,
+    Deals: DEFAULT_GOVERNANCE_RULES,
+  };
+  for (const moduleName of modules) {
+    try {
+      const moduleDoc = await getGovernanceDocumentByModule(moduleName);
+      const rawRules = moduleDoc?.rules_json;
+      if (!rawRules) continue;
+      const parsed =
+        typeof rawRules === "string" ? JSON.parse(rawRules) : rawRules;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        byModule[moduleName] = parsed;
+        continue;
+      }
+      if (parsed?.rules && Array.isArray(parsed.rules) && parsed.rules.length > 0) {
+        byModule[moduleName] = parsed.rules;
+      }
+    } catch (err) {
+      logger.warn("[Digest] Failed to load governance rules; using defaults", {
+        moduleName,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return byModule;
+}
+
+function summarizeFindingTypes(
+  records: ZohoCRMRecord[],
+  governanceRulesByModule: Record<string, any[]>,
+): Array<{ module: string; issue_type: string; severity: string; count: number }> {
+  const counts = new Map<string, { module: string; issue_type: string; severity: string; count: number }>();
+  for (const record of records) {
+    const governanceRules =
+      governanceRulesByModule[record.module] || DEFAULT_GOVERNANCE_RULES;
+    const issues = analyzeRecordHygiene(record, governanceRules);
+    for (const issue of issues) {
+      const key = `${issue.module}::${issue.issueType}`;
+      const existing = counts.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        counts.set(key, {
+          module: issue.module,
+          issue_type: issue.issueType,
+          severity: issue.severity,
+          count: 1,
+        });
+      }
+    }
+  }
+  return Array.from(counts.values()).sort((a, b) => b.count - a.count);
 }
 
 export function computeDigestWindow(
@@ -698,7 +782,16 @@ export async function generateDigestData(
   }
 
   const sectionRules = options.sectionRules || resolveDigestSectionRules();
-  const businessSections = buildBusinessSections(businessRecords, sectionRules);
+  const governanceRulesByModule = await resolveDigestGovernanceRulesByModule();
+  const findingTypes = summarizeFindingTypes(
+    businessRecords,
+    governanceRulesByModule,
+  );
+  const businessSections = buildBusinessSections(
+    businessRecords,
+    sectionRules,
+    governanceRulesByModule,
+  );
   const overallSeverity: DigestSeveritySummary = {
     critical: 0,
     high: 0,
@@ -775,6 +868,7 @@ export async function generateDigestData(
       total_issues: overallSeverity.total,
       severity_counts: overallSeverity,
     },
+    finding_types: findingTypes,
     business_sections: businessSections,
   };
 }
@@ -899,7 +993,25 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
       text: `*${section.title}*\n• Total: *${section.total}* (Leads ${section.leads} / Deals ${section.deals})\n• New: *${section.new_in_window}*\n• Progressed: *${section.progressed}* | Stalled: *${section.stalled}*\n• Severity: C *${section.severity_counts.critical}* / H *${section.severity_counts.high}* / M *${section.severity_counts.medium}* / L *${section.severity_counts.low}*\n• Health: ${healthEmoji(section.health_score)} *${section.health_score}%*`,
     },
   }));
-  return [
+  const findingTypeLines = data.finding_types.map(
+    (f) =>
+      `• *${f.module}* / ${f.issue_type}: ${f.count} _(${f.severity})_`,
+  );
+  const findingTypeChunks: string[] = [];
+  if (findingTypeLines.length > 0) {
+    let currentChunk = "";
+    for (const line of findingTypeLines) {
+      const candidate = currentChunk ? `${currentChunk}\n${line}` : line;
+      if (candidate.length > 2800) {
+        if (currentChunk) findingTypeChunks.push(currentChunk);
+        currentChunk = line;
+      } else {
+        currentChunk = candidate;
+      }
+    }
+    if (currentChunk) findingTypeChunks.push(currentChunk);
+  }
+  const blocks: any[] = [
     {
       type: "header",
       text: {
@@ -964,6 +1076,22 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
       ],
     },
   ];
+  if (findingTypeChunks.length > 0) {
+    blocks.push({ type: "divider" });
+    findingTypeChunks.forEach((chunk, idx) => {
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text:
+            idx === 0
+              ? `*All Finding Types (${data.finding_types.length})*\n${chunk}`
+              : `*All Finding Types (continued ${idx + 1})*\n${chunk}`,
+        },
+      });
+    });
+  }
+  return blocks;
 }
 
 function resolveSlackChannel(cadence: DigestCadence, override?: string): string | null {
@@ -1152,4 +1280,40 @@ export async function runDigestFanout(
       ? slackResult.value
       : ({ success: false, error: slackResult.reason ? String(slackResult.reason) : "slack fanout failed" } as DigestSendResult);
   return { cadence, window, email, slack };
+}
+
+export async function getDigestDeliveryHealth(
+  cadence: DigestCadence = "weekly",
+  now = new Date(),
+): Promise<DigestDeliveryHealth> {
+  const window = computeDigestWindow(cadence, now);
+  const runKeySlack = buildDigestRunKey(cadence, window, "slack");
+  const runKeyEmail = buildDigestRunKey(cadence, window, "email");
+  const slackEnabled = envBool("DIGEST_SLACK_NOTIFY", true);
+  const directAuditSlackEnabled = envBool("DIRECT_AUDIT_SLACK_NOTIFY", true);
+  const hasSlackCredentials = !!(
+    process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN
+  );
+  const slackChannelResolved = resolveSlackChannel(cadence);
+  const hasDigestEmailRecipient = !!(
+    process.env.QUALITY_DIGEST_EMAIL || process.env.ADMIN_EMAIL
+  );
+  const [idempotentRunExistsSlack, idempotentRunExistsEmail] = await Promise.all([
+    hasSuccessfulDigestRun(runKeySlack),
+    hasSuccessfulDigestRun(runKeyEmail),
+  ]);
+  return {
+    cadence,
+    window_start: window.start.toISOString(),
+    window_end: window.end.toISOString(),
+    run_key_slack: runKeySlack,
+    run_key_email: runKeyEmail,
+    slack_enabled: slackEnabled,
+    direct_audit_slack_enabled: directAuditSlackEnabled,
+    has_slack_credentials: hasSlackCredentials,
+    slack_channel_resolved: slackChannelResolved,
+    has_digest_email_recipient: hasDigestEmailRecipient,
+    idempotent_run_exists_slack: idempotentRunExistsSlack,
+    idempotent_run_exists_email: idempotentRunExistsEmail,
+  };
 }
