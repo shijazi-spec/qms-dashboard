@@ -35,6 +35,7 @@ const GETS = [
   "/api/analytics/capa-recurrence",
   "/api/analytics/trends",
   "/api/analytics/executive-digest",
+  "/api/analytics/executive-digest/health",
 ];
 
 for (const p of GETS) {
