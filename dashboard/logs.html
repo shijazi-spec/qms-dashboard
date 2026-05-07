@@ -43,13 +43,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
     <script src="/js/streaming-download.js?v=2.2.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -116,7 +116,7 @@
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-redaction-sweep">
             <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
@@ -136,7 +136,7 @@
 
         <div id="postRestoreAlertsCard" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-post-restore-alerts">
             <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
@@ -156,7 +156,7 @@
 
         <div id="alertRecipientsCard" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8" data-testid="card-alert-recipients">
             <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
@@ -260,7 +260,7 @@
                     <input type="text" id="filterSearch" placeholder="User or description..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
             </div>
-            <div class="flex justify-end space-x-3 mt-4">
+            <div class="flex justify-end gap-3 mt-4">
                 <button data-on-click="clearFilters" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
                     Clear Filters
                 </button>
@@ -268,7 +268,7 @@
                     Apply Filters
                 </button>
                 <button id="exportLogsBtn" data-on-click="exportCSV" data-pass-event="true" data-estimate-url="/api/logs/export" data-testid="button-export-logs-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition font-medium">
-                    Export CSV <span data-size-hint class="ml-1 text-xs opacity-90"></span>
+                    Export CSV <span data-size-hint class="ms-1 text-xs opacity-90"></span>
                 </button>
             </div>
         </div>
@@ -284,15 +284,15 @@
                 <table class="w-full">
                     <thead class="bg-gray-50 border-b border-gray-200">
                         <tr>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">User</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Role</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Action</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity Type</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity</th>
-                            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Description</th>
-                            <th class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">AI</th>
-                            <th class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Severity</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Date/Time</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">User</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Role</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Action</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity Type</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Entity</th>
+                            <th scope="col" class="text-start px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Description</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">AI</th>
+                            <th scope="col" class="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Severity</th>
                         </tr>
                     </thead>
                     <tbody id="logsTable" class="divide-y divide-gray-200">
@@ -310,7 +310,7 @@
                 </table>
             </div>
             <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center gap-2">
                     <span class="text-sm text-gray-700">Page Size:</span>
                     <select id="pageSize" data-on-change="loadLogs" data-args="[1]" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
                         <option value="10">10</option>
@@ -319,7 +319,7 @@
                         <option value="100">100</option>
                     </select>
                 </div>
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center gap-2">
                     <button id="prevPage" data-on-click="loadLogs" data-args="[${currentPage - 1}]" class="px-3 py-1 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                         Previous
                     </button>
@@ -698,7 +698,7 @@
         function renderSweepBreakdownRow(label, info) {
             if (info && typeof info === 'object' && 'skipped' in info) {
                 return '<tr>' +
-                    '<td class="py-1 pr-4 text-gray-600">' + escapeHtml(label) + '</td>' +
+                    '<td class="py-1 pe-4 text-gray-600">' + escapeHtml(label) + '</td>' +
                     '<td class="py-1 text-gray-400 italic">skipped (' + escapeHtml(info.skipped) + ')</td>' +
                     '</tr>';
             }
@@ -707,7 +707,7 @@
             let value = escapeHtml(updated == null ? 0 : updated);
             if (scanned !== null) value += ' <span class="text-gray-400">(scanned ' + escapeHtml(scanned) + ')</span>';
             return '<tr>' +
-                '<td class="py-1 pr-4 text-gray-600">' + escapeHtml(label) + '</td>' +
+                '<td class="py-1 pe-4 text-gray-600">' + escapeHtml(label) + '</td>' +
                 '<td class="py-1 text-gray-900 font-medium">' + value + '</td>' +
                 '</tr>';
         }
@@ -740,7 +740,7 @@
                     '</span>';
             }
             return '<tr data-testid="row-flagged-action-codes">' +
-                '<td class="py-1 pr-4 text-gray-500 align-top">  ↳ flagged approvals</td>' +
+                '<td class="py-1 pe-4 text-gray-500 align-top">  ↳ flagged approvals</td>' +
                 '<td class="py-1 text-gray-900">' +
                     '<div class="flex flex-wrap gap-x-2 gap-y-1 items-center">' + links + suffix + '</div>' +
                 '</td>' +
@@ -1037,7 +1037,7 @@
                         : 'Per-table counts unavailable for this alert.');
 
                 const mainRow = '<tr class="align-top hover:bg-gray-50" data-testid="row-post-restore-alert-' + escapeHtml(id) + '">' +
-                    '<td class="py-3 pr-2 align-top">' +
+                    '<td class="py-3 pe-2 align-top">' +
                         '<button type="button" ' +
                             'class="text-gray-400 hover:text-gray-700 text-xs px-1" ' +
                             'aria-label="Toggle alert details" ' +
@@ -1048,16 +1048,16 @@
                             '▸' +
                         '</button>' +
                     '</td>' +
-                    '<td class="py-3 pr-4 text-sm text-gray-900 whitespace-nowrap" data-testid="text-post-restore-alert-time-' + escapeHtml(id) + '">' +
+                    '<td class="py-3 pe-4 text-sm text-gray-900 whitespace-nowrap" data-testid="text-post-restore-alert-time-' + escapeHtml(id) + '">' +
                         escapeHtml(formatPostRestoreTimestamp(createdAt)) +
                     '</td>' +
-                    '<td class="py-3 pr-4">' +
+                    '<td class="py-3 pe-4">' +
                         '<span class="px-2 py-1 rounded-full text-xs font-medium ' + postRestoreSweepPriorityClass(priority) + '" ' +
                             'data-testid="badge-post-restore-alert-priority-' + escapeHtml(id) + '">' +
                             escapeHtml(String(priority).toUpperCase()) +
                         '</span>' +
                     '</td>' +
-                    '<td class="py-3 pr-4">' +
+                    '<td class="py-3 pe-4">' +
                         '<div class="flex flex-col gap-1">' +
                             '<span class="px-2 py-1 rounded-full text-xs font-medium self-start ' + postRestoreSweepStatusClass(status) + '" ' +
                                 'data-testid="badge-post-restore-alert-status-' + escapeHtml(id) + '">' +
@@ -1070,13 +1070,13 @@
                             recipientHtml +
                         '</div>' +
                     '</td>' +
-                    '<td class="py-3 pr-4">' +
+                    '<td class="py-3 pe-4">' +
                         '<div class="flex flex-wrap gap-1" data-testid="group-post-restore-alert-counts-' + escapeHtml(id) + '">' +
                             triggerBadgesHtml +
                         '</div>' +
                         zeroRowBanner +
                     '</td>' +
-                    '<td class="py-3 pr-4 text-sm text-gray-900">' +
+                    '<td class="py-3 pe-4 text-sm text-gray-900">' +
                         '<div class="font-medium" data-testid="text-post-restore-alert-title-' + escapeHtml(id) + '">' +
                             escapeHtml(title) +
                         '</div>' +
@@ -1084,7 +1084,7 @@
                             ? '<div class="text-xs text-gray-500 mt-1 max-w-md line-clamp-2 overflow-hidden" data-testid="text-post-restore-alert-message-' + escapeHtml(id) + '">' + escapeHtml(message) + '</div>'
                             : '') +
                     '</td>' +
-                    '<td class="py-3 text-right whitespace-nowrap">' +
+                    '<td class="py-3 text-end whitespace-nowrap">' +
                         '<button type="button" ' +
                             'class="px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition" ' +
                             'data-on-click="viewPostRestoreSweepEventLog" ' +
@@ -1097,7 +1097,7 @@
 
                 const detailRow = '<tr class="hidden bg-gray-50" data-testid="row-post-restore-alert-detail-' + escapeHtml(id) + '">' +
                     '<td></td>' +
-                    '<td colspan="6" class="py-3 pr-4">' +
+                    '<td colspan="6" class="py-3 pe-4">' +
                         '<div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Full message</div>' +
                         '<pre class="text-xs text-gray-800 whitespace-pre-wrap font-mono bg-white border border-gray-200 rounded p-2 max-w-3xl" ' +
                             'data-testid="text-post-restore-alert-full-message-' + escapeHtml(id) + '">' +
@@ -1129,14 +1129,14 @@
 
             body.innerHTML =
                 '<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-post-restore-alerts">' +
-                    '<thead><tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
-                        '<th class="py-2 pr-2 w-6"></th>' +
-                        '<th class="py-2 pr-4">When</th>' +
-                        '<th class="py-2 pr-4">Priority</th>' +
-                        '<th class="py-2 pr-4">Status / channel</th>' +
-                        '<th class="py-2 pr-4">Per-table counts</th>' +
-                        '<th class="py-2 pr-4">Alert</th>' +
-                        '<th class="py-2 text-right">Action</th>' +
+                    '<thead><tr class="text-start text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
+                        '<th scope="col" class="py-2 pe-2 w-6"></th>' +
+                        '<th scope="col" class="py-2 pe-4">When</th>' +
+                        '<th scope="col" class="py-2 pe-4">Priority</th>' +
+                        '<th scope="col" class="py-2 pe-4">Status / channel</th>' +
+                        '<th scope="col" class="py-2 pe-4">Per-table counts</th>' +
+                        '<th scope="col" class="py-2 pe-4">Alert</th>' +
+                        '<th scope="col" class="py-2 text-end">Action</th>' +
                     '</tr></thead>' +
                     '<tbody class="divide-y divide-gray-100">' + rows + '</tbody>' +
                 '</table></div>' +
@@ -1397,10 +1397,10 @@
                 recipientRows = recipients.map(function (r) {
                     const emailEsc = escapeHtml(r.email || '');
                     return '<tr data-testid="row-alert-recipient-' + emailEsc + '">' +
-                        '<td class="py-2 pr-4 font-mono text-gray-900" data-testid="text-alert-recipient-email-' + emailEsc + '">' + emailEsc + '</td>' +
-                        '<td class="py-2 pr-4 text-gray-500">' + escapeHtml(r.added_by || '—') + '</td>' +
-                        '<td class="py-2 pr-4 text-gray-500">' + escapeHtml(formatAlertTimestamp(r.added_at)) + '</td>' +
-                        '<td class="py-2 text-right">' +
+                        '<td class="py-2 pe-4 font-mono text-gray-900" data-testid="text-alert-recipient-email-' + emailEsc + '">' + emailEsc + '</td>' +
+                        '<td class="py-2 pe-4 text-gray-500">' + escapeHtml(r.added_by || '—') + '</td>' +
+                        '<td class="py-2 pe-4 text-gray-500">' + escapeHtml(formatAlertTimestamp(r.added_at)) + '</td>' +
+                        '<td class="py-2 text-end">' +
                             '<button class="text-red-600 hover:text-red-800 text-xs font-medium" ' +
                                 'data-on-click="removeAlertRecipient" data-args=\'["' + emailEsc + '"]\' ' +
                                 'data-testid="button-remove-alert-recipient-' + emailEsc + '">Remove</button>' +
@@ -1421,9 +1421,9 @@
                 auditRows = audit.map(function (a) {
                     const colour = a.action === 'remove' ? 'text-red-700' : 'text-green-700';
                     return '<tr>' +
-                        '<td class="py-1 pr-4 text-xs text-gray-500">' + escapeHtml(formatAlertTimestamp(a.changed_at)) + '</td>' +
-                        '<td class="py-1 pr-4 text-xs ' + colour + ' font-medium">' + escapeHtml(a.action) + '</td>' +
-                        '<td class="py-1 pr-4 text-xs font-mono text-gray-900">' + escapeHtml(a.email) + '</td>' +
+                        '<td class="py-1 pe-4 text-xs text-gray-500">' + escapeHtml(formatAlertTimestamp(a.changed_at)) + '</td>' +
+                        '<td class="py-1 pe-4 text-xs ' + colour + ' font-medium">' + escapeHtml(a.action) + '</td>' +
+                        '<td class="py-1 pe-4 text-xs font-mono text-gray-900">' + escapeHtml(a.email) + '</td>' +
                         '<td class="py-1 text-xs text-gray-500">' + escapeHtml(a.changed_by) + '</td>' +
                     '</tr>';
                 }).join('');
@@ -1431,11 +1431,11 @@
 
             body.innerHTML =
                 '<div class="overflow-x-auto"><table class="w-full text-sm" data-testid="table-alert-recipients">' +
-                    '<thead><tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
-                        '<th class="py-2 pr-4">Email</th>' +
-                        '<th class="py-2 pr-4">Added by</th>' +
-                        '<th class="py-2 pr-4">Added at</th>' +
-                        '<th class="py-2"></th>' +
+                    '<thead><tr class="text-start text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">' +
+                        '<th scope="col" class="py-2 pe-4">Email</th>' +
+                        '<th scope="col" class="py-2 pe-4">Added by</th>' +
+                        '<th scope="col" class="py-2 pe-4">Added at</th>' +
+                        '<th scope="col" class="py-2"></th>' +
                     '</tr></thead>' +
                     '<tbody class="divide-y divide-gray-100">' + recipientRows + '</tbody>' +
                 '</table></div>' +
@@ -1454,11 +1454,11 @@
                 '<details class="mt-4">' +
                     '<summary class="text-xs text-gray-500 cursor-pointer">Recent changes (audit log)</summary>' +
                     '<div class="overflow-x-auto mt-2"><table class="w-full" data-testid="table-alert-recipients-audit">' +
-                        '<thead><tr class="text-left text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">' +
-                            '<th class="py-1 pr-4">When</th>' +
-                            '<th class="py-1 pr-4">Action</th>' +
-                            '<th class="py-1 pr-4">Email</th>' +
-                            '<th class="py-1">By</th>' +
+                        '<thead><tr class="text-start text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">' +
+                            '<th scope="col" class="py-1 pe-4">When</th>' +
+                            '<th scope="col" class="py-1 pe-4">Action</th>' +
+                            '<th scope="col" class="py-1 pe-4">Email</th>' +
+                            '<th scope="col" class="py-1">By</th>' +
                         '</tr></thead>' +
                         '<tbody class="divide-y divide-gray-50">' + auditRows + '</tbody>' +
                     '</table></div>' +

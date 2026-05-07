@@ -24,7 +24,9 @@
  *   /api/qms/nc/export/estimate             (qmsEnhancedRoutes)
  *   /api/qms/capa/export/estimate           (qmsEnhancedRoutes)
  *   /api/compliance/export/estimate         (qmsEnhancedRoutes)
+ *   /api/compliance/export-xlsx/estimate    (qmsEnhancedRoutes)
  *   /api/pdpl/export/estimate               (qmsEnhancedRoutes)
+ *   /api/pdpl/export-xlsx/estimate          (qmsEnhancedRoutes)
  *   /api/kpis/export/estimate               (qmsEnhancedRoutes)
  *   /api/kpis/export-xlsx/estimate          (qmsEnhancedRoutes)
  *   /api/vendors/export/estimate            (qmsEnhancedRoutes)
@@ -150,7 +152,9 @@ const AUTH_GATED: Array<{
   { label: "QMS NC CSV",       routes: qmsEnhancedRoutes,    path: "/api/qms/nc/export/estimate" },
   { label: "QMS CAPA CSV",     routes: qmsEnhancedRoutes,    path: "/api/qms/capa/export/estimate" },
   { label: "compliance CSV",   routes: qmsEnhancedRoutes,    path: "/api/compliance/export/estimate" },
+  { label: "compliance XLSX",  routes: qmsEnhancedRoutes,    path: "/api/compliance/export-xlsx/estimate" },
   { label: "PDPL CSV",         routes: qmsEnhancedRoutes,    path: "/api/pdpl/export/estimate" },
+  { label: "PDPL XLSX",        routes: qmsEnhancedRoutes,    path: "/api/pdpl/export-xlsx/estimate" },
   { label: "KPIs CSV",         routes: qmsEnhancedRoutes,    path: "/api/kpis/export/estimate" },
   { label: "KPIs XLSX",        routes: qmsEnhancedRoutes,    path: "/api/kpis/export-xlsx/estimate" },
   { label: "vendors CSV",      routes: qmsEnhancedRoutes,    path: "/api/vendors/export/estimate" },
@@ -344,8 +348,10 @@ if (HAS_DB) {
   const QMS_HAPPY: Array<{ path: string; label: string; format: "csv" | "xlsx" }> = [
     { path: "/api/qms/nc/export/estimate",      label: "QMS NC CSV",    format: "csv" },
     { path: "/api/qms/capa/export/estimate",    label: "QMS CAPA CSV",  format: "csv" },
-    { path: "/api/compliance/export/estimate",  label: "compliance CSV", format: "csv" },
-    { path: "/api/pdpl/export/estimate",        label: "PDPL CSV",      format: "csv" },
+    { path: "/api/compliance/export/estimate",       label: "compliance CSV",  format: "csv" },
+    { path: "/api/compliance/export-xlsx/estimate",  label: "compliance XLSX", format: "xlsx" },
+    { path: "/api/pdpl/export/estimate",             label: "PDPL CSV",        format: "csv" },
+    { path: "/api/pdpl/export-xlsx/estimate",        label: "PDPL XLSX",       format: "xlsx" },
     { path: "/api/kpis/export/estimate",        label: "KPIs CSV",      format: "csv" },
     { path: "/api/kpis/export-xlsx/estimate",   label: "KPIs XLSX",     format: "xlsx" },
     { path: "/api/vendors/export/estimate",     label: "vendors CSV",   format: "csv" },

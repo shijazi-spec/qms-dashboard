@@ -301,11 +301,83 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
   return null;
 }
 
-async function applyBodySanitization(c: any, urlPath: string, method: string): Promise<void> {
-  if (!['POST', 'PUT', 'PATCH'].includes(method)) return;
+/**
+ * Maximum JSON body size that `applyBodySanitization` will buffer into memory.
+ * Multipart requests are skipped entirely — file-size limits are enforced
+ * per-route before `formData()` is called.  1 MB is generous for any
+ * legitimate JSON API call; raise via MAX_JSON_BODY_BYTES env if needed.
+ */
+const MAX_JSON_BODY_BYTES = (() => {
+  const raw = process.env.MAX_JSON_BODY_BYTES;
+  const n = parseInt(raw ?? String(1 * 1024 * 1024), 10);
+  return Number.isFinite(n) && n > 0 ? n : 1 * 1024 * 1024;
+})();
+
+/**
+ * Read a ReadableStream up to `maxBytes`, aborting mid-stream if the limit
+ * is exceeded.  Returns the decoded text on success or `{ tooLarge: true }`
+ * when the limit is hit.  This is the only safe way to cap body buffering
+ * regardless of whether the client sent a Content-Length header.
+ */
+async function readStreamWithLimit(
+  stream: ReadableStream<Uint8Array> | null | undefined,
+  maxBytes: number,
+): Promise<{ text: string } | { tooLarge: true }> {
+  if (!stream) return { text: '' };
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
   try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value && value.byteLength > 0) {
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          // Cancel the stream so the underlying connection is released
+          // promptly rather than waiting for the sender to finish.
+          void reader.cancel().catch(() => { });
+          return { tooLarge: true };
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    try { reader.releaseLock(); } catch { /* noop */ }
+  }
+  let offset = 0;
+  const combined = new Uint8Array(totalBytes);
+  for (const chunk of chunks) { combined.set(chunk, offset); offset += chunk.byteLength; }
+  return { text: new TextDecoder().decode(combined) };
+}
+
+async function applyBodySanitization(c: any, urlPath: string, method: string): Promise<Response | null> {
+  if (!['POST', 'PUT', 'PATCH'].includes(method)) return null;
+
+  const contentType = c.req.header('Content-Type') || '';
+
+  // Multipart form-data bodies are not JSON and must not be buffered here.
+  // Each upload route enforces Content-Length before calling formData() and
+  // requires the header to be present (411) so there is no need to touch
+  // the stream in the middleware.
+  if (contentType.includes('multipart/')) return null;
+
+  // Fast-path: reject when Content-Length is declared and already exceeds
+  // the cap so we never open the stream at all.
+  const declaredLength = parseInt(c.req.header('Content-Length') || '0', 10);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BODY_BYTES) {
+    return c.json({ error: 'Request body too large' }, 413);
+  }
+
+  try {
+    // Use streaming read so the limit is enforced regardless of whether the
+    // client sent Content-Length (chunked TE can omit it).
     const cloned = c.req.raw.clone();
-    const bodyText = await cloned.text();
+    const result = await readStreamWithLimit(cloned.body, MAX_JSON_BODY_BYTES);
+    if ('tooLarge' in result) {
+      return c.json({ error: 'Request body too large' }, 413);
+    }
+    const bodyText = result.text;
     let parsedBody: any;
     let isJson = false;
     try {
@@ -327,6 +399,7 @@ async function applyBodySanitization(c: any, urlPath: string, method: string): P
       (c.req as any).cachedBody = undefined;
     }
   } catch (_) { }
+  return null;
 }
 
 /**
@@ -384,7 +457,14 @@ export async function redactSecretsInResponse(c: any): Promise<void> {
   c.res = new Response(redactedJson, { status: res.status, headers: res.headers });
 }
 
-async function injectCspNonce(c: any, cspNonce: string): Promise<void> {
+async function injectCspNonce(c: any, cspNonce: string, urlPath: string): Promise<void> {
+  // Do not inject nonces into dynamically generated API HTML responses (e.g.
+  // /api/reports/*). API HTML responses embed database values in their markup
+  // and nonce injection would stamp a valid CSP nonce onto any attacker-
+  // supplied <script substring that survived into the output, defeating the
+  // nonce-based CSP entirely for those responses. Page routes (non-/api/)
+  // still receive nonce injection for their trusted inline scripts.
+  if (urlPath.startsWith('/api/')) return;
   const contentType = c.res.headers.get('Content-Type') || '';
   if (contentType.includes('text/html') && c.res.body) {
     try {
@@ -431,6 +511,19 @@ export const globalMiddleware = [
     if (isApi && !publicPath && !mastraInternal) {
       const apiAuthResult = await checkApiAuth(c, urlPath, method);
       if (apiAuthResult) return apiAuthResult;
+    } else if (isApi && mastraInternal && !publicPath) {
+      const session = getSessionFromCookie(c.req.header('Cookie'));
+      const hasAdminKey = hasValidAdminApiKey(c);
+      if (!session && !hasAdminKey) {
+        return c.json({ error: 'Authentication required' }, 401);
+      }
+      if (session && !hasAdminKey) {
+        const { checkPlatformUserActive } = await import('../../utils/rbacMiddleware');
+        const isActive = await checkPlatformUserActive(session.email);
+        if (!isActive) {
+          return c.json({ error: 'Account is not active or has been disabled' }, 403);
+        }
+      }
     } else if (isApi && publicPath) {
       const ip = parseClientIp(c.req.header('x-forwarded-for'), c.req.header('x-real-ip'));
       const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
@@ -442,8 +535,28 @@ export const globalMiddleware = [
       }
     }
 
+    // Reject clearly oversized request bodies before any parsing occurs.
+    // This is a byte-volume guard: even if a caller stays within the
+    // request-count rate limit, we refuse to accept bodies that exceed
+    // the largest upload we would ever accept (260 MB covers the 250 MB
+    // aggregate bulk-upload limit plus multipart framing overhead).
+    // JSON endpoints are further capped at 10 MB inside applyBodySanitization.
+    // We only act when Content-Length is declared; chunked bodies without
+    // Content-Length are caught by the per-handler size checks instead.
+    if (isApi && ['POST', 'PUT', 'PATCH'].includes(method)) {
+      const rawCL = c.req.header('Content-Length');
+      if (rawCL !== null && rawCL !== undefined) {
+        const declaredBytes = parseInt(rawCL, 10);
+        const MAX_REQUEST_BODY_BYTES = 260 * 1024 * 1024; // 260 MB
+        if (Number.isFinite(declaredBytes) && declaredBytes > MAX_REQUEST_BODY_BYTES) {
+          return c.json({ error: 'Request body too large' }, 413);
+        }
+      }
+    }
+
     if (isApi) {
-      await applyBodySanitization(c, urlPath, method);
+      const sanitizationError = await applyBodySanitization(c, urlPath, method);
+      if (sanitizationError) return sanitizationError;
     }
 
     try {
@@ -513,6 +626,6 @@ export const globalMiddleware = [
     // `redactSecretsInResponse` doc-comment for rationale.
     await redactSecretsInResponse(c);
 
-    await injectCspNonce(c, cspNonce);
+    await injectCspNonce(c, cspNonce, urlPath);
   },
 ];

@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -30,6 +30,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('fraud-dashboard');
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
         });
     </script>
 
@@ -72,7 +73,7 @@
                     <option value="sama_reports_filed">SAMA Reports Filed</option>
                 </select>
             </div>
-            <div class="relative" style="height: 320px;">
+            <div class="relative" data-style="height:320px">
                 <canvas id="trendCanvas"></canvas>
             </div>
         </div>
@@ -86,15 +87,15 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Month</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Confirmed</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Loss (SAR)</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">CB Count</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">CB Ratio (%)</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Fraud Rate (%)</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Detect→Contain (hrs)</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Resolved 30d (%)</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">SAMA Filed</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Month</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Confirmed</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Loss (SAR)</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">CB Count</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">CB Ratio (%)</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Fraud Rate (%)</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Detect→Contain (hrs)</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Resolved 30d (%)</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">SAMA Filed</th>
                         </tr>
                     </thead>
                     <tbody id="kpiTableBody" class="divide-y divide-gray-200 text-sm"></tbody>
@@ -417,6 +418,11 @@
         window.submitManualEntry = submitManualEntry;
 
         document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
     </script>
 </body>
 </html>

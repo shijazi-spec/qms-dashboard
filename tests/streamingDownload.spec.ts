@@ -347,14 +347,37 @@ test.describe('streamingDownload — cross-browser smoke', () => {
   // locale forced to Arabic and `canStreamToDisk()` forced false closes
   // that gap on every engine the streaming-download workflow already
   // exercises (Chromium, Firefox, WebKit).
-  test('renders the streaming-fallback advisory in Arabic on /vendors', async ({
+  // Every dashboard listed here ships a STATIC export button in its
+  // server-rendered HTML that matches findExportButton() in
+  // dashboard/js/streaming-download.js — so scheduleStreamingFallbackNotice()
+  // auto-attaches the advisory on DOMContentLoaded without requiring any
+  // dashboard-specific JS to render the export controls first. This is the
+  // set of dashboards where a per-page regression in the notice (CSP
+  // blocking /js/i18n.js, an RTL layout override clipping the dismiss
+  // button, a missing <main> anchor under findNoticeAnchor, etc.) would
+  // surface to users on first paint.
+  //
+  // Keeping vendors + policies + risks + logs + duplicates exercises every
+  // page where the advisory auto-renders, so a regression on, say, the
+  // duplicates layout fails the test pointing at /duplicates rather than
+  // hiding behind a green /vendors run.
+  const FALLBACK_NOTICE_DASHBOARDS = [
+    '/vendors',
+    '/policies',
+    '/risks',
+    '/logs',
+    '/duplicates',
+  ] as const;
+
+  for (const dashboardPath of FALLBACK_NOTICE_DASHBOARDS) {
+  test(`renders the streaming-fallback advisory in Arabic on ${dashboardPath}`, async ({
     page,
     context,
     browserName,
   }) => {
     test.setTimeout(60_000);
 
-    console.log(`[streaming-fallback-ar] running on ${browserName}`);
+    console.log(`[streaming-fallback-ar] running on ${browserName} for ${dashboardPath}`);
 
     const ok = await authenticate(context);
     if (!ok) {
@@ -454,12 +477,12 @@ test.describe('streamingDownload — cross-browser smoke', () => {
       } catch (_) { /* ignore */ }
     });
 
-    // /vendors is a gated dashboard that pulls in /js/i18n.js and
-    // /js/streaming-download.js and ships static export buttons in its
-    // server-rendered HTML — so findExportButton() succeeds on
-    // DOMContentLoaded and attachStreamingFallbackNotice() has an anchor
-    // to mount under <main>.
-    await page.goto(`${BASE_URL}/vendors`, {
+    // Each dashboard in FALLBACK_NOTICE_DASHBOARDS is a gated page that
+    // pulls in /js/i18n.js and /js/streaming-download.js and ships static
+    // export buttons in its server-rendered HTML — so findExportButton()
+    // succeeds on DOMContentLoaded and attachStreamingFallbackNotice()
+    // has an anchor to mount under <main>.
+    await page.goto(`${BASE_URL}${dashboardPath}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -518,9 +541,10 @@ test.describe('streamingDownload — cross-browser smoke', () => {
     const dismissBox = await dismissBtn.boundingBox();
     expect(
       dismissBox && dismissBox.width > 0 && dismissBox.height > 0,
-      `Dismiss button has zero size on ${browserName} ` +
+      `Dismiss button has zero size on ${browserName} at ${dashboardPath} ` +
         `(box=${JSON.stringify(dismissBox)}) — possible RTL layout ` +
         'regression hiding the close affordance.',
     ).toBe(true);
   });
+  }
 });

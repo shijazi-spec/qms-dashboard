@@ -10,22 +10,41 @@
  *
  * Persistence model
  * ─────────────────
- * The workflow already uploads `streaming-download-timing` as an
- * `actions/upload-artifact@v4` artifact every run. GitHub keeps those
- * artifacts for 90 days (default retention) which gives us a free,
- * already-authenticated "time-series store" without adding an external
- * service, secret, gist, or DB.
+ * History is kept on a dedicated orphan branch
+ * (default: `ci-data/streaming-download`) that stores one JSON file per
+ * (run, browser) under `data/<browser>/<runNumber>-<shortSha>.json`. The
+ * workflow appends to that branch on every successful run on the default
+ * branch (see `.github/workflows/streaming-download-smoke.yml`). The
+ * orphan branch has effectively unlimited retention — unlike the
+ * `streaming-download-timing` GitHub Actions artifact, which GitHub
+ * evicts after 90 days. That eviction would hide a slow creep that takes
+ * 4–6 months to develop (precisely the regressions the static fail
+ * budget would also miss), so the artifact is now only a fallback.
  *
- * This script uses the `gh` CLI (preinstalled on GitHub-hosted runners) to:
- *   1. Find the last N successful runs of the same workflow on the
- *      repo's default branch.
- *   2. Download each run's `streaming-download-timing` artifact.
- *   3. Combine those records with the current in-tree timing files.
- *   4. Render a per-browser trend table (last N runs, rolling median,
+ * Order of precedence when assembling history:
+ *   1. Orphan branch history (preferred, unbounded retention) — read via
+ *      `git fetch --depth=1 origin <branch>` + `git ls-tree`/`git show`,
+ *      so no extra clone of the main tree is required.
+ *   2. Artifact fallback (90-day window) — `gh run download` of the
+ *      `streaming-download-timing` artifact from prior workflow runs.
+ *      Records already covered by the branch are de-duplicated by
+ *      (browser, runId).
+ *   3. Current in-tree timing files written by this run.
+ *
+ * Steps performed by this script:
+ *   1. Load history from the orphan branch (and, as fallback, prior
+ *      workflow artifacts).
+ *   2. Combine those records with the current in-tree timing files.
+ *   3. Render a per-browser trend table (last N runs, rolling median,
  *      delta-vs-median, simple linear-trend slope).
- *   5. Detect "creeping regression": current run > 1.25 × median of the
+ *   4. Detect "creeping regression": current run > 1.25 × median of the
  *      last 10 runs on that browser, even when still inside the hard
  *      LATENCY_FAIL_MS budget.
+ *
+ * Persisting this run's records back to the orphan branch is handled by
+ * the workflow (a separate step that runs only on pushes to the default
+ * branch, where `GITHUB_TOKEN` has `contents: write`). That keeps fork
+ * PRs — which only get a read-only token — from failing the trend step.
  *
  * Outputs
  * ───────
@@ -49,15 +68,20 @@
  *                                    (default main)
  *   STREAMING_TREND_TIMING_DIR — where this run's timing JSONs live
  *                                (default test-results/streaming-download-timing)
- *   STREAMING_TREND_SKIP_GH — set to "1" to skip the gh CLI download step
- *                             and only render the current run (used by tests).
+ *   STREAMING_TREND_HISTORY_BRANCH — orphan branch holding the long-term
+ *                                    history (default ci-data/streaming-download)
+ *   STREAMING_TREND_SKIP_BRANCH — set to "1" to skip the branch-history
+ *                                  fetch (used by tests / offline runs)
+ *   STREAMING_TREND_SKIP_GH — set to "1" to skip the gh CLI artifact
+ *                             fallback step (used by tests).
  *
  * Local usage
  * ───────────
- * The script is safe to run locally: if `gh` is not installed, not
- * authenticated, or cannot find prior runs (e.g. very first run on a new
- * repo), it falls back to "current run only" and writes a single-row
- * report rather than failing.
+ * The script is safe to run locally: if `git` cannot fetch the history
+ * branch (e.g. no remote configured), if `gh` is not installed or not
+ * authenticated, or if no prior runs exist (e.g. very first run on a
+ * new repo), it falls back to "current run only" and writes a
+ * single-row report rather than failing.
  */
 
 'use strict';
@@ -79,6 +103,9 @@ const HISTORY_LIMIT = Number(
 const DEFAULT_BRANCH =
   process.env.STREAMING_TREND_DEFAULT_BRANCH || 'main';
 const SKIP_GH = process.env.STREAMING_TREND_SKIP_GH === '1';
+const SKIP_BRANCH = process.env.STREAMING_TREND_SKIP_BRANCH === '1';
+const HISTORY_BRANCH =
+  process.env.STREAMING_TREND_HISTORY_BRANCH || 'ci-data/streaming-download';
 
 // A run that is more than CREEP_THRESHOLD × the rolling median is flagged
 // as a "creeping regression" candidate, even if it's still inside the hard
@@ -181,19 +208,110 @@ function downloadArtifact(runId, destDir) {
   return true;
 }
 
-function loadHistory() {
+function whichGit() {
+  const r = spawnSync('git', ['--version'], { encoding: 'utf-8' });
+  return r.status === 0;
+}
+
+function fetchHistoryBranch() {
+  // Fetch the orphan branch into FETCH_HEAD without checking it out.
+  // `--depth=1` keeps things fast — we only need the latest tree, since
+  // every prior run is a separate file already on that tree.
+  const r = spawnSync(
+    'git',
+    ['fetch', '--depth=1', '--no-tags', 'origin', HISTORY_BRANCH],
+    { encoding: 'utf-8' },
+  );
+  if (r.status !== 0) {
+    // Most common reasons: branch doesn't exist yet (first run ever),
+    // running outside CI without an `origin` remote, or transient
+    // network issue. All non-fatal — we'll fall through to the
+    // artifact fallback or current-run-only.
+    log(`git fetch ${HISTORY_BRANCH} failed: ${(r.stderr || '').trim()}`);
+    return false;
+  }
+  return true;
+}
+
+function loadHistoryFromBranch() {
+  if (SKIP_BRANCH) {
+    log('STREAMING_TREND_SKIP_BRANCH=1 — skipping branch history fetch');
+    return [];
+  }
+  if (!whichGit()) {
+    log('git not available — skipping branch history fetch');
+    return [];
+  }
+  if (!fetchHistoryBranch()) return [];
+
+  // Enumerate every JSON blob on the fetched tree and read its content
+  // via `git show`. Avoids checking out / mutating the working tree.
+  const lsTree = spawnSync(
+    'git',
+    ['ls-tree', '-r', '--name-only', 'FETCH_HEAD'],
+    { encoding: 'utf-8' },
+  );
+  if (lsTree.status !== 0) {
+    log(`git ls-tree failed: ${(lsTree.stderr || '').trim()}`);
+    return [];
+  }
+  const files = lsTree.stdout
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.endsWith('.json'));
+
+  const out = [];
+  for (const file of files) {
+    const show = spawnSync('git', ['show', `FETCH_HEAD:${file}`], {
+      encoding: 'utf-8',
+    });
+    if (show.status !== 0) continue;
+    let rec;
+    try {
+      rec = JSON.parse(show.stdout);
+    } catch (err) {
+      log(`skip ${file}: ${err.message}`);
+      continue;
+    }
+    if (rec && rec.browser && typeof rec.durationMs === 'number') {
+      // The timing JSONs themselves don't contain run identity (the
+      // workflow writes raw per-browser files), so we recover
+      // runNumber + shortSha from the file path the workflow chose:
+      //   data/<browser>/<runNumber>-<shortSha>.json
+      // This is what makes (browser, runNumber) a stable dedup key
+      // against the artifact-fallback records (which carry runNumber
+      // from `gh run list`).
+      const base = path.basename(file, '.json');
+      const m = base.match(/^(\d+)-([0-9a-f]{4,40})$/i);
+      const runNumberFromPath = m ? Number(m[1]) : null;
+      const shaFromPath = m ? m[2] : null;
+      out.push({
+        ...rec,
+        runId: rec.runId != null ? String(rec.runId) : null,
+        runNumber: rec.runNumber || runNumberFromPath,
+        sha: rec.sha || shaFromPath || null,
+        createdAt: rec.createdAt || rec.timestamp || null,
+        source: 'branch',
+      });
+    }
+  }
+  log(`loaded ${out.length} historical record(s) from branch ${HISTORY_BRANCH}`);
+  return out;
+}
+
+function loadHistoryFromArtifacts() {
   if (SKIP_GH) {
-    log('STREAMING_TREND_SKIP_GH=1 — skipping history fetch');
+    log('STREAMING_TREND_SKIP_GH=1 — skipping artifact history fetch');
     return [];
   }
   if (!whichGh()) {
-    log('gh CLI not available — skipping history fetch (current run only)');
+    log('gh CLI not available — skipping artifact history fetch');
     return [];
   }
   const workflow = resolveWorkflowFile();
   const runs = listRecentRuns(workflow);
   if (runs.length === 0) {
-    log('no prior successful runs found — current run only');
+    log('no prior successful runs found in artifact fallback');
     return [];
   }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'streaming-trend-'));
@@ -213,10 +331,48 @@ function loadHistory() {
           runNumber: run.number,
           sha: run.headSha,
           createdAt: run.createdAt,
-          source: 'history',
+          source: 'artifact',
         });
       }
     }
+  }
+  return out;
+}
+
+function loadHistory() {
+  // Prefer the orphan branch (unbounded retention). Fill in any gaps
+  // from the 90-day artifact fallback for runs the branch hasn't
+  // captured yet (e.g. immediately after enabling the branch, or if a
+  // run failed to push to it). Records are de-duplicated by
+  // (browser, runId) — the branch copy wins on conflict because it has
+  // the long-term identity.
+  const branchRecords = loadHistoryFromBranch();
+  const artifactRecords = loadHistoryFromArtifacts();
+
+  // Dedup identity:
+  //   • runNumber is stable across both sources — branch records carry
+  //     it via the `<runNumber>-<shortSha>.json` filename convention
+  //     and artifact records carry it from `gh run list`.
+  //   • sha is the secondary key (covers any older branch files that
+  //     predate the filename convention).
+  //   • createdAt is the last-resort key for hand-seeded local data.
+  // Branch records take precedence on conflict because they're the
+  // long-term source of truth.
+  const identity = (rec) =>
+    `${rec.browser}::${
+      rec.runNumber != null
+        ? `n${rec.runNumber}`
+        : rec.sha
+          ? `s${rec.sha}`
+          : `t${rec.createdAt || ''}`
+    }`;
+  const seen = new Set();
+  const out = [];
+  for (const rec of [...branchRecords, ...artifactRecords]) {
+    const key = identity(rec);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(rec);
   }
   return out;
 }
@@ -384,8 +540,9 @@ function renderReport(byBrowser, currentRun) {
 
   lines.push('');
   lines.push(
-    '<sub>Source data: `streaming-download-timing` artifacts from prior ' +
-      'workflow runs (90-day retention) plus this run. ' +
+    '<sub>Source data: `' + HISTORY_BRANCH + '` orphan branch (unbounded ' +
+      'retention) with `streaming-download-timing` artifact fallback ' +
+      '(90-day retention) for runs not yet on the branch, plus this run. ' +
       'Generated by `scripts/streaming-download-trend.cjs`.</sub>',
   );
   lines.push('<!-- streaming-download-trend -->');

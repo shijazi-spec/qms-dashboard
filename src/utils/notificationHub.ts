@@ -140,6 +140,16 @@ export async function getUnreadCount(recipient?: string): Promise<number> {
   return parseInt(result.rows[0].count);
 }
 
+export async function getNotificationById(
+  id: number,
+): Promise<Notification | null> {
+  const result = await pool.query(
+    `SELECT * FROM notifications WHERE id = $1`,
+    [id],
+  );
+  return result.rows[0] || null;
+}
+
 export async function markAsRead(id: number): Promise<Notification | null> {
   const result = await pool.query(
     `UPDATE notifications SET status = 'read', read_at = NOW() WHERE id = $1 RETURNING *`,

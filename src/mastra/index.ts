@@ -6,6 +6,7 @@ import { MCPServer } from "@mastra/mcp";
 
 import { sharedPostgresStorage } from "./storage";
 import { registerCronTrigger } from "../triggers/cronTriggers";
+import { registerSlackConsultantRatingRoutes } from "../triggers/slackConsultantRatingTrigger";
 import { qualitySpecialistAgent } from "./agents/qualitySpecialistAgent";
 import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
 import { qualityAuditWorkflow } from "./workflows/qualityAuditWorkflow";
@@ -39,6 +40,7 @@ import { migrationRoutes } from "./routes/migrationRoutes";
 import { handoffRoutes } from "./routes/handoffRoutes";
 import { kpiRoutes } from "./routes/kpiRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
+import { zohoAgingRoutes } from "./routes/zohoAgingRoutes";
 import { infographicRoutes } from "./routes/infographicRoutes";
 import { rbacRoutes } from "./routes/rbacRoutes";
 import { scorecardRoutes } from "./routes/scorecardRoutes";
@@ -50,6 +52,7 @@ import { externalAuditRoutes } from "./routes/externalAuditRoutes";
 import { userAccessRoutes } from "./routes/userAccessRoutes";
 import { smokeTestRoutes } from "./routes/smokeTestRoutes";
 import { consultantRoutes } from "./routes/consultantRoutes";
+import { mobileRoutes } from "./routes/mobileRoutes";
 import { aiApprovalRoutes } from "./routes/aiApprovalRoutes";
 import "../utils/integrationTestFixtureTools";
 import { aiOpsRoutes } from "./routes/aiOpsRoutes";
@@ -66,6 +69,10 @@ import { i18nRoutes } from "./routes/i18nRoutes";
 import { onBootRedactionSweep } from "../utils/redactHistoricalLogs";
 import { exportDownloadRoutes } from "./routes/exportDownloadRoutes";
 import { assertAdminApiKeyStrengthOrThrow } from "../utils/rbacMiddleware";
+import {
+  lockDownStagedExportCacheDirAtStartup,
+  checkStagedExportCacheLocation,
+} from "../utils/excelExport";
 
 import { logger as safeLogger } from "../utils/logger";
 // ─── ADMIN_API_KEY strength gate ──────────────────────────────────────────────
@@ -76,6 +83,33 @@ import { logger as safeLogger } from "../utils/logger";
 // chars ≥ 10). No-op when ADMIN_API_KEY is unset — the "Setup Required" page
 // flow handles the unconfigured-platform case.
 assertAdminApiKeyStrengthOrThrow();
+
+// ─── Streaming-export cache directory lockdown ────────────────────────────────
+// Eagerly create / re-chmod the streaming-export cache directory to mode 0o700
+// at boot, before any export routes start serving traffic. Closes the window
+// where an inherited cache directory from a previous run could sit on disk
+// with looser permissions, and surfaces FS / permission problems immediately
+// at startup instead of on the first user export. The lazy ensure inside
+// stageAndServeStreamingExport remains as a safety net. Awaited at the
+// top level (ESM) so the cache dir is guaranteed to be 0o700 before
+// `new Mastra({...})` below registers any export route.
+await lockDownStagedExportCacheDirAtStartup();
+
+// ─── Streaming-export cache location health check (Task #770) ────────────────
+// One-shot fs.stat walk over the configured STREAMING_EXPORT_CACHE_DIR's
+// ancestor chain. Silent in the default `/tmp`-based single-tenant
+// configuration; logs a structured warning when an operator override points
+// the cache at a path with a group/other-readable parent (filenames would
+// leak via parent traversal even though the leaf dir itself is 0o700). See
+// docs/Security_Operations_SOP.md §5.14. Best-effort — never blocks boot.
+// Runs after the lockdown above so the cache dir is materialised before the
+// ancestor walk (any segments the worker created are 0o700 by construction).
+void checkStagedExportCacheLocation().catch((err) => {
+  safeLogger.warn(
+    "[stagedExport] cache-location healthcheck threw unexpectedly",
+    { err: String(err) },
+  );
+});
 
 registerCronTrigger({
   cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "0 8 * * 1",
@@ -159,6 +193,12 @@ export const mastra = new Mastra({
       // ── Admin API ────────────────────────────────────────────────────────
       ...adminApiRoutes,
 
+      // ── QMS Enhanced (registered BEFORE qmsApiRoutes & kpiRoutes so that
+      //     literal export segments like `/api/qms/capa/export` and
+      //     `/api/kpis/export` are matched before the dynamic `:id` handlers
+      //     defined in qmsApiRoutes / kpiRoutes — see task-670).
+      ...qmsEnhancedRoutes,
+
       // ── QMS API ──────────────────────────────────────────────────────────
       ...qmsApiRoutes,
 
@@ -193,6 +233,7 @@ export const mastra = new Mastra({
       ...handoffRoutes,
       ...kpiRoutes,
       ...duplicateRadarRoutes,
+      ...zohoAgingRoutes,
       ...rbacRoutes,
       ...scorecardRoutes,
       ...pdplRoutes,
@@ -203,9 +244,10 @@ export const mastra = new Mastra({
       ...userAccessRoutes,
       ...smokeTestRoutes,
       ...consultantRoutes,
+      ...mobileRoutes,
       ...aiApprovalRoutes,
       ...aiOpsRoutes,
-      ...qmsEnhancedRoutes,
+      // qmsEnhancedRoutes was hoisted above qmsApiRoutes — see comment there.
       ...qmsDocsRoutes,
       ...notificationRoutes,
       ...knowledgeRoutes,
@@ -228,6 +270,9 @@ export const mastra = new Mastra({
 
       // ── i18n / Language API ──────────────────────────────────────────────
       ...i18nRoutes,
+
+      // ── Slack consultant rating bot (Task #801) ──────────────────────────
+      ...registerSlackConsultantRatingRoutes(),
     ],
   },
   logger:

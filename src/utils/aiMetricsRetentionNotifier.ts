@@ -670,9 +670,9 @@ export async function notifyAiMetricsRetentionPruneNow(
         buildPruneNowBlocks(notification, cfg.link, cfg.linkIsAbsolute),
       );
     } catch (err) {
-      console.error(
-        "[AiMetricsRetentionNotifier] Slack send threw for manual prune:",
-        err,
+      logger.error(
+        "[AiMetricsRetentionNotifier] Slack send threw for manual prune",
+        { error: err instanceof Error ? err.message : String(err) },
       );
       result.slackSent = false;
     }
@@ -695,9 +695,9 @@ export async function notifyAiMetricsRetentionPruneNow(
       });
       result.emailSent = !!sendResult?.success;
     } catch (err) {
-      console.error(
-        "[AiMetricsRetentionNotifier] Email send threw for manual prune:",
-        err,
+      logger.error(
+        "[AiMetricsRetentionNotifier] Email send threw for manual prune",
+        { error: err instanceof Error ? err.message : String(err) },
       );
       result.emailSent = false;
     }

@@ -262,10 +262,35 @@
    * stalls or is unreachable (localStorage is already updated, so the correct
    * language will be applied on reload regardless).
    */
-  function setLang(lang) {
+  function setLang(lang, onBusy) {
     if (SUPPORTED.indexOf(lang) === -1) return;
-    var timeout = new Promise(function (resolve) { setTimeout(resolve, 5000); });
-    Promise.race([_persistLang(lang), timeout]).then(function () {
+    if (typeof onBusy === 'function') {
+      try { onBusy(true); } catch (_) {}
+    }
+    var previous = _lang;
+    // Load the new dictionary and swap in-memory locale state BEFORE we
+    // emit `walaPlusLanguageChange`, so any subscriber that re-renders
+    // (KPI list, charts on risks/vendors/compliance) reads the new
+    // strings via the translator instead of the previous bundle. The
+    // page reload still follows so persisted DOM and server preference
+    // catch up, but the live relabeling works without waiting on it.
+    var loadTimeout = new Promise(function (resolve) { setTimeout(resolve, 5000); });
+    var swapped = Promise.race([_loadStrings(lang), loadTimeout]).then(function (strings) {
+      if (!strings) return; // load timed out — let reload below pick up the new locale
+      _strings = strings;
+      _lang = lang;
+      try { localStorage.setItem(STORAGE_KEY, lang); } catch (_) {}
+      _applyHtmlDir(_lang);
+      try { applyToDOM(); } catch (_) {}
+      try {
+        document.dispatchEvent(new CustomEvent('walaPlusLanguageChange', {
+          detail: { lang: lang, previous: previous }
+        }));
+      } catch (_) {}
+    }).catch(function () { /* fall through to reload-only path */ });
+
+    var persistTimeout = new Promise(function (resolve) { setTimeout(resolve, 5000); });
+    Promise.all([swapped, Promise.race([_persistLang(lang), persistTimeout])]).then(function () {
       window.location.reload();
     });
   }
@@ -403,6 +428,11 @@
    * `opts` accepts standard Intl.DateTimeFormat options (year/month/day/hour/minute/...).
    * Returns '-' for falsy or invalid dates so it can be dropped into table cells safely.
    */
+  function _localTimeZone() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; }
+    catch (_) { return undefined; }
+  }
+
   function formatDate(date, opts) {
     if (date == null || date === '') return '-';
     var d = date instanceof Date ? date : new Date(date);
@@ -411,11 +441,25 @@
     var locale = (_lang === 'ar' && useEastern) ? 'ar-SA'
       : (_lang === 'ar' ? 'ar' : 'en-US');
     var options = opts || { year: 'numeric', month: 'short', day: 'numeric' };
+    if (!options.timeZone) options.timeZone = _localTimeZone();
     try {
       return new Intl.DateTimeFormat(locale, options).format(d);
     } catch (_) {
       try { return d.toLocaleDateString(); } catch (__) { return String(date); }
     }
+  }
+
+  function formatDateTime(date, opts) {
+    var options = opts || {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    };
+    return formatDate(date, options);
+  }
+
+  function formatTime(date, opts) {
+    var options = opts || { hour: '2-digit', minute: '2-digit' };
+    return formatDate(date, options);
   }
 
   /**
@@ -466,6 +510,8 @@
     applyToDOM: applyToDOM,
     formatDateBilingual: formatDateBilingual,
     formatDate: formatDate,
+    formatDateTime: formatDateTime,
+    formatTime: formatTime,
     formatNumber: formatNumber,
     setUseEasternNumerals: setUseEasternNumerals,
     getUseEasternNumerals: getUseEasternNumerals,

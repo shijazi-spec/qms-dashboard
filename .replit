@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web", "postgresql-16", "python-3.11"]
+modules = ["nodejs-20", "web", "python-3.11", "postgresql-16"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
@@ -40,6 +40,10 @@ args = "i18n"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "post-restore-sweep-panel"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "consultant-approval-prior-viewers"
 
 [[workflows.workflow]]
 name = "Start application"
@@ -83,6 +87,17 @@ args = "npx playwright test tests/postRestoreSweepPanel.spec.ts --reporter=line"
 [workflows.workflow.metadata]
 isValidation = true
 
+[[workflows.workflow]]
+name = "consultant-approval-prior-viewers"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx playwright test tests/consultantApprovalPriorViewers.spec.ts --reporter=line"
+
+[workflows.workflow.metadata]
+isValidation = true
+
 [userenv]
 
 [userenv.shared]
@@ -90,14 +105,12 @@ ZOHO_ACCOUNTS_URL = "https://accounts.zoho.com"
 ZOHO_API_DOMAIN = "https://www.zohoapis.com"
 DATA_MODE = "REAL"
 MANUAL_INTAKE_DIR = "./data/manual-intake"
-ADMIN_API_KEY = "WalaPlus-QMS-Admin-Rotates-April-2026!"
 
 [userenv.development]
-TEST_ADMIN_KEY = "a1b2c3d4e5f60718293a4b5c6d7e8f90fedcba0987654321abcdef0123456789"
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
 
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 180000
+timeoutMs = 360000

@@ -150,7 +150,8 @@ async function run(): Promise<void> {
   ];
 
   const stub1 = makeStubClient(initial);
-  const count1 = await redactEventLogs(stub1.client);
+  const result1 = await redactEventLogs(stub1.client);
+  const count1 = result1.rowsUpdated;
 
   assert(count1 === 6, `6 dirty rows updated (got ${count1})`);
   assert(stub1.updates.length === 6, `6 UPDATE statements issued (got ${stub1.updates.length})`);
@@ -263,7 +264,7 @@ async function run(): Promise<void> {
   console.log('\n--- Idempotency check ---\n');
 
   const stub2 = makeStubClient(stub1.rows);
-  const count2 = await redactEventLogs(stub2.client);
+  const count2 = (await redactEventLogs(stub2.client)).rowsUpdated;
 
   assert(count2 === 0, `second pass updates 0 rows (got ${count2}) — idempotent`);
   assert(stub2.updates.length === 0, 'second pass issues no UPDATE statements');

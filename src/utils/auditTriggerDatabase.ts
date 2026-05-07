@@ -553,3 +553,39 @@ export async function isAuditLocked(auditId: number): Promise<boolean> {
 // (dismiss_reason, next_reevaluate_at, hitl_action_code, etc.) without
 // duplicating connection setup.
 export { pool as auditTriggerPool };
+
+/**
+ * Persist the dynamic "extra column" updates added in the P0 trigger schema
+ * migration (dismiss_reason, next_reevaluate_at, hitl_action_code, …).
+ *
+ * Moved out of `triggerRoutes.ts` so all `audit_triggers` writes live in one
+ * place and the secret-leak coverage gate (scripts/check-db-test-coverage.sh)
+ * doesn't have to track route files separately.
+ *
+ * The `"NOW()"` sentinel string is treated as a SQL literal (not a parameter)
+ * so callers can request a NOW() timestamp without smuggling a string into
+ * the params vector. All other values are bound as `$N` parameters and pass
+ * through the redacted pool wrapper.
+ */
+export async function updateTriggerExtraColumns(
+  triggerId: number,
+  extras: Record<string, unknown>,
+): Promise<void> {
+  if (!extras || Object.keys(extras).length === 0) return;
+  const fields: string[] = [];
+  const vals: unknown[] = [];
+  let i = 1;
+  for (const [k, v] of Object.entries(extras)) {
+    if (v === "NOW()") {
+      fields.push(`${k} = NOW()`);
+    } else {
+      fields.push(`${k} = $${i++}`);
+      vals.push(v);
+    }
+  }
+  vals.push(triggerId);
+  await pool.query(
+    `UPDATE audit_triggers SET ${fields.join(", ")} WHERE id = $${i}`,
+    vals,
+  );
+}

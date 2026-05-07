@@ -321,6 +321,54 @@ describe('stageAndServeStreamingExport', () => {
     const out = new Uint8Array(await r1.arrayBuffer());
     expect(out.byteLength).toBe(0);
   });
+
+  it.runIf(process.platform !== 'win32')(
+    'creates the cache directory with mode 0o700 and staged files with mode 0o600',
+    async () => {
+      // Drain a non-empty body so we exercise the fs.open("w", 0o600) path.
+      const buf = makeBuf(1024);
+      const r1 = await stageAndServeStreamingExport({}, 'k_perm', () => makeStreamingResponse(buf));
+      await r1.arrayBuffer();
+
+      // Directory itself must be owner-only — no group/other bits.
+      const dirStat = await fsp.stat(CACHE_DIR);
+      expect(dirStat.mode & 0o777).toBe(0o700);
+
+      // The staged file for this jobKey must be owner-read/write only.
+      const prefix = require('crypto').createHash('sha256').update('k_perm').digest('hex');
+      const files = (await fsp.readdir(CACHE_DIR)).filter((f) => f.startsWith(prefix));
+      expect(files.length).toBe(1);
+      const fileStat = await fsp.stat(path.join(CACHE_DIR, files[0]));
+      expect(fileStat.mode & 0o777).toBe(0o600);
+    },
+  );
+
+  it.runIf(process.platform !== 'win32')(
+    'creates a 0-byte staged file with mode 0o600 (empty-body code path)',
+    async () => {
+      // Build a Response with a *null* body to drive the
+      // `await fsPromises.writeFile(filePath, Buffer.alloc(0), { mode: 0o600 })`
+      // branch in drainResponseBodyToFile — distinct from the streaming path
+      // covered above.
+      const r1 = await stageAndServeStreamingExport({}, 'k_perm_empty', () =>
+        new Response(null, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Content-Disposition': 'attachment; filename="empty.bin"',
+          },
+        }),
+      );
+      await r1.arrayBuffer();
+
+      const prefix = require('crypto').createHash('sha256').update('k_perm_empty').digest('hex');
+      const files = (await fsp.readdir(CACHE_DIR)).filter((f) => f.startsWith(prefix));
+      expect(files.length).toBe(1);
+      const fileStat = await fsp.stat(path.join(CACHE_DIR, files[0]));
+      expect(fileStat.size).toBe(0);
+      expect(fileStat.mode & 0o777).toBe(0o600);
+    },
+  );
 });
 
 describe('deriveStreamingExportJobKey', () => {

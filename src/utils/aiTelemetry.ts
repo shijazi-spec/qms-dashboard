@@ -137,6 +137,15 @@ export interface AiCallTelemetryMetadata {
   step?: string;
   /** Background-scan kind (e.g. `platform_scan`). */
   scan_type?: string;
+  /**
+   * Surface that produced the call / rating (e.g. `web`, `mobile`, `slack`,
+   * `embedded`). Mirrors the same field on `AiCallFeedbackMetadata` and
+   * is read by the per-surface breakdown in
+   * `getFeedbackBreakdownByPromptVersion()`. Task #763 made the call-id
+   * rating endpoint backfill this onto legacy rows that lack one so
+   * Slack / mobile / embedded ratings attribute correctly.
+   */
+  client_surface?: string;
 }
 
 /**
@@ -154,6 +163,7 @@ export interface AiCallTelemetryMetadataInput {
   workflow?: string;
   step?: string;
   scanType?: string;
+  clientSurface?: string;
 }
 
 const TELEMETRY_METADATA_KEY_MAP: Record<
@@ -167,6 +177,7 @@ const TELEMETRY_METADATA_KEY_MAP: Record<
   workflow: "workflow",
   step: "step",
   scanType: "scan_type",
+  clientSurface: "client_surface",
 };
 
 /**
@@ -716,10 +727,19 @@ export async function withAiTelemetry<T>(
 // { success: false, queued: true }). Queued calls are NOT counted as
 // errors in the dashboard; only true exceptions or non-queued failures are.
 // ──────────────────────────────────────────────────────────────────────────────
+// Mastra's current Tool<...> emits an `execute` whose first argument is a
+// strongly-typed context object (e.g. `{ context: Input, runtimeContext, ... }`)
+// and which optionally takes a second `MastraToolInvocationOptions` argument.
+// We don't care about the exact shape at the telemetry layer — we only need to
+// forward whatever arguments the LLM runtime hands us. Using `any[]` for the
+// parameter list (instead of `unknown` / a fixed-arity tuple) lets this type
+// stay assignable from any concrete `Tool<...>` instance regardless of how
+// narrowly Mastra has typed its input/output schemas. Behavior is unchanged.
 type WrappableTool = {
   id?: string;
   description?: string;
-  execute?: (args: unknown) => Promise<unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  execute?: (...args: any[]) => Promise<any>;
 };
 
 function describeToolFailure(result: unknown): string | null {
@@ -740,7 +760,10 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(
   const toolId = tool.id;
   if (!originalExecute || !toolId) return tool;
 
-  const wrappedExecute = async (args: unknown): Promise<unknown> => {
+  const wrappedExecute = async (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...args: any[]
+  ): Promise<unknown> => {
     const startedAt = Date.now();
     const parentCallId = getCurrentParentCallId();
     let success = true;
@@ -750,11 +773,11 @@ export function wrapToolWithTelemetry<T extends WrappableTool>(
     // output so ops teams can reproduce a failing tool call without us
     // ever persisting raw secrets / PII. Both are ≤300 chars after the
     // same PII redaction rules used for prompt_preview.
-    const toolInputPreview = redactToolPayloadPreview(args);
+    const toolInputPreview = redactToolPayloadPreview(args[0]);
     let toolOutputPreview: string | undefined;
 
     try {
-      const result = await originalExecute(args);
+      const result = await originalExecute(...args);
       toolOutputPreview = redactToolPayloadPreview(result);
 
       // Tools standardize on { success: boolean, ...}.
@@ -1566,19 +1589,18 @@ export async function getAgentLatencyPercentiles(): Promise<any[]> {
   return result.rows;
 }
 
-export async function getTopToolsByCost(
-  limit = 10,
-  agentName?: string,
-): Promise<any[]> {
-  await ensureAiMetricsTable();
-  const params: any[] = [limit];
-  let agentFilter = "";
-  if (agentName && agentName.trim()) {
-    params.push(agentName.trim());
-    agentFilter = `AND agent_name = $${params.length}`;
-  }
-  const result = await pool.query(
-    `SELECT
+/**
+ * Builds the SQL for getTopToolsByCost. Exported (along with the helper) so
+ * the EXPLAIN-based regression test in
+ * tests/aiTelemetryDashboardIndexes.test.ts can assert that the
+ * agent-filtered variant uses `idx_ai_call_metrics_agent_started`. Keep the
+ * two callers (getTopToolsByCost + the test) in lock-step by routing both
+ * through this builder so a future SQL tweak can never silently drift past
+ * the test.
+ */
+export function buildTopToolsByCostSql(hasAgentFilter: boolean): string {
+  const agentFilter = hasAgentFilter ? "AND agent_name = $2" : "";
+  return `SELECT
        tool_name,
        agent_name,
        COUNT(*)                                                              AS call_count,
@@ -1594,7 +1616,20 @@ export async function getTopToolsByCost(
        ${agentFilter}
      GROUP BY tool_name, agent_name
      ORDER BY total_cost DESC, call_count DESC
-     LIMIT $1`,
+     LIMIT $1`;
+}
+
+export async function getTopToolsByCost(
+  limit = 10,
+  agentName?: string,
+): Promise<any[]> {
+  await ensureAiMetricsTable();
+  const params: any[] = [limit];
+  const trimmedAgent =
+    agentName && agentName.trim() ? agentName.trim() : null;
+  if (trimmedAgent) params.push(trimmedAgent);
+  const result = await pool.query(
+    buildTopToolsByCostSql(!!trimmedAgent),
     params,
   );
   return result.rows;
@@ -1615,8 +1650,15 @@ export interface ParentCallForTool {
 export async function getParentCallsForTool(
   toolName: string,
   limit = 20,
+  windowDays = 7,
 ): Promise<ParentCallForTool[]> {
   await ensureAiMetricsTable();
+  // windowDays is interpolated (not a $-param) because PostgreSQL does not
+  // accept bind parameters inside an INTERVAL literal. The route layer
+  // already clamps the value via safeInt(..., 1, 90), and the function
+  // signature defaults to 7, so the value is always a small bounded
+  // integer — never user-controlled free-form text.
+  const safeDays = Math.max(1, Math.min(90, Math.floor(windowDays) || 7));
   const result = await pool.query(
     `SELECT
        p.id,
@@ -1631,7 +1673,7 @@ export async function getParentCallsForTool(
      FROM ai_call_metrics p
      JOIN ai_call_metrics c ON c.parent_call_id = p.id
      WHERE c.tool_name = $1
-       AND p.started_at >= NOW() - INTERVAL '7 days'
+       AND p.started_at >= NOW() - (INTERVAL '1 day' * ${safeDays})
      GROUP BY p.id, p.agent_name, p.model, p.started_at, p.latency_ms,
               p.estimated_cost_usd, p.success
      ORDER BY tool_cost DESC, p.started_at DESC
@@ -1662,8 +1704,11 @@ export async function getKnownAgentNames(): Promise<string[]> {
  * `getChildToolCallsForParent` in sync.
  */
 export const CHILD_TOOL_CALLS_SQL = `SELECT
-       id, agent_name, tool_name,
-       latency_ms, success, error_class, error_message, started_at
+       id, agent_name, tool_name, model,
+       prompt_tokens, completion_tokens, estimated_cost_usd,
+       latency_ms, success, error_class, error_message, started_at,
+       prompt_preview, tool_input_preview, tool_output_preview,
+       previews_redacted_at
      FROM ai_call_metrics
      WHERE parent_call_id = $1
      ORDER BY started_at ASC, id ASC`;
@@ -1673,11 +1718,19 @@ export async function getChildToolCallsForParent(parentId: number): Promise<
     id: string;
     agent_name: string;
     tool_name: string | null;
+    model: string | null;
+    prompt_tokens: number | null;
+    completion_tokens: number | null;
+    estimated_cost_usd: number | null;
     latency_ms: number;
     success: boolean;
     error_class: string | null;
     error_message: string | null;
     started_at: string;
+    prompt_preview: string | null;
+    tool_input_preview: string | null;
+    tool_output_preview: string | null;
+    previews_redacted_at: string | null;
   }[]
 > {
   await ensureAiMetricsTable();
@@ -1709,6 +1762,18 @@ export interface ToolWindowAggregate {
  * Intentionally does NOT apply a `minCalls` filter — a tool that had just
  * one call is still active; we only want tools with truly zero activity.
  */
+/**
+ * SQL for the silent-tool auto-resolve sweep's "which tools have had any
+ * activity in the last N minutes?" probe. Exported so the EXPLAIN-based
+ * regression test in tests/aiTelemetryDashboardIndexes.test.ts can assert
+ * the partial index `idx_ai_call_metrics_tool_started` is used and the
+ * sweep cannot silently fall back to a Seq Scan in production.
+ */
+export const TOOLS_WITH_CALLS_IN_WINDOW_SQL = `SELECT DISTINCT tool_name
+       FROM ai_call_metrics
+      WHERE tool_name IS NOT NULL
+        AND started_at >= NOW() - MAKE_INTERVAL(mins => $1)`;
+
 export async function getToolsWithCallsInWindow(
   windowMinutes: number,
 ): Promise<Set<string>> {
@@ -1721,10 +1786,7 @@ export async function getToolsWithCallsInWindow(
   // aborts the sweep on any error, so failing loudly here is the safe
   // (fail-closed) behavior.
   const result = await pool.query(
-    `SELECT DISTINCT tool_name
-       FROM ai_call_metrics
-      WHERE tool_name IS NOT NULL
-        AND started_at >= NOW() - MAKE_INTERVAL(mins => $1)`,
+    TOOLS_WITH_CALLS_IN_WINDOW_SQL,
     [windowMinutes],
   );
   return new Set<string>(
@@ -1773,6 +1835,26 @@ export async function getToolWindowAggregates(
   }));
 }
 
+/**
+ * SQL for the global "recent slow/failed calls" time-scrubber query on the
+ * AI Operations dashboard. Exported so the EXPLAIN-based regression test
+ * in tests/aiTelemetryDashboardIndexes.test.ts can assert the
+ * `idx_ai_call_metrics_started_at` index drives the ORDER BY started_at
+ * DESC LIMIT N pattern and the dashboard cannot silently regress to a
+ * Seq Scan.
+ */
+export const RECENT_SLOW_FAILED_CALLS_SQL = `SELECT
+       id, agent_name, tool_name, model,
+       latency_ms, estimated_cost_usd,
+       success, error_class, error_message,
+       prompt_preview, tool_input_preview, tool_output_preview,
+       started_at, prompt_tokens, completion_tokens
+     FROM ai_call_metrics
+     WHERE (NOT success OR latency_ms > 30000)
+       AND started_at >= NOW() - INTERVAL '7 days'
+     ORDER BY started_at DESC
+     LIMIT $1`;
+
 export async function getRecentSlowFailedCalls(limit = 20): Promise<
   {
     id: string;
@@ -1793,20 +1875,7 @@ export async function getRecentSlowFailedCalls(limit = 20): Promise<
   }[]
 > {
   await ensureAiMetricsTable();
-  const result = await pool.query(
-    `SELECT
-       id, agent_name, tool_name, model,
-       latency_ms, estimated_cost_usd,
-       success, error_class, error_message,
-       prompt_preview, tool_input_preview, tool_output_preview,
-       started_at, prompt_tokens, completion_tokens
-     FROM ai_call_metrics
-     WHERE (NOT success OR latency_ms > 30000)
-       AND started_at >= NOW() - INTERVAL '7 days'
-     ORDER BY started_at DESC
-     LIMIT $1`,
-    [limit],
-  );
+  const result = await pool.query(RECENT_SLOW_FAILED_CALLS_SQL, [limit]);
   return result.rows;
 }
 
@@ -1857,7 +1926,7 @@ export async function getCallById(callId: number): Promise<{
 // ──────────────────────────────────────────────────────────────────────────────
 let feedbackTableReady: Promise<void> | null = null;
 
-async function ensureFeedbackTable(): Promise<void> {
+export async function ensureFeedbackTable(): Promise<void> {
   if (feedbackTableReady) return feedbackTableReady;
   feedbackTableReady = (async () => {
     try {
@@ -1872,6 +1941,12 @@ async function ensureFeedbackTable(): Promise<void> {
         );
         ALTER TABLE ai_call_feedback
           ADD COLUMN IF NOT EXISTS comment TEXT;
+        -- Task #799: rating-source breakdown joins on
+        -- f.metadata ->> 'rating_source'. The breakdown SQL was added
+        -- without the corresponding schema bump, so on existing
+        -- databases the column may be missing.
+        ALTER TABLE ai_call_feedback
+          ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
         CREATE INDEX IF NOT EXISTS idx_ai_call_feedback_call_id
           ON ai_call_feedback (call_id);
         CREATE INDEX IF NOT EXISTS idx_ai_call_feedback_created_at
@@ -1925,6 +2000,131 @@ export async function insertCallFeedback(
   } catch (err) {
     logger.error("[aiTelemetry] Failed to insert feedback:", err);
     return false;
+  }
+}
+
+/**
+ * Backfill `prompt_version` into `ai_call_metrics.metadata` for a single
+ * call, but ONLY when the row does not already carry one. The
+ * authoritative writer is the streaming consultant route, which sets
+ * `metadata.prompt_version` at span open via
+ * {@link buildAiCallTelemetryMetadata}; this helper is the call-id rating
+ * path's "echo back what the client saw" safety net so call-id ratings
+ * (POST /api/ai-ops/feedback) are also visible in the per-version
+ * analytics view (`getFeedbackRateByPromptVersion`) when an older row
+ * predates the always-on telemetry path or when a future surface routes
+ * through aiOps without going through the consultant span first.
+ *
+ * Refuses to overwrite an existing prompt_version because the client is
+ * untrusted — the server-side span value (recorded at the moment the
+ * response was generated) is the source of truth. We only fill the
+ * field when it is absent or empty.
+ *
+ * Returns true when the row was updated (i.e. metadata.prompt_version
+ * was missing and is now `version`), false otherwise — including when
+ * the call id is unknown or the value already matched.
+ */
+export async function setCallPromptVersionIfMissing(
+  callId: number,
+  version: string,
+): Promise<boolean> {
+  try {
+    if (!Number.isFinite(callId) || callId <= 0) return false;
+    if (typeof version !== "string") return false;
+    const trimmed = version.trim().slice(0, 100);
+    if (!trimmed) return false;
+    await ensureAiMetricsTable();
+    const result = await pool.query(
+      `UPDATE ai_call_metrics
+          SET metadata = COALESCE(metadata, '{}'::jsonb)
+                         || jsonb_build_object('prompt_version', $2::text)
+        WHERE id = $1
+          AND COALESCE(metadata ->> 'prompt_version', '') = ''`,
+      [callId, trimmed],
+    );
+    return (result.rowCount ?? 0) > 0;
+  } catch (err) {
+    logger.error("[aiTelemetry] Failed to backfill prompt_version on call:", err);
+    return false;
+  }
+}
+
+/**
+ * Task #763: companion to {@link setCallPromptVersionIfMissing} that
+ * backfills `metadata.client_surface` on a call row when it is missing.
+ *
+ * Used by non-web rating surfaces (Slack thumbs-up/down bot, mobile app,
+ * embedded widget) to mark which UI produced the rating so per-surface
+ * analytics in the AI Operations dashboard
+ * (`getFeedbackBreakdownByPromptVersion().client_surfaces`) are populated
+ * without changing the message-id consultant feedback path.
+ *
+ * Refuses to overwrite an existing `client_surface` because the value
+ * recorded server-side at span open time (when present) is the source of
+ * truth — a misconfigured downstream surface shouldn't be able to reattribute
+ * a row to a different bucket after the fact.
+ *
+ * Returns true when the row was updated, false otherwise.
+ */
+export async function setCallClientSurfaceIfMissing(
+  callId: number,
+  surface: string,
+): Promise<boolean> {
+  try {
+    if (!Number.isFinite(callId) || callId <= 0) return false;
+    if (typeof surface !== "string") return false;
+    const trimmed = surface.trim().slice(0, 50);
+    if (!trimmed) return false;
+    await ensureAiMetricsTable();
+    const result = await pool.query(
+      `UPDATE ai_call_metrics
+          SET metadata = COALESCE(metadata, '{}'::jsonb)
+                         || jsonb_build_object('client_surface', $2::text)
+        WHERE id = $1
+          AND COALESCE(metadata ->> 'client_surface', '') = ''`,
+      [callId, trimmed],
+    );
+    return (result.rowCount ?? 0) > 0;
+  } catch (err) {
+    logger.error("[aiTelemetry] Failed to backfill client_surface on call:", err);
+    return false;
+  }
+}
+
+/**
+ * Read the recorded `metadata.prompt_version` for a single call.
+ *
+ * Task #763: non-web rating surfaces (Slack bot, mobile app, embedded
+ * widget) typically only have the `callId` of the response the user
+ * reacted to — they do not carry the `promptVersion` echo the web
+ * consultant chat client passes back in its feedback POST. Surfaces
+ * call this helper to look up the version that was active when the
+ * response was generated, then forward it on the rating POST so
+ * per-version analytics (`getFeedbackRateByPromptVersion`) attribute
+ * Slack/mobile/embedded ratings the same way they attribute web ones.
+ *
+ * Returns the trimmed prompt-version string, or null when the row does
+ * not exist or has no `metadata.prompt_version` (e.g. a legacy call
+ * recorded before the always-on telemetry path).
+ */
+export async function getCallPromptVersion(
+  callId: number,
+): Promise<string | null> {
+  try {
+    if (!Number.isFinite(callId) || callId <= 0) return null;
+    await ensureAiMetricsTable();
+    const result = await pool.query(
+      `SELECT NULLIF(TRIM(metadata ->> 'prompt_version'), '') AS prompt_version
+         FROM ai_call_metrics
+        WHERE id = $1
+        LIMIT 1`,
+      [callId],
+    );
+    const value = result.rows[0]?.prompt_version;
+    return typeof value === "string" && value ? value : null;
+  } catch (err) {
+    logger.error("[aiTelemetry] Failed to read prompt_version for call:", err);
+    return null;
   }
 }
 
@@ -1987,6 +2187,29 @@ export interface PromptVersionAggregate {
    * "regressed" by downstream consumers.
    */
   meets_min_feedback: boolean;
+  /**
+   * Per-surface call-count breakdown hoisted from
+   * `ai_call_metrics.metadata.client_surface` within the selected window
+   * (Task #749). Shape: `{ web: 12, slack: 3, mobile: 1, unknown: 4 }`
+   * where the `unknown` bucket collapses rows whose metadata never
+   * captured a surface (e.g. legacy traffic). Empty object for archived
+   * rows with no in-window activity. Lets the AI Ops dashboard render a
+   * tooltip/breakdown showing which surfaces contributed to each
+   * (agent, prompt_version) bucket without a follow-up query.
+   */
+  client_surfaces: Record<string, number>;
+  /**
+   * Per-rating-source breakdown hoisted from
+   * `ai_call_feedback.metadata.rating_source` within the selected window
+   * (Task #799). Shape: `{ inline_thumbs: 7, comment_modal: 2, retro_triage: 1, unknown: 3 }`
+   * where the `unknown` bucket collapses ratings whose metadata never
+   * captured a source (e.g. legacy votes recorded before the field was
+   * introduced). Empty object for rows with no in-window ratings. Lets
+   * the AI Ops dashboard render a per-source breakdown showing whether a
+   * version's feedback rate is heavily skewed toward a single source
+   * (which can bias the rate) without an extra round-trip.
+   */
+  rating_sources: Record<string, number>;
 }
 
 /**
@@ -2021,7 +2244,27 @@ export async function getFeedbackRateByPromptVersion(
       await ensureFeedbackTable();
     }
     const result = await queryPool.query(
-      `WITH windowed AS (
+      FEEDBACK_RATE_BY_PROMPT_VERSION_SQL,
+      [days, floor],
+    );
+    return result.rows;
+  } catch (err) {
+    logger.error("[aiTelemetry] getFeedbackRateByPromptVersion failed:", err);
+    return [];
+  }
+}
+
+/**
+ * SQL for the AI Operations dashboard's Prompt Version comparison view.
+ * Exported so the EXPLAIN-based regression test in
+ * tests/aiTelemetryDashboardIndexes.test.ts can assert that the partial
+ * index `idx_ai_call_metrics_agent_prompt_version` is used by at least one
+ * scan in the plan and the (expensive) per-prompt-version aggregate cannot
+ * silently regress to a Seq Scan on `ai_call_metrics`.
+ *
+ * Bind parameters: $1 = days window, $2 = min_feedback floor.
+ */
+export const FEEDBACK_RATE_BY_PROMPT_VERSION_SQL = `WITH windowed AS (
          SELECT
            m.agent_name,
            COALESCE(m.metadata ->> 'prompt_version', '(unknown)')            AS prompt_version,
@@ -2050,6 +2293,68 @@ export async function getFeedbackRateByPromptVersion(
          WHERE m.started_at >= NOW() - MAKE_INTERVAL(days => $1)
            AND m.tool_name IS NULL
          GROUP BY m.agent_name, COALESCE(m.metadata ->> 'prompt_version', '(unknown)')
+       ),
+       -- Per-surface call-count breakdown (Task #749). Computed as its
+       -- own grouped CTE and re-joined to the windowed CTE to avoid the
+       -- "subquery uses ungrouped column" error you would get from
+       -- inlining a correlated subquery into the windowed SELECT.
+       -- Collapses missing/empty client_surface metadata into an
+       -- "unknown" bucket so per-surface counts stay additive with
+       -- call_count even on legacy rows that predate metadata capture.
+       surface_counts AS (
+         SELECT
+           m.agent_name,
+           COALESCE(m.metadata ->> 'prompt_version', '(unknown)')              AS prompt_version,
+           COALESCE(NULLIF(m.metadata ->> 'client_surface', ''), 'unknown')    AS surface,
+           COUNT(*)                                                            AS surface_count
+         FROM ai_call_metrics m
+         WHERE m.started_at >= NOW() - MAKE_INTERVAL(days => $1)
+           AND m.tool_name IS NULL
+         GROUP BY
+           m.agent_name,
+           COALESCE(m.metadata ->> 'prompt_version', '(unknown)'),
+           COALESCE(NULLIF(m.metadata ->> 'client_surface', ''), 'unknown')
+       ),
+       surface_breakdown AS (
+         SELECT
+           agent_name,
+           prompt_version,
+           jsonb_object_agg(surface, surface_count) AS client_surfaces
+         FROM surface_counts
+         GROUP BY agent_name, prompt_version
+       ),
+       -- Per-rating-source breakdown (Task #799). Mirrors the
+       -- surface_counts CTE above but pulls from
+       -- ai_call_feedback.metadata.rating_source and is keyed off the
+       -- joined feedback row (so it counts ratings, not calls). Like
+       -- surfaces, missing/empty values collapse into an "unknown"
+       -- bucket so the per-source counts stay additive with
+       -- total_feedback even on legacy ratings recorded before the
+       -- field existed. The grouped jsonb_object_agg is split into a
+       -- separate CTE for the same reason as surface_breakdown — to
+       -- avoid "subquery uses ungrouped column" errors.
+       rating_source_counts AS (
+         SELECT
+           m.agent_name,
+           COALESCE(m.metadata ->> 'prompt_version', '(unknown)')                  AS prompt_version,
+           COALESCE(NULLIF(f.metadata ->> 'rating_source', ''), 'unknown')         AS rating_source,
+           COUNT(*)                                                                AS source_count
+         FROM ai_call_metrics m
+         JOIN ai_call_feedback f ON f.call_id = m.id
+         WHERE m.started_at >= NOW() - MAKE_INTERVAL(days => $1)
+           AND m.tool_name IS NULL
+         GROUP BY
+           m.agent_name,
+           COALESCE(m.metadata ->> 'prompt_version', '(unknown)'),
+           COALESCE(NULLIF(f.metadata ->> 'rating_source', ''), 'unknown')
+       ),
+       rating_source_breakdown AS (
+         SELECT
+           agent_name,
+           prompt_version,
+           jsonb_object_agg(rating_source, source_count) AS rating_sources
+         FROM rating_source_counts
+         GROUP BY agent_name, prompt_version
        ),
        global_last AS (
          SELECT
@@ -2081,21 +2386,39 @@ export async function getFeedbackRateByPromptVersion(
          w.last_seen                           AS last_seen,
          $2::INTEGER                           AS min_feedback,
          COALESCE(w.meets_min_feedback, FALSE) AS meets_min_feedback,
-         g.last_seen_at                        AS last_seen_at
+         g.last_seen_at                        AS last_seen_at,
+         COALESCE(sb.client_surfaces, '{}'::jsonb) AS client_surfaces,
+         COALESCE(rsb.rating_sources, '{}'::jsonb) AS rating_sources
        FROM global_last g
        LEFT JOIN windowed w
          ON w.agent_name = g.agent_name AND w.prompt_version = g.prompt_version
-       ORDER BY g.agent_name, g.last_seen_at DESC`,
-      [days, floor],
-    );
-    return result.rows;
-  } catch (err) {
-    logger.error("[aiTelemetry] getFeedbackRateByPromptVersion failed:", err);
-    return [];
-  }
+       LEFT JOIN surface_breakdown sb
+         ON sb.agent_name = g.agent_name AND sb.prompt_version = g.prompt_version
+       LEFT JOIN rating_source_breakdown rsb
+         ON rsb.agent_name = g.agent_name AND rsb.prompt_version = g.prompt_version
+       ORDER BY g.agent_name, g.last_seen_at DESC`;
+
+/**
+ * Optional filters for the Recent Thumbs-Down panel (Task #598).
+ *
+ * - `agentName` narrows to a single agent (e.g. when an admin spots a
+ *   regression on `qmsConsultantAgent` and wants to drill in without
+ *   scrolling the combined list). Trimmed and capped at 100 chars to match
+ *   the agent_name column the production rows use.
+ * - `days` controls the lookback window (was hard-coded to 30). Clamped to
+ *   1..365 to match the route-level `safeInt` guard so an out-of-range value
+ *   from a future caller can never blow out the query plan. Both filters
+ *   are applied via parameterized SQL — no string interpolation.
+ */
+export interface RecentNegativeFeedbackOptions {
+  limit?: number;
+  agentName?: string | null;
+  days?: number;
 }
 
-export async function getRecentNegativeFeedback(limit = 25): Promise<
+export async function getRecentNegativeFeedback(
+  optsOrLimit: number | RecentNegativeFeedbackOptions = {},
+): Promise<
   {
     feedback_id: string;
     call_id: string;
@@ -2108,10 +2431,54 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<
     latency_ms: number;
     success: boolean;
     error_class: string | null;
+    /**
+     * Client surface that submitted the rating, hoisted from
+     * `ai_call_metrics.metadata.client_surface` (Task #749). Lets the AI
+     * Ops dashboard show whether thumbs-down ratings are coming from the
+     * web chat, the Slack bot, or a mobile client without a separate
+     * round-trip. NULL for legacy rows where the surface was never
+     * captured.
+     */
+    client_surface: string | null;
+    /**
+     * Parent call's full `ai_call_metrics.metadata` JSONB (Task #621). Lets
+     * the AI Ops dashboard's Negative Feedback table render the same
+     * prompt-version / experiment-arm / feature-flag chips already shown on
+     * the Recent Thumbs-Down panel so operators don't lose regression
+     * context when pivoting between the two views. Always an object —
+     * legacy rows where metadata is SQL NULL are normalized to `{}` so the
+     * dashboard never has to defensively null-check before reading nested
+     * keys.
+     */
+    metadata: Record<string, unknown>;
   }[]
 > {
   try {
+    // Back-compat: accept the legacy positional `limit` form so existing
+    // callers (and the test suite that pre-dates Task #598) keep working
+    // without a sweep — only the route-level dashboard wiring needs the
+    // new options bag.
+    const opts: RecentNegativeFeedbackOptions =
+      typeof optsOrLimit === "number" ? { limit: optsOrLimit } : optsOrLimit;
+    const limit = Math.max(1, Math.min(1000, Math.floor(opts.limit ?? 25)));
+    const days = Math.max(1, Math.min(365, Math.floor(opts.days ?? 30)));
+    const agentName =
+      typeof opts.agentName === "string" && opts.agentName.trim()
+        ? opts.agentName.trim().slice(0, 100)
+        : null;
+
     await ensureFeedbackTable();
+    // INTERVAL is built via parameterized arithmetic (`INTERVAL '1 day' * $N`)
+    // so the day-window stays a real integer parameter — never a string
+    // interpolated into the SQL — which keeps the query injection-safe and
+    // lets Postgres reuse the prepared plan across windows. Same pattern
+    // for the optional agent_name filter.
+    const params: any[] = [limit, days];
+    let agentClause = "";
+    if (agentName) {
+      params.push(agentName);
+      agentClause = ` AND m.agent_name = $${params.length}`;
+    }
     const result = await pool.query(
       `SELECT
          f.id           AS feedback_id,
@@ -2124,23 +2491,31 @@ export async function getRecentNegativeFeedback(limit = 25): Promise<
          m.prompt_preview,
          m.latency_ms,
          m.success,
-         m.error_class
+         m.error_class,
+         m.metadata ->> 'client_surface' AS client_surface,
+         m.metadata     AS metadata
        FROM ai_call_feedback f
        JOIN ai_call_metrics  m ON m.id = f.call_id
        WHERE f.rating = 'thumbs_down'
-         AND f.created_at >= NOW() - INTERVAL '30 days'
+         AND f.created_at >= NOW() - (INTERVAL '1 day' * $2)${agentClause}
        ORDER BY f.created_at DESC
        LIMIT $1`,
-      [limit],
+      params,
     );
-    return result.rows;
+    return result.rows.map((row) => ({
+      ...row,
+      metadata:
+        row.metadata && typeof row.metadata === "object"
+          ? (row.metadata as Record<string, unknown>)
+          : {},
+    }));
   } catch (err) {
     logger.error("[aiTelemetry] getRecentNegativeFeedback failed:", err);
     return [];
   }
 }
 
-export async function getFeedbackRateByAgent(): Promise<
+export async function getFeedbackRateByAgent(days = 30): Promise<
   {
     agent_name: string;
     total_feedback: number;
@@ -2150,6 +2525,12 @@ export async function getFeedbackRateByAgent(): Promise<
   }[]
 > {
   try {
+    // Same parameterized day-window plumbing as `getRecentNegativeFeedback`
+    // (Task #598) so the dashboard's per-agent feedback-rate panel and the
+    // recent thumbs-down panel narrow to the same 7/30/90 window when an
+    // operator flips the toggle. Clamped to 1..365 to match the route-level
+    // safeInt guard.
+    const safeDays = Math.max(1, Math.min(365, Math.floor(days || 30)));
     await ensureFeedbackTable();
     const result = await pool.query(
       `SELECT
@@ -2163,9 +2544,10 @@ export async function getFeedbackRateByAgent(): Promise<
          )                                                                    AS feedback_rate_pct
        FROM ai_call_feedback f
        JOIN ai_call_metrics  m ON m.id = f.call_id
-       WHERE f.created_at >= NOW() - INTERVAL '30 days'
+       WHERE f.created_at >= NOW() - (INTERVAL '1 day' * $1)
        GROUP BY m.agent_name
        ORDER BY total_feedback DESC`,
+      [safeDays],
     );
     return result.rows;
   } catch {

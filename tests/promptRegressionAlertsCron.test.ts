@@ -15,6 +15,10 @@ import {
   sendPromptRegressionNotifications,
   sendPromptRegressionRecoveryNotifications,
   PROMPT_REGRESSION_THRESHOLDS,
+  PROMPT_REGRESSION_DEFAULTS,
+  PROMPT_REGRESSION_BOUNDS,
+  PROMPT_REGRESSION_ENV_BASELINE,
+  mergePromptRegressionOverrides,
   type RegressionBreach,
   type RegressionRecovery,
 } from "../src/mastra/workflows/promptRegressionAlertsCron";
@@ -848,6 +852,10 @@ async function run(): Promise<void> {
         sendPromptRegressionNotifications(breaches, {
           fetchFn: fetchStub,
           sendEmail: sendEmailStub,
+          // Bypass the per-(agent, version) cooldown introduced by Task
+          // #754 — this case asserts the happy-path Slack/email fan-out
+          // and runs against a test DB with no notification ledger row.
+          claimDb: async () => true,
         }),
     });
 
@@ -952,6 +960,10 @@ async function run(): Promise<void> {
     await sendPromptRegressionNotifications([makeBreach()], {
       fetchFn: fetchStub,
       sendEmail: sendEmailStub,
+      // Skip the cooldown gate (Task #754) for this isolation test —
+      // we're asserting Slack-failure does not silence email, not the
+      // throttle behaviour (separately covered by case 27/28).
+      claimDb: async () => true,
     });
 
     assert(emailCalls === 1, `Email was still attempted (got ${emailCalls})`);
@@ -977,6 +989,10 @@ async function run(): Promise<void> {
     await sendPromptRegressionNotifications([makeBreach()], {
       fetchFn: fetchStub,
       sendEmail: sendEmailStub,
+      // Skip the cooldown gate (Task #754) for this isolation test —
+      // we're asserting email-failure does not silence Slack, not the
+      // throttle behaviour (separately covered by case 27/28).
+      claimDb: async () => true,
     });
 
     assert(fetchCalls === 1, `Slack fetch was still attempted (got ${fetchCalls})`);
@@ -1147,6 +1163,270 @@ async function run(): Promise<void> {
     });
 
     assert(fetchCalls === 1, `Recovery Slack fetch was still attempted (got ${fetchCalls})`);
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Admin-tunable thresholds (Task #754).
+  //
+  // The cron used to read its sensitivity exclusively from env vars, so the
+  // only way to relax/tighten alerting was a redeploy. #754 added a DB-
+  // backed override row that's edited from the AI-Ops dashboard and merged
+  // in at runtime via the `loadOverrides` dep. The case below proves that
+  // a smaller `dropPctPoints` from the DB:
+  //   • flows through the full check (not just the merge helper), and
+  //   • flips a previously-quiet two-version pair into an actual alert.
+  // We pick a delta that's BELOW the env baseline but ABOVE the override
+  // so the env path emits 0 alerts and the override path emits 1 — making
+  // the assertion immune to drift in the env baseline value itself.
+  // ────────────────────────────────────────────────────────────────────────
+  console.log(
+    "\n26. Admin override from loadOverrides() lowers the drop threshold and opens an alert env baseline would have skipped",
+  );
+  await withRegressionEnv(async () => {
+    const baseline = PROMPT_REGRESSION_ENV_BASELINE.dropPctPoints;
+    const overrideDrop = Math.max(
+      PROMPT_REGRESSION_BOUNDS.dropPctPoints.min,
+      baseline - 5,
+    );
+    // Pick a measured drop strictly between override and baseline so the
+    // sole observable difference is which threshold is in effect.
+    const measuredDrop = (baseline + overrideDrop) / 2;
+    assert(
+      measuredDrop < baseline && measuredDrop > overrideDrop,
+      `precondition: measured drop ${measuredDrop} sits strictly between override ${overrideDrop} and baseline ${baseline}`,
+    );
+
+    const bestRate = 95;
+    const regressedRate = bestRate - measuredDrop;
+
+    // Run #1: NO override → env baseline applies → no alert.
+    const stubBaseline = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: bestRate, total_feedback: 25, thumbs_up: 24, thumbs_down: 1 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: regressedRate, total_feedback: 25, thumbs_up: Math.round((regressedRate / 100) * 25), thumbs_down: 25 - Math.round((regressedRate / 100) * 25) }),
+      ],
+    });
+    const baselineOut = await runPromptRegressionCheck({
+      ...stubBaseline.deps,
+      loadOverrides: async () => ({}),
+      // Skip Slack/email side-effects entirely — only the alert-create
+      // path is under test here.
+      notifyBreaches: async () => {},
+    });
+    assert(
+      baselineOut.alertsCreated === 0,
+      `with empty overrides the env baseline (${baseline} pp) keeps the cron quiet (got ${baselineOut.alertsCreated})`,
+    );
+    assert(
+      baselineOut.breaches.length === 0,
+      "no breach surfaces when the measured drop is below the env baseline",
+    );
+
+    // Run #2: DB override → smaller threshold applies → 1 alert.
+    const stubOverride = makeStub({
+      rows: [
+        makeRow({ prompt_version: "v1", feedback_rate_pct: bestRate, total_feedback: 25, thumbs_up: 24, thumbs_down: 1 }),
+        makeRow({ prompt_version: "v2", feedback_rate_pct: regressedRate, total_feedback: 25, thumbs_up: Math.round((regressedRate / 100) * 25), thumbs_down: 25 - Math.round((regressedRate / 100) * 25) }),
+      ],
+    });
+    const overrideOut = await runPromptRegressionCheck({
+      ...stubOverride.deps,
+      loadOverrides: async () => ({ dropPctPoints: overrideDrop }),
+      notifyBreaches: async () => {},
+    });
+    assert(
+      overrideOut.alertsCreated === 1,
+      `with dropPctPoints override ${overrideDrop} pp the same data triggers 1 alert (got ${overrideOut.alertsCreated})`,
+    );
+    assert(
+      overrideOut.breaches.length === 1 &&
+        overrideOut.breaches[0]?.regressed_version === "v2",
+      "the override-induced breach correctly flags v2 as the regressed version",
+    );
+
+    // And confirm the merge helper itself folds the override into the
+    // shape the rest of the cron consumes. Guards against future
+    // refactors that bypass mergePromptRegressionOverrides.
+    const merged = mergePromptRegressionOverrides({ dropPctPoints: overrideDrop });
+    assert(
+      merged.dropPctPoints === overrideDrop,
+      `mergePromptRegressionOverrides honours the DB override (got ${merged.dropPctPoints})`,
+    );
+    assert(
+      merged.minFeedback === PROMPT_REGRESSION_ENV_BASELINE.minFeedback &&
+        merged.windowDays === PROMPT_REGRESSION_ENV_BASELINE.windowDays &&
+        merged.notifyThrottleMin === PROMPT_REGRESSION_ENV_BASELINE.notifyThrottleMin,
+      "untouched fields fall through to the env baseline (no accidental wipe)",
+    );
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Notification cooldown via tool_health_notifications (Task #754).
+  //
+  // The breach notifier now takes a `claimDb` dep that mirrors the tool-
+  // health alerter's per-key throttle. When the DB returns `false` for a
+  // given `(agent, version)` key the breach must NOT reach Slack or email
+  // this cycle — even though `runPromptRegressionCheck` already opened an
+  // AIAlert row. This case feeds two breaches, lets only one through the
+  // throttle, and asserts:
+  //   • the throttle key shape is `prompt_regression:<agent>:<version>`,
+  //   • the throttle is consulted exactly once per breach,
+  //   • only the sendable breach is surfaced in the Slack body and the
+  //     single email summary (i.e. throttled breaches are filtered, not
+  //     just dimmed),
+  //   • the configured `notifyThrottleMin` is forwarded as the cooldown
+  //     window so the DB-side TTL matches the admin's setting.
+  // ────────────────────────────────────────────────────────────────────────
+  console.log(
+    "\n27. Throttle gate via claimDb filters breaches and forwards the configured cooldown",
+  );
+  await withRegressionEnv(async () => {
+    const claimCalls: Array<{ key: string; nowMs: number; ttlMs: number }> = [];
+    // Seed: first key (TestAgent:v2) is fresh → claim succeeds. Second
+    // key (OtherAgent:v9) is still cooling down → claim returns false.
+    const claimDbStub = async (key: string, nowMs: number, ttlMs: number) => {
+      claimCalls.push({ key, nowMs, ttlMs });
+      return key === "prompt_regression:TestAgent:v2";
+    };
+    const fetchCalls: Array<{ url: string; body: string }> = [];
+    const fetchStub = (async (url: string | URL | Request, init?: RequestInit) => {
+      fetchCalls.push({
+        url: String(url),
+        body: typeof init?.body === "string" ? init.body : "",
+      });
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+    const emailCalls: Array<{ to: string | string[]; subject: string; html?: string }> = [];
+    const sendEmailStub = async (opts: {
+      to: string | string[];
+      subject: string;
+      html?: string;
+      text?: string;
+    }) => {
+      emailCalls.push(opts);
+      return { success: true };
+    };
+
+    const cfg = {
+      ...PROMPT_REGRESSION_DEFAULTS,
+      notifyThrottleMin: 17, // distinctive value to assert TTL forwarding
+    };
+
+    await sendPromptRegressionNotifications(
+      [
+        makeBreach({ agent_name: "TestAgent", regressed_version: "v2" }),
+        makeBreach({ agent_name: "OtherAgent", regressed_version: "v9" }),
+      ],
+      {
+        fetchFn: fetchStub,
+        sendEmail: sendEmailStub,
+        claimDb: claimDbStub,
+        effectiveConfig: cfg,
+      },
+    );
+
+    // 1. Throttle is consulted once per breach with the documented key shape.
+    assert(
+      claimCalls.length === 2,
+      `claimDb called once per breach (got ${claimCalls.length})`,
+    );
+    const claimedKeys = claimCalls.map((c) => c.key).sort();
+    assert(
+      claimedKeys[0] === "prompt_regression:OtherAgent:v9" &&
+        claimedKeys[1] === "prompt_regression:TestAgent:v2",
+      `throttle keys use the prompt_regression:<agent>:<version> shape (got ${JSON.stringify(claimedKeys)})`,
+    );
+
+    // 2. The cooldown TTL forwarded to the DB matches notifyThrottleMin
+    //    (17 minutes → 17 * 60_000 ms). This is the contract the dashboard
+    //    promises operators when they tune the slider.
+    const expectedTtlMs = cfg.notifyThrottleMin * 60_000;
+    assert(
+      claimCalls.every((c) => c.ttlMs === expectedTtlMs),
+      `claimDb is called with TTL ${expectedTtlMs} ms (got ${JSON.stringify(claimCalls.map((c) => c.ttlMs))})`,
+    );
+
+    // 3. Slack fires once and the body mentions only the un-throttled
+    //    breach. The throttled one must not leak into the channel — that
+    //    would defeat the cooldown entirely.
+    assert(
+      fetchCalls.length === 1,
+      `Slack POST happens exactly once for the sendable subset (got ${fetchCalls.length})`,
+    );
+    assert(
+      fetchCalls[0]!.body.includes("TestAgent") &&
+        fetchCalls[0]!.body.includes("v2"),
+      "Slack body names the un-throttled (TestAgent / v2) breach",
+    );
+    assert(
+      !fetchCalls[0]!.body.includes("OtherAgent") &&
+        !fetchCalls[0]!.body.includes("v9"),
+      "Slack body omits the throttled (OtherAgent / v9) breach",
+    );
+
+    // 4. Email behaves the same — throttled breach absent from the HTML body.
+    assert(
+      emailCalls.length === 1,
+      `Email summary sent exactly once (got ${emailCalls.length})`,
+    );
+    const html = emailCalls[0]?.html ?? "";
+    assert(
+      html.includes("TestAgent") && html.includes("v2"),
+      "Email HTML body names the un-throttled breach",
+    );
+    assert(
+      !html.includes("OtherAgent") && !html.includes("v9"),
+      "Email HTML body omits the throttled breach",
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Throttle bypass — when an admin sets notifyThrottleMin to 0 from the
+  // dashboard the cron must skip claimDb entirely and fan-out every
+  // breach. This is the documented "disable the cooldown" affordance, so
+  // a future refactor that always calls claimDb (e.g. with a 0-ms TTL)
+  // would silently fail open and would NOT be caught by case 27. This
+  // case nails that contract by failing if claimDb is touched at all.
+  // ──────────────────────────────────────────────────────────────────────
+  console.log(
+    "\n28. notifyThrottleMin=0 disables the throttle entirely and every breach fans out",
+  );
+  await withRegressionEnv(async () => {
+    let claimCalls = 0;
+    const claimDbStub = async () => {
+      claimCalls++;
+      return false; // would suppress everything if it were ever called
+    };
+    let fetchCalls = 0;
+    const fetchStub = (async () => {
+      fetchCalls++;
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+    let emailCalls = 0;
+    const sendEmailStub = async () => {
+      emailCalls++;
+      return { success: true };
+    };
+
+    await sendPromptRegressionNotifications(
+      [
+        makeBreach({ agent_name: "A1", regressed_version: "v1" }),
+        makeBreach({ agent_name: "A2", regressed_version: "v2" }),
+      ],
+      {
+        fetchFn: fetchStub,
+        sendEmail: sendEmailStub,
+        claimDb: claimDbStub,
+        effectiveConfig: { ...PROMPT_REGRESSION_DEFAULTS, notifyThrottleMin: 0 },
+      },
+    );
+
+    assert(
+      claimCalls === 0,
+      `claimDb is bypassed entirely when cooldown is 0 (got ${claimCalls} calls)`,
+    );
+    assert(fetchCalls === 1, `Slack still fires (got ${fetchCalls})`);
+    assert(emailCalls === 1, `Email still fires (got ${emailCalls})`);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

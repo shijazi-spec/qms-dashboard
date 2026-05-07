@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
@@ -42,6 +42,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('fraud-incidents');
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
         });
     </script>
 
@@ -138,17 +139,17 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Code</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Date</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Severity</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Type</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Source</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Status</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Customers</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Amount (SAR)</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600">SLA</th>
-                            <th class="px-3 py-2 text-start text-xs font-semibold text-gray-600">SAMA</th>
-                            <th class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Actions</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Code</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Date</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Severity</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Type</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Source</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">Status</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Customers</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Amount (SAR)</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">SLA</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-semibold text-gray-600">SAMA</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-semibold text-gray-600">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="incidentsTableBody" class="divide-y divide-gray-200 text-sm"></tbody>
@@ -339,8 +340,12 @@
 
         function fmtDate(s) {
             if (!s) return '—';
-            try { return new Date(s).toISOString().slice(0, 10); }
-            catch { return String(s); }
+            try {
+                if (window.WalaPlusI18n && WalaPlusI18n.formatDate) {
+                    return WalaPlusI18n.formatDate(s, { year: 'numeric', month: '2-digit', day: '2-digit' });
+                }
+                return new Date(s).toLocaleDateString();
+            } catch { return String(s); }
         }
 
         function fmtNumber(n) {
@@ -406,7 +411,7 @@
                     return;
                 }
                 container.innerHTML = '<div class="overflow-x-auto"><table class="min-w-full text-xs">' +
-                    '<thead><tr class="bg-gray-50"><th class="px-2 py-1 text-start">Trigger</th><th class="px-2 py-1 text-start">Severity</th><th class="px-2 py-1 text-start">Notify Immediately</th><th class="px-2 py-1 text-start">Notify in 4h</th><th class="px-2 py-1 text-start">External</th><th class="px-2 py-1 text-start">SLA</th></tr></thead><tbody>' +
+                    '<thead><tr class="bg-gray-50"><th scope="col" class="px-2 py-1 text-start">Trigger</th><th scope="col" class="px-2 py-1 text-start">Severity</th><th scope="col" class="px-2 py-1 text-start">Notify Immediately</th><th scope="col" class="px-2 py-1 text-start">Notify in 4h</th><th scope="col" class="px-2 py-1 text-start">External</th><th scope="col" class="px-2 py-1 text-start">SLA</th></tr></thead><tbody>' +
                     rows.map(r => '<tr class="border-t"><td class="px-2 py-1 font-mono">' + escapeHtml(r.trigger_id) + '</td>' +
                         '<td class="px-2 py-1">' + escapeHtml(r.severity || '—') + '</td>' +
                         '<td class="px-2 py-1">' + (Array.isArray(r.notify_immediately) ? r.notify_immediately.map(escapeHtml).join('<br>') : '—') + '</td>' +
@@ -650,6 +655,11 @@
         window.submitCloseForm = submitCloseForm;
 
         document.addEventListener('DOMContentLoaded', loadIncidents);
+    </script>
+    <script>
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
     </script>
 </body>
 </html>

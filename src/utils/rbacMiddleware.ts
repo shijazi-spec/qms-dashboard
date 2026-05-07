@@ -97,9 +97,14 @@ export function getSessionUser(c: any): SessionUser | null {
       picture: session.picture,
     };
   }
-  const adminKeyHeader = c.req.header("X-Admin-Key");
   const expectedKey = process.env.ADMIN_API_KEY;
-  if (expectedKey && adminKeyHeader === expectedKey) {
+  // Accept the admin key from EITHER the X-Admin-Key header (server-to-server
+  // / curl) OR the admin_key cookie (browser sessions opened via the
+  // /dashboard/login.html admin-key form). `getAdminKey` already covers both
+  // sources and percent-decodes cookie values, so reuse it instead of
+  // re-implementing header-only matching here.
+  const presentedKey = getAdminKey(c);
+  if (expectedKey && presentedKey && presentedKey === expectedKey) {
     return {
       userId: 0,
       email: "admin-key@system",
@@ -1724,6 +1729,48 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     ],
   },
 
+  // Pipeline Aging (Task #825) — mirrors Duplicate Radar read set; handlers
+  // also enforce the same allowlist via `requirePipelineAgingAccess`.
+  {
+    pattern: /^\/api\/zoho\/(deals|leads)\/[^/]+\/(stage|status)-aging$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "grc_manager",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "bu_owner",
+      "executive",
+    ],
+  },
+  {
+    pattern: /^\/api\/zoho\/(deals|leads)\/aging$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "grc_manager",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "bu_owner",
+      "executive",
+    ],
+  },
+  {
+    pattern: /^\/api\/zoho\/aging\/config$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "grc_manager",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "bu_owner",
+      "executive",
+    ],
+  },
+
   // External Audit reads — handler uses `getSessionUser` only (any auth).
   {
     pattern: /^\/api\/external-audits/,
@@ -2047,11 +2094,127 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     ],
   },
 
-  // User access reads — fine-grained (admin-only diagnostics; admin+QM list).
-  // Order matters: more specific patterns must precede the broad
-  // `/api/users(/...)?$ GET` rule below.
+  // ─────────────────────────────────────────────────────────────────────────
+  // Task #436 — coverage backfill for `/api/*` routes that previously fell
+  // through every rule above and were therefore denied by the deny-by-default
+  // fallback. Discovered by `tests/rbacRouteCoverage.test.ts`, which scans
+  // `src/mastra/routes/**` and `src/triggers/**` and asserts every live
+  // route has an explicit ROUTE_PERMISSION_MAP rule.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Consultant feedback by message — handler uses `requireRole(c, CONSULTANT_ROLES)`.
+  {
+    pattern: /^\/api\/consultant\/feedback\/[^/]+$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "grc_manager",
+      "head_of_operations_quality",
+    ],
+  },
+
+  // Consultant chat history by thread — handler uses
+  // `requireRole(c, CONSULTANT_ROLES)`. Same role set as the sibling
+  // /api/consultant/feedback/:messageId rule above; backfilled here so the
+  // rebac route-coverage gate (Task #436) passes for the route added in
+  // src/mastra/routes/consultantRoutes.ts:139.
+  {
+    pattern: /^\/api\/consultant\/history\/[^/]+$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "grc_manager",
+      "head_of_operations_quality",
+    ],
+  },
+
+  // Recent-downloads tracker — per-user list/insert/clear via `getSessionUser`
+  // (any authenticated caller). Used by the streaming-download UI to surface
+  // each user's own recent export history.
+  {
+    pattern: /^\/api\/exports\/recent-downloads$/,
+    methods: ["GET", "POST", "DELETE"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "auditor",
+      "quality_specialist",
+      "team_lead",
+      "bu_owner",
+      "ai_specialist",
+      "executive",
+      "department_viewer",
+    ],
+  },
+
+  // Health-index aggregated quality metrics — handler enforces
+  // session-or-admin-key (`isAuthorizedForHealthIndex`); any authenticated
+  // caller may read.
+  {
+    pattern: /^\/api\/health-index$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "auditor",
+      "quality_specialist",
+      "team_lead",
+      "bu_owner",
+      "ai_specialist",
+      "executive",
+      "department_viewer",
+    ],
+  },
+
+  // SOP document API + download — handler enforces session-or-admin-key
+  // (`isAuthorizedForSop`); any authenticated caller may read.
+  {
+    pattern: /^\/api\/sop(\/download)?$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "auditor",
+      "quality_specialist",
+      "team_lead",
+      "bu_owner",
+      "ai_specialist",
+      "executive",
+      "department_viewer",
+    ],
+  },
+
   { pattern: /^\/api\/users\/stats$/, methods: ["GET"], roles: ["admin"] },
   { pattern: /^\/api\/users\/\d+$/, methods: ["GET"], roles: ["admin"] },
+  // PATCH on a specific user — admin-only (handler also enforces
+  // verifyAdminKey). Map-level rule is required because the broader
+  // `^/api/users` POST/PUT/DELETE permission rule above doesn't cover
+  // PATCH, so without this entry the deny-by-default fallback in
+  // `enforceRoutePermission` would swallow PATCH before the handler
+  // could run. DELETE is already covered by the `can_manage_users`
+  // rule above; intentionally not duplicated here so first-match
+  // semantics keep that policy authoritative.
+  {
+    pattern: /^\/api\/users\/\d+$/,
+    methods: ["PATCH"],
+    roles: ["admin"],
+  },
+  // Mobile consultant feedback (callId + messageId variants) — same
+  // allowlist as the web consultant chat (CONSULTANT_ROLES). See
+  // src/mastra/routes/mobileRoutes.ts:MOBILE_CONSULTANT_ROLES.
+  {
+    pattern: /^\/api\/mobile\/consultant\/(feedback|message-feedback)$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "grc_manager", "head_of_operations_quality"],
+  },
   {
     pattern: /^\/api\/users$/,
     methods: ["GET"],

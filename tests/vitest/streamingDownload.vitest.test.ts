@@ -900,6 +900,95 @@ describe('streamingDownload (browser helper)', () => {
     expect(env.win.alert).not.toHaveBeenCalled();
   });
 
+  it('shows an "Interrupted — Retry" toast when a mid-stream TypeError kills the service-worker streaming path (Task #379)', async () => {
+    // The SW path catches its own pipeTo() rejections and rethrows them as a
+    // synthetic AbortError (so the iframe-driven download is treated as a
+    // normal cancellation by the browser). The outer catch-block must still
+    // recognise this as an environmental abort — NOT a user cancel — and
+    // surface the amber "Download interrupted — Retry" toast, matching the
+    // behaviour of the FSA and Blob paths.
+    env = setupBrowserEnv({
+      enableShowSaveFilePicker: false,
+      installServiceWorker: true,
+    });
+
+    let bodyController: any;
+    const body = new (globalThis as any).ReadableStream({
+      start(c: any) { bodyController = c; },
+    });
+
+    let fetchCalls = 0;
+    env.win.fetch = vi.fn(async () => {
+      fetchCalls += 1;
+      return new (globalThis as any).Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-disposition': 'attachment; filename="sw-network-drop.bin"',
+        },
+      });
+    });
+
+    const downloadPromise = env.win.streamingDownload('/api/exports/sw-network-drop.bin', {
+      skipEstimate: true,
+      streamToDisk: true,
+    });
+
+    // Wait until the SW register ack lands and the iframe is in the DOM —
+    // this means we're truly on the SW streaming path (not the Blob fallback).
+    for (let i = 0; i < 50; i++) {
+      const hasReg = env.swCalls.some((c) => c.msg && c.msg.type === 'register');
+      const hasIframe = env.win.document.querySelectorAll('iframe').length > 0;
+      if (hasReg && hasIframe) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(env.swCalls.some((c) => c.msg && c.msg.type === 'register')).toBe(true);
+
+    // Push a chunk so we're truly mid-stream (received > 0).
+    bodyController.enqueue(new Uint8Array([1, 2, 3, 4]));
+    await new Promise((r) => setTimeout(r, 5));
+
+    // Simulate a real network drop on the body: this surfaces inside pipeTo()
+    // as a TypeError, which the SW catch-block rewraps into AbortError before
+    // it ever reaches the outer guard.
+    const networkErr: any = new Error('Failed to fetch');
+    networkErr.name = 'TypeError';
+    bodyController.error(networkErr);
+
+    await expect(downloadPromise).rejects.toMatchObject({
+      name: 'AbortError',
+      interrupted: true,
+    });
+
+    // The "Interrupted — Retry" warn toast must appear — same as the FSA and
+    // Blob paths. The filename context must be preserved.
+    const toast = env.win.document.querySelector('[data-testid="toast-download-interrupted"]');
+    expect(toast).not.toBeNull();
+    expect(toast?.textContent).toMatch(/interrupted/i);
+    expect(toast?.textContent).toMatch(/sw-network-drop\.bin/);
+
+    // The Retry button must be present.
+    const retryBtn = toast?.querySelector(
+      '[data-testid="button-retry-download"]'
+    ) as HTMLButtonElement | null;
+    expect(retryBtn).not.toBeNull();
+    expect(retryBtn?.textContent).toBe('Retry');
+
+    // The progress card must show "Interrupted", not "Cancelled".
+    const card = env.win.document.querySelector('[data-testid="card-download-progress"]');
+    const status = card?.querySelector('[data-testid="text-download-status"]');
+    expect(status?.textContent).toMatch(/interrupted/i);
+
+    // Best-effort: the SW received an explicit cancel for the registration so
+    // the in-flight stream entry is cleaned up server-worker-side.
+    const cancelCalls = env.swCalls.filter((c) => c.msg && c.msg.type === 'cancel');
+    expect(cancelCalls.length).toBeGreaterThanOrEqual(1);
+
+    // Only one fetch — Retry hasn't been clicked yet.
+    expect(fetchCalls).toBe(1);
+    expect(env.win.alert).not.toHaveBeenCalled();
+  });
+
   it('does NOT show an "Interrupted — Retry" toast for a TypeError that occurs before any bytes are received (pre-stream failure)', async () => {
     env = setupBrowserEnv({ enableShowSaveFilePicker: false });
 
@@ -2349,6 +2438,72 @@ describe('streamingDownload (browser helper)', () => {
         b.controller.error(Object.assign(new Error('done'), { name: 'AbortError' }));
         await expect(downloadPromise).rejects.toBeDefined();
       });
+
+      it('renders the cancel-confirm modal and progress-card "Waiting…" label in Arabic when WalaPlusI18n is loaded', async () => {
+        env = setupBrowserEnv({ enableShowSaveFilePicker: false });
+
+        const ar = JSON.parse(
+          readFileSync(resolve(__dirname, '..', '..', 'dashboard', 'i18n', 'ar.json'), 'utf8')
+        );
+        // Both shims are required: A11y to render the styled modal, and i18n
+        // to translate the modal/card strings.
+        installI18nShim(env.win, ar);
+        installA11yShim(env.win);
+
+        // Sanity-check: the four new keys exist in the Arabic dictionary.
+        expect(ar.downloads.cancel_modal_title).toBeTruthy();
+        expect(ar.downloads.cancel_modal_keep).toBeTruthy();
+        expect(ar.downloads.cancel_modal_confirm).toBeTruthy();
+        expect(ar.downloads.cancelling_wait).toBeTruthy();
+
+        const b = makeAbortableBody();
+        installAbortableFetch(env.win, b, {
+          'content-type': 'application/octet-stream',
+          'content-length': '1000',
+        });
+
+        const downloadPromise = env.win.streamingDownload('/api/exports/i18n-modal.bin', {
+          skipEstimate: true,
+          useServiceWorker: false,
+          confirmCancelThresholdMs: Infinity,
+        });
+
+        await new Promise((r) => setTimeout(r, 5));
+        b.controller.enqueue(new Uint8Array(800));
+        await new Promise((r) => setTimeout(r, 5));
+
+        const cancelBtn = env.win.document.querySelector(
+          '[data-testid="button-cancel-download"]'
+        ) as HTMLButtonElement;
+        expect(cancelBtn).not.toBeNull();
+
+        cancelBtn.click();
+        await new Promise((r) => setTimeout(r, 10));
+
+        // While the modal is open the card cancel button switches to the
+        // "Waiting…" label — verify it renders the Arabic translation.
+        expect(cancelBtn.textContent).toBe(ar.downloads.cancelling_wait);
+
+        const modal = env.win.document.querySelector(
+          '[role="dialog"][aria-modal="true"]'
+        ) as HTMLElement;
+        expect(modal).not.toBeNull();
+
+        const title = modal.querySelector('#sd-confirm-cancel-title');
+        expect(title?.textContent).toBe(ar.downloads.cancel_modal_title);
+
+        const keepBtn = modal.querySelector('[data-testid="button-keep-downloading"]');
+        expect(keepBtn?.textContent).toBe(ar.downloads.cancel_modal_keep);
+
+        const confirmBtn = modal.querySelector('[data-testid="button-confirm-cancel-download"]');
+        expect(confirmBtn?.textContent).toBe(ar.downloads.cancel_modal_confirm);
+
+        // Clean up: back out of the modal and end the download.
+        (keepBtn as HTMLElement).click();
+        await new Promise((r) => setTimeout(r, 10));
+        b.controller.error(Object.assign(new Error('done'), { name: 'AbortError' }));
+        await expect(downloadPromise).rejects.toBeDefined();
+      });
     });
   });
 
@@ -3253,13 +3408,11 @@ describe('streamingDownload (browser helper)', () => {
       // static "Export CSV" button so findExportButton() matches it on
       // first paint, just like the other dashboards.
       { page: 'logs', staticButton: true },
-      // audits.html's per-row PDF buttons are rendered dynamically by
-      // renderAudits() after the /api/audits fetch, so the static HTML
-      // still has no matching trigger. The dashboard code now calls
-      // attachStreamingFallbackNotice() at the end of renderAudits() so
-      // the advisory appears as soon as the table is populated; the
-      // assertion below simulates that injection.
-      { page: 'audits', staticButton: false },
+      // audits.html now ships a static "Export Audits CSV" button in the
+      // toolbar wired to /api/audits/export with data-estimate-url, so
+      // findExportButton() matches it on first paint just like the other
+      // dashboards. The dynamically-rendered per-row PDF buttons remain.
+      { page: 'audits', staticButton: true },
     ];
 
     function loadDashboardEnv(page: string) {

@@ -137,7 +137,7 @@ describe("GET /api/kpis/:id — real data path", () => {
     vi.mocked(kpiDb.getKPIHistory).mockResolvedValueOnce(history);
 
     const routes = await getRoutes();
-    const handler = await buildHandler(routes, "/api/kpis/:id", "GET");
+    const handler = await buildHandler(routes, "/api/kpis/:id{[0-9]+}", "GET");
     const res = await handler(makeContext({ method: "GET", params: { id: "5" } }));
 
     expect(res.status).toBe(200);
@@ -151,7 +151,7 @@ describe("GET /api/kpis/:id — real data path", () => {
     vi.mocked(kpiDb.getKPIById).mockResolvedValueOnce(null);
 
     const routes = await getRoutes();
-    const handler = await buildHandler(routes, "/api/kpis/:id", "GET");
+    const handler = await buildHandler(routes, "/api/kpis/:id{[0-9]+}", "GET");
     const res = await handler(makeContext({ method: "GET", params: { id: "999" } }));
 
     expect(res.status).toBe(404);
@@ -161,7 +161,7 @@ describe("GET /api/kpis/:id — real data path", () => {
 
   test("400 when KPI id is not a number", async () => {
     const routes = await getRoutes();
-    const handler = await buildHandler(routes, "/api/kpis/:id", "GET");
+    const handler = await buildHandler(routes, "/api/kpis/:id{[0-9]+}", "GET");
     const res = await handler(makeContext({ method: "GET", params: { id: "abc" } }));
 
     expect(res.status).toBe(400);

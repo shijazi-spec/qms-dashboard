@@ -1023,9 +1023,9 @@ export const adminApiRoutes = [
                   }
                 }
               } catch (joinErr) {
-                console.warn(
-                  '[Admin] Failed to join event_logs for post-restore alerts (per-table counts will fall back to message parsing):',
-                  joinErr,
+                logger.warn(
+                  '[Admin] Failed to join event_logs for post-restore alerts (per-table counts will fall back to message parsing)',
+                  { error: joinErr instanceof Error ? joinErr.message : String(joinErr) },
                 );
               }
             }
@@ -1135,6 +1135,32 @@ export const adminApiRoutes = [
         } catch (error) {
           logger.error("Error fetching post-restore sweep alerts:", error);
           return c.json({ error: "Failed to fetch post-restore sweep alerts" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Task #755 — surface the streaming-export per-job temp-file cache to
+    // operators. Returns live entry counts, on-disk byte totals, hit/miss
+    // counters, and the most recent janitor pass timestamp so admins can
+    // catch the cache directory growing unbounded before disk fills.
+    path: "/api/admin/export-cache/stats",
+    method: "GET",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!isAdminAuthorized(c))
+            return c.json({ error: "Insufficient permissions" }, 403);
+          const { getStagedExportCacheStats } =
+            await import("../../utils/excelExport");
+          const stats = await getStagedExportCacheStats();
+          return c.json(stats);
+        } catch (error) {
+          logger.error("Error fetching export cache stats:", error);
+          return c.json(
+            { error: "Failed to fetch export cache stats" },
+            500,
+          );
         }
       };
     },
