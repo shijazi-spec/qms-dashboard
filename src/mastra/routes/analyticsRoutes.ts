@@ -238,6 +238,88 @@ export const analyticsRoutes = [
     },
   },
   {
+    path: "/api/analytics/executive-digest/outbox",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...ANALYTICS_READ_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for notification outbox visibility",
+            );
+          const { getOutboxEntries } = await import("../../utils/notificationOutbox");
+          const source = String(c.req.query("source") || "").trim() || undefined;
+          const statusRaw = String(c.req.query("status") || "").trim().toLowerCase();
+          const status =
+            statusRaw === "pending" ||
+            statusRaw === "processing" ||
+            statusRaw === "sent" ||
+            statusRaw === "failed"
+              ? statusRaw
+              : undefined;
+          const limitRaw = Number.parseInt(String(c.req.query("limit") || "50"), 10);
+          const limit = Number.isFinite(limitRaw) ? limitRaw : 50;
+          const outbox = await getOutboxEntries({
+            source,
+            status: status as any,
+            limit,
+          });
+          return c.json({
+            success: true,
+            count: outbox.length,
+            outbox,
+          });
+        } catch (error) {
+          return c.json(
+            { error: "Failed to fetch notification outbox entries" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/analytics/executive-digest/outbox/process",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...DIGEST_SEND_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to process notification outbox",
+            );
+          let body: any = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          const limitRaw = Number.parseInt(String(body.limit || "30"), 10);
+          const limit = Number.isFinite(limitRaw) ? limitRaw : 30;
+          const { processDueOutboxMessages } = await import("../../utils/notificationOutbox");
+          const result = await processDueOutboxMessages(limit);
+          return c.json({
+            success: true,
+            result,
+          });
+        } catch (error) {
+          return c.json(
+            { error: "Failed to process notification outbox" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/analytics/executive-digest/send",
     method: "POST" as const,
     createHandler: async () => {

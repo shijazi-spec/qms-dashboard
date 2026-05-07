@@ -1085,6 +1085,22 @@ const executiveDigestQuarterlyFunction = inngest.createFunction(
 );
 inngestFunctions.push(executiveDigestQuarterlyFunction);
 
+const notificationOutboxDrainFunction = inngest.createFunction(
+  { id: "notification-outbox-drain" },
+  { cron: process.env.NOTIFICATION_OUTBOX_CRON || "*/10 * * * *" },
+  async ({ step }) => {
+    return await step.run("drain-notification-outbox", async () => {
+      const { processDueOutboxMessages } = await import("../../utils/notificationOutbox");
+      const result = await processDueOutboxMessages(
+        Number.parseInt(process.env.NOTIFICATION_OUTBOX_DRAIN_LIMIT || "50", 10),
+      );
+      logger.info("[Outbox] Scheduled drain completed", result);
+      return result;
+    });
+  },
+);
+inngestFunctions.push(notificationOutboxDrainFunction);
+
 const aiFeedbackDigestFunction = inngest.createFunction(
   { id: "ai-feedback-digest" },
   { cron: process.env.AI_FEEDBACK_DIGEST_CRON || "0 7 * * 1" },

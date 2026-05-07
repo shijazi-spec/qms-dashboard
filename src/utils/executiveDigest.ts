@@ -1,6 +1,5 @@
 ﻿import pg from "pg";
 import { logger } from "./logger";
-import { sendSlackNotification } from "./slackNotifications";
 import {
   analyzeRecordHygiene,
   DEFAULT_GOVERNANCE_RULES,
@@ -633,7 +632,7 @@ async function recordDigestRun(params: {
   cadence: DigestCadence;
   channel: DigestChannel;
   window: DigestWindow;
-  status: "success" | "failed";
+  status: "success" | "failed" | "queued";
   error?: string;
 }): Promise<void> {
   try {
@@ -1264,13 +1263,53 @@ export async function sendDigestSlack(
     };
   }
 
-  const sent = await sendSlackNotification(channel, fallback, blocks);
-  if (sent) {
+  const { enqueueSlackOutboxMessage, processOutboxMessageById, processDueOutboxMessages } =
+    await import("./notificationOutbox");
+  await processDueOutboxMessages(20);
+  const dedupeKey = options.enforceIdempotency === false ? undefined : runKey;
+  const outbox = await enqueueSlackOutboxMessage({
+    source: `executive_digest_${cadence}`,
+    destination: channel,
+    text: fallback,
+    blocks,
+    dedupeKey,
+    metadata: {
+      cadence,
+      runKey,
+      windowStart: window.start.toISOString(),
+      windowEnd: window.end.toISOString(),
+    },
+    maxAttempts: Number.parseInt(process.env.DIGEST_OUTBOX_MAX_ATTEMPTS || "4", 10),
+  });
+  const delivered = await processOutboxMessageById(outbox.id);
+  if (!delivered) {
+    const error = "Outbox enqueue succeeded but delivery record unavailable";
+    await recordDigestRun({ runKey, cadence, channel: "slack", window, status: "failed", error });
+    return { success: false, error, runKey, cadence };
+  }
+  if (delivered.status === "sent") {
     await recordDigestRun({ runKey, cadence, channel: "slack", window, status: "success" });
-    return { success: true, method: "slack", runKey, cadence };
+    return { success: true, method: "slack-outbox", runKey, cadence };
+  }
+  if (delivered.status === "pending" || delivered.status === "processing") {
+    await recordDigestRun({
+      runKey,
+      cadence,
+      channel: "slack",
+      window,
+      status: "queued",
+      error: delivered.last_error || undefined,
+    });
+    return {
+      success: true,
+      method: "slack-outbox-queued",
+      runKey,
+      cadence,
+      error: delivered.last_error || undefined,
+    };
   }
 
-  const error = "Slack delivery failed";
+  const error = delivered.last_error || "Slack delivery failed";
   await recordDigestRun({ runKey, cadence, channel: "slack", window, status: "failed", error });
   return { success: false, error, runKey, cadence };
 }
