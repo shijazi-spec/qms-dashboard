@@ -312,6 +312,36 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       (typeof p?.dayRange === 'number' ? ` · last ${p.dayRange} days` : ''),
   },
 
+  'extract-clauses-from-standard': {
+    toolId: 'extract-clauses-from-standard',
+    label: 'Extract draft clauses from standard PDF (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only clause extraction draft',
+      'WP-SOP-019 (Control of Documented Information Process) — user reviews before any write',
+    ],
+    entityType: 'clause_extraction_draft',
+    buildPreview: (p: any) =>
+      `Document: #${p?.documentId ?? '—'}` +
+      (p?.regulationId ? ` · regulation #${p.regulationId}` : ' · no regulation linked'),
+  },
+
+  'suggest-obligation-mapping': {
+    toolId: 'suggest-obligation-mapping',
+    label: 'Suggest obligation mapping for document (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only mapping suggestions',
+      'WP-SOP-019 (Control of Documented Information Process) — user reviews and accepts',
+    ],
+    entityType: 'obligation_mapping_suggestion',
+    buildPreview: (p: any) =>
+      `Document: #${p?.documentId ?? '—'}` +
+      (typeof p?.topN === 'number' ? ` · top ${p.topN}` : ' · top 5'),
+  },
+
   'check-regulation-compliance': {
     toolId: 'check-regulation-compliance',
     label: 'Check regulation compliance score (read-only)',

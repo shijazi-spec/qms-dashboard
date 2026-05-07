@@ -265,10 +265,16 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
 
   const ip = parseClientIp(c.req.header('x-forwarded-for'), c.req.header('x-real-ip'));
   const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
-  const rateCheck = await checkRateLimit(ip, isWrite, urlPath, isAuthenticated, session?.userId ? String(session.userId) : undefined);
+  // Cheap public preference lookup hit on every page load by every browser
+  // tab — rate-limiting it produces user-visible 429s and test flakes for
+  // a no-op endpoint. Bypass the limiter for this exact path only.
+  const isLanguagePreference = urlPath === '/api/user/language-preference';
+  const rateCheck = isLanguagePreference
+    ? { allowed: true as const }
+    : await checkRateLimit(ip, isWrite, urlPath, isAuthenticated, session?.userId ? String(session.userId) : undefined);
   if (!rateCheck.allowed) {
-    c.header('Retry-After', String(rateCheck.retryAfter || 60));
-    logRateLimit429(urlPath, method, ip, rateCheck.retryAfter);
+    c.header('Retry-After', String((rateCheck as any).retryAfter || 60));
+    logRateLimit429(urlPath, method, ip, (rateCheck as any).retryAfter);
     return c.json({ error: 'Too many requests' }, 429);
   }
 
@@ -525,13 +531,18 @@ export const globalMiddleware = [
         }
       }
     } else if (isApi && publicPath) {
-      const ip = parseClientIp(c.req.header('x-forwarded-for'), c.req.header('x-real-ip'));
-      const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
-      const rateCheck = await checkRateLimit(ip, isWrite, urlPath, false);
-      if (!rateCheck.allowed) {
-        c.header('Retry-After', String(rateCheck.retryAfter || 60));
-        logRateLimit429(urlPath, method, ip, rateCheck.retryAfter);
-        return c.json({ error: 'Too many requests' }, 429);
+      // Cheap public preference lookup hit on every page load by every browser
+      // tab — rate-limiting it produces user-visible 429s and test flakes for
+      // a no-op endpoint. Bypass the limiter for this exact path only.
+      if (urlPath !== '/api/user/language-preference') {
+        const ip = parseClientIp(c.req.header('x-forwarded-for'), c.req.header('x-real-ip'));
+        const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+        const rateCheck = await checkRateLimit(ip, isWrite, urlPath, false);
+        if (!rateCheck.allowed) {
+          c.header('Retry-After', String(rateCheck.retryAfter || 60));
+          logRateLimit429(urlPath, method, ip, rateCheck.retryAfter);
+          return c.json({ error: 'Too many requests' }, 429);
+        }
       }
     }
 
