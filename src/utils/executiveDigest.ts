@@ -1,7 +1,12 @@
 import pg from "pg";
 import { logger } from "./logger";
 import { sendSlackNotification } from "./slackNotifications";
-import { fetchAllZohoRecords, type ZohoCRMRecord } from "./zohoCRM";
+import {
+  analyzeRecordHygiene,
+  DEFAULT_GOVERNANCE_RULES,
+  fetchAllZohoRecords,
+  type ZohoCRMRecord,
+} from "./zohoCRM";
 
 const { Pool } = pg;
 
@@ -29,6 +34,7 @@ export interface DigestSectionRule {
   title: string;
   module: "Leads" | "Deals" | "Both";
   includeKeywords?: string[];
+  excludeKeywords?: string[];
 }
 
 export interface DigestBusinessSection {
@@ -40,6 +46,22 @@ export interface DigestBusinessSection {
   new_in_window: number;
   progressed: number;
   stalled: number;
+  health_score: number;
+  severity_counts: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    total: number;
+  };
+}
+
+export interface DigestSeveritySummary {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  total: number;
 }
 
 export interface DigestData {
@@ -76,6 +98,13 @@ export interface DigestData {
   top_alerts: Array<{ title: string; severity: string; module: string }>;
   capa_recurrences: number;
   duplicate_clusters: number;
+  business_overview: {
+    total_records: number;
+    total_leads: number;
+    total_deals: number;
+    total_issues: number;
+    severity_counts: DigestSeveritySummary;
+  };
   business_sections: DigestBusinessSection[];
 }
 
@@ -223,6 +252,9 @@ function recordSignalText(record: ZohoCRMRecord): string {
     record.data?.Stage?.name || record.data?.Stage,
     record.data?.Deal_Name,
     record.data?.Company,
+    record.data?.Account_Type?.name || record.data?.Account_Type,
+    record.data?.Customer_Type?.name || record.data?.Customer_Type,
+    record.data?.Type?.name || record.data?.Type,
   ];
   return normalize(parts.filter(Boolean).join(" "));
 }
@@ -240,22 +272,22 @@ function recordProgressSignal(record: ZohoCRMRecord): string {
 
 export function resolveDigestSectionRules(): DigestSectionRule[] {
   const defaults: DigestSectionRule[] = [
-    { id: "sdr", title: "SDR (All leads)", module: "Leads" },
     {
-      id: "walaplus_deals",
-      title: "WalaPlus Deals",
-      module: "Deals",
-      includeKeywords: ["walaplus", "wala plus"],
+      id: "sdr_leads_only",
+      title: "SDR Leads only",
+      module: "Leads",
+      excludeKeywords: ["marketplace", "market place", "mp"],
     },
     {
-      id: "walaone_deals",
-      title: "WalaOne Deals",
+      id: "deals_corporates_only",
+      title: "Deals Corporates only",
       module: "Deals",
-      includeKeywords: ["walaone", "wala one"],
+      includeKeywords: ["corporate", "enterprise", "b2b", "company"],
+      excludeKeywords: ["marketplace", "market place", "mp"],
     },
     {
       id: "marketplace_all",
-      title: "MarketPlace (All leads & deals)",
+      title: "MarketPlace Leads & Deals",
       module: "Both",
       includeKeywords: ["marketplace", "market place", "mp"],
     },
@@ -274,6 +306,9 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
         includeKeywords: Array.isArray(r.includeKeywords)
           ? r.includeKeywords.map((x: any) => String(x)).filter(Boolean)
           : [],
+        excludeKeywords: Array.isArray(r.excludeKeywords)
+          ? r.excludeKeywords.map((x: any) => String(x)).filter(Boolean)
+          : [],
       }))
       .filter((r) => r.id && r.title);
     return mapped.length > 0 ? mapped : defaults;
@@ -285,8 +320,14 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
 
 function matchesRule(record: ZohoCRMRecord, rule: DigestSectionRule): boolean {
   if (rule.module !== "Both" && record.module !== rule.module) return false;
-  if (!rule.includeKeywords || rule.includeKeywords.length === 0) return true;
   const signal = recordSignalText(record);
+  if (rule.excludeKeywords && rule.excludeKeywords.length > 0) {
+    const hasExcludedKeyword = rule.excludeKeywords.some((k) =>
+      signal.includes(normalize(k)),
+    );
+    if (hasExcludedKeyword) return false;
+  }
+  if (!rule.includeKeywords || rule.includeKeywords.length === 0) return true;
   return rule.includeKeywords.some((k) => signal.includes(normalize(k)));
 }
 
@@ -294,12 +335,47 @@ function buildBusinessSections(
   records: ZohoCRMRecord[],
   rules: DigestSectionRule[],
 ): DigestBusinessSection[] {
+  const recordSeverityMap = new Map<
+    string,
+    { critical: number; high: number; medium: number; low: number; total: number }
+  >();
+  for (const record of records) {
+    const issues = analyzeRecordHygiene(record, DEFAULT_GOVERNANCE_RULES);
+    const sev = { critical: 0, high: 0, medium: 0, low: 0, total: 0 };
+    for (const issue of issues) {
+      sev.total++;
+      if (issue.severity === "critical") sev.critical++;
+      else if (issue.severity === "high") sev.high++;
+      else if (issue.severity === "medium") sev.medium++;
+      else sev.low++;
+    }
+    recordSeverityMap.set(record.id, sev);
+  }
+
+  const claimedRecordIds = new Set<string>();
   return rules.map((rule) => {
-    const items = records.filter((r) => matchesRule(r, rule));
+    const items = records.filter((r) => {
+      if (claimedRecordIds.has(r.id)) return false;
+      const matched = matchesRule(r, rule);
+      if (matched) claimedRecordIds.add(r.id);
+      return matched;
+    });
     const leads = items.filter((r) => r.module === "Leads").length;
     const deals = items.filter((r) => r.module === "Deals").length;
     const progressed = items.filter((r) => isProgressed(recordProgressSignal(r))).length;
     const stalled = items.filter((r) => isStalled(recordProgressSignal(r))).length;
+    const severity = { critical: 0, high: 0, medium: 0, low: 0, total: 0 };
+    for (const item of items) {
+      const itemSev = recordSeverityMap.get(item.id);
+      if (!itemSev) continue;
+      severity.critical += itemSev.critical;
+      severity.high += itemSev.high;
+      severity.medium += itemSev.medium;
+      severity.low += itemSev.low;
+      severity.total += itemSev.total;
+    }
+
+    const itemHealth = severity.total > 0 ? Math.max(0, 100 - Math.round((severity.critical * 8 + severity.high * 4 + severity.medium * 2 + severity.low) / Math.max(items.length, 1))) : 100;
 
     return {
       id: rule.id,
@@ -310,6 +386,8 @@ function buildBusinessSections(
       new_in_window: items.length,
       progressed,
       stalled,
+      severity_counts: severity,
+      health_score: itemHealth,
     };
   });
 }
@@ -621,6 +699,23 @@ export async function generateDigestData(
 
   const sectionRules = options.sectionRules || resolveDigestSectionRules();
   const businessSections = buildBusinessSections(businessRecords, sectionRules);
+  const overallSeverity: DigestSeveritySummary = {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+    total: 0,
+  };
+  for (const section of businessSections) {
+    overallSeverity.critical += section.severity_counts.critical;
+    overallSeverity.high += section.severity_counts.high;
+    overallSeverity.medium += section.severity_counts.medium;
+    overallSeverity.low += section.severity_counts.low;
+    overallSeverity.total += section.severity_counts.total;
+  }
+  const totalLeads = businessSections.reduce((sum, s) => sum + s.leads, 0);
+  const totalDeals = businessSections.reduce((sum, s) => sum + s.deals, 0);
+  const totalRecords = businessSections.reduce((sum, s) => sum + s.total, 0);
 
   return {
     generated_at: now.toISOString(),
@@ -673,6 +768,13 @@ export async function generateDigestData(
     top_alerts: alertRows,
     capa_recurrences: recurrenceRows.length,
     duplicate_clusters: parseInt(duplicateClusters[0]?.cnt || "0", 10),
+    business_overview: {
+      total_records: totalRecords,
+      total_leads: totalLeads,
+      total_deals: totalDeals,
+      total_issues: overallSeverity.total,
+      severity_counts: overallSeverity,
+    },
     business_sections: businessSections,
   };
 }
@@ -699,7 +801,9 @@ export function buildDigestHTML(data: DigestData): string {
   const businessSectionsHtml = data.business_sections
     .map(
       (section) => `<div class="metric-row"><span>${section.title}</span><span class="metric-value">${section.total} (L:${section.leads} / D:${section.deals})</span></div>
-  <div class="metric-row"><span>Progressed / Stalled</span><span class="metric-value">${section.progressed} / ${section.stalled}</span></div>`,
+  <div class="metric-row"><span>Progressed / Stalled</span><span class="metric-value">${section.progressed} / ${section.stalled}</span></div>
+  <div class="metric-row"><span>Severity (C/H/M/L)</span><span class="metric-value">${section.severity_counts.critical}/${section.severity_counts.high}/${section.severity_counts.medium}/${section.severity_counts.low}</span></div>
+  <div class="metric-row"><span>Section Health</span><span class="metric-value">${section.health_score}%</span></div>`,
     )
     .join("");
 
@@ -727,6 +831,10 @@ export function buildDigestHTML(data: DigestData): string {
 
 <div class="card">
   <h3>Business Sections</h3>
+  <div class="metric-row"><span>Total records in scope</span><span class="metric-value">${data.business_overview.total_records} (L:${data.business_overview.total_leads} / D:${data.business_overview.total_deals})</span></div>
+  <div class="metric-row"><span>Total hygiene issues</span><span class="metric-value">${data.business_overview.total_issues}</span></div>
+  <div class="metric-row"><span>Severity (C/H/M/L)</span><span class="metric-value">${data.business_overview.severity_counts.critical}/${data.business_overview.severity_counts.high}/${data.business_overview.severity_counts.medium}/${data.business_overview.severity_counts.low}</span></div>
+  <hr style="border:0;border-top:1px solid #E5E7EB;margin:10px 0;" />
   ${businessSectionsHtml || `<div class="metric-row"><span>No CRM records in window</span><span class="metric-value">0</span></div>`}
 </div>
 
@@ -781,11 +889,14 @@ ${data.duplicate_clusters > 0 ? `<div class="card"><h3>Duplicate Radar</h3><p st
 }
 
 export function buildDigestSlackBlocks(data: DigestData): any[] {
+  const healthEmoji = (score: number): string =>
+    score >= 90 ? "🟢" : score >= 75 ? "🟡" : score >= 60 ? "🟠" : "🔴";
+
   const sections = data.business_sections.map((section) => ({
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*${section.title}*\n• Total: *${section.total}* (Leads ${section.leads} / Deals ${section.deals})\n• New: *${section.new_in_window}*\n• Progressed: *${section.progressed}* | Stalled: *${section.stalled}*`,
+      text: `*${section.title}*\n• Total: *${section.total}* (Leads ${section.leads} / Deals ${section.deals})\n• New: *${section.new_in_window}*\n• Progressed: *${section.progressed}* | Stalled: *${section.stalled}*\n• Severity: C *${section.severity_counts.critical}* / H *${section.severity_counts.high}* / M *${section.severity_counts.medium}* / L *${section.severity_counts.low}*\n• Health: ${healthEmoji(section.health_score)} *${section.health_score}%*`,
     },
   }));
   return [
@@ -802,7 +913,33 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
       elements: [
         {
           type: "mrkdwn",
-          text: `Window: ${data.period} (KSA)`,
+          text: `Period Covered: ${data.period} (KSA)`,
+        },
+        {
+          type: "mrkdwn",
+          text: `Generated: ${new Date(data.generated_at).toLocaleString("en-GB", { timeZone: "Asia/Riyadh" })} (KSA)`,
+        },
+      ],
+    },
+    { type: "divider" },
+    {
+      type: "section",
+      fields: [
+        {
+          type: "mrkdwn",
+          text: `*Records Audited*\n${data.business_overview.total_records} (Leads ${data.business_overview.total_leads} / Deals ${data.business_overview.total_deals})`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Issues Found*\n${data.business_overview.total_issues}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Severity*\nC ${data.business_overview.severity_counts.critical} • H ${data.business_overview.severity_counts.high} • M ${data.business_overview.severity_counts.medium} • L ${data.business_overview.severity_counts.low}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Audit Snapshot*\nScore ${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"} • Trend ${data.audit_summary.trend}`,
         },
       ],
     },
