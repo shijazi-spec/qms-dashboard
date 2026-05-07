@@ -604,7 +604,11 @@ export async function runDirectAudit(
         process.env.SLACK_DEFAULT_CHANNEL;
 
       if (directAuditSlackEnabled && slackToken && slackChannel) {
-        const { sendSlackNotification } = await import("./slackNotifications");
+        const {
+          enqueueSlackOutboxMessage,
+          processOutboxMessageById,
+          processDueOutboxMessages,
+        } = await import("./notificationOutbox");
         const score = qualityScores.overallScore || 0;
         const scoreEmoji = score >= 90 ? "🟢" : score >= 80 ? "🟡" : score >= 70 ? "🟠" : "🔴";
         const sevSummary = `Critical: ${criticalIssues} · High: ${highIssues} · Medium: ${mediumIssues} · Low: ${lowIssues}`;
@@ -718,15 +722,32 @@ export async function runDirectAudit(
           ],
         });
 
-        const sent = await sendSlackNotification(
-          slackChannel,
-          `${scoreEmoji} WalaPlus Quality Audit Completed — Score ${score.toFixed(1)}%`,
+        await processDueOutboxMessages(20);
+        const outboxEntry = await enqueueSlackOutboxMessage({
+          source: "direct_audit_completed",
+          destination: slackChannel,
+          text: `${scoreEmoji} WalaPlus Quality Audit Completed — Score ${score.toFixed(1)}%`,
           blocks,
-        );
-        if (sent) {
-          logger?.info("✅ [DirectAudit] Slack notification sent");
+          dedupeKey: savedResult.id ? `direct-audit:${savedResult.id}:slack` : undefined,
+          metadata: {
+            auditId: savedResult.id || null,
+            overallScore: score,
+          },
+          maxAttempts: Number.parseInt(process.env.DIRECT_AUDIT_OUTBOX_MAX_ATTEMPTS || "4", 10),
+        });
+        const delivered = await processOutboxMessageById(outboxEntry.id);
+        if (delivered?.status === "sent") {
+          logger?.info("✅ [DirectAudit] Slack notification sent via outbox");
+        } else if (delivered?.status === "pending" || delivered?.status === "processing") {
+          logger?.warn("⚠️ [DirectAudit] Slack queued for retry via outbox", {
+            outboxId: delivered.id,
+            lastError: delivered.last_error,
+          });
         } else {
-          logger?.warn("⚠️ [DirectAudit] Slack notification failed (helper returned false)");
+          logger?.warn("⚠️ [DirectAudit] Slack notification failed via outbox", {
+            outboxId: delivered?.id || outboxEntry.id,
+            lastError: delivered?.last_error || null,
+          });
         }
       } else if (!directAuditSlackEnabled) {
         logger?.info("ℹ️ [DirectAudit] DIRECT_AUDIT_SLACK_NOTIFY=false — skipping direct Slack notification");

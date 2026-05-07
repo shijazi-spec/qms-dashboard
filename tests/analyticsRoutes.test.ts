@@ -37,6 +37,7 @@ const GETS = [
   "/api/analytics/executive-digest",
   "/api/analytics/executive-digest/health",
   "/api/analytics/executive-digest/runs",
+  "/api/analytics/executive-digest/outbox",
 ];
 
 for (const p of GETS) {
@@ -50,6 +51,13 @@ for (const p of GETS) {
 
 await suite.test("POST /api/analytics/executive-digest/send — 403 without role", async () => {
   const handler = await buildHandler(analyticsRoutes, "/api/analytics/executive-digest/send", "POST");
+  const res = await handler(makeContext({ method: "POST", body: {} }));
+  suite.expectEqual(res.status, 403, "status");
+  suite.expect(typeof res.body?.error === "string", "body.error is string");
+});
+
+await suite.test("POST /api/analytics/executive-digest/outbox/process — 403 without role", async () => {
+  const handler = await buildHandler(analyticsRoutes, "/api/analytics/executive-digest/outbox/process", "POST");
   const res = await handler(makeContext({ method: "POST", body: {} }));
   suite.expectEqual(res.status, 403, "status");
   suite.expect(typeof res.body?.error === "string", "body.error is string");
