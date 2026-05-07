@@ -591,11 +591,20 @@ export async function runDirectAudit(
     // the audit pipeline. This is in addition to the internal audit_notifications
     // table updated by fireAuditCompletedTrigger below.
     try {
-      const slackToken = process.env.SLACK_BOT_TOKEN;
-      const slackChannel = process.env.SLACK_CHANNEL_ID || process.env.SLACK_DEFAULT_CHANNEL;
-      if (slackToken && slackChannel) {
-        const { WebClient } = await import("@slack/web-api");
-        const slack = new WebClient(slackToken);
+      const slackFlag = String(
+        process.env.DIRECT_AUDIT_SLACK_NOTIFY ?? "true",
+      ).toLowerCase();
+      const directAuditSlackEnabled = !["0", "false", "off", "no"].includes(
+        slackFlag,
+      );
+      const slackToken = process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN;
+      const slackChannel =
+        process.env.DIRECT_AUDIT_SLACK_CHANNEL ||
+        process.env.SLACK_CHANNEL_ID ||
+        process.env.SLACK_DEFAULT_CHANNEL;
+
+      if (directAuditSlackEnabled && slackToken && slackChannel) {
+        const { sendSlackNotification } = await import("./slackNotifications");
         const score = qualityScores.overallScore || 0;
         const scoreEmoji = score >= 90 ? "🟢" : score >= 80 ? "🟡" : score >= 70 ? "🟠" : "🔴";
         const sevSummary = `Critical: ${criticalIssues} · High: ${highIssues} · Medium: ${mediumIssues} · Low: ${lowIssues}`;
@@ -604,42 +613,89 @@ export async function runDirectAudit(
           .map((m: any) => `• *${m.module}*: ${m.recordsAudited.toLocaleString()} records, ${m.issuesFound.toLocaleString()} issues`)
           .join("\n");
         const dashUrl = process.env.PUBLIC_DASHBOARD_URL || "https://qms-dashboard.replit.app/";
-        await slack.chat.postMessage({
-          channel: slackChannel,
-          text: `${scoreEmoji} WalaPlus Quality Audit Completed — Score ${score.toFixed(1)}%`,
-          blocks: [
+        const generatedAtKsa = new Date().toLocaleString("en-GB", {
+          timeZone: "Asia/Riyadh",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        });
+
+        let executiveSectionText = "";
+        try {
+          const { generateDigestData } = await import("./executiveDigest");
+          const digestData = await generateDigestData({ cadence: "weekly", now: new Date() });
+          const sectionLines = digestData.business_sections.map(
+            (section) =>
+              `• *${section.title}* — Total ${section.total} (L ${section.leads} / D ${section.deals}) | New ${section.new_in_window} | Progressed ${section.progressed} | Stalled ${section.stalled} | Severity C/H/M/L ${section.severity_counts.critical}/${section.severity_counts.high}/${section.severity_counts.medium}/${section.severity_counts.low}`,
+          );
+          executiveSectionText = `*Period Covered (KSA):*\n${digestData.window_start} -> ${digestData.window_end}\n\n*Executive Segments (Dashboard-aligned):*\n${sectionLines.join("\n")}`;
+        } catch (digestErr) {
+          logger?.warn("⚠️ [DirectAudit] Could not build executive sections for Slack message", {
+            error: digestErr instanceof Error ? digestErr.message : String(digestErr),
+          });
+        }
+
+        const blocks: any[] = [
+          {
+            type: "header",
+            text: { type: "plain_text", text: `${scoreEmoji} Quality Audit Completed` },
+          },
+          {
+            type: "section",
+            fields: [
+              { type: "mrkdwn", text: `*Overall Score:*\n${score.toFixed(1)}%` },
+              { type: "mrkdwn", text: `*Records Audited:*\n${totalRecordsAudited.toLocaleString()}` },
+              { type: "mrkdwn", text: `*Issues Found:*\n${totalIssuesFound.toLocaleString()}` },
+              { type: "mrkdwn", text: `*Severity:*\n${sevSummary}` },
+              { type: "mrkdwn", text: `*People:* ${qualityScores.peopleScore.toFixed(1)}%` },
+              { type: "mrkdwn", text: `*Process:* ${qualityScores.processScore.toFixed(1)}%` },
+              { type: "mrkdwn", text: `*Governance:* ${qualityScores.governanceScore.toFixed(1)}%` },
+              { type: "mrkdwn", text: `*Generated at (KSA):*\n${generatedAtKsa}` },
+            ],
+          },
+        ];
+
+        if (executiveSectionText) {
+          blocks.push({ type: "divider" });
+          blocks.push({
+            type: "section",
+            text: { type: "mrkdwn", text: executiveSectionText },
+          });
+        }
+
+        if (moduleSummary) {
+          blocks.push({
+            type: "section",
+            text: { type: "mrkdwn", text: `*Module Breakdown:*\n${moduleSummary}` },
+          });
+        }
+
+        blocks.push({
+          type: "actions",
+          elements: [
             {
-              type: "header",
-              text: { type: "plain_text", text: `${scoreEmoji} Quality Audit Completed` },
-            },
-            {
-              type: "section",
-              fields: [
-                { type: "mrkdwn", text: `*Overall Score:*\n${score.toFixed(1)}%` },
-                { type: "mrkdwn", text: `*Records Audited:*\n${totalRecordsAudited.toLocaleString()}` },
-                { type: "mrkdwn", text: `*Issues Found:*\n${totalIssuesFound.toLocaleString()}` },
-                { type: "mrkdwn", text: `*Severity:*\n${sevSummary}` },
-                { type: "mrkdwn", text: `*People:* ${qualityScores.peopleScore.toFixed(1)}%` },
-                { type: "mrkdwn", text: `*Process:* ${qualityScores.processScore.toFixed(1)}%` },
-                { type: "mrkdwn", text: `*Governance:* ${qualityScores.governanceScore.toFixed(1)}%` },
-              ],
-            },
-            ...(moduleSummary
-              ? [{ type: "section" as const, text: { type: "mrkdwn" as const, text: `*Module Breakdown:*\n${moduleSummary}` } }]
-              : []),
-            {
-              type: "actions",
-              elements: [
-                {
-                  type: "button",
-                  text: { type: "plain_text", text: "Open Dashboard" },
-                  url: dashUrl,
-                },
-              ],
+              type: "button",
+              text: { type: "plain_text", text: "Open Dashboard" },
+              url: dashUrl,
             },
           ],
         });
-        logger?.info("✅ [DirectAudit] Slack notification sent");
+
+        const sent = await sendSlackNotification(
+          slackChannel,
+          `${scoreEmoji} WalaPlus Quality Audit Completed — Score ${score.toFixed(1)}%`,
+          blocks,
+        );
+        if (sent) {
+          logger?.info("✅ [DirectAudit] Slack notification sent");
+        } else {
+          logger?.warn("⚠️ [DirectAudit] Slack notification failed (helper returned false)");
+        }
+      } else if (!directAuditSlackEnabled) {
+        logger?.info("ℹ️ [DirectAudit] DIRECT_AUDIT_SLACK_NOTIFY=false — skipping direct Slack notification");
       } else {
         logger?.info("ℹ️ [DirectAudit] Slack not configured (SLACK_BOT_TOKEN / SLACK_CHANNEL_ID missing) — skipping Slack notification");
       }
