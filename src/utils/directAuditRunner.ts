@@ -747,7 +747,36 @@ export async function runDirectAudit(
           });
         }
       } else if (!directAuditSlackEnabled) {
-        logger?.info("ℹ️ [DirectAudit] DIRECT_AUDIT_SLACK_NOTIFY=false — skipping direct Slack notification");
+        logger?.info("ℹ️ [DirectAudit] DIRECT_AUDIT_SLACK_NOTIFY=false — sending digest-format fallback notification");
+        try {
+          const { sendDigestSlack, computeDigestWindow } = await import("./executiveDigest");
+          const now = new Date();
+          const cadence = "weekly" as const;
+          const window = computeDigestWindow(cadence, now);
+          const fallbackResult = await sendDigestSlack({
+            cadence,
+            now,
+            window,
+            // Direct-audit fallback should notify immediately for this audit run.
+            enforceIdempotency: false,
+            channelOverride:
+              process.env.DIRECT_AUDIT_SLACK_CHANNEL ||
+              process.env.DIGEST_SLACK_CHANNEL_WEEKLY ||
+              process.env.DIGEST_SLACK_CHANNEL ||
+              process.env.SLACK_CHANNEL_ID ||
+              process.env.SLACK_DEFAULT_CHANNEL ||
+              undefined,
+          });
+          logger?.info("✅ [DirectAudit] Digest-format fallback notification attempted", {
+            success: fallbackResult.success,
+            method: fallbackResult.method,
+            error: fallbackResult.error || null,
+          });
+        } catch (fallbackErr) {
+          logger?.warn("⚠️ [DirectAudit] Digest-format fallback notification failed", {
+            error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+          });
+        }
       } else {
         logger?.info("ℹ️ [DirectAudit] Slack not configured (SLACK_BOT_TOKEN / SLACK_CHANNEL_ID missing) — skipping Slack notification");
       }
