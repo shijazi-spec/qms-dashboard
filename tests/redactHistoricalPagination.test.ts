@@ -132,7 +132,7 @@ async function run(): Promise<void> {
       },
     );
 
-    const updated = await redactEventLogs(stub as any, BATCH);
+    const updated = (await redactEventLogs(stub as any, BATCH)).rowsUpdated;
 
     const expectedDirty = Math.ceil(TOTAL / 3);
     const expectedFullPages = Math.floor(TOTAL / BATCH);
@@ -265,7 +265,7 @@ async function run(): Promise<void> {
       /^\s*UPDATE\s+event_logs/i,
       () => {},
     );
-    const updated = await redactEventLogs(stub as any, 250);
+    const updated = (await redactEventLogs(stub as any, 250)).rowsUpdated;
     assert(updated === 0, 'empty event_logs: 0 rows updated');
     assert(
       stub.selectCalls === 1,

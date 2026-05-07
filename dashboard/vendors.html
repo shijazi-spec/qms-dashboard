@@ -24,13 +24,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
     <script src="/js/streaming-download.js?v=2.2.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -122,12 +122,12 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_code">Code</th>
-                                <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_vendor">Vendor</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_category">Category</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_criticality">Criticality</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_risk_score">Risk Score</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_status">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_code">Code</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_vendor">Vendor</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_category">Category</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_criticality">Criticality</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_risk_score">Risk Score</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_status">Status</th>
                             </tr>
                         </thead>
                         <tbody id="vendorsTableBody" class="bg-white divide-y divide-gray-200">
@@ -185,13 +185,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_remediation">Remediation</th>
-                            <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_vendor">Vendor</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_category">Category</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_priority">Priority</th>
-                            <th class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_assigned_to">Assigned To</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_due_date">Due Date</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_status">Status</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_remediation">Remediation</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_vendor">Vendor</th>
+                            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_category">Category</th>
+                            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_priority">Priority</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_assigned_to">Assigned To</th>
+                            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_due_date">Due Date</th>
+                            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="vendors.col_status">Status</th>
                         </tr>
                     </thead>
                     <tbody id="remediationsTableBody" class="bg-white divide-y divide-gray-200">
@@ -420,22 +420,20 @@
             }
         }
 
-        function _t(k, opts) {
-            if (window.WalaPlusI18n && window.WalaPlusI18n.t) {
-                if (opts && typeof opts === 'object') return window.WalaPlusI18n.t(k, opts) || k;
-                const r = window.WalaPlusI18n.t(k);
-                return (typeof opts === 'string') ? (r || opts) : r;
-            }
-            return (typeof opts === 'string') ? opts : k;
-        }
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
+        document.addEventListener('walaPlusLanguageChange', function () {
+            try {
+                if (typeof loadSummary === 'function') loadSummary();
+                if (typeof loadVendors === 'function') loadVendors();
+            } catch (_) {}
+        });
 
         function renderCriticalityChart(data) {
             const container = document.getElementById('byCriticalityChart');
             if (data.length === 0) {
-                container.innerHTML = '<div class="text-gray-400 text-center py-4">' + _t('dyn.vendors.no_active_vendors') + '</div>';
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">' + WalaPlusI18n.t('dyn.vendors.no_active_vendors') + '</div>';
                 return;
             }
             const total = data.reduce((sum, item) => sum + parseInt(item.count), 0);
@@ -457,7 +455,7 @@
         function renderExpiringContracts(contracts) {
             const container = document.getElementById('expiringContracts');
             if (contracts.length === 0) {
-                container.innerHTML = '<div class="text-green-600 text-center py-4">' + _t('dyn.vendors.no_expiring_contracts') + '</div>';
+                container.innerHTML = '<div class="text-green-600 text-center py-4">' + WalaPlusI18n.t('dyn.vendors.no_expiring_contracts') + '</div>';
                 return;
             }
             container.innerHTML = contracts.map(c => `
@@ -477,7 +475,7 @@
         function renderOverdueAssessments(vendors) {
             const container = document.getElementById('overdueAssessments');
             if (vendors.length === 0) {
-                container.innerHTML = '<div class="text-green-600 text-center py-4">' + _t('dyn.vendors.no_overdue_assessments') + '</div>';
+                container.innerHTML = '<div class="text-green-600 text-center py-4">' + WalaPlusI18n.t('dyn.vendors.no_overdue_assessments') + '</div>';
                 return;
             }
             container.innerHTML = vendors.map(v => `
@@ -487,7 +485,7 @@
                         <div class="text-xs text-gray-500">${v.vendor_code}</div>
                     </div>
                     <div class="text-end">
-                        <div class="text-sm text-red-600 font-medium">${_t('dyn.vendors.due_label', { date: _fd(v.next_assessment_date) })}</div>
+                        <div class="text-sm text-red-600 font-medium">${WalaPlusI18n.t('dyn.vendors.due_label', { date: _fd(v.next_assessment_date) })}</div>
                         <span class="text-xs px-2 py-0.5 rounded-full criticality-${v.criticality}">${formatCriticality(v.criticality)}</span>
                     </div>
                 </div>
@@ -511,12 +509,42 @@
                 renderVendorsTable(data.vendors || []);
             } catch (error) {
                 console.error('Error loading vendors:', error);
-                document.getElementById('vendorsTableBody').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">' + _t('dyn.vendors.error_loading') + '</td></tr>';
+                document.getElementById('vendorsTableBody').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">' + WalaPlusI18n.t('dyn.vendors.error_loading') + '</td></tr>';
             }
         }
 
         function _vlabel(group, key) {
-            const t = _t('dyn.vendors.' + group + '.' + key);
+            let t;
+            if (group === 'criticality') {
+                switch (key) {
+                    case 'critical': t = WalaPlusI18n.t('dyn.vendors.criticality.critical'); break;
+                    case 'high':     t = WalaPlusI18n.t('dyn.vendors.criticality.high'); break;
+                    case 'medium':   t = WalaPlusI18n.t('dyn.vendors.criticality.medium'); break;
+                    case 'low':      t = WalaPlusI18n.t('dyn.vendors.criticality.low'); break;
+                }
+            } else if (group === 'status') {
+                switch (key) {
+                    case 'active':       t = WalaPlusI18n.t('dyn.vendors.status.active'); break;
+                    case 'under_review': t = WalaPlusI18n.t('dyn.vendors.status.under_review'); break;
+                    case 'suspended':    t = WalaPlusI18n.t('dyn.vendors.status.suspended'); break;
+                    case 'terminated':   t = WalaPlusI18n.t('dyn.vendors.status.terminated'); break;
+                    case 'onboarding':   t = WalaPlusI18n.t('dyn.vendors.status.onboarding'); break;
+                }
+            } else if (group === 'category') {
+                switch (key) {
+                    case 'it_services':           t = WalaPlusI18n.t('dyn.vendors.category.it_services'); break;
+                    case 'cloud':                 t = WalaPlusI18n.t('dyn.vendors.category.cloud'); break;
+                    case 'software':              t = WalaPlusI18n.t('dyn.vendors.category.software'); break;
+                    case 'hardware':              t = WalaPlusI18n.t('dyn.vendors.category.hardware'); break;
+                    case 'consulting':            t = WalaPlusI18n.t('dyn.vendors.category.consulting'); break;
+                    case 'staffing':              t = WalaPlusI18n.t('dyn.vendors.category.staffing'); break;
+                    case 'logistics':             t = WalaPlusI18n.t('dyn.vendors.category.logistics'); break;
+                    case 'marketing':             t = WalaPlusI18n.t('dyn.vendors.category.marketing'); break;
+                    case 'professional_services': t = WalaPlusI18n.t('dyn.vendors.category.professional_services'); break;
+                    case 'utilities':             t = WalaPlusI18n.t('dyn.vendors.category.utilities'); break;
+                    case 'other':                 t = WalaPlusI18n.t('dyn.vendors.category.other'); break;
+                }
+            }
             if (t && t !== key) return t;
             return String(key).replace(/_/g, ' ');
         }
@@ -524,7 +552,7 @@
         function renderVendorsTable(vendors) {
             const tbody = document.getElementById('vendorsTableBody');
             if (vendors.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.vendors.no_vendors_found') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.vendors.no_vendors_found') + '</td></tr>';
                 return;
             }
             
@@ -559,41 +587,41 @@
         }
         function formatVendorCategory(cat) {
             const map = {
-                'technology':            _t('vendors.cat_technology',   'Technology'),
-                'consulting':            _t('vendors.cat_consulting',   'Consulting'),
-                'manufacturing':         _t('vendors.cat_manufacturing', 'Manufacturing'),
-                'logistics':             _t('vendors.cat_logistics',    'Logistics'),
-                'financial':             _t('vendors.cat_financial',    'Financial'),
-                'professional_services': _t('vendors.cat_professional', 'Professional Services'),
-                'other':                 _t('vendors.cat_other',        'Other')
+                'technology':            (WalaPlusI18n.t('vendors.cat_technology') || 'Technology'),
+                'consulting':            (WalaPlusI18n.t('vendors.cat_consulting') || 'Consulting'),
+                'manufacturing':         (WalaPlusI18n.t('vendors.cat_manufacturing') || 'Manufacturing'),
+                'logistics':             (WalaPlusI18n.t('vendors.cat_logistics') || 'Logistics'),
+                'financial':             (WalaPlusI18n.t('vendors.cat_financial') || 'Financial'),
+                'professional_services': (WalaPlusI18n.t('vendors.cat_professional') || 'Professional Services'),
+                'other':                 (WalaPlusI18n.t('vendors.cat_other') || 'Other')
             };
             return map[cat] || _prettify(cat);
         }
         function formatCriticality(level) {
             const map = {
-                'critical': _t('common.critical', 'Critical'),
-                'high':     _t('common.high',     'High'),
-                'medium':   _t('common.medium',   'Medium'),
-                'low':      _t('common.low',      'Low')
+                'critical': (WalaPlusI18n.t('common.critical') || 'Critical'),
+                'high':     (WalaPlusI18n.t('common.high') || 'High'),
+                'medium':   (WalaPlusI18n.t('common.medium') || 'Medium'),
+                'low':      (WalaPlusI18n.t('common.low') || 'Low')
             };
             return map[level] || _prettify(level);
         }
         function formatVendorStatus(status) {
             const map = {
-                'active':           _t('vendors.s_active',           'Active'),
-                'pending':          _t('vendors.s_pending',          'Pending'),
-                'pending_approval': _t('vendors.s_pending_approval', 'Pending Approval'),
-                'probation':        _t('vendors.s_probation',        'Probation'),
-                'suspended':        _t('vendors.s_suspended',        'Suspended'),
-                'inactive':         _t('common.inactive',            'Inactive'),
-                'under_review':     _t('vendors.s_under_review',     'Under Review'),
-                'approved':         _t('common.approved',            'Approved'),
-                'rejected':         _t('common.rejected',            'Rejected'),
-                'draft':            _t('vendors.s_draft',            'Draft'),
-                'completed':        _t('common.completed',           'Completed'),
-                'in_progress':      _t('common.in_progress',         'In Progress'),
-                'closed':           _t('common.closed',              'Closed'),
-                'open':             _t('common.open',                'Open')
+                'active':           (WalaPlusI18n.t('vendors.s_active') || 'Active'),
+                'pending':          (WalaPlusI18n.t('vendors.s_pending') || 'Pending'),
+                'pending_approval': (WalaPlusI18n.t('vendors.s_pending_approval') || 'Pending Approval'),
+                'probation':        (WalaPlusI18n.t('vendors.s_probation') || 'Probation'),
+                'suspended':        (WalaPlusI18n.t('vendors.s_suspended') || 'Suspended'),
+                'inactive':         (WalaPlusI18n.t('common.inactive') || 'Inactive'),
+                'under_review':     (WalaPlusI18n.t('vendors.s_under_review') || 'Under Review'),
+                'approved':         (WalaPlusI18n.t('common.approved') || 'Approved'),
+                'rejected':         (WalaPlusI18n.t('common.rejected') || 'Rejected'),
+                'draft':            (WalaPlusI18n.t('vendors.s_draft') || 'Draft'),
+                'completed':        (WalaPlusI18n.t('common.completed') || 'Completed'),
+                'in_progress':      (WalaPlusI18n.t('common.in_progress') || 'In Progress'),
+                'closed':           (WalaPlusI18n.t('common.closed') || 'Closed'),
+                'open':             (WalaPlusI18n.t('common.open') || 'Open')
             };
             return map[status] || _prettify(status);
         }
@@ -619,7 +647,7 @@
         function renderRemediationsTable(remediations) {
             const tbody = document.getElementById('remediationsTableBody');
             if (remediations.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.vendors.no_remediations') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.vendors.no_remediations') + '</td></tr>';
                 return;
             }
             
@@ -658,7 +686,7 @@
             const data = await response.json();
             
             const select = document.getElementById('assessmentVendorSelect');
-            select.innerHTML = '<option value="">' + _t('dyn.vendors.select_vendor_placeholder') + '</option>';
+            select.innerHTML = '<option value="">' + WalaPlusI18n.t('dyn.vendors.select_vendor_placeholder') + '</option>';
             (data.vendors || []).forEach(v => {
                 const option = document.createElement('option');
                 option.value = v.id;
@@ -677,7 +705,7 @@
         }
 
         function viewVendor(id) {
-            alert(_t('dyn.vendors.view_coming_soon', { id: id }));
+            alert(WalaPlusI18n.t('dyn.vendors.view_coming_soon', { id: id }));
         }
 
         document.getElementById('vendorForm').addEventListener('submit', async (e) => {
@@ -698,10 +726,10 @@
                     loadVendors();
                 } else {
                     const error = await response.json();
-                    alert(error.error || _t('dyn.vendors.register_failed'));
+                    alert(error.error || WalaPlusI18n.t('dyn.vendors.register_failed'));
                 }
             } catch (error) {
-                alert(_t('dyn.vendors.register_error'));
+                alert(WalaPlusI18n.t('dyn.vendors.register_error'));
             }
         });
 
@@ -728,10 +756,10 @@
                     loadVendors();
                 } else {
                     const error = await response.json();
-                    alert(error.error || _t('dyn.vendors.assessment_failed'));
+                    alert(error.error || WalaPlusI18n.t('dyn.vendors.assessment_failed'));
                 }
             } catch (error) {
-                alert(_t('dyn.vendors.assessment_error'));
+                alert(WalaPlusI18n.t('dyn.vendors.assessment_error'));
             }
         });
 

@@ -370,6 +370,94 @@ export async function getAiMetricsRetentionAuditPage(
 }
 
 /**
+ * Server-side batch size used when streaming the full audit history out as
+ * CSV (Task #652). Picked so each fetch round-trips a meaningful chunk of
+ * rows without holding all of them in memory at once — admins occasionally
+ * pull a multi-year retention audit during compliance reviews and the
+ * paged GET would silently cap that at {@link AI_METRICS_RETENTION_AUDIT_MAX_LIMIT}.
+ *
+ * The export endpoint streams batches of this size in newest-first order
+ * until the underlying SELECT runs out of matching rows. Increasing the
+ * batch trades fewer round-trips for a larger working set per chunk.
+ */
+export const AI_METRICS_RETENTION_AUDIT_EXPORT_BATCH_SIZE = 500;
+
+/**
+ * Streaming, ceiling-bypassing read of the retention audit log used by
+ * the CSV export endpoint (Task #652). Yields entries newest-first in
+ * chunks of {@link AI_METRICS_RETENTION_AUDIT_EXPORT_BATCH_SIZE}, stopping
+ * when the underlying query returns fewer rows than the batch size.
+ *
+ * Honours the same `from` / `to` date-range filter as
+ * {@link getAiMetricsRetentionAuditPage} so the exported file matches the
+ * window the operator is currently looking at on the dashboard. Does NOT
+ * accept a `limit` — the whole point of this helper is to bypass the
+ * 100-row paging ceiling when an admin asks for "everything from last
+ * quarter as a spreadsheet".
+ *
+ * Fails CLOSED on DB read failure — both the init call and any batch
+ * query rethrow so the caller (the CSV export route) can surface a 500
+ * instead of streaming a silently-truncated file. A partial audit export
+ * during an incident review is materially worse than no export: it would
+ * mislead compliance into thinking they had the full timeline.
+ */
+export async function* streamAiMetricsRetentionAudit(
+  opts: { from?: Date | string | null; to?: Date | string | null } = {},
+): AsyncGenerator<AiMetricsRetentionAuditEntry, void, void> {
+  const from = coerceBoundary(opts.from);
+  const to = coerceBoundary(opts.to);
+
+  await initAiMetricsRetentionConfigTable();
+
+  const whereParts: string[] = [];
+  const whereParams: unknown[] = [];
+  if (from) {
+    whereParams.push(from);
+    whereParts.push(`changed_at >= $${whereParams.length}`);
+  }
+  if (to) {
+    whereParams.push(to);
+    whereParts.push(`changed_at <= $${whereParams.length}`);
+  }
+  const whereClause = whereParts.length
+    ? `WHERE ${whereParts.join(" AND ")}`
+    : "";
+
+  const batchSize = AI_METRICS_RETENTION_AUDIT_EXPORT_BATCH_SIZE;
+  let offset = 0;
+  // Hard safety ceiling to defend against a runaway loop on a misbehaving
+  // driver that returns a full batch forever. 10M rows is multiple orders
+  // of magnitude past any plausible audit history (the table only grows
+  // on operator clicks + daily prune runs).
+  const SAFETY_CAP = 10_000_000;
+
+  while (offset < SAFETY_CAP) {
+    const pageSql =
+      `SELECT id, changed_at, changed_by, before_days, after_days, note
+         FROM ai_metrics_retention_audit
+         ${whereClause}
+        ORDER BY changed_at DESC, id DESC
+        LIMIT $${whereParams.length + 1} OFFSET $${whereParams.length + 2}`;
+    const res = await pool.query(pageSql, [...whereParams, batchSize, offset]);
+    const rows: any[] = res.rows ?? [];
+
+    for (const r of rows) {
+      yield {
+        id: Number(r.id),
+        changed_at: r.changed_at,
+        changed_by: r.changed_by,
+        before_days: r.before_days == null ? null : Number(r.before_days),
+        after_days: r.after_days == null ? null : Number(r.after_days),
+        note: r.note ?? null,
+      };
+    }
+
+    if (rows.length < batchSize) return;
+    offset += batchSize;
+  }
+}
+
+/**
  * Marker prefix used in `ai_metrics_retention_audit.note` for rows that
  * record a manual "Prune now" run (Task #558) rather than a config
  * change. The dashboard's audit renderer detects this prefix to label

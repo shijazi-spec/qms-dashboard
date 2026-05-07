@@ -304,7 +304,26 @@ describe('AI Approvals — detail modal (Task #297)', () => {
     const list = modal.querySelector<HTMLOListElement>('[data-testid="list-prior-viewers"]')!;
     expect(list, 'viewer list should render as an ordered list').toBeTruthy();
     expect(list.tagName.toLowerCase()).toBe('ol');
-    expect(list.getAttribute('aria-label')).toMatch(/Prior reviewers/i);
+    // Task #543: the modal copy now routes through WalaPlusI18n so the
+    // panel translates into Arabic. The vitest JSDOM rig does not load
+    // /dashboard/i18n/*.json (external scripts are skipped), which means
+    // `_t` falls through to the raw key — that's the stable contract we
+    // assert against here so the test stays language-agnostic.
+    expect(list.getAttribute('aria-label')).toBe(
+      'dyn.ai_approvals.prior_reviewers_aria',
+    );
+
+    // Close-button aria-label is set imperatively in openDetailModal() so that
+    // a mid-session language change re-localises the dialog. Same JSDOM/i18n
+    // caveat — `_t` returns the raw key when WalaPlusI18n isn't loaded, which
+    // is the stable contract this assertion locks down (and proves the
+    // dispatch case for `close_action_detail_dialog` is wired).
+    const closeBtn = modal.querySelector(
+      '[data-testid="button-close-action-detail"]',
+    )!;
+    expect(closeBtn.getAttribute('aria-label')).toBe(
+      'dyn.ai_approvals.close_action_detail_dialog',
+    );
 
     const rows = list.querySelectorAll('[data-testid^="row-prior-viewer-"]');
     expect(
@@ -312,9 +331,11 @@ describe('AI Approvals — detail modal (Task #297)', () => {
       'every prior viewer should render — no +N more truncation in the panel',
     ).toBe(SEED_VIEWERS.length);
 
-    // Reviewer count summary.
+    // Reviewer count summary — i18n key, dispatched by Intl.PluralRules.
     const cnt = modal.querySelector('[data-testid="text-prior-viewers-count"]')!;
-    expect(cnt.textContent).toBe(`${SEED_VIEWERS.length} reviewers`);
+    expect(cnt.textContent).toMatch(
+      /^dyn\.ai_approvals\.reviewer_(zero|one|two|few|many|other)$/,
+    );
 
     // Per-row content: name, role, view count, timestamp.
     SEED_VIEWERS.forEach((v, idx) => {
@@ -323,8 +344,9 @@ describe('AI Approvals — detail modal (Task #297)', () => {
       const roleEl = modal.querySelector(`[data-testid="text-viewer-role-${idx}"]`)!;
       expect(roleEl.textContent).toBe(v.user_role);
       const countEl = modal.querySelector(`[data-testid="text-viewer-count-${idx}"]`)!;
-      expect(countEl.textContent).toBe(
-        v.view_count === 1 ? '1 view' : `${v.view_count} views`,
+      // Pluralised view-count key (e.g. view_one / view_other) — see note above.
+      expect(countEl.textContent).toMatch(
+        /^dyn\.ai_approvals\.view_(zero|one|two|few|many|other)$/,
       );
       const timeEl = modal.querySelector(`[data-testid="text-viewer-last-${idx}"]`)!;
       expect(timeEl.getAttribute('datetime')).toBe(v.last_viewed_at);
@@ -362,10 +384,16 @@ describe('AI Approvals — detail modal (Task #297)', () => {
     const modal = env.doc.getElementById('actionDetailModal')!;
     const empty = modal.querySelector('[data-testid="text-no-prior-viewers"]');
     expect(empty, 'empty-state element should render').toBeTruthy();
-    expect(empty!.textContent).toMatch(/no reviewers/i);
+    // Task #543: empty-state copy is now an i18n key (Arabic translation
+    // lives at dashboard/i18n/ar.json :: dyn.ai_approvals.no_prior_viewers).
+    // The vitest rig doesn't load the JSON dictionaries, so `_t` falls
+    // through to the literal key — assert on that stable contract.
+    expect(empty!.textContent).toBe('dyn.ai_approvals.no_prior_viewers');
 
     const cnt = modal.querySelector('[data-testid="text-prior-viewers-count"]')!;
-    expect(cnt.textContent).toBe('0 reviewers');
+    expect(cnt.textContent).toMatch(
+      /^dyn\.ai_approvals\.reviewer_(zero|one|two|few|many|other)$/,
+    );
   });
 
   it('closes on Escape and restores focus to the trigger button', async () => {
@@ -685,12 +713,18 @@ describe('AI Approvals — detail modal (Task #297)', () => {
     await env.waitForModalRender();
     const modal = env.doc.getElementById('actionDetailModal')!;
 
-    // Order in the list is whatever the server returned.
+    // Task #543: per-row view counts are now dispatched through Intl.PluralRules
+    // and routed to language-specific keys. The vitest rig doesn't load the
+    // i18n dictionaries (no fetch for /dashboard/i18n/*.json), so `_t` falls
+    // through to the raw key — we assert on the CLDR plural CATEGORY chosen
+    // for each count, which is the language-agnostic contract.
+    // Active language defaults to 'en' (no localStorage, no <html lang>) → CLDR:
+    //   1 → 'one', 7 → 'other'.
     expect(
       modal.querySelector('[data-testid="text-viewer-count-0"]')!.textContent,
-    ).toBe('1 view');
+    ).toBe('dyn.ai_approvals.view_one');
     expect(
       modal.querySelector('[data-testid="text-viewer-count-1"]')!.textContent,
-    ).toBe('7 views');
+    ).toBe('dyn.ai_approvals.view_other');
   });
 });

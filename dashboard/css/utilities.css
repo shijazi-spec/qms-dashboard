@@ -6,6 +6,7 @@
  */
 
 /* Chart container heights (replaces style="height: NNNpx;") */
+.chart-h-140 { height: 140px; }
 .chart-h-220 { height: 220px; }
 .chart-h-240 { height: 240px; }
 

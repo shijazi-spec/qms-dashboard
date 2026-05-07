@@ -77,6 +77,7 @@ export const ROUTE_MANIFEST = {
     { path: '/api/activity/stats', method: 'GET', file: 'routes/adminApiRoutes.ts' },
     { path: '/api/admin/rate-limit-stats', method: 'GET', file: 'routes/adminApiRoutes.ts' },
     { path: '/api/admin/redaction-sweep/status', method: 'GET', file: 'routes/adminApiRoutes.ts' },
+    { path: '/api/admin/export-cache/stats', method: 'GET', file: 'routes/adminApiRoutes.ts' },
     { path: '/api/admin/alert-recipients', method: 'GET|POST|DELETE', file: 'routes/adminApiRoutes.ts' },
   ],
 
@@ -154,6 +155,7 @@ export const ROUTE_MANIFEST = {
     'routes/userAccessRoutes.ts',
     'routes/smokeTestRoutes.ts',
     'routes/consultantRoutes.ts',
+    'routes/mobileRoutes.ts',
     'routes/aiApprovalRoutes.ts',
     'routes/qmsEnhancedRoutes.ts',
     'routes/notificationRoutes.ts',

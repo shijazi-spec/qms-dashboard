@@ -383,6 +383,85 @@ export interface ZohoAttachmentMeta {
   modifiedTime: string | null;
 }
 
+// ─── Modification-history fetchers (Task #825) ────────────────────────────────
+//
+// Power the Lead Status / Deal Stage aging metrics. Both helpers go through
+// `makeZohoRequest` so they share OAuth token caching, the 401-then-refresh
+// retry path, and the structured error surface used by the rest of this
+// module.
+
+export interface ZohoStageHistoryRow {
+  id?: string;
+  Stage?: string;
+  Modified_Time?: string;
+  Last_Modified_Time?: string;
+  Stage_Duration?: number;
+}
+
+export async function fetchDealStageHistory(
+  dealId: string,
+): Promise<ZohoStageHistoryRow[]> {
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/Deals/${encodeURIComponent(dealId)}/Stage_History?per_page=200`;
+      return fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    async (response) => {
+      // Zoho returns 204 when the related list is empty for the record.
+      if (response.status === 204) return [];
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(`Zoho Stage_History API error: ${response.status} - ${error.message || response.statusText}`);
+      }
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return (data.data || []) as ZohoStageHistoryRow[];
+    },
+  );
+}
+
+export interface ZohoChangelogRow {
+  audited_time?: string;
+  field?: { api_name?: string; display_label?: string };
+  value?: { current?: string; previous?: string };
+}
+
+export async function fetchLeadStatusChangelog(
+  leadId: string,
+): Promise<ZohoChangelogRow[]> {
+  return makeZohoRequest(
+    async (config) => {
+      const params = new URLSearchParams({ per_page: '200', fields: 'Lead_Status' });
+      const url = `${config.apiDomain}/crm/v2/Leads/${encodeURIComponent(leadId)}/__changelog?${params.toString()}`;
+      return fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    async (response) => {
+      if (response.status === 204) return [];
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(`Zoho Lead Timeline API error: ${response.status} - ${error.message || response.statusText}`);
+      }
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return (data.data || []) as ZohoChangelogRow[];
+    },
+  );
+}
+
 export async function fetchRecordAttachments(
   module: string,
   recordId: string

@@ -7,7 +7,15 @@ import {
   fetchAllZohoRecords,
   type ZohoCRMRecord,
 } from "./zohoCRM";
+ slack-audit-notification-alignment
 import { getGovernanceDocumentByModule } from "./database";
+
+import {
+  getWeeklyFeedbackDigest,
+  summarizeFeedbackTrend,
+  type FeedbackTrendSummary,
+} from "./aiFeedbackDatabase";
+ main
 
 const { Pool } = pg;
 
@@ -18,6 +26,10 @@ const pool = new Pool({
 const KSA_OFFSET_MS = 3 * 60 * 60 * 1000;
 const KSA_WEEKDAY_THURSDAY = 4;
 const DIGEST_DASHBOARD_LINK = process.env.DIGEST_DASHBOARD_URL || "/executive";
+
+function isAbsoluteHttpUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
 
 export type DigestCadence = "weekly" | "monthly" | "quarterly";
 export type DigestChannel = "email" | "slack";
@@ -113,6 +125,14 @@ export interface DigestData {
     count: number;
   }>;
   business_sections: DigestBusinessSection[];
+  ai_feedback_summary: {
+    period: string;
+    total: number;
+    thumbs_up: number;
+    thumbs_down: number;
+    thumbs_up_pct: number;
+    trend: FeedbackTrendSummary;
+  };
 }
 
 export interface DigestBuildOptions {
@@ -810,6 +830,35 @@ export async function generateDigestData(
   const totalDeals = businessSections.reduce((sum, s) => sum + s.deals, 0);
   const totalRecords = businessSections.reduce((sum, s) => sum + s.total, 0);
 
+  let aiFeedbackSummary: DigestData['ai_feedback_summary'] = {
+    period: `${window.start.toDateString()} – ${now.toDateString()}`,
+    total: 0,
+    thumbs_up: 0,
+    thumbs_down: 0,
+    thumbs_up_pct: 0,
+    trend: {
+      direction: 'insufficient_data',
+      peak_negative_day: null,
+      peak_negative_count: 0,
+      total_thumbs_up: 0,
+      total_thumbs_down: 0,
+      first_half_down_rate: 0,
+      second_half_down_rate: 0,
+      days_observed: 0,
+    },
+  };
+  try {
+    const weekly = await getWeeklyFeedbackDigest();
+    aiFeedbackSummary = {
+      period: weekly.period,
+      total: weekly.total,
+      thumbs_up: weekly.thumbs_up,
+      thumbs_down: weekly.thumbs_down,
+      thumbs_up_pct: weekly.thumbs_up_pct,
+      trend: summarizeFeedbackTrend(weekly.trend),
+    };
+  } catch {}
+
   return {
     generated_at: now.toISOString(),
     cadence,
@@ -870,6 +919,7 @@ export async function generateDigestData(
     },
     finding_types: findingTypes,
     business_sections: businessSections,
+    ai_feedback_summary: aiFeedbackSummary,
   };
 }
 
@@ -900,6 +950,22 @@ export function buildDigestHTML(data: DigestData): string {
   <div class="metric-row"><span>Section Health</span><span class="metric-value">${section.health_score}%</span></div>`,
     )
     .join("");
+
+  const fb = data.ai_feedback_summary;
+  const fbDir = fb.trend.direction;
+  const fbIcon = fbDir === "improving" ? "↑" : fbDir === "worsening" ? "↓" : fbDir === "stable" ? "→" : "·";
+  const fbColor = fbDir === "improving" ? "#047857" : fbDir === "worsening" ? "#B91C1C" : "#6B7280";
+  const fbLabel = fbDir === "insufficient_data" ? "insufficient data" : fbDir;
+  const fbSection = fb.total === 0
+    ? `<div class="card"><h3>AI Consultant Feedback</h3><p style="font-size:13px;color:#6B7280">No feedback this week.</p></div>`
+    : `<div class="card">
+  <h3>AI Consultant Feedback</h3>
+  <div class="metric-row"><span>Total responses rated</span><span class="metric-value">${fb.total}</span></div>
+  <div class="metric-row"><span><span class="badge badge-green">Thumbs up</span></span><span class="metric-value">${fb.thumbs_up} (${fb.thumbs_up_pct}%)</span></div>
+  <div class="metric-row"><span><span class="badge badge-red">Thumbs down</span></span><span class="metric-value">${fb.thumbs_down}</span></div>
+  <div class="metric-row"><span>Trend</span><span class="metric-value" style="color:${fbColor}">${fbIcon} ${fbLabel}</span></div>
+  ${fb.trend.peak_negative_day && fb.trend.peak_negative_count > 0 ? `<div class="metric-row"><span>Peak negative day</span><span class="metric-value">${fb.trend.peak_negative_day} (${fb.trend.peak_negative_count})</span></div>` : ""}
+</div>`;
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WalaPlus ${cadenceLabel(data.cadence)} Quality Digest</title>
 <style>
@@ -968,6 +1034,8 @@ export function buildDigestHTML(data: DigestData): string {
   <div class="metric-row"><span><span class="badge badge-amber">Amber</span></span><span class="metric-value">${data.kpi_summary.amber}</span></div>
   <div class="metric-row"><span><span class="badge badge-red">Red</span></span><span class="metric-value">${data.kpi_summary.red}</span></div>
 </div>
+
+${fbSection}
 
 ${data.top_alerts.length > 0 ? `<div class="card">
   <h3>Top Alerts</h3>
@@ -1066,6 +1134,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         text: `*Quality snapshot:* NC Open ${data.nc_summary.open} • CAPA Open ${data.capa_summary.open} • Risks ${data.risk_summary.total_active} • KPI Red ${data.kpi_summary.red}`,
       },
     },
+ slack-audit-notification-alignment
   ];
   if (hasAbsoluteDashboardUrl) {
     blocks.push({
@@ -1079,6 +1148,23 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
       ],
     });
   }
+
+    ...(isAbsoluteHttpUrl(DIGEST_DASHBOARD_LINK)
+      ? [
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: { type: "plain_text", text: "Open Executive Dashboard", emoji: true },
+                url: DIGEST_DASHBOARD_LINK,
+              },
+            ],
+          },
+        ]
+      : []),
+  ];
+ main
   if (findingTypeChunks.length > 0) {
     blocks.push({ type: "divider" });
     findingTypeChunks.forEach((chunk, idx) => {

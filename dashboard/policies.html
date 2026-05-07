@@ -39,13 +39,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-    <script src="/js/navigation.js?v=4.7"></script>
+    <script src="/js/navigation.js?v=5.0"></script>
     <script src="/js/streaming-download.js?v=2.2.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -106,23 +106,23 @@
                 <div class="text-sm text-gray-500" data-i18n="policies.total_docs">Total Documents</div>
                 <div id="totalPolicies" class="text-2xl font-bold text-gray-900" data-testid="text-total-documents">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-gray-400">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-gray-400">
                 <div class="text-sm text-gray-500" data-i18n="policies.draft">Draft</div>
                 <div id="draftCount" class="text-2xl font-bold text-gray-600" data-testid="text-draft-count">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-600">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-blue-600">
                 <div class="text-sm text-gray-500" data-i18n="policies.in_review">In Review</div>
                 <div id="reviewCount" class="text-2xl font-bold text-blue-600" data-testid="text-review-count">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-amber-500">
                 <div class="text-sm text-gray-500" data-i18n="policies.pending_approval">Pending Approval</div>
                 <div id="approvalCount" class="text-2xl font-bold text-amber-500" data-testid="text-approval-count">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-600">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-green-600">
                 <div class="text-sm text-gray-500" data-i18n="policies.published">Published</div>
                 <div id="publishedCount" class="text-2xl font-bold text-green-600" data-testid="text-published-count">-</div>
             </div>
-            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-600">
+            <div class="bg-white rounded-lg shadow p-4 border-s-4 border-red-600">
                 <div class="text-sm text-gray-500" data-i18n="policies.overdue_reviews">Overdue Reviews</div>
                 <div id="overdueCount" class="text-2xl font-bold text-red-600" data-testid="text-overdue-count">-</div>
             </div>
@@ -171,14 +171,14 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="policies.col_doc_no">Doc #</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.category">Category</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="policies.col_ver">Ver</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="policies.col_confid">Confid.</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="policies.col_doc_no">Doc #</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.title">Title</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.type">Type</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.category">Category</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="policies.col_ver">Ver</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="policies.col_confid">Confid.</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="policiesTableBody" class="bg-white divide-y divide-gray-200">
@@ -351,7 +351,6 @@
     </div>
 
     <script>
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         let currentPage = 0;
         const pageSize = 15;
         let totalPolicies = 0;
@@ -378,12 +377,12 @@
                 if (data.upcoming_reviews && data.upcoming_reviews.length > 0) {
                     renderUpcomingReviews(data.upcoming_reviews);
                 } else {
-                    document.getElementById('upcomingReviews').innerHTML = '<div class="text-gray-600 text-center py-4">' + _t('dyn.policies.no_upcoming_reviews') + '</div>';
+                    document.getElementById('upcomingReviews').innerHTML = '<div class="text-gray-600 text-center py-4">' + WalaPlusI18n.t('dyn.policies.no_upcoming_reviews') + '</div>';
                 }
                 if (data.by_category && data.by_category.length > 0) {
                     renderCategoryBreakdown(data.by_category);
                 } else {
-                    document.getElementById('categoryBreakdown').innerHTML = '<div class="text-gray-400 text-center py-4">' + _t('dyn.policies.no_category_data') + '</div>';
+                    document.getElementById('categoryBreakdown').innerHTML = '<div class="text-gray-400 text-center py-4">' + WalaPlusI18n.t('dyn.policies.no_category_data') + '</div>';
                 }
             } catch (error) {
                 console.error('Error loading summary:', error);
@@ -465,7 +464,7 @@
                 updatePagination();
             } catch (error) {
                 console.error('Error loading documents:', error);
-                document.getElementById('policiesTableBody').innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-red-500">' + _t('dyn.policies.error_loading_docs') + '</td></tr>';
+                document.getElementById('policiesTableBody').innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-red-500">' + WalaPlusI18n.t('dyn.policies.error_loading_docs') + '</td></tr>';
             }
         }
 
@@ -483,7 +482,7 @@
         function renderPoliciesTable(policies) {
             const tbody = document.getElementById('policiesTableBody');
             if (!policies || policies.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">' + _t('dyn.policies.no_docs_found') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.policies.no_docs_found') + '</td></tr>';
                 return;
             }
 
@@ -563,35 +562,35 @@
                 if (res.ok) {
                     closeModal('addPolicyModal');
                     loadAll();
-                    alert(_t('dyn.policies.doc_created'));
+                    alert(WalaPlusI18n.t('dyn.policies.doc_created'));
                 } else {
                     const err = await res.json();
-                    alert(_t('dyn.policies.error_prefix', { msg: err.error || _t('dyn.policies.failed_create_doc') }));
+                    alert(WalaPlusI18n.t('dyn.policies.error_prefix', { msg: err.error || WalaPlusI18n.t('dyn.policies.failed_create_doc') }));
                 }
             } catch (error) {
                 console.error('Error creating document:', error);
-                alert(_t('dyn.policies.error_creating_doc'));
+                alert(WalaPlusI18n.t('dyn.policies.error_creating_doc'));
             }
         }
 
         async function deleteDocument(id, title) {
-            if (!confirm(_t('dyn.policies.confirm_delete_doc', { title }))) return;
+            if (!confirm(WalaPlusI18n.t('dyn.policies.confirm_delete_doc', { title }))) return;
             try {
                 const res = await fetch(`/api/policies/${id}`, { method: 'DELETE' });
-                if (res.ok) { loadAll(); alert(_t('dyn.policies.doc_deleted')); }
-                else { const err = await res.json(); alert(_t('dyn.policies.error_prefix', { msg: err.error || _t('dyn.policies.failed_delete') })); }
-            } catch (e) { alert(_t('dyn.policies.error_deleting_doc')); }
+                if (res.ok) { loadAll(); alert(WalaPlusI18n.t('dyn.policies.doc_deleted')); }
+                else { const err = await res.json(); alert(WalaPlusI18n.t('dyn.policies.error_prefix', { msg: err.error || WalaPlusI18n.t('dyn.policies.failed_delete') })); }
+            } catch (e) { alert(WalaPlusI18n.t('dyn.policies.error_deleting_doc')); }
         }
 
         async function viewPolicyDetail(id) {
             document.getElementById('policyDetailModal').classList.add('active');
-            document.getElementById('policyDetailContent').innerHTML = '<div class="text-gray-400 text-center py-4">' + _t('dyn.policies.loading') + '</div>';
+            document.getElementById('policyDetailContent').innerHTML = '<div class="text-gray-400 text-center py-4">' + WalaPlusI18n.t('dyn.policies.loading') + '</div>';
             try {
                 const res = await fetch(`/api/policies/${id}`);
                 const data = await res.json();
                 renderPolicyDetail(data);
             } catch (error) {
-                document.getElementById('policyDetailContent').innerHTML = '<div class="text-red-500 text-center py-4">' + _t('dyn.policies.error_loading_details') + '</div>';
+                document.getElementById('policyDetailContent').innerHTML = '<div class="text-red-500 text-center py-4">' + WalaPlusI18n.t('dyn.policies.error_loading_details') + '</div>';
             }
         }
 
@@ -719,12 +718,12 @@
                 const res = await fetch(`/api/policies/${policyId}/upload`, { method: 'POST', body: formData });
                 if (res.ok) {
                     viewPolicyDetail(policyId);
-                    alert(_t('dyn.policies.file_uploaded'));
+                    alert(WalaPlusI18n.t('dyn.policies.file_uploaded'));
                 } else {
                     const err = await res.json();
-                    alert(_t('dyn.policies.error_prefix', { msg: err.error || _t('dyn.policies.upload_failed') }));
+                    alert(WalaPlusI18n.t('dyn.policies.error_prefix', { msg: err.error || WalaPlusI18n.t('dyn.policies.upload_failed') }));
                 }
-            } catch (e) { alert(_t('dyn.policies.error_uploading_file')); }
+            } catch (e) { alert(WalaPlusI18n.t('dyn.policies.error_uploading_file')); }
         }
 
         function getTransitionButtons(status, id, policy) {
@@ -770,7 +769,7 @@
         }
 
         async function requestGrcApproval(id) {
-            const email = prompt(_t('dyn.policies.prompt_grc_email'));
+            const email = prompt(WalaPlusI18n.t('dyn.policies.prompt_grc_email'));
             if (!email) return;
             try {
                 const res = await fetch(`/api/policies/${id}/grc-approval`, {
@@ -778,10 +777,10 @@
                     body: JSON.stringify({ approver_email: email })
                 });
                 const data = await res.json();
-                if (res.ok) { closeModal('policyDetailModal'); loadAll(); alert(_t('dyn.policies.grc_approved')); }
-                else if (res.status === 403) { alert(_t('dyn.policies.access_denied', { role: data.required_role })); }
-                else { alert(_t('dyn.policies.error_prefix', { msg: data.error || _t('dyn.policies.failed_approve') })); }
-            } catch (error) { alert(_t('dyn.policies.error_grc_approval')); }
+                if (res.ok) { closeModal('policyDetailModal'); loadAll(); alert(WalaPlusI18n.t('dyn.policies.grc_approved')); }
+                else if (res.status === 403) { alert(WalaPlusI18n.t('dyn.policies.access_denied', { role: data.required_role })); }
+                else { alert(WalaPlusI18n.t('dyn.policies.error_prefix', { msg: data.error || WalaPlusI18n.t('dyn.policies.failed_approve') })); }
+            } catch (error) { alert(WalaPlusI18n.t('dyn.policies.error_grc_approval')); }
         }
 
         async function transitionPolicy(id, newStatus) {
@@ -790,9 +789,9 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ new_status: newStatus, transitioned_by: 'User' })
                 });
-                if (res.ok) { closeModal('policyDetailModal'); loadAll(); alert(_t('dyn.policies.status_updated', { status: newStatus })); }
-                else { const err = await res.json(); alert(_t('dyn.policies.error_prefix', { msg: err.error || _t('dyn.policies.failed_update_status') })); }
-            } catch (error) { alert(_t('dyn.policies.error_updating_status')); }
+                if (res.ok) { closeModal('policyDetailModal'); loadAll(); alert(WalaPlusI18n.t('dyn.policies.status_updated', { status: newStatus })); }
+                else { const err = await res.json(); alert(WalaPlusI18n.t('dyn.policies.error_prefix', { msg: err.error || WalaPlusI18n.t('dyn.policies.failed_update_status') })); }
+            } catch (error) { alert(WalaPlusI18n.t('dyn.policies.error_updating_status')); }
         }
 
         function loadAll() {

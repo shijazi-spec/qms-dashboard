@@ -14,6 +14,16 @@ async function safeQuery(sql: string, params: any[] = []): Promise<any[]> {
   }
 }
 
+function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 function htmlWrap(title: string, body: string): string {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
 <style>
@@ -46,8 +56,9 @@ ${body}
 }
 
 function severityBadge(s: string): string {
+  const safe = escapeHtml(s);
   const c = s === 'critical' || s === 'high' ? 'red' : s === 'major' || s === 'medium' ? 'amber' : 'green';
-  return `<span class="badge badge-${c}">${s}</span>`;
+  return `<span class="badge badge-${c}">${safe}</span>`;
 }
 
 export async function generateCapaEffectivenessReport(): Promise<string> {
@@ -65,13 +76,13 @@ export async function generateCapaEffectivenessReport(): Promise<string> {
   const notEffective = capas.filter(c => c.effectiveness_result === 'not_effective').length;
 
   const rows = capas.map(c => `<tr>
-    <td>${c.capa_number}</td>
-    <td>${c.title}</td>
+    <td>${escapeHtml(c.capa_number)}</td>
+    <td>${escapeHtml(c.title)}</td>
     <td>${severityBadge(c.severity)}</td>
-    <td><span class="badge badge-${c.effectiveness_result === 'effective' ? 'green' : c.effectiveness_result === 'not_effective' ? 'red' : 'amber'}">${(c.effectiveness_result || '').replace('_', ' ')}</span></td>
-    <td>${c.effectiveness_reviewed_by || '-'}</td>
+    <td><span class="badge badge-${c.effectiveness_result === 'effective' ? 'green' : c.effectiveness_result === 'not_effective' ? 'red' : 'amber'}">${escapeHtml((c.effectiveness_result || '').replace('_', ' '))}</span></td>
+    <td>${escapeHtml(c.effectiveness_reviewed_by) || '-'}</td>
     <td>${c.effectiveness_reviewed_at ? new Date(c.effectiveness_reviewed_at).toLocaleDateString() : '-'}</td>
-    <td>${c.effectiveness_evidence || '-'}</td>
+    <td>${escapeHtml(c.effectiveness_evidence) || '-'}</td>
   </tr>`).join('');
 
   return htmlWrap('CAPA Effectiveness Report', `
@@ -104,10 +115,10 @@ export async function generateCompliancePostureReport(): Promise<string> {
   const score = Math.round((compliant + partial * 0.5) / total * 100);
 
   const rows = obligations.map(o => `<tr>
-    <td>${o.regulation || '-'}</td>
-    <td>${o.title}</td>
+    <td>${escapeHtml(o.regulation) || '-'}</td>
+    <td>${escapeHtml(o.title)}</td>
     <td>${severityBadge(o.priority || 'low')}</td>
-    <td><span class="badge badge-${o.status === 'compliant' ? 'green' : o.status === 'non_compliant' ? 'red' : 'amber'}">${(o.status || '').replace('_', ' ')}</span></td>
+    <td><span class="badge badge-${o.status === 'compliant' ? 'green' : o.status === 'non_compliant' ? 'red' : 'amber'}">${escapeHtml((o.status || '').replace('_', ' '))}</span></td>
     <td>${o.last_assessment_date ? new Date(o.last_assessment_date).toLocaleDateString() : 'Not assessed'}</td>
   </tr>`).join('');
 
@@ -149,19 +160,19 @@ export async function generatePDPLInventoryReport(): Promise<string> {
   `);
 
   const invRows = inventory.map(i => `<tr>
-    <td>${i.name}</td>
-    <td>${i.data_category || '-'}</td>
-    <td>${i.purpose || '-'}</td>
-    <td>${i.legal_basis || '-'}</td>
-    <td>${i.retention_period || '-'}</td>
+    <td>${escapeHtml(i.name)}</td>
+    <td>${escapeHtml(i.data_category) || '-'}</td>
+    <td>${escapeHtml(i.purpose) || '-'}</td>
+    <td>${escapeHtml(i.legal_basis) || '-'}</td>
+    <td>${escapeHtml(i.retention_period) || '-'}</td>
     <td>${i.cross_border ? 'Yes' : 'No'}</td>
     <td>${i.encryption_at_rest ? '✓' : '✗'} / ${i.encryption_in_transit ? '✓' : '✗'}</td>
   </tr>`).join('');
 
   const incRows = incidents.map(i => `<tr>
-    <td>${i.title}</td>
+    <td>${escapeHtml(i.title)}</td>
     <td>${severityBadge(i.severity || 'low')}</td>
-    <td><span class="badge badge-${i.status === 'closed' || i.status === 'resolved' ? 'green' : 'amber'}">${i.status}</span></td>
+    <td><span class="badge badge-${i.status === 'closed' || i.status === 'resolved' ? 'green' : 'amber'}">${escapeHtml(i.status)}</span></td>
     <td>${i.reported_date ? new Date(i.reported_date).toLocaleDateString() : '-'}</td>
   </tr>`).join('');
 

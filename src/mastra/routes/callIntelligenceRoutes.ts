@@ -7,6 +7,7 @@ import {
 } from "../../utils/rbacMiddleware";
 
 import { logger as safeLogger } from "../../utils/logger";
+import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
 const CALL_READ_ROLES = [
   "admin",
   "ai_specialist",
@@ -920,13 +921,14 @@ Respond with JSON only:
             },
           } as any);
 
-          // Update the audio_file_path in the database
+          // Update the audio_file_path in the database. Delegated to
+          // callIntelligenceDb.updateCallRecordAudioPath so all call_records
+          // writes live in one module (Task #746).
           if (audioFilePath && callRecord.id) {
-            const { pool } = await import("../../utils/database");
-            await pool.query(
-              "UPDATE call_records SET audio_file_path = $1 WHERE id = $2",
-              [audioFilePath, callRecord.id],
+            const { updateCallRecordAudioPath } = await import(
+              "../../utils/callIntelligenceDb"
             );
+            await updateCallRecordAudioPath(callRecord.id, audioFilePath);
           }
 
           logger?.info("✅ [API] Manual call record created", {
@@ -965,6 +967,10 @@ Respond with JSON only:
           const file = formData.get("file");
           const agentEmail = formData.get("agent_email");
           const agentName = formData.get("agent_name") || "";
+          const leadId = (formData.get("lead_id") as string | null) || "";
+          const contactName =
+            (formData.get("contact_name") as string | null) || "";
+          const callDateRaw = formData.get("call_date") as string | null;
           const autoAnalyze = formData.get("auto_analyze") === "true";
 
           if (!agentEmail) {
@@ -981,6 +987,12 @@ Respond with JSON only:
             );
           }
 
+          let parsedCallDate = new Date();
+          if (callDateRaw) {
+            const d = new Date(callDateRaw);
+            if (!isNaN(d.getTime())) parsedCallDate = d;
+          }
+
           const {
             createCallRecord,
             initCallIntelligenceTables,
@@ -995,13 +1007,13 @@ Respond with JSON only:
           const callRecord = await createCallRecord({
             call_id: `audio-${Date.now()}`,
             source: "manual",
-            lead_id: "",
-            contact_name: "",
+            lead_id: leadId,
+            contact_name: contactName,
             agent_email: agentEmail,
             agent_name: agentName,
             direction: "outbound",
             recording_url: `/uploads/calls/${fileName}`,
-            call_date: new Date(),
+            call_date: parsedCallDate,
             status: "pending",
             metadata: {
               uploaded_at: new Date().toISOString(),
@@ -1358,36 +1370,23 @@ ${transcriptText}
             );
           }
 
-          const { Pool } = await import("pg");
-          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-          await pool.query(`
-            CREATE TABLE IF NOT EXISTS integration_config (
-              id SERIAL PRIMARY KEY,
-              integration_type VARCHAR(50) UNIQUE NOT NULL,
-              config JSONB NOT NULL,
-              is_active BOOLEAN DEFAULT true,
-              last_sync_at TIMESTAMP,
-              created_at TIMESTAMP DEFAULT NOW(),
-              updated_at TIMESTAMP DEFAULT NOW()
-            )
-          `);
-
-          await pool.query(
-            `
-            INSERT INTO integration_config (integration_type, config, is_active)
-            VALUES ('five9', $1, true)
-            ON CONFLICT (integration_type) 
-            DO UPDATE SET config = $1, updated_at = NOW()
-          `,
-            [
-              JSON.stringify({
-                domain: body.domain,
-                username: body.username,
-                configured_at: new Date().toISOString(),
-              }),
-            ],
+          // Scrub deny-list keys / credential-shaped strings out of the
+          // free-text Five9 config blob BEFORE persisting it as JSONB.
+          // The endpoint deliberately drops the raw password (it is not
+          // included in the persisted object), but `domain`/`username`
+          // are still operator-controlled and could otherwise smuggle a
+          // JWT, GitHub PAT (`ghp_…`), bcrypt hash, etc. into Postgres.
+          const safeConfig = redactSensitiveDeep({
+            domain: body.domain,
+            username: body.username,
+            configured_at: new Date().toISOString(),
+          }) as Record<string, unknown>;
+          // Delegated to callIntelligenceDb (Task #746) so the
+          // integration_config writes live in a *Database/*Db module.
+          const { upsertFive9IntegrationConfig } = await import(
+            "../../utils/callIntelligenceDb"
           );
+          await upsertFive9IntegrationConfig(safeConfig);
 
           logger?.info("✅ [API] Five9 configuration saved");
 
@@ -1415,14 +1414,13 @@ ${transcriptText}
           const logger = mastra?.getLogger();
           logger?.info("🔄 [API] Syncing calls from Five9");
 
-          const { Pool } = await import("pg");
-          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-          const configResult = await pool.query(`
-            SELECT config FROM integration_config WHERE integration_type = 'five9' AND is_active = true
-          `);
-
-          if (configResult.rows.length === 0) {
+          // Delegated to callIntelligenceDb (Task #746).
+          const {
+            getActiveFive9IntegrationConfig,
+            markFive9IntegrationSynced,
+          } = await import("../../utils/callIntelligenceDb");
+          const cfg = await getActiveFive9IntegrationConfig();
+          if (!cfg) {
             return c.json(
               {
                 success: false,
@@ -1431,10 +1429,7 @@ ${transcriptText}
               400,
             );
           }
-
-          await pool.query(`
-            UPDATE integration_config SET last_sync_at = NOW() WHERE integration_type = 'five9'
-          `);
+          await markFive9IntegrationSynced();
 
           logger?.info(
             "✅ [API] Five9 sync completed (placeholder - actual Five9 API integration pending)",
