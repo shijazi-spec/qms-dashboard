@@ -165,6 +165,17 @@ export async function initAuditTables(): Promise<void> {
   await addColumnIfNotExists("audits", "linked_control_ids", "INTEGER[]");
   await addColumnIfNotExists("audits", "created_by", "VARCHAR(255)");
   await addColumnIfNotExists("audits", "updated_at", "TIMESTAMP DEFAULT NOW()");
+  // Compliance v2 — Audit Run engine: a compliance audit targets a
+  // single regulation_id and auto-generates its checklist from that
+  // regulation's obligations. `audit_kind` distinguishes 'compliance'
+  // from existing 'internal'/'supplier' runs.
+  await addColumnIfNotExists("audits", "regulation_id", "INTEGER");
+  await addColumnIfNotExists(
+    "audits",
+    "audit_kind",
+    "VARCHAR(30) DEFAULT 'internal'",
+  );
+  await addColumnIfNotExists("audits", "scope_summary", "TEXT");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grc_audit_findings (
@@ -229,6 +240,35 @@ export async function initAuditTables(): Promise<void> {
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  // Compliance v2 — Audit Run engine wiring. Every checklist item
+  // generated for a compliance audit links back to the obligation it
+  // tests, so the finalize step can write per-clause findings and
+  // assessments without re-keying.
+  await addColumnIfNotExists("audit_checklists", "obligation_id", "INTEGER");
+  await addColumnIfNotExists(
+    "audit_checklists",
+    "outcome",
+    "VARCHAR(30)",
+  );
+  await addColumnIfNotExists(
+    "audit_checklists",
+    "evidence_document_ids",
+    "INTEGER[]",
+  );
+  await addColumnIfNotExists(
+    "audit_checklists",
+    "obligation_code",
+    "VARCHAR(50)",
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_audit_checklists_audit
+       ON audit_checklists (audit_id)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_audit_checklists_obligation
+       ON audit_checklists (obligation_id) WHERE obligation_id IS NOT NULL`,
+  );
 
   await pool.query(
     `ALTER TABLE audits ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid()`,

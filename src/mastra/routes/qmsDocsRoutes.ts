@@ -136,6 +136,21 @@ export const qmsDocsRoutes = [
             uploaded_by: g.user!.email || g.user!.id || "unknown",
           });
 
+          // Phase 2.1 — fire async text-extraction event so the upload
+          // response stays fast. Failure here must never block the upload.
+          try {
+            const { inngest } = await import("../inngest/client");
+            await inngest.send({
+              name: "qmsdocs.uploaded",
+              data: { document_id: row.id, category, mime_type: row.mime_type },
+            });
+          } catch (err) {
+            safeLogger.warn(
+              "[QmsDocs] failed to dispatch qmsdocs.uploaded event:",
+              err,
+            );
+          }
+
           return c.json({ success: true, document: row });
         } catch (error) {
           safeLogger.error("❌ [QmsDocs] upload error:", error);
@@ -242,6 +257,23 @@ export const qmsDocsRoutes = [
                 uploaded_by: g.user!.email || g.user!.id || "unknown",
               });
               uploaded.push(row);
+              // Phase 2.1 — fire extraction event per uploaded row.
+              try {
+                const { inngest } = await import("../inngest/client");
+                await inngest.send({
+                  name: "qmsdocs.uploaded",
+                  data: {
+                    document_id: row.id,
+                    category,
+                    mime_type: row.mime_type,
+                  },
+                });
+              } catch (sendErr) {
+                safeLogger.warn(
+                  "[QmsDocs] bulk: dispatch qmsdocs.uploaded failed:",
+                  sendErr,
+                );
+              }
             } catch (err: any) {
               failed.push({ name: file.name, error: err?.message || "upload failed" });
             }

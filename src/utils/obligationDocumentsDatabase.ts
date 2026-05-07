@@ -47,6 +47,20 @@ export async function initObligationDocumentsTable(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_obligation_documents_document
       ON obligation_documents (document_id);
   `);
+  // Compliance v2 — link provenance + review queue. `link_method`
+  // distinguishes manual vs. AI-suggested vs. citation-driven links;
+  // `awaiting_review` is true when the citation extractor created the
+  // link automatically and a human should confirm it.
+  await pool.query(
+    `ALTER TABLE obligation_documents ADD COLUMN IF NOT EXISTS link_method VARCHAR(20) DEFAULT 'manual'`,
+  );
+  await pool.query(
+    `ALTER TABLE obligation_documents ADD COLUMN IF NOT EXISTS awaiting_review BOOLEAN DEFAULT FALSE`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_obligation_documents_awaiting
+       ON obligation_documents (awaiting_review) WHERE awaiting_review = TRUE`,
+  );
   initialized = true;
   logger.info("✅ [ObligationDocsDB] obligation_documents table ready");
 }
@@ -119,4 +133,149 @@ export async function unlinkDocumentFromObligation(
     [obligationId, documentId],
   );
   return (result.rowCount ?? 0) > 0;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Phase 1.2 — Framework coverage helpers
+//
+// These power the "X of Y clauses have evidence — Z%" headline tile on
+// the compliance dashboard plus the per-framework "Missing Evidence"
+// drill-down. Pure SQL aggregations; no LLM calls.
+// ──────────────────────────────────────────────────────────────────────
+
+export interface UnmappedObligationRow {
+  id: number;
+  obligation_code: string;
+  title: string;
+  section_domain: string | null;
+  priority: string;
+}
+
+export interface FrameworkCoverage {
+  regulation_id: number;
+  regulation_code: string;
+  regulation_name: string;
+  total_obligations: number;
+  with_evidence: number;
+  coverage_pct: number;
+}
+
+export interface FrameworkCoverageDetail extends FrameworkCoverage {
+  unmapped: UnmappedObligationRow[];
+}
+
+/**
+ * Coverage % for a single framework. Returns the coverage object plus
+ * the list of unmapped clauses (clauses with zero linked documents) so
+ * the dashboard can render the headline number AND the gap drill-down
+ * from one round-trip.
+ *
+ * Pure aggregation — no document content reading, safe to call on
+ * every page-load.
+ */
+export async function getFrameworkCoverage(
+  regulationId: number,
+): Promise<FrameworkCoverageDetail> {
+  await initObligationDocumentsTable();
+  const reg = await pool.query(
+    "SELECT id, regulation_code, name FROM regulations WHERE id = $1",
+    [regulationId],
+  );
+  if (reg.rows.length === 0) {
+    throw new Error(`Regulation ${regulationId} not found`);
+  }
+
+  const counts = await pool.query(
+    `SELECT
+        COUNT(*)::int                                         AS total,
+        COUNT(*) FILTER (WHERE od_count > 0)::int             AS with_evidence
+       FROM (
+         SELECT o.id, COUNT(od.id)::int AS od_count
+           FROM obligations o
+      LEFT JOIN obligation_documents od ON od.obligation_id = o.id
+          WHERE o.regulation_id = $1
+            AND o.status = 'applicable'
+       GROUP BY o.id
+       ) sub`,
+    [regulationId],
+  );
+
+  const total = Number(counts.rows[0]?.total ?? 0);
+  const withEvidence = Number(counts.rows[0]?.with_evidence ?? 0);
+
+  const unmappedRows = await pool.query(
+    `SELECT o.id, o.obligation_code, o.title, o.section_domain, o.priority
+       FROM obligations o
+  LEFT JOIN obligation_documents od ON od.obligation_id = o.id
+      WHERE o.regulation_id = $1
+        AND o.status = 'applicable'
+        AND od.id IS NULL
+   ORDER BY COALESCE(o.section_order, 0), o.obligation_code`,
+    [regulationId],
+  );
+
+  return {
+    regulation_id: reg.rows[0].id,
+    regulation_code: reg.rows[0].regulation_code,
+    regulation_name: reg.rows[0].name,
+    total_obligations: total,
+    with_evidence: withEvidence,
+    coverage_pct: total > 0 ? Math.round((withEvidence / total) * 100) : 0,
+    unmapped: unmappedRows.rows as UnmappedObligationRow[],
+  };
+}
+
+/**
+ * Coverage summary for every active regulation, suitable for the
+ * dashboard tile grid. Single round-trip.
+ */
+export async function getAllFrameworkCoverage(): Promise<FrameworkCoverage[]> {
+  await initObligationDocumentsTable();
+  const rows = await pool.query(
+    `SELECT
+        r.id                                                  AS regulation_id,
+        r.regulation_code,
+        r.name                                                AS regulation_name,
+        COUNT(o.id)::int                                       AS total_obligations,
+        COALESCE(SUM(CASE WHEN od_count > 0 THEN 1 ELSE 0 END), 0)::int
+                                                              AS with_evidence
+       FROM regulations r
+  LEFT JOIN (
+         SELECT o2.id, o2.regulation_id, COUNT(od2.id)::int AS od_count
+           FROM obligations o2
+      LEFT JOIN obligation_documents od2 ON od2.obligation_id = o2.id
+          WHERE o2.status = 'applicable'
+       GROUP BY o2.id, o2.regulation_id
+       ) o ON o.regulation_id = r.id
+      WHERE r.status = 'active'
+   GROUP BY r.id, r.regulation_code, r.name
+   ORDER BY r.regulation_code`,
+  );
+
+  return rows.rows.map((r: any) => {
+    const total = Number(r.total_obligations) || 0;
+    const we = Number(r.with_evidence) || 0;
+    return {
+      regulation_id: Number(r.regulation_id),
+      regulation_code: r.regulation_code,
+      regulation_name: r.regulation_name,
+      total_obligations: total,
+      with_evidence: we,
+      coverage_pct: total > 0 ? Math.round((we / total) * 100) : 0,
+    };
+  });
+}
+
+/**
+ * Pure-function variant of the coverage % calculation used by both
+ * helpers above. Exposed for unit testing without a database.
+ */
+export function calculateCoveragePct(
+  total: number,
+  withEvidence: number,
+): number {
+  if (total <= 0) return 0;
+  if (withEvidence < 0) return 0;
+  if (withEvidence >= total) return 100;
+  return Math.round((withEvidence / total) * 100);
 }

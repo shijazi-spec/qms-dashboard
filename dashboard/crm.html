@@ -159,7 +159,7 @@
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
                 <div class="flex items-center space-x-4">
                     <div class="relative">
-                        <input type="text" id="searchInput" placeholder="Search records..."
+                        <input type="text" id="searchInput" placeholder="Search records..." 
                             class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-64"
                             data-on-keyup="filterTable" data-testid="input-search">
                         <svg class="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -250,7 +250,7 @@
                         <div class="flex items-center gap-2"><span class="cluster-badge cluster-high">3 dups</span> High-confidence duplicate cluster</div>
                         <div class="flex items-center gap-2"><span class="cluster-badge cluster-medium">2 dups</span> Medium-confidence cluster</div>
                         <div class="flex items-center gap-2"><span class="text-xs text-gray-400 italic">No badge</span> Not detected in any cluster</div>
-                    </div>
+                </div>
                 </div>
                 <div>
                     <h3 class="font-medium text-gray-700 mb-2" data-i18n="crm.sec_row_highlights">Row Highlights</h3>
@@ -258,7 +258,7 @@
                         <div class="flex items-center gap-2"><span class="inline-block w-4 h-4 rounded bg-red-50 border border-red-200"></span> Junk / spam record</div>
                         <div class="flex items-center gap-2"><span class="inline-block w-4 h-4 rounded bg-yellow-50 border border-yellow-200"></span> Part of a duplicate cluster</div>
                         <div class="flex items-center gap-2"><span class="hygiene-warn">&#9888; format</span> Data hygiene warning</div>
-                    </div>
+                </div>
                 </div>
             </div>
         </div>
@@ -349,23 +349,23 @@
             var errorEl = document.getElementById('errorState');
             var emptyEl = document.getElementById('emptyState');
             var refreshBtn = document.getElementById('refreshBtn');
-
+            
             loadingEl.classList.remove('hidden');
             dataEl.classList.add('hidden');
             errorEl.classList.add('hidden');
             emptyEl.classList.add('hidden');
             refreshBtn.disabled = true;
-
+            
             try {
                 var data = await fetchModuleData(currentModule);
                 if (!data.success) throw new Error(data.error || 'Failed to fetch data');
-
+                
                 allRecords = data.records || [];
                 document.getElementById('recordCount').textContent = _t('dyn.crm.records_count', { count: _fn(allRecords.length) });
                 document.getElementById('lastUpdated').textContent = _t('dyn.crm.updated_at', { time: new Date().toLocaleTimeString() });
-
+                
                 loadingEl.classList.add('hidden');
-
+                
                 if (allRecords.length === 0) {
                     emptyEl.classList.remove('hidden');
                     updateHealthBar({});

@@ -80,6 +80,15 @@ const WalaPlusNav = {
         // Compliance module (PDPL, ISO 9001, ISO 27001, PCI DSS, …).
         { label: 'Documentations', href: '/qms-docs', icon: 'document-text', id: 'qms-docs' },
         { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
+        // Compliance v2 — Audit Readiness lives between Compliance and
+        // Document Mapping so the GRC user sees the full lifecycle in
+        // order: define obligations -> run audits -> link evidence.
+        { label: 'Audit Readiness', href: '/audit-readiness', icon: 'clipboard-check', id: 'audit-readiness' },
+        // Document Mapping: AI-assisted workspace for mapping uploaded
+        // documents to compliance clauses. Coverage tiles, suggest console,
+        // AI-judged findings, and audit-readiness PDFs live here so the
+        // Compliance page stays focused on governance/assessment workflow.
+        { label: 'Document Mapping', href: '/document-mapping', icon: 'duplicate', id: 'document-mapping' },
         { label: 'External Audits', href: '/external-audits', icon: 'clipboard-check', id: 'external-audits' },
         { label: 'Vendors', href: '/vendors', icon: 'users', id: 'vendors' },
         { label: 'Mgmt Review', href: '/reviews', icon: 'clipboard-list', id: 'reviews' }

@@ -167,10 +167,11 @@ export const ROUTE_MANIFEST = {
 
   pages: [
     '/', '/dashboard', '/dashboard/:name', '/login', '/admin', '/users', '/accept-invite',
-    '/qms', '/sandbox', '/crm', '/audits', '/compliance', '/policies', '/reviews',
-    '/risks', '/grc', '/pdpl', '/feedback', '/guide', '/migration', '/logs',
-    '/ai-approvals', '/intake', '/external-audits', '/vendors', '/tablef',
-    '/infographic', '/sop', '/docs/SCOPE_OF_WORK.html',
+    '/qms', '/sandbox', '/crm', '/audits', '/compliance', '/document-mapping',
+    '/audit-readiness', '/import-review',
+    '/policies', '/reviews', '/risks', '/grc', '/pdpl', '/feedback', '/guide',
+    '/migration', '/logs', '/ai-approvals', '/intake', '/external-audits',
+    '/vendors', '/tablef', '/infographic', '/sop', '/docs/SCOPE_OF_WORK.html',
   ],
 
   staticAssets: [

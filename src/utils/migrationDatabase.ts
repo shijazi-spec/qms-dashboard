@@ -67,7 +67,7 @@ export interface DeduplicationRule {
 
 export async function initMigrationTables(): Promise<void> {
   logger.info("📋 [MigrationDB] Initializing migration tables...");
-
+  
   await pool.query(`
     CREATE TABLE IF NOT EXISTS migration_jobs (
       id SERIAL PRIMARY KEY,
@@ -149,7 +149,7 @@ async function seedMigrationTemplates(): Promise<void> {
   if (parseInt(existingTemplates.rows[0].count) > 0) return;
 
   logger.info("📝 [MigrationDB] Seeding migration templates...");
-
+  
   const templates = [
     {
       name: "Risk Register Import",
@@ -470,7 +470,7 @@ async function seedDeduplicationRules(): Promise<void> {
   if (parseInt(existingRules.rows[0].count) > 0) return;
 
   logger.info("📝 [MigrationDB] Seeding deduplication rules...");
-
+  
   const rules = [
     {
       target_module: "risks",
@@ -645,7 +645,7 @@ export async function getAllMigrationJobs(filters?: {
 
   query += " ORDER BY created_at DESC";
   const result = await pool.query(query, values);
-
+  
   return { jobs: result.rows, total: parseInt(countResult.rows[0].count) };
 }
 
@@ -654,12 +654,12 @@ export async function getTemplates(
 ): Promise<MigrationTemplate[]> {
   let query = "SELECT * FROM migration_templates WHERE is_active = true";
   const values: any[] = [];
-
+  
   if (targetModule) {
     query += " AND target_module = $1";
     values.push(targetModule);
   }
-
+  
   query += " ORDER BY target_module, name";
   const result = await pool.query(query, values);
   return result.rows;
@@ -670,12 +670,12 @@ export async function getDeduplicationRules(
 ): Promise<DeduplicationRule[]> {
   let query = "SELECT * FROM deduplication_rules WHERE is_active = true";
   const values: any[] = [];
-
+  
   if (targetModule) {
     query += " AND target_module = $1";
     values.push(targetModule);
   }
-
+  
   query += " ORDER BY target_module, rule_name";
   const result = await pool.query(query, values);
   return result.rows;

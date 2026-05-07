@@ -437,6 +437,50 @@ export const staticPageRoutes = [
         `To access the Compliance dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
+  // /document-mapping → AI-assisted document/clause mapping workspace
+  // (coverage, suggest, judge, audit-readiness PDFs). Same role gate as
+  // /compliance because it talks to the same /api/compliance/* endpoints.
+  {
+    path: "/document-mapping",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "document-mapping.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Document Mapping Setup Required",
+        `To access the Document Mapping workspace, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
+  // /audit-readiness → Compliance v2 Audit Run engine. Reuses the
+  // existing audits + grc_audit_findings infrastructure but is scoped
+  // to compliance audits (audit_kind='compliance'). Role-gated to the
+  // same governance/executive set as /compliance.
+  {
+    path: "/audit-readiness",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "audit-readiness.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Audit Readiness Setup Required",
+        `To access the Audit Readiness workspace, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
+  // /import-review → Compliance v2 Ingest Standard from Document
+  // review screen. Walks the user through editing the AI-extracted
+  // draft of a regulation's clauses before bulk-inserting them. Same
+  // role gate as /compliance.
+  {
+    path: "/import-review",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "import-review.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Import Review Setup Required",
+        `To access the Import Review screen, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   // /policies → /api/policies GET — broad QMS read set.
   {
     path: "/policies",
@@ -809,6 +853,21 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
   },
   {
     path: "/compliance",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/compliance",
+  },
+  {
+    path: "/document-mapping",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/compliance",
+  },
+  {
+    path: "/audit-readiness",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/compliance",
+  },
+  {
+    path: "/import-review",
     allowedRoles: GOVERNANCE_AND_EXECUTIVE,
     backingApiPath: "/api/compliance",
   },

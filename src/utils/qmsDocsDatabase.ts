@@ -18,6 +18,13 @@ export const QMS_DOC_CATEGORIES: readonly QmsDocCategory[] = [
   "sops",
 ];
 
+export type QmsDocExtractionStatus =
+  | "pending"
+  | "extracted"
+  | "failed"
+  | "unsupported"
+  | "skipped";
+
 export interface QmsUploadedDocument {
   id: number;
   category: QmsDocCategory;
@@ -30,6 +37,11 @@ export interface QmsUploadedDocument {
   regulation_codes: string[] | null;
   uploaded_by: string;
   uploaded_at: string;
+  // Phase 2.1 — text extraction columns (added via ALTER on init)
+  extracted_text?: string | null;
+  extraction_status?: QmsDocExtractionStatus | null;
+  extracted_at?: string | null;
+  extracted_hash?: string | null;
 }
 
 let initialized = false;
@@ -62,8 +74,71 @@ export async function initQmsDocsTable(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_qms_uploaded_documents_category
       ON qms_uploaded_documents (category);
   `);
+
+  // Phase 2.1 — text-extraction columns (idempotent ALTERs).
+  // extracted_text is truncated to 50k chars at write time. extracted_hash
+  // stores SHA-256 of the full file so we know whether to re-extract on
+  // file replacement without storing the entire raw blob in the DB.
+  await pool.query(
+    `ALTER TABLE qms_uploaded_documents ADD COLUMN IF NOT EXISTS extracted_text TEXT`,
+  );
+  await pool.query(
+    `ALTER TABLE qms_uploaded_documents ADD COLUMN IF NOT EXISTS extraction_status VARCHAR(20) DEFAULT 'pending'`,
+  );
+  await pool.query(
+    `ALTER TABLE qms_uploaded_documents ADD COLUMN IF NOT EXISTS extracted_at TIMESTAMP`,
+  );
+  await pool.query(
+    `ALTER TABLE qms_uploaded_documents ADD COLUMN IF NOT EXISTS extracted_hash VARCHAR(64)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_qms_uploaded_documents_extraction_status
+       ON qms_uploaded_documents (extraction_status)`,
+  );
+
   initialized = true;
   logger.info("✅ [QmsDocsDB] qms_uploaded_documents table ready");
+}
+
+/**
+ * Phase 2.1 — list documents that still need text extraction. Used by
+ * the Inngest backfill cron and by tests.
+ */
+export async function listDocumentsPendingExtraction(
+  limit: number = 25,
+): Promise<QmsUploadedDocument[]> {
+  await initQmsDocsTable();
+  const result = await pool.query(
+    `SELECT * FROM qms_uploaded_documents
+      WHERE extraction_status = 'pending' OR extraction_status IS NULL
+      ORDER BY uploaded_at ASC
+      LIMIT $1`,
+    [limit],
+  );
+  return result.rows as QmsUploadedDocument[];
+}
+
+/**
+ * Phase 2.1 — persist extraction result for a document.
+ */
+export async function setDocumentExtractionResult(
+  id: number,
+  status: QmsDocExtractionStatus,
+  text: string | null,
+  hash: string | null,
+): Promise<void> {
+  await initQmsDocsTable();
+  // Truncate to 50k chars to keep row size bounded.
+  const safeText = text == null ? null : text.slice(0, 50_000);
+  await pool.query(
+    `UPDATE qms_uploaded_documents
+        SET extracted_text   = $2,
+            extraction_status = $3,
+            extracted_at      = CURRENT_TIMESTAMP,
+            extracted_hash    = $4
+      WHERE id = $1`,
+    [id, safeText, status, hash],
+  );
 }
 
 export function isValidCategory(c: string): c is QmsDocCategory {
