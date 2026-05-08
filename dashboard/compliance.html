@@ -277,7 +277,7 @@
             </div>
             <div class="bg-white rounded-lg shadow p-6">
                 <h2 class="text-base font-semibold text-gray-900 mb-3" data-i18n="compliance.by_domain">By Domain</h2>
-                <div id="byDomainChart" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+                <div id="byDomainChart" class="space-y-2 max-h-64 overflow-y-auto pe-1">
                     <div class="text-gray-400 text-center py-4 text-sm">Loading…</div>
                 </div>
             </div>
@@ -1115,7 +1115,7 @@
                 const c = colors[p];
                 const pct = Math.round(buckets[p] / total * 100);
                 const label = _td('dyn.compliance.priority', p) || p;
-                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;priority&quot;,&quot;' + p + '&quot;]" class="w-full text-left ' + c.bg + ' rounded p-2 hover:opacity-90" data-testid="chart-priority-' + p + '">'
+                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;priority&quot;,&quot;' + p + '&quot;]" class="w-full text-start ' + c.bg + ' rounded p-2 hover:opacity-90" data-testid="chart-priority-' + p + '">'
                     + '<div class="flex justify-between items-center text-xs ' + c.text + ' font-medium mb-1"><span class="capitalize">' + escAttr(label) + '</span><span>' + buckets[p] + ' (' + pct + '%)</span></div>'
                     + '<div class="h-1.5 w-full bg-white/70 rounded-full overflow-hidden"><div class="h-full ' + c.bar + '" data-style="width:' + pct + '%"></div></div>'
                     + '</button>';
@@ -1140,7 +1140,7 @@
                 const name = e[0]; const n = e[1];
                 const pct = Math.round(n / max * 100);
                 const safe = escAttr(name);
-                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;domain&quot;,&quot;' + safe.replace(/"/g, '\\&quot;') + '&quot;]" class="w-full text-left p-1.5 rounded hover:bg-gray-50">'
+                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;domain&quot;,&quot;' + safe.replace(/"/g, '\\&quot;') + '&quot;]" class="w-full text-start p-1.5 rounded hover:bg-gray-50">'
                     + '<div class="flex justify-between items-center text-xs text-gray-700 mb-0.5"><span class="truncate" title="' + safe + '">' + safe + '</span><span class="text-gray-500">' + n + '</span></div>'
                     + '<div class="h-1 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-indigo-500" data-style="width:' + pct + '%"></div></div>'
                     + '</button>';
@@ -1173,7 +1173,7 @@
             if (rows.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-10 text-center text-gray-400">'
                     + _ct('compliance.no_match', 'No clauses match the current filters.')
-                    + ' <button type="button" data-on-click="resetFilters" class="text-emerald-700 hover:underline ml-1">'
+                    + ' <button type="button" data-on-click="resetFilters" class="text-emerald-700 hover:underline ms-1">'
                     + _ct('compliance.flt_reset', 'Reset')
                     + '</button>'
                     + '</td></tr>';
@@ -1196,7 +1196,7 @@
                     + '<td class="px-3 py-2.5 text-center text-sm font-medium text-gray-700">' + (r.score != null ? (r.score + '%') : '—') + '</td>'
                     + '<td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">' + escAttr(dt) + '</td>'
                     + '<td class="px-3 py-2.5 text-center whitespace-nowrap">'
-                        + '<button data-title="' + escAttr(r.title) + '" data-on-click="openAssessmentModal" data-args="[' + r.id + ',&quot;@this.dataset.title&quot;]" class="text-green-600 hover:text-green-800 text-xs font-medium mr-2" data-testid="button-assess-' + r.id + '" data-i18n="compliance.assess_short">Assess</button>'
+                        + '<button data-title="' + escAttr(r.title) + '" data-on-click="openAssessmentModal" data-args="[' + r.id + ',&quot;@this.dataset.title&quot;]" class="text-green-600 hover:text-green-800 text-xs font-medium me-2" data-testid="button-assess-' + r.id + '" data-i18n="compliance.assess_short">Assess</button>'
                         + '<button data-on-click="openClauseDocsModal" data-args="[' + r.id + ',&quot;' + escAttr(r.obligation_code + ' — ' + (r.title || '')) + '&quot;]" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium" data-testid="button-link-' + r.id + '" data-i18n="compliance.link_docs_short">Link Docs</button>'
                     + '</td>'
                 + '</tr>';
