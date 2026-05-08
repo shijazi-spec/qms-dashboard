@@ -430,6 +430,19 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/logs/, methods: ["GET"], roles: ["admin"] },
   { pattern: /^\/api\/event-logs/, methods: ["GET"], roles: ["admin"] },
 
+  // Executive digest — XLSX export of issues (analytics read-side; mirrors other analytics reads)
+  {
+    pattern: /^\/api\/digest\/issues\.xlsx$/,
+    methods: ["GET"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
+  },
+  // Executive digest — outbox processor (write/send-side; admin + ops only, mirrors DIGEST_SEND_ROLES)
+  {
+    pattern: /^\/api\/analytics\/executive-digest\/outbox\/process$/,
+    methods: ["POST"],
+    roles: ["admin", "head_of_operations_quality"],
+  },
+
   {
     pattern: /^\/api\/risks\/\d+\/close$/,
     methods: ["POST"],

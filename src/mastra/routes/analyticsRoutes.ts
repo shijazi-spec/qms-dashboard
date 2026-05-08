@@ -1,4 +1,5 @@
 import "../../utils/executiveDigest";
+import { logger } from "../../utils/logger";
 
 const ANALYTICS_READ_ROLES = [
   "admin",
@@ -196,7 +197,7 @@ export const analyticsRoutes = [
             ),
           );
         } catch (error) {
-          console.error("[digest/issues.xlsx] export failed:", error);
+          logger.error("[digest/issues.xlsx] export failed", { error: error instanceof Error ? error.message : String(error) });
           return c.json({
             error: "Failed to export digest issues to XLSX",
             detail: error instanceof Error ? error.message : String(error),
