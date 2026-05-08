@@ -104,6 +104,17 @@ export function extractRawCitations(text: string): RawCitation[] {
   if (!text || text.length < 30) return [];
   const out: RawCitation[] = [];
   const seen = new Set<string>();
+  // Track text-index ranges already claimed by an earlier (more specific)
+  // pattern. Later patterns (e.g. bare "A.5.15") must not re-emit a hit
+  // that lies inside a region already matched by a framework+clause hit
+  // like "ISO 27001 A.5.15".
+  const claimedRanges: Array<[number, number]> = [];
+  const overlapsClaimed = (start: number, end: number) => {
+    for (const [s, e] of claimedRanges) {
+      if (start < e && end > s) return true;
+    }
+    return false;
+  };
 
   for (const p of CLAUSE_PATTERNS) {
     p.regex.lastIndex = 0;
@@ -111,6 +122,14 @@ export function extractRawCitations(text: string): RawCitation[] {
     while ((m = p.regex.exec(text)) !== null) {
       const raw = m[0];
       if (!raw || raw.length > 80) continue;
+      const matchStart = m.index;
+      const matchEnd = m.index + raw.length;
+      if (overlapsClaimed(matchStart, matchEnd)) continue;
+      // Always claim the range, even if we later drop the hit as a
+      // duplicate key — otherwise a later, less-specific pattern (e.g.
+      // bare "A.5.15") would still match the *second* occurrence of
+      // "ISO 27001 A.5.15" and emit it as a separate citation.
+      claimedRanges.push([matchStart, matchEnd]);
       const key = raw.toUpperCase().replace(/\s+/g, " ").trim();
       if (seen.has(key)) continue;
       seen.add(key);

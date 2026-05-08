@@ -36,7 +36,11 @@ await suite.test("every route exposes path, method and createHandler", async () 
   suite.expectEqual(adminApiRoutes.length >= 20, true, "at least 20 routes registered");
 });
 
-await suite.test("POST /api/admin/auth — 200 with correct ADMIN_API_KEY (sets cookie)", async () => {
+// Regression guard for Task #831: POST /api/admin/auth verifies the raw key
+// for server-to-server tooling but no longer issues a browser admin_key
+// session cookie. The success response carries `success:true` and a `note`
+// instructing the caller to use X-Admin-Key on subsequent requests.
+await suite.test("POST /api/admin/auth — 200 with correct ADMIN_API_KEY (no cookie issued)", async () => {
   const original = process.env.ADMIN_API_KEY;
   process.env.ADMIN_API_KEY = "integration-test-secret-2026";
   try {
@@ -46,23 +50,14 @@ await suite.test("POST /api/admin/auth — 200 with correct ADMIN_API_KEY (sets 
     );
     suite.expectEqual(res.status, 200, "status");
     suite.expectEqual(res.body?.success, true, "body.success");
-    const cookie = res.headers["Set-Cookie"];
-    suite.expect(typeof cookie === "string", "Set-Cookie header is a string");
     suite.expect(
-      cookie?.startsWith("admin_key=integration-test-secret-2026") ?? false,
-      `Set-Cookie carries admin_key (got: ${cookie})`,
+      typeof res.body?.note === "string" && res.body.note.includes("X-Admin-Key"),
+      "body.note instructs caller to use X-Admin-Key header",
     );
-    // All three flags (HttpOnly, Secure, SameSite=Strict) are required and
-    // unconditional — see scripts/check-admin-cookie-flags.sh for the static
-    // CI guardrail that mirrors this assertion. The admin_key cookie was
-    // silently missing SameSite=Strict for a period of time; both checks
-    // exist so a regression fails at runtime *and* at scan time.
+    const cookie = res.headers["Set-Cookie"];
     suite.expect(
-      cookie?.includes("HttpOnly") &&
-        cookie?.includes("Secure") &&
-        cookie?.includes("SameSite=Strict") &&
-        cookie?.includes("Max-Age=28800"),
-      "Set-Cookie has HttpOnly + Secure + SameSite=Strict + Max-Age=28800",
+      !cookie || !String(cookie).includes("admin_key="),
+      `no admin_key Set-Cookie issued (got: ${cookie ?? "<none>"})`,
     );
   } finally {
     if (original === undefined) delete process.env.ADMIN_API_KEY;

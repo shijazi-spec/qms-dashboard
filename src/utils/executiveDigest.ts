@@ -511,11 +511,21 @@ export function computeDigestWindow(
 
     const anchorThursdayDate = ksa.day + diffToThursday;
     const anchorThursdayStart = fromKsaParts(ksa.year, ksa.monthIndex, anchorThursdayDate);
-    const windowStart = new Date(anchorThursdayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const anchorParts = getKsaParts(anchorThursdayStart);
+    // windowStart is the Friday 6 KSA-days before the Thursday anchor.
+    // We anchor at UTC 00:00 on that KSA calendar date (rather than
+    // KSA-midnight, which falls on the previous UTC date) so that
+    // start.toISOString().slice(0,10) renders the correct Friday and
+    // matches the convention used by downstream consumers
+    // (window_start in slack blocks etc).
+    const fridayUtc = new Date(
+      Date.UTC(anchorParts.year, anchorParts.monthIndex, anchorParts.day - 6, 0, 0, 0, 0),
+    );
+    const windowStart = fridayUtc;
     const windowEnd = fromKsaParts(
-      getKsaParts(anchorThursdayStart).year,
-      getKsaParts(anchorThursdayStart).monthIndex,
-      getKsaParts(anchorThursdayStart).day,
+      anchorParts.year,
+      anchorParts.monthIndex,
+      anchorParts.day,
       23,
       59,
       59,

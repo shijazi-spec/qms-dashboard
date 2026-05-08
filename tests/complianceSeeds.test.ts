@@ -32,20 +32,26 @@ const VALID_FREQ = new Set([
 ]);
 const VALID_PRIORITY = new Set(["critical", "high", "medium", "low"]);
 
-function structuralChecks(
+async function structuralChecks(
   suite: TestSuite,
   label: string,
   defs: ObligationDef[],
   expectedMin: number,
-): void {
-  suite.test(`${label} — has at least ${expectedMin} obligations`, async () => {
+): Promise<void> {
+  // IMPORTANT: each suite.test() must be awaited individually.
+  // TestSuite#test mutates a single `current` field on the suite, so
+  // launching multiple unawaited test() promises in parallel makes the
+  // expect() calls in later tests run after `current` has been nulled
+  // by the first test's finally block ("Cannot read properties of null
+  // reading 'failures'").
+  await suite.test(`${label} — has at least ${expectedMin} obligations`, async () => {
     suite.expect(
       defs.length >= expectedMin,
       `expected at least ${expectedMin}, got ${defs.length}`,
     );
   });
 
-  suite.test(`${label} — every obligation_code is unique`, async () => {
+  await suite.test(`${label} — every obligation_code is unique`, async () => {
     const codes = defs.map((d) => d.code);
     const dupes = codes.filter((c, i) => codes.indexOf(c) !== i);
     suite.expectEqual(
@@ -55,7 +61,7 @@ function structuralChecks(
     );
   });
 
-  suite.test(`${label} — every obligation has the required fields`, async () => {
+  await suite.test(`${label} — every obligation has the required fields`, async () => {
     for (const d of defs) {
       suite.expect(!!d.code, `missing code on order=${d.order}`);
       suite.expect(!!d.title, `missing title on ${d.code}`);
@@ -68,7 +74,7 @@ function structuralChecks(
     }
   });
 
-  suite.test(`${label} — every enum field uses a valid value`, async () => {
+  await suite.test(`${label} — every enum field uses a valid value`, async () => {
     for (const d of defs) {
       suite.expect(VALID_TYPE.has(d.type), `bad type on ${d.code}: ${d.type}`);
       suite.expect(VALID_CTRL.has(d.ctrl), `bad ctrl on ${d.code}: ${d.ctrl}`);
@@ -80,7 +86,7 @@ function structuralChecks(
     }
   });
 
-  suite.test(`${label} — section_order is a positive integer`, async () => {
+  await suite.test(`${label} — section_order is a positive integer`, async () => {
     for (const d of defs) {
       suite.expect(
         Number.isInteger(d.order) && d.order > 0,
@@ -94,7 +100,7 @@ console.log("\n=== Compliance framework seeds — structural tests ===\n");
 
 const isoSuite = new TestSuite("iso27001Seed");
 console.log("\n— ISO 27001:2022 —");
-structuralChecks(isoSuite, "ISO 27001", ISO27001_OBLIGATION_DEFINITIONS, 90);
+await structuralChecks(isoSuite, "ISO 27001", ISO27001_OBLIGATION_DEFINITIONS, 90);
 await isoSuite.test("ISO 27001 — has both Annex A and clause sections", async () => {
   const hasAnnexA = ISO27001_OBLIGATION_DEFINITIONS.some((d) =>
     d.code.startsWith("ISO27001-A."),
@@ -108,11 +114,11 @@ await isoSuite.test("ISO 27001 — has both Annex A and clause sections", async 
 
 const iso9Suite = new TestSuite("iso9001Seed");
 console.log("\n— ISO 9001:2015 —");
-structuralChecks(iso9Suite, "ISO 9001", ISO9001_OBLIGATION_DEFINITIONS, 40);
+await structuralChecks(iso9Suite, "ISO 9001", ISO9001_OBLIGATION_DEFINITIONS, 40);
 
 const eccSuite = new TestSuite("ncaEccSeed");
 console.log("\n— NCA-ECC v1:2018 —");
-structuralChecks(eccSuite, "NCA-ECC", NCA_ECC_OBLIGATION_DEFINITIONS, 100);
+await structuralChecks(eccSuite, "NCA-ECC", NCA_ECC_OBLIGATION_DEFINITIONS, 100);
 await eccSuite.test("NCA-ECC — covers all 5 main domains", async () => {
   const domains = new Set(NCA_ECC_OBLIGATION_DEFINITIONS.map((d) => d.domain));
   eccSuite.expectEqual(
@@ -124,11 +130,11 @@ await eccSuite.test("NCA-ECC — covers all 5 main domains", async () => {
 
 const dccSuite = new TestSuite("ncaDccSeed");
 console.log("\n— NCA-DCC v1:2022 —");
-structuralChecks(dccSuite, "NCA-DCC", NCA_DCC_OBLIGATION_DEFINITIONS, 100);
+await structuralChecks(dccSuite, "NCA-DCC", NCA_DCC_OBLIGATION_DEFINITIONS, 100);
 
 const pciSuite = new TestSuite("pciDssSeed");
 console.log("\n— PCI DSS v4.0 (priority subset) —");
-structuralChecks(pciSuite, "PCI DSS", PCIDSS_OBLIGATION_DEFINITIONS, 70);
+await structuralChecks(pciSuite, "PCI DSS", PCIDSS_OBLIGATION_DEFINITIONS, 70);
 await pciSuite.test("PCI DSS — covers all 12 requirements", async () => {
   const reqs = new Set(
     PCIDSS_OBLIGATION_DEFINITIONS.map((d) => d.code.split("-").slice(0, 3).join("-")),
@@ -149,7 +155,7 @@ await pciSuite.test("PCI DSS — covers all 12 requirements", async () => {
 
 const samaSuite = new TestSuite("samaCsfFullSeed");
 console.log("\n— SAMA CSF (full fill) —");
-structuralChecks(
+await structuralChecks(
   samaSuite,
   "SAMA CSF fill",
   SAMA_FULL_OBLIGATION_DEFINITIONS,
@@ -171,7 +177,7 @@ await samaSuite.test("SAMA fill — codes start at SAMA-21 (no overlap with orig
 
 const pdplSuite = new TestSuite("pdplFillSeed");
 console.log("\n— PDPL Implementing Regulations (fill) —");
-structuralChecks(
+await structuralChecks(
   pdplSuite,
   "PDPL fill",
   PDPL_FILL_OBLIGATION_DEFINITIONS,
