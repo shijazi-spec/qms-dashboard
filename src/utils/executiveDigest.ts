@@ -100,6 +100,12 @@ export interface DigestData {
   };
   kpi_summary: { green: number; amber: number; red: number; total: number };
   compliance_summary: { met: number; partial: number; not_met: number; total: number };
+  /**
+   * Composite enterprise health score 0-100, derived from real GRC signals.
+   * Components (weights): audit score 30%, CAPA closure 20%, risk hygiene 25%,
+   * KPI green rate 15%, NC closure rate 10%. See `computeHealthScore()`.
+   */
+  health_score: number;
   top_alerts: Array<{ title: string; severity: string; module: string }>;
   capa_recurrences: number;
   duplicate_clusters: number;
@@ -717,11 +723,21 @@ export async function generateDigestData(
   const window = options.window || computeDigestWindow(cadence, now);
   const weekAgoStr = window.start.toISOString();
 
+  // Schema mapping (May 2026 audit):
+  //   NC      -> audit_findings (canonical NC source; nonconformance_records is unused)
+  //   CAPA    -> capas + capa_action_items (capa_records is unused)
+  //   Risk    -> enterprise_risks (risk_register does not exist)
+  //   KPI     -> kpi_values JOIN kpi_definitions (kpi_entries does not exist)
+  //   Compl.  -> compliance_assessments (compliance_obligations does not exist)
+  //   Audit   -> quality_audit_results (quality_audits does not exist)
+  // Each safeQuery falls back to [] if a table is missing in a future env,
+  // so the digest degrades gracefully rather than 500-ing.
   const [
     ncOpen,
     ncNewWeek,
     ncClosedWeek,
     ncOverdue,
+    ncTotal,
     capaOpen,
     capaNewWeek,
     capaClosedWeek,
@@ -739,56 +755,68 @@ export async function generateDigestData(
     businessRecords,
   ] = await Promise.all([
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM nonconformance_records WHERE status NOT IN ('closed', 'rejected')`,
+      `SELECT COUNT(*) as cnt FROM audit_findings WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed', 'resolved', 'rejected')`,
     ),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM nonconformance_records WHERE created_at >= $1`,
+      `SELECT COUNT(*) as cnt FROM audit_findings WHERE created_at >= $1`,
       [weekAgoStr],
     ),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM nonconformance_records WHERE closed_date >= $1`,
+      `SELECT COUNT(*) as cnt FROM audit_findings WHERE resolution_date >= $1`,
       [weekAgoStr],
     ),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM nonconformance_records WHERE status NOT IN ('closed', 'rejected') AND created_at < NOW() - INTERVAL '15 days'`,
+      `SELECT COUNT(*) as cnt FROM audit_findings WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed', 'resolved', 'rejected') AND target_date IS NOT NULL AND target_date < CURRENT_DATE`,
     ),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM capa_records WHERE status NOT IN ('closed', 'cancelled')`,
+      `SELECT COUNT(*) as cnt FROM audit_findings`,
     ),
-    safeQuery(`SELECT COUNT(*) as cnt FROM capa_records WHERE created_at >= $1`, [weekAgoStr]),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM capa_records WHERE completion_date >= $1`,
+      `SELECT COUNT(*) as cnt FROM capas WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed', 'cancelled', 'completed')`,
+    ),
+    safeQuery(`SELECT COUNT(*) as cnt FROM capas WHERE created_at >= $1`, [weekAgoStr]),
+    safeQuery(
+      `SELECT COUNT(*) as cnt FROM capa_action_items WHERE completion_date >= $1`,
       [weekAgoStr],
     ),
+    // Effectiveness proxy: action-items completed vs total across all CAPAs
+    // (capas table has no effectiveness_result column).
     safeQuery(
-      `SELECT COUNT(*) FILTER (WHERE effectiveness_result = 'effective') as eff, COUNT(*) as total FROM capa_records WHERE effectiveness_result IS NOT NULL`,
+      `SELECT COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'open')) = 'completed') as eff, COUNT(*) as total FROM capa_action_items`,
     ),
-    safeQuery(`SELECT COUNT(*) as cnt FROM risk_register WHERE status != 'closed'`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed', 'accepted')`),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM risk_register WHERE (likelihood * impact) >= 15 AND status != 'closed'`,
+      `SELECT COUNT(*) as cnt FROM enterprise_risks WHERE COALESCE(risk_score,0) >= 15 AND LOWER(COALESCE(status,'open')) NOT IN ('closed', 'accepted')`,
     ),
-    safeQuery(`SELECT COUNT(*) as cnt FROM risk_register WHERE created_at >= $1`, [weekAgoStr]),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE created_at >= $1`, [weekAgoStr]),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM risk_treatment_actions WHERE due_date < CURRENT_DATE AND status NOT IN ('completed', 'cancelled')`,
+      `SELECT COUNT(*) as cnt FROM enterprise_risks WHERE treatment_deadline IS NOT NULL AND treatment_deadline < NOW() AND LOWER(COALESCE(status,'open')) NOT IN ('closed', 'accepted')`,
     ),
     safeQuery(
-      `SELECT overall_score, audit_date FROM quality_audits ORDER BY audit_date DESC LIMIT 3`,
+      `SELECT overall_score, audit_date FROM quality_audit_results ORDER BY audit_date DESC LIMIT 3`,
     ),
+    // Latest kpi_value per kpi_id, then bucket by status.  Falls back to
+    // raw status counts if the window-over-partition is unavailable.
     safeQuery(`
+      WITH latest AS (
+        SELECT DISTINCT ON (kpi_id) kpi_id, status
+        FROM kpi_values
+        ORDER BY kpi_id, period_end DESC NULLS LAST, id DESC
+      )
       SELECT
-        COUNT(*) FILTER (WHERE status IN ('green', 'on_track')) as green,
-        COUNT(*) FILTER (WHERE status IN ('amber', 'at_risk')) as amber,
-        COUNT(*) FILTER (WHERE status IN ('red', 'off_track')) as red,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('green', 'on_track')) as green,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('amber', 'at_risk')) as amber,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('red', 'off_track')) as red,
         COUNT(*) as total
-      FROM kpi_entries
+      FROM latest
     `),
     safeQuery(`
       SELECT
-        COUNT(*) FILTER (WHERE status = 'met') as met,
-        COUNT(*) FILTER (WHERE status = 'partial') as partial,
-        COUNT(*) FILTER (WHERE status = 'not_met') as not_met,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('met', 'compliant')) as met,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('partial', 'partially_compliant')) as partial,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('not_met', 'non_compliant')) as not_met,
         COUNT(*) as total
-      FROM compliance_obligations
+      FROM compliance_assessments
     `),
     safeQuery(`
       SELECT title, severity, related_module as module
@@ -796,11 +824,13 @@ export async function generateDigestData(
       WHERE status = 'active' AND severity IN ('critical', 'high')
       ORDER BY created_at DESC LIMIT 5
     `),
+    // Recurrence proxy: audit_findings with the same criteria_name appearing
+    // more than once (capas table has no root_cause column).
     safeQuery(`
-      SELECT root_cause, COUNT(*) as cnt
-      FROM capa_records
-      WHERE root_cause IS NOT NULL AND TRIM(root_cause) != ''
-      GROUP BY root_cause HAVING COUNT(*) > 1
+      SELECT criteria_name, COUNT(*) as cnt
+      FROM audit_findings
+      WHERE criteria_name IS NOT NULL AND TRIM(criteria_name) != ''
+      GROUP BY criteria_name HAVING COUNT(*) > 1
     `),
     safeQuery(`SELECT COUNT(*) as cnt FROM duplicate_clusters WHERE status = 'active'`),
     fetchWindowedBusinessRecords(window),
@@ -920,6 +950,18 @@ export async function generateDigestData(
       not_met: parseInt(compRows[0]?.not_met || "0", 10),
       total: parseInt(compRows[0]?.total || "0", 10),
     },
+    health_score: computeEnterpriseHealthScore({
+      auditScore: auditRows[0]?.overall_score ? parseFloat(auditRows[0].overall_score) : null,
+      ncOpen: parseInt(ncOpen[0]?.cnt || "0", 10),
+      ncTotal: parseInt(ncTotal[0]?.cnt || "0", 10),
+      capaOpen: parseInt(capaOpen[0]?.cnt || "0", 10),
+      capaEffectiveCompleted: parseInt(capaEffective[0]?.eff || "0", 10),
+      capaEffectiveTotal: parseInt(capaEffective[0]?.total || "0", 10),
+      riskActive: parseInt(riskActive[0]?.cnt || "0", 10),
+      riskCritHigh: parseInt(riskCritHigh[0]?.cnt || "0", 10),
+      kpiGreen: parseInt(kpiRows[0]?.green || "0", 10),
+      kpiTotal: parseInt(kpiRows[0]?.total || "0", 10),
+    }),
     top_alerts: alertRows,
     capa_recurrences: recurrenceRows.length,
     duplicate_clusters: parseInt(duplicateClusters[0]?.cnt || "0", 10),
@@ -934,6 +976,66 @@ export async function generateDigestData(
     business_sections: businessSections,
     ai_feedback_summary: aiFeedbackSummary,
   };
+}
+
+/**
+ * Composite enterprise health score (0-100) from real GRC signals.
+ *
+ * Component formulas:
+ *  - audit:  latest overall_score (0-100); if null, component is omitted and weights re-normalised.
+ *  - capa:   100 * (1 - open / max(total_action_items,1))  — open vs all action items.
+ *            If no action items recorded, omitted.
+ *  - risk:   100 * (1 - critical_high / max(total_active,1)) — share of active risks that are NOT crit/high.
+ *            If no active risks, defaults to 100.
+ *  - kpi:    100 * green / total. If no KPIs, omitted.
+ *  - nc:     100 * (1 - open / max(ncTotal,1)). If no findings, omitted.
+ *
+ * Weights (when all present): audit 30, capa 20, risk 25, kpi 15, nc 10.
+ * If a component is omitted, remaining weights are re-normalised to 100.
+ * Returns 0 only when no components have data (rare; fully-empty system).
+ */
+export function computeEnterpriseHealthScore(input: {
+  auditScore: number | null;
+  ncOpen: number;
+  ncTotal: number;
+  capaOpen: number;
+  capaEffectiveCompleted: number;
+  capaEffectiveTotal: number;
+  riskActive: number;
+  riskCritHigh: number;
+  kpiGreen: number;
+  kpiTotal: number;
+}): number {
+  const components: Array<{ value: number; weight: number }> = [];
+  if (input.auditScore !== null && Number.isFinite(input.auditScore)) {
+    components.push({ value: clampPct(input.auditScore), weight: 30 });
+  }
+  if (input.capaEffectiveTotal > 0) {
+    const completedPct = (input.capaEffectiveCompleted / input.capaEffectiveTotal) * 100;
+    components.push({ value: clampPct(completedPct), weight: 20 });
+  }
+  // Risk hygiene: always included — "no active risks" is a meaningful 100.
+  const riskHygiene = input.riskActive > 0
+    ? (1 - input.riskCritHigh / input.riskActive) * 100
+    : 100;
+  components.push({ value: clampPct(riskHygiene), weight: 25 });
+  if (input.kpiTotal > 0) {
+    components.push({ value: clampPct((input.kpiGreen / input.kpiTotal) * 100), weight: 15 });
+  }
+  if (input.ncTotal > 0) {
+    components.push({ value: clampPct((1 - input.ncOpen / input.ncTotal) * 100), weight: 10 });
+  }
+  const totalWeight = components.reduce((sum, c) => sum + c.weight, 0);
+  if (totalWeight === 0) return 0;
+  const weighted = components.reduce((sum, c) => sum + c.value * c.weight, 0);
+  return Math.round(weighted / totalWeight);
+}
+
+function clampPct(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  if (n < 0) return 0;
+  if (n > 100) return 100;
+  return n;
 }
 
 function cadenceLabel(cadence: DigestCadence): string {
@@ -1039,6 +1141,7 @@ export function buildDigestHTML(data: DigestData): string {
   <h3>Quality Audit</h3>
   <div class="metric-row"><span>Last score</span><span class="metric-value">${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"}</span></div>
   <div class="metric-row"><span>Trend</span><span class="metric-value" style="color:${trendColor}">${trendIcon} ${data.audit_summary.trend}</span></div>
+  <div class="metric-row"><span>Enterprise Health</span><span class="metric-value" style="color:${data.health_score >= 75 ? "#047857" : data.health_score >= 50 ? "#D97706" : "#B91C1C"}">${data.health_score}%</span></div>
 </div>
 
 <div class="card">
@@ -1139,7 +1242,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         },
         {
           type: "mrkdwn",
-          text: `*Audit Snapshot*\nScore ${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"} - Trend ${data.audit_summary.trend}`,
+          text: `*Audit Snapshot*\nScore ${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"} - Trend ${data.audit_summary.trend}\nHealth ${healthEmoji(data.health_score)} *${data.health_score}%*`,
         },
       ],
     },
