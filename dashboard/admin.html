@@ -1221,7 +1221,6 @@
         <script>
             let currentScorecard = null;
             let currentDocuments = [];
-            let adminAuthenticated = false;
             let useSessionAuth = false;
 
             (async function initAuth() {
@@ -1230,16 +1229,13 @@
                     const data = await res.json();
                     if (data.authenticated) {
                         useSessionAuth = true;
-                    }
-                } catch(e) {}
-                if (!useSessionAuth) {
-                    const testRes = await fetch('/api/admin/documents');
-                    if (testRes.ok) {
-                        adminAuthenticated = true;
                     } else {
-                        promptForAdminKey();
+                        window.location.href = '/login';
                         return;
                     }
+                } catch(e) {
+                    window.location.href = '/login';
+                    return;
                 }
                 loadDocuments();
                 loadScorecard();
@@ -1249,37 +1245,9 @@
                 return { "Content-Type": "application/json" };
             }
 
-            async function promptForAdminKey() {
-                if (useSessionAuth) return;
-                const key = prompt(WalaPlusI18n.t('dyn.admin.prompt_admin_api_key'));
-                if (key) {
-                    try {
-                        const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
-                        if (res.ok) {
-                            adminAuthenticated = true;
-                            loadDocuments();
-                            loadScorecard();
-                        } else {
-                            showToast('Invalid admin key', 'error');
-                        }
-                    } catch(e) {
-                        showToast('Authentication failed', 'error');
-                    }
-                }
-            }
-
             function handleUnauthorized(response) {
                 if (response.status === 401) {
-                    if (useSessionAuth) {
-                        window.location.href = '/login';
-                        return true;
-                    }
-                    adminAuthenticated = false;
-                    showToast(
-                        "Authentication required. Please enter your admin key.",
-                        "error",
-                    );
-                    promptForAdminKey();
+                    window.location.href = '/login';
                     return true;
                 }
                 return false;

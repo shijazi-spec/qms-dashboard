@@ -24,7 +24,7 @@ import { hasValidAdminApiKey, requireRole } from "../../utils/rbacMiddleware";
  * Defense-in-depth authorization for the health-pulse routes.
  *
  * Allows either:
- *   1. A valid X-Admin-Key (header or admin_key cookie), OR
+ *   1. A valid X-Admin-Key header or signed admin_session cookie, OR
  *   2. A signed session that resolves to the `admin` platform role.
  *
  * Always enforces admin even when ADMIN_API_KEY is unset — the legacy

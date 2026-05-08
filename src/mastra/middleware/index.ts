@@ -146,7 +146,7 @@ export const PUBLIC_PATHS = [
   // because a future `/api/admin/auth-something` must NOT inherit the
   // bypass automatically.
   '/api/admin/auth',                // POST: exchange ADMIN_API_KEY → cookie
-  '/api/admin/auth/logout',         // POST: clears admin_key cookie
+  '/api/admin/auth/logout',         // POST: clears admin_session + admin_key cookies
 
   // ---- Invitation acceptance (caller has no session yet) ----
   '/accept-invite',                 // landing page invitees see pre-session

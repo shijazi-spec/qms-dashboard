@@ -9,6 +9,7 @@ import {
 } from "./rbacDatabase";
 
 import { logger } from "./logger";
+
 const platformPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 export interface SessionUser {
@@ -97,14 +98,10 @@ export function getSessionUser(c: any): SessionUser | null {
       picture: session.picture,
     };
   }
-  const expectedKey = process.env.ADMIN_API_KEY;
-  // Accept the admin key from EITHER the X-Admin-Key header (server-to-server
-  // / curl) OR the admin_key cookie (browser sessions opened via the
-  // /dashboard/login.html admin-key form). `getAdminKey` already covers both
-  // sources and percent-decodes cookie values, so reuse it instead of
-  // re-implementing header-only matching here.
-  const presentedKey = getAdminKey(c);
-  if (expectedKey && presentedKey && presentedKey === expectedKey) {
+  // Accept admin identity via X-Admin-Key header only (server-to-server / CLI path).
+  // The browser admin-key cookie path has been fully removed (Task #831).
+  // Browser admin access requires OIDC login with the admin platform role.
+  if (hasValidAdminApiKey(c)) {
     return {
       userId: 0,
       email: "admin-key@system",
@@ -179,33 +176,35 @@ export function isDepartmentViewer(c: any): boolean {
   return user?.role === "department_viewer";
 }
 
+/**
+ * Returns the raw ADMIN_API_KEY presented via the X-Admin-Key request header,
+ * or null if the header is absent.  This covers server-to-server / CLI calls
+ * (curl, internal tooling) where the caller has legitimate access to the raw
+ * secret.
+ *
+ * Browser sessions are NOT accepted here.  The raw admin-key browser cookie
+ * path was removed in Task #831: browsers must authenticate through the OIDC
+ * login flow and be assigned the `admin` platform role.
+ */
 export function getAdminKey(c: any): string | null {
-  const headerKey = c.req.header("X-Admin-Key");
-  if (headerKey) return headerKey;
-  const cookies = (c.req.header("Cookie") || "")
-    .split(";")
-    .map((s: string) => s.trim());
-  const adminCookie = cookies.find((s: string) => s.startsWith("admin_key="));
-  if (adminCookie) {
-    const rawValue = adminCookie.slice(adminCookie.indexOf("=") + 1);
-    if (!rawValue) return null;
-    // Some HTTP clients percent-encode cookie values that contain reserved
-    // characters like '=', '+', or '/'. Decode so the comparison against
-    // ADMIN_API_KEY succeeds regardless of how the client serialized it.
-    // Fall back to the raw value if the sequence is malformed.
-    try {
-      return decodeURIComponent(rawValue);
-    } catch {
-      return rawValue;
-    }
-  }
-  return null;
+  return c.req.header("X-Admin-Key") ?? null;
 }
 
+/**
+ * Returns true when the caller presents a valid raw ADMIN_API_KEY via the
+ * X-Admin-Key request header.  This covers only the server-to-server / CLI
+ * trust path (curl, internal automation, Inngest, monitoring tools).
+ *
+ * Browser sessions are NOT accepted here: browsers must authenticate through
+ * the OIDC login flow and be assigned the `admin` platform role. The browser
+ * admin-key cookie path has been removed because a global shared secret must
+ * not be convertible into a reusable, device-independent browser session.
+ */
 export function hasValidAdminApiKey(c: any): boolean {
-  const adminKey = getAdminKey(c);
   const expectedKey = process.env.ADMIN_API_KEY;
-  return !!(expectedKey && adminKey === expectedKey);
+  if (!expectedKey) return false;
+  const headerKey = getAdminKey(c);
+  return !!(headerKey && headerKey === expectedKey);
 }
 
 /**

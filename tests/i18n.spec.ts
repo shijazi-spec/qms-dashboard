@@ -131,21 +131,6 @@ test.describe('Login page — i18n', () => {
     await expect(btn).toContainText('تسجيل الدخول');
   });
 
-  test('admin key placeholder is translated in Arabic', async ({ page }) => {
-    await setLanguage(page, 'ar');
-    await page.goto(`${BASE_URL}/login`);
-    await page.waitForLoadState('networkidle');
-
-    await page.waitForFunction(() => {
-      const el = document.querySelector('[data-i18n-placeholder="login.admin_key_placeholder"]') as HTMLInputElement | null;
-      return el && el.placeholder && el.placeholder !== 'Enter admin API key';
-    }, { timeout: 5000 });
-
-    const input = page.locator('[data-testid="input-admin-key"]');
-    const placeholder = await input.getAttribute('placeholder');
-    expect(placeholder).toContain('مفتاح');
-  });
-
   test('page has data-i18n attributes on key elements', async ({ page }) => {
     await page.goto(`${BASE_URL}/login`);
     await page.waitForLoadState('domcontentloaded');

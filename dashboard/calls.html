@@ -1249,18 +1249,7 @@
         let selectedUploadFile = null;
         let selectedEvalCall = null;
         let callsForEval = [];
-        let adminAuthenticated = false;
-        
-        async function getAdminHeaders() {
-            if (!adminAuthenticated) {
-                const key = prompt(WalaPlusI18n.t('dyn.calls.prompt_admin_key')) || '';
-                if (key) {
-                    try {
-                        const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
-                        if (res.ok) adminAuthenticated = true;
-                    } catch(e) {}
-                }
-            }
+        function getAdminHeaders() {
             return { 'Content-Type': 'application/json' };
         }
 

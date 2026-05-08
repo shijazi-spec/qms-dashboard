@@ -336,8 +336,8 @@ export const authRoutes = [
             },
           });
         }
-        // Admin-key callers (X-Admin-Key header or admin_key cookie) get the
-        // same shape as a session so callers don't need a separate endpoint.
+        // Admin-key callers (X-Admin-Key header or signed admin_session cookie)
+        // get the same shape as a session so callers don't need a separate endpoint.
         if (hasValidAdminApiKey(c)) {
           return c.json({
             authenticated: true,
@@ -361,17 +361,20 @@ export const authRoutes = [
       return async (c: any) => {
         const secure = isSecureDomain();
         const sessionCookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? "; Secure" : ""}`;
-        // Security: admin_key must always carry HttpOnly + Secure + SameSite=Strict —
+        // Security: admin cookie flags must always carry HttpOnly + Secure + SameSite=Strict —
         // all three flags are unconditional regardless of protocol, to prevent XSS and CSRF.
         const adminKeyCookieFlags = `HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Strict`;
-        // Clear both auth cookies so the unified /api/auth/me endpoint stops
+        // Clear all auth cookies so the unified /api/auth/me endpoint stops
         // reporting the caller as authenticated regardless of which auth path
-        // they used (OIDC session or admin API key).
+        // they used (OIDC session, admin_session token, or legacy admin_key).
         c.header(
           "Set-Cookie",
           `${SESSION_COOKIE_NAME}=; ${sessionCookieFlags}`,
           { append: true },
         );
+        c.header("Set-Cookie", `admin_session=; ${adminKeyCookieFlags}`, {
+          append: true,
+        });
         c.header("Set-Cookie", `admin_key=; ${adminKeyCookieFlags}`, {
           append: true,
         });
@@ -398,17 +401,20 @@ export const authRoutes = [
       return async (c: any) => {
         const secure = isSecureDomain();
         const sessionCookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? "; Secure" : ""}`;
-        // Security: admin_key must always carry HttpOnly + Secure + SameSite=Strict —
+        // Security: admin cookie flags must always carry HttpOnly + Secure + SameSite=Strict —
         // all three flags are unconditional regardless of protocol, to prevent XSS and CSRF.
         const adminKeyCookieFlags = `HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Strict`;
-        // Clear both auth cookies (session + admin_key) so the unified
-        // /api/auth/me endpoint won't keep reporting the caller as
-        // authenticated after they sign out.
+        // Clear all auth cookies (session + admin_session token + legacy admin_key)
+        // so the unified /api/auth/me endpoint won't keep reporting the caller
+        // as authenticated after they sign out.
         c.header(
           "Set-Cookie",
           `${SESSION_COOKIE_NAME}=; ${sessionCookieFlags}`,
           { append: true },
         );
+        c.header("Set-Cookie", `admin_session=; ${adminKeyCookieFlags}`, {
+          append: true,
+        });
         c.header("Set-Cookie", `admin_key=; ${adminKeyCookieFlags}`, {
           append: true,
         });

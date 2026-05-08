@@ -412,7 +412,6 @@
     </div>
 
     <script>
-        let adminAuthenticated = false;
         let useSessionAuth = false;
         const headers = { 'Content-Type': 'application/json' };
 
@@ -491,26 +490,16 @@
         async function initAuth() {
             try {
                 const res = await fetch('/api/auth/me', { credentials: 'include' });
-                if (res.ok) {
+                const data = await res.json();
+                if (data.authenticated) {
                     useSessionAuth = true;
+                } else {
+                    window.location.href = '/login';
+                    return;
                 }
-            } catch (e) {}
-            if (!useSessionAuth) {
-                const key = await showPromptModal({
-                    title: WalaPlusI18n.t('dyn.users.admin_api_key_title'),
-                    body: WalaPlusI18n.t('dyn.users.prompt_admin_api_key'),
-                    label: WalaPlusI18n.t('dyn.users.admin_api_key_label'),
-                    placeholder: WalaPlusI18n.t('dyn.users.admin_api_key_placeholder'),
-                    inputType: 'password',
-                    submitLabel: WalaPlusI18n.t('dyn.users.admin_api_key_submit'),
-                    cancelLabel: WalaPlusI18n.t('dyn.users.admin_api_key_skip'),
-                });
-                if (key) {
-                    try {
-                        const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
-                        if (res.ok) adminAuthenticated = true;
-                    } catch(e) {}
-                }
+            } catch (e) {
+                window.location.href = '/login';
+                return;
             }
             loadStats();
             switchTab('pending');

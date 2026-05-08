@@ -7,6 +7,11 @@ import {
 import { logger } from "../../utils/logger";
 export const adminApiRoutes = [
   {
+    // Security: this endpoint validates the raw ADMIN_API_KEY for server-to-server
+    // tooling only. It no longer issues browser session cookies. Browser admin
+    // access requires OIDC login with an admin platform role. Returning 200 on
+    // success allows automation scripts that call this endpoint to detect a valid
+    // key; they should use the X-Admin-Key header on subsequent API requests.
     path: "/api/admin/auth",
     method: "POST",
     createHandler: async () => {
@@ -17,14 +22,10 @@ export const adminApiRoutes = [
           const expectedKey = process.env.ADMIN_API_KEY;
           if (!expectedKey || !key || key !== expectedKey)
             return c.json({ error: "Authentication required" }, 401);
-          // Security: HttpOnly prevents JS access (XSS), Secure enforces HTTPS-only
-          // transmission, SameSite=Strict blocks CSRF. All three flags are required
-          // and must never be made conditional for the admin_key cookie.
-          c.header(
-            "Set-Cookie",
-            `admin_key=${key}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`,
-          );
-          return c.json({ success: true });
+          return c.json({
+            success: true,
+            note: "Key verified. Use the X-Admin-Key header for subsequent requests.",
+          });
         } catch (error) {
           return c.json({ error: "Authentication failed" }, 500);
         }
@@ -36,11 +37,19 @@ export const adminApiRoutes = [
     method: "POST",
     createHandler: async () => {
       return async (c: any) => {
-        // Security: clear flags must mirror those used when the cookie was set —
-        // HttpOnly, Secure, and SameSite=Strict are all required and unconditional.
+        // Clear any residual admin cookies from previous deployments that used
+        // the now-removed cookie-based admin auth path. All three flags are
+        // required and unconditional: HttpOnly (XSS), Secure (HTTPS-only),
+        // SameSite=Strict (CSRF).
+        c.header(
+          "Set-Cookie",
+          `admin_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+          { append: true },
+        );
         c.header(
           "Set-Cookie",
           `admin_key=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+          { append: true },
         );
         return c.json({ success: true });
       };
