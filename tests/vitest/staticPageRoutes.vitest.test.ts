@@ -171,8 +171,8 @@ describe("GET /admin — valid X-Admin-Key header (no session cookie)", () => {
   });
 });
 
-describe("GET /admin — valid admin_key cookie (no header, no session)", () => {
-  test("returns 200 with admin HTML when admin_key cookie matches ADMIN_API_KEY", async () => {
+describe("GET /admin — admin_key cookie alone (Task #831 regression guard)", () => {
+  test("does NOT serve admin HTML when only admin_key cookie is present (cookie path removed in Task #831; X-Admin-Key header is now required)", async () => {
     const handler = await buildStaticHandler("/admin");
     const ctx = makeCtxWithHtml({
       method: "GET",
@@ -182,7 +182,8 @@ describe("GET /admin — valid admin_key cookie (no header, no session)", () => 
     const res = await handler(ctx);
 
     expect(res.status).toBe(200);
-    expect(res.body).toContain("ADMIN_DASHBOARD");
+    expect(res.body).toContain("Admin Setup Required");
+    expect(res.body).not.toContain("ADMIN_DASHBOARD");
   });
 });
 
@@ -252,8 +253,8 @@ describe("GET /users — valid X-Admin-Key header (no session cookie)", () => {
   });
 });
 
-describe("GET /users — valid admin_key cookie (no header, no session)", () => {
-  test("returns 200 with users HTML when admin_key cookie matches ADMIN_API_KEY", async () => {
+describe("GET /users — admin_key cookie alone (Task #831 regression guard)", () => {
+  test("does NOT serve users HTML when only admin_key cookie is present (cookie path removed in Task #831; X-Admin-Key header is now required)", async () => {
     const handler = await buildStaticHandler("/users");
     const ctx = makeCtxWithHtml({
       method: "GET",
@@ -263,7 +264,8 @@ describe("GET /users — valid admin_key cookie (no header, no session)", () => 
     const res = await handler(ctx);
 
     expect(res.status).toBe(200);
-    expect(res.body).toContain("USERS_DASHBOARD");
+    expect(res.body).toContain("Admin Setup Required");
+    expect(res.body).not.toContain("USERS_DASHBOARD");
   });
 });
 
