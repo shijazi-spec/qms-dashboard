@@ -35,8 +35,8 @@ const WRITE_ROLES = [
   "quality_manager",
 ];
 
-const MAX_FILES_PER_REQUEST = 50;
-const MAX_TOTAL_BYTES_PER_REQUEST = 250 * 1024 * 1024; // 250 MB
+const MAX_FILES_PER_REQUEST = 20;
+const MAX_TOTAL_BYTES_PER_REQUEST = 50 * 1024 * 1024; // 50 MB
 const MAX_NOTES_LEN = 2000;
 const MAX_REG_CSV_LEN = 1000;
 
@@ -239,7 +239,7 @@ export const obligationDocumentsRoutes = [
           if (!rawBatchLen) return c.json({ error: 'Content-Length header required for file uploads' }, 411);
           const batchContentLen = parseInt(rawBatchLen, 10);
           if (!Number.isFinite(batchContentLen) || batchContentLen > MAX_TOTAL_BYTES_PER_REQUEST) {
-            return c.json({ error: 'Request body too large (max 250 MB total)' }, 413);
+            return c.json({ error: 'Request body too large (max 50 MB total)' }, 413);
           }
 
           const formData = await c.req.formData();

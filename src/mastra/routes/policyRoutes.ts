@@ -512,8 +512,19 @@ export const policyRoutes = [
             return c.json({ error: "Missing required fields" }, 400);
           }
 
+          // Strip file-attachment fields — file_path/file_name/file_size/file_mime_type
+          // must only be set by the dedicated internal upload endpoint, never by the
+          // create-policy JSON body (prevents cross-module file rebinding at creation).
+          const {
+            file_path: _fp,
+            file_name: _fn,
+            file_size: _fs,
+            file_mime_type: _fmt,
+            ...safeBody
+          } = body;
+
           const policy = await createPolicy({
-            ...body,
+            ...safeBody,
             created_by: sessionUser.email,
           });
 
@@ -578,7 +589,17 @@ export const policyRoutes = [
               400,
             );
           }
-          const { status, ...safeBody } = body;
+          // Strip status and file-attachment fields: file_path/file_name/file_size/
+          // file_mime_type are managed exclusively by the internal upload handler and
+          // must never be set by external callers (prevents cross-module file rebinding).
+          const {
+            status,
+            file_path,
+            file_name,
+            file_size,
+            file_mime_type,
+            ...safeBody
+          } = body;
 
           const updatedPolicy = await updatePolicy(
             id,
