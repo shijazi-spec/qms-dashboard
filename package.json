@@ -34,14 +34,17 @@
     "@types/pg": "^8.16.0",
     "acorn": "^8.16.0",
     "ai": "^6.0.86",
+    "axios": "^1.16.0",
     "bcryptjs": "^3.0.3",
     "connect-pg-simple": "^10.0.0",
     "dotenv": "^17.3.1",
     "exa-js": "^2.4.0",
     "exceljs": "^4.4.0",
     "express-session": "^1.19.0",
+    "hono": "^4.12.18",
     "inngest": "^3.52.0",
     "inngest-cli": "^1.17.0",
+    "ip-address": "^10.2.0",
     "jsdom": "^29.1.1",
     "mammoth": "^1.8.0",
     "mastra": "^0.18.9",
@@ -70,6 +73,9 @@
     "rollup": "^4.59.0",
     "uuid": "14.0.0",
     "jsondiffpatch": "0.7.3",
-    "ai": "^6.0.86"
+    "ai": "^6.0.86",
+    "axios": "^1.16.0",
+    "hono": "^4.12.18",
+    "ip-address": "^10.2.0"
   }
 }
