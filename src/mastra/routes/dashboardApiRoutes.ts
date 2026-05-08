@@ -626,6 +626,41 @@ const _dashboardApiRoutesRaw = [
               "⚠️ [API] Inngest dispatch failed (continuing with direct execution)",
             );
           }
+
+          // Fire an "Unplanned AI Audit" notification so manual runs are
+          // surfaced in the notifications panel and (when configured)
+          // Slack / email. The recurring weekly / monthly / quarterly
+          // schedules continue to rely on fireAuditCompletedTrigger and
+          // the Inngest cron pipeline as before — this is purely
+          // additive for the manual-trigger path.
+          try {
+            const { notifyEvent } = await import(
+              "../../utils/notificationHub"
+            );
+            await notifyEvent({
+              type: "unplanned_audit_started",
+              module: "quality",
+              title: "Unplanned AI Audit Started",
+              message:
+                `An unplanned AI quality audit was triggered by ${userEmail}` +
+                ` at ${new Date().toLocaleString()}. Results will appear in` +
+                ` Audit History when the run completes.`,
+              priority: "medium",
+              entityType: "audit_run",
+              actionUrl: "/dashboard",
+            });
+          } catch (notifyErr) {
+            logger?.warn(
+              "⚠️ [API] Unplanned-audit notification dispatch failed (audit will still run)",
+              {
+                error:
+                  notifyErr instanceof Error
+                    ? notifyErr.message
+                    : String(notifyErr),
+              },
+            );
+          }
+
           (async () => {
             try {
               const { runDirectAudit } =

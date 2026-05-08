@@ -980,7 +980,31 @@
         let trendChart = null;
         let customizeMode = false;
         let sortableInstances = [];
-        let currentDateFilters = {
+        const DASHBOARD_FILTERS_STORAGE_KEY = 'dashboardDateFilters';
+        function loadPersistedDateFilters() {
+            try {
+                const raw = localStorage.getItem(DASHBOARD_FILTERS_STORAGE_KEY);
+                if (!raw) return null;
+                const parsed = JSON.parse(raw);
+                const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+                const clean = (v) => (typeof v === 'string' && dateRe.test(v)) ? v : null;
+                return {
+                    created: { start: clean(parsed?.created?.start), end: clean(parsed?.created?.end) },
+                    modified: { start: clean(parsed?.modified?.start), end: clean(parsed?.modified?.end) },
+                };
+            } catch (_) { return null; }
+        }
+        function persistDateFilters(filters) {
+            try {
+                const any = filters && (filters.created.start || filters.created.end || filters.modified.start || filters.modified.end);
+                if (any) {
+                    localStorage.setItem(DASHBOARD_FILTERS_STORAGE_KEY, JSON.stringify(filters));
+                } else {
+                    localStorage.removeItem(DASHBOARD_FILTERS_STORAGE_KEY);
+                }
+            } catch (_) {}
+        }
+        let currentDateFilters = loadPersistedDateFilters() || {
             created: { start: null, end: null },
             modified: { start: null, end: null }
         };
@@ -1007,6 +1031,7 @@
                 created: { start: null, end: null },
                 modified: { start: null, end: null }
             };
+            persistDateFilters(currentDateFilters);
             console.log('Date filters cleared');
             updateFilterChips();
             refreshDashboard();
@@ -1024,8 +1049,26 @@
         // Apply date filters and refresh dashboard
         function applyDateFilters() {
             handleDateFilterChange();
+            persistDateFilters(currentDateFilters);
             updateFilterChips();
             refreshDashboard();
+        }
+
+        // Restore persisted filters into the inputs + chips on page load so
+        // that a refresh keeps the same audit data visible until the user
+        // explicitly clears the filter.
+        function hydrateDateFilterInputs() {
+            const map = {
+                createdStartDate: currentDateFilters.created.start,
+                createdEndDate: currentDateFilters.created.end,
+                modifiedStartDate: currentDateFilters.modified.start,
+                modifiedEndDate: currentDateFilters.modified.end,
+            };
+            for (const [id, val] of Object.entries(map)) {
+                const el = document.getElementById(id);
+                if (el && val) el.value = val;
+            }
+            updateFilterChips();
         }
         
         // Helper function to get current filter description for display
@@ -3330,7 +3373,10 @@
             btn.classList.add('from-purple-600', 'to-indigo-600');
         }
 
-        // Initialize - load dashboard without filters on startup
+        // Initialize - restore persisted filters first so the dashboard
+        // shows the same last audit/data after a refresh until the user
+        // explicitly clears the filter.
+        hydrateDateFilterInputs();
         refreshDashboard();
         setInterval(refreshDashboard, 600000); // Auto-refresh every 10 minutes
     </script>
