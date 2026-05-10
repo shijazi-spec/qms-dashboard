@@ -292,6 +292,7 @@ export const analyticsRoutes = [
             auditGovernance: snapshot.audit_dimensions?.governance ?? null,
             auditRecords: snapshot.audit_records,
             auditIssues: snapshot.audit_issues,
+            auditModuleBreakdown: snapshot.audit_module_breakdown,
             ncOpen: ncOpenN,
             ncTotal: ncTotalN,
             capaOpen: capaOpenN,
@@ -332,13 +333,35 @@ export const analyticsRoutes = [
               const dimsLabel = dims
                 ? `people ${dims.people ?? "—"} / process ${dims.process ?? "—"} / governance ${dims.governance ?? "—"}`
                 : "—";
-              const density =
-                snapshot.audit_records > 0
-                  ? Math.round((snapshot.audit_issues / snapshot.audit_records) * 100) / 100
-                  : 0;
+              const mb = snapshot.audit_module_breakdown ?? [];
+              const perDept = mb.length
+                ? mb
+                    .map((m) => {
+                      const pct = m.recordsAudited > 0
+                        ? Math.round((m.recordsWithIssues / m.recordsAudited) * 1000) / 10
+                        : 0;
+                      return `${m.module} ${pct}%`;
+                    })
+                    .join(" / ")
+                : "(no per-department breakdown)";
+              const avg = mb.length
+                ? Math.round(
+                    (mb.reduce(
+                      (s, m) =>
+                        s +
+                        (m.recordsAudited > 0
+                          ? m.recordsWithIssues / m.recordsAudited
+                          : 0),
+                      0,
+                    ) /
+                      mb.length) *
+                      1000,
+                  ) / 10
+                : null;
               return {
-                metric: "Audit — value used in health score (process-weighted, density-penalised)",
-                value: `${blended}  [${dimsLabel}; ${snapshot.audit_issues.toLocaleString()} issues / ${snapshot.audit_records.toLocaleString()} records = ${density}/record]`,
+                metric:
+                  "Audit — value used in health score (process-weighted, dept-contamination-penalised)",
+                value: `${blended}  [${dimsLabel}; dept bad-rate avg ${avg ?? "—"}% — ${perDept}]`,
               };
             })(),
             {

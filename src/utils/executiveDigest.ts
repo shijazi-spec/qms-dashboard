@@ -798,7 +798,7 @@ export async function generateDigestData(
     ),
     safeQuery(
       `SELECT overall_score, people_score, process_score, governance_score,
-              total_records_audited, total_issues_found, audit_date
+              total_records_audited, total_issues_found, dimension_details, audit_date
        FROM quality_audit_results
        ORDER BY audit_date DESC LIMIT 3`,
     ),
@@ -964,6 +964,7 @@ export async function generateDigestData(
       auditGovernance: auditRows[0]?.governance_score != null ? parseFloat(auditRows[0].governance_score) : null,
       auditRecords: parseInt(auditRows[0]?.total_records_audited || "0", 10),
       auditIssues: parseInt(auditRows[0]?.total_issues_found || "0", 10),
+      auditModuleBreakdown: parseAuditModuleBreakdown(auditRows[0]?.dimension_details),
       ncOpen: parseInt(ncOpen[0]?.cnt || "0", 10),
       ncTotal: parseInt(ncTotal[0]?.cnt || "0", 10),
       capaOpen: parseInt(capaOpen[0]?.cnt || "0", 10),
@@ -1035,11 +1036,57 @@ export async function generateDigestData(
  * the score still spans 0-100. Returns 0 only when no components have
  * data (fully-empty system).
  */
+export interface AuditModuleBreakdown {
+  module: string;
+  recordsAudited: number;
+  recordsWithIssues: number;
+  issuesFound?: number;
+}
+
 /**
- * Reblend the audit component using process-weighted dimensions and an
- * issue-density penalty. Returns null when no audit signal is available.
- * Shared by both `computeEnterpriseHealthScore` and the detail variant
- * so the math stays in one place.
+ * Pull the per-module breakdown out of `quality_audit_results.dimension_details`.
+ * Tolerates already-parsed jsonb (object) and string-encoded jsonb. Returns
+ * an empty array on any shape that doesn't expose the expected fields so the
+ * scorer falls back to the legacy global density penalty cleanly.
+ */
+export function parseAuditModuleBreakdown(raw: unknown): AuditModuleBreakdown[] {
+  if (raw === null || raw === undefined) return [];
+  let obj: any = raw;
+  if (typeof raw === "string") {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  const arr = obj && Array.isArray(obj.moduleBreakdown) ? obj.moduleBreakdown : null;
+  if (!arr) return [];
+  return arr
+    .map((m: any) => ({
+      module: String(m?.module ?? "").trim() || "(unknown)",
+      recordsAudited: Number(m?.recordsAudited) || 0,
+      recordsWithIssues: Number(m?.recordsWithIssues) || 0,
+      issuesFound: Number(m?.issuesFound) || 0,
+    }))
+    .filter((m: AuditModuleBreakdown) => m.recordsAudited > 0);
+}
+
+/**
+ * Reblend the audit component using process-weighted dimensions and a
+ * department-level contamination penalty.
+ *
+ * Penalty logic (preferred path):
+ *   For each department with recordsAudited > 0:
+ *       badRate_m = recordsWithIssues_m / recordsAudited_m
+ *   penalty = 1 - mean(badRate_m)   // unweighted across departments
+ *   so a small clean department isn't drowned out by a huge dirty one,
+ *   and "1 issue" vs "100 issues" on the same record both count as one
+ *   contaminated record.
+ *
+ * Fallback when no per-module breakdown is provided: the legacy global
+ * issue-density penalty `max(0, 1 - 0.15 * issues/records)`.
+ *
+ * Returns null when no audit signal is available at all.
  */
 function computeAuditComponentValue(input: {
   auditScore: number | null;
@@ -1048,6 +1095,7 @@ function computeAuditComponentValue(input: {
   auditGovernance?: number | null;
   auditRecords?: number;
   auditIssues?: number;
+  auditModuleBreakdown?: AuditModuleBreakdown[];
 }): number | null {
   const hasDimensions =
     input.auditPeople != null && Number.isFinite(input.auditPeople) &&
@@ -1064,12 +1112,25 @@ function computeAuditComponentValue(input: {
   } else {
     return null;
   }
-  const records = input.auditRecords ?? 0;
-  const issues = input.auditIssues ?? 0;
   let penalty = 1;
-  if (records > 0 && issues > 0) {
-    const density = issues / records;
-    penalty = Math.max(0, 1 - 0.15 * density);
+  const modules = (input.auditModuleBreakdown ?? []).filter(
+    (m) => Number.isFinite(m.recordsAudited) && m.recordsAudited > 0,
+  );
+  if (modules.length > 0) {
+    const avgBadRate =
+      modules.reduce(
+        (s, m) =>
+          s + Math.min(1, Math.max(0, (m.recordsWithIssues || 0) / m.recordsAudited)),
+        0,
+      ) / modules.length;
+    penalty = Math.max(0, 1 - avgBadRate);
+  } else {
+    const records = input.auditRecords ?? 0;
+    const issues = input.auditIssues ?? 0;
+    if (records > 0 && issues > 0) {
+      const density = issues / records;
+      penalty = Math.max(0, 1 - 0.15 * density);
+    }
   }
   return clampPct(blend * penalty);
 }
@@ -1081,6 +1142,7 @@ export function computeEnterpriseHealthScore(input: {
   auditGovernance?: number | null;
   auditRecords?: number;
   auditIssues?: number;
+  auditModuleBreakdown?: AuditModuleBreakdown[];
   ncOpen: number;
   ncTotal: number;
   capaOpen: number;
@@ -1189,8 +1251,29 @@ export function computeEnterpriseHealthScoreDetail(
     const records = input.auditRecords ?? 0;
     const issues = input.auditIssues ?? 0;
     const density = records > 0 ? issues / records : 0;
+    const modules = (input.auditModuleBreakdown ?? []).filter(
+      (m) => Number.isFinite(m.recordsAudited) && m.recordsAudited > 0,
+    );
+    const perModuleBadRates = modules.map((m) => ({
+      module: m.module,
+      recordsAudited: m.recordsAudited,
+      recordsWithIssues: m.recordsWithIssues || 0,
+      badRatePct:
+        Math.round(
+          Math.min(1, Math.max(0, (m.recordsWithIssues || 0) / m.recordsAudited)) *
+            1000,
+        ) / 10,
+    }));
+    const avgBadRatePct =
+      perModuleBadRates.length > 0
+        ? Math.round(
+            (perModuleBadRates.reduce((s, m) => s + m.badRatePct, 0) /
+              perModuleBadRates.length) *
+              10,
+          ) / 10
+        : null;
     components.push({
-      name: "Audit (process-weighted, density-penalised)",
+      name: "Audit (process-weighted, dept-contamination-penalised)",
       value: auditVal,
       weight: 25,
       included: true,
@@ -1202,11 +1285,13 @@ export function computeEnterpriseHealthScoreDetail(
         records,
         issues,
         issuesPerRecord: Math.round(density * 100) / 100,
+        avgDeptBadRatePct: avgBadRatePct,
+        perModuleBadRates: perModuleBadRates.length > 0 ? perModuleBadRates : null,
       },
     });
   } else {
     components.push({
-      name: "Audit (process-weighted, density-penalised)",
+      name: "Audit (process-weighted, dept-contamination-penalised)",
       value: null,
       weight: 25,
       included: false,
@@ -1373,6 +1458,7 @@ export interface EnterpriseGRCSnapshot {
   } | null;
   audit_records: number;
   audit_issues: number;
+  audit_module_breakdown: AuditModuleBreakdown[];
   nc_summary: { open: number; total: number };
   capa_summary: { open: number; total: number; effectiveness_rate: number };
   risk_summary: { active: number; critical_high: number };
@@ -1475,7 +1561,7 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
     `),
     safeQuery(
       `SELECT overall_score, people_score, process_score, governance_score,
-              total_records_audited, total_issues_found
+              total_records_audited, total_issues_found, dimension_details
        FROM quality_audit_results
        ORDER BY audit_date DESC LIMIT 1`,
     ),
@@ -1495,6 +1581,9 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
     : null;
   const auditRecords = parseInt(auditRows[0]?.total_records_audited || "0", 10);
   const auditIssues = parseInt(auditRows[0]?.total_issues_found || "0", 10);
+  const auditModuleBreakdown = parseAuditModuleBreakdown(
+    auditRows[0]?.dimension_details,
+  );
   const ncOpenN = parseInt(ncOpen[0]?.cnt || "0", 10);
   const ncTotalN = parseInt(ncTotal[0]?.cnt || "0", 10);
   const capaOpenN = parseInt(capaOpen[0]?.cnt || "0", 10);
@@ -1520,6 +1609,7 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
     auditGovernance,
     auditRecords,
     auditIssues,
+    auditModuleBreakdown,
     ncOpen: ncOpenN,
     ncTotal: ncTotalN,
     capaOpen: capaOpenN,
@@ -1545,6 +1635,7 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
         : null,
     audit_records: auditRecords,
     audit_issues: auditIssues,
+    audit_module_breakdown: auditModuleBreakdown,
     nc_summary: { open: ncOpenN, total: ncTotalN },
     capa_summary: {
       open: capaOpenN,
