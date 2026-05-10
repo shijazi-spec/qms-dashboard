@@ -133,6 +133,9 @@ export const analyticsRoutes = [
             computeDigestWindow,
             generateDigestData,
             dateLabelKsa,
+            getEnterpriseGRCSnapshot,
+            computeEnterpriseHealthScoreDetail,
+            safeQuery,
           } = await import("../../utils/executiveDigest");
           // Buffered (in-memory) workbook path. The streaming
           // WorkbookWriter trips over an archiver-utils `isStream()`
@@ -175,27 +178,222 @@ export const analyticsRoutes = [
                 })()
               : fallbackWindow;
 
-          const data = await generateDigestData({
-            cadence: cadence as any,
-            now,
-            window: requestedWindow as any,
+          // Drill-down rows (capped per sheet for export size). Ordered
+          // by recency so the most relevant records surface first.
+          const ROW_CAP = 200;
+          const [
+            data,
+            snapshot,
+            auditFindings,
+            ncRows,
+            capaRows,
+            riskRows,
+            kpiRowsDetail,
+            complianceRows,
+            qaResults,
+          ] = await Promise.all([
+            generateDigestData({
+              cadence: cadence as any,
+              now,
+              window: requestedWindow as any,
+            }),
+            getEnterpriseGRCSnapshot(),
+            safeQuery(
+              `SELECT finding_number, criteria_name, dimension, severity, status,
+                      owner, target_date, resolution_date, created_at
+               FROM audit_findings
+               ORDER BY created_at DESC NULLS LAST
+               LIMIT $1`,
+              [ROW_CAP],
+            ),
+            safeQuery(
+              `SELECT nc_number, title, nc_type, severity, status, disposition,
+                      detected_by, detected_date, closed_date
+               FROM nonconformance_records
+               ORDER BY detected_date DESC NULLS LAST
+               LIMIT $1`,
+              [ROW_CAP],
+            ),
+            safeQuery(
+              `SELECT capa_number, title, type, status, priority,
+                      assigned_to, department, due_date, created_at
+               FROM capas
+               ORDER BY created_at DESC NULLS LAST
+               LIMIT $1`,
+              [ROW_CAP],
+            ),
+            safeQuery(
+              `SELECT id, risk_title, risk_category, risk_level, risk_score,
+                      impact_score, likelihood_score, status,
+                      risk_owner, treatment_strategy, treatment_deadline,
+                      identified_date
+               FROM enterprise_risks
+               ORDER BY risk_score DESC NULLS LAST, identified_date DESC NULLS LAST
+               LIMIT $1`,
+              [ROW_CAP],
+            ),
+            safeQuery(
+              `WITH latest AS (
+                 SELECT DISTINCT ON (kpi_id)
+                   kpi_id, period_start, period_end,
+                   actual_value, target_value, status, trend, updated_at
+                 FROM kpi_values
+                 ORDER BY kpi_id, period_end DESC NULLS LAST, id DESC
+               )
+               SELECT * FROM latest
+               ORDER BY
+                 CASE LOWER(COALESCE(status,''))
+                   WHEN 'red' THEN 1 WHEN 'off_track' THEN 1
+                   WHEN 'amber' THEN 2 WHEN 'at_risk' THEN 2
+                   ELSE 3 END,
+                 updated_at DESC NULLS LAST
+               LIMIT $1`,
+              [ROW_CAP],
+            ),
+            safeQuery(
+              `SELECT id, obligation_id, assessment_date, assessed_by,
+                      compliance_status, score, remediation_required,
+                      remediation_status, remediation_deadline, next_assessment_date
+               FROM compliance_assessments
+               ORDER BY assessment_date DESC NULLS LAST
+               LIMIT $1`,
+              [ROW_CAP],
+            ),
+            safeQuery(
+              `SELECT audit_date, total_records_audited, total_issues_found,
+                      people_score, process_score, governance_score, overall_score
+               FROM quality_audit_results
+               ORDER BY audit_date DESC NULLS LAST
+               LIMIT 20`,
+            ),
+          ]);
+
+          // Recompute health detail using the same snapshot inputs.
+          const ncOpenN = snapshot.nc_summary.open;
+          const ncTotalN = snapshot.nc_summary.total;
+          const capaOpenN = snapshot.capa_summary.open;
+          const capaTotalN = snapshot.capa_summary.total;
+          const capaActionsTotal = parseInt(
+            (await safeQuery(`SELECT COUNT(*) as cnt FROM capa_action_items`))[0]
+              ?.cnt || "0",
+            10,
+          );
+          const capaActionsCompleted = parseInt(
+            (await safeQuery(
+              `SELECT COUNT(*) as cnt FROM capa_action_items WHERE LOWER(COALESCE(status,'open')) = 'completed'`,
+            ))[0]?.cnt || "0",
+            10,
+          );
+
+          const detail = computeEnterpriseHealthScoreDetail({
+            auditScore: snapshot.audit_score,
+            ncOpen: ncOpenN,
+            ncTotal: ncTotalN,
+            capaOpen: capaOpenN,
+            capaTotal: capaTotalN,
+            capaEffectiveCompleted: capaActionsCompleted,
+            capaEffectiveTotal: capaActionsTotal,
+            riskActive: snapshot.risk_summary.active,
+            riskCritHigh: snapshot.risk_summary.critical_high,
+            riskTotal: riskRows.length, // accurate vs cached snapshot count
+            kpiGreen: snapshot.kpi_summary.green,
+            kpiAmber: snapshot.kpi_summary.amber,
+            kpiTotal: snapshot.kpi_summary.total,
+            complianceMet: snapshot.compliance_summary.met,
+            compliancePartial: snapshot.compliance_summary.partial,
+            complianceTotal: snapshot.compliance_summary.total,
           });
 
-          const rows = data.finding_types.map((f) => ({
+          const summaryRows = [
+            { metric: "Period", value: data.period },
+            { metric: "Window Start (UTC)", value: data.window_start },
+            { metric: "Window End (UTC)", value: data.window_end },
+            { metric: "Cadence", value: cadence },
+            { metric: "Generated At (UTC)", value: data.generated_at },
+            { metric: "", value: "" },
+            { metric: "Enterprise Health Score", value: `${detail.score} / 100` },
+            { metric: "Health Rating", value: detail.rating },
+            { metric: "", value: "" },
+            { metric: "Audit — latest overall score", value: snapshot.audit_score ?? "—" },
+            {
+              metric: "Audit Findings (recorded)",
+              value: auditFindings.length,
+            },
+            {
+              metric: "Nonconformances — open / total",
+              value: `${ncOpenN} / ${ncTotalN}`,
+            },
+            {
+              metric: "CAPAs — open / total",
+              value: `${capaOpenN} / ${capaTotalN}`,
+            },
+            {
+              metric: "CAPA action items — completed / total",
+              value: `${capaActionsCompleted} / ${capaActionsTotal}`,
+            },
+            {
+              metric: "Risks — active / critical-high / register total",
+              value: `${snapshot.risk_summary.active} / ${snapshot.risk_summary.critical_high} / ${riskRows.length}`,
+            },
+            {
+              metric: "KPIs — green / amber / red / total",
+              value: `${snapshot.kpi_summary.green} / ${snapshot.kpi_summary.amber} / ${snapshot.kpi_summary.red} / ${snapshot.kpi_summary.total}`,
+            },
+            {
+              metric: "Compliance — met / partial / not-met / total",
+              value: `${snapshot.compliance_summary.met} / ${snapshot.compliance_summary.partial} / ${snapshot.compliance_summary.not_met} / ${snapshot.compliance_summary.total}`,
+            },
+          ];
+
+          const healthBreakdownRows = detail.components.map((c) => ({
+            component: c.name,
+            value: c.value === null ? "—" : Math.round(c.value * 10) / 10,
+            weight: c.weight,
+            contribution:
+              c.included && c.value !== null
+                ? Math.round(((c.value * c.weight) / detail.totalWeight) * 10) /
+                  10
+                : "—",
+            included: c.included ? "Yes" : "No",
+            note: c.included
+              ? Object.entries(c.raw || {})
+                  .map(([k, v]) => `${k}=${v}`)
+                  .join(", ")
+              : c.reason || "",
+          }));
+
+          const issueRows = data.finding_types.map((f) => ({
             module: f.module,
             issue_type: f.issue_type,
             severity: f.severity,
             count: f.count,
-            period: data.period,
-            window_start: data.window_start,
-            window_end: data.window_end,
           }));
 
           const safeCadence = cadence.replace(/[^a-z]/gi, "_");
-          const filename = `digest_issues_${safeCadence}_${Date.now()}.xlsx`;
+          const filename = `enterprise_grc_report_${safeCadence}_${Date.now()}.xlsx`;
 
           const buffer = await buildWorkbook(
             [
+              {
+                name: "Summary",
+                columns: [
+                  { header: "Metric", key: "metric", width: 48 },
+                  { header: "Value", key: "value", width: 56 },
+                ],
+                rows: summaryRows,
+              },
+              {
+                name: "Health Breakdown",
+                columns: [
+                  { header: "Component", key: "component", width: 44 },
+                  { header: "Value (0-100)", key: "value", width: 14 },
+                  { header: "Weight", key: "weight", width: 10 },
+                  { header: "Contribution", key: "contribution", width: 14 },
+                  { header: "Included", key: "included", width: 10 },
+                  { header: "Note / Inputs", key: "note", width: 60 },
+                ],
+                rows: healthBreakdownRows,
+              },
               {
                 name: "Digest Issues",
                 columns: [
@@ -203,14 +401,117 @@ export const analyticsRoutes = [
                   { header: "Issue Type", key: "issue_type", width: 40 },
                   { header: "Severity", key: "severity", width: 12 },
                   { header: "Count", key: "count", width: 10 },
-                  { header: "Period", key: "period", width: 26 },
-                  { header: "Window Start", key: "window_start", width: 28 },
-                  { header: "Window End", key: "window_end", width: 28 },
                 ],
-                rows,
+                rows: issueRows,
+              },
+              {
+                name: "Audit Findings",
+                columns: [
+                  { header: "Finding #", key: "finding_number", width: 14 },
+                  { header: "Criteria", key: "criteria_name", width: 36 },
+                  { header: "Dimension", key: "dimension", width: 16 },
+                  { header: "Severity", key: "severity", width: 12 },
+                  { header: "Status", key: "status", width: 14 },
+                  { header: "Owner", key: "owner", width: 20 },
+                  { header: "Target Date", key: "target_date", width: 14 },
+                  { header: "Resolved", key: "resolution_date", width: 14 },
+                  { header: "Created", key: "created_at", width: 22 },
+                ],
+                rows: auditFindings,
+              },
+              {
+                name: "Nonconformances",
+                columns: [
+                  { header: "NC #", key: "nc_number", width: 14 },
+                  { header: "Title", key: "title", width: 40 },
+                  { header: "Type", key: "nc_type", width: 16 },
+                  { header: "Severity", key: "severity", width: 12 },
+                  { header: "Status", key: "status", width: 14 },
+                  { header: "Disposition", key: "disposition", width: 16 },
+                  { header: "Detected By", key: "detected_by", width: 20 },
+                  { header: "Detected", key: "detected_date", width: 22 },
+                  { header: "Closed", key: "closed_date", width: 22 },
+                ],
+                rows: ncRows,
+              },
+              {
+                name: "CAPAs",
+                columns: [
+                  { header: "CAPA #", key: "capa_number", width: 14 },
+                  { header: "Title", key: "title", width: 40 },
+                  { header: "Type", key: "type", width: 14 },
+                  { header: "Status", key: "status", width: 14 },
+                  { header: "Priority", key: "priority", width: 12 },
+                  { header: "Assigned To", key: "assigned_to", width: 20 },
+                  { header: "Department", key: "department", width: 18 },
+                  { header: "Due Date", key: "due_date", width: 22 },
+                  { header: "Created", key: "created_at", width: 22 },
+                ],
+                rows: capaRows,
+              },
+              {
+                name: "Risks",
+                columns: [
+                  { header: "ID", key: "id", width: 8 },
+                  { header: "Title", key: "risk_title", width: 36 },
+                  { header: "Category", key: "risk_category", width: 18 },
+                  { header: "Level", key: "risk_level", width: 12 },
+                  { header: "Score", key: "risk_score", width: 8 },
+                  { header: "Impact", key: "impact_score", width: 8 },
+                  { header: "Likelihood", key: "likelihood_score", width: 12 },
+                  { header: "Status", key: "status", width: 14 },
+                  { header: "Owner", key: "risk_owner", width: 20 },
+                  { header: "Treatment", key: "treatment_strategy", width: 16 },
+                  { header: "Treatment Deadline", key: "treatment_deadline", width: 22 },
+                  { header: "Identified", key: "identified_date", width: 22 },
+                ],
+                rows: riskRows,
+              },
+              {
+                name: "KPIs",
+                columns: [
+                  { header: "KPI ID", key: "kpi_id", width: 10 },
+                  { header: "Period Start", key: "period_start", width: 14 },
+                  { header: "Period End", key: "period_end", width: 14 },
+                  { header: "Actual", key: "actual_value", width: 12 },
+                  { header: "Target", key: "target_value", width: 12 },
+                  { header: "Status", key: "status", width: 12 },
+                  { header: "Trend", key: "trend", width: 12 },
+                  { header: "Updated", key: "updated_at", width: 22 },
+                ],
+                rows: kpiRowsDetail,
+              },
+              {
+                name: "Compliance",
+                columns: [
+                  { header: "ID", key: "id", width: 8 },
+                  { header: "Obligation", key: "obligation_id", width: 14 },
+                  { header: "Assessed", key: "assessment_date", width: 22 },
+                  { header: "Assessed By", key: "assessed_by", width: 20 },
+                  { header: "Status", key: "compliance_status", width: 18 },
+                  { header: "Score", key: "score", width: 8 },
+                  { header: "Remediation Required", key: "remediation_required", width: 18 },
+                  { header: "Remediation Status", key: "remediation_status", width: 18 },
+                  { header: "Remediation Deadline", key: "remediation_deadline", width: 22 },
+                  { header: "Next Assessment", key: "next_assessment_date", width: 22 },
+                ],
+                rows: complianceRows,
+              },
+              {
+                name: "QA Audit History",
+                columns: [
+                  { header: "Audit Date", key: "audit_date", width: 22 },
+                  { header: "Records Audited", key: "total_records_audited", width: 16 },
+                  { header: "Issues Found", key: "total_issues_found", width: 14 },
+                  { header: "People", key: "people_score", width: 10 },
+                  { header: "Process", key: "process_score", width: 10 },
+                  { header: "Governance", key: "governance_score", width: 12 },
+                  { header: "Overall", key: "overall_score", width: 10 },
+                ],
+                rows: qaResults,
               },
             ],
-            { title: "Executive Digest Issues" },
+            { title: "WalaPlus Enterprise GRC Report" },
           );
 
           const headers = xlsxResponseHeaders(filename);

@@ -609,7 +609,7 @@ export function buildDigestRunKey(
   return `${cadence}:${toIsoDateOnly(window.start)}:${toIsoDateOnly(window.end)}:${channel}`;
 }
 
-async function safeQuery(sql: string, params: any[] = []): Promise<any[]> {
+export async function safeQuery(sql: string, params: any[] = []): Promise<any[]> {
   try {
     const result = await pool.query(sql, params);
     return result.rows;
@@ -1089,6 +1089,195 @@ export function computeEnterpriseHealthScore(input: {
   if (totalWeight === 0) return 0;
   const weighted = components.reduce((sum, c) => sum + c.value * c.weight, 0);
   return Math.round(weighted / totalWeight);
+}
+
+export interface EnterpriseHealthScoreComponent {
+  name: string;
+  value: number | null; // null when omitted
+  weight: number;
+  included: boolean;
+  reason?: string; // why omitted
+  raw?: Record<string, number | null>;
+}
+
+export interface EnterpriseHealthScoreDetail {
+  score: number;
+  rating: EnterpriseHealthRating;
+  components: EnterpriseHealthScoreComponent[];
+  totalWeight: number;
+}
+
+/**
+ * Same math as `computeEnterpriseHealthScore` but returns a per-component
+ * breakdown for display (cover sheets, audit, debugging). Keep the two
+ * functions in lock-step; this one delegates to no shared helper because
+ * we need `included`/`reason` per branch.
+ */
+export function computeEnterpriseHealthScoreDetail(
+  input: Parameters<typeof computeEnterpriseHealthScore>[0],
+): EnterpriseHealthScoreDetail {
+  const components: EnterpriseHealthScoreComponent[] = [];
+
+  if (input.auditScore !== null && Number.isFinite(input.auditScore)) {
+    components.push({
+      name: "Audit (latest QA score)",
+      value: clampPct(input.auditScore),
+      weight: 25,
+      included: true,
+      raw: { auditScore: input.auditScore },
+    });
+  } else {
+    components.push({
+      name: "Audit (latest QA score)",
+      value: null,
+      weight: 25,
+      included: false,
+      reason: "No quality_audit_results recorded",
+    });
+  }
+
+  const capaSignals: number[] = [];
+  if (input.capaTotal > 0) {
+    capaSignals.push(clampPct((1 - input.capaOpen / input.capaTotal) * 100));
+  }
+  if (input.capaEffectiveTotal > 0) {
+    capaSignals.push(
+      clampPct((input.capaEffectiveCompleted / input.capaEffectiveTotal) * 100),
+    );
+  }
+  if (capaSignals.length > 0) {
+    components.push({
+      name: "CAPA (closure + action-item completion)",
+      value: capaSignals.reduce((s, v) => s + v, 0) / capaSignals.length,
+      weight: 20,
+      included: true,
+      raw: {
+        capaOpen: input.capaOpen,
+        capaTotal: input.capaTotal,
+        actionsCompleted: input.capaEffectiveCompleted,
+        actionsTotal: input.capaEffectiveTotal,
+      },
+    });
+  } else {
+    components.push({
+      name: "CAPA (closure + action-item completion)",
+      value: null,
+      weight: 20,
+      included: false,
+      reason: "No CAPAs and no action items recorded",
+    });
+  }
+
+  if (input.riskTotal > 0) {
+    const v =
+      input.riskActive > 0
+        ? (1 - input.riskCritHigh / input.riskActive) * 100
+        : 100;
+    components.push({
+      name: "Risk (hygiene of active register)",
+      value: clampPct(v),
+      weight: 20,
+      included: true,
+      raw: {
+        active: input.riskActive,
+        criticalHigh: input.riskCritHigh,
+        total: input.riskTotal,
+      },
+    });
+  } else {
+    components.push({
+      name: "Risk (hygiene of active register)",
+      value: null,
+      weight: 20,
+      included: false,
+      reason: "Risk register is empty (no signal)",
+    });
+  }
+
+  if (input.kpiTotal > 0) {
+    components.push({
+      name: "KPIs (green + half-credit amber)",
+      value: clampPct(
+        ((input.kpiGreen + 0.5 * input.kpiAmber) / input.kpiTotal) * 100,
+      ),
+      weight: 15,
+      included: true,
+      raw: {
+        green: input.kpiGreen,
+        amber: input.kpiAmber,
+        total: input.kpiTotal,
+      },
+    });
+  } else {
+    components.push({
+      name: "KPIs (green + half-credit amber)",
+      value: null,
+      weight: 15,
+      included: false,
+      reason: "No KPI values recorded",
+    });
+  }
+
+  if (input.ncTotal > 0) {
+    components.push({
+      name: "Nonconformances (closure rate)",
+      value: clampPct((1 - input.ncOpen / input.ncTotal) * 100),
+      weight: 10,
+      included: true,
+      raw: { open: input.ncOpen, total: input.ncTotal },
+    });
+  } else {
+    components.push({
+      name: "Nonconformances (closure rate)",
+      value: null,
+      weight: 10,
+      included: false,
+      reason: "No NCs recorded",
+    });
+  }
+
+  if (input.complianceTotal > 0) {
+    components.push({
+      name: "Compliance (met + half-credit partial)",
+      value: clampPct(
+        ((input.complianceMet + 0.5 * input.compliancePartial) /
+          input.complianceTotal) *
+          100,
+      ),
+      weight: 10,
+      included: true,
+      raw: {
+        met: input.complianceMet,
+        partial: input.compliancePartial,
+        total: input.complianceTotal,
+      },
+    });
+  } else {
+    components.push({
+      name: "Compliance (met + half-credit partial)",
+      value: null,
+      weight: 10,
+      included: false,
+      reason: "No compliance assessments recorded",
+    });
+  }
+
+  const included = components.filter((c) => c.included);
+  const totalWeight = included.reduce((s, c) => s + c.weight, 0);
+  const score =
+    totalWeight === 0
+      ? 0
+      : Math.round(
+          included.reduce((s, c) => s + (c.value as number) * c.weight, 0) /
+            totalWeight,
+        );
+
+  return {
+    score,
+    rating: ratingForEnterpriseHealth(score),
+    components,
+    totalWeight,
+  };
 }
 
 export type EnterpriseHealthRating = "Excellent" | "Good" | "Needs Attention" | "At Risk";
