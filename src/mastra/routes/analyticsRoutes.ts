@@ -370,7 +370,7 @@ export const analyticsRoutes = [
           }));
 
           const safeCadence = cadence.replace(/[^a-z]/gi, "_");
-          const filename = `enterprise_grc_report_${safeCadence}_${Date.now()}.xlsx`;
+          const filename = `quality_audit_report_${safeCadence}_${Date.now()}.xlsx`;
 
           const buffer = await buildWorkbook(
             [
@@ -511,7 +511,7 @@ export const analyticsRoutes = [
                 rows: qaResults,
               },
             ],
-            { title: "WalaPlus Enterprise GRC Report" },
+            { title: "WalaPlus Quality Audit Report" },
           );
 
           const headers = xlsxResponseHeaders(filename);
