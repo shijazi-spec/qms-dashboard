@@ -527,6 +527,14 @@ export async function getDashboardData(opts?: AuditFilterOpts): Promise<{
   governance: GovernanceDocument | null;
   governanceDocs: GovernanceDocument[];
   scorecard: QualityScorecard | null;
+  /**
+   * Enterprise-wide GRC snapshot (NCs, CAPAs, risks, KPIs, compliance, and
+   * the composite enterprise health score / rating). Mirrors the executive
+   * digest's numbers so the dashboard headline agrees with the Slack/email
+   * digest by construction. Always system-wide — independent of any
+   * Created/Modified period filter applied to the audit body.
+   */
+  grcSnapshot: import("./executiveDigest").EnterpriseGRCSnapshot | null;
   appliedDateRange: {
     startDate: string | null;
     endDate: string | null;
@@ -557,6 +565,7 @@ export async function getDashboardData(opts?: AuditFilterOpts): Promise<{
     modifiedStart: opts?.modifiedStart || null,
     modifiedEnd: opts?.modifiedEnd || null,
   };
+  const { getEnterpriseGRCSnapshot } = await import("./executiveDigest");
   const [
     latestAudit,
     absoluteLatestAudit,
@@ -564,6 +573,7 @@ export async function getDashboardData(opts?: AuditFilterOpts): Promise<{
     governance,
     governanceDocs,
     scorecard,
+    grcSnapshot,
   ] = await Promise.all([
     getLatestAuditResult(range),
     getLatestAuditResult(),
@@ -571,6 +581,10 @@ export async function getDashboardData(opts?: AuditFilterOpts): Promise<{
     getActiveGovernanceDocument(),
     getActiveGovernanceDocumentsByModule(),
     getActiveScorecard(),
+    // System-wide GRC snapshot — never gated by the audit Created/Modified
+    // filter, so the headline rating stays consistent with the Slack/email
+    // digest regardless of dashboard filtering.
+    getEnterpriseGRCSnapshot().catch(() => null),
   ]);
 
   const [overallTrend, peopleTrend, processTrend, governanceTrend] =
@@ -588,6 +602,7 @@ export async function getDashboardData(opts?: AuditFilterOpts): Promise<{
     governance,
     governanceDocs,
     scorecard,
+    grcSnapshot,
     appliedDateRange: range as Required<AuditFilterOpts>,
     trends: {
       overall: overallTrend,

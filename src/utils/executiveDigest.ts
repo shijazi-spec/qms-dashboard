@@ -1031,6 +1031,166 @@ export function computeEnterpriseHealthScore(input: {
   return Math.round(weighted / totalWeight);
 }
 
+export type EnterpriseHealthRating = "Excellent" | "Good" | "Watch" | "Alert";
+
+export function ratingForEnterpriseHealth(score: number): EnterpriseHealthRating {
+  return score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Watch" : "Alert";
+}
+
+export interface EnterpriseGRCSnapshot {
+  audit_score: number | null;
+  nc_summary: { open: number; total: number };
+  capa_summary: { open: number; total: number; effectiveness_rate: number };
+  risk_summary: { active: number; critical_high: number };
+  kpi_summary: { green: number; amber: number; red: number; total: number };
+  compliance_summary: { met: number; partial: number; not_met: number; total: number };
+  enterprise_health_score: number;
+  enterprise_health_rating: EnterpriseHealthRating;
+}
+
+// Brief in-process cache for the snapshot. The dashboard pulls /api/dashboard
+// on every page load and on the auto-refresh tick; without this, every load
+// fans out ~10 aggregate queries even though the underlying counts barely
+// change second-to-second. 30 s is short enough that operators see fresh
+// data after acting on a finding, while collapsing burst refreshes onto a
+// single DB pass. Single-process; tests can override with the env var.
+let _snapshotCache: { value: EnterpriseGRCSnapshot; expiresAt: number } | null = null;
+let _snapshotInflight: Promise<EnterpriseGRCSnapshot> | null = null;
+function snapshotCacheTtlMs(): number {
+  const raw = process.env.GRC_SNAPSHOT_CACHE_TTL_MS;
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n >= 0 ? n : 30_000;
+}
+
+/** Test-only: drop the in-process snapshot cache. */
+export function resetEnterpriseGRCSnapshotCache(): void {
+  _snapshotCache = null;
+  _snapshotInflight = null;
+}
+
+/**
+ * Lightweight snapshot of the same enterprise-wide GRC signals the executive
+ * digest summarises, without the Zoho CRM scan or business-section build.
+ *
+ * Mirrors `generateDigestData` numerically (uses the same queries and the
+ * same `computeEnterpriseHealthScore`) so any UI rendering this snapshot
+ * agrees with the Slack/email digest by construction. Cached in-process for
+ * `GRC_SNAPSHOT_CACHE_TTL_MS` (default 30 s) so the dashboard's per-request
+ * call doesn't multiply DB load on refresh storms.
+ */
+export async function getEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
+  const now = Date.now();
+  if (_snapshotCache && _snapshotCache.expiresAt > now) {
+    return _snapshotCache.value;
+  }
+  // Coalesce concurrent callers onto a single in-flight DB pass.
+  if (_snapshotInflight) return _snapshotInflight;
+  _snapshotInflight = (async () => {
+    try {
+      const value = await _computeEnterpriseGRCSnapshot();
+      _snapshotCache = { value, expiresAt: Date.now() + snapshotCacheTtlMs() };
+      return value;
+    } finally {
+      _snapshotInflight = null;
+    }
+  })();
+  return _snapshotInflight;
+}
+
+async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
+  const [
+    ncOpen,
+    ncTotal,
+    capaOpen,
+    capaTotal,
+    capaEffective,
+    riskActive,
+    riskCritHigh,
+    kpiRows,
+    compRows,
+    auditRows,
+  ] = await Promise.all([
+    safeQuery(`SELECT COUNT(*) as cnt FROM audit_findings WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed','resolved','rejected')`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM audit_findings`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM capas WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed','cancelled','completed')`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM capas`),
+    safeQuery(`SELECT COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'open')) = 'completed') as eff, COUNT(*) as total FROM capa_action_items`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed','accepted')`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE COALESCE(risk_score,0) >= 15 AND LOWER(COALESCE(status,'open')) NOT IN ('closed','accepted')`),
+    safeQuery(`
+      WITH latest AS (
+        SELECT DISTINCT ON (kpi_id) kpi_id, status
+        FROM kpi_values
+        ORDER BY kpi_id, period_end DESC NULLS LAST, id DESC
+      )
+      SELECT
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('green','on_track')) as green,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('amber','at_risk')) as amber,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('red','off_track')) as red,
+        COUNT(*) as total FROM latest
+    `),
+    safeQuery(`
+      SELECT
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('met','compliant')) as met,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('partial','partially_compliant')) as partial,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('not_met','non_compliant')) as not_met,
+        COUNT(*) as total
+      FROM compliance_assessments
+    `),
+    safeQuery(`SELECT overall_score FROM quality_audit_results ORDER BY audit_date DESC LIMIT 1`),
+  ]);
+
+  const auditScore = auditRows[0]?.overall_score
+    ? parseFloat(auditRows[0].overall_score)
+    : null;
+  const ncOpenN = parseInt(ncOpen[0]?.cnt || "0", 10);
+  const ncTotalN = parseInt(ncTotal[0]?.cnt || "0", 10);
+  const capaOpenN = parseInt(capaOpen[0]?.cnt || "0", 10);
+  const capaTotalN = parseInt(capaTotal[0]?.cnt || "0", 10);
+  const capaEffN = parseInt(capaEffective[0]?.eff || "0", 10);
+  const capaEffTotalN = parseInt(capaEffective[0]?.total || "0", 10);
+  const riskActiveN = parseInt(riskActive[0]?.cnt || "0", 10);
+  const riskCritHighN = parseInt(riskCritHigh[0]?.cnt || "0", 10);
+  const kpiGreenN = parseInt(kpiRows[0]?.green || "0", 10);
+  const kpiAmberN = parseInt(kpiRows[0]?.amber || "0", 10);
+  const kpiRedN = parseInt(kpiRows[0]?.red || "0", 10);
+  const kpiTotalN = parseInt(kpiRows[0]?.total || "0", 10);
+
+  const score = computeEnterpriseHealthScore({
+    auditScore,
+    ncOpen: ncOpenN,
+    ncTotal: ncTotalN,
+    capaOpen: capaOpenN,
+    capaEffectiveCompleted: capaEffN,
+    capaEffectiveTotal: capaEffTotalN,
+    riskActive: riskActiveN,
+    riskCritHigh: riskCritHighN,
+    kpiGreen: kpiGreenN,
+    kpiTotal: kpiTotalN,
+  });
+
+  return {
+    audit_score: auditScore,
+    nc_summary: { open: ncOpenN, total: ncTotalN },
+    capa_summary: {
+      open: capaOpenN,
+      total: capaTotalN,
+      effectiveness_rate:
+        capaEffTotalN > 0 ? Math.round((capaEffN / capaEffTotalN) * 100) : 0,
+    },
+    risk_summary: { active: riskActiveN, critical_high: riskCritHighN },
+    kpi_summary: { green: kpiGreenN, amber: kpiAmberN, red: kpiRedN, total: kpiTotalN },
+    compliance_summary: {
+      met: parseInt(compRows[0]?.met || "0", 10),
+      partial: parseInt(compRows[0]?.partial || "0", 10),
+      not_met: parseInt(compRows[0]?.not_met || "0", 10),
+      total: parseInt(compRows[0]?.total || "0", 10),
+    },
+    enterprise_health_score: score,
+    enterprise_health_rating: ratingForEnterpriseHealth(score),
+  };
+}
+
 function clampPct(n: number): number {
   if (!Number.isFinite(n)) return 0;
   if (n < 0) return 0;

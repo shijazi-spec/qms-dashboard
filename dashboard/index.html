@@ -575,6 +575,54 @@
                         </div>
                     </div>
 
+                    <!-- Row 2a: Enterprise GRC Snapshot (mirrors Slack/email digest) -->
+                    <div class="widget-row" data-row="2a">
+                        <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="grc-snapshot" data-name="Enterprise GRC Snapshot">
+                            <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                                <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
+                                    Enterprise GRC Snapshot
+                                    <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
+                                          data-tip="System-wide nonconformance, CAPA, risk, KPI, and compliance counts. Same numbers powering the Slack/email digest."
+                                          data-testid="info-grc-snapshot">i</span>
+                                </span>
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" id="grcSnapshotGrid">
+                                    <div class="bg-indigo-50 rounded-xl p-4 text-center">
+                                        <div class="text-2xl font-bold text-indigo-700" id="grcHealthScore" data-testid="text-grc-health-score">--</div>
+                                        <div class="text-xs text-gray-600 mt-1">Enterprise Health</div>
+                                    </div>
+                                    <div class="bg-red-50 rounded-xl p-4 text-center">
+                                        <div class="text-2xl font-bold text-red-700" id="grcNcOpen" data-testid="text-grc-nc-open">--</div>
+                                        <div class="text-xs text-gray-600 mt-1">NCs Open</div>
+                                        <div class="text-[11px] text-gray-500" id="grcNcTotal">of --</div>
+                                    </div>
+                                    <div class="bg-amber-50 rounded-xl p-4 text-center">
+                                        <div class="text-2xl font-bold text-amber-700" id="grcCapaOpen" data-testid="text-grc-capa-open">--</div>
+                                        <div class="text-xs text-gray-600 mt-1">CAPAs Open</div>
+                                        <div class="text-[11px] text-gray-500" id="grcCapaEff">eff --%</div>
+                                    </div>
+                                    <div class="bg-rose-50 rounded-xl p-4 text-center">
+                                        <div class="text-2xl font-bold text-rose-700" id="grcRiskActive" data-testid="text-grc-risk-active">--</div>
+                                        <div class="text-xs text-gray-600 mt-1">Risks Active</div>
+                                        <div class="text-[11px] text-gray-500" id="grcRiskCritHigh">C/H --</div>
+                                    </div>
+                                    <div class="bg-emerald-50 rounded-xl p-4 text-center">
+                                        <div class="text-sm font-bold text-emerald-700" id="grcKpi" data-testid="text-grc-kpi">--</div>
+                                        <div class="text-xs text-gray-600 mt-1">KPIs G/A/R</div>
+                                    </div>
+                                    <div class="bg-sky-50 rounded-xl p-4 text-center">
+                                        <div class="text-sm font-bold text-sky-700" id="grcCompliance" data-testid="text-grc-compliance">--</div>
+                                        <div class="text-xs text-gray-600 mt-1">Compliance M/P/N</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Row 2b1: Score Trend (full-width, above Data Quality Trend) -->
                     <div class="widget-row" data-row="2b1">
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="trend-chart" data-name="Score Trend">
@@ -2476,6 +2524,40 @@
             return { text: 'Critical', class: 'bg-red-100 text-red-800' };
         }
 
+        function updateGrcSnapshotCard(snap) {
+            const set = (id, text) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = text;
+            };
+            // Defensive readers — a partial / older API payload (e.g. a
+            // staged front-end against a back-end that hasn't been deployed
+            // yet, or a snapshot whose computation partially failed) must
+            // render "--" rather than throw a TypeError that blanks the
+            // entire dashboard.
+            const s = snap || {};
+            const num = (obj, key) => {
+                const v = obj && obj[key];
+                return (typeof v === 'number' && Number.isFinite(v)) ? v : null;
+            };
+            const fmt = (v) => v === null ? '--' : String(v);
+            const nc = s.nc_summary || {};
+            const capa = s.capa_summary || {};
+            const risk = s.risk_summary || {};
+            const kpi = s.kpi_summary || {};
+            const comp = s.compliance_summary || {};
+            const score = num(s, 'enterprise_health_score');
+            const rating = s.enterprise_health_rating || '--';
+            set('grcHealthScore', score === null ? '--' : `${score}% ${rating}`);
+            set('grcNcOpen', fmt(num(nc, 'open')));
+            set('grcNcTotal', `of ${fmt(num(nc, 'total'))}`);
+            set('grcCapaOpen', fmt(num(capa, 'open')));
+            set('grcCapaEff', `eff ${fmt(num(capa, 'effectiveness_rate'))}%`);
+            set('grcRiskActive', fmt(num(risk, 'active')));
+            set('grcRiskCritHigh', `C/H ${fmt(num(risk, 'critical_high'))}`);
+            set('grcKpi', `${fmt(num(kpi, 'green'))}/${fmt(num(kpi, 'amber'))}/${fmt(num(kpi, 'red'))}`);
+            set('grcCompliance', `${fmt(num(comp, 'met'))}/${fmt(num(comp, 'partial'))}/${fmt(num(comp, 'not_met'))}`);
+        }
+
         function updateDashboard(data) {
             document.getElementById('loading').classList.add('hidden');
             
@@ -2499,10 +2581,26 @@
             scoreRing.style.setProperty('--score', overallScore);
             scoreRing.style.setProperty('--score-color', getScoreColor(overallScore));
 
-            const rating = getScoreRating(overallScore);
+            // The headline rating reflects ENTERPRISE health (audit + NCs +
+            // CAPAs + risks + KPIs), not the per-audit overall score alone.
+            // Falls back to the audit score only when the snapshot is missing.
+            // Without this, a single audit dimension scoring high (e.g. People
+            // 91%) can render "Excellent" while the system has hundreds of
+            // thousands of open issues — which is what the digest's composite
+            // rating exists to prevent.
+            const snap = data.grcSnapshot;
+            const ratingScore = snap && Number.isFinite(snap.enterprise_health_score)
+                ? snap.enterprise_health_score
+                : overallScore;
+            const ratingLabel = snap && snap.enterprise_health_rating
+                ? snap.enterprise_health_rating
+                : getScoreRating(overallScore).text;
+            const ratingClass = getScoreRating(ratingScore).class;
             const ratingEl = document.getElementById('overallRating');
-            ratingEl.textContent = rating.text;
-            ratingEl.className = `mt-4 inline-block px-4 py-2 rounded-full text-sm font-medium ${rating.class}`;
+            ratingEl.textContent = `${ratingLabel} (${ratingScore}%)`;
+            ratingEl.className = `mt-4 inline-block px-4 py-2 rounded-full text-sm font-medium ${ratingClass}`;
+            ratingEl.setAttribute('data-testid', 'badge-enterprise-health');
+            updateGrcSnapshotCard(snap);
 
             document.getElementById('peopleScore').textContent = peopleScore.toFixed(1) + '%';
             document.getElementById('processScore').textContent = processScore.toFixed(1) + '%';
