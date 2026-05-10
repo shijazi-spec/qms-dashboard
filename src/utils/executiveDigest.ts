@@ -739,6 +739,7 @@ export async function generateDigestData(
     ncOverdue,
     ncTotal,
     capaOpen,
+    capaTotal,
     capaNewWeek,
     capaClosedWeek,
     capaEffective,
@@ -775,6 +776,7 @@ export async function generateDigestData(
     safeQuery(
       `SELECT COUNT(*) as cnt FROM capas WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed', 'cancelled', 'completed')`,
     ),
+    safeQuery(`SELECT COUNT(*) as cnt FROM capas`),
     safeQuery(`SELECT COUNT(*) as cnt FROM capas WHERE created_at >= $1`, [weekAgoStr]),
     safeQuery(
       `SELECT COUNT(*) as cnt FROM capa_action_items WHERE completion_date >= $1`,
@@ -957,13 +959,18 @@ export async function generateDigestData(
       ncOpen: parseInt(ncOpen[0]?.cnt || "0", 10),
       ncTotal: parseInt(ncTotal[0]?.cnt || "0", 10),
       capaOpen: parseInt(capaOpen[0]?.cnt || "0", 10),
+      capaTotal: parseInt(capaTotal[0]?.cnt || "0", 10),
       capaEffectiveCompleted: parseInt(capaEffective[0]?.eff || "0", 10),
       capaEffectiveTotal: parseInt(capaEffective[0]?.total || "0", 10),
       riskActive: parseInt(riskActive[0]?.cnt || "0", 10),
       riskCritHigh: parseInt(riskCritHigh[0]?.cnt || "0", 10),
       riskTotal: parseInt(riskTotal[0]?.cnt || "0", 10),
       kpiGreen: parseInt(kpiRows[0]?.green || "0", 10),
+      kpiAmber: parseInt(kpiRows[0]?.amber || "0", 10),
       kpiTotal: parseInt(kpiRows[0]?.total || "0", 10),
+      complianceMet: parseInt(compRows[0]?.met || "0", 10),
+      compliancePartial: parseInt(compRows[0]?.partial || "0", 10),
+      complianceTotal: parseInt(compRows[0]?.total || "0", 10),
     }),
     top_alerts: alertRows,
     capa_recurrences: recurrenceRows.length,
@@ -984,60 +991,100 @@ export async function generateDigestData(
 /**
  * Composite enterprise health score (0-100) from real GRC signals.
  *
- * Component formulas:
- *  - audit:  latest overall_score (0-100); if null, component is omitted and weights re-normalised.
- *  - capa:   100 * (1 - open / max(total_action_items,1))  — open vs all action items.
- *            If no action items recorded, omitted.
- *  - risk:   100 * (1 - critical_high / max(total_active,1)) — share of active risks that are NOT crit/high.
- *            Only credited when the risk register has at least one row
- *            (`riskTotal > 0`). An empty risk register is treated as
- *            "no signal" rather than "perfectly healthy" — otherwise an
- *            unpopulated module silently donates 25% of the headline
- *            score, which inflates the rating well beyond reality.
- *  - kpi:    100 * green / total. If no KPIs, omitted.
- *  - nc:     100 * (1 - open / max(ncTotal,1)). If no findings, omitted.
+ * Component formulas (each clamped to 0-100):
+ *  - audit       (weight 25): latest quality_audit_results.overall_score.
+ *                Omitted if no audits recorded.
+ *  - capa        (weight 20): average of two sub-signals when both are
+ *                available, else whichever is present:
+ *                  · closureRate    = 100 * (1 - capaOpen / capaTotal)
+ *                  · completionRate = 100 * completed / total action items
+ *                Omitted entirely if neither the capas table nor the
+ *                action-items table has any rows.
+ *  - risk        (weight 20): 100 * (1 - critical_high / active).
+ *                Only credited when riskTotal > 0; an empty register is
+ *                treated as "no signal", not "perfectly healthy".
+ *  - kpi         (weight 15): (green + 0.5 * amber) / total * 100.
+ *                Amber gets half credit so partial-progress KPIs move the
+ *                score, instead of being lumped in with red.
+ *  - nc          (weight 10): 100 * (1 - open / total). Omitted if zero.
+ *  - compliance  (weight 10): (met + 0.5 * partial) / total * 100.
+ *                Omitted when no controls have been assessed.
  *
- * Weights (when all present): audit 30, capa 20, risk 25, kpi 15, nc 10.
- * If a component is omitted, remaining weights are re-normalised to 100.
- * Returns 0 only when no components have data (rare; fully-empty system).
+ * If a component is omitted, the remaining weights are re-normalised so
+ * the score still spans 0-100. Returns 0 only when no components have
+ * data (fully-empty system).
  */
 export function computeEnterpriseHealthScore(input: {
   auditScore: number | null;
   ncOpen: number;
   ncTotal: number;
   capaOpen: number;
+  capaTotal: number;
   capaEffectiveCompleted: number;
   capaEffectiveTotal: number;
   riskActive: number;
   riskCritHigh: number;
   riskTotal: number;
   kpiGreen: number;
+  kpiAmber: number;
   kpiTotal: number;
+  complianceMet: number;
+  compliancePartial: number;
+  complianceTotal: number;
 }): number {
   const components: Array<{ value: number; weight: number }> = [];
+
   if (input.auditScore !== null && Number.isFinite(input.auditScore)) {
-    components.push({ value: clampPct(input.auditScore), weight: 30 });
+    components.push({ value: clampPct(input.auditScore), weight: 25 });
+  }
+
+  // CAPA: combine open-vs-total closure (from `capas`) and action-item
+  // completion (from `capa_action_items`). Either signal alone counts;
+  // both averaged when present so backlog of open CAPAs is never ignored.
+  const capaSignals: number[] = [];
+  if (input.capaTotal > 0) {
+    capaSignals.push(clampPct((1 - input.capaOpen / input.capaTotal) * 100));
   }
   if (input.capaEffectiveTotal > 0) {
-    const completedPct = (input.capaEffectiveCompleted / input.capaEffectiveTotal) * 100;
-    components.push({ value: clampPct(completedPct), weight: 20 });
+    capaSignals.push(
+      clampPct((input.capaEffectiveCompleted / input.capaEffectiveTotal) * 100),
+    );
   }
-  // Risk hygiene: only credit when the register actually has rows.
-  // riskActive === 0 with riskTotal > 0 is a real "all risks closed"
-  // signal worth 100; riskActive === 0 with riskTotal === 0 means the
-  // register isn't being used and we should not pretend that's healthy.
+  if (capaSignals.length > 0) {
+    const capaValue =
+      capaSignals.reduce((s, v) => s + v, 0) / capaSignals.length;
+    components.push({ value: capaValue, weight: 20 });
+  }
+
   if (input.riskTotal > 0) {
-    const riskHygiene = input.riskActive > 0
-      ? (1 - input.riskCritHigh / input.riskActive) * 100
-      : 100;
-    components.push({ value: clampPct(riskHygiene), weight: 25 });
+    const riskHygiene =
+      input.riskActive > 0
+        ? (1 - input.riskCritHigh / input.riskActive) * 100
+        : 100;
+    components.push({ value: clampPct(riskHygiene), weight: 20 });
   }
+
   if (input.kpiTotal > 0) {
-    components.push({ value: clampPct((input.kpiGreen / input.kpiTotal) * 100), weight: 15 });
+    const kpiPct =
+      ((input.kpiGreen + 0.5 * input.kpiAmber) / input.kpiTotal) * 100;
+    components.push({ value: clampPct(kpiPct), weight: 15 });
   }
+
   if (input.ncTotal > 0) {
-    components.push({ value: clampPct((1 - input.ncOpen / input.ncTotal) * 100), weight: 10 });
+    components.push({
+      value: clampPct((1 - input.ncOpen / input.ncTotal) * 100),
+      weight: 10,
+    });
   }
+
+  if (input.complianceTotal > 0) {
+    const compPct =
+      ((input.complianceMet + 0.5 * input.compliancePartial) /
+        input.complianceTotal) *
+      100;
+    components.push({ value: clampPct(compPct), weight: 10 });
+  }
+
   const totalWeight = components.reduce((sum, c) => sum + c.weight, 0);
   if (totalWeight === 0) return 0;
   const weighted = components.reduce((sum, c) => sum + c.value * c.weight, 0);
@@ -1172,18 +1219,27 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
   const kpiRedN = parseInt(kpiRows[0]?.red || "0", 10);
   const kpiTotalN = parseInt(kpiRows[0]?.total || "0", 10);
 
+  const compMetN = parseInt(compRows[0]?.met || "0", 10);
+  const compPartialN = parseInt(compRows[0]?.partial || "0", 10);
+  const compTotalN = parseInt(compRows[0]?.total || "0", 10);
+
   const score = computeEnterpriseHealthScore({
     auditScore,
     ncOpen: ncOpenN,
     ncTotal: ncTotalN,
     capaOpen: capaOpenN,
+    capaTotal: capaTotalN,
     capaEffectiveCompleted: capaEffN,
     capaEffectiveTotal: capaEffTotalN,
     riskActive: riskActiveN,
     riskCritHigh: riskCritHighN,
     riskTotal: riskTotalN,
     kpiGreen: kpiGreenN,
+    kpiAmber: kpiAmberN,
     kpiTotal: kpiTotalN,
+    complianceMet: compMetN,
+    compliancePartial: compPartialN,
+    complianceTotal: compTotalN,
   });
 
   return {
