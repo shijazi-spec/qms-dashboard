@@ -744,6 +744,7 @@ export async function generateDigestData(
     capaEffective,
     riskActive,
     riskCritHigh,
+    riskTotal,
     riskNew,
     riskOverdueTreatments,
     auditRows,
@@ -788,6 +789,7 @@ export async function generateDigestData(
     safeQuery(
       `SELECT COUNT(*) as cnt FROM enterprise_risks WHERE COALESCE(risk_score,0) >= 15 AND LOWER(COALESCE(status,'open')) NOT IN ('closed', 'accepted')`,
     ),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks`),
     safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE created_at >= $1`, [weekAgoStr]),
     safeQuery(
       `SELECT COUNT(*) as cnt FROM enterprise_risks WHERE treatment_deadline IS NOT NULL AND treatment_deadline < NOW() AND LOWER(COALESCE(status,'open')) NOT IN ('closed', 'accepted')`,
@@ -959,6 +961,7 @@ export async function generateDigestData(
       capaEffectiveTotal: parseInt(capaEffective[0]?.total || "0", 10),
       riskActive: parseInt(riskActive[0]?.cnt || "0", 10),
       riskCritHigh: parseInt(riskCritHigh[0]?.cnt || "0", 10),
+      riskTotal: parseInt(riskTotal[0]?.cnt || "0", 10),
       kpiGreen: parseInt(kpiRows[0]?.green || "0", 10),
       kpiTotal: parseInt(kpiRows[0]?.total || "0", 10),
     }),
@@ -986,7 +989,11 @@ export async function generateDigestData(
  *  - capa:   100 * (1 - open / max(total_action_items,1))  — open vs all action items.
  *            If no action items recorded, omitted.
  *  - risk:   100 * (1 - critical_high / max(total_active,1)) — share of active risks that are NOT crit/high.
- *            If no active risks, defaults to 100.
+ *            Only credited when the risk register has at least one row
+ *            (`riskTotal > 0`). An empty risk register is treated as
+ *            "no signal" rather than "perfectly healthy" — otherwise an
+ *            unpopulated module silently donates 25% of the headline
+ *            score, which inflates the rating well beyond reality.
  *  - kpi:    100 * green / total. If no KPIs, omitted.
  *  - nc:     100 * (1 - open / max(ncTotal,1)). If no findings, omitted.
  *
@@ -1003,6 +1010,7 @@ export function computeEnterpriseHealthScore(input: {
   capaEffectiveTotal: number;
   riskActive: number;
   riskCritHigh: number;
+  riskTotal: number;
   kpiGreen: number;
   kpiTotal: number;
 }): number {
@@ -1014,11 +1022,16 @@ export function computeEnterpriseHealthScore(input: {
     const completedPct = (input.capaEffectiveCompleted / input.capaEffectiveTotal) * 100;
     components.push({ value: clampPct(completedPct), weight: 20 });
   }
-  // Risk hygiene: always included — "no active risks" is a meaningful 100.
-  const riskHygiene = input.riskActive > 0
-    ? (1 - input.riskCritHigh / input.riskActive) * 100
-    : 100;
-  components.push({ value: clampPct(riskHygiene), weight: 25 });
+  // Risk hygiene: only credit when the register actually has rows.
+  // riskActive === 0 with riskTotal > 0 is a real "all risks closed"
+  // signal worth 100; riskActive === 0 with riskTotal === 0 means the
+  // register isn't being used and we should not pretend that's healthy.
+  if (input.riskTotal > 0) {
+    const riskHygiene = input.riskActive > 0
+      ? (1 - input.riskCritHigh / input.riskActive) * 100
+      : 100;
+    components.push({ value: clampPct(riskHygiene), weight: 25 });
+  }
   if (input.kpiTotal > 0) {
     components.push({ value: clampPct((input.kpiGreen / input.kpiTotal) * 100), weight: 15 });
   }
@@ -1106,6 +1119,7 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
     capaEffective,
     riskActive,
     riskCritHigh,
+    riskTotal,
     kpiRows,
     compRows,
     auditRows,
@@ -1117,6 +1131,7 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
     safeQuery(`SELECT COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'open')) = 'completed') as eff, COUNT(*) as total FROM capa_action_items`),
     safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed','accepted')`),
     safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE COALESCE(risk_score,0) >= 15 AND LOWER(COALESCE(status,'open')) NOT IN ('closed','accepted')`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks`),
     safeQuery(`
       WITH latest AS (
         SELECT DISTINCT ON (kpi_id) kpi_id, status
@@ -1151,6 +1166,7 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
   const capaEffTotalN = parseInt(capaEffective[0]?.total || "0", 10);
   const riskActiveN = parseInt(riskActive[0]?.cnt || "0", 10);
   const riskCritHighN = parseInt(riskCritHigh[0]?.cnt || "0", 10);
+  const riskTotalN = parseInt(riskTotal[0]?.cnt || "0", 10);
   const kpiGreenN = parseInt(kpiRows[0]?.green || "0", 10);
   const kpiAmberN = parseInt(kpiRows[0]?.amber || "0", 10);
   const kpiRedN = parseInt(kpiRows[0]?.red || "0", 10);
@@ -1165,6 +1181,7 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
     capaEffectiveTotal: capaEffTotalN,
     riskActive: riskActiveN,
     riskCritHigh: riskCritHighN,
+    riskTotal: riskTotalN,
     kpiGreen: kpiGreenN,
     kpiTotal: kpiTotalN,
   });
