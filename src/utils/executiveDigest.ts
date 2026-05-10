@@ -1044,10 +1044,10 @@ export function computeEnterpriseHealthScore(input: {
   return Math.round(weighted / totalWeight);
 }
 
-export type EnterpriseHealthRating = "Excellent" | "Good" | "Watch" | "Alert";
+export type EnterpriseHealthRating = "Excellent" | "Good" | "Needs Attention" | "At Risk";
 
 export function ratingForEnterpriseHealth(score: number): EnterpriseHealthRating {
-  return score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Watch" : "Alert";
+  return score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Needs Attention" : "At Risk";
 }
 
 export interface EnterpriseGRCSnapshot {
@@ -1345,7 +1345,7 @@ ${data.duplicate_clusters > 0 ? `<div class="card"><h3>Duplicate Radar</h3><p st
 
 export function buildDigestSlackBlocks(data: DigestData): any[] {
   const healthEmoji = (score: number): string =>
-    score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Watch" : "Alert";
+    score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Needs Attention" : "At Risk";
   const hasAbsoluteDashboardUrl = /^https?:\/\//i.test(DIGEST_DASHBOARD_LINK);
   const generatedTimeKsa = new Date(data.generated_at).toLocaleTimeString("en-US", {
     timeZone: "Asia/Riyadh",
