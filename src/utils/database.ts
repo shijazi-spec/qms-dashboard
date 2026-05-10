@@ -380,33 +380,93 @@ async function saveTrendMetrics(auditId: number, audit: QualityAuditResult) {
   );
 }
 
+export interface AuditFilterOpts {
+  /** Legacy: filter by `audit_date` (when the audit RAN). */
+  startDate?: string | null;
+  /** Legacy: filter by `audit_date` (when the audit RAN). */
+  endDate?: string | null;
+  /** Filter by `period_created_*` overlap (CRM record created window). */
+  createdStart?: string | null;
+  /** Filter by `period_created_*` overlap (CRM record created window). */
+  createdEnd?: string | null;
+  /** Filter by `period_modified_*` overlap (CRM record modified window). */
+  modifiedStart?: string | null;
+  /** Filter by `period_modified_*` overlap (CRM record modified window). */
+  modifiedEnd?: string | null;
+}
+
 /**
- * Build the WHERE clause + params for the dashboard date filter.
- * The UI sends ISO date strings (YYYY-MM-DD). End date is treated as
- * inclusive end-of-day so a range like "04/27 → 04/27" still matches
- * audits run that same day. Returns an empty clause when no filter is
- * supplied so the caller can append it unconditionally.
+ * Build the WHERE clause + params for the dashboard audit filter.
+ *
+ * The UI sends ISO date strings (YYYY-MM-DD).
+ *
+ * Filtering modes:
+ *  - When `createdStart`/`createdEnd` or `modifiedStart`/`modifiedEnd` are
+ *    supplied (the dashboard's Created/Modified pickers), the clause filters
+ *    by audit-period OVERLAP using the `period_created_*` /
+ *    `period_modified_*` columns. Audits with NULL period metadata are
+ *    excluded — we cannot prove a NULL-period audit covers the requested
+ *    window, so showing it would mislead the user with "0 records / 0 issues".
+ *  - When only legacy `startDate`/`endDate` are supplied (used by
+ *    `/api/audit/latest` and `/api/audit/history`), the clause filters by
+ *    `audit_date` (when the audit RAN), preserving prior behaviour.
+ *
+ * End dates are treated as inclusive end-of-day, expressed as an exclusive
+ * upper bound on the NEXT day to avoid the `23:59:59.999` microsecond
+ * truncation bug.
+ *
+ * Returns an empty clause when no filter is supplied so callers can append
+ * it unconditionally.
  */
 function buildAuditDateRangeClause(
-  opts: { startDate?: string | null; endDate?: string | null } | undefined,
+  opts: AuditFilterOpts | undefined,
   startingParamIndex: number,
 ): { clause: string; params: any[] } {
   if (!opts) return { clause: "", params: [] };
   const params: any[] = [];
   const conds: string[] = [];
-  if (opts.startDate) {
-    params.push(opts.startDate);
-    conds.push(`audit_date >= $${startingParamIndex + params.length - 1}`);
-  }
-  if (opts.endDate) {
-    // Inclusive end-of-day, expressed as an exclusive upper bound on the
-    // NEXT day. Avoids the `23:59:59.999` truncation bug — Postgres
-    // timestamps support microseconds, so anything in the .999001-.999999
-    // window would otherwise be silently dropped from the same-day range.
-    params.push(opts.endDate);
-    conds.push(
-      `audit_date < ($${startingParamIndex + params.length - 1}::date + interval '1 day')`,
-    );
+  const nextPlaceholder = () =>
+    `$${startingParamIndex + params.length - 1}`;
+  const hasPeriod =
+    opts.createdStart || opts.createdEnd || opts.modifiedStart || opts.modifiedEnd;
+  if (hasPeriod) {
+    if (opts.createdStart || opts.createdEnd) {
+      const startVal = opts.createdStart || "0001-01-01";
+      const endVal = opts.createdEnd || "9999-12-31";
+      params.push(startVal);
+      const startPh = nextPlaceholder();
+      params.push(endVal);
+      const endPh = nextPlaceholder();
+      conds.push(
+        `(period_created_start IS NOT NULL AND period_created_end IS NOT NULL ` +
+          `AND period_created_start <= (${endPh}::date + interval '1 day' - interval '1 microsecond') ` +
+          `AND period_created_end >= ${startPh}::date)`,
+      );
+    }
+    if (opts.modifiedStart || opts.modifiedEnd) {
+      const startVal = opts.modifiedStart || "0001-01-01";
+      const endVal = opts.modifiedEnd || "9999-12-31";
+      params.push(startVal);
+      const startPh = nextPlaceholder();
+      params.push(endVal);
+      const endPh = nextPlaceholder();
+      conds.push(
+        `(period_modified_start IS NOT NULL AND period_modified_end IS NOT NULL ` +
+          `AND period_modified_start <= (${endPh}::date + interval '1 day' - interval '1 microsecond') ` +
+          `AND period_modified_end >= ${startPh}::date)`,
+      );
+    }
+  } else {
+    if (opts.startDate) {
+      params.push(opts.startDate);
+      conds.push(`audit_date >= ${nextPlaceholder()}`);
+    }
+    if (opts.endDate) {
+      params.push(opts.endDate);
+      conds.push(
+        `audit_date < (${nextPlaceholder()}::date + interval '1 day')`,
+      );
+    }
   }
   const clause = conds.length > 0 ? ` WHERE ${conds.join(" AND ")}` : "";
   return { clause, params };
@@ -454,16 +514,27 @@ export async function getTrendData(
   return result.rows;
 }
 
-export async function getDashboardData(opts?: {
-  startDate?: string | null;
-  endDate?: string | null;
-}): Promise<{
+export async function getDashboardData(opts?: AuditFilterOpts): Promise<{
   latestAudit: QualityAuditResult | null;
+  /**
+   * Always the most recent audit in the table, regardless of any active
+   * Created/Modified filter. Powers the "Last AI Audit: …" header chip,
+   * which describes when the system last RAN an audit and must not change
+   * when the user filters the dashboard body by CRM record period.
+   */
+  absoluteLatestAudit: QualityAuditResult | null;
   auditHistory: QualityAuditResult[];
   governance: GovernanceDocument | null;
   governanceDocs: GovernanceDocument[];
   scorecard: QualityScorecard | null;
-  appliedDateRange: { startDate: string | null; endDate: string | null };
+  appliedDateRange: {
+    startDate: string | null;
+    endDate: string | null;
+    createdStart: string | null;
+    createdEnd: string | null;
+    modifiedStart: string | null;
+    modifiedEnd: string | null;
+  };
   trends: {
     overall: any[];
     people: any[];
@@ -471,23 +542,36 @@ export async function getDashboardData(opts?: {
     governance: any[];
   };
 }> {
-  // When a date range is supplied, every headline KPI on the dashboard
-  // (Overall / People / Process / Governance scores, Records Audited,
-  // Issues Found, Compliance Rate) and the Audit History list are scoped
-  // to audits whose `audit_date` falls within that window. The trend
-  // sparklines below remain a 90-day rolling view by design.
-  const range = {
+  // When a Created/Modified filter is supplied, the headline KPIs (Overall /
+  // People / Process / Governance scores, Records Audited, Issues Found,
+  // Compliance Rate) and the Audit History list are scoped to audits whose
+  // `period_created_*` / `period_modified_*` window OVERLAPS the filter (see
+  // buildAuditDateRangeClause). The trend sparklines below remain a 90-day
+  // rolling view by design. `absoluteLatestAudit` ignores the filter so the
+  // header chip always reflects the true most-recent audit.
+  const range: AuditFilterOpts = {
     startDate: opts?.startDate || null,
     endDate: opts?.endDate || null,
+    createdStart: opts?.createdStart || null,
+    createdEnd: opts?.createdEnd || null,
+    modifiedStart: opts?.modifiedStart || null,
+    modifiedEnd: opts?.modifiedEnd || null,
   };
-  const [latestAudit, auditHistory, governance, governanceDocs, scorecard] =
-    await Promise.all([
-      getLatestAuditResult(range),
-      getAuditHistory(20, range),
-      getActiveGovernanceDocument(),
-      getActiveGovernanceDocumentsByModule(),
-      getActiveScorecard(),
-    ]);
+  const [
+    latestAudit,
+    absoluteLatestAudit,
+    auditHistory,
+    governance,
+    governanceDocs,
+    scorecard,
+  ] = await Promise.all([
+    getLatestAuditResult(range),
+    getLatestAuditResult(),
+    getAuditHistory(20, range),
+    getActiveGovernanceDocument(),
+    getActiveGovernanceDocumentsByModule(),
+    getActiveScorecard(),
+  ]);
 
   const [overallTrend, peopleTrend, processTrend, governanceTrend] =
     await Promise.all([
@@ -499,11 +583,12 @@ export async function getDashboardData(opts?: {
 
   return {
     latestAudit,
+    absoluteLatestAudit,
     auditHistory,
     governance,
     governanceDocs,
     scorecard,
-    appliedDateRange: range,
+    appliedDateRange: range as Required<AuditFilterOpts>,
     trends: {
       overall: overallTrend,
       people: peopleTrend,

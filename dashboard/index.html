@@ -2599,7 +2599,11 @@
 
             const lastUpdatedEl = document.getElementById('lastUpdated');
             if (lastUpdatedEl) {
-                lastUpdatedEl.textContent = 'Last AI Audit: ' + new Date(audit.audit_date).toLocaleString();
+                // Always show the absolute most-recent audit run, regardless of any
+                // active Created/Modified filter — this label describes when the
+                // SYSTEM last ran an audit, not which audit is being displayed below.
+                const headerAudit = data.absoluteLatestAudit || audit;
+                lastUpdatedEl.textContent = 'Last AI Audit: ' + new Date(headerAudit.audit_date).toLocaleString();
             }
             
             applyWidgetConfig();

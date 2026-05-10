@@ -79,9 +79,16 @@ const _dashboardApiRoutesRaw = [
         v && isoDateRe.test(v) ? v : null;
       return async (c: any) => {
         try {
-          const startDate = sanitize(c.req.query("createdStart") || null);
-          const endDate = sanitize(c.req.query("createdEnd") || null);
-          const data = await getDashboardData({ startDate, endDate });
+          const createdStart = sanitize(c.req.query("createdStart") || null);
+          const createdEnd = sanitize(c.req.query("createdEnd") || null);
+          const modifiedStart = sanitize(c.req.query("modifiedStart") || null);
+          const modifiedEnd = sanitize(c.req.query("modifiedEnd") || null);
+          const data = await getDashboardData({
+            createdStart,
+            createdEnd,
+            modifiedStart,
+            modifiedEnd,
+          });
           return c.json(data);
         } catch (error) {
           safeLogger.error("Error fetching dashboard data:", error);
