@@ -232,7 +232,7 @@ function toIsoDateOnly(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function dateLabelKsa(d: Date): string {
+export function dateLabelKsa(d: Date): string {
   return d.toLocaleDateString("en-GB", { timeZone: "Asia/Riyadh" });
 }
 

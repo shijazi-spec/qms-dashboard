@@ -132,6 +132,7 @@ export const analyticsRoutes = [
           const {
             computeDigestWindow,
             generateDigestData,
+            dateLabelKsa,
           } = await import("../../utils/executiveDigest");
           // Buffered (in-memory) workbook path. The streaming
           // WorkbookWriter trips over an archiver-utils `isStream()`
@@ -157,12 +158,21 @@ export const analyticsRoutes = [
           const windowEndRaw = c.req.query("windowEnd");
           const requestedWindow =
             windowStartRaw && windowEndRaw
-              ? {
-                  cadence,
-                  start: new Date(windowStartRaw),
-                  end: new Date(windowEndRaw),
-                  periodLabel: fallbackWindow.periodLabel,
-                }
+              ? (() => {
+                  const start = new Date(windowStartRaw);
+                  const end = new Date(windowEndRaw);
+                  return {
+                    cadence,
+                    start,
+                    end,
+                    // Derive the label from the actual requested range so
+                    // the Period column matches Window Start/End. Falling
+                    // back to the cadence's default label here was the
+                    // source of the "weekly label on a quarterly export"
+                    // mismatch.
+                    periodLabel: `${dateLabelKsa(start)} - ${dateLabelKsa(end)}`,
+                  };
+                })()
               : fallbackWindow;
 
           const data = await generateDigestData({
