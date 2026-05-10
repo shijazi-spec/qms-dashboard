@@ -319,7 +319,28 @@ export const analyticsRoutes = [
             { metric: "Enterprise Health Score", value: `${detail.score} / 100` },
             { metric: "Health Rating", value: detail.rating },
             { metric: "", value: "" },
-            { metric: "Audit — latest overall score", value: snapshot.audit_score ?? "—" },
+            { metric: "Audit — latest QA overall score (raw)", value: snapshot.audit_score ?? "—" },
+            (() => {
+              const auditComp = detail.components.find((c) =>
+                c.name.startsWith("Audit"),
+              );
+              const blended =
+                auditComp && auditComp.included && auditComp.value !== null
+                  ? Math.round(auditComp.value * 10) / 10
+                  : "—";
+              const dims = snapshot.audit_dimensions;
+              const dimsLabel = dims
+                ? `people ${dims.people ?? "—"} / process ${dims.process ?? "—"} / governance ${dims.governance ?? "—"}`
+                : "—";
+              const density =
+                snapshot.audit_records > 0
+                  ? Math.round((snapshot.audit_issues / snapshot.audit_records) * 100) / 100
+                  : 0;
+              return {
+                metric: "Audit — value used in health score (process-weighted, density-penalised)",
+                value: `${blended}  [${dimsLabel}; ${snapshot.audit_issues.toLocaleString()} issues / ${snapshot.audit_records.toLocaleString()} records = ${density}/record]`,
+              };
+            })(),
             {
               metric: "Audit Findings (recorded)",
               value: auditFindings.length,
