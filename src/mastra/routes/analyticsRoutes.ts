@@ -287,6 +287,11 @@ export const analyticsRoutes = [
 
           const detail = computeEnterpriseHealthScoreDetail({
             auditScore: snapshot.audit_score,
+            auditPeople: snapshot.audit_dimensions?.people ?? null,
+            auditProcess: snapshot.audit_dimensions?.process ?? null,
+            auditGovernance: snapshot.audit_dimensions?.governance ?? null,
+            auditRecords: snapshot.audit_records,
+            auditIssues: snapshot.audit_issues,
             ncOpen: ncOpenN,
             ncTotal: ncTotalN,
             capaOpen: capaOpenN,

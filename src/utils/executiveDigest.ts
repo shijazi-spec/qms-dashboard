@@ -797,7 +797,10 @@ export async function generateDigestData(
       `SELECT COUNT(*) as cnt FROM enterprise_risks WHERE treatment_deadline IS NOT NULL AND treatment_deadline < NOW() AND LOWER(COALESCE(status,'open')) NOT IN ('closed', 'accepted')`,
     ),
     safeQuery(
-      `SELECT overall_score, audit_date FROM quality_audit_results ORDER BY audit_date DESC LIMIT 3`,
+      `SELECT overall_score, people_score, process_score, governance_score,
+              total_records_audited, total_issues_found, audit_date
+       FROM quality_audit_results
+       ORDER BY audit_date DESC LIMIT 3`,
     ),
     // Latest kpi_value per kpi_id, then bucket by status.  Falls back to
     // raw status counts if the window-over-partition is unavailable.
@@ -956,6 +959,11 @@ export async function generateDigestData(
     },
     health_score: computeEnterpriseHealthScore({
       auditScore: auditRows[0]?.overall_score ? parseFloat(auditRows[0].overall_score) : null,
+      auditPeople: auditRows[0]?.people_score != null ? parseFloat(auditRows[0].people_score) : null,
+      auditProcess: auditRows[0]?.process_score != null ? parseFloat(auditRows[0].process_score) : null,
+      auditGovernance: auditRows[0]?.governance_score != null ? parseFloat(auditRows[0].governance_score) : null,
+      auditRecords: parseInt(auditRows[0]?.total_records_audited || "0", 10),
+      auditIssues: parseInt(auditRows[0]?.total_issues_found || "0", 10),
       ncOpen: parseInt(ncOpen[0]?.cnt || "0", 10),
       ncTotal: parseInt(ncTotal[0]?.cnt || "0", 10),
       capaOpen: parseInt(capaOpen[0]?.cnt || "0", 10),
@@ -992,8 +1000,21 @@ export async function generateDigestData(
  * Composite enterprise health score (0-100) from real GRC signals.
  *
  * Component formulas (each clamped to 0-100):
- *  - audit       (weight 25): latest quality_audit_results.overall_score.
- *                Omitted if no audits recorded.
+ *  - audit       (weight 25): NOT the QA scorer's flat-averaged
+ *                overall_score. We re-blend the three dimensions so
+ *                process problems (data quality / record errors) carry
+ *                more weight than people/governance — otherwise a high
+ *                people score papers over hundreds of thousands of
+ *                record-level issues:
+ *                    auditBlend = 0.5*process + 0.3*governance + 0.2*people
+ *                Then we apply an issue-density penalty:
+ *                    density   = total_issues_found / total_records_audited
+ *                    penalty   = max(0, 1 - 0.15 * density)
+ *                    auditValue = auditBlend * penalty
+ *                so a register averaging >1 issue per record is dragged
+ *                down accordingly. Falls back to overall_score if the
+ *                dimension breakdown is missing on legacy rows.
+ *                Omitted entirely if no audits recorded.
  *  - capa        (weight 20): average of two sub-signals when both are
  *                available, else whichever is present:
  *                  · closureRate    = 100 * (1 - capaOpen / capaTotal)
@@ -1014,8 +1035,52 @@ export async function generateDigestData(
  * the score still spans 0-100. Returns 0 only when no components have
  * data (fully-empty system).
  */
+/**
+ * Reblend the audit component using process-weighted dimensions and an
+ * issue-density penalty. Returns null when no audit signal is available.
+ * Shared by both `computeEnterpriseHealthScore` and the detail variant
+ * so the math stays in one place.
+ */
+function computeAuditComponentValue(input: {
+  auditScore: number | null;
+  auditPeople?: number | null;
+  auditProcess?: number | null;
+  auditGovernance?: number | null;
+  auditRecords?: number;
+  auditIssues?: number;
+}): number | null {
+  const hasDimensions =
+    input.auditPeople != null && Number.isFinite(input.auditPeople) &&
+    input.auditProcess != null && Number.isFinite(input.auditProcess) &&
+    input.auditGovernance != null && Number.isFinite(input.auditGovernance);
+  let blend: number;
+  if (hasDimensions) {
+    blend =
+      0.5 * (input.auditProcess as number) +
+      0.3 * (input.auditGovernance as number) +
+      0.2 * (input.auditPeople as number);
+  } else if (input.auditScore !== null && Number.isFinite(input.auditScore)) {
+    blend = input.auditScore;
+  } else {
+    return null;
+  }
+  const records = input.auditRecords ?? 0;
+  const issues = input.auditIssues ?? 0;
+  let penalty = 1;
+  if (records > 0 && issues > 0) {
+    const density = issues / records;
+    penalty = Math.max(0, 1 - 0.15 * density);
+  }
+  return clampPct(blend * penalty);
+}
+
 export function computeEnterpriseHealthScore(input: {
   auditScore: number | null;
+  auditPeople?: number | null;
+  auditProcess?: number | null;
+  auditGovernance?: number | null;
+  auditRecords?: number;
+  auditIssues?: number;
   ncOpen: number;
   ncTotal: number;
   capaOpen: number;
@@ -1034,8 +1099,9 @@ export function computeEnterpriseHealthScore(input: {
 }): number {
   const components: Array<{ value: number; weight: number }> = [];
 
-  if (input.auditScore !== null && Number.isFinite(input.auditScore)) {
-    components.push({ value: clampPct(input.auditScore), weight: 25 });
+  const auditValue = computeAuditComponentValue(input);
+  if (auditValue !== null) {
+    components.push({ value: auditValue, weight: 25 });
   }
 
   // CAPA: combine open-vs-total closure (from `capas`) and action-item
@@ -1118,17 +1184,29 @@ export function computeEnterpriseHealthScoreDetail(
 ): EnterpriseHealthScoreDetail {
   const components: EnterpriseHealthScoreComponent[] = [];
 
-  if (input.auditScore !== null && Number.isFinite(input.auditScore)) {
+  const auditVal = computeAuditComponentValue(input);
+  if (auditVal !== null) {
+    const records = input.auditRecords ?? 0;
+    const issues = input.auditIssues ?? 0;
+    const density = records > 0 ? issues / records : 0;
     components.push({
-      name: "Audit (latest QA score)",
-      value: clampPct(input.auditScore),
+      name: "Audit (process-weighted, density-penalised)",
+      value: auditVal,
       weight: 25,
       included: true,
-      raw: { auditScore: input.auditScore },
+      raw: {
+        people: input.auditPeople ?? null,
+        process: input.auditProcess ?? null,
+        governance: input.auditGovernance ?? null,
+        overall: input.auditScore,
+        records,
+        issues,
+        issuesPerRecord: Math.round(density * 100) / 100,
+      },
     });
   } else {
     components.push({
-      name: "Audit (latest QA score)",
+      name: "Audit (process-weighted, density-penalised)",
       value: null,
       weight: 25,
       included: false,
@@ -1288,6 +1366,13 @@ export function ratingForEnterpriseHealth(score: number): EnterpriseHealthRating
 
 export interface EnterpriseGRCSnapshot {
   audit_score: number | null;
+  audit_dimensions: {
+    people: number | null;
+    process: number | null;
+    governance: number | null;
+  } | null;
+  audit_records: number;
+  audit_issues: number;
   nc_summary: { open: number; total: number };
   capa_summary: { open: number; total: number; effectiveness_rate: number };
   risk_summary: { active: number; critical_high: number };
@@ -1388,12 +1473,28 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
         COUNT(*) as total
       FROM compliance_assessments
     `),
-    safeQuery(`SELECT overall_score FROM quality_audit_results ORDER BY audit_date DESC LIMIT 1`),
+    safeQuery(
+      `SELECT overall_score, people_score, process_score, governance_score,
+              total_records_audited, total_issues_found
+       FROM quality_audit_results
+       ORDER BY audit_date DESC LIMIT 1`,
+    ),
   ]);
 
   const auditScore = auditRows[0]?.overall_score
     ? parseFloat(auditRows[0].overall_score)
     : null;
+  const auditPeople = auditRows[0]?.people_score != null
+    ? parseFloat(auditRows[0].people_score)
+    : null;
+  const auditProcess = auditRows[0]?.process_score != null
+    ? parseFloat(auditRows[0].process_score)
+    : null;
+  const auditGovernance = auditRows[0]?.governance_score != null
+    ? parseFloat(auditRows[0].governance_score)
+    : null;
+  const auditRecords = parseInt(auditRows[0]?.total_records_audited || "0", 10);
+  const auditIssues = parseInt(auditRows[0]?.total_issues_found || "0", 10);
   const ncOpenN = parseInt(ncOpen[0]?.cnt || "0", 10);
   const ncTotalN = parseInt(ncTotal[0]?.cnt || "0", 10);
   const capaOpenN = parseInt(capaOpen[0]?.cnt || "0", 10);
@@ -1414,6 +1515,11 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
 
   const score = computeEnterpriseHealthScore({
     auditScore,
+    auditPeople,
+    auditProcess,
+    auditGovernance,
+    auditRecords,
+    auditIssues,
     ncOpen: ncOpenN,
     ncTotal: ncTotalN,
     capaOpen: capaOpenN,
@@ -1433,6 +1539,12 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
 
   return {
     audit_score: auditScore,
+    audit_dimensions:
+      auditPeople !== null || auditProcess !== null || auditGovernance !== null
+        ? { people: auditPeople, process: auditProcess, governance: auditGovernance }
+        : null,
+    audit_records: auditRecords,
+    audit_issues: auditIssues,
     nc_summary: { open: ncOpenN, total: ncTotalN },
     capa_summary: {
       open: capaOpenN,
