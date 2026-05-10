@@ -133,7 +133,16 @@ export const analyticsRoutes = [
             computeDigestWindow,
             generateDigestData,
           } = await import("../../utils/executiveDigest");
-          const { streamXlsx, stageStreamingExportFromHono } =
+          // Buffered (in-memory) workbook path. The streaming
+          // WorkbookWriter trips over an archiver-utils `isStream()`
+          // check in the deployed module tree (readable-stream's
+          // Duplex is not `instanceof require('stream').Stream` there),
+          // failing every export with "input source must be valid
+          // Stream or Buffer instance". The digest issues export is
+          // tiny (≤ a few dozen finding-type rows) so we don't need
+          // streaming — building the workbook in memory side-steps the
+          // archiver path entirely.
+          const { buildWorkbook, bufferResponseWithRange, xlsxResponseHeaders } =
             await import("../../utils/excelExport");
 
           const cadenceRaw = String(c.req.query("cadence") || "weekly").toLowerCase();
@@ -175,26 +184,37 @@ export const analyticsRoutes = [
           const safeCadence = cadence.replace(/[^a-z]/gi, "_");
           const filename = `digest_issues_${safeCadence}_${Date.now()}.xlsx`;
 
-          return await stageStreamingExportFromHono(c, async () =>
-            streamXlsx(
-              [
-                {
-                  name: "Digest Issues",
-                  columns: [
-                    { header: "Module", key: "module", width: 18 },
-                    { header: "Issue Type", key: "issue_type", width: 40 },
-                    { header: "Severity", key: "severity", width: 12 },
-                    { header: "Count", key: "count", width: 10 },
-                    { header: "Period", key: "period", width: 26 },
-                    { header: "Window Start", key: "window_start", width: 28 },
-                    { header: "Window End", key: "window_end", width: 28 },
-                  ],
-                  rows,
-                },
-              ],
-              filename,
-              { title: "Executive Digest Issues" },
-            ),
+          const buffer = await buildWorkbook(
+            [
+              {
+                name: "Digest Issues",
+                columns: [
+                  { header: "Module", key: "module", width: 18 },
+                  { header: "Issue Type", key: "issue_type", width: 40 },
+                  { header: "Severity", key: "severity", width: 12 },
+                  { header: "Count", key: "count", width: 10 },
+                  { header: "Period", key: "period", width: 26 },
+                  { header: "Window Start", key: "window_start", width: 28 },
+                  { header: "Window End", key: "window_end", width: 28 },
+                ],
+                rows,
+              },
+            ],
+            { title: "Executive Digest Issues" },
+          );
+
+          const headers = xlsxResponseHeaders(filename);
+          const reqHeadersBag: Record<string, string> = {};
+          const range = c.req.header("Range") || c.req.header("range");
+          if (range) reqHeadersBag["range"] = range;
+          const ifRange = c.req.header("If-Range") || c.req.header("if-range");
+          if (ifRange) reqHeadersBag["if-range"] = ifRange;
+
+          return bufferResponseWithRange(
+            buffer,
+            headers["Content-Type"],
+            filename,
+            reqHeadersBag,
           );
         } catch (error) {
           logger.error("[digest/issues.xlsx] export failed", { error: error instanceof Error ? error.message : String(error) });
