@@ -518,17 +518,14 @@ export const globalMiddleware = [
       const apiAuthResult = await checkApiAuth(c, urlPath, method);
       if (apiAuthResult) return apiAuthResult;
     } else if (isApi && mastraInternal && !publicPath) {
-      const session = getSessionFromCookie(c.req.header('Cookie'));
-      const hasAdminKey = hasValidAdminApiKey(c);
-      if (!session && !hasAdminKey) {
-        return c.json({ error: 'Authentication required' }, 401);
-      }
-      if (session && !hasAdminKey) {
-        const { checkPlatformUserActive } = await import('../../utils/rbacMiddleware');
-        const isActive = await checkPlatformUserActive(session.email);
-        if (!isActive) {
-          return c.json({ error: 'Account is not active or has been disabled' }, 403);
-        }
+      // Raw Mastra-internal routes (/api/memory/*, /api/workflows/*, /api/agents/*)
+      // bypass the application's RBAC model entirely — they trust caller-supplied
+      // agentId/resourceId/threadId without any ownership or role checks. Restrict
+      // access to admin-key callers only (server-to-server / platform ops).
+      // Regular authenticated browser sessions must use the guarded product routes
+      // (/api/consultant/*, /api/audit/*, etc.) instead of these raw endpoints.
+      if (!hasValidAdminApiKey(c)) {
+        return c.json({ error: 'Access denied' }, 403);
       }
     } else if (isApi && publicPath) {
       // Cheap public preference lookup hit on every page load by every browser

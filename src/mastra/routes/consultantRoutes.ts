@@ -40,7 +40,16 @@ interface AgentTextResult {
   text: string;
 }
 
-const CONSULTANT_RESOURCE_ID = "consultant-session";
+/**
+ * Returns a per-user resource ID so each user's AI conversation history is
+ * isolated in Mastra memory. Using the shared constant "consultant-session"
+ * would let any role-qualified user read or append to another user's thread
+ * by supplying a known threadId — the per-user namespace is the primary
+ * ownership boundary that prevents cross-user thread replay.
+ */
+function userResourceId(userId: string | number): string {
+  return `consultant-${userId}`;
+}
 
 /**
  * After an agent turn completes, the assistant message has been persisted to
@@ -84,6 +93,7 @@ function extractAssistantIdFromAgentResult(result: any): string | null {
 async function resolveLatestAssistantMessageId(
   agent: any,
   threadId: string,
+  resourceId: string,
   preloaded?: any,
 ): Promise<string> {
   // Fast path — pull the id straight from the agent result if available.
@@ -96,7 +106,7 @@ async function resolveLatestAssistantMessageId(
     if (!memory) return randomUUID();
     const result = await memory.query({
       threadId,
-      resourceId: CONSULTANT_RESOURCE_ID,
+      resourceId,
       selectBy: { last: 5 },
     });
     const v2: Array<{ id: string; role: string; createdAt: Date | string }> =
@@ -245,6 +255,15 @@ export const consultantRoutes = [
             return c.json({ messages: [] });
           }
 
+          // Ownership check: the thread's resourceId must match the
+          // requesting user's own resource namespace. Without this a
+          // role-qualified user who knows another user's threadId could
+          // read that user's full AI conversation history.
+          const expectedResourceId = userResourceId(user.userId);
+          if (thread.resourceId && thread.resourceId !== expectedResourceId) {
+            return c.json({ error: "Not found" }, 404);
+          }
+
           // Sanitize the optional ?limit= query — fall back to the
           // default when the value is missing, non-numeric, or NaN, then
           // clamp to [1, 200] so a malformed client cannot ask the
@@ -258,7 +277,7 @@ export const consultantRoutes = [
           );
           const result = await memory.query({
             threadId,
-            resourceId: CONSULTANT_RESOURCE_ID,
+            resourceId: expectedResourceId,
             selectBy: { last: lastN },
           });
 
@@ -341,7 +360,16 @@ export const consultantRoutes = [
             return c.json({ error: "QMS Consultant agent not available" }, 503);
           }
 
-          const resolvedThreadId = threadId || `consultant-${Date.now()}`;
+          // Scope all memory to this user. Using a per-user resource ID
+          // prevents cross-user thread replay: even if an attacker knows
+          // another user's threadId, they cannot read or poison that
+          // thread because the resourceId namespace is different.
+          const resourceId = userResourceId(user.userId);
+          // Use a cryptographically random UUID for new threads so the
+          // threadId cannot be brute-forced from a known time window.
+          const resolvedThreadId = (threadId && typeof threadId === "string")
+            ? threadId
+            : `consultant-${randomUUID()}`;
 
           const chatTimeout = parseInt(
             process.env.CONSULTANT_CHAT_TIMEOUT_MS || "120000",
@@ -381,7 +409,7 @@ export const consultantRoutes = [
                       () =>
                         agent.generate(message, {
                           threadId: resolvedThreadId,
-                          resourceId: CONSULTANT_RESOURCE_ID,
+                          resourceId,
                           abortSignal: controller.signal,
                         }),
                     );
@@ -393,6 +421,7 @@ export const consultantRoutes = [
             const messageId = await resolveLatestAssistantMessageId(
               agent,
               resolvedThreadId,
+              resourceId,
               response,
             );
             return c.json({
@@ -447,7 +476,16 @@ export const consultantRoutes = [
             return c.json({ error: "QMS Consultant agent not available" }, 503);
           }
 
-          const resolvedThreadId = threadId || `consultant-${Date.now()}`;
+          // Scope all memory to this user. Using a per-user resource ID
+          // prevents cross-user thread replay: even if an attacker knows
+          // another user's threadId, they cannot read or poison that
+          // thread because the resourceId namespace is different.
+          const resourceId = userResourceId(user.userId);
+          // Use a cryptographically random UUID for new threads so the
+          // threadId cannot be brute-forced from a known time window.
+          const resolvedThreadId = (threadId && typeof threadId === "string")
+            ? threadId
+            : `consultant-${randomUUID()}`;
 
           const streamTimeout = parseInt(
             process.env.CONSULTANT_STREAM_TIMEOUT_MS || "120000",
@@ -520,7 +558,7 @@ export const consultantRoutes = [
                 () =>
                   agent.stream(message, {
                     threadId: resolvedThreadId,
-                    resourceId: CONSULTANT_RESOURCE_ID,
+                    resourceId,
                     abortSignal: controller.signal,
                   }),
               ),
@@ -611,6 +649,7 @@ export const consultantRoutes = [
                 const messageId = await resolveLatestAssistantMessageId(
                   agent,
                   resolvedThreadId,
+                  resourceId,
                   preloaded,
                 );
                 streamController.enqueue(
