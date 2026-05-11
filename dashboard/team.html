@@ -567,6 +567,15 @@
         let allMembers = [];
         let currentProjectView = 'table';
 
+        function esc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             loadAnalytics();
             loadMembers();
@@ -638,12 +647,12 @@
                         container.innerHTML = columns[col].map(p => `
                             <div class="bg-white rounded-lg shadow-sm border p-3 cursor-pointer hover:shadow-md transition">
                                 <div class="flex items-start justify-between mb-2">
-                                    <h5 class="font-medium text-gray-900 text-sm">${p.project_name}</h5>
-                                    <span class="badge-${p.priority} px-1.5 py-0.5 rounded text-xs">${p.priority}</span>
+                                    <h5 class="font-medium text-gray-900 text-sm">${esc(p.project_name)}</h5>
+                                    <span class="badge-${esc(p.priority)} px-1.5 py-0.5 rounded text-xs">${esc(p.priority)}</span>
                                 </div>
-                                <p class="text-xs text-gray-500 mb-2">${p.member_name || 'Unassigned'}</p>
+                                <p class="text-xs text-gray-500 mb-2">${p.member_name ? esc(p.member_name) : 'Unassigned'}</p>
                                 <div class="flex items-center justify-between text-xs">
-                                    <span class="text-gray-400">${p.project_type?.replace('_', ' ') || ''}</span>
+                                    <span class="text-gray-400">${esc(p.project_type?.replace('_', ' ') || '')}</span>
                                     ${p.due_date ? `<span class="text-gray-500">${new Date(p.due_date).toLocaleDateString()}</span>` : ''}
                                 </div>
                             </div>
@@ -673,21 +682,21 @@
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4">
                                 <div>
-                                    <p class="font-medium text-gray-900">${c.name}</p>
-                                    <p class="text-sm text-gray-500">${c.description || ''}</p>
+                                    <p class="font-medium text-gray-900">${esc(c.name)}</p>
+                                    <p class="text-sm text-gray-500">${esc(c.description || '')}</p>
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <span class="${c.course_type === 'mandatory' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded-full text-xs font-medium capitalize">${c.course_type}</span>
+                                <span class="${c.course_type === 'mandatory' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded-full text-xs font-medium capitalize">${esc(c.course_type)}</span>
                             </td>
-                            <td class="px-6 py-4 text-gray-700">${c.department || 'All'}</td>
+                            <td class="px-6 py-4 text-gray-700">${esc(c.department || 'All')}</td>
                             <td class="px-6 py-4 text-gray-700">${parseFloat(c.duration_hours || 0)} hrs</td>
                             <td class="px-6 py-4 text-gray-700">${c.passing_score || 0}%</td>
                             <td class="px-6 py-4">
                                 <span class="${c.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} px-2 py-1 rounded-full text-xs font-medium">${c.is_active ? 'Active' : 'Inactive'}</span>
                             </td>
                             <td class="px-6 py-4">
-                                <button data-on-click="deleteCourse" data-args="[&quot;${c.course_id}&quot;]" class="text-red-600 hover:text-red-800">
+                                <button data-on-click="deleteCourse" data-args="[&quot;${escAttr(c.course_id)}&quot;]" class="text-red-600 hover:text-red-800">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
@@ -878,8 +887,8 @@
                         ${i + 1}
                     </div>
                     <div class="flex-1">
-                        <p class="font-medium text-gray-900">${p.full_name}</p>
-                        <p class="text-sm text-gray-500">${p.role} - ${p.department}</p>
+                        <p class="font-medium text-gray-900">${esc(p.full_name)}</p>
+                        <p class="text-sm text-gray-500">${esc(p.role)} - ${esc(p.department)}</p>
                     </div>
                     <div class="text-end">
                         <p class="text-2xl font-bold text-green-600">${Math.round(p.performance_score || 0)}%</p>
@@ -891,7 +900,7 @@
         function populateDepartmentFilter(departments) {
             const select = document.getElementById('filterDepartment');
             select.innerHTML = '<option value="">All Departments</option>' +
-                departments.map(d => `<option value="${d.department}">${d.department}</option>`).join('');
+                departments.map(d => `<option value="${escAttr(d.department)}">${esc(d.department)}</option>`).join('');
         }
 
         async function loadMembers() {
@@ -915,18 +924,18 @@
                             <td class="px-6 py-4">
                                 <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-medium">
-                                        ${m.full_name.split(' ').map(n => n[0]).join('').substring(0,2)}
+                                        ${esc(m.full_name.split(' ').map(n => n[0]).join('').substring(0,2))}
                                     </div>
                                     <div>
-                                        <p class="font-medium text-gray-900">${m.full_name}</p>
-                                        <p class="text-sm text-gray-500">${m.email}</p>
+                                        <p class="font-medium text-gray-900">${esc(m.full_name)}</p>
+                                        <p class="text-sm text-gray-500">${esc(m.email)}</p>
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-6 py-4 text-gray-700">${m.role}</td>
-                            <td class="px-6 py-4 text-gray-700">${m.department}</td>
+                            <td class="px-6 py-4 text-gray-700">${esc(m.role)}</td>
+                            <td class="px-6 py-4 text-gray-700">${esc(m.department)}</td>
                             <td class="px-6 py-4">
-                                <span class="badge-${m.status} px-2 py-1 rounded-full text-xs font-medium capitalize">${m.status.replace('_', ' ')}</span>
+                                <span class="badge-${esc(m.status)} px-2 py-1 rounded-full text-xs font-medium capitalize">${esc(m.status.replace('_', ' '))}</span>
                             </td>
                             <td class="px-6 py-4">
                                 <div class="flex items-center gap-2">
@@ -945,7 +954,7 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <button data-on-click="deleteMember" data-args="[&quot;${m.member_id}&quot;]" class="text-red-600 hover:text-red-800">
+                                <button data-on-click="deleteMember" data-args="[&quot;${escAttr(m.member_id)}&quot;]" class="text-red-600 hover:text-red-800">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
@@ -965,7 +974,7 @@
         function populateProjectMemberSelect() {
             const select = document.getElementById('projectMemberSelect');
             select.innerHTML = allMembers.map(m => 
-                `<option value="${m.member_id}" data-name="${m.full_name}">${m.full_name} (${m.role})</option>`
+                `<option value="${escAttr(m.member_id)}" data-name="${escAttr(m.full_name)}">${esc(m.full_name)} (${esc(m.role)})</option>`
             ).join('');
         }
 
@@ -985,16 +994,16 @@
                 } else {
                     tbody.innerHTML = projects.map(p => `
                         <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 font-medium text-gray-900">${p.project_name}</td>
-                            <td class="px-6 py-4 text-gray-700 capitalize">${p.project_type.replace('_', ' ')}</td>
-                            <td class="px-6 py-4 text-gray-700">${p.member_name}</td>
-                            <td class="px-6 py-4 text-gray-700">${p.role_in_project}</td>
+                            <td class="px-6 py-4 font-medium text-gray-900">${esc(p.project_name)}</td>
+                            <td class="px-6 py-4 text-gray-700 capitalize">${esc(p.project_type.replace('_', ' '))}</td>
+                            <td class="px-6 py-4 text-gray-700">${esc(p.member_name)}</td>
+                            <td class="px-6 py-4 text-gray-700">${esc(p.role_in_project)}</td>
                             <td class="px-6 py-4 text-gray-700">${p.due_date ? new Date(p.due_date).toLocaleDateString() : '-'}</td>
                             <td class="px-6 py-4">
-                                <span class="badge-${p.priority} px-2 py-1 rounded-full text-xs font-medium capitalize">${p.priority}</span>
+                                <span class="badge-${esc(p.priority)} px-2 py-1 rounded-full text-xs font-medium capitalize">${esc(p.priority)}</span>
                             </td>
                             <td class="px-6 py-4">
-                                <select data-on-change="updateProjectStatus" data-args="[&quot;${p.assignment_id}&quot;,&quot;@this.value&quot;]" class="text-sm border border-gray-200 rounded px-2 py-1">
+                                <select data-on-change="updateProjectStatus" data-args="[&quot;${escAttr(p.assignment_id)}&quot;,&quot;@this.value&quot;]" class="text-sm border border-gray-200 rounded px-2 py-1">
                                     <option value="assigned" ${p.status === 'assigned' ? 'selected' : ''}>Assigned</option>
                                     <option value="in_progress" ${p.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
                                     <option value="completed" ${p.status === 'completed' ? 'selected' : ''}>Completed</option>
@@ -1002,7 +1011,7 @@
                                 </select>
                             </td>
                             <td class="px-6 py-4">
-                                <button data-on-click="deleteProject" data-args="[&quot;${p.assignment_id}&quot;]" class="text-red-600 hover:text-red-800">
+                                <button data-on-click="deleteProject" data-args="[&quot;${escAttr(p.assignment_id)}&quot;]" class="text-red-600 hover:text-red-800">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
@@ -1041,15 +1050,15 @@
                         <tbody class="divide-y divide-gray-200">
                             ${members.map(m => `
                                 <tr>
-                                    <td class="px-4 py-3 font-medium text-gray-900">${m.full_name}</td>
-                                    <td class="px-4 py-3 text-gray-600">${m.department}</td>
+                                    <td class="px-4 py-3 font-medium text-gray-900">${esc(m.full_name)}</td>
+                                    <td class="px-4 py-3 text-gray-600">${esc(m.department)}</td>
                                     <td class="px-4 py-3">
                                         ${m.training_assignments.length ? m.training_assignments.map(t => `
                                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium me-1 mb-1
                                                 ${t.status === 'completed' ? 'bg-green-100 text-green-800' : 
                                                   t.status === 'overdue' ? 'bg-red-100 text-red-800' : 
                                                   'bg-amber-100 text-amber-800'}">
-                                                ${t.title || 'Training'}
+                                                ${esc(t.title || 'Training')}
                                             </span>
                                         `).join('') : '<span class="text-gray-400">No training assigned</span>'}
                                     </td>
