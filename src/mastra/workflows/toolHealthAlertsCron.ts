@@ -1282,7 +1282,62 @@ export const toolHealthAlertsCronFunction = inngest.createFunction(
   { cron: TOOL_HEALTH_THRESHOLDS.cron },
   async ({ step }) => {
     return await step.run("evaluate-tool-health", async () => {
-      return await runToolHealthCheck();
+      // Cooperative singleton guard via pg session-level advisory lock.
+      // Two purposes:
+      //  1. In multi-replica deploys, prevents two cron ticks firing
+      //     simultaneously from racing on `tool_health_config_overrides`
+      //     (id=1 singleton) and writing duplicate audit/notification rows.
+      //  2. Lets `tests/toolHealthConfigDatabase.test.ts` and the auto-revert
+      //     test in `tests/aiOpsRoutes.test.ts` serialize against the cron
+      //     by holding the same lock — without this, the cron tick can
+      //     reap the test's seeded expired row before the test's own
+      //     assertions observe it (manifests as "got 0 reaped, got 2
+      //     not_reaped" in the post-merge run).
+      // Lock key matches both tests (see SINGLETON_LOCK_KEY there).
+      const SINGLETON_LOCK_KEY = 7321614321;
+      const { sharedPool } = await import("../../utils/sharedPool");
+      const lockClient = await sharedPool.connect();
+      try {
+        const got = await lockClient.query(
+          "SELECT pg_try_advisory_lock($1) AS locked",
+          [SINGLETON_LOCK_KEY],
+        );
+        if (!got.rows[0]?.locked) {
+          logger.debug(
+            "[ToolHealth] Cron pass skipped — advisory lock held by another worker or test.",
+          );
+          return {
+            toolsEvaluated: 0,
+            alertsCreated: 0,
+            alertsSkippedDuplicate: 0,
+            alertsAutoResolved: 0,
+            expiredOverridesReaped: 0,
+            overrideExpirySoonWarningSent: 0,
+            notificationsSent: 0,
+            notificationsSkipped: 0,
+            notificationsThrottled: 0,
+            notificationsDeadLettered: 0,
+            breaches: [],
+            recoveries: [],
+          };
+        }
+        try {
+          return await runToolHealthCheck();
+        } finally {
+          try {
+            await lockClient.query("SELECT pg_advisory_unlock($1)", [
+              SINGLETON_LOCK_KEY,
+            ]);
+          } catch (err) {
+            logger.error(
+              "[ToolHealth] Failed to release singleton advisory lock:",
+              err,
+            );
+          }
+        }
+      } finally {
+        lockClient.release();
+      }
     });
   },
 );
