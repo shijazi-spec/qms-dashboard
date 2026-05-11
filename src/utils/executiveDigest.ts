@@ -12,6 +12,10 @@ import {
   summarizeFeedbackTrend,
   type FeedbackTrendSummary,
 } from "./aiFeedbackDatabase";
+import {
+  computeSopGapSummary,
+  type SopGapSummary,
+} from "./sopGapDetection";
 
 const { Pool } = pg;
 
@@ -131,6 +135,13 @@ export interface DigestData {
     thumbs_up_pct: number;
     trend: FeedbackTrendSummary;
   };
+  /**
+   * SOP-driven gap detection (Phase 2). Counts how many requirements
+   * derived from uploaded SOPs have no matching audit/CAPA/risk record,
+   * so Operating Officers see compliance gaps even when operational
+   * tables are sparse.
+   */
+  sop_gap_summary: SopGapSummary;
 }
 
 export interface DigestBuildOptions {
@@ -909,6 +920,24 @@ export async function generateDigestData(
     };
   } catch {}
 
+  let sopGapSummary: SopGapSummary;
+  try {
+    sopGapSummary = await computeSopGapSummary();
+  } catch (err) {
+    logger.warn("[Digest] SOP gap detection failed; defaulting to empty", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    sopGapSummary = {
+      documents_scanned: 0,
+      requirements_total: 0,
+      requirements_covered: 0,
+      open_gaps: 0,
+      coverage_pct: 0,
+      top_gaps: [],
+      reason: "SOP gap detection failed",
+    };
+  }
+
   return {
     generated_at: now.toISOString(),
     cadence,
@@ -980,6 +1009,8 @@ export async function generateDigestData(
       complianceMet: parseInt(compRows[0]?.met || "0", 10),
       compliancePartial: parseInt(compRows[0]?.partial || "0", 10),
       complianceTotal: parseInt(compRows[0]?.total || "0", 10),
+      sopRequirementsTotal: sopGapSummary.requirements_total,
+      sopRequirementsCovered: sopGapSummary.requirements_covered,
     }),
     top_alerts: alertRows,
     capa_recurrences: recurrenceRows.length,
@@ -994,6 +1025,7 @@ export async function generateDigestData(
     finding_types: findingTypes,
     business_sections: businessSections,
     ai_feedback_summary: aiFeedbackSummary,
+    sop_gap_summary: sopGapSummary,
   };
 }
 
@@ -1158,6 +1190,9 @@ export function computeEnterpriseHealthScore(input: {
   complianceMet: number;
   compliancePartial: number;
   complianceTotal: number;
+  /** SOP-coverage signal: derived requirements vs satisfying records. */
+  sopRequirementsTotal?: number;
+  sopRequirementsCovered?: number;
 }): number {
   const components: Array<{ value: number; weight: number }> = [];
 
@@ -1211,6 +1246,18 @@ export function computeEnterpriseHealthScore(input: {
         input.complianceTotal) *
       100;
     components.push({ value: clampPct(compPct), weight: 10 });
+  }
+
+  // SOP coverage: percent of SOP-derived requirements with at least one
+  // satisfying audit/CAPA/risk record. Only credited when at least one
+  // requirement was extracted; an empty SOP corpus is treated as "no
+  // signal" rather than perfect coverage.
+  if ((input.sopRequirementsTotal ?? 0) > 0) {
+    const sopPct =
+      ((input.sopRequirementsCovered ?? 0) /
+        (input.sopRequirementsTotal as number)) *
+      100;
+    components.push({ value: clampPct(sopPct), weight: 10 });
   }
 
   const totalWeight = components.reduce((sum, c) => sum + c.weight, 0);
@@ -1425,6 +1472,30 @@ export function computeEnterpriseHealthScoreDetail(
     });
   }
 
+  const sopTotal = input.sopRequirementsTotal ?? 0;
+  const sopCovered = input.sopRequirementsCovered ?? 0;
+  if (sopTotal > 0) {
+    components.push({
+      name: "SOP coverage (requirements with satisfying records)",
+      value: clampPct((sopCovered / sopTotal) * 100),
+      weight: 10,
+      included: true,
+      raw: {
+        sopRequirementsTotal: sopTotal,
+        sopRequirementsCovered: sopCovered,
+        sopOpenGaps: Math.max(0, sopTotal - sopCovered),
+      },
+    });
+  } else {
+    components.push({
+      name: "SOP coverage (requirements with satisfying records)",
+      value: null,
+      weight: 10,
+      included: false,
+      reason: "No SOP-derived requirements available",
+    });
+  }
+
   const included = components.filter((c) => c.included);
   const totalWeight = included.reduce((s, c) => s + c.weight, 0);
   const score =
@@ -1464,6 +1535,7 @@ export interface EnterpriseGRCSnapshot {
   risk_summary: { active: number; critical_high: number };
   kpi_summary: { green: number; amber: number; red: number; total: number };
   compliance_summary: { met: number; partial: number; not_met: number; total: number };
+  sop_gap_summary: SopGapSummary;
   enterprise_health_score: number;
   enterprise_health_rating: EnterpriseHealthRating;
 }
@@ -1602,6 +1674,21 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
   const compPartialN = parseInt(compRows[0]?.partial || "0", 10);
   const compTotalN = parseInt(compRows[0]?.total || "0", 10);
 
+  let sopSummary: SopGapSummary;
+  try {
+    sopSummary = await computeSopGapSummary();
+  } catch {
+    sopSummary = {
+      documents_scanned: 0,
+      requirements_total: 0,
+      requirements_covered: 0,
+      open_gaps: 0,
+      coverage_pct: 0,
+      top_gaps: [],
+      reason: "SOP gap detection failed",
+    };
+  }
+
   const score = computeEnterpriseHealthScore({
     auditScore,
     auditPeople,
@@ -1625,6 +1712,8 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
     complianceMet: compMetN,
     compliancePartial: compPartialN,
     complianceTotal: compTotalN,
+    sopRequirementsTotal: sopSummary.requirements_total,
+    sopRequirementsCovered: sopSummary.requirements_covered,
   });
 
   return {
@@ -1651,6 +1740,7 @@ async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
       not_met: parseInt(compRows[0]?.not_met || "0", 10),
       total: parseInt(compRows[0]?.total || "0", 10),
     },
+    sop_gap_summary: sopSummary,
     enterprise_health_score: score,
     enterprise_health_rating: ratingForEnterpriseHealth(score),
   };
@@ -1667,6 +1757,66 @@ function cadenceLabel(cadence: DigestCadence): string {
   if (cadence === "monthly") return "Monthly";
   if (cadence === "quarterly") return "Quarterly";
   return "Weekly";
+}
+
+function escapeHtmlAttr(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeSlack(s: string): string {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+export function buildSopGapSlackBlocks(sop: SopGapSummary): Array<Record<string, unknown>> {
+  if (sop.documents_scanned === 0 || sop.requirements_total === 0) {
+    return [];
+  }
+  const lines = [
+    `*SOP gaps:* ${sop.open_gaps} expected NC(s) - ${sop.coverage_pct}% coverage (${sop.requirements_covered}/${sop.requirements_total} across ${sop.documents_scanned} SOP doc(s))`,
+  ];
+  const top = sop.top_gaps.slice(0, 5);
+  if (top.length > 0) {
+    lines.push(
+      ...top.map(
+        (g) =>
+          `- ${escapeSlack(g.framework_hint || g.category)} ${escapeSlack(g.raw_citation)} _(${escapeSlack(g.document_title)})_`,
+      ),
+    );
+  }
+  return [
+    { type: "section", text: { type: "mrkdwn", text: lines.join("\n") } },
+  ];
+}
+
+export function buildSopGapHtml(sop: SopGapSummary): string {
+  if (sop.documents_scanned === 0) {
+    return `<div class="card"><h3>SOP Gaps</h3><p style="font-size:13px;color:#6B7280">${escapeHtmlAttr(sop.reason || "No SOP documents available to scan.")}</p></div>`;
+  }
+  if (sop.requirements_total === 0) {
+    return `<div class="card"><h3>SOP Gaps</h3>
+<div class="metric-row"><span>SOP documents scanned</span><span class="metric-value">${sop.documents_scanned}</span></div>
+<p style="font-size:13px;color:#6B7280">${escapeHtmlAttr(sop.reason || "No clause/article references found in SOP text.")}</p></div>`;
+  }
+  const gapRows = sop.top_gaps
+    .map(
+      (g) => `<div class="alert-row"><span class="badge badge-${sop.open_gaps > 0 ? "amber" : "green"}">${escapeHtmlAttr(g.framework_hint || g.category)}</span> ${escapeHtmlAttr(g.raw_citation)} <span style="color:#6B7280">— ${escapeHtmlAttr(g.document_title)}</span></div>`,
+    )
+    .join("");
+  const color = sop.open_gaps > 0 ? "#B91C1C" : "#047857";
+  return `<div class="card">
+  <h3>SOP Gaps (derived from uploaded SOPs)</h3>
+  <div class="metric-row"><span>SOP documents scanned</span><span class="metric-value">${sop.documents_scanned}</span></div>
+  <div class="metric-row"><span>Requirements derived</span><span class="metric-value">${sop.requirements_total}</span></div>
+  <div class="metric-row"><span>Covered by audits/CAPAs/risks</span><span class="metric-value">${sop.requirements_covered}</span></div>
+  <div class="metric-row"><span>Open gaps (expected NCs)</span><span class="metric-value" style="color:${color}">${sop.open_gaps}</span></div>
+  <div class="metric-row"><span>Coverage</span><span class="metric-value">${sop.coverage_pct}%</span></div>
+  ${gapRows ? `<hr style="border:0;border-top:1px solid #E5E7EB;margin:10px 0;" />${gapRows}` : ""}
+</div>`;
 }
 
 export function buildDigestHTML(data: DigestData): string {
@@ -1787,6 +1937,8 @@ ${data.capa_recurrences > 0 ? `<div class="card"><h3>CAPA Recurrences</h3><p sty
 
 ${data.duplicate_clusters > 0 ? `<div class="card"><h3>Duplicate Radar</h3><p style="font-size:13px">${data.duplicate_clusters} active duplicate cluster(s) require attention.</p></div>` : ""}
 
+${buildSopGapHtml(data.sop_gap_summary)}
+
 <div class="footer">Generated by WalaPlus QMS Platform - ${data.generated_at}<br/>This is an automated quality digest. Do not reply.</div>
 </body></html>`;
 }
@@ -1881,6 +2033,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         text: `*Quality snapshot:* NC Open ${data.nc_summary.open} - CAPA Open ${data.capa_summary.open} - Risks ${data.risk_summary.total_active} - KPI Red ${data.kpi_summary.red}`,
       },
     },
+    ...buildSopGapSlackBlocks(data.sop_gap_summary),
     {
       type: "context",
       elements: [
