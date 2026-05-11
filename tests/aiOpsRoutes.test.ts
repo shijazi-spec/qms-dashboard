@@ -1655,6 +1655,19 @@ if (HAS_DB) {
         before_values: Record<string, unknown>;
         after_values: Record<string, unknown>;
       }
+      // Serialize against `tests/toolHealthConfigDatabase.test.ts` which
+      // also seeds + reaps the `tool_health_config_overrides` (id=1)
+      // singleton row. Both tests can run in parallel under the default
+      // 4-worker pool in `tests/runIntegrationTests.ts` and clobber each
+      // other's seed. A session-level pg advisory lock held on a dedicated
+      // client serializes the singleton-mutation window across processes
+      // without forcing TEST_CONCURRENCY=1. Lock key matches the one in
+      // `tests/toolHealthConfigDatabase.test.ts`.
+      const SINGLETON_LOCK_KEY = 7321614321;
+      const { sharedPool: lockPool } = await import("../src/utils/sharedPool");
+      const lockClient = await lockPool.connect();
+      await lockClient.query("SELECT pg_advisory_lock($1)", [SINGLETON_LOCK_KEY]);
+
       try {
         const { runToolHealthCheck } = await import(
           "../src/mastra/workflows/toolHealthAlertsCron"
@@ -1906,6 +1919,15 @@ if (HAS_DB) {
         }
         if (original === undefined) delete process.env.ADMIN_API_KEY;
         else process.env.ADMIN_API_KEY = original;
+        // Release the singleton advisory lock + dedicated client.
+        try {
+          await lockClient.query("SELECT pg_advisory_unlock($1)", [
+            SINGLETON_LOCK_KEY,
+          ]);
+        } catch {
+          /* best-effort */
+        }
+        lockClient.release();
       }
     },
   );

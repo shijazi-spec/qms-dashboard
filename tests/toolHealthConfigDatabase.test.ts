@@ -53,6 +53,22 @@ if (!HAS_DB) {
       // by this specific test run from any unrelated reaper activity.
       const TEST_OVERRIDE_PCT = 77;
 
+      // ── 0. Serialize against any other test that mutates the same
+      //    singleton row (id=1) in `tool_health_config_overrides`. The
+      //    table is a global singleton, and `tests/aiOpsRoutes.test.ts`
+      //    has an end-to-end auto-revert test that PUTs/clears the same
+      //    row and runs the real reaper. When both run in parallel under
+      //    `tests/runIntegrationTests.ts` (default 4 workers) they
+      //    clobber each other's seed and this test sees 0 reaped instead
+      //    of exactly 1. A session-level pg advisory lock held on a
+      //    dedicated client serializes the seed→race→assert window
+      //    without forcing the whole suite to TEST_CONCURRENCY=1.
+      //    Lock key chosen by hash of "tool_health_config_overrides:singleton".
+      const SINGLETON_LOCK_KEY = 7321614321;
+      const lockClient = await pool.connect();
+      await lockClient.query("SELECT pg_advisory_lock($1)", [SINGLETON_LOCK_KEY]);
+
+      try {
       // ── 1. Seed an expired override row (upsert into the singleton). ────────
       //    error_rate_high_pct is set to the sentinel so we can filter audit
       //    rows by `before_values->>'errorRateHighPct' = '77'`.
@@ -168,6 +184,18 @@ if (!HAS_DB) {
         } catch {
           /* best-effort */
         }
+      }
+      } finally {
+        // Release the singleton advisory lock + dedicated client even if
+        // the inner block threw before reaching its own finally.
+        try {
+          await lockClient.query("SELECT pg_advisory_unlock($1)", [
+            SINGLETON_LOCK_KEY,
+          ]);
+        } catch {
+          /* best-effort */
+        }
+        lockClient.release();
       }
     },
   );
