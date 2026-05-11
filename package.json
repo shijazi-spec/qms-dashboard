@@ -24,6 +24,9 @@
     "@mastra/memory": "^0.15.13",
     "@mastra/pg": "^0.17.10",
     "@openrouter/ai-sdk-provider": "^2.2.3",
+    "@opentelemetry/auto-instrumentations-node": "^0.75.0",
+    "@opentelemetry/exporter-prometheus": "^0.217.0",
+    "@opentelemetry/sdk-node": "^0.217.0",
     "@playwright/test": "^1.59.1",
     "@slack/web-api": "^7.14.1",
     "@types/bcryptjs": "^2.4.6",
@@ -77,6 +80,9 @@
     "axios": "^1.16.0",
     "hono": "^4.12.18",
     "ip-address": "^10.2.0",
-    "fast-uri": "^3.1.2"
+    "fast-uri": "^3.1.2",
+    "@opentelemetry/exporter-prometheus": "^0.217.0",
+    "@opentelemetry/sdk-node": "^0.217.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.75.0"
   }
 }
