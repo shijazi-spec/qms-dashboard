@@ -276,6 +276,16 @@ if (!HAS_DB) {
       // test that already exercises the same redaction path.
       const versionA = "qms-consultant@taskaprompt";
       const versionB = "qms-consultant@taskbprompt";
+      // Idempotency guard: delete any rows from earlier runs that share
+      // these hardcoded prompt_version sentinels. Without this, the
+      // hardcoded labels survive across runs (the cleanup step only
+      // deletes by message_id) and accumulate, doubling the per-version
+      // counts on the next run.
+      await pool.query(
+        `DELETE FROM ai_response_feedback
+         WHERE metadata->>'prompt_version' IN ($1, $2)`,
+        [versionA, versionB],
+      );
       const ids = [
         `consultant-stats-A-up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         `consultant-stats-A-down-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -552,6 +562,14 @@ if (!HAS_DB) {
     async () => {
       const versionA = "qms-consultant@xtabaprompt";
       const versionB = "qms-consultant@xtabbprompt";
+      // Idempotency guard: see the per-prompt-version test above for the
+      // rationale. Hardcoded sentinels survive across runs, so wipe
+      // any leftovers before seeding to keep cross-tab counts stable.
+      await pool.query(
+        `DELETE FROM ai_response_feedback
+         WHERE metadata->>'prompt_version' IN ($1, $2)`,
+        [versionA, versionB],
+      );
       const ids = [
         `consultant-xtab-A-mobile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         `consultant-xtab-A-web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
