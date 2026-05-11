@@ -857,6 +857,23 @@ Respond with JSON only:
           const logger = mastra?.getLogger();
           logger?.info("📤 [API] Manual call upload request");
 
+          // --- Body-size guard (200 MB max for call recordings) ---
+          const MAX_CALL_UPLOAD_BYTES = 200 * 1024 * 1024;
+          const rawLen = c.req.header("Content-Length");
+          if (!rawLen) {
+            return c.json(
+              { success: false, error: "Content-Length header required for file uploads" },
+              411,
+            );
+          }
+          const contentLen = parseInt(rawLen, 10);
+          if (!Number.isFinite(contentLen) || contentLen > MAX_CALL_UPLOAD_BYTES) {
+            return c.json(
+              { success: false, error: "Request body too large (max 200 MB)" },
+              413,
+            );
+          }
+
           const formData = await c.req.formData();
           const file = formData.get("file");
           const agentName = formData.get("agent_name");
@@ -882,12 +899,34 @@ Respond with JSON only:
           let audioFilePath = "";
 
           if (file && file.size > 0) {
+            if (file.size > MAX_CALL_UPLOAD_BYTES) {
+              return c.json(
+                { success: false, error: "File too large (max 200 MB)" },
+                413,
+              );
+            }
+
             const fs = await import("fs");
             const path = await import("path");
 
             const uploadsDir = path.default.resolve("uploads/calls");
             if (!fs.default.existsSync(uploadsDir)) {
               fs.default.mkdirSync(uploadsDir, { recursive: true });
+            }
+
+            // Free-space check: require at least 200 MB buffer + file size
+            try {
+              const stats = fs.default.statfsSync(uploadsDir);
+              const freeBytes = stats.bfree * stats.bsize;
+              const MIN_FREE = 200 * 1024 * 1024;
+              if (freeBytes < MIN_FREE + file.size) {
+                return c.json(
+                  { success: false, error: "Insufficient disk space to store upload" },
+                  507,
+                );
+              }
+            } catch {
+              // statfs unavailable on this platform — proceed
             }
 
             const fileName = `call_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
@@ -963,6 +1002,23 @@ Respond with JSON only:
           const logger = mastra?.getLogger();
           logger?.info("🎤 [API] Audio call upload with transcription request");
 
+          // --- Body-size guard (200 MB max for call recordings) ---
+          const MAX_AUDIO_UPLOAD_BYTES = 200 * 1024 * 1024;
+          const rawAudioLen = c.req.header("Content-Length");
+          if (!rawAudioLen) {
+            return c.json(
+              { success: false, error: "Content-Length header required for file uploads" },
+              411,
+            );
+          }
+          const audioContentLen = parseInt(rawAudioLen, 10);
+          if (!Number.isFinite(audioContentLen) || audioContentLen > MAX_AUDIO_UPLOAD_BYTES) {
+            return c.json(
+              { success: false, error: "Request body too large (max 200 MB)" },
+              413,
+            );
+          }
+
           const formData = await c.req.formData();
           const file = formData.get("file");
           const agentEmail = formData.get("agent_email");
@@ -985,6 +1041,34 @@ Respond with JSON only:
               { success: false, error: "Missing required fields" },
               400,
             );
+          }
+
+          if (file.size > MAX_AUDIO_UPLOAD_BYTES) {
+            return c.json(
+              { success: false, error: "File too large (max 200 MB)" },
+              413,
+            );
+          }
+
+          // Free-space check before buffering the audio into memory
+          try {
+            const fsCheck = await import("fs");
+            const pathCheck = await import("path");
+            const audioUploadsDir = pathCheck.default.resolve("uploads/calls");
+            if (!fsCheck.default.existsSync(audioUploadsDir)) {
+              fsCheck.default.mkdirSync(audioUploadsDir, { recursive: true });
+            }
+            const stats = fsCheck.default.statfsSync(audioUploadsDir);
+            const freeBytes = stats.bfree * stats.bsize;
+            const MIN_FREE = 200 * 1024 * 1024;
+            if (freeBytes < MIN_FREE + file.size) {
+              return c.json(
+                { success: false, error: "Insufficient disk space to store upload" },
+                507,
+              );
+            }
+          } catch {
+            // statfs unavailable on this platform — proceed
           }
 
           let parsedCallDate = new Date();

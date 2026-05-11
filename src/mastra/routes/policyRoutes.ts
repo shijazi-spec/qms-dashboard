@@ -1251,7 +1251,7 @@ export const policyRoutes = [
 
           const { updatePolicy, getPolicyById, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { validateFile, saveUploadedFile } =
+          const { validateFile, saveUploadedFile, deleteUploadedFile } =
             await import("../../utils/fileUpload");
           await initPolicyTables();
 
@@ -1275,6 +1275,8 @@ export const policyRoutes = [
           if (!validation.valid)
             return c.json({ error: validation.error }, 400);
 
+          const oldFilePath = policy.file_path || null;
+
           const buffer = Buffer.from(await file.arrayBuffer());
           const fileInfo = await saveUploadedFile(buffer, file.name, file.type);
 
@@ -1288,6 +1290,12 @@ export const policyRoutes = [
             },
             sessionUser.email,
           );
+
+          // Remove the previous blob so the shared document volume is not
+          // slowly exhausted by repeated attachment replacements.
+          if (oldFilePath && oldFilePath !== fileInfo.filePath) {
+            deleteUploadedFile(oldFilePath);
+          }
 
           return c.json({ success: true, file: fileInfo });
         } catch (error) {
