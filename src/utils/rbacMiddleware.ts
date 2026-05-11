@@ -2190,8 +2190,10 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   },
 
   // Health-index aggregated quality metrics — handler enforces
-  // session-or-admin-key (`isAuthorizedForHealthIndex`); any authenticated
-  // caller may read.
+  // `requireRoleOrKey(c, HEALTH_INDEX_ROLES)` (see notificationRoutes.ts).
+  // Restricted to governance-oriented roles that are already permitted to
+  // read the underlying modules (audit, NC, CAPA, KPI, compliance). Mirrors
+  // REPORT_ALLOWED_ROLES in reportRoutes.ts, which queries the same tables.
   {
     pattern: /^\/api\/health-index$/,
     methods: ["GET"],
@@ -2200,13 +2202,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
       "head_of_operations_quality",
       "grc_manager",
       "quality_manager",
-      "auditor",
-      "quality_specialist",
-      "team_lead",
-      "bu_owner",
-      "ai_specialist",
       "executive",
-      "department_viewer",
     ],
   },
 
