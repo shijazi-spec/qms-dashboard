@@ -2609,7 +2609,11 @@
 
         function renderScorecardsList() {
             const container = document.getElementById('scorecards-list');
-            if (!scorecards || scorecards.length === 0) {
+            // Hide inactive scorecards from this list — they're noise once
+            // deactivated. The active toggle on each card still lets users
+            // deactivate; restoring is handled via the admin path.
+            const visibleScorecards = (scorecards || []).filter(sc => sc.is_active);
+            if (visibleScorecards.length === 0) {
                 container.innerHTML = `
                     <div class="p-8 text-center text-gray-400">
                         <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
@@ -2620,7 +2624,7 @@
                 return;
             }
 
-            container.innerHTML = scorecards.map(sc => {
+            container.innerHTML = visibleScorecards.map(sc => {
                 const dims = sc.dimensions?.dimensions || sc.dimensions || {};
                 const attrCount = Object.values(dims).reduce((sum, d) => sum + (d.attributes?.length || 0), 0);
                 return `
