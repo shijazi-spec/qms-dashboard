@@ -175,6 +175,7 @@ export const mastra = new Mastra({
       "resend",
       "openai",
       "exa-js",
+      "xmlbuilder",
     ],
     sourcemap: true,
   },
