@@ -103,6 +103,7 @@ await suite.test("slack block payload renders 4 digest sections", async () => {
       open_gaps: 0,
       coverage_pct: 0,
       top_gaps: [],
+      coverage_breakdown: { obligation_id: 0, normalised_text: 0, ancestor: 0 },
       reason: "test fixture",
     },
     business_sections: [

@@ -28,6 +28,7 @@
 import { sharedPool as pool } from "./sharedPool";
 import { logger } from "./logger";
 import {
+  canonicaliseFramework,
   extractRawCitations,
   resolveCitations,
   type ResolvedCitation,
@@ -60,6 +61,26 @@ export interface SopGap {
   framework_hint: string | null;
 }
 
+/**
+ * Why a requirement was deemed "covered" by an operational record.
+ *
+ * - `obligation_id`   — checklist row links to the same obligation.
+ * - `normalised_text` — same clause/article after stripping whitespace,
+ *   punctuation, and prefix variants (Art./Article/§/Clause), and after
+ *   collapsing framework aliases (e.g. "ISO27001" ≈ "ISO 27001").
+ * - `ancestor`        — the SOP cites a parent clause (e.g. "A.5.15") and
+ *   an operational record cites a sub-clause that lives underneath it
+ *   (e.g. "A.5.15.1"). The narrower citation satisfies the broader one.
+ */
+export type CoverageMatchReason =
+  | "obligation_id"
+  | "normalised_text"
+  | "ancestor";
+
+export interface CoverageMatch {
+  matched_by: CoverageMatchReason;
+}
+
 export interface SopGapSummary {
   /** Number of SOP docs scanned (those with extracted_text available). */
   documents_scanned: number;
@@ -73,6 +94,12 @@ export interface SopGapSummary {
   coverage_pct: number;
   /** First few open gaps for digest display. */
   top_gaps: SopGap[];
+  /**
+   * Per-reason count of how covered requirements were matched. Keys are
+   * always present (zero-filled) so the dashboard drill-in can render
+   * stable rows without having to back-fill missing buckets.
+   */
+  coverage_breakdown: Record<CoverageMatchReason, number>;
   /** Empty-state hint when no SOPs are available to scan. */
   reason?: string;
 }
@@ -108,22 +135,216 @@ export function partitionCitations(
 }
 
 /**
- * Pure: build a simple substring-membership matcher from a corpus of
- * lowercased text + a set of obligation ids known to be referenced.
- * Exported for testing.
+ * Canonical, framework-aware shape of a single clause/article reference.
+ * Built from raw text so we can compare references that look textually
+ * different but mean the same thing — e.g. "Article 6", "Art. 6", "§6"
+ * all reduce to `{ kind: "article", path: [6] }`.
+ *
+ * `kind` distinguishes the three reference families we care about:
+ *   - `annex`   — ISO-style Annex A controls, e.g. "A.5.15"
+ *   - `article` — regulation articles, e.g. "PDPL Article 6"
+ *   - `clause`  — numbered clauses/sections, e.g. "Clause 8.2.1"
+ *
+ * `path` is the numeric hierarchy (e.g. `[5, 15, 1]` for "A.5.15.1") so
+ * a parent citation can be detected as covering any of its descendants.
+ */
+export interface CanonicalCitation {
+  framework: string | null;
+  kind: "annex" | "article" | "clause";
+  path: number[];
+}
+
+/** Framework alias alternation, shared by the forward/reverse scanners. */
+const FRAMEWORK_ALT =
+  "ISO[\\s-]?27001|ISO[\\s-]?9001|PCI[\\s-]?DSS|PDPL|SAMA[\\s-]?CSF|NCA[\\s-]?ECC|NCA[\\s-]?DCC|COPC";
+
+/** Sub-patterns shared between needle parsing and corpus scanning. */
+const ANNEX_RE = /A\.(\d+(?:\.\d+){0,3})/i;
+const ARTICLE_RE = /(?:Art\.?|Article|§)\s*(\d+(?:\.\d+){0,3})/i;
+const CLAUSE_RE = /(?:Clause|Section)\s*(\d+(?:\.\d+){0,3})/i;
+const BARE_NUMERIC_RE = /^(\d+(?:\.\d+){1,3})$/;
+
+function pathFromString(s: string): number[] {
+  return s.split(".").map((n) => Number(n)).filter((n) => Number.isFinite(n));
+}
+
+/**
+ * Pure: parse a single raw citation string into its canonical form.
+ *
+ * Tolerates whitespace/punctuation noise and the most common prefix
+ * variants (Art., Article, §, Clause, Section). The `frameworkHint`
+ * argument lets callers pass framework context that wasn't part of the
+ * raw string itself (e.g. the citation came pre-resolved with a
+ * `framework_hint` from the extractor, or the SOP doc declared its
+ * regulation_codes). When the raw string itself contains a framework
+ * alias, that alias wins over the hint.
+ *
+ * Returns `null` for strings that don't look like a clause/article
+ * reference at all.
+ */
+export function normaliseCitation(
+  raw: string,
+  frameworkHint?: string | null,
+): CanonicalCitation | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const inlineFw = trimmed.match(new RegExp(FRAMEWORK_ALT, "i"));
+  const framework = inlineFw
+    ? canonicaliseFramework(inlineFw[0])
+    : frameworkHint
+    ? canonicaliseFramework(frameworkHint) || frameworkHint.toUpperCase()
+    : null;
+
+  const annex = trimmed.match(ANNEX_RE);
+  if (annex) return { framework, kind: "annex", path: pathFromString(annex[1]) };
+
+  const article = trimmed.match(ARTICLE_RE);
+  if (article)
+    return { framework, kind: "article", path: pathFromString(article[1]) };
+
+  const clause = trimmed.match(CLAUSE_RE);
+  if (clause)
+    return { framework, kind: "clause", path: pathFromString(clause[1]) };
+
+  const bare = trimmed.match(BARE_NUMERIC_RE);
+  if (bare) return { framework, kind: "clause", path: pathFromString(bare[1]) };
+
+  return null;
+}
+
+/**
+ * Pure: scan a free-text corpus and return every clause/article-shaped
+ * reference it contains, normalised to canonical form. De-duplicates
+ * exact repeats. Used to build the coverage index that
+ * `buildCoverageMatcher` checks needles against.
+ */
+export function extractCanonicalCitations(text: string): CanonicalCitation[] {
+  if (!text) return [];
+  const out: CanonicalCitation[] = [];
+  const seen = new Set<string>();
+
+  const push = (c: CanonicalCitation | null) => {
+    if (!c || c.path.length === 0) return;
+    const key = `${c.framework || "*"}|${c.kind}|${c.path.join(".")}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(c);
+  };
+
+  const annexBody = "A\\.\\d+(?:\\.\\d+){1,3}";
+  const articleBody = "(?:Art\\.?|Article|§)\\s*\\d+(?:\\.\\d+){0,3}";
+  const clauseBody = "(?:Clause|Section)\\s*\\d+(?:\\.\\d+){0,3}";
+  const bodyAlt = `(?:${annexBody}|${articleBody}|${clauseBody})`;
+
+  // "PDPL Article 6", "ISO 27001 A.5.15", or a bare clause body.
+  const forward = new RegExp(
+    `(?:(${FRAMEWORK_ALT})[\\s:.,;\\-]{1,5})?(${bodyAlt})`,
+    "gi",
+  );
+  let m: RegExpExecArray | null;
+  while ((m = forward.exec(text)) !== null) {
+    const fw = m[1] ? canonicaliseFramework(m[1]) : null;
+    push(normaliseCitation(m[2], fw));
+  }
+
+  // "Article 12 of PDPL" — framework appears AFTER the citation body.
+  const reverse = new RegExp(
+    `(${bodyAlt})\\s+of\\s+(${FRAMEWORK_ALT})`,
+    "gi",
+  );
+  while ((m = reverse.exec(text)) !== null) {
+    const fw = canonicaliseFramework(m[2]);
+    push(normaliseCitation(m[1], fw));
+  }
+
+  return out;
+}
+
+/** True when `prefix` is a (proper or full) prefix of `path`. */
+function pathStartsWith(path: number[], prefix: number[]): boolean {
+  if (prefix.length === 0 || prefix.length > path.length) return false;
+  for (let i = 0; i < prefix.length; i++) {
+    if (path[i] !== prefix[i]) return false;
+  }
+  return true;
+}
+
+/** Frameworks are compatible if either side is unspecified, or they match. */
+function frameworksCompatible(a: string | null, b: string | null): boolean {
+  if (!a || !b) return true;
+  return a === b;
+}
+
+/**
+ * Pure: build a coverage matcher that returns *why* a citation matched.
+ *
+ * Match precedence (highest first):
+ *   1. `obligation_id` — checklist row links to the same obligation row.
+ *   2. `normalised_text` — the corpus contains the same canonical
+ *      reference (after normalising whitespace/punctuation, prefix
+ *      variants like "Art." vs "Article" vs "§", and framework aliases).
+ *   3. `ancestor` — the corpus cites a strictly narrower sub-clause that
+ *      lives under the requirement's clause (e.g. SOP says "A.5.15",
+ *      a CAPA references "A.5.15.1"). The narrower citation satisfies
+ *      the broader one because every sub-clause is part of its parent.
+ *
+ * As a final safety net (so we never lose coverage on free-form text
+ * that didn't survive normalisation), the matcher also falls back to a
+ * lower-cased substring scan of the original corpus and reports that
+ * as `normalised_text` too — this preserves the previous behaviour for
+ * obligation codes and other identifiers that aren't clause-shaped.
+ *
+ * Returns `null` when nothing matches; otherwise a `CoverageMatch`
+ * carrying the reason. The truthy/falsy shape keeps it usable as a
+ * predicate from existing call sites.
  */
 export function buildCoverageMatcher(
   textCorpus: string,
   obligationIds: ReadonlySet<number>,
-): (c: ResolvedCitation) => boolean {
-  const haystack = textCorpus.toLowerCase();
+): (c: ResolvedCitation) => CoverageMatch | null {
+  const canonical = extractCanonicalCitations(textCorpus);
+
+  // Bucket by `kind` so we don't scan article/clause candidates while
+  // looking for an annex match (and vice versa).
+  const byKind = new Map<CanonicalCitation["kind"], CanonicalCitation[]>();
+  for (const c of canonical) {
+    const arr = byKind.get(c.kind) ?? [];
+    arr.push(c);
+    byKind.set(c.kind, arr);
+  }
+
+  const haystackLower = textCorpus.toLowerCase();
+
   return (c) => {
     if (c.obligation_id != null && obligationIds.has(c.obligation_id)) {
-      return true;
+      return { matched_by: "obligation_id" };
     }
-    const needle = c.raw_citation.toLowerCase().trim();
-    if (!needle) return false;
-    return haystack.includes(needle);
+    const raw = c.raw_citation;
+    if (!raw || !raw.trim()) return null;
+
+    const needle = normaliseCitation(raw, c.framework_hint);
+    if (needle && needle.path.length > 0) {
+      const candidates = byKind.get(needle.kind) ?? [];
+      let ancestorHit = false;
+      for (const h of candidates) {
+        if (!frameworksCompatible(needle.framework, h.framework)) continue;
+        if (!pathStartsWith(h.path, needle.path)) continue;
+        if (h.path.length === needle.path.length) {
+          return { matched_by: "normalised_text" };
+        }
+        ancestorHit = true;
+      }
+      if (ancestorHit) return { matched_by: "ancestor" };
+    }
+
+    // Last-resort lexical fallback: keeps non-clause identifiers
+    // (obligation codes, framework-prefixed ids) working as before.
+    const lex = raw.toLowerCase().trim();
+    if (lex && haystackLower.includes(lex)) {
+      return { matched_by: "normalised_text" };
+    }
+    return null;
   };
 }
 
@@ -263,6 +484,7 @@ export async function computeSopGapSummary(): Promise<SopGapSummary> {
       open_gaps: 0,
       coverage_pct: 0,
       top_gaps: [],
+      coverage_breakdown: emptyBreakdown(),
       reason: "No SOP documents with extracted text available",
     };
   }
@@ -301,6 +523,7 @@ export async function computeSopGapSummary(): Promise<SopGapSummary> {
       open_gaps: 0,
       coverage_pct: 0,
       top_gaps: [],
+      coverage_breakdown: emptyBreakdown(),
       reason: "No SOP documents with extractable text available",
     };
   }
@@ -313,6 +536,7 @@ export async function computeSopGapSummary(): Promise<SopGapSummary> {
       open_gaps: 0,
       coverage_pct: 0,
       top_gaps: [],
+      coverage_breakdown: emptyBreakdown(),
       reason: "No clause/article references found in SOP text",
     };
   }
@@ -321,25 +545,30 @@ export async function computeSopGapSummary(): Promise<SopGapSummary> {
   const baseMatcher = buildCoverageMatcher(coverageText, obligationIds);
 
   // Per-doc augmentation: when the SOP itself is tagged with one or more
-  // regulation_codes (e.g. ["PDPL"]), a bare "Article 6" inside that SOP
-  // should also match an audit_finding that references "PDPL Article 6".
-  const haystackLower = coverageText.toLowerCase();
-  function isCoveredForDoc(c: ResolvedCitation, regCodes: string[] | null): boolean {
-    if (baseMatcher(c)) return true;
-    if (!regCodes || regCodes.length === 0) return false;
-    const needle = c.raw_citation.toLowerCase().trim();
-    if (!needle) return false;
+  // regulation_codes (e.g. ["PDPL"]) and the citation has no inline
+  // framework hint, retry against each declared framework so a bare
+  // "Article 6" inside a PDPL SOP still finds "PDPL Article 6" evidence.
+  function matchForDoc(
+    c: ResolvedCitation,
+    regCodes: string[] | null,
+  ): CoverageMatch | null {
+    const direct = baseMatcher(c);
+    if (direct) return direct;
+    if (c.framework_hint) return null;
+    if (!regCodes || regCodes.length === 0) return null;
     for (const code of regCodes) {
-      const codeStr = String(code).toLowerCase().trim();
+      const codeStr = String(code || "").trim();
       if (!codeStr) continue;
-      if (haystackLower.includes(`${codeStr} ${needle}`)) return true;
-      if (haystackLower.includes(`${codeStr}: ${needle}`)) return true;
+      const augmented: ResolvedCitation = { ...c, framework_hint: codeStr };
+      const r = baseMatcher(augmented);
+      if (r) return r;
     }
-    return false;
+    return null;
   }
 
   let total = 0;
   let covered = 0;
+  const breakdown = emptyBreakdown();
   const gaps: SopGap[] = [];
   for (const { doc, cits } of perDocCitations) {
     const seenInDoc = new Set<string>();
@@ -348,8 +577,10 @@ export async function computeSopGapSummary(): Promise<SopGapSummary> {
       if (seenInDoc.has(key)) continue;
       seenInDoc.add(key);
       total++;
-      if (isCoveredForDoc(c, doc.regulation_codes)) {
+      const hit = matchForDoc(c, doc.regulation_codes);
+      if (hit) {
         covered++;
+        breakdown[hit.matched_by]++;
       } else {
         gaps.push({
           document_id: doc.id,
@@ -372,5 +603,11 @@ export async function computeSopGapSummary(): Promise<SopGapSummary> {
     open_gaps,
     coverage_pct,
     top_gaps: gaps.slice(0, 10),
+    coverage_breakdown: breakdown,
   };
+}
+
+/** Zero-filled breakdown so summaries always carry the full key set. */
+function emptyBreakdown(): Record<CoverageMatchReason, number> {
+  return { obligation_id: 0, normalised_text: 0, ancestor: 0 };
 }
