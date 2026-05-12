@@ -314,6 +314,52 @@ export async function getCallRecordById(
   return result.rows[0] || null;
 }
 
+/**
+ * Hard-delete a call record and its dependent rows. Returns the number of
+ * call_records rows actually removed (0 if the id did not exist).
+ *
+ * Children deleted in dependency order (best-effort: tables that may not exist
+ * in every install are wrapped so a missing-relation error doesn't abort the
+ * whole transaction).
+ */
+export async function deleteCallRecord(id: number): Promise<number> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const childTables = [
+      "call_transcripts",
+      "call_analysis",
+      "call_qa_scores",
+      "call_compliance",
+    ];
+    for (const tbl of childTables) {
+      try {
+        await client.query(`DELETE FROM ${tbl} WHERE call_record_id = $1`, [
+          id,
+        ]);
+      } catch (err: any) {
+        // Tolerate "relation does not exist" / "column does not exist" so a
+        // partial schema doesn't block the parent delete.
+        if (err && (err.code === "42P01" || err.code === "42703")) continue;
+        throw err;
+      }
+    }
+    const result = await client.query(
+      "DELETE FROM call_records WHERE id = $1",
+      [id],
+    );
+    await client.query("COMMIT");
+    return result.rowCount || 0;
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getCallRecordByCallId(
   callId: string,
 ): Promise<CallRecord | null> {

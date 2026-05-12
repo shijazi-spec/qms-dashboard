@@ -2370,6 +2370,43 @@ ${transcriptText}
     },
   },
   {
+    path: "/api/calls/:id",
+    method: "DELETE" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await verifyCallAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        try {
+          const idRaw = c.req.param("id");
+          const id = parseInt(String(idRaw || ""), 10);
+          if (!Number.isFinite(id) || id <= 0) {
+            return c.json({ error: "invalid id" }, 400);
+          }
+          const { getCallRecordById, deleteCallRecord } = await import(
+            "../../utils/callIntelligenceDb"
+          );
+          const record = await getCallRecordById(id);
+          if (!record) {
+            return c.json({ error: "call record not found" }, 404);
+          }
+          const removed = await deleteCallRecord(id);
+          safeLogger.info("[Calls] deleted call record", {
+            id,
+            call_id: record.call_id,
+            actor: user.email || user.id,
+            removed,
+          });
+          return c.json({ success: true, deleted: removed, id });
+        } catch (error) {
+          safeLogger.error("[Calls] delete failed", {
+            err: error instanceof Error ? error.message : String(error),
+          });
+          return c.json({ error: "Delete failed" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/calls/:id/auto-link-lead",
     method: "POST" as const,
     createHandler: async () => {

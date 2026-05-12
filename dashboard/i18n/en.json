@@ -1259,7 +1259,10 @@
       "sdr_eval_combined_desc": "Process compliance (CRM activity in Zoho) and call-quality scorecard (COPC) for this call, side-by-side.",
       "sdr_eval_run": "Run SDR Evaluation",
       "sdr_eval_process_title": "Process compliance",
-      "sdr_eval_quality_title": "Call-quality scorecard"
+      "sdr_eval_quality_title": "Call-quality scorecard",
+      "delete_btn": "Delete",
+      "delete_confirm": "Delete call record {id}? This removes its transcript, analysis, QA score, and compliance row. This cannot be undone.",
+      "delete_failed": "Delete failed: {msg}"
     },
     "users": {
       "no_pending_requests": "No pending access requests",

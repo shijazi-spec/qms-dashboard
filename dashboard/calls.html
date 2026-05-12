@@ -1079,9 +1079,12 @@
                         </span>
                     </td>
                     <td class="px-4 py-3 text-center">
-                        ${call.status === 'analyzed'
-                            ? `<button data-on-click="viewCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-view-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.view_btn'))}</button>`
-                            : `<button data-on-click="analyzeCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-analyze-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.analyze_btn'))}</button>`}
+                        <div class="inline-flex items-center gap-3">
+                            ${call.status === 'analyzed'
+                                ? `<button data-on-click="viewCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-view-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.view_btn'))}</button>`
+                                : `<button data-on-click="analyzeCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-analyze-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.analyze_btn'))}</button>`}
+                            <button data-on-click="deleteCall" data-args="[${call.id},&quot;${escapeHtml(call.call_id)}&quot;]" class="text-red-600 hover:text-red-800 text-sm font-medium" data-testid="button-delete-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.delete_btn'))}</button>
+                        </div>
                     </td>
                 </tr>
             `).join('');
@@ -1556,6 +1559,22 @@
                 }
             } catch (e) {
                 alert(WalaPlusI18n.t('dyn.calls.auto_link_failed', { msg: e instanceof Error ? e.message : String(e) }));
+            }
+        }
+
+        async function deleteCall(callId, callIdLabel) {
+            const label = callIdLabel || `#${callId}`;
+            if (!window.confirm(WalaPlusI18n.t('dyn.calls.delete_confirm', { id: label }))) return;
+            try {
+                const res = await fetch(`/api/calls/${callId}`, { method: 'DELETE' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data?.success === false) {
+                    alert(WalaPlusI18n.t('dyn.calls.delete_failed', { msg: data?.error || res.statusText }));
+                    return;
+                }
+                refreshData();
+            } catch (e) {
+                alert(WalaPlusI18n.t('dyn.calls.delete_failed', { msg: e instanceof Error ? e.message : String(e) }));
             }
         }
 
