@@ -870,7 +870,55 @@
         let sentimentChart = null;
         let qaTrendChart = null;
 
+        function wireDropzone(zoneId, inputId, isMultiple) {
+            const zone = document.getElementById(zoneId);
+            const input = document.getElementById(inputId);
+            if (!zone || !input) return;
+            const activeCls = ['border-blue-400', 'bg-blue-50'];
+            const onOver = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+                zone.classList.add(...activeCls);
+            };
+            const onLeave = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.target === zone) zone.classList.remove(...activeCls);
+            };
+            const onDrop = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                zone.classList.remove(...activeCls);
+                const files = e.dataTransfer ? Array.from(e.dataTransfer.files) : [];
+                if (files.length === 0) return;
+                const dt = new DataTransfer();
+                const toAdd = isMultiple ? files : files.slice(0, 1);
+                toAdd.forEach(f => dt.items.add(f));
+                input.files = dt.files;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            zone.addEventListener('dragenter', onOver);
+            zone.addEventListener('dragover', onOver);
+            zone.addEventListener('dragleave', onLeave);
+            zone.addEventListener('drop', onDrop);
+        }
+
+        // Stop the browser from navigating when files are dropped outside the
+        // dropzones (default browser behavior opens the file as a new tab).
+        function preventWindowFileDropNav() {
+            ['dragover', 'drop'].forEach(ev => {
+                window.addEventListener(ev, (e) => {
+                    if (e.target && e.target.closest && e.target.closest('#upload-dropzone, #bulk-audio-dropzone')) return;
+                    e.preventDefault();
+                }, false);
+            });
+        }
+
         async function init() {
+            wireDropzone('upload-dropzone', 'call-file-input', false);
+            wireDropzone('bulk-audio-dropzone', 'bulk-audio-input', true);
+            preventWindowFileDropNav();
             await refreshData();
         }
 
