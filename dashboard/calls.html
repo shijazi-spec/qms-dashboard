@@ -1263,14 +1263,29 @@
                         </div>
                     ` : ''}
                     <div class="mt-6 pt-6 border-t">
-                        <h4 class="font-semibold text-gray-900 mb-2">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_reconcile_title'))}</h4>
-                        <p class="text-xs text-gray-500 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_reconcile_desc'))}</p>
+                        <h4 class="font-semibold text-gray-900 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_combined_title'))}</h4>
+                        <p class="text-xs text-gray-500 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_combined_desc'))}</p>
                         <div class="flex flex-wrap gap-2">
-                            <button type="button" data-on-click="loadCallMcpReconciliation" data-args="[${callId}]" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700" data-testid="button-load-reconciliation-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_load_reconcile'))}</button>
-                            <button type="button" data-on-click="loadCallCopcScorecard" data-args="[${callId}]" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700" data-testid="button-load-scorecard-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_load_scorecard'))}</button>
+                            <button type="button" data-on-click="loadCallSdrEvaluation" data-args="[${callId}]" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700" data-testid="button-load-sdr-eval-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_run'))}</button>
                         </div>
-                        <div id="mcp-reconcile-result" class="mt-4 hidden text-sm max-h-80 overflow-y-auto"></div>
-                        <div id="copc-scorecard-result" class="mt-4 hidden text-sm max-h-96 overflow-y-auto"></div>
+                        <div id="sdr-eval-combined-result" class="mt-4 hidden">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <div class="border border-violet-200 rounded-lg p-3 bg-violet-50/30">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-violet-600"></span>
+                                        <h5 class="text-sm font-semibold text-violet-900">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_process_title'))}</h5>
+                                    </div>
+                                    <div id="mcp-reconcile-result" class="text-sm max-h-96 overflow-y-auto"></div>
+                                </div>
+                                <div class="border border-emerald-200 rounded-lg p-3 bg-emerald-50/30">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-600"></span>
+                                        <h5 class="text-sm font-semibold text-emerald-900">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_quality_title'))}</h5>
+                                    </div>
+                                    <div id="copc-scorecard-result" class="text-sm max-h-96 overflow-y-auto"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 `;
 
@@ -1424,6 +1439,16 @@
                 alert(WalaPlusI18n.t('dyn.calls.mcp_reconcile_by_id_failed', { msg: e instanceof Error ? e.message : String(e) }));
                 if (out) out.innerHTML = '';
             }
+        }
+
+        async function loadCallSdrEvaluation(callId) {
+            const wrapper = document.getElementById('sdr-eval-combined-result');
+            if (wrapper) wrapper.classList.remove('hidden');
+            // Run both in parallel — failures in one pane do not block the other.
+            await Promise.allSettled([
+                loadCallMcpReconciliation(callId),
+                loadCallCopcScorecard(callId),
+            ]);
         }
 
         async function loadCallMcpReconciliation(callId) {

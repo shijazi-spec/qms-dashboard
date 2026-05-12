@@ -1254,7 +1254,12 @@
       "copc_sourced_checkpoints": "Sourced checkpoints",
       "copc_none_sourced": "No checkpoints could be scored from available data.",
       "copc_not_sourced_list": "Not yet sourced",
-      "copc_not_yet_sourced": "data not yet sourced"
+      "copc_not_yet_sourced": "data not yet sourced",
+      "sdr_eval_combined_title": "SDR Evaluation",
+      "sdr_eval_combined_desc": "Process compliance (CRM activity in Zoho) and call-quality scorecard (COPC) for this call, side-by-side.",
+      "sdr_eval_run": "Run SDR Evaluation",
+      "sdr_eval_process_title": "Process compliance",
+      "sdr_eval_quality_title": "Call-quality scorecard"
     },
     "users": {
       "no_pending_requests": "No pending access requests",
