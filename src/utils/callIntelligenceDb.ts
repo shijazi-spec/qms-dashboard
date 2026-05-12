@@ -294,6 +294,17 @@ export async function updateCallRecord(
   return result.rows[0] || null;
 }
 
+export async function updateCallRecordLeadId(
+  id: number,
+  leadId: string,
+): Promise<CallRecord | null> {
+  const result = await pool.query(
+    `UPDATE call_records SET lead_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [leadId, id],
+  );
+  return result.rows[0] || null;
+}
+
 export async function getCallRecordById(
   id: number,
 ): Promise<CallRecord | null> {

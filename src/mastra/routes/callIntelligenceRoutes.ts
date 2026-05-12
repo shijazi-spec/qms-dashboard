@@ -2369,6 +2369,112 @@ ${transcriptText}
       };
     },
   },
+  {
+    path: "/api/calls/:id/auto-link-lead",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await verifyCallAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        try {
+          const idRaw = c.req.param("id");
+          const id = parseInt(String(idRaw || ""), 10);
+          if (!Number.isFinite(id) || id <= 0) {
+            return c.json({ error: "invalid id" }, 400);
+          }
+          const body = await c.req.json().catch(() => ({}));
+          const overridePhone =
+            typeof body?.phone === "string" && body.phone.trim()
+              ? body.phone.trim()
+              : null;
+          const force = body?.force === true;
+          const maxRecords =
+            typeof body?.max_records === "number" && body.max_records > 0
+              ? Math.min(body.max_records, 2000)
+              : undefined;
+
+          const { getCallRecordById, updateCallRecordLeadId } = await import(
+            "../../utils/callIntelligenceDb"
+          );
+          const record = await getCallRecordById(id);
+          if (!record) {
+            return c.json({ error: "call record not found" }, 404);
+          }
+          if (record.lead_id && !force) {
+            return c.json({
+              linked: false,
+              lead_id: record.lead_id,
+              matches_count: 0,
+              scanned: 0,
+              reason: "already_linked",
+            });
+          }
+
+          const { autoLinkLeadByPhone, extractCallPhoneCandidates } =
+            await import("../../utils/callLeadPhoneMatch");
+          const candidates = overridePhone
+            ? [overridePhone]
+            : extractCallPhoneCandidates(record);
+          const result = await autoLinkLeadByPhone(
+            id,
+            candidates,
+            (cid, leadId) => updateCallRecordLeadId(cid, leadId),
+            { maxRecords },
+          );
+          return c.json(result);
+        } catch (error) {
+          safeLogger.error("[MCP] auto-link-lead failed", {
+            err: error instanceof Error ? error.message : String(error),
+          });
+          return c.json({ error: "Auto-link failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/calls/mcp/scorecard/:id",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await verifyCallAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        try {
+          const idRaw = c.req.param("id");
+          const id = parseInt(String(idRaw || ""), 10);
+          if (!Number.isFinite(id) || id <= 0) {
+            return c.json({ error: "invalid id" }, 400);
+          }
+          const { getCallRecordById } = await import(
+            "../../utils/callIntelligenceDb"
+          );
+          const record = await getCallRecordById(id);
+          if (!record) {
+            return c.json({ error: "call record not found" }, 404);
+          }
+          const { evaluateLoadedCopcScorecard } = await import(
+            "../../utils/copcScorecardEngine"
+          );
+          const scorecard = evaluateLoadedCopcScorecard({
+            call_record_id: id,
+            transcript_text:
+              typeof (record as any).transcript_text === "string"
+                ? (record as any).transcript_text
+                : null,
+            sentiment_label:
+              typeof (record as any).sentiment_label === "string"
+                ? (record as any).sentiment_label
+                : null,
+          });
+          return c.json({ scorecard });
+        } catch (error) {
+          safeLogger.error("[MCP] scorecard failed", {
+            err: error instanceof Error ? error.message : String(error),
+          });
+          return c.json({ error: "Scorecard evaluation failed" }, 500);
+        }
+      };
+    },
+  },
 ];
 
 function formatEvaluationForZoho(evaluation: any, callRecord: any): string {

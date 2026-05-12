@@ -1169,7 +1169,7 @@
                                 <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.source_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.source || '--')}</dd></div>
                                 <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.direction_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.direction || '--')}</dd></div>
                                 <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.duration_label'))}</dt><dd class="font-medium">${formatDuration(data.record?.duration_seconds)}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.lead_id_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.lead_id || '--')}</dd></div>
+                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.lead_id_label'))}</dt><dd class="font-medium">${data.record?.lead_id ? `<a href="https://crm.zoho.com/crm/org766568398/tab/Leads/${escapeHtml(data.record.lead_id)}" target="_blank" rel="noopener" class="text-blue-600 hover:underline" data-testid="link-lead-${escapeHtml(data.record.lead_id)}">${escapeHtml(data.record.lead_id)}</a>` : `<span class="text-gray-400">--</span> <button type="button" data-on-click="autoLinkLeadByCall" data-args="[${callId}]" class="ms-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700" data-testid="button-auto-link-lead-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.auto_link_lead'))}</button>`}</dd></div>
                                 <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.status_label'))}</dt><dd><span class="px-2 py-1 rounded-full text-xs font-medium status-${escapeHtml(data.record?.status)}">${escapeHtml(data.record?.status)}</span></dd></div>
                             </dl>
                         </div>
@@ -1217,8 +1217,12 @@
                     <div class="mt-6 pt-6 border-t">
                         <h4 class="font-semibold text-gray-900 mb-2">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_reconcile_title'))}</h4>
                         <p class="text-xs text-gray-500 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_reconcile_desc'))}</p>
-                        <button type="button" data-on-click="loadCallMcpReconciliation" data-args="[${callId}]" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_load_reconcile'))}</button>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" data-on-click="loadCallMcpReconciliation" data-args="[${callId}]" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700" data-testid="button-load-reconciliation-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_load_reconcile'))}</button>
+                            <button type="button" data-on-click="loadCallCopcScorecard" data-args="[${callId}]" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700" data-testid="button-load-scorecard-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_load_scorecard'))}</button>
+                        </div>
                         <div id="mcp-reconcile-result" class="mt-4 hidden text-sm max-h-80 overflow-y-auto"></div>
+                        <div id="copc-scorecard-result" class="mt-4 hidden text-sm max-h-96 overflow-y-auto"></div>
                     </div>
                 `;
 
@@ -1386,6 +1390,99 @@
                 slot.innerHTML = renderMcpReportBlock(data.report, data.sdr_process_scope);
             } catch (e) {
                 slot.innerHTML = `<p class="text-sm text-red-600">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_reconcile_failed', { msg: e instanceof Error ? e.message : String(e) }))}</p>`;
+            }
+        }
+
+        function renderCopcScorecardBlock(scorecard) {
+            if (!scorecard) return `<p class="text-sm text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_no_data'))}</p>`;
+            if (scorecard.load_error) {
+                return `<p class="text-sm text-red-600">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_load_error', { msg: scorecard.load_error }))}</p>`;
+            }
+            const overall = scorecard.overall || {};
+            const totalPct = overall.weighted_total_pct;
+            const headerColor = totalPct == null ? 'bg-gray-100 text-gray-700' : (totalPct >= 75 ? 'bg-emerald-50 text-emerald-700' : totalPct >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700');
+            const totalLabel = totalPct == null ? '—' : `${totalPct}%`;
+            const sections = (scorecard.per_section || []).map(s => {
+                const pct = s.percentage == null ? '—' : `${s.percentage}%`;
+                return `<div class="flex items-center justify-between text-xs py-1 border-b border-gray-100" data-testid="section-score-${s.id}">
+                    <span class="font-medium text-gray-700">${escapeHtml(s.id)} · ${escapeHtml(s.title)} <span class="text-gray-400">(w ${s.weight_pct}%)</span></span>
+                    <span class="font-mono">${escapeHtml(pct)} <span class="text-gray-400">(${s.evaluable_count} scored)</span></span>
+                </div>`;
+            }).join('');
+            const sourced = (scorecard.per_checkpoint || []).filter(c => c.sourced).map(c => {
+                const scoreLabel = c.score == null ? '—' : `${c.score}/${c.max}`;
+                const badge = c.score == null ? 'bg-gray-100 text-gray-600' : (c.score === 2 ? 'bg-emerald-100 text-emerald-700' : c.score === 1 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700');
+                return `<div class="text-xs py-1 border-b border-gray-100" data-testid="cp-row-${c.id}">
+                    <div class="flex justify-between"><span class="font-medium">${escapeHtml(c.id)} · ${escapeHtml(c.name)}</span><span class="px-2 py-0.5 rounded ${badge} font-mono">${escapeHtml(scoreLabel)}</span></div>
+                    ${c.evidence ? `<div class="text-gray-500 mt-0.5">${escapeHtml(c.evidence)}</div>` : ''}
+                </div>`;
+            }).join('') || `<p class="text-xs text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_none_sourced'))}</p>`;
+            const notSourced = (scorecard.per_checkpoint || []).filter(c => !c.sourced).map(c =>
+                `<li class="text-xs text-gray-600" data-testid="cp-not-sourced-${c.id}"><span class="font-mono">${escapeHtml(c.id)}</span> · ${escapeHtml(c.name)} <span class="text-gray-400">— ${escapeHtml(c.data_source || WalaPlusI18n.t('dyn.calls.copc_not_yet_sourced'))}</span></li>`
+            ).join('');
+            return `
+                <div class="space-y-3">
+                    <div class="${headerColor} rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide opacity-80">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_weighted_total'))}</div>
+                            <div class="text-2xl font-bold" data-testid="copc-weighted-total">${escapeHtml(totalLabel)}</div>
+                        </div>
+                        <div class="text-right text-xs">
+                            <div>${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_coverage'))}: <span class="font-mono" data-testid="copc-coverage">${overall.coverage_pct ?? 0}%</span></div>
+                            <div>${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_sourced'))}: <span class="font-mono">${overall.sourced_count ?? 0}/${overall.total_checkpoints ?? 0}</span></div>
+                            <div class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_version'))}: <span class="font-mono">${escapeHtml(scorecard.scorecard_version || '?')}</span></div>
+                        </div>
+                    </div>
+                    <div>
+                        <h5 class="text-sm font-semibold mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_section_scores'))}</h5>
+                        ${sections || `<p class="text-xs text-gray-500">—</p>`}
+                    </div>
+                    <div>
+                        <h5 class="text-sm font-semibold mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_sourced_checkpoints'))}</h5>
+                        ${sourced}
+                    </div>
+                    <details class="text-xs">
+                        <summary class="cursor-pointer text-gray-700 font-medium" data-testid="copc-not-sourced-toggle">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_not_sourced_list'))} (${overall.not_yet_sourced_count ?? 0})</summary>
+                        <ul class="mt-2 space-y-1 ps-4 list-disc">${notSourced}</ul>
+                    </details>
+                </div>`;
+        }
+
+        async function loadCallCopcScorecard(callId) {
+            const slot = document.getElementById('copc-scorecard-result');
+            if (!slot) return;
+            slot.classList.remove('hidden');
+            slot.innerHTML = `<p class="text-sm text-gray-500">…</p>`;
+            try {
+                const res = await fetch(`/api/calls/mcp/scorecard/${callId}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                slot.innerHTML = renderCopcScorecardBlock(data.scorecard);
+            } catch (e) {
+                slot.innerHTML = `<p class="text-sm text-red-600">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_load_error', { msg: e instanceof Error ? e.message : String(e) }))}</p>`;
+            }
+        }
+
+        async function autoLinkLeadByCall(callId) {
+            try {
+                const res = await fetch(`/api/calls/${callId}/auto-link-lead`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(WalaPlusI18n.t('dyn.calls.auto_link_failed', { msg: data.error || res.statusText }));
+                    return;
+                }
+                if (data.linked) {
+                    alert(WalaPlusI18n.t('dyn.calls.auto_link_ok', { id: data.lead_id }));
+                    viewCall(callId);
+                } else {
+                    alert(WalaPlusI18n.t('dyn.calls.auto_link_none', { reason: data.reason || 'unknown' }));
+                }
+            } catch (e) {
+                alert(WalaPlusI18n.t('dyn.calls.auto_link_failed', { msg: e instanceof Error ? e.message : String(e) }));
             }
         }
 
