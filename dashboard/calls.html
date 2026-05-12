@@ -1079,9 +1079,9 @@
                         </span>
                     </td>
                     <td class="px-4 py-3 text-center">
-                        <button data-on-click="analyzeCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" ${call.status === 'analyzed' ? 'disabled' : ''}>
-                            ${escapeHtml(call.status === 'analyzed' ? WalaPlusI18n.t('dyn.calls.view_btn') : WalaPlusI18n.t('dyn.calls.analyze_btn'))}
-                        </button>
+                        ${call.status === 'analyzed'
+                            ? `<button data-on-click="viewCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-view-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.view_btn'))}</button>`
+                            : `<button data-on-click="analyzeCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-analyze-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.analyze_btn'))}</button>`}
                     </td>
                 </tr>
             `).join('');
@@ -1759,7 +1759,15 @@
                     : (fallbackName || (fallbackEmail ? fallbackEmail.split('@')[0] : ''));
                 const fileLeadId = parsed.phone || '';
                 const fileContactName = parsed.phone || '';
-                const fileCallDate = file.lastModified ? new Date(file.lastModified).toISOString() : '';
+                // file.lastModified can be 0 (missing) or 315532800000 (FAT epoch
+                // 1980-01-01) when files were extracted from a ZIP / copied without
+                // preserving mtime. In those cases default to upload-time so we
+                // don't tag every record as "Jan 1, 1980".
+                const lastModMs = Number(file.lastModified) || 0;
+                const minTrustedMs = Date.UTC(2005, 0, 1);
+                const fileCallDate = lastModMs >= minTrustedMs
+                    ? new Date(lastModMs).toISOString()
+                    : new Date().toISOString();
 
                 progressText.textContent = `${_fn(i + 1)}/${_fn(bulkAudioFiles.length)} - ${file.name}`;
                 progressBar.style.width = `${((i + 1) / bulkAudioFiles.length) * 100}%`;
