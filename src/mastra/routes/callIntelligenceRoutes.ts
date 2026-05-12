@@ -2247,6 +2247,128 @@ ${transcriptText}
       };
     },
   },
+  {
+    path: "/api/calls/mcp/import-sources",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await verifyCallAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        try {
+          const { getCallImportSourcesCatalog } = await import(
+            "../../utils/callMcpImportSources"
+          );
+          return c.json(getCallImportSourcesCatalog());
+        } catch (error) {
+          safeLogger.error("[MCP] import-sources failed", {
+            err: error instanceof Error ? error.message : String(error),
+          });
+          return c.json({ error: "Failed to load import catalog" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/calls/mcp/leads/match-phone",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await verifyCallAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        try {
+          const body = await c.req.json().catch(() => ({}));
+          const phone = typeof body?.phone === "string" ? body.phone : "";
+          if (!phone.trim()) {
+            return c.json({ error: "phone is required" }, 400);
+          }
+          const digitsOnly = phone.replace(/\D+/g, "");
+          if (digitsOnly.length < 7) {
+            return c.json(
+              { error: "phone must contain at least 7 digits" },
+              400,
+            );
+          }
+          const max =
+            typeof body?.max_records === "number" && body.max_records > 0
+              ? Math.min(body.max_records, 2000)
+              : undefined;
+          const { findLeadsByPhoneMatch } = await import(
+            "../../utils/callLeadPhoneMatch"
+          );
+          const result = await findLeadsByPhoneMatch(phone, {
+            maxRecords: max,
+          });
+          return c.json(result);
+        } catch (error) {
+          safeLogger.error("[MCP] leads/match-phone failed", {
+            err: error instanceof Error ? error.message : String(error),
+          });
+          return c.json({ error: "Lead match failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/calls/mcp/reconciliation/:id",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await verifyCallAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        try {
+          const idRaw = c.req.param("id");
+          const id = parseInt(String(idRaw || ""), 10);
+          if (!Number.isFinite(id) || id <= 0) {
+            return c.json({ error: "invalid id" }, 400);
+          }
+          const { getCallRecordById } = await import(
+            "../../utils/callIntelligenceDb"
+          );
+          const record = await getCallRecordById(id);
+          if (!record) {
+            return c.json({ error: "call record not found" }, 404);
+          }
+          const { buildTranscriptVsEvaluationReport } = await import(
+            "../../utils/callMcpReconciliation"
+          );
+          const { getSdrProcessScopeForApi } = await import(
+            "../../utils/sdrProcessScope"
+          );
+          const report = buildTranscriptVsEvaluationReport({
+            call_record_id: id,
+            lead_id: record.lead_id ?? null,
+            agent_email: record.agent_email ?? null,
+            transcript_text:
+              typeof record.transcript_text === "string"
+                ? record.transcript_text
+                : null,
+            qa_score_percentage:
+              typeof record.qa_score_percentage === "number"
+                ? record.qa_score_percentage
+                : null,
+            talk_ratio:
+              typeof record.talk_ratio === "number"
+                ? record.talk_ratio
+                : null,
+            sentiment_label:
+              typeof record.sentiment_label === "string"
+                ? record.sentiment_label
+                : null,
+            improvements: record.improvements ?? null,
+          });
+          return c.json({
+            report,
+            sdr_process_scope: getSdrProcessScopeForApi(),
+          });
+        } catch (error) {
+          safeLogger.error("[MCP] reconciliation failed", {
+            err: error instanceof Error ? error.message : String(error),
+          });
+          return c.json({ error: "Reconciliation failed" }, 500);
+        }
+      };
+    },
+  },
 ];
 
 function formatEvaluationForZoho(evaluation: any, callRecord: any): string {
