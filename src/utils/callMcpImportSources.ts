@@ -85,34 +85,19 @@ export function getCallImportSourcesCatalog(): {
       {
         id: "google_drive",
         label: "Google Drive (or shared folder)",
- slack-audit-notification-alignment
-        status: "available",
-        description:
-          "Lists audio recordings in a Drive folder and creates call_records (source=google_drive) with recording_url pointing at the Drive media endpoint. Auth resolves at runtime in this order: Replit Drive connector → Service Account (GOOGLE_DRIVE_CLIENT_EMAIL + GOOGLE_DRIVE_PRIVATE_KEY) → OAuth refresh (GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN). Trigger transcription via existing upload-audio / Whisper path on the resulting record.",
-
         status: "planned",
         description:
           "Planned: service-account or OAuth, list folder, download audio, transcribe, then ingest with source google_drive. Use bulk or Five9 ingest until Drive client env is set.",
- main
         endpoints: [
           {
             method: "POST",
             path: "/api/calls/mcp/drive-import",
- slack-audit-notification-alignment
-            notes:
-              "Body: { folder_id?, query?, page_size?, page_token?, agent_email, default_direction?, dry_run? }. Returns 503 if no auth path configured.",
-
             notes: "Returns 501 with env hints until implemented.",
- main
           },
           {
             method: "POST",
             path: "/api/calls/ingest",
- slack-audit-notification-alignment
-            notes: "Also valid for one-off Drive-sourced calls (source=google_drive).",
-
             notes: "Once downloaded, same ingest contract with source google_drive.",
- main
           },
         ],
       },

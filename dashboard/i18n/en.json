@@ -1238,9 +1238,6 @@
       "mcp_reconcile_by_id_failed": "Reconciliation failed: {msg}",
       "mcp_tab_bridge": "QMS Bridge",
       "mcp_channel_status": "Status",
- slack-audit-notification-alignment
-      "mcp_channel_endpoints": "Endpoints"
-
       "mcp_channel_endpoints": "Endpoints",
       "auto_link_lead": "Match by phone",
       "auto_link_ok": "Linked to Lead {id}.",
@@ -1266,7 +1263,6 @@
       "delete_btn": "Delete",
       "delete_confirm": "Delete call record {id}? This removes its transcript, analysis, QA score, and compliance row. This cannot be undone.",
       "delete_failed": "Delete failed: {msg}"
- main
     },
     "users": {
       "no_pending_requests": "No pending access requests",

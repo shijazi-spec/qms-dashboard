@@ -7,8 +7,6 @@ import {
 
 export { CRM_PHONE_MATCH_SCOPE, CRM_PHONE_MATCH_SCOPE_DESCRIPTION };
 
- slack-audit-notification-alignment
-
 export interface AutoLinkLeadResult {
   linked: boolean;
   lead_id: string | null;
@@ -44,7 +42,6 @@ export function extractCallPhoneCandidates(record: any): string[] {
   return out.filter((c) => (seen.has(c) ? false : (seen.add(c), true)));
 }
 
- main
 export interface LeadPhoneMatch {
   id: string;
   module: "Leads";
@@ -109,7 +106,6 @@ export async function findLeadsByPhoneMatch(
   }
   return { normalized_query, matches, scanned: leads.length };
 }
- slack-audit-notification-alignment
 
 
 /**
@@ -218,4 +214,3 @@ export async function autoLinkLeadByPhone(
     attempted_phone: lastResult?.attempted_phone,
   };
 }
- main
