@@ -1620,6 +1620,23 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin"],
   },
+  {
+    pattern: /^\/api\/calls\/mcp\/leads\/match-phone$/,
+    methods: ["POST"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "team_lead",
+      "grc_manager",
+    ],
+  },
+  {
+    pattern: /^\/api\/calls\/mcp\/drive-import$/,
+    methods: ["POST"],
+    roles: ["admin"],
+  },
   { pattern: /^\/api\/meetings\/mom$/, methods: ["POST"], roles: ["admin"] },
   {
     pattern: /^\/api\/quality-scorecards(\/\d+)?$/,

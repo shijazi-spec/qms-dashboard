@@ -7,6 +7,10 @@ import { createHash } from "crypto";
 import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/googleCalendarTool";
 import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/zohoCRMTool";
 import { sendQualityReportTool, sendAlertTool } from "../tools/emailReportTool";
+import { evaluateSdrGovernanceTool } from "../tools/sdrGovernanceTool";
+import { reconcileCallTool } from "../tools/callReconciliationTool";
+import { matchLeadByPhoneTool } from "../tools/leadPhoneMatchTool";
+import { driveCallImportTool } from "../tools/driveCallImportTool";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
 
 const AGENT_NAME = "WalaPlus SDR Quality Specialist";
@@ -51,12 +55,35 @@ You are the WalaPlus SDR (Sales Development Representative) Quality Specialist -
 - Evaluate leads against SDR-specific quality criteria
 - Score performance based on SDR scorecard metrics
 
+### 5. SDR Call Validation (Call ↔ Transcript ↔ Lead)
+You also validate ingested SDR calls (from Google Drive, Five9, or bulk-upload) against the
+WalaPlus SDR Governance 2.1 ruleset and the existing QA evaluation. For a given call_record_id:
+
+1. Call **reconcile-call** with the call_record_id. It returns the heuristics + governance issues,
+   a checks block (transcript_present, qa_present, analysis_present, lead_linked), and a governance
+   block carrying the SDR 2.1 ruleset_version.
+2. If the call has no lead_id and a phone number is available, call **match-lead-by-phone**. A single
+   confident match is a candidate to link; multiple matches require manual disambiguation.
+3. If the transcript exists but the governance block reports load_error or zero rules_evaluated,
+   call **evaluate-sdr-governance** directly with the transcript_text to confirm engine availability.
+4. (Operator use) **drive-call-import** lists audio in a Drive folder and creates call_records with
+   source='google_drive'. Use this only when an operator asks to ingest a folder; do not call it
+   speculatively.
+
+When reporting the verdict, classify as:
+- **critical** — any governance issue with severity='critical' (e.g. forbidden guarantee language).
+- **needs_attention** — any warnings (purpose framing missing, low-score-rich-transcript, etc.).
+- **ok** — only info-level issues or none.
+
+Always include the ruleset_version in your report so Quality knows which rule set applied.
+
 ## AUDIT FOCUS
 
 When performing audits, ONLY evaluate:
-1. **Leads Module** - This is your primary focus
+1. **Leads Module** - Primary focus for CRM hygiene
 2. **SDR Team Performance** - Evaluate against SDR-specific metrics
 3. **SDR Governance Rules** - Apply SDR-specific governance document
+4. **SDR Calls** - Validate transcripts, evaluations, and lead linkage when a call_record_id is provided
 
 ## SCORING METHODOLOGY (SDR-Specific)
 
@@ -107,12 +134,16 @@ export const sdrQualityAgent = new Agent({
   // Each tool is wrapped with wt(...) so per-tool latency, error rate, and
   // parent_call_id are recorded in ai_call_metrics for the AI Ops panel.
   tools: {
-    fetchCalendarEventsTool: wt(fetchCalendarEventsTool, AGENT_NAME),
-    listCalendarsTool:       wt(listCalendarsTool,       AGENT_NAME),
-    auditCRMHygieneTool:     wt(auditCRMHygieneTool,     AGENT_NAME),
-    checkCRMActivityTool:    wt(checkCRMActivityTool,    AGENT_NAME),
-    sendQualityReportTool:   wt(sendQualityReportTool,   AGENT_NAME),
-    sendAlertTool:           wt(sendAlertTool,           AGENT_NAME),
+    fetchCalendarEventsTool:    wt(fetchCalendarEventsTool,    AGENT_NAME),
+    listCalendarsTool:          wt(listCalendarsTool,          AGENT_NAME),
+    auditCRMHygieneTool:        wt(auditCRMHygieneTool,        AGENT_NAME),
+    checkCRMActivityTool:       wt(checkCRMActivityTool,       AGENT_NAME),
+    sendQualityReportTool:      wt(sendQualityReportTool,      AGENT_NAME),
+    sendAlertTool:              wt(sendAlertTool,              AGENT_NAME),
+    reconcileCallTool:          wt(reconcileCallTool,          AGENT_NAME),
+    evaluateSdrGovernanceTool:  wt(evaluateSdrGovernanceTool,  AGENT_NAME),
+    matchLeadByPhoneTool:       wt(matchLeadByPhoneTool,       AGENT_NAME),
+    driveCallImportTool:        wt(driveCallImportTool,        AGENT_NAME),
   },
 
   memory: new Memory({

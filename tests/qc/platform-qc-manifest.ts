@@ -355,6 +355,15 @@ export const PLATFORM_QC_MANIFEST: QCTestCase[] = [
     path: "/api/calls/analytics",
     expectedStatus: 200,
   },
+  {
+    id: "calls-mcp-import-sources",
+    screenName: "Call Intelligence",
+    screenRoute: "/calls",
+    functionalityName: "QMS Bridge — import catalog & SDR scope",
+    method: "GET",
+    path: "/api/calls/mcp/import-sources",
+    expectedStatus: 200,
+  },
   // --- ROI (/roi)
   {
     id: "roi-list",

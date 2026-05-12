@@ -10,6 +10,11 @@ import { qualitySpecialistAgent } from "./agents/qualitySpecialistAgent";
 import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
 import { qualityAuditWorkflow } from "./workflows/qualityAuditWorkflow";
 
+import { evaluateSdrGovernanceTool } from "./tools/sdrGovernanceTool";
+import { reconcileCallTool } from "./tools/callReconciliationTool";
+import { matchLeadByPhoneTool } from "./tools/leadPhoneMatchTool";
+import { driveCallImportTool } from "./tools/driveCallImportTool";
+
 import { globalMiddleware } from "./middleware";
 import { dashboardApiRoutes } from "./routes/dashboardApiRoutes";
 import { adminApiRoutes } from "./routes/adminApiRoutes";
@@ -23,6 +28,7 @@ import { staticAssetRoutes } from "./routes/staticAssetRoutes";
 
 import { authRoutes } from "./routes/authRoutes";
 import { callIntelligenceRoutes } from "./routes/callIntelligenceRoutes";
+import { mcpCallEvaluationRoutes } from "./routes/mcpCallEvaluationRoutes";
 import { roiRoutes } from "./routes/roiRoutes";
 import { teamRoutes } from "./routes/teamRoutes";
 import { pmpRoutes } from "./routes/pmpRoutes";
@@ -120,7 +126,12 @@ export const mastra = new Mastra({
     allTools: new MCPServer({
       name: "allTools",
       version: "1.0.0",
-      tools: {},
+      tools: {
+        evaluateSdrGovernanceTool,
+        reconcileCallTool,
+        matchLeadByPhoneTool,
+        driveCallImportTool,
+      },
     }),
   },
   bundler: {
@@ -176,6 +187,7 @@ export const mastra = new Mastra({
 
       // ── Module-specific routes (already in separate files) ────────────────
       ...callIntelligenceRoutes,
+      ...mcpCallEvaluationRoutes,
       ...roiRoutes,
       ...teamRoutes,
       ...pmpRoutes,

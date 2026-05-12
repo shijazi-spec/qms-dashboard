@@ -1231,7 +1231,7 @@ ${transcriptText}
 
               const callRecord = await createCallRecord({
                 call_id: call.call_id || `bulk-${Date.now()}-${i}`,
-                source: "manual",
+                source: "bulk_upload",
                 lead_id: call.lead_id || "",
                 contact_name: call.contact_name || "",
                 agent_email: call.agent_email,
