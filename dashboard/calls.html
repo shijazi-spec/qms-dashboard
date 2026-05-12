@@ -454,7 +454,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
                         </svg>
                         <p class="text-gray-600 font-medium mb-1">Drop audio/video files here or click to browse</p>
-                        <p class="text-sm text-gray-400">Supports MP3, WAV, M4A, MP4, WebM, OGG (max 25MB each, 10 files)</p>
+                        <p class="text-sm text-gray-400">Supports MP3, WAV, M4A, MP4, WebM, OGG (max 25MB each, 50 files)</p>
                     </div>
                     <div id="bulk-audio-list" class="hidden mt-4 space-y-2">
                         <div class="flex items-center justify-between mb-2">
@@ -1583,7 +1583,7 @@
 
         function handleBulkAudioSelect(event) {
             const files = Array.from(event.target.files);
-            if (files.length > 10) {
+            if (files.length > 50) {
                 alert(WalaPlusI18n.t('dyn.calls.max_files_10'));
                 return;
             }

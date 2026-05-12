@@ -1054,7 +1054,7 @@
       "sample_ingest_msg": "Sample call ingestion coming soon. Use the API endpoint POST /api/calls/ingest",
       "prompt_admin_key": "Enter Admin API Key for this operation:",
       "file_too_large_100": "File size exceeds 100MB limit",
-      "max_files_10": "Maximum 10 files allowed per upload",
+      "max_files_10": "Maximum 50 files allowed per upload",
       "file_too_large_25": "File {name} exceeds 25MB limit",
       "agent_email_required": "Please enter a default agent email",
       "no_files_selected": "No files selected",
