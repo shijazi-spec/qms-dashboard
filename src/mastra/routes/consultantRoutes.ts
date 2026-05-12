@@ -40,6 +40,130 @@ interface AgentTextResult {
   text: string;
 }
 
+/**
+ * Returns a per-user resource ID so each user's AI conversation history is
+ * isolated in Mastra memory. Using the shared constant "consultant-session"
+ * would let any role-qualified user read or append to another user's thread
+ * by supplying a known threadId — the per-user namespace is the primary
+ * ownership boundary that prevents cross-user thread replay.
+ */
+function userResourceId(userId: string | number): string {
+  return `consultant-${userId}`;
+}
+
+/**
+ * After an agent turn completes, the assistant message has been persisted to
+ * Mastra memory with a stable id. We surface THAT id to the client as the
+ * messageId (instead of an ephemeral randomUUID) so when the user later
+ * returns to the page and we fetch /api/consultant/history/:threadId, the
+ * messageIds align — letting the existing per-message rating lookup
+ * (GET /api/consultant/feedback/:messageId) pre-apply thumbs on prior
+ * assistant turns. Falls back to a random UUID if memory is unavailable
+ * (e.g. an unexpected query failure) so the client still gets *some* id.
+ */
+/**
+ * Try to extract the assistant message id directly from the agent's own
+ * result object before falling back to a memory query. Mastra's generate()
+ * and stream() expose the persisted messages on `response.messages` once
+ * the turn completes — reading from there avoids an extra PG round-trip
+ * after every single chat turn (saves ~10-50ms of TTLB on every request).
+ */
+function extractAssistantIdFromAgentResult(result: any): string | null {
+  try {
+    const candidates = [
+      result?.response?.messages,
+      result?.messages,
+      result?.responseMessages,
+    ];
+    for (const msgs of candidates) {
+      if (!Array.isArray(msgs)) continue;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (m && m.role === "assistant" && typeof m.id === "string" && m.id) {
+          return m.id;
+        }
+      }
+    }
+  } catch {
+    /* fall through to memory query */
+  }
+  return null;
+}
+
+async function resolveLatestAssistantMessageId(
+  agent: any,
+  threadId: string,
+  resourceId: string,
+  preloaded?: any,
+): Promise<string> {
+  // Fast path — pull the id straight from the agent result if available.
+  if (preloaded) {
+    const fromResult = extractAssistantIdFromAgentResult(preloaded);
+    if (fromResult) return fromResult;
+  }
+  try {
+    const memory = await agent.getMemory?.();
+    if (!memory) return randomUUID();
+    const result = await memory.query({
+      threadId,
+      resourceId,
+      selectBy: { last: 5 },
+    });
+    const v2: Array<{ id: string; role: string; createdAt: Date | string }> =
+      (result?.messagesV2 as any) || [];
+    for (let i = v2.length - 1; i >= 0; i--) {
+      if (v2[i] && v2[i].role === "assistant" && v2[i].id) return v2[i].id;
+    }
+  } catch (err) {
+    safeLogger.warn(
+      "[ConsultantRoutes] resolveLatestAssistantMessageId failed",
+      err as any,
+    );
+  }
+  return randomUUID();
+}
+
+/**
+ * Per-thread serialization. Mastra's memory layer is not safe against
+ * two concurrent writes on the same threadId — rapid double-sends from
+ * the same user (e.g. impatient retry) can interleave assistant turns
+ * and corrupt the transcript order. We chain incoming requests for the
+ * same threadId through a tiny in-process Map so they execute serially.
+ * Different threads remain fully concurrent.
+ *
+ * We also cap the map size as a safety net so a long-running process
+ * with many threads does not leak entries when threads finish (each
+ * thread's entry is removed once it resolves).
+ */
+const threadMutex = new Map<string, Promise<unknown>>();
+const THREAD_MUTEX_MAX_SIZE = 5_000;
+async function withThreadLock<T>(
+  threadId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const prev = threadMutex.get(threadId) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  threadMutex.set(threadId, next);
+  if (threadMutex.size > THREAD_MUTEX_MAX_SIZE) {
+    // Drop the oldest entries; any in-flight promise they reference is
+    // still kept alive by the await chain below.
+    const it = threadMutex.keys();
+    for (let i = 0; i < 1000; i++) {
+      const k = it.next();
+      if (k.done) break;
+      threadMutex.delete(k.value);
+    }
+  }
+  try {
+    return await next;
+  } finally {
+    // Only clear if no newer waiter has chained on top of us.
+    if (threadMutex.get(threadId) === next) {
+      threadMutex.delete(threadId);
+    }
+  }
+}
+
 const CONSULTANT_ROLES: UserRole[] = [
   "admin",
   "ai_specialist",
@@ -92,6 +216,129 @@ export const consultantRoutes = [
   },
 
   {
+    // Returns the persisted Mastra chat history for a thread so the
+    // consultant page (and embedded widget) can re-render the prior
+    // conversation when the user reloads or comes back later. Each
+    // assistant message carries its Mastra-stored id as `messageId`,
+    // which matches the id surfaced at chat-time — letting the client's
+    // existing per-message rating lookup pre-apply thumbs.
+    path: "/api/consultant/history/:threadId",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const threadId = c.req.param("threadId");
+          if (!threadId || typeof threadId !== "string") {
+            return c.json({ error: "threadId is required" }, 400);
+          }
+
+          const mastra = c.get("mastra");
+          const agent = mastra?.getAgent("qmsConsultantAgent");
+          if (!agent) {
+            return c.json({ error: "QMS Consultant agent not available" }, 503);
+          }
+
+          const memory = await agent.getMemory?.();
+          if (!memory) {
+            return c.json({ messages: [] });
+          }
+
+          // Confirm the thread exists before querying — keeps the
+          // response a clean empty list for unknown / never-used
+          // threadIds (e.g. a stale sessionStorage value from a thread
+          // the user cleared) instead of surfacing a memory error.
+          const thread = await memory.getThreadById({ threadId });
+          if (!thread) {
+            return c.json({ messages: [] });
+          }
+
+          // Ownership check: the thread's resourceId must match the
+          // requesting user's own resource namespace. Without this a
+          // role-qualified user who knows another user's threadId could
+          // read that user's full AI conversation history.
+          const expectedResourceId = userResourceId(user.userId);
+          if (thread.resourceId && thread.resourceId !== expectedResourceId) {
+            return c.json({ error: "Not found" }, 404);
+          }
+
+          // Sanitize the optional ?limit= query — fall back to the
+          // default when the value is missing, non-numeric, or NaN, then
+          // clamp to [1, 200] so a malformed client cannot ask the
+          // memory layer for an unbounded slice. Default is 40 to match
+          // the agent's lastMessages window — fetching more is wasted
+          // work since the model only ever sees the last 40 anyway.
+          const limitRaw = parseInt(c.req.query("limit") || "40", 10);
+          const lastN = Math.max(
+            1,
+            Math.min(200, Number.isFinite(limitRaw) ? limitRaw : 40),
+          );
+          const result = await memory.query({
+            threadId,
+            resourceId: expectedResourceId,
+            selectBy: { last: lastN },
+          });
+
+          // We read V2 messages only — they carry the persisted Mastra
+          // id (needed to align with later feedback rating lookups) and
+          // a real createdAt. Threads created with the current agent
+          // configuration always populate messagesV2; legacy / V1-only
+          // threads are not supported by this rehydration path and will
+          // appear as an empty transcript (the welcome state takes over)
+          // rather than being shown without stable ids. We only surface
+          // user / assistant text turns — tool calls, system messages,
+          // and working-memory injections aren't useful for re-rendering
+          // the chat transcript.
+          const v2: any[] = (result?.messagesV2 as any[]) || [];
+          const messages = v2
+            .filter((m) => m && (m.role === "user" || m.role === "assistant"))
+            .map((m) => {
+              let text = "";
+              const content = m.content;
+              if (typeof content === "string") {
+                text = content;
+              } else if (content && typeof content === "object") {
+                if (typeof content.content === "string") {
+                  text = content.content;
+                } else if (Array.isArray(content.parts)) {
+                  text = content.parts
+                    .map((p: any) =>
+                      p && typeof p === "object" && typeof p.text === "string"
+                        ? p.text
+                        : "",
+                    )
+                    .filter(Boolean)
+                    .join("");
+                }
+              }
+              return {
+                messageId: m.id,
+                role: m.role,
+                content: text,
+                createdAt:
+                  m.createdAt instanceof Date
+                    ? m.createdAt.toISOString()
+                    : m.createdAt || null,
+              };
+            })
+            .filter((m) => m.content && m.content.trim().length > 0);
+
+          return c.json({
+            threadId,
+            promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
+            messages,
+          });
+        } catch (error) {
+          logger.error("[Consultant] History fetch error:", error);
+          return c.json({ error: "Failed to fetch history" }, 500);
+        }
+      };
+    },
+  },
+
+  {
     path: "/api/consultant/chat",
     method: "POST" as const,
     createHandler: async () => {
@@ -113,7 +360,16 @@ export const consultantRoutes = [
             return c.json({ error: "QMS Consultant agent not available" }, 503);
           }
 
-          const resolvedThreadId = threadId || `consultant-${Date.now()}`;
+          // Scope all memory to this user. Using a per-user resource ID
+          // prevents cross-user thread replay: even if an attacker knows
+          // another user's threadId, they cannot read or poison that
+          // thread because the resourceId namespace is different.
+          const resourceId = userResourceId(user.userId);
+          // Use a cryptographically random UUID for new threads so the
+          // threadId cannot be brute-forced from a known time window.
+          const resolvedThreadId = (threadId && typeof threadId === "string")
+            ? threadId
+            : `consultant-${randomUUID()}`;
 
           const chatTimeout = parseInt(
             process.env.CONSULTANT_CHAT_TIMEOUT_MS || "120000",
@@ -125,41 +381,49 @@ export const consultantRoutes = [
             // Wrap agent invocation in AsyncLocalStorage so any AI write-tool
             // called during this turn can see WHO prompted it. Without this,
             // the HITL gate cannot attribute pending actions to a user.
-            const { result: response, callId } =
-              await withAiTelemetry<AgentTextResult>(
-                {
-                  agentName: "WalaPlus QMS Consultant",
-                  model: "gpt-4o",
-                  promptText: message,
-                  userId: user.userId,
-                  sessionId: resolvedThreadId,
-                  metadata: buildAiCallTelemetryMetadata({
-                    promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
-                  }),
-                },
-                async () => {
-                  const res = await withAgentUserContext(
-                    {
-                      user: {
-                        userId: user.userId,
-                        email: user.email,
-                        role: user.role,
-                        autoApproveTier: resolveAutoApproveTier(user.role),
-                      },
-                      threadId: resolvedThreadId,
-                    },
-                    () =>
-                      agent.generateLegacy(message, {
+            const { result: response, callId } = await withThreadLock(
+              resolvedThreadId,
+              () =>
+                withAiTelemetry<AgentTextResult>(
+                  {
+                    agentName: "WalaPlus QMS Consultant",
+                    model: "gpt-4o",
+                    promptText: message,
+                    userId: user.userId,
+                    sessionId: resolvedThreadId,
+                    metadata: buildAiCallTelemetryMetadata({
+                      promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
+                    }),
+                  },
+                  async () => {
+                    const res = await withAgentUserContext(
+                      {
+                        user: {
+                          userId: user.userId,
+                          email: user.email,
+                          role: user.role,
+                          autoApproveTier: resolveAutoApproveTier(user.role),
+                        },
                         threadId: resolvedThreadId,
-                        resourceId: "consultant-session",
-                        abortSignal: controller.signal,
-                      }),
-                  );
-                  return res as AgentTextResult;
-                },
-              );
+                      },
+                      () =>
+                        agent.generate(message, {
+                          threadId: resolvedThreadId,
+                          resourceId,
+                          abortSignal: controller.signal,
+                        }),
+                    );
+                    return res as AgentTextResult;
+                  },
+                ),
+            );
 
-            const messageId = randomUUID();
+            const messageId = await resolveLatestAssistantMessageId(
+              agent,
+              resolvedThreadId,
+              resourceId,
+              response,
+            );
             return c.json({
               success: true,
               threadId: resolvedThreadId,
@@ -212,7 +476,16 @@ export const consultantRoutes = [
             return c.json({ error: "QMS Consultant agent not available" }, 503);
           }
 
-          const resolvedThreadId = threadId || `consultant-${Date.now()}`;
+          // Scope all memory to this user. Using a per-user resource ID
+          // prevents cross-user thread replay: even if an attacker knows
+          // another user's threadId, they cannot read or poison that
+          // thread because the resourceId namespace is different.
+          const resourceId = userResourceId(user.userId);
+          // Use a cryptographically random UUID for new threads so the
+          // threadId cannot be brute-forced from a known time window.
+          const resolvedThreadId = (threadId && typeof threadId === "string")
+            ? threadId
+            : `consultant-${randomUUID()}`;
 
           const streamTimeout = parseInt(
             process.env.CONSULTANT_STREAM_TIMEOUT_MS || "120000",
@@ -235,8 +508,41 @@ export const consultantRoutes = [
               promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
             }),
           });
-          const messageId = randomUUID();
-          let stream: Awaited<ReturnType<typeof agent.streamLegacy>>;
+          let stream: Awaited<ReturnType<typeof agent.stream>>;
+          // Acquire the per-thread lock for the lifetime of THIS stream
+          // (init + consumption). We resolve `releaseThreadLock` from the
+          // SSE finally{} block so the next request on the same thread
+          // can begin only after we finish writing to memory.
+          //
+          // Safety: a hard auto-release timer (streamTimeout + 30s) fires
+          // even if every code path forgets to release the lock — that
+          // way a single bug here can never permanently starve a thread.
+          // The release function is idempotent.
+          let lockReleased = false;
+          let releaseThreadLock: () => void = () => {};
+          const releaseLockOnce = () => {
+            if (lockReleased) return;
+            lockReleased = true;
+            releaseThreadLock();
+          };
+          const lockSafetyTimer = setTimeout(
+            releaseLockOnce,
+            streamTimeout + 30_000,
+          );
+          const threadLockHandshake = withThreadLock(
+            resolvedThreadId,
+            () =>
+              new Promise<void>((res) => {
+                releaseThreadLock = () => {
+                  clearTimeout(lockSafetyTimer);
+                  res();
+                };
+              }),
+          );
+          // Surface lock-acquisition failures to the outer catch so we
+          // don't leak the span; otherwise the await inside .start() will
+          // never resolve if the prior thread holder rejected.
+          threadLockHandshake.catch(() => {});
           try {
             stream = await span.run(() =>
               withAgentUserContext(
@@ -250,14 +556,15 @@ export const consultantRoutes = [
                   threadId: resolvedThreadId,
                 },
                 () =>
-                  agent.streamLegacy(message, {
+                  agent.stream(message, {
                     threadId: resolvedThreadId,
-                    resourceId: "consultant-session",
+                    resourceId,
                     abortSignal: controller.signal,
                   }),
               ),
             );
           } catch (streamInitErr) {
+            releaseLockOnce();
             clearTimeout(timer);
             const e =
               streamInitErr instanceof Error
@@ -278,16 +585,33 @@ export const consultantRoutes = [
           c.header("Connection", "keep-alive");
 
           const encoder = new TextEncoder();
+          // Heartbeat: while the agent is "thinking" (e.g. waiting on a
+          // slow tool before the first chunk arrives), the SSE socket is
+          // idle and intermediate proxies (Replit's edge, corporate
+          // gateways) can drop the connection after ~30-60s. Send an
+          // SSE comment frame every 15s — comments are ignored by the
+          // EventSource parser but keep the TCP socket warm.
+          const HEARTBEAT_MS = 15_000;
           const readable = new ReadableStream({
             async start(streamController) {
               let streamSuccess = true;
               let streamError: Error | undefined;
+              let firstChunkSeen = false;
+              const heartbeat = setInterval(() => {
+                if (firstChunkSeen) return;
+                try {
+                  streamController.enqueue(encoder.encode(`: ping\n\n`));
+                } catch {
+                  /* controller closed — ignore */
+                }
+              }, HEARTBEAT_MS);
               try {
                 // Run the stream consumption INSIDE span.run() so the
                 // parent_call_id ALS context is visible to tools invoked
                 // during streaming (tools execute lazily as chunks flow).
                 await span.run(async () => {
                   for await (const chunk of stream.textStream) {
+                    firstChunkSeen = true;
                     streamController.enqueue(
                       encoder.encode(
                         `data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`,
@@ -299,8 +623,35 @@ export const consultantRoutes = [
                 // inline thumbs / comment feedback (POST /api/ai-ops/feedback)
                 // to this exact response. The span allocates the callId up
                 // front, so it's known here without waiting for finalize().
-                // messageId comes from main and is used by the client to
-                // address an individual assistant turn for editing/threading.
+                // messageId is resolved AFTER streaming completes so it
+                // matches the assistant message Mastra just persisted to
+                // memory. Returning that stable id (instead of a random
+                // UUID) lets the history endpoint pre-apply prior thumbs
+                // when the user revisits the page.
+                // Try to read the assistant id directly from the stream
+                // result first (Mastra exposes a `response` promise that
+                // resolves once the turn is fully persisted) — falls
+                // back to the memory query if that shape isn't present.
+                let preloaded: any = null;
+                try {
+                  const responseProp = (stream as any).response;
+                  if (responseProp && typeof responseProp.then === "function") {
+                    preloaded = await Promise.race([
+                      responseProp,
+                      new Promise((res) => setTimeout(() => res(null), 500)),
+                    ]);
+                  } else if (responseProp) {
+                    preloaded = responseProp;
+                  }
+                } catch {
+                  /* fall back to memory query below */
+                }
+                const messageId = await resolveLatestAssistantMessageId(
+                  agent,
+                  resolvedThreadId,
+                  resourceId,
+                  preloaded,
+                );
                 streamController.enqueue(
                   encoder.encode(
                     `data: ${JSON.stringify({ done: true, threadId: resolvedThreadId, messageId, callId: span.callId ?? undefined, promptVersion: QMS_CONSULTANT_PROMPT_VERSION })}\n\n`,
@@ -323,19 +674,32 @@ export const consultantRoutes = [
                 streamController.close();
               } finally {
                 clearTimeout(timer);
+                clearInterval(heartbeat);
+                // Release the per-thread mutex now that this stream is
+                // fully done writing to Mastra memory — the next request
+                // on the same threadId can proceed. Idempotent so the
+                // safety timer doesn't double-release after us.
+                releaseLockOnce();
 
                 // Best-effort token-usage extraction, then finalize the
-                // parent row that was opened above.
+                // parent row that was opened above. We also clear the
+                // race-timer handle so it doesn't keep the event loop
+                // alive when usage resolves first (was a small leak).
                 let promptTokens: number | undefined;
                 let completionTokens: number | undefined;
                 let totalTokens: number | undefined;
                 if (streamSuccess) {
                   try {
+                    let usageRaceTimer: ReturnType<typeof setTimeout> | null =
+                      null;
                     const usage = await Promise.race([
-                      stream.usage ?? Promise.resolve(null),
-                      new Promise<null>((res) =>
-                        setTimeout(() => res(null), 2000),
-                      ),
+                      Promise.resolve(stream.usage ?? null).then((u) => {
+                        if (usageRaceTimer) clearTimeout(usageRaceTimer);
+                        return u;
+                      }),
+                      new Promise<null>((res) => {
+                        usageRaceTimer = setTimeout(() => res(null), 2000);
+                      }),
                     ]);
                     if (usage && typeof usage === "object") {
                       const u = usage as Record<string, unknown>;
@@ -396,11 +760,22 @@ export const consultantRoutes = [
           const alertType = c.req.query("type") as AlertType | undefined;
           const limit = parseInt(c.req.query("limit") || "50");
           const offset = parseInt(c.req.query("offset") || "0");
+          // Server-side resolution-source filter (Task #417). The All
+          // Alerts modal previously applied this client-side AFTER the
+          // 50-row API cap, which silently dropped matches whenever
+          // closed-alert volume crossed the cap in a single status.
+          // Whitelist here so only the two valid values reach the SQL.
+          const resolutionRaw = (c.req.query("resolution") || "").toLowerCase();
+          const resolution =
+            resolutionRaw === "auto" || resolutionRaw === "manual"
+              ? (resolutionRaw as "auto" | "manual")
+              : undefined;
 
           const result = await getAIAlerts({
             status: status || undefined,
             severity: severity || undefined,
             alert_type: alertType || undefined,
+            resolution,
             limit: isNaN(limit) ? 50 : limit,
             offset: isNaN(offset) ? 0 : offset,
           });
@@ -469,7 +844,27 @@ export const consultantRoutes = [
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid alert ID" }, 400);
 
-          const alert = await resolveAlert(id);
+          // Task #324: capture the optional resolution note posted by the
+          // manual-resolve popover and the resolver's identity so the
+          // resolved-alerts feed can render WHO closed it and WHY. Empty /
+          // non-string values fall through as `undefined` so resolveAlert()
+          // preserves any prior note via COALESCE.
+          let note: string | undefined;
+          try {
+            const body = await c.req.json().catch(() => null);
+            const raw = body?.note;
+            if (typeof raw === "string") {
+              const trimmed = raw.trim();
+              if (trimmed.length > 0) {
+                note = trimmed.slice(0, 1000);
+              }
+            }
+          } catch {
+            // No body / invalid JSON — legacy clients that POST without a
+            // body still work; just no note attached.
+          }
+          const resolvedBy = user.name || user.email;
+          const alert = await resolveAlert(id, note, resolvedBy);
           if (!alert) return c.json({ error: "Alert not found" }, 404);
 
           return c.json({ success: true, alert });
@@ -608,32 +1003,58 @@ export const consultantRoutes = [
 
           // Optional metadata filters so admins triaging a regression can
           // narrow the recent thumbs-down list down to a specific prompt
-          // revision (`metadata->>'prompt_version'`) or feature-flag bucket
-          // (`metadata->>'feature_flag'`). Mirrors the snake_case shape the
-          // sibling `ai_call_metrics.metadata` endpoints already speak so the
-          // dashboard can wire the same filter values across both panels.
-          // The downstream `getRecentThumbsDown()` helper trims, length-caps,
-          // and binds these via parameterised SQL so no validation needs to
-          // happen here.
+          // revision (`metadata->>'prompt_version'`), feature-flag bucket
+          // (`metadata->>'feature_flag'`), or client surface
+          // (`metadata->>'client_surface'`). Mirrors the snake_case shape
+          // the sibling `ai_call_metrics.metadata` endpoints already speak
+          // so the dashboard can wire the same filter values across both
+          // panels. The downstream `getRecentThumbsDown()` helper trims,
+          // length-caps, and binds these via parameterised SQL so no
+          // validation needs to happen here.
           const promptVersion =
             c.req.query("prompt_version") ?? c.req.query("promptVersion");
           const featureFlag =
             c.req.query("feature_flag") ?? c.req.query("featureFlag");
+          const clientSurface =
+            c.req.query("client_surface") ?? c.req.query("clientSurface");
+          // Task #767: third triage dimension on the recent thumbs-down list.
+          // Mirrors the snake_case / camelCase fallback pattern used by the
+          // sibling filters so the dashboard can speak either spelling.
+          const ratingSource =
+            c.req.query("rating_source") ?? c.req.query("ratingSource");
+          // Task #423: optional `agent` filter so the AI Ops feedback tab can
+          // narrow KPIs, top-thumbs-down categories, and the recent
+          // thumbs-down list down to the same agent already supported by the
+          // trend chart endpoint. The literal "all" sentinel emitted by the
+          // dashboard dropdown is treated as "no filter" so the frontend can
+          // forward the dropdown value verbatim.
+          const agentRaw = c.req.query("agent");
+          const agentNormalized =
+            typeof agentRaw === "string" ? agentRaw.trim() : "";
+          const agent =
+            agentNormalized && agentNormalized !== "all"
+              ? agentNormalized
+              : null;
 
           const isAdmin = user.role === "admin";
           const [stats, recent] = await Promise.all([
-            getFeedbackStats(days),
+            getFeedbackStats(days, agent),
             isAdmin
               ? getRecentThumbsDown(20, {
                   promptVersion:
                     typeof promptVersion === "string" ? promptVersion : null,
                   featureFlag:
                     typeof featureFlag === "string" ? featureFlag : null,
+                  clientSurface:
+                    typeof clientSurface === "string" ? clientSurface : null,
+                  ratingSource:
+                    typeof ratingSource === "string" ? ratingSource : null,
+                  agent,
                 })
               : Promise.resolve([]),
           ]);
 
-          return c.json({ stats, recent, isAdmin });
+          return c.json({ stats, recent, isAdmin, agent: agent || "all" });
         } catch (error) {
           logger.error("[Consultant] Feedback stats error:", error);
           return c.json({ error: "Failed to fetch feedback stats" }, 500);
@@ -756,7 +1177,7 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
                 }),
               },
               async () =>
-                (await agent.generateLegacy(scanPrompt, {
+                (await agent.generate(scanPrompt, {
                   threadId: `scan-${Date.now()}`,
                   resourceId: "system-scanner",
                   abortSignal: scanController.signal,

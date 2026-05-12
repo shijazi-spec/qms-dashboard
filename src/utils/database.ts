@@ -113,6 +113,15 @@ export interface QualityAuditResult {
   recommendations?: any;
   calendar_events_count?: number;
   raw_audit_data?: any;
+  // The user-selected date filter (from the upper-area Created/Modified
+  // pickers) that was active when this audit was triggered. Persisted so
+  // the Audit History "Period Covered" column can show exactly which
+  // records the audit covered, instead of the gap between consecutive
+  // audit_date timestamps. Null on cron/legacy audits ⇒ "All Data".
+  period_created_start?: string | null;
+  period_created_end?: string | null;
+  period_modified_start?: string | null;
+  period_modified_end?: string | null;
 }
 
 export async function getActiveGovernanceDocument(): Promise<GovernanceDocument | null> {
@@ -258,8 +267,9 @@ export async function saveAuditResult(
     `INSERT INTO quality_audit_results 
      (scorecard_id, governance_doc_id, total_records_audited, total_issues_found, 
       people_score, process_score, governance_score, overall_score, 
-      dimension_details, issues_by_category, recommendations, calendar_events_count, raw_audit_data)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      dimension_details, issues_by_category, recommendations, calendar_events_count, raw_audit_data,
+      period_created_start, period_created_end, period_modified_start, period_modified_end)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
      RETURNING *`,
     [
       audit.scorecard_id,
@@ -275,6 +285,10 @@ export async function saveAuditResult(
       JSON.stringify(audit.recommendations),
       audit.calendar_events_count,
       JSON.stringify(audit.raw_audit_data),
+      audit.period_created_start ?? null,
+      audit.period_created_end ?? null,
+      audit.period_modified_start ?? null,
+      audit.period_modified_end ?? null,
     ],
   );
 
@@ -366,33 +380,93 @@ async function saveTrendMetrics(auditId: number, audit: QualityAuditResult) {
   );
 }
 
+export interface AuditFilterOpts {
+  /** Legacy: filter by `audit_date` (when the audit RAN). */
+  startDate?: string | null;
+  /** Legacy: filter by `audit_date` (when the audit RAN). */
+  endDate?: string | null;
+  /** Filter by `period_created_*` overlap (CRM record created window). */
+  createdStart?: string | null;
+  /** Filter by `period_created_*` overlap (CRM record created window). */
+  createdEnd?: string | null;
+  /** Filter by `period_modified_*` overlap (CRM record modified window). */
+  modifiedStart?: string | null;
+  /** Filter by `period_modified_*` overlap (CRM record modified window). */
+  modifiedEnd?: string | null;
+}
+
 /**
- * Build the WHERE clause + params for the dashboard date filter.
- * The UI sends ISO date strings (YYYY-MM-DD). End date is treated as
- * inclusive end-of-day so a range like "04/27 → 04/27" still matches
- * audits run that same day. Returns an empty clause when no filter is
- * supplied so the caller can append it unconditionally.
+ * Build the WHERE clause + params for the dashboard audit filter.
+ *
+ * The UI sends ISO date strings (YYYY-MM-DD).
+ *
+ * Filtering modes:
+ *  - When `createdStart`/`createdEnd` or `modifiedStart`/`modifiedEnd` are
+ *    supplied (the dashboard's Created/Modified pickers), the clause filters
+ *    by audit-period OVERLAP using the `period_created_*` /
+ *    `period_modified_*` columns. Audits with NULL period metadata are
+ *    excluded — we cannot prove a NULL-period audit covers the requested
+ *    window, so showing it would mislead the user with "0 records / 0 issues".
+ *  - When only legacy `startDate`/`endDate` are supplied (used by
+ *    `/api/audit/latest` and `/api/audit/history`), the clause filters by
+ *    `audit_date` (when the audit RAN), preserving prior behaviour.
+ *
+ * End dates are treated as inclusive end-of-day, expressed as an exclusive
+ * upper bound on the NEXT day to avoid the `23:59:59.999` microsecond
+ * truncation bug.
+ *
+ * Returns an empty clause when no filter is supplied so callers can append
+ * it unconditionally.
  */
 function buildAuditDateRangeClause(
-  opts: { startDate?: string | null; endDate?: string | null } | undefined,
+  opts: AuditFilterOpts | undefined,
   startingParamIndex: number,
 ): { clause: string; params: any[] } {
   if (!opts) return { clause: "", params: [] };
   const params: any[] = [];
   const conds: string[] = [];
-  if (opts.startDate) {
-    params.push(opts.startDate);
-    conds.push(`audit_date >= $${startingParamIndex + params.length - 1}`);
-  }
-  if (opts.endDate) {
-    // Inclusive end-of-day, expressed as an exclusive upper bound on the
-    // NEXT day. Avoids the `23:59:59.999` truncation bug — Postgres
-    // timestamps support microseconds, so anything in the .999001-.999999
-    // window would otherwise be silently dropped from the same-day range.
-    params.push(opts.endDate);
-    conds.push(
-      `audit_date < ($${startingParamIndex + params.length - 1}::date + interval '1 day')`,
-    );
+  const nextPlaceholder = () =>
+    `$${startingParamIndex + params.length - 1}`;
+  const hasPeriod =
+    opts.createdStart || opts.createdEnd || opts.modifiedStart || opts.modifiedEnd;
+  if (hasPeriod) {
+    if (opts.createdStart || opts.createdEnd) {
+      const startVal = opts.createdStart || "0001-01-01";
+      const endVal = opts.createdEnd || "9999-12-31";
+      params.push(startVal);
+      const startPh = nextPlaceholder();
+      params.push(endVal);
+      const endPh = nextPlaceholder();
+      conds.push(
+        `(period_created_start IS NOT NULL AND period_created_end IS NOT NULL ` +
+          `AND period_created_start <= (${endPh}::date + interval '1 day' - interval '1 microsecond') ` +
+          `AND period_created_end >= ${startPh}::date)`,
+      );
+    }
+    if (opts.modifiedStart || opts.modifiedEnd) {
+      const startVal = opts.modifiedStart || "0001-01-01";
+      const endVal = opts.modifiedEnd || "9999-12-31";
+      params.push(startVal);
+      const startPh = nextPlaceholder();
+      params.push(endVal);
+      const endPh = nextPlaceholder();
+      conds.push(
+        `(period_modified_start IS NOT NULL AND period_modified_end IS NOT NULL ` +
+          `AND period_modified_start <= (${endPh}::date + interval '1 day' - interval '1 microsecond') ` +
+          `AND period_modified_end >= ${startPh}::date)`,
+      );
+    }
+  } else {
+    if (opts.startDate) {
+      params.push(opts.startDate);
+      conds.push(`audit_date >= ${nextPlaceholder()}`);
+    }
+    if (opts.endDate) {
+      params.push(opts.endDate);
+      conds.push(
+        `audit_date < (${nextPlaceholder()}::date + interval '1 day')`,
+      );
+    }
   }
   const clause = conds.length > 0 ? ` WHERE ${conds.join(" AND ")}` : "";
   return { clause, params };
@@ -440,16 +514,35 @@ export async function getTrendData(
   return result.rows;
 }
 
-export async function getDashboardData(opts?: {
-  startDate?: string | null;
-  endDate?: string | null;
-}): Promise<{
+export async function getDashboardData(opts?: AuditFilterOpts): Promise<{
   latestAudit: QualityAuditResult | null;
+  /**
+   * Always the most recent audit in the table, regardless of any active
+   * Created/Modified filter. Powers the "Last AI Audit: …" header chip,
+   * which describes when the system last RAN an audit and must not change
+   * when the user filters the dashboard body by CRM record period.
+   */
+  absoluteLatestAudit: QualityAuditResult | null;
   auditHistory: QualityAuditResult[];
   governance: GovernanceDocument | null;
   governanceDocs: GovernanceDocument[];
   scorecard: QualityScorecard | null;
-  appliedDateRange: { startDate: string | null; endDate: string | null };
+  /**
+   * Enterprise-wide GRC snapshot (NCs, CAPAs, risks, KPIs, compliance, and
+   * the composite enterprise health score / rating). Mirrors the executive
+   * digest's numbers so the dashboard headline agrees with the Slack/email
+   * digest by construction. Always system-wide — independent of any
+   * Created/Modified period filter applied to the audit body.
+   */
+  grcSnapshot: import("./executiveDigest").EnterpriseGRCSnapshot | null;
+  appliedDateRange: {
+    startDate: string | null;
+    endDate: string | null;
+    createdStart: string | null;
+    createdEnd: string | null;
+    modifiedStart: string | null;
+    modifiedEnd: string | null;
+  };
   trends: {
     overall: any[];
     people: any[];
@@ -457,23 +550,42 @@ export async function getDashboardData(opts?: {
     governance: any[];
   };
 }> {
-  // When a date range is supplied, every headline KPI on the dashboard
-  // (Overall / People / Process / Governance scores, Records Audited,
-  // Issues Found, Compliance Rate) and the Audit History list are scoped
-  // to audits whose `audit_date` falls within that window. The trend
-  // sparklines below remain a 90-day rolling view by design.
-  const range = {
+  // When a Created/Modified filter is supplied, the headline KPIs (Overall /
+  // People / Process / Governance scores, Records Audited, Issues Found,
+  // Compliance Rate) and the Audit History list are scoped to audits whose
+  // `period_created_*` / `period_modified_*` window OVERLAPS the filter (see
+  // buildAuditDateRangeClause). The trend sparklines below remain a 90-day
+  // rolling view by design. `absoluteLatestAudit` ignores the filter so the
+  // header chip always reflects the true most-recent audit.
+  const range: AuditFilterOpts = {
     startDate: opts?.startDate || null,
     endDate: opts?.endDate || null,
+    createdStart: opts?.createdStart || null,
+    createdEnd: opts?.createdEnd || null,
+    modifiedStart: opts?.modifiedStart || null,
+    modifiedEnd: opts?.modifiedEnd || null,
   };
-  const [latestAudit, auditHistory, governance, governanceDocs, scorecard] =
-    await Promise.all([
-      getLatestAuditResult(range),
-      getAuditHistory(20, range),
-      getActiveGovernanceDocument(),
-      getActiveGovernanceDocumentsByModule(),
-      getActiveScorecard(),
-    ]);
+  const { getEnterpriseGRCSnapshot } = await import("./executiveDigest");
+  const [
+    latestAudit,
+    absoluteLatestAudit,
+    auditHistory,
+    governance,
+    governanceDocs,
+    scorecard,
+    grcSnapshot,
+  ] = await Promise.all([
+    getLatestAuditResult(range),
+    getLatestAuditResult(),
+    getAuditHistory(20, range),
+    getActiveGovernanceDocument(),
+    getActiveGovernanceDocumentsByModule(),
+    getActiveScorecard(),
+    // System-wide GRC snapshot — never gated by the audit Created/Modified
+    // filter, so the headline rating stays consistent with the Slack/email
+    // digest regardless of dashboard filtering.
+    getEnterpriseGRCSnapshot().catch(() => null),
+  ]);
 
   const [overallTrend, peopleTrend, processTrend, governanceTrend] =
     await Promise.all([
@@ -485,11 +597,13 @@ export async function getDashboardData(opts?: {
 
   return {
     latestAudit,
+    absoluteLatestAudit,
     auditHistory,
     governance,
     governanceDocs,
     scorecard,
-    appliedDateRange: range,
+    grcSnapshot,
+    appliedDateRange: range as Required<AuditFilterOpts>,
     trends: {
       overall: overallTrend,
       people: peopleTrend,

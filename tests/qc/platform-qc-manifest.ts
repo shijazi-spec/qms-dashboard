@@ -552,4 +552,14 @@ export const PLATFORM_QC_MANIFEST: QCTestCase[] = [
     expectedStatus: [200, 401],
     allowUnauth: true,
   },
+  // --- MCP Call Evaluation (QMS Bridge)
+  {
+    id: "calls-mcp-import-sources",
+    screenName: "Call Evaluation",
+    screenRoute: "/calls",
+    functionalityName: "MCP import-sources catalog",
+    method: "GET",
+    path: "/api/calls/mcp/import-sources",
+    expectedStatus: 200,
+  },
 ];

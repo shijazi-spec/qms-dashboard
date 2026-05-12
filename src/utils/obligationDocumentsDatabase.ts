@@ -1,7 +1,7 @@
-import { Pool } from "pg";
+import { createRedactedPool } from "./redactedPool";
 import { logger } from "./logger";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = createRedactedPool({ connectionString: process.env.DATABASE_URL });
 
 export interface ObligationDocumentLink {
   id: number;

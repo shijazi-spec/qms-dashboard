@@ -1,19 +1,21 @@
-import { getSessionFromCookie } from "./authRoutes";
-import { hasValidAdminApiKey } from "../../utils/rbacMiddleware";
+import { requireRoleOrKey, forbiddenResponse } from "../../utils/rbacMiddleware";
+import type { UserRole } from "../../utils/rbacMiddleware";
 
 import { logger } from "../../utils/logger";
-// Defense-in-depth gate for `/api/health-index`. The middleware's PUBLIC_PATHS
-// list (see src/mastra/middleware/index.ts) used to allowlist `/api/health` as
-// a *prefix*, which silently exposed `/api/health-index` (aggregated NC / CAPA
-// / audit / KPI / compliance counts) to anonymous callers. Task #447 changed
-// the matcher so `/api/health` is exact-only, but we still enforce a
-// session-or-admin-key check here so a future stale entry in PUBLIC_PATHS
-// (the same class of bug audited in #447) cannot silently re-expose this
-// quality-metrics rollup. Mirrors `isAuthorizedForSop` in sopRoutes.ts.
-function isAuthorizedForHealthIndex(c: any): boolean {
-  if (hasValidAdminApiKey(c)) return true;
-  return !!getSessionFromCookie(c.req.header("Cookie"));
-}
+// Roles permitted to read the health-index aggregates. These cover audit,
+// NC, CAPA, KPI, and compliance data, so access is limited to governance-
+// oriented roles that are already permitted to read those underlying modules
+// directly. Mirrors the role set used by `/api/reports/capa-effectiveness`
+// (REPORT_ALLOWED_ROLES in reportRoutes.ts) since both endpoints query the
+// same sensitive operational tables (capa_records, nonconformance_records,
+// quality_audit_results, kpi_values, obligations).
+const HEALTH_INDEX_ROLES: UserRole[] = [
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+  "executive",
+];
 
 export const notificationRoutes = [
   {
@@ -81,13 +83,37 @@ export const notificationRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, forbiddenResponse, hasValidAdminApiKey } =
+            await import("../../utils/rbacMiddleware");
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
-          const { dismissNotification } =
+
+          const { getNotificationById, dismissNotification } =
             await import("../../utils/notificationHub");
-          const notif = await dismissNotification(id);
+
+          const notif = await getNotificationById(id);
           if (!notif) return c.json({ error: "Not found" }, 404);
-          return c.json({ success: true, notification: notif });
+
+          const isAdminKey = hasValidAdminApiKey(c);
+          if (!isAdminKey) {
+            const user = getSessionUser(c);
+            if (!user) return c.json({ error: "Authentication required" }, 401);
+
+            const isAdmin = user.role === "admin";
+            const isRecipient =
+              notif.recipient && notif.recipient === user.email;
+
+            if (!isAdmin && !isRecipient) {
+              return forbiddenResponse(
+                c,
+                "You may only dismiss notifications addressed to you",
+              );
+            }
+          }
+
+          const dismissed = await dismissNotification(id);
+          return c.json({ success: true, notification: dismissed });
         } catch (error) {
           return c.json({ error: "Failed to dismiss" }, 500);
         }
@@ -99,8 +125,12 @@ export const notificationRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
-        if (!isAuthorizedForHealthIndex(c)) {
-          return c.json({ error: "Authentication required" }, 401);
+        const user = await requireRoleOrKey(c, HEALTH_INDEX_ROLES);
+        if (!user) {
+          return forbiddenResponse(
+            c,
+            "Insufficient permissions to view health index",
+          );
         }
         const pg = await import("pg");
         const pool = new pg.default.Pool({

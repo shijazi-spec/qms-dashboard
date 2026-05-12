@@ -9,6 +9,7 @@ import {
 } from "./rbacDatabase";
 
 import { logger } from "./logger";
+
 const platformPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 export interface SessionUser {
@@ -97,9 +98,10 @@ export function getSessionUser(c: any): SessionUser | null {
       picture: session.picture,
     };
   }
-  const adminKeyHeader = c.req.header("X-Admin-Key");
-  const expectedKey = process.env.ADMIN_API_KEY;
-  if (expectedKey && adminKeyHeader === expectedKey) {
+  // Accept admin identity via X-Admin-Key header only (server-to-server / CLI path).
+  // The browser admin-key cookie path has been fully removed (Task #831).
+  // Browser admin access requires OIDC login with the admin platform role.
+  if (hasValidAdminApiKey(c)) {
     return {
       userId: 0,
       email: "admin-key@system",
@@ -174,33 +176,35 @@ export function isDepartmentViewer(c: any): boolean {
   return user?.role === "department_viewer";
 }
 
+/**
+ * Returns the raw ADMIN_API_KEY presented via the X-Admin-Key request header,
+ * or null if the header is absent.  This covers server-to-server / CLI calls
+ * (curl, internal tooling) where the caller has legitimate access to the raw
+ * secret.
+ *
+ * Browser sessions are NOT accepted here.  The raw admin-key browser cookie
+ * path was removed in Task #831: browsers must authenticate through the OIDC
+ * login flow and be assigned the `admin` platform role.
+ */
 export function getAdminKey(c: any): string | null {
-  const headerKey = c.req.header("X-Admin-Key");
-  if (headerKey) return headerKey;
-  const cookies = (c.req.header("Cookie") || "")
-    .split(";")
-    .map((s: string) => s.trim());
-  const adminCookie = cookies.find((s: string) => s.startsWith("admin_key="));
-  if (adminCookie) {
-    const rawValue = adminCookie.slice(adminCookie.indexOf("=") + 1);
-    if (!rawValue) return null;
-    // Some HTTP clients percent-encode cookie values that contain reserved
-    // characters like '=', '+', or '/'. Decode so the comparison against
-    // ADMIN_API_KEY succeeds regardless of how the client serialized it.
-    // Fall back to the raw value if the sequence is malformed.
-    try {
-      return decodeURIComponent(rawValue);
-    } catch {
-      return rawValue;
-    }
-  }
-  return null;
+  return c.req.header("X-Admin-Key") ?? null;
 }
 
+/**
+ * Returns true when the caller presents a valid raw ADMIN_API_KEY via the
+ * X-Admin-Key request header.  This covers only the server-to-server / CLI
+ * trust path (curl, internal automation, Inngest, monitoring tools).
+ *
+ * Browser sessions are NOT accepted here: browsers must authenticate through
+ * the OIDC login flow and be assigned the `admin` platform role. The browser
+ * admin-key cookie path has been removed because a global shared secret must
+ * not be convertible into a reusable, device-independent browser session.
+ */
 export function hasValidAdminApiKey(c: any): boolean {
-  const adminKey = getAdminKey(c);
   const expectedKey = process.env.ADMIN_API_KEY;
-  return !!(expectedKey && adminKey === expectedKey);
+  if (!expectedKey) return false;
+  const headerKey = getAdminKey(c);
+  return !!(headerKey && headerKey === expectedKey);
 }
 
 /**
@@ -425,6 +429,19 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // Event logs — admin-only read (cross-module audit trail with PII and sensitive diffs)
   { pattern: /^\/api\/logs/, methods: ["GET"], roles: ["admin"] },
   { pattern: /^\/api\/event-logs/, methods: ["GET"], roles: ["admin"] },
+
+  // Executive digest — XLSX export of issues (analytics read-side; mirrors other analytics reads)
+  {
+    pattern: /^\/api\/digest\/issues\.xlsx$/,
+    methods: ["GET"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
+  },
+  // Executive digest — outbox processor (write/send-side; admin + ops only, mirrors DIGEST_SEND_ROLES)
+  {
+    pattern: /^\/api\/analytics\/executive-digest\/outbox\/process$/,
+    methods: ["POST"],
+    roles: ["admin", "head_of_operations_quality"],
+  },
 
   {
     pattern: /^\/api\/risks\/\d+\/close$/,
@@ -1767,6 +1784,48 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     ],
   },
 
+  // Pipeline Aging (Task #825) — mirrors Duplicate Radar read set; handlers
+  // also enforce the same allowlist via `requirePipelineAgingAccess`.
+  {
+    pattern: /^\/api\/zoho\/(deals|leads)\/[^/]+\/(stage|status)-aging$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "grc_manager",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "bu_owner",
+      "executive",
+    ],
+  },
+  {
+    pattern: /^\/api\/zoho\/(deals|leads)\/aging$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "grc_manager",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "bu_owner",
+      "executive",
+    ],
+  },
+  {
+    pattern: /^\/api\/zoho\/aging\/config$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "grc_manager",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "bu_owner",
+      "executive",
+    ],
+  },
+
   // External Audit reads — handler uses `getSessionUser` only (any auth).
   {
     pattern: /^\/api\/external-audits/,
@@ -2090,11 +2149,123 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     ],
   },
 
-  // User access reads — fine-grained (admin-only diagnostics; admin+QM list).
-  // Order matters: more specific patterns must precede the broad
-  // `/api/users(/...)?$ GET` rule below.
+  // ─────────────────────────────────────────────────────────────────────────
+  // Task #436 — coverage backfill for `/api/*` routes that previously fell
+  // through every rule above and were therefore denied by the deny-by-default
+  // fallback. Discovered by `tests/rbacRouteCoverage.test.ts`, which scans
+  // `src/mastra/routes/**` and `src/triggers/**` and asserts every live
+  // route has an explicit ROUTE_PERMISSION_MAP rule.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Consultant feedback by message — handler uses `requireRole(c, CONSULTANT_ROLES)`.
+  {
+    pattern: /^\/api\/consultant\/feedback\/[^/]+$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "grc_manager",
+      "head_of_operations_quality",
+    ],
+  },
+
+  // Consultant chat history by thread — handler uses
+  // `requireRole(c, CONSULTANT_ROLES)`. Same role set as the sibling
+  // /api/consultant/feedback/:messageId rule above; backfilled here so the
+  // rebac route-coverage gate (Task #436) passes for the route added in
+  // src/mastra/routes/consultantRoutes.ts:139.
+  {
+    pattern: /^\/api\/consultant\/history\/[^/]+$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "grc_manager",
+      "head_of_operations_quality",
+    ],
+  },
+
+  // Recent-downloads tracker — per-user list/insert/clear via `getSessionUser`
+  // (any authenticated caller). Used by the streaming-download UI to surface
+  // each user's own recent export history.
+  {
+    pattern: /^\/api\/exports\/recent-downloads$/,
+    methods: ["GET", "POST", "DELETE"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "auditor",
+      "quality_specialist",
+      "team_lead",
+      "bu_owner",
+      "ai_specialist",
+      "executive",
+      "department_viewer",
+    ],
+  },
+
+  // Health-index aggregated quality metrics — handler enforces
+  // `requireRoleOrKey(c, HEALTH_INDEX_ROLES)` (see notificationRoutes.ts).
+  // Restricted to governance-oriented roles that are already permitted to
+  // read the underlying modules (audit, NC, CAPA, KPI, compliance). Mirrors
+  // REPORT_ALLOWED_ROLES in reportRoutes.ts, which queries the same tables.
+  {
+    pattern: /^\/api\/health-index$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "executive",
+    ],
+  },
+
+  // SOP document API + download — handler enforces session-or-admin-key
+  // (`isAuthorizedForSop`); any authenticated caller may read.
+  {
+    pattern: /^\/api\/sop(\/download)?$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "grc_manager",
+      "quality_manager",
+      "auditor",
+      "quality_specialist",
+      "team_lead",
+      "bu_owner",
+      "ai_specialist",
+      "executive",
+      "department_viewer",
+    ],
+  },
+
   { pattern: /^\/api\/users\/stats$/, methods: ["GET"], roles: ["admin"] },
   { pattern: /^\/api\/users\/\d+$/, methods: ["GET"], roles: ["admin"] },
+  // PATCH on a specific user — admin-only (handler also enforces
+  // verifyAdminKey). Map-level rule is required because the broader
+  // `^/api/users` POST/PUT/DELETE permission rule above doesn't cover
+  // PATCH, so without this entry the deny-by-default fallback in
+  // `enforceRoutePermission` would swallow PATCH before the handler
+  // could run. DELETE is already covered by the `can_manage_users`
+  // rule above; intentionally not duplicated here so first-match
+  // semantics keep that policy authoritative.
+  {
+    pattern: /^\/api\/users\/\d+$/,
+    methods: ["PATCH"],
+    roles: ["admin"],
+  },
+  // Mobile consultant feedback (callId + messageId variants) — same
+  // allowlist as the web consultant chat (CONSULTANT_ROLES). See
+  // src/mastra/routes/mobileRoutes.ts:MOBILE_CONSULTANT_ROLES.
+  {
+    pattern: /^\/api\/mobile\/consultant\/(feedback|message-feedback)$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "grc_manager", "head_of_operations_quality"],
+  },
   {
     pattern: /^\/api\/users$/,
     methods: ["GET"],

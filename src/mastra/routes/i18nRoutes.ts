@@ -1,18 +1,11 @@
-import pg from "pg";
-const { Pool } = pg;
 import { getSessionFromCookie } from "./authRoutes";
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+import {
+  ensureUiLanguageColumn,
+  getUserLanguagePreference,
+  setUserLanguagePreference,
+} from "../../utils/userAccessDatabase";
 
 const SUPPORTED_LANGS = ["en", "ar"];
-
-async function ensureLangColumn(): Promise<void> {
-  try {
-    await pool.query(
-      `ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS ui_language VARCHAR(10) DEFAULT 'en'`,
-    );
-  } catch (_) {}
-}
 
 export const i18nRoutes = [
   {
@@ -25,12 +18,9 @@ export const i18nRoutes = [
           return c.json({ lang: null });
         }
         try {
-          await ensureLangColumn();
-          const result = await pool.query(
-            "SELECT ui_language FROM platform_users WHERE id = $1",
-            [session.userId],
-          );
-          const lang = result.rows[0]?.ui_language || "en";
+          await ensureUiLanguageColumn();
+          const lang =
+            (await getUserLanguagePreference(session.userId)) || "en";
           return c.json({ lang: SUPPORTED_LANGS.includes(lang) ? lang : "en" });
         } catch {
           return c.json({ lang: "en" });
@@ -56,11 +46,8 @@ export const i18nRoutes = [
           return c.json({ success: true, lang });
         }
         try {
-          await ensureLangColumn();
-          await pool.query(
-            "UPDATE platform_users SET ui_language = $1 WHERE id = $2",
-            [lang, session.userId],
-          );
+          await ensureUiLanguageColumn();
+          await setUserLanguagePreference(session.userId, lang);
         } catch (err) {
           return c.json(
             { error: "Failed to persist language preference" },

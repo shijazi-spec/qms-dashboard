@@ -259,6 +259,13 @@ export const manualAuditRoutes = [
         if (!user) return unauthorizedResponse(c);
         if (!canIntake(user.role)) return forbiddenResponse(c);
 
+        const rawUploadLen = c.req.header('Content-Length');
+        if (!rawUploadLen) return c.json({ error: 'Content-Length header required for file uploads' }, 411);
+        const uploadContentLen = parseInt(rawUploadLen, 10);
+        if (!Number.isFinite(uploadContentLen) || uploadContentLen > 31 * 1024 * 1024) {
+          return c.json({ error: 'Request body too large (max 30 MB)' }, 413);
+        }
+
         const body = await c.req.parseBody();
         const file = body["file"];
         if (!file || !(file instanceof File)) {

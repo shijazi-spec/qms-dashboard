@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WalaPlus - QMS Document Library</title>
+    <title>WalaPlus - Documents Library</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -17,13 +17,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-    <script src="/js/navigation.js?v=4.7"></script>
+    <script src="/js/navigation.js?v=5.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             WalaPlusNav.init('qms-docs');
@@ -34,7 +34,7 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div class="flex justify-between items-center mb-6">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900">QMS Document Library</h1>
+                <h1 class="text-2xl font-bold text-gray-900">Documents Library</h1>
                 <p class="text-sm text-gray-500 mt-1">
                     Upload and organise governance artefacts. Files staged here can be mapped to the
                     regulations tracked in <a href="/compliance" class="text-blue-600 hover:underline">Regulatory Compliance</a>
@@ -201,7 +201,7 @@
                 const count = cachedCounts[c.id] || 0;
                 const active = selectedCategory === c.id ? ' ring-2 ' + cc.ring : ' ring-1 ring-gray-200';
                 return '<button type="button" data-on-click="selectCategory" data-args=\'["' + c.id + '"]\' ' +
-                    'class="cat-card text-left bg-white rounded-xl p-5 ' + active + ' hover:bg-gray-50" ' +
+                    'class="cat-card text-start bg-white rounded-xl p-5 ' + active + ' hover:bg-gray-50" ' +
                     'data-testid="card-category-' + c.id + '">' +
                         '<div class="flex items-center justify-between">' +
                             '<span class="' + cc.bg + ' ' + cc.text + ' text-xs font-semibold px-2 py-1 rounded">' + c.label + '</span>' +
@@ -259,13 +259,13 @@
                     '<table class="min-w-full text-sm">' +
                         '<thead class="bg-gray-50">' +
                             '<tr>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Title</th>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">File</th>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Size</th>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Mapped to</th>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">Uploaded by</th>' +
-                                '<th class="text-left px-3 py-2 font-medium text-gray-600">When</th>' +
-                                '<th class="text-right px-3 py-2 font-medium text-gray-600">Actions</th>' +
+                                '<th scope="col" class="text-start px-3 py-2 font-medium text-gray-600">Title</th>' +
+                                '<th scope="col" class="text-start px-3 py-2 font-medium text-gray-600">File</th>' +
+                                '<th scope="col" class="text-start px-3 py-2 font-medium text-gray-600">Size</th>' +
+                                '<th scope="col" class="text-start px-3 py-2 font-medium text-gray-600">Mapped to</th>' +
+                                '<th scope="col" class="text-start px-3 py-2 font-medium text-gray-600">Uploaded by</th>' +
+                                '<th scope="col" class="text-start px-3 py-2 font-medium text-gray-600">When</th>' +
+                                '<th scope="col" class="text-end px-3 py-2 font-medium text-gray-600">Actions</th>' +
                             '</tr>' +
                         '</thead>' +
                         '<tbody class="divide-y divide-gray-100">' +
@@ -282,9 +282,9 @@
                                     '<td class="px-3 py-2 text-gray-600">' + mapped + '</td>' +
                                     '<td class="px-3 py-2 text-gray-600">' + escapeHtml(d.uploaded_by || '') + '</td>' +
                                     '<td class="px-3 py-2 text-gray-600">' + escapeHtml(new Date(d.uploaded_at).toLocaleString()) + '</td>' +
-                                    '<td class="px-3 py-2 text-right">' +
-                                        '<a href="/api/qms-docs/' + Number(d.id) + '/download" class="text-blue-600 hover:underline text-sm mr-3" data-testid="link-download-' + Number(d.id) + '">Download</a>' +
-                                        '<button data-on-click="openSuggestMappingsModal" data-args="[' + Number(d.id) + ',&quot;' + escapeHtml(d.title) + '&quot;]" class="text-emerald-700 hover:underline text-sm mr-3" data-testid="button-suggest-' + Number(d.id) + '">Suggest mappings</button>' +
+                                    '<td class="px-3 py-2 text-end">' +
+                                        '<a href="/api/qms-docs/' + Number(d.id) + '/download" class="text-blue-600 hover:underline text-sm me-3" data-testid="link-download-' + Number(d.id) + '">Download</a>' +
+                                        '<button data-on-click="openSuggestMappingsModal" data-args="[' + Number(d.id) + ',&quot;' + escapeHtml(d.title) + '&quot;]" class="text-emerald-700 hover:underline text-sm me-3" data-testid="button-suggest-' + Number(d.id) + '">Suggest mappings</button>' +
                                         '<button data-on-click="deleteDoc" data-args="[' + Number(d.id) + ']" class="text-red-600 hover:underline text-sm" data-testid="button-delete-' + Number(d.id) + '">Delete</button>' +
                                     '</td>' +
                                 '</tr>';
@@ -538,10 +538,10 @@
                             '<div class="text-sm font-mono font-semibold text-gray-900">' + escapeHtml(s.obligation_code) + '</div>' +
                             '<div class="text-xs text-gray-700 mt-1">' + escapeHtml(s.rationale || '') + '</div>' +
                         '</div>' +
-                        '<div class="text-right shrink-0">' +
+                        '<div class="text-end shrink-0">' +
                             '<div class="text-xl font-bold">' + conf + '%</div>' +
                             '<div class="h-1.5 w-16 mt-1 rounded-full bg-white overflow-hidden">' +
-                                '<div class="h-full ' + bar + '" style="width:' + conf + '%"></div>' +
+                                '<div class="h-full ' + bar + '" data-style="width:' + conf + '%"></div>' +
                             '</div>' +
                             '<button type="button" data-on-click="acceptSuggestion" data-args="[' + s.obligation_id + ',' + idx + ']" class="mt-2 px-3 py-1 bg-green-700 text-white text-xs font-medium rounded hover:bg-green-800" data-testid="button-accept-suggest-' + idx + '">Accept</button>' +
                         '</div>' +
@@ -578,6 +578,14 @@
             } catch (e) {
                 alert('Network error while linking.');
             }
+        }
+    </script>
+    <script>
+        // i18n bootstrap — translates every data-i18n attribute on the page
+        // (matches the pattern used by every other dashboard page; required
+        // by scripts/check-i18n.cjs "Page wiring" check).
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
         }
     </script>
 </body>

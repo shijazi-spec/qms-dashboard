@@ -82,14 +82,14 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Code</th>
-                            <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Title</th>
-                            <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Framework</th>
-                            <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Lead Auditor</th>
-                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Progress</th>
-                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Findings</th>
-                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Code</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Title</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Framework</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Lead Auditor</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Progress</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Findings</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="runsBody" class="bg-white divide-y divide-gray-200">
@@ -232,7 +232,7 @@
                     + '<td class="px-3 py-2 text-xs">' + escAttr(r.regulation_code || '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs">' + escAttr(r.lead_auditor || '—') + '</td>'
                     + '<td class="px-3 py-2 text-center"><div class="text-xs">' + done + ' / ' + total + ' (' + pct + '%)</div>'
-                        + '<div class="h-1 w-24 mx-auto bg-gray-200 rounded mt-1"><div class="h-1 bg-emerald-500 rounded" style="width:' + pct + '%"></div></div>'
+                        + '<div class="h-1 w-24 mx-auto bg-gray-200 rounded mt-1"><div class="h-1 bg-emerald-500 rounded" data-style="width:' + pct + '%"></div></div>'
                     + '</td>'
                     + '<td class="px-3 py-2 text-center text-xs">' + findings + (critical ? ' (' + critical + ' critical)' : '') + '</td>'
                     + '<td class="px-3 py-2 text-center"><span class="pill ' + (r.status === 'completed' ? 'outcome-conformant' : 'outcome-observation') + '">' + (r.status || '—').replace(/_/g, ' ') + '</span></td>'

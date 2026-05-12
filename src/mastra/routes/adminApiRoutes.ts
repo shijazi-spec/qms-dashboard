@@ -7,6 +7,11 @@ import {
 import { logger } from "../../utils/logger";
 export const adminApiRoutes = [
   {
+    // Security: this endpoint validates the raw ADMIN_API_KEY for server-to-server
+    // tooling only. It no longer issues browser session cookies. Browser admin
+    // access requires OIDC login with an admin platform role. Returning 200 on
+    // success allows automation scripts that call this endpoint to detect a valid
+    // key; they should use the X-Admin-Key header on subsequent API requests.
     path: "/api/admin/auth",
     method: "POST",
     createHandler: async () => {
@@ -17,14 +22,10 @@ export const adminApiRoutes = [
           const expectedKey = process.env.ADMIN_API_KEY;
           if (!expectedKey || !key || key !== expectedKey)
             return c.json({ error: "Authentication required" }, 401);
-          // Security: HttpOnly prevents JS access (XSS), Secure enforces HTTPS-only
-          // transmission, SameSite=Strict blocks CSRF. All three flags are required
-          // and must never be made conditional for the admin_key cookie.
-          c.header(
-            "Set-Cookie",
-            `admin_key=${key}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`,
-          );
-          return c.json({ success: true });
+          return c.json({
+            success: true,
+            note: "Key verified. Use the X-Admin-Key header for subsequent requests.",
+          });
         } catch (error) {
           return c.json({ error: "Authentication failed" }, 500);
         }
@@ -36,11 +37,19 @@ export const adminApiRoutes = [
     method: "POST",
     createHandler: async () => {
       return async (c: any) => {
-        // Security: clear flags must mirror those used when the cookie was set —
-        // HttpOnly, Secure, and SameSite=Strict are all required and unconditional.
+        // Clear any residual admin cookies from previous deployments that used
+        // the now-removed cookie-based admin auth path. All three flags are
+        // required and unconditional: HttpOnly (XSS), Secure (HTTPS-only),
+        // SameSite=Strict (CSRF).
+        c.header(
+          "Set-Cookie",
+          `admin_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+          { append: true },
+        );
         c.header(
           "Set-Cookie",
           `admin_key=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+          { append: true },
         );
         return c.json({ success: true });
       };
@@ -1023,9 +1032,9 @@ export const adminApiRoutes = [
                   }
                 }
               } catch (joinErr) {
-                console.warn(
-                  '[Admin] Failed to join event_logs for post-restore alerts (per-table counts will fall back to message parsing):',
-                  joinErr,
+                logger.warn(
+                  '[Admin] Failed to join event_logs for post-restore alerts (per-table counts will fall back to message parsing)',
+                  { error: joinErr instanceof Error ? joinErr.message : String(joinErr) },
                 );
               }
             }
@@ -1135,6 +1144,32 @@ export const adminApiRoutes = [
         } catch (error) {
           logger.error("Error fetching post-restore sweep alerts:", error);
           return c.json({ error: "Failed to fetch post-restore sweep alerts" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Task #755 — surface the streaming-export per-job temp-file cache to
+    // operators. Returns live entry counts, on-disk byte totals, hit/miss
+    // counters, and the most recent janitor pass timestamp so admins can
+    // catch the cache directory growing unbounded before disk fills.
+    path: "/api/admin/export-cache/stats",
+    method: "GET",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!isAdminAuthorized(c))
+            return c.json({ error: "Insufficient permissions" }, 403);
+          const { getStagedExportCacheStats } =
+            await import("../../utils/excelExport");
+          const stats = await getStagedExportCacheStats();
+          return c.json(stats);
+        } catch (error) {
+          logger.error("Error fetching export cache stats:", error);
+          return c.json(
+            { error: "Failed to fetch export cache stats" },
+            500,
+          );
         }
       };
     },

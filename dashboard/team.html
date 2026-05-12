@@ -46,13 +46,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('team');
@@ -61,7 +61,7 @@
 
     <main class="max-w-7xl mx-auto px-4 py-6">
         <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="nav.items.team">Team Performance</h1>
-        <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-xl">
+        <div class="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl">
             <button data-on-click="showTab" data-args="[&quot;overview&quot;]" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active" data-i18n="team.tab_overview">
                 Overview
             </button>
@@ -142,19 +142,22 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_by_dept">Team by Department</h3>
                     <div class="chart-container">
-                        <canvas id="departmentChart"></canvas>
+                        <canvas id="departmentChart" role="img" aria-label="Team by Department: doughnut chart showing employee count per department" aria-describedby="departmentChart-summary"></canvas>
+                        <table id="departmentChart-summary" class="sr-only"><caption>Team by Department</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_project_status">Project Status</h3>
                     <div class="chart-container">
-                        <canvas id="projectStatusChart"></canvas>
+                        <canvas id="projectStatusChart" role="img" aria-label="Project Status: doughnut chart showing assigned, in progress, completed, and on-hold project counts" aria-describedby="projectStatusChart-summary"></canvas>
+                        <table id="projectStatusChart-summary" class="sr-only"><caption>Project Status</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="team.sec_team_status">Team Status</h3>
                     <div class="chart-container">
-                        <canvas id="statusChart"></canvas>
+                        <canvas id="statusChart" role="img" aria-label="Team Status: doughnut chart showing active, inactive, on-leave, and probation employee counts" aria-describedby="statusChart-summary"></canvas>
+                        <table id="statusChart-summary" class="sr-only"><caption>Team Status</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                     </div>
                 </div>
             </div>
@@ -171,7 +174,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-gray-900" data-i18n="team.sec_members">Team Members</h3>
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center gap-4">
                         <select id="filterDepartment" data-on-change="loadMembers" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Departments</option>
                         </select>
@@ -194,13 +197,13 @@
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Performance</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Training</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Name</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Role</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Department</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Performance</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Training</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="membersTable" class="divide-y divide-gray-200">
@@ -217,7 +220,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-gray-900" data-i18n="team.sec_courses">Training Courses Catalog</h3>
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center gap-4">
                         <select id="filterCourseType" data-on-change="loadCourses" class="text-sm border border-gray-200 rounded-lg px-3 py-2">
                             <option value="">All Types</option>
                             <option value="mandatory">Mandatory</option>
@@ -232,13 +235,13 @@
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course Name</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Passing Score</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Course Name</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Department</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Duration</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Passing Score</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="coursesTable" class="divide-y divide-gray-200">
@@ -261,14 +264,14 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-gray-900" data-i18n="team.sec_assignments">Project Assignments</h3>
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center gap-4">
                         <div class="flex bg-gray-100 rounded-lg p-1">
                             <button data-on-click="setProjectView" data-args="[&quot;table&quot;]" id="viewTable" class="px-3 py-1 rounded text-sm font-medium bg-white shadow">
-                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                                <svg class="w-4 h-4 inline me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
                                 Table
                             </button>
                             <button data-on-click="setProjectView" data-args="[&quot;kanban&quot;]" id="viewKanban" class="px-3 py-1 rounded text-sm font-medium text-gray-600">
-                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+                                <svg class="w-4 h-4 inline me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
                                 Kanban
                             </button>
                         </div>
@@ -288,14 +291,14 @@
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due Date</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Project</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Assigned To</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Role</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Due Date</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Priority</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="projectsTable" class="divide-y divide-gray-200">
@@ -307,7 +310,7 @@
                 <div class="bg-gray-100 rounded-xl p-4">
                     <div class="flex items-center justify-between mb-4">
                         <h4 class="font-semibold text-gray-700 flex items-center">
-                            <span class="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>Backlog
+                            <span class="w-3 h-3 bg-blue-500 rounded-full me-2"></span>Backlog
                         </h4>
                         <span id="kanban-backlog-count" class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">0</span>
                     </div>
@@ -316,7 +319,7 @@
                 <div class="bg-gray-100 rounded-xl p-4">
                     <div class="flex items-center justify-between mb-4">
                         <h4 class="font-semibold text-gray-700 flex items-center">
-                            <span class="w-3 h-3 bg-amber-500 rounded-full mr-2"></span>In Progress
+                            <span class="w-3 h-3 bg-amber-500 rounded-full me-2"></span>In Progress
                         </h4>
                         <span id="kanban-progress-count" class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full">0</span>
                     </div>
@@ -325,7 +328,7 @@
                 <div class="bg-gray-100 rounded-xl p-4">
                     <div class="flex items-center justify-between mb-4">
                         <h4 class="font-semibold text-gray-700 flex items-center">
-                            <span class="w-3 h-3 bg-purple-500 rounded-full mr-2"></span>Waiting Stakeholder
+                            <span class="w-3 h-3 bg-purple-500 rounded-full me-2"></span>Waiting Stakeholder
                         </h4>
                         <span id="kanban-waiting-count" class="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">0</span>
                     </div>
@@ -334,7 +337,7 @@
                 <div class="bg-gray-100 rounded-xl p-4">
                     <div class="flex items-center justify-between mb-4">
                         <h4 class="font-semibold text-gray-700 flex items-center">
-                            <span class="w-3 h-3 bg-indigo-500 rounded-full mr-2"></span>Review
+                            <span class="w-3 h-3 bg-indigo-500 rounded-full me-2"></span>Review
                         </h4>
                         <span id="kanban-review-count" class="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full">0</span>
                     </div>
@@ -343,7 +346,7 @@
                 <div class="bg-gray-100 rounded-xl p-4">
                     <div class="flex items-center justify-between mb-4">
                         <h4 class="font-semibold text-gray-700 flex items-center">
-                            <span class="w-3 h-3 bg-green-500 rounded-full mr-2"></span>Completed
+                            <span class="w-3 h-3 bg-green-500 rounded-full me-2"></span>Completed
                         </h4>
                         <span id="kanban-completed-count" class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">0</span>
                     </div>
@@ -357,7 +360,8 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4">Performance by Department</h3>
                     <div class="chart-container">
-                        <canvas id="performanceDeptChart"></canvas>
+                        <canvas id="performanceDeptChart" role="img" aria-label="Performance by Department: bar chart showing average performance score per department" aria-describedby="performanceDeptChart-summary"></canvas>
+                        <table id="performanceDeptChart-summary" class="sr-only"><caption>Performance by Department</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th></tr></thead><tbody></tbody></table>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -426,7 +430,7 @@
                             <input type="date" name="hire_date" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
+                    <div class="flex justify-end gap-3 mt-6">
                         <button type="button" data-on-click="closeNewMemberModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add Member</button>
                     </div>
@@ -493,7 +497,7 @@
                             <textarea name="deliverables" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
+                    <div class="flex justify-end gap-3 mt-6">
                         <button type="button" data-on-click="closeNewProjectModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Assignment</button>
                     </div>
@@ -549,7 +553,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex justify-end space-x-3 mt-6">
+                    <div class="flex justify-end gap-3 mt-6">
                         <button type="button" data-on-click="closeNewCourseModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add Course</button>
                     </div>
@@ -559,10 +563,18 @@
     </div>
 
     <script>
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
         let departmentChart, projectStatusChart, statusChart, performanceDeptChart;
         let allMembers = [];
         let currentProjectView = 'table';
+
+        function esc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             loadAnalytics();
@@ -630,17 +642,17 @@
                     count.textContent = columns[col].length;
                     
                     if (columns[col].length === 0) {
-                        container.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">' + _t('dyn.team.no_items') + '</div>';
+                        container.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">' + WalaPlusI18n.t('dyn.team.no_items') + '</div>';
                     } else {
                         container.innerHTML = columns[col].map(p => `
                             <div class="bg-white rounded-lg shadow-sm border p-3 cursor-pointer hover:shadow-md transition">
                                 <div class="flex items-start justify-between mb-2">
-                                    <h5 class="font-medium text-gray-900 text-sm">${p.project_name}</h5>
-                                    <span class="badge-${p.priority} px-1.5 py-0.5 rounded text-xs">${p.priority}</span>
+                                    <h5 class="font-medium text-gray-900 text-sm">${esc(p.project_name)}</h5>
+                                    <span class="badge-${esc(p.priority)} px-1.5 py-0.5 rounded text-xs">${esc(p.priority)}</span>
                                 </div>
-                                <p class="text-xs text-gray-500 mb-2">${p.member_name || 'Unassigned'}</p>
+                                <p class="text-xs text-gray-500 mb-2">${p.member_name ? esc(p.member_name) : 'Unassigned'}</p>
                                 <div class="flex items-center justify-between text-xs">
-                                    <span class="text-gray-400">${p.project_type?.replace('_', ' ') || ''}</span>
+                                    <span class="text-gray-400">${esc(p.project_type?.replace('_', ' ') || '')}</span>
                                     ${p.due_date ? `<span class="text-gray-500">${new Date(p.due_date).toLocaleDateString()}</span>` : ''}
                                 </div>
                             </div>
@@ -664,27 +676,27 @@
                 
                 const tbody = document.getElementById('coursesTable');
                 if (!courses.length) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">' + _t('dyn.team.no_courses') + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">' + WalaPlusI18n.t('dyn.team.no_courses') + '</td></tr>';
                 } else {
                     tbody.innerHTML = courses.map(c => `
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4">
                                 <div>
-                                    <p class="font-medium text-gray-900">${c.name}</p>
-                                    <p class="text-sm text-gray-500">${c.description || ''}</p>
+                                    <p class="font-medium text-gray-900">${esc(c.name)}</p>
+                                    <p class="text-sm text-gray-500">${esc(c.description || '')}</p>
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <span class="${c.course_type === 'mandatory' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded-full text-xs font-medium capitalize">${c.course_type}</span>
+                                <span class="${c.course_type === 'mandatory' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded-full text-xs font-medium capitalize">${esc(c.course_type)}</span>
                             </td>
-                            <td class="px-6 py-4 text-gray-700">${c.department || 'All'}</td>
+                            <td class="px-6 py-4 text-gray-700">${esc(c.department || 'All')}</td>
                             <td class="px-6 py-4 text-gray-700">${parseFloat(c.duration_hours || 0)} hrs</td>
                             <td class="px-6 py-4 text-gray-700">${c.passing_score || 0}%</td>
                             <td class="px-6 py-4">
                                 <span class="${c.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} px-2 py-1 rounded-full text-xs font-medium">${c.is_active ? 'Active' : 'Inactive'}</span>
                             </td>
                             <td class="px-6 py-4">
-                                <button data-on-click="deleteCourse" data-args="[&quot;${c.course_id}&quot;]" class="text-red-600 hover:text-red-800">
+                                <button data-on-click="deleteCourse" data-args="[&quot;${escAttr(c.course_id)}&quot;]" class="text-red-600 hover:text-red-800">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
@@ -725,16 +737,16 @@
                     loadCourses();
                 } else {
                     const error = await res.json();
-                    alert(error.error || _t('dyn.team.failed_create_course'));
+                    alert(error.error || WalaPlusI18n.t('dyn.team.failed_create_course'));
                 }
             } catch (error) {
                 console.error('Error creating course:', error);
-                alert(_t('dyn.team.failed_create_course'));
+                alert(WalaPlusI18n.t('dyn.team.failed_create_course'));
             }
         }
 
         async function deleteCourse(courseId) {
-            if (!confirm(_t('dyn.team.confirm_delete_course'))) return;
+            if (!confirm(WalaPlusI18n.t('dyn.team.confirm_delete_course'))) return;
 
             try {
                 const res = await fetch(`/api/team/courses/${courseId}`, { method: 'DELETE' });
@@ -788,6 +800,7 @@
                     plugins: { legend: { position: 'bottom' } }
                 }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('departmentChart', departmentChart, 'Team by Department');
         }
 
         function renderProjectStatusChart(status) {
@@ -810,6 +823,7 @@
                     plugins: { legend: { position: 'bottom' } }
                 }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('projectStatusChart', projectStatusChart, 'Project Status');
         }
 
         function renderStatusChart(status) {
@@ -832,6 +846,7 @@
                     plugins: { legend: { position: 'bottom' } }
                 }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('statusChart', statusChart, 'Team Status');
         }
 
         function renderPerformanceDeptChart(departments) {
@@ -856,25 +871,26 @@
                     plugins: { legend: { display: false } }
                 }
             });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('performanceDeptChart', performanceDeptChart, 'Performance by Department');
         }
 
         function renderTopPerformers(performers) {
             const container = document.getElementById('topPerformers');
             if (!performers.length) {
-                container.innerHTML = '<p class="text-gray-500 text-center py-8">' + _t('dyn.team.no_perf_data') + '</p>';
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.team.no_perf_data') + '</p>';
                 return;
             }
 
             container.innerHTML = performers.map((p, i) => `
-                <div class="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                <div class="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
                     <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
                         ${i + 1}
                     </div>
                     <div class="flex-1">
-                        <p class="font-medium text-gray-900">${p.full_name}</p>
-                        <p class="text-sm text-gray-500">${p.role} - ${p.department}</p>
+                        <p class="font-medium text-gray-900">${esc(p.full_name)}</p>
+                        <p class="text-sm text-gray-500">${esc(p.role)} - ${esc(p.department)}</p>
                     </div>
-                    <div class="text-right">
+                    <div class="text-end">
                         <p class="text-2xl font-bold text-green-600">${Math.round(p.performance_score || 0)}%</p>
                     </div>
                 </div>
@@ -884,7 +900,7 @@
         function populateDepartmentFilter(departments) {
             const select = document.getElementById('filterDepartment');
             select.innerHTML = '<option value="">All Departments</option>' +
-                departments.map(d => `<option value="${d.department}">${d.department}</option>`).join('');
+                departments.map(d => `<option value="${escAttr(d.department)}">${esc(d.department)}</option>`).join('');
         }
 
         async function loadMembers() {
@@ -901,28 +917,28 @@
 
                 const tbody = document.getElementById('membersTable');
                 if (!allMembers.length) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">' + _t('dyn.team.no_members') + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">' + WalaPlusI18n.t('dyn.team.no_members') + '</td></tr>';
                 } else {
                     tbody.innerHTML = allMembers.map(m => `
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4">
-                                <div class="flex items-center space-x-3">
+                                <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-medium">
-                                        ${m.full_name.split(' ').map(n => n[0]).join('').substring(0,2)}
+                                        ${esc(m.full_name.split(' ').map(n => n[0]).join('').substring(0,2))}
                                     </div>
                                     <div>
-                                        <p class="font-medium text-gray-900">${m.full_name}</p>
-                                        <p class="text-sm text-gray-500">${m.email}</p>
+                                        <p class="font-medium text-gray-900">${esc(m.full_name)}</p>
+                                        <p class="text-sm text-gray-500">${esc(m.email)}</p>
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-6 py-4 text-gray-700">${m.role}</td>
-                            <td class="px-6 py-4 text-gray-700">${m.department}</td>
+                            <td class="px-6 py-4 text-gray-700">${esc(m.role)}</td>
+                            <td class="px-6 py-4 text-gray-700">${esc(m.department)}</td>
                             <td class="px-6 py-4">
-                                <span class="badge-${m.status} px-2 py-1 rounded-full text-xs font-medium capitalize">${m.status.replace('_', ' ')}</span>
+                                <span class="badge-${esc(m.status)} px-2 py-1 rounded-full text-xs font-medium capitalize">${esc(m.status.replace('_', ' '))}</span>
                             </td>
                             <td class="px-6 py-4">
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center gap-2">
                                     <div class="w-24 bg-gray-200 rounded-full h-2">
                                         <div class="bg-green-500 h-2 rounded-full progress-bar" data-style="width: ${m.performance_score || 0}%"></div>
                                     </div>
@@ -930,7 +946,7 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center gap-2">
                                     <div class="w-24 bg-gray-200 rounded-full h-2">
                                         <div class="bg-indigo-500 h-2 rounded-full progress-bar" data-style="width: ${m.training_compliance_rate || 0}%"></div>
                                     </div>
@@ -938,7 +954,7 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <button data-on-click="deleteMember" data-args="[&quot;${m.member_id}&quot;]" class="text-red-600 hover:text-red-800">
+                                <button data-on-click="deleteMember" data-args="[&quot;${escAttr(m.member_id)}&quot;]" class="text-red-600 hover:text-red-800">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
@@ -948,7 +964,7 @@
                     `).join('');
                 }
 
-                document.getElementById('membersPagination').textContent = _t('dyn.team.showing_members', { count: allMembers.length, total: data.total });
+                document.getElementById('membersPagination').textContent = WalaPlusI18n.t('dyn.team.showing_members', { count: allMembers.length, total: data.total });
                 populateProjectMemberSelect();
             } catch (error) {
                 console.error('Error loading members:', error);
@@ -958,7 +974,7 @@
         function populateProjectMemberSelect() {
             const select = document.getElementById('projectMemberSelect');
             select.innerHTML = allMembers.map(m => 
-                `<option value="${m.member_id}" data-name="${m.full_name}">${m.full_name} (${m.role})</option>`
+                `<option value="${escAttr(m.member_id)}" data-name="${escAttr(m.full_name)}">${esc(m.full_name)} (${esc(m.role)})</option>`
             ).join('');
         }
 
@@ -974,20 +990,20 @@
 
                 const tbody = document.getElementById('projectsTable');
                 if (!projects.length) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">' + _t('dyn.team.no_proj_assignments') + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">' + WalaPlusI18n.t('dyn.team.no_proj_assignments') + '</td></tr>';
                 } else {
                     tbody.innerHTML = projects.map(p => `
                         <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 font-medium text-gray-900">${p.project_name}</td>
-                            <td class="px-6 py-4 text-gray-700 capitalize">${p.project_type.replace('_', ' ')}</td>
-                            <td class="px-6 py-4 text-gray-700">${p.member_name}</td>
-                            <td class="px-6 py-4 text-gray-700">${p.role_in_project}</td>
+                            <td class="px-6 py-4 font-medium text-gray-900">${esc(p.project_name)}</td>
+                            <td class="px-6 py-4 text-gray-700 capitalize">${esc(p.project_type.replace('_', ' '))}</td>
+                            <td class="px-6 py-4 text-gray-700">${esc(p.member_name)}</td>
+                            <td class="px-6 py-4 text-gray-700">${esc(p.role_in_project)}</td>
                             <td class="px-6 py-4 text-gray-700">${p.due_date ? new Date(p.due_date).toLocaleDateString() : '-'}</td>
                             <td class="px-6 py-4">
-                                <span class="badge-${p.priority} px-2 py-1 rounded-full text-xs font-medium capitalize">${p.priority}</span>
+                                <span class="badge-${esc(p.priority)} px-2 py-1 rounded-full text-xs font-medium capitalize">${esc(p.priority)}</span>
                             </td>
                             <td class="px-6 py-4">
-                                <select data-on-change="updateProjectStatus" data-args="[&quot;${p.assignment_id}&quot;,&quot;@this.value&quot;]" class="text-sm border border-gray-200 rounded px-2 py-1">
+                                <select data-on-change="updateProjectStatus" data-args="[&quot;${escAttr(p.assignment_id)}&quot;,&quot;@this.value&quot;]" class="text-sm border border-gray-200 rounded px-2 py-1">
                                     <option value="assigned" ${p.status === 'assigned' ? 'selected' : ''}>Assigned</option>
                                     <option value="in_progress" ${p.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
                                     <option value="completed" ${p.status === 'completed' ? 'selected' : ''}>Completed</option>
@@ -995,7 +1011,7 @@
                                 </select>
                             </td>
                             <td class="px-6 py-4">
-                                <button data-on-click="deleteProject" data-args="[&quot;${p.assignment_id}&quot;]" class="text-red-600 hover:text-red-800">
+                                <button data-on-click="deleteProject" data-args="[&quot;${escAttr(p.assignment_id)}&quot;]" class="text-red-600 hover:text-red-800">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
@@ -1017,7 +1033,7 @@
 
                 const container = document.getElementById('trainingMatrix');
                 if (!members.length) {
-                    container.innerHTML = '<p class="text-gray-500 text-center py-8">' + _t('dyn.team.no_training_data') + '</p>';
+                    container.innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.team.no_training_data') + '</p>';
                     return;
                 }
 
@@ -1025,29 +1041,29 @@
                     <table class="w-full text-sm">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500">Team Member</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500">Department</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500">Training Courses</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500">Compliance</th>
+                                <th scope="col" class="px-4 py-3 text-start font-medium text-gray-500">Team Member</th>
+                                <th scope="col" class="px-4 py-3 text-start font-medium text-gray-500">Department</th>
+                                <th scope="col" class="px-4 py-3 text-start font-medium text-gray-500">Training Courses</th>
+                                <th scope="col" class="px-4 py-3 text-start font-medium text-gray-500">Compliance</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
                             ${members.map(m => `
                                 <tr>
-                                    <td class="px-4 py-3 font-medium text-gray-900">${m.full_name}</td>
-                                    <td class="px-4 py-3 text-gray-600">${m.department}</td>
+                                    <td class="px-4 py-3 font-medium text-gray-900">${esc(m.full_name)}</td>
+                                    <td class="px-4 py-3 text-gray-600">${esc(m.department)}</td>
                                     <td class="px-4 py-3">
                                         ${m.training_assignments.length ? m.training_assignments.map(t => `
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mr-1 mb-1
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium me-1 mb-1
                                                 ${t.status === 'completed' ? 'bg-green-100 text-green-800' : 
                                                   t.status === 'overdue' ? 'bg-red-100 text-red-800' : 
                                                   'bg-amber-100 text-amber-800'}">
-                                                ${t.title || 'Training'}
+                                                ${esc(t.title || 'Training')}
                                             </span>
                                         `).join('') : '<span class="text-gray-400">No training assigned</span>'}
                                     </td>
                                     <td class="px-4 py-3">
-                                        <div class="flex items-center space-x-2">
+                                        <div class="flex items-center gap-2">
                                             <div class="w-24 bg-gray-200 rounded-full h-2">
                                                 <div class="bg-indigo-500 h-2 rounded-full" data-style="width: ${m.compliance_rate}%"></div>
                                             </div>
@@ -1101,11 +1117,11 @@
                     loadAnalytics();
                 } else {
                     const error = await res.json();
-                    alert(error.error || _t('dyn.team.failed_create_member'));
+                    alert(error.error || WalaPlusI18n.t('dyn.team.failed_create_member'));
                 }
             } catch (error) {
                 console.error('Error creating member:', error);
-                alert(_t('dyn.team.failed_create_member'));
+                alert(WalaPlusI18n.t('dyn.team.failed_create_member'));
             }
         }
 
@@ -1132,16 +1148,16 @@
                     loadAnalytics();
                 } else {
                     const error = await res.json();
-                    alert(error.error || _t('dyn.team.failed_create_assignment'));
+                    alert(error.error || WalaPlusI18n.t('dyn.team.failed_create_assignment'));
                 }
             } catch (error) {
                 console.error('Error creating project:', error);
-                alert(_t('dyn.team.failed_create_assignment'));
+                alert(WalaPlusI18n.t('dyn.team.failed_create_assignment'));
             }
         }
 
         async function deleteMember(memberId) {
-            if (!confirm(_t('dyn.team.confirm_delete_member'))) return;
+            if (!confirm(WalaPlusI18n.t('dyn.team.confirm_delete_member'))) return;
 
             try {
                 const res = await fetch(`/api/team/members/${memberId}`, { method: 'DELETE' });
@@ -1155,7 +1171,7 @@
         }
 
         async function deleteProject(assignmentId) {
-            if (!confirm(_t('dyn.team.confirm_delete_assignment'))) return;
+            if (!confirm(WalaPlusI18n.t('dyn.team.confirm_delete_assignment'))) return;
 
             try {
                 const res = await fetch(`/api/team/projects/${assignmentId}`, { method: 'DELETE' });

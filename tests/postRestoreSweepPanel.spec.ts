@@ -169,15 +169,12 @@ test.describe('Post-restore sweep alerts panel — /logs (Task #657)', () => {
       baseURL: BASE_URL,
       extraHTTPHeaders: { 'X-Admin-Key': ADMIN_KEY },
     });
-    // Single suite-level login; per-test logins would trip the
-    // /api/admin/auth rate limiter (5 attempts / minute).
-    const authRes = await apiCtx.post('/api/admin/auth', {
-      data: { key: ADMIN_KEY },
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (authRes.status() !== 200) {
-      throw new Error(`/api/admin/auth login returned HTTP ${authRes.status()}`);
-    }
+    // Task #831 removed the browser admin_key cookie path. Authentication
+    // is now header-only via X-Admin-Key, which apiCtx already carries on
+    // every subsequent request, so calling POST /api/admin/auth here would
+    // do nothing useful and only burn a quota slot in the
+    // /api/admin/auth rate limiter (5 attempts / minute) — which causes
+    // intermittent HTTP 429 failures when this workflow restarts back-to-back.
 
     pool = new pg.Pool({ connectionString: DATABASE_URL });
     await ensureNotificationsTableInitialized();

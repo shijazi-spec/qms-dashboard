@@ -2,6 +2,7 @@ import type { Pool as PgPool } from "pg";
 import {
   requireRoleOrKey,
   unauthorizedResponse,
+  forbiddenResponse,
 } from "../../utils/rbacMiddleware";
 
 import { logger as safeLogger } from "../../utils/logger";
@@ -17,6 +18,29 @@ const POLICY_READ_ROLES = [
   "team_lead",
   "ai_specialist",
 ] as const;
+
+const CONFIDENTIALITY_PRIVILEGED_ROLES = new Set([
+  "admin",
+  "grc_manager",
+  "quality_manager",
+  "head_of_operations_quality",
+]);
+
+const NON_SENSITIVE_CONFIDENTIALITY = ["public", "internal"];
+
+function getAllowedConfidentiality(role: string): string[] | undefined {
+  if (CONFIDENTIALITY_PRIVILEGED_ROLES.has(role)) return undefined;
+  return NON_SENSITIVE_CONFIDENTIALITY;
+}
+
+function canAccessConfidentialPolicy(
+  role: string,
+  confidentiality: string | undefined,
+): boolean {
+  if (CONFIDENTIALITY_PRIVILEGED_ROLES.has(role)) return true;
+  const level = confidentiality || "internal";
+  return level === "public" || level === "internal";
+}
 
 export const policyRoutes = [
   {
@@ -50,6 +74,7 @@ export const policyRoutes = [
             document_type,
           });
 
+          const allowedConfidentiality = getAllowedConfidentiality(admin.role);
           const result = await getAllPolicies({
             status,
             category,
@@ -58,6 +83,7 @@ export const policyRoutes = [
             search,
             limit,
             offset,
+            allowedConfidentiality,
           });
 
           return c.json(result);
@@ -229,6 +255,11 @@ export const policyRoutes = [
             filterParams.push(status);
             conditions.push(`status = $${filterParams.length}`);
           }
+          const allowedConfidentiality = getAllowedConfidentiality(admin.role);
+          if (allowedConfidentiality) {
+            filterParams.push(allowedConfidentiality);
+            conditions.push(`confidentiality = ANY($${filterParams.length}::text[])`);
+          }
           const where = conditions.length
             ? `WHERE ${conditions.join(" AND ")}`
             : "";
@@ -289,6 +320,11 @@ export const policyRoutes = [
           if (status) {
             filterParams.push(status);
             conditions.push(`status = $${filterParams.length}`);
+          }
+          const allowedConfidentiality = getAllowedConfidentiality(admin.role);
+          if (allowedConfidentiality) {
+            filterParams.push(allowedConfidentiality);
+            conditions.push(`confidentiality = ANY($${filterParams.length}::text[])`);
           }
           const where = conditions.length
             ? `WHERE ${conditions.join(" AND ")}`
@@ -423,6 +459,13 @@ export const policyRoutes = [
             return c.json({ error: "Policy not found" }, 404);
           }
 
+          if (!canAccessConfidentialPolicy(admin.role, policy.confidentiality)) {
+            return forbiddenResponse(
+              c,
+              "Access to this policy is restricted by its confidentiality classification",
+            );
+          }
+
           const [versions, acknowledgments, ackStats] = await Promise.all([
             getPolicyVersions(id),
             getPolicyAcknowledgments(id),
@@ -469,8 +512,19 @@ export const policyRoutes = [
             return c.json({ error: "Missing required fields" }, 400);
           }
 
+          // Strip file-attachment fields — file_path/file_name/file_size/file_mime_type
+          // must only be set by the dedicated internal upload endpoint, never by the
+          // create-policy JSON body (prevents cross-module file rebinding at creation).
+          const {
+            file_path: _fp,
+            file_name: _fn,
+            file_size: _fs,
+            file_mime_type: _fmt,
+            ...safeBody
+          } = body;
+
           const policy = await createPolicy({
-            ...body,
+            ...safeBody,
             created_by: sessionUser.email,
           });
 
@@ -535,7 +589,17 @@ export const policyRoutes = [
               400,
             );
           }
-          const { status, ...safeBody } = body;
+          // Strip status and file-attachment fields: file_path/file_name/file_size/
+          // file_mime_type are managed exclusively by the internal upload handler and
+          // must never be set by external callers (prevents cross-module file rebinding).
+          const {
+            status,
+            file_path,
+            file_name,
+            file_size,
+            file_mime_type,
+            ...safeBody
+          } = body;
 
           const updatedPolicy = await updatePolicy(
             id,
@@ -1187,13 +1251,20 @@ export const policyRoutes = [
 
           const { updatePolicy, getPolicyById, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { validateFile, saveUploadedFile } =
+          const { validateFile, saveUploadedFile, deleteUploadedFile } =
             await import("../../utils/fileUpload");
           await initPolicyTables();
 
           const id = parseInt(c.req.param("id"));
           const policy = await getPolicyById(id);
           if (!policy) return c.json({ error: "Document not found" }, 404);
+
+          const rawUploadLen = c.req.header('Content-Length');
+          if (!rawUploadLen) return c.json({ error: 'Content-Length header required for file uploads' }, 411);
+          const uploadContentLen = parseInt(rawUploadLen, 10);
+          if (!Number.isFinite(uploadContentLen) || uploadContentLen > 26 * 1024 * 1024) {
+            return c.json({ error: 'Request body too large (max 25 MB)' }, 413);
+          }
 
           const formData = await c.req.formData();
           const file = formData.get("file");
@@ -1203,6 +1274,8 @@ export const policyRoutes = [
           const validation = validateFile(file.name, file.size, file.type);
           if (!validation.valid)
             return c.json({ error: validation.error }, 400);
+
+          const oldFilePath = policy.file_path || null;
 
           const buffer = Buffer.from(await file.arrayBuffer());
           const fileInfo = await saveUploadedFile(buffer, file.name, file.type);
@@ -1217,6 +1290,12 @@ export const policyRoutes = [
             },
             sessionUser.email,
           );
+
+          // Remove the previous blob so the shared document volume is not
+          // slowly exhausted by repeated attachment replacements.
+          if (oldFilePath && oldFilePath !== fileInfo.filePath) {
+            deleteUploadedFile(oldFilePath);
+          }
 
           return c.json({ success: true, file: fileInfo });
         } catch (error) {
@@ -1244,6 +1323,13 @@ export const policyRoutes = [
           const policy = await getPolicyById(id);
           if (!policy || !policy.file_path)
             return c.json({ error: "No file attached" }, 404);
+
+          if (!canAccessConfidentialPolicy(admin.role, policy.confidentiality)) {
+            return forbiddenResponse(
+              c,
+              "Access to this policy file is restricted by its confidentiality classification",
+            );
+          }
 
           const file = getUploadedFile(policy.file_path);
           if (!file) return c.json({ error: "File not found on disk" }, 404);

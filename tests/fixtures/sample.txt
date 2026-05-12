@@ -1,0 +1,2 @@
+This is the access control policy for WalaPlus.
+It covers MFA, password rotation, and quarterly access reviews.

@@ -20,6 +20,7 @@
 
 import pg from "pg";
 import { consultantRoutes } from "../src/mastra/routes/consultantRoutes";
+import type { FeedbackPromptVersionSurfaceBreakdown } from "../src/utils/aiFeedbackDatabase";
 import { QMS_CONSULTANT_PROMPT_VERSION } from "../src/mastra/agents/qmsConsultantAgent";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext, type FakeContext } from "./_helpers/fakeContext";
@@ -275,6 +276,16 @@ if (!HAS_DB) {
       // test that already exercises the same redaction path.
       const versionA = "qms-consultant@taskaprompt";
       const versionB = "qms-consultant@taskbprompt";
+      // Idempotency guard: delete any rows from earlier runs that share
+      // these hardcoded prompt_version sentinels. Without this, the
+      // hardcoded labels survive across runs (the cleanup step only
+      // deletes by message_id) and accumulate, doubling the per-version
+      // counts on the next run.
+      await pool.query(
+        `DELETE FROM ai_response_feedback
+         WHERE metadata->>'prompt_version' IN ($1, $2)`,
+        [versionA, versionB],
+      );
       const ids = [
         `consultant-stats-A-up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         `consultant-stats-A-down-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -539,6 +550,98 @@ if (!HAS_DB) {
         suite.expect(
           (rowUnknown.thumbs_down ?? 0) >= 1,
           "'unknown' bucket counts the legacy row with empty metadata",
+        );
+      }
+    },
+  );
+
+  // Task #732: per-(prompt_version × client_surface) cross-tab, plus
+  // 'unknown' fallback for legacy `{}`-metadata rows.
+  await suite.test(
+    "GET /api/consultant/feedback/stats — returns per-(prompt_version × client_surface) cross-tab including 'unknown' bucket for legacy rows",
+    async () => {
+      const versionA = "qms-consultant@xtabaprompt";
+      const versionB = "qms-consultant@xtabbprompt";
+      // Idempotency guard: see the per-prompt-version test above for the
+      // rationale. Hardcoded sentinels survive across runs, so wipe
+      // any leftovers before seeding to keep cross-tab counts stable.
+      await pool.query(
+        `DELETE FROM ai_response_feedback
+         WHERE metadata->>'prompt_version' IN ($1, $2)`,
+        [versionA, versionB],
+      );
+      const ids = [
+        `consultant-xtab-A-mobile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `consultant-xtab-A-web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `consultant-xtab-B-mobile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `consultant-xtab-legacy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      ];
+      seededMessageIds.push(...ids);
+
+      await postFeedback({ messageId: ids[0], rating: "down", promptVersion: versionA, clientSurface: "mobile" });
+      await postFeedback({ messageId: ids[1], rating: "up",   promptVersion: versionA, clientSurface: "web" });
+      await postFeedback({ messageId: ids[2], rating: "up",   promptVersion: versionB, clientSurface: "mobile" });
+      await pool.query(
+        `INSERT INTO ai_response_feedback (message_id, agent, rating, metadata)
+         VALUES ($1, 'qmsConsultantAgent', 'down', '{}'::jsonb)`,
+        [ids[3]],
+      );
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      let res;
+      try {
+        const handler = await buildHandler(
+          consultantRoutes,
+          "/api/consultant/feedback/stats",
+          "GET",
+        );
+        const ctx = makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "30" },
+        });
+        res = await handler(ctx);
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+
+      suite.expectEqual(res.status, 200, "status");
+      const xtabRaw: unknown = res.body?.stats?.prompt_version_surfaces;
+      suite.expect(Array.isArray(xtabRaw), "stats.prompt_version_surfaces is an array");
+      const xtab = (Array.isArray(xtabRaw) ? xtabRaw : []) as FeedbackPromptVersionSurfaceBreakdown[];
+
+      const findCell = (pv: string, surface: string): FeedbackPromptVersionSurfaceBreakdown | undefined =>
+        xtab.find((c) => c.prompt_version === pv && c.client_surface === surface);
+
+      const aMobile = findCell(versionA, "mobile");
+      const aWeb = findCell(versionA, "web");
+      const bMobile = findCell(versionB, "mobile");
+      const unknownCell = findCell("unknown", "unknown");
+
+      suite.expect(!!aMobile, `cross-tab contains (${versionA}, mobile)`);
+      suite.expect(!!aWeb, `cross-tab contains (${versionA}, web)`);
+      suite.expect(!!bMobile, `cross-tab contains (${versionB}, mobile)`);
+      suite.expect(!!unknownCell, "cross-tab contains the (unknown, unknown) bucket for legacy rows");
+
+      if (aMobile) {
+        suite.expectEqual(aMobile.thumbs_down, 1, "(A, mobile) thumbs_down");
+        suite.expectEqual(aMobile.thumbs_up, 0, "(A, mobile) thumbs_up");
+        suite.expectEqual(aMobile.thumbs_up_ratio, 0, "(A, mobile) ratio is 0%");
+      }
+      if (aWeb) {
+        suite.expectEqual(aWeb.thumbs_up, 1, "(A, web) thumbs_up");
+        suite.expectEqual(aWeb.thumbs_up_ratio, 100, "(A, web) ratio is 100%");
+      }
+      if (bMobile) {
+        suite.expectEqual(bMobile.thumbs_up, 1, "(B, mobile) thumbs_up");
+        suite.expectEqual(bMobile.thumbs_up_ratio, 100, "(B, mobile) ratio is 100%");
+      }
+      if (unknownCell) {
+        suite.expect(
+          (unknownCell.thumbs_down ?? 0) >= 1,
+          "(unknown, unknown) bucket counts the legacy row",
         );
       }
     },

@@ -23,8 +23,8 @@ function renderSetupRequiredPage(
  * `ROUTE_PERMISSION_MAP` in `src/utils/rbacMiddleware.ts`.
  *
  * Access semantics (admit when ANY of):
- *   - the caller carries a valid `ADMIN_API_KEY` (header or `admin_key`
- *     cookie) — service / automation path; or
+ *   - the caller carries a valid `ADMIN_API_KEY` (X-Admin-Key header or
+ *     signed admin_session cookie) — service / automation path; or
  *   - the caller carries a signed session cookie whose payload role is in
  *     `allowedRoles` — normal browser navigation.
  *

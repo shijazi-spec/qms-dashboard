@@ -65,13 +65,14 @@ for (const route of aiOpsRoutes) {
   });
 }
 
-await suite.test("GET /ai-ops — 403 without an AI-ops role (html route also gated)", async () => {
+await suite.test("GET /ai-ops — 302 redirect to /dashboard (page retired, no auth check)", async () => {
   const handler = await buildHandler(aiOpsRoutes, "/ai-ops", "GET");
-  const ctx = makeContext({ method: "GET" }) as FakeContext & { html?: any };
+  const ctx = makeContext({ method: "GET" }) as FakeContext & { html?: any; redirect?: any };
   ctx.html = (body: string, status?: number) => ({ status: status ?? 200, body, headers: {} });
+  ctx.redirect = (location: string, status?: number) => ({ status: status ?? 302, body: "", headers: { Location: location } });
   const res = await handler(ctx);
-  suite.expectEqual(res.status, 403, "status");
-  suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
+  suite.expectEqual(res.status, 302, "status");
+  suite.expectEqual(res.headers?.Location, "/dashboard", "redirect target");
 });
 
 // ---------------------------------------------------------------------------
@@ -462,6 +463,35 @@ if (!HAS_DB) {
       const fallbackIds = (allFallback.body?.data ?? []).map((a: any) => a.id);
       suite.expect(fallbackIds.includes(highId), "fallback contains high seed");
       suite.expect(fallbackIds.includes(mediumId), "fallback contains medium seed");
+
+      // 5. Notification-delivery surface (Task #526): the history rows
+      // must expose `notified_at` / `notified_channel` so the dashboard
+      // history table can render the same Notified pill the open-alerts
+      // panel uses. We don't assert specific values (no notifier ran for
+      // the seeded rows) — we just lock in that the keys are present and
+      // null until a delivery is recorded.
+      const seededRow = (noFilter.body?.data ?? []).find(
+        (a: any) => a.id === highId,
+      );
+      suite.expect(seededRow != null, "history response includes seeded high row");
+      suite.expect(
+        Object.prototype.hasOwnProperty.call(seededRow, "notified_at"),
+        "history row includes notified_at field",
+      );
+      suite.expect(
+        Object.prototype.hasOwnProperty.call(seededRow, "notified_channel"),
+        "history row includes notified_channel field",
+      );
+      suite.expectEqual(
+        seededRow.notified_at,
+        null,
+        "notified_at null until notifier records",
+      );
+      suite.expectEqual(
+        seededRow.notified_channel,
+        null,
+        "notified_channel null until notifier records",
+      );
     } finally {
       if (original === undefined) delete process.env.ADMIN_API_KEY;
       else process.env.ADMIN_API_KEY = original;
@@ -472,6 +502,445 @@ if (!HAS_DB) {
           try { await resolveAlert(id, "history-filter-test", "cleanup"); }
           catch { /* best-effort */ }
         }
+      }
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Auto-vs-manual resolution-source filter (Task #417).
+  //
+  // The dashboards previously applied this filter client-side AFTER the
+  // API's 50-row cap, which silently dropped matches whenever closed-alert
+  // volume crossed the cap in a single status. The fix pushes the
+  // `resolution_note ILIKE 'auto-resolved%'` check into SQL inside
+  // getToolHealthAlertHistory(), exposed via `?resolution=auto|manual` on
+  // /api/ai-ops/tool-health-alerts/history. This test seeds one auto-resolved
+  // and one manually-resolved tool_health row, then asserts each filter
+  // value returns only its matching seed and excludes the other.
+  // -------------------------------------------------------------------------
+  const RESOLUTION_SUFFIX = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const AUTO_TOOL = `test_resolution_auto_${RESOLUTION_SUFFIX}`;
+  const MANUAL_TOOL = `test_resolution_manual_${RESOLUTION_SUFFIX}`;
+  let autoSeedId: number | null = null;
+  let manualSeedId: number | null = null;
+
+  await suite.test("happy: GET /api/ai-ops/tool-health-alerts/history filters by resolution=auto|manual", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    const pgMod = await import("pg");
+    const pool = new pgMod.default.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      // AUTO row: status='resolved' AND resolution_note ILIKE 'auto-resolved%'.
+      const autoRes = await pool.query(
+        `INSERT INTO ai_alerts
+           (alert_type, severity, title, description, suggestion, related_module,
+            related_record_id, status, acknowledged_by, resolved_at,
+            resolution_note, created_at)
+         VALUES
+           ('tool_health', 'high', $1,
+            'Task #417 resolution-filter test seed (auto)', 'n/a', 'ai_ops',
+            $2, 'resolved', NULL, NOW(), 'auto-resolved: error rate recovered (test)', NOW())
+         RETURNING id`,
+        [`Resolution test AUTO ${AUTO_TOOL}`, `${AUTO_TOOL}:error_rate`],
+      );
+      autoSeedId = Number(autoRes.rows[0].id);
+
+      // MANUAL row: status='resolved' AND resolution_note IS NULL → human-closed.
+      const manualRes = await pool.query(
+        `INSERT INTO ai_alerts
+           (alert_type, severity, title, description, suggestion, related_module,
+            related_record_id, status, acknowledged_by, resolved_at,
+            resolution_note, created_at)
+         VALUES
+           ('tool_health', 'high', $1,
+            'Task #417 resolution-filter test seed (manual)', 'n/a', 'ai_ops',
+            $2, 'resolved', 'history-resolution-test', NOW(), NULL, NOW())
+         RETURNING id`,
+        [`Resolution test MANUAL ${MANUAL_TOOL}`, `${MANUAL_TOOL}:p95_latency`],
+      );
+      manualSeedId = Number(manualRes.rows[0].id);
+
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-alerts/history",
+        "GET",
+      );
+
+      // 1. resolution=auto → only AUTO seed; MANUAL excluded.
+      const autoOnly = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", resolution: "auto" },
+        }),
+      );
+      suite.expectEqual(autoOnly.status, 200, "auto-only status");
+      const autoRows = (autoOnly.body?.data ?? []) as any[];
+      suite.expect(autoRows.some((a) => a.id === autoSeedId), "auto filter contains AUTO seed");
+      suite.expect(!autoRows.some((a) => a.id === manualSeedId), "auto filter excludes MANUAL seed");
+      suite.expect(
+        autoRows.every((a) => a.status === "resolved"
+          && typeof a.resolution_note === "string"
+          && a.resolution_note.toLowerCase().startsWith("auto-resolved")),
+        "every auto-filter row is resolved with an 'auto-resolved' note prefix",
+      );
+
+      // 2. resolution=manual → only MANUAL seed; AUTO excluded.
+      const manualOnly = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", resolution: "manual" },
+        }),
+      );
+      suite.expectEqual(manualOnly.status, 200, "manual-only status");
+      const manualRows = (manualOnly.body?.data ?? []) as any[];
+      suite.expect(manualRows.some((a) => a.id === manualSeedId), "manual filter contains MANUAL seed");
+      suite.expect(!manualRows.some((a) => a.id === autoSeedId), "manual filter excludes AUTO seed");
+      suite.expect(
+        manualRows.every((a) => {
+          const note = String(a.resolution_note || "").toLowerCase();
+          return !note.startsWith("auto-resolved");
+        }),
+        "no manual-filter row carries an 'auto-resolved' note prefix",
+      );
+
+      // 3. Unknown resolution value → falls through to unfiltered (both seeds present).
+      const allFallback = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", resolution: "garbage" },
+        }),
+      );
+      suite.expectEqual(allFallback.status, 200, "unknown-resolution fallback status");
+      const fallbackIds = (allFallback.body?.data ?? []).map((a: any) => a.id);
+      suite.expect(fallbackIds.includes(autoSeedId), "fallback contains AUTO seed");
+      suite.expect(fallbackIds.includes(manualSeedId), "fallback contains MANUAL seed");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      const ids = [autoSeedId, manualSeedId].filter((x): x is number => x != null);
+      if (ids.length > 0) {
+        try {
+          await pool.query(`DELETE FROM ai_alerts WHERE id = ANY($1::bigint[])`, [ids]);
+        } catch { /* best-effort */ }
+      }
+      await pool.end().catch(() => {});
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Same resolution filter, exercised against /api/consultant/alerts
+  // (Task #417). Mirrors the AI Ops test above but routes through the
+  // consultant handler so the All Alerts modal's wire path is also locked
+  // in. Dismissed rows are valid manual-resolution targets here (the
+  // consultant feed includes them); we seed one to prove they surface.
+  // -------------------------------------------------------------------------
+  const CONSULT_SUFFIX = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const CONSULT_AUTO_TITLE = `Resolution test consult AUTO ${CONSULT_SUFFIX}`;
+  const CONSULT_MANUAL_TITLE = `Resolution test consult MANUAL ${CONSULT_SUFFIX}`;
+  const CONSULT_DISMISSED_TITLE = `Resolution test consult DISMISSED ${CONSULT_SUFFIX}`;
+
+  await suite.test("happy: GET /api/consultant/alerts respects ?resolution=auto|manual", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    const pgMod = await import("pg");
+    const pool = new pgMod.default.Pool({ connectionString: process.env.DATABASE_URL });
+    const { consultantRoutes } = await import("../src/mastra/routes/consultantRoutes");
+    let cAuto: number | null = null;
+    let cManual: number | null = null;
+    let cDismissed: number | null = null;
+    try {
+      const a = await pool.query(
+        `INSERT INTO ai_alerts (alert_type, severity, title, description, suggestion,
+            related_module, related_record_id, status, resolved_at, resolution_note, created_at)
+         VALUES ('tool_health','critical',$1,'seed','n/a','ai_ops',$2,'resolved',NOW(),
+            'auto-resolved: recovered (test)',NOW()) RETURNING id`,
+        [CONSULT_AUTO_TITLE, `consult:${CONSULT_SUFFIX}:auto`],
+      );
+      cAuto = Number(a.rows[0].id);
+      const m = await pool.query(
+        `INSERT INTO ai_alerts (alert_type, severity, title, description, suggestion,
+            related_module, related_record_id, status, resolved_at, resolution_note, created_at)
+         VALUES ('tool_health','critical',$1,'seed','n/a','ai_ops',$2,'resolved',NOW(),NULL,NOW())
+         RETURNING id`,
+        [CONSULT_MANUAL_TITLE, `consult:${CONSULT_SUFFIX}:manual`],
+      );
+      cManual = Number(m.rows[0].id);
+      const d = await pool.query(
+        `INSERT INTO ai_alerts (alert_type, severity, title, description, suggestion,
+            related_module, related_record_id, status, resolved_at, resolution_note, created_at)
+         VALUES ('tool_health','critical',$1,'seed','n/a','ai_ops',$2,'dismissed',NULL,NULL,NOW())
+         RETURNING id`,
+        [CONSULT_DISMISSED_TITLE, `consult:${CONSULT_SUFFIX}:dismissed`],
+      );
+      cDismissed = Number(d.rows[0].id);
+
+      const handler = await buildHandler(consultantRoutes, "/api/consultant/alerts", "GET");
+
+      // resolution=auto → only the auto-resolved seed.
+      const autoRes = await handler(makeContext({
+        method: "GET",
+        headers: { "X-Admin-Key": ADMIN_KEY },
+        query: { limit: "100", resolution: "auto" },
+      }));
+      suite.expectEqual(autoRes.status, 200, "consultant auto status");
+      const autoIds = (autoRes.body?.alerts ?? []).map((x: any) => x.id);
+      suite.expect(autoIds.includes(cAuto), "consultant auto contains AUTO seed");
+      suite.expect(!autoIds.includes(cManual), "consultant auto excludes MANUAL seed");
+      suite.expect(!autoIds.includes(cDismissed), "consultant auto excludes DISMISSED seed");
+
+      // resolution=manual → manual + dismissed seeds, NOT auto.
+      const manualRes = await handler(makeContext({
+        method: "GET",
+        headers: { "X-Admin-Key": ADMIN_KEY },
+        query: { limit: "100", resolution: "manual" },
+      }));
+      suite.expectEqual(manualRes.status, 200, "consultant manual status");
+      const manualIds = (manualRes.body?.alerts ?? []).map((x: any) => x.id);
+      suite.expect(manualIds.includes(cManual), "consultant manual contains MANUAL seed");
+      suite.expect(manualIds.includes(cDismissed), "consultant manual contains DISMISSED seed");
+      suite.expect(!manualIds.includes(cAuto), "consultant manual excludes AUTO seed");
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      const ids = [cAuto, cManual, cDismissed].filter((x): x is number => x != null);
+      if (ids.length > 0) {
+        try {
+          await pool.query(`DELETE FROM ai_alerts WHERE id = ANY($1::bigint[])`, [ids]);
+        } catch { /* best-effort */ }
+      }
+      await pool.end().catch(() => {});
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Task #324 — Resolution-note coverage for manual resolves and the
+  // dismissed-alerts surface in the AI Ops "Recently triaged" history.
+  //
+  // Two integration tests:
+  //   1) POST /api/ai-ops/alerts/:id/resolve with `{ note: "…" }` persists
+  //      the note onto ai_alerts.resolution_note (visible to the All Alerts
+  //      modal + history feed alongside the "Manually resolved" badge).
+  //   2) GET  /api/ai-ops/tool-health-alerts/history?includeDismissed=1
+  //      returns dismissed rows (with their resolution_note) in addition to
+  //      acknowledged + resolved; omitting the flag preserves the legacy
+  //      behaviour of excluding dismissed.
+  // ─────────────────────────────────────────────────────────────────────────
+  await suite.test("happy: POST /api/ai-ops/alerts/:id/resolve persists the resolution note (Task #324)", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    let seedId: number | null = null;
+    try {
+      const seeded = await createAIAlert({
+        alert_type: "tool_health",
+        severity: "high",
+        title: `Task324 manual-resolve note seed ${Date.now()}`,
+        description: "Task #324 manual-resolve note persistence test seed",
+        suggestion: "n/a",
+        related_record_type: "tool_health",
+        related_record_id: `task324_resolve_note_${Date.now()}:error_rate`,
+        metadata: { tool_name: "task324_resolve_note", reason: "error_rate" },
+      });
+      seedId = seeded.id ?? null;
+      suite.expect(seedId != null, "seed alert created with id");
+
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/alerts/:id/resolve",
+        "POST",
+      );
+      const NOTE = "Confirmed root cause: stale tool config — refreshed cache.";
+      const res = await handler(
+        makeContext({
+          method: "POST",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          params: { id: String(seedId) },
+          body: { note: NOTE },
+        }),
+      );
+      suite.expectEqual(res.status, 200, "status");
+      suite.expect(res.body?.success === true, "success=true");
+      suite.expectEqual(res.body?.alert?.id, seedId, "echoes alert id");
+      suite.expectEqual(res.body?.alert?.status, "resolved", "status flipped");
+      suite.expectEqual(
+        res.body?.alert?.resolution_note,
+        NOTE,
+        "resolution_note persisted from POST body",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      if (seedId != null) {
+        try { await resolveAlert(seedId, "task324-cleanup", "cleanup"); }
+        catch { /* best-effort */ }
+      }
+    }
+  });
+
+  await suite.test("happy: GET /api/ai-ops/tool-health-alerts/history honours includeDismissed (Task #324)", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    const { dismissAlert } = await import("../src/utils/aiAlertsDatabase");
+    const { sharedPool } = await import("../src/utils/sharedPool");
+    let dismissedId: number | null = null;
+    try {
+      const dismissed = await createAIAlert({
+        alert_type: "tool_health",
+        severity: "medium",
+        title: `Task324 dismissed-history seed ${Date.now()}`,
+        description: "Task #324 dismissed-history visibility test seed",
+        suggestion: "n/a",
+        related_record_type: "tool_health",
+        related_record_id: `task324_dismissed_${Date.now()}:p95_latency`,
+        metadata: { tool_name: "task324_dismissed", reason: "p95_latency" },
+      });
+      dismissedId = dismissed.id ?? null;
+      suite.expect(dismissedId != null, "dismissed seed created");
+      await dismissAlert(dismissedId as number);
+      const NOTE = "False positive — flapping latency probe, ignoring.";
+      await sharedPool.query(
+        `UPDATE ai_alerts SET resolution_note = $2 WHERE id = $1`,
+        [dismissedId, NOTE],
+      );
+
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-alerts/history",
+        "GET",
+      );
+
+      // Default (no flag) — dismissed row is excluded.
+      const noFlag = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100" },
+        }),
+      );
+      suite.expectEqual(noFlag.status, 200, "no-flag status");
+      const noFlagIds = (noFlag.body?.data ?? []).map((a: any) => a.id);
+      suite.expect(
+        !noFlagIds.includes(dismissedId),
+        "dismissed row excluded by default",
+      );
+
+      // includeDismissed=1 — dismissed row appears with its note.
+      const withFlag = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { days: "1", limit: "100", includeDismissed: "1" },
+        }),
+      );
+      suite.expectEqual(withFlag.status, 200, "with-flag status");
+      const withFlagRows = (withFlag.body?.data ?? []) as any[];
+      const dismissedRow = withFlagRows.find((a) => a.id === dismissedId);
+      suite.expect(dismissedRow != null, "dismissed row included with flag");
+      suite.expectEqual(
+        dismissedRow?.status,
+        "dismissed",
+        "row carries dismissed status",
+      );
+      suite.expectEqual(
+        dismissedRow?.resolution_note,
+        NOTE,
+        "resolution_note surfaced for dismissed row",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      if (dismissedId != null) {
+        try {
+          await sharedPool.query(`DELETE FROM ai_alerts WHERE id = $1`, [
+            dismissedId,
+          ]);
+        } catch { /* best-effort */ }
+      }
+    }
+  });
+
+  await suite.test("happy: GET /api/ai-ops/tool-health-alerts/resolved honours includeDismissed (Task #324)", async () => {
+    const original = process.env.ADMIN_API_KEY;
+    process.env.ADMIN_API_KEY = ADMIN_KEY;
+    const { dismissAlert } = await import("../src/utils/aiAlertsDatabase");
+    const { sharedPool } = await import("../src/utils/sharedPool");
+    let dismissedId: number | null = null;
+    try {
+      const dismissed = await createAIAlert({
+        alert_type: "tool_health",
+        severity: "medium",
+        title: `Task324 resolved-endpoint dismissed seed ${Date.now()}`,
+        description: "Task #324 resolved-endpoint dismissed visibility seed",
+        suggestion: "n/a",
+        related_record_type: "tool_health",
+        related_record_id: `task324_resolved_dismissed_${Date.now()}:error_rate`,
+        metadata: {
+          tool_name: "task324_resolved_dismissed",
+          reason: "error_rate",
+        },
+      });
+      dismissedId = dismissed.id ?? null;
+      suite.expect(dismissedId != null, "dismissed seed created");
+      await dismissAlert(dismissedId as number);
+      const NOTE = "Dismissed: maintenance window — known noise.";
+      await sharedPool.query(
+        `UPDATE ai_alerts SET resolution_note = $2 WHERE id = $1`,
+        [dismissedId, NOTE],
+      );
+
+      const handler = await buildHandler(
+        aiOpsRoutes,
+        "/api/ai-ops/tool-health-alerts/resolved",
+        "GET",
+      );
+
+      // Default — dismissed excluded.
+      const noFlag = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { limit: "50" },
+        }),
+      );
+      suite.expectEqual(noFlag.status, 200, "no-flag status");
+      const noFlagIds = (noFlag.body?.data ?? []).map((a: any) => a.id);
+      suite.expect(
+        !noFlagIds.includes(dismissedId),
+        "/resolved excludes dismissed by default",
+      );
+
+      // includeDismissed=1 — dismissed appears with note.
+      const withFlag = await handler(
+        makeContext({
+          method: "GET",
+          headers: { "X-Admin-Key": ADMIN_KEY },
+          query: { limit: "50", includeDismissed: "1" },
+        }),
+      );
+      suite.expectEqual(withFlag.status, 200, "with-flag status");
+      const withFlagRows = (withFlag.body?.data ?? []) as any[];
+      const row = withFlagRows.find((a) => a.id === dismissedId);
+      suite.expect(
+        row != null,
+        "/resolved includes dismissed when flag set",
+      );
+      suite.expectEqual(row?.status, "dismissed", "row status=dismissed");
+      suite.expectEqual(
+        row?.resolution_note,
+        NOTE,
+        "/resolved surfaces dismissed resolution_note",
+      );
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_API_KEY;
+      else process.env.ADMIN_API_KEY = original;
+      if (dismissedId != null) {
+        try {
+          await sharedPool.query(`DELETE FROM ai_alerts WHERE id = $1`, [
+            dismissedId,
+          ]);
+        } catch { /* best-effort */ }
       }
     }
   });
@@ -1186,6 +1655,19 @@ if (HAS_DB) {
         before_values: Record<string, unknown>;
         after_values: Record<string, unknown>;
       }
+      // Serialize against `tests/toolHealthConfigDatabase.test.ts` which
+      // also seeds + reaps the `tool_health_config_overrides` (id=1)
+      // singleton row. Both tests can run in parallel under the default
+      // 4-worker pool in `tests/runIntegrationTests.ts` and clobber each
+      // other's seed. A session-level pg advisory lock held on a dedicated
+      // client serializes the singleton-mutation window across processes
+      // without forcing TEST_CONCURRENCY=1. Lock key matches the one in
+      // `tests/toolHealthConfigDatabase.test.ts`.
+      const SINGLETON_LOCK_KEY = 7321614321;
+      const { sharedPool: lockPool } = await import("../src/utils/sharedPool");
+      const lockClient = await lockPool.connect();
+      await lockClient.query("SELECT pg_advisory_lock($1)", [SINGLETON_LOCK_KEY]);
+
       try {
         const { runToolHealthCheck } = await import(
           "../src/mastra/workflows/toolHealthAlertsCron"
@@ -1437,6 +1919,15 @@ if (HAS_DB) {
         }
         if (original === undefined) delete process.env.ADMIN_API_KEY;
         else process.env.ADMIN_API_KEY = original;
+        // Release the singleton advisory lock + dedicated client.
+        try {
+          await lockClient.query("SELECT pg_advisory_unlock($1)", [
+            SINGLETON_LOCK_KEY,
+          ]);
+        } catch {
+          /* best-effort */
+        }
+        lockClient.release();
       }
     },
   );
@@ -1761,5 +2252,358 @@ await suite.test(
     suite.expect(Array.isArray(warnings) && warnings.length === 0, "no warnings for valid defaults");
   },
 );
+
+// ---------------------------------------------------------------------------
+// Task #745: POST /api/ai-ops/feedback (call-id rating path) must persist the
+// echoed `promptVersion` into ai_call_metrics.metadata.prompt_version when
+// the row predates the always-on telemetry path or otherwise lacks one.
+// Mirrors the message-id path's prompt-version capture so per-version
+// analytics (`getFeedbackRateByPromptVersion`) attribute call-id ratings
+// the same way they already attribute message-id ratings.
+// ---------------------------------------------------------------------------
+if (HAS_DB) {
+  const { insertAiCallMetric, ensureAiMetricsTable } = await import(
+    "../src/utils/aiTelemetry"
+  );
+  const pgMod = await import("pg");
+
+  const TEST_AGENT = `__test_aiops_feedback_pv_${Date.now()}__`;
+  const PROMPT_VERSION = "qms@call-id-test-fbe4";
+
+  await suite.test(
+    "POST /api/ai-ops/feedback — persists promptVersion into ai_call_metrics.metadata when missing",
+    async () => {
+      await ensureAiMetricsTable();
+      // Seed a row WITHOUT prompt_version so the helper has something to
+      // backfill. The unattributed shape mirrors a legacy call recorded
+      // before the consultant span started writing metadata.prompt_version.
+      const callId = await insertAiCallMetric({
+        agent_name: TEST_AGENT,
+        model: "gpt-4o",
+        latency_ms: 600,
+        success: true,
+        // metadata intentionally omitted → JSONB '{}' default applies.
+      });
+      suite.expect(callId != null && callId > 0, "seeded call row with id");
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId,
+              rating: "thumbs_up",
+              promptVersion: PROMPT_VERSION,
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 200, "feedback POST returns 200");
+        suite.expectEqual(res.body?.success, true, "feedback recorded");
+
+        // Inspect the row directly: metadata.prompt_version must now match
+        // the value the client echoed back.
+        const pool = new pgMod.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const row = await pool.query(
+            `SELECT metadata FROM ai_call_metrics WHERE id = $1`,
+            [callId],
+          );
+          const meta = row.rows[0]?.metadata ?? {};
+          suite.expectEqual(
+            meta.prompt_version,
+            PROMPT_VERSION,
+            "metadata.prompt_version backfilled from request",
+          );
+        } finally {
+          await pool.end();
+        }
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  await suite.test(
+    "POST /api/ai-ops/feedback — does NOT overwrite an existing prompt_version",
+    async () => {
+      await ensureAiMetricsTable();
+      const SERVER_VERSION = "qms@server-truth-aaaa";
+      // Seed a row that already carries the authoritative server-side
+      // prompt_version (the consultant span already wrote it). A
+      // client-supplied alternative MUST NOT clobber the source of truth.
+      const callId = await insertAiCallMetric({
+        agent_name: TEST_AGENT,
+        model: "gpt-4o",
+        latency_ms: 700,
+        success: true,
+        metadata: { prompt_version: SERVER_VERSION },
+      });
+      suite.expect(callId != null && callId > 0, "seeded call row with id");
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId,
+              rating: "thumbs_down",
+              promptVersion: "qms@malicious-overwrite",
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 200, "feedback POST returns 200");
+
+        const pool = new pgMod.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const row = await pool.query(
+            `SELECT metadata FROM ai_call_metrics WHERE id = $1`,
+            [callId],
+          );
+          const meta = row.rows[0]?.metadata ?? {};
+          suite.expectEqual(
+            meta.prompt_version,
+            SERVER_VERSION,
+            "existing server-side prompt_version preserved (client cannot overwrite)",
+          );
+        } finally {
+          await pool.end();
+        }
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  await suite.test(
+    "POST /api/ai-ops/feedback — 400 when promptVersion is not a string",
+    async () => {
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId: 1,
+              rating: "thumbs_up",
+              promptVersion: { not: "a string" },
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 400, "rejects non-string promptVersion");
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  // -------------------------------------------------------------------
+  // Task #763: POST /api/ai-ops/feedback must also persist the echoed
+  // `clientSurface` into ai_call_metrics.metadata.client_surface so the
+  // per-surface breakdown in the AI Ops dashboard attributes Slack /
+  // mobile / embedded ratings correctly. Same never-overwrite-server-truth
+  // contract as prompt_version above.
+  // -------------------------------------------------------------------
+  await suite.test(
+    "POST /api/ai-ops/feedback — persists clientSurface into ai_call_metrics.metadata when missing",
+    async () => {
+      await ensureAiMetricsTable();
+      const callId = await insertAiCallMetric({
+        agent_name: TEST_AGENT,
+        model: "gpt-4o",
+        latency_ms: 500,
+        success: true,
+      });
+      suite.expect(callId != null && callId > 0, "seeded call row with id");
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId,
+              rating: "thumbs_up",
+              clientSurface: "slack",
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 200, "feedback POST returns 200");
+        suite.expectEqual(res.body?.success, true, "feedback recorded");
+
+        const pool = new pgMod.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const row = await pool.query(
+            `SELECT metadata FROM ai_call_metrics WHERE id = $1`,
+            [callId],
+          );
+          const meta = row.rows[0]?.metadata ?? {};
+          suite.expectEqual(
+            meta.client_surface,
+            "slack",
+            "metadata.client_surface backfilled from request",
+          );
+        } finally {
+          await pool.end();
+        }
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  await suite.test(
+    "POST /api/ai-ops/feedback — does NOT overwrite an existing client_surface",
+    async () => {
+      await ensureAiMetricsTable();
+      const SERVER_SURFACE = "web";
+      const callId = await insertAiCallMetric({
+        agent_name: TEST_AGENT,
+        model: "gpt-4o",
+        latency_ms: 700,
+        success: true,
+        metadata: { client_surface: SERVER_SURFACE },
+      });
+      suite.expect(callId != null && callId > 0, "seeded call row with id");
+
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId,
+              rating: "thumbs_down",
+              clientSurface: "slack",
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 200, "feedback POST returns 200");
+
+        const pool = new pgMod.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const row = await pool.query(
+            `SELECT metadata FROM ai_call_metrics WHERE id = $1`,
+            [callId],
+          );
+          const meta = row.rows[0]?.metadata ?? {};
+          suite.expectEqual(
+            meta.client_surface,
+            SERVER_SURFACE,
+            "existing server-side client_surface preserved (client cannot overwrite)",
+          );
+        } finally {
+          await pool.end();
+        }
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  await suite.test(
+    "POST /api/ai-ops/feedback — 400 when clientSurface is not a string",
+    async () => {
+      const original = process.env.ADMIN_API_KEY;
+      process.env.ADMIN_API_KEY = ADMIN_KEY;
+      try {
+        const handler = await buildHandler(
+          aiOpsRoutes,
+          "/api/ai-ops/feedback",
+          "POST",
+        );
+        const res = await handler(
+          makeContext({
+            method: "POST",
+            headers: { "X-Admin-Key": ADMIN_KEY },
+            body: {
+              callId: 1,
+              rating: "thumbs_up",
+              clientSurface: { not: "a string" },
+            },
+          }),
+        );
+        suite.expectEqual(res.status, 400, "rejects non-string clientSurface");
+      } finally {
+        if (original === undefined) delete process.env.ADMIN_API_KEY;
+        else process.env.ADMIN_API_KEY = original;
+      }
+    },
+  );
+
+  await suite.test(
+    "cleanup: remove seeded ai_call_metrics rows for Task #745 test agent",
+    async () => {
+      const pool = new pgMod.default.Pool({
+        connectionString: process.env.DATABASE_URL,
+      });
+      try {
+        await pool.query(
+          `DELETE FROM ai_call_feedback
+            WHERE call_id IN (
+              SELECT id FROM ai_call_metrics WHERE agent_name = $1
+            )`,
+          [TEST_AGENT],
+        );
+        await pool.query(
+          `DELETE FROM ai_call_metrics WHERE agent_name = $1`,
+          [TEST_AGENT],
+        );
+        suite.expect(true, "cleanup query executed without error");
+      } finally {
+        await pool.end();
+      }
+    },
+  );
+}
 
 suite.finishOrExit();

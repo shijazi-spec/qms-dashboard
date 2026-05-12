@@ -467,13 +467,16 @@ const aiCostSummaryFunction = inngest.createFunction(
       try {
         const { getAiMetricsTableStats } =
           await import("../../utils/aiTelemetry");
-        const { evaluateAndAlertStorageHealth } =
-          await import("../../utils/storageHealthAlerts");
+        const {
+          evaluateAndAlertStorageHealth,
+          repageStaleStorageHealthAlerts,
+        } = await import("../../utils/storageHealthAlerts");
         const {
           openAlertExistsByKey,
           createAIAlert,
           getOpenAlertsByKey,
           resolveAlert,
+          recordAlertNotificationResult,
         } = await import("../../utils/aiAlertsDatabase");
         const { createNotification } =
           await import("../../utils/notificationHub");
@@ -527,6 +530,52 @@ const aiCostSummaryFunction = inngest.createFunction(
             `[AI-Cost] Storage-health auto-resolved ${storageResult.alertsResolved} alert(s)`,
           );
         }
+
+        // Task #679: re-page on-call when a storage_health alert has sat
+        // in the open state past the configured threshold (default 24 h).
+        // The /ai-ops banner already surfaces it, but if no operator is
+        // looking, the dedupe in evaluateAndAlertStorageHealth means we
+        // never re-page. This sweep closes that gap.
+        const repageResult = await repageStaleStorageHealthAlerts({
+          getOpenAlertsByKey,
+          recordAlertNotified: (alertId, channel, whenMs) =>
+            recordAlertNotificationResult(alertId, channel, whenMs),
+          sendSlack: async (webhookUrl, text) => {
+            try {
+              const resp = await fetch(webhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text }),
+              });
+              return resp.ok;
+            } catch {
+              return false;
+            }
+          },
+          sendEmail: async ({ to, subject, html }) => {
+            const sendResult = await sendResendEmail({ to, subject, html });
+            return Boolean(sendResult?.success);
+          },
+        });
+        if (repageResult.alertsRepaged > 0) {
+          logger.warn(
+            `[AI-Cost] Storage-health re-paged ${repageResult.alertsRepaged} ` +
+              `stale alert(s) (slack=${repageResult.slackSent}, ` +
+              `email=${repageResult.emailSent}, ` +
+              `throttled=${repageResult.alertsThrottled}, ` +
+              `quietHours=${repageResult.alertsQuietHoursSuppressed})`,
+          );
+        } else if (repageResult.alertsConsidered > 0) {
+          logger.info(
+            `[AI-Cost] Storage-health re-page sweep: ` +
+              `considered=${repageResult.alertsConsidered}, ` +
+              `young=${repageResult.alertsSkippedYoung}, ` +
+              `acknowledged=${repageResult.alertsSkippedAcknowledged}, ` +
+              `throttled=${repageResult.alertsThrottled}, ` +
+              `quietHours=${repageResult.alertsQuietHoursSuppressed}, ` +
+              `disabled=${repageResult.disabled}`,
+          );
+        }
       } catch (storageErr) {
         logger.warn(
           "[AI-Cost] Storage-health evaluation failed (non-fatal):",
@@ -568,6 +617,42 @@ const aiCostSummaryFunction = inngest.createFunction(
         logger.warn(
           "[AI-Cost] ai_call_metrics redaction backfill failed (non-fatal):",
           backfillErr,
+        );
+      }
+
+      // Task #797: After the metrics sweep, run the feedback
+      // prompt-version backfill so legacy ai_response_feedback rows (and
+      // any newly-rated calls that briefly raced ahead of the consultant
+      // span) get `metadata.prompt_version` stamped from the linked
+      // ai_call_metrics row. Idempotent — quiet no-op once steady-state.
+      // Wrapped in its own try/catch so a failure here cannot mask the
+      // metrics sweep result above (mirrors that pattern exactly).
+      try {
+        const pg = await import("pg");
+        const { runFeedbackPromptVersionBackfill } =
+          await import("../../scripts/backfillAiResponseFeedbackPromptVersion");
+        const feedbackBackfillPool = new pg.default.Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        try {
+          const feedbackResult =
+            await runFeedbackPromptVersionBackfill(feedbackBackfillPool);
+          if (feedbackResult.rows_updated > 0) {
+            logger.info(
+              `[AI-Cost] Feedback prompt-version backfill rewrote ` +
+                `${feedbackResult.rows_updated} ai_response_feedback rows ` +
+                `(scanned=${feedbackResult.scanned}, eligible=${feedbackResult.eligible}, ` +
+                `missing_source=${feedbackResult.missing_source}, ` +
+                `unlinked=${feedbackResult.unlinked})`,
+            );
+          }
+        } finally {
+          await feedbackBackfillPool.end();
+        }
+      } catch (feedbackBackfillErr) {
+        logger.warn(
+          "[AI-Cost] ai_response_feedback prompt-version backfill failed (non-fatal):",
+          feedbackBackfillErr,
         );
       }
 
@@ -986,6 +1071,29 @@ const rateLimit429SpikeAlertFunction = inngest.createFunction(
 );
 inngestFunctions.push(rateLimit429SpikeAlertFunction);
 
+// Export-endpoint p95 latency alert cron (Task #440) — scrapes the in-memory
+// rolling window populated by `instrumentExportResponseTiming` in
+// `src/utils/excelExport.ts` and pages on-call when any route's rolling p95
+// of TTFB or total duration exceeds `EXPORT_TTFB_BUDGET_MS` /
+// `EXPORT_TOTAL_BUDGET_MS`. Repeat-suppression is per-(route, reason) so a
+// sustained regression on one endpoint does not silence a fresh regression
+// on another. Runbook: docs/runbook-export-timing-alert.md.
+const exportTimingAlertFunction = inngest.createFunction(
+  { id: "export-timing-p95-alert" },
+  { cron: process.env.EXPORT_TIMING_ALERT_CRON || "*/5 * * * *" },
+  async ({ step }) => {
+    return await step.run("check-export-timing-p95", async () => {
+      const { runExportTimingAlertCheck } = await import(
+        "../../utils/exportTimingMetrics"
+      );
+      const result = await runExportTimingAlertCheck();
+      logger.info(`[ExportTimingAlert] Cron run complete:`, result);
+      return result;
+    });
+  },
+);
+inngestFunctions.push(exportTimingAlertFunction);
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Per-tool health alert cron — defined in workflows/toolHealthAlertsCron.ts
 // (kept there so all the threshold config + evaluation logic live together).
@@ -1038,6 +1146,64 @@ async function runExecutiveDigestCadence(
 
   return result;
 }
+// ──────────────────────────────────────────────────────────────────────────────
+// Storage-health morning digest (Task #604)
+//
+// Once per day, shortly after the configured quiet-hours window ends, push a
+// single Slack/email digest summarising every still-unresolved storage_health
+// alert that fired while pushes were suppressed. Closes the gap that Task
+// #579 introduced — ops who don't open /ai-ops first thing could miss a
+// breach that fired at 02:00 because the next storage-health cron pass
+// dedupes against the existing open alert and never re-pages.
+//
+// The digest is opt-out via STORAGE_HEALTH_MORNING_DIGEST_DISABLED for sites
+// that prefer pure in-app surfacing. When STORAGE_HEALTH_QUIET_HOURS_START/
+// END are unset the cron is a no-op (nothing to digest).
+//
+// Schedule: defaults to 05 07 * * * UTC (a few minutes after the default
+// 22→07 quiet-hours window ends). Overridable via
+// STORAGE_HEALTH_MORNING_DIGEST_CRON so deployments using a non-default
+// quiet-hours window can re-align the digest with their own end time.
+// ──────────────────────────────────────────────────────────────────────────────
+const storageHealthMorningDigestFunction = inngest.createFunction(
+  { id: "storage-health-morning-digest" },
+  { cron: process.env.STORAGE_HEALTH_MORNING_DIGEST_CRON || "5 7 * * *" },
+  async ({ step }) => {
+    return await step.run("send-storage-health-morning-digest", async () => {
+      const { runStorageHealthMorningDigest } = await import(
+        "../../utils/storageHealthMorningDigest"
+      );
+      const { getUnresolvedAlertsCreatedBetween } = await import(
+        "../../utils/aiAlertsDatabase"
+      );
+      const { sendResendEmail } = await import("../../utils/resendMail");
+
+      const result = await runStorageHealthMorningDigest({
+        getUnresolvedAlertsCreatedBetween,
+        sendSlack: async (webhookUrl, text) => {
+          try {
+            const resp = await fetch(webhookUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+            return resp.ok;
+          } catch {
+            return false;
+          }
+        },
+        sendEmail: async ({ to, subject, html }) => {
+          const sendResult = await sendResendEmail({ to, subject, html });
+          return Boolean(sendResult?.success);
+        },
+      });
+
+      logger.info("[StorageHealthMorningDigest] Cron pass complete", result);
+      return result;
+    });
+  },
+);
+inngestFunctions.push(storageHealthMorningDigestFunction);
 
 const executiveDigestFunction = inngest.createFunction(
   { id: "weekly-executive-digest" },
@@ -1539,291 +1705,14 @@ const fraudKpiMonthlyReminderFunction = inngest.createFunction(
 inngestFunctions.push(fraudKpiMonthlyReminderFunction);
 
 // ──────────────────────────────────────────────────────────────────────
-// Phase 2.1 — Document text-extraction pipeline (compliance mapping)
-//
-//   qmsdocs-text-extract           triggered by `qmsdocs.uploaded` event
-//   qmsdocs-text-extract-backfill  daily 03:30 UTC; extracts any pending row
-//
-// Both functions read the binary file via documentTextExtractor, then
-// persist text + status into qms_uploaded_documents. Failures are
-// swallowed and stored as `failed`/`unsupported` so the upload flow is
-// never blocked by extractor errors.
+// Phase 2.1 (document text-extraction + compliance-judge pipeline) was
+// previously registered here with five Inngest functions. Their backing
+// modules and DB schema were never authored, so the registrations only
+// existed as no-op stubs that broke the deployment build (Task #828).
+// Removed pending a real implementation; callers that need extraction
+// should re-introduce these functions alongside the underlying modules
+// in one PR rather than as orphaned shells.
 // ──────────────────────────────────────────────────────────────────────
-const qmsdocsTextExtractFunction = inngest.createFunction(
-  { id: "qmsdocs-text-extract", concurrency: 2, retries: 2 },
-  { event: "qmsdocs.uploaded" },
-  async ({ event, step }) => {
-    const documentId = Number(event.data?.document_id);
-    if (!Number.isFinite(documentId) || documentId <= 0) {
-      throw new NonRetriableError(
-        `qmsdocs.uploaded missing valid document_id: ${JSON.stringify(event.data)}`,
-      );
-    }
-    const extracted = await step.run("extract-text", async () => {
-      const { getDocumentById, setDocumentExtractionResult } = await import(
-        "../../utils/qmsDocsDatabase"
-      );
-      const { extractDocumentText } = await import(
-        "../../utils/documentTextExtractor"
-      );
-      const doc = await getDocumentById(documentId);
-      if (!doc) {
-        return { document_id: documentId, status: "missing" };
-      }
-      const result = await extractDocumentText(doc.file_path, doc.mime_type);
-      await setDocumentExtractionResult(
-        documentId,
-        result.status as any,
-        result.text,
-        result.hash,
-      );
-      return {
-        document_id: documentId,
-        status: result.status,
-        stored_chars: result.stored_chars ?? 0,
-      };
-    });
-    // Compliance v2 — Pillar 4: chained citation extraction step.
-    // Cheap (regex + small SQL); only runs when extraction succeeded.
-    if (extracted?.status === "extracted") {
-      try {
-        await step.run("extract-citations", async () => {
-          const { runCitationExtraction } = await import(
-            "../../utils/clauseCitationExtractor"
-          );
-          return await runCitationExtraction(documentId);
-        });
-      } catch (err) {
-        logger.warn(
-          `[qmsdocs-text-extract] citation extraction failed for doc ${documentId}: ${(err as Error).message}`,
-        );
-      }
-    }
-    return extracted;
-  },
-);
-inngestFunctions.push(qmsdocsTextExtractFunction);
-
-const qmsdocsTextExtractBackfillFunction = inngest.createFunction(
-  { id: "qmsdocs-text-extract-backfill" },
-  { cron: process.env.QMSDOCS_EXTRACT_BACKFILL_CRON || "30 3 * * *" },
-  async ({ step }) => {
-    return await step.run("extract-pending", async () => {
-      const {
-        listDocumentsPendingExtraction,
-        setDocumentExtractionResult,
-      } = await import("../../utils/qmsDocsDatabase");
-      const { extractDocumentText } = await import(
-        "../../utils/documentTextExtractor"
-      );
-      const batchSize = Number(process.env.QMSDOCS_EXTRACT_BACKFILL_BATCH || 25);
-      const pending = await listDocumentsPendingExtraction(batchSize);
-      let extracted = 0;
-      let failed = 0;
-      let unsupported = 0;
-      const { runCitationExtraction } = await import(
-        "../../utils/clauseCitationExtractor"
-      );
-      for (const doc of pending) {
-        try {
-          const r = await extractDocumentText(doc.file_path, doc.mime_type);
-          await setDocumentExtractionResult(
-            doc.id,
-            r.status as any,
-            r.text,
-            r.hash,
-          );
-          if (r.status === "extracted") {
-            extracted++;
-            // Best-effort: don't fail the whole batch if citation
-            // extraction errors on a single doc.
-            try {
-              await runCitationExtraction(doc.id);
-            } catch (citErr) {
-              logger.warn(
-                `[qmsdocs-extract-backfill] citation extraction failed for doc ${doc.id}: ${(citErr as Error).message}`,
-              );
-            }
-          } else if (r.status === "unsupported") unsupported++;
-          else failed++;
-        } catch (err) {
-          failed++;
-          logger.warn(
-            `[qmsdocs-extract-backfill] doc ${doc.id} failed: ${(err as Error).message}`,
-          );
-          try {
-            await setDocumentExtractionResult(doc.id, "failed", null, null);
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-      logger.info(
-        `[qmsdocs-extract-backfill] processed ${pending.length}: ${extracted} extracted, ${unsupported} unsupported, ${failed} failed`,
-      );
-      return {
-        processed: pending.length,
-        extracted,
-        unsupported,
-        failed,
-      };
-    });
-  },
-);
-inngestFunctions.push(qmsdocsTextExtractBackfillFunction);
-
-// ──────────────────────────────────────────────────────────────────────
-// Compliance v2 — Ingest Standard from Document
-//
-//   compliance-ingest-standard  triggered by `compliance.ingest.requested`
-//
-// Chains: text-extract (already done by qmsdocs-text-extract for any
-// uploaded doc) -> AI clause extraction -> persist draft into
-// regulation_imports for human review.
-// ──────────────────────────────────────────────────────────────────────
-const complianceIngestStandardFunction = inngest.createFunction(
-  { id: "compliance-ingest-standard", concurrency: 2, retries: 1 },
-  { event: "compliance.ingest.requested" },
-  async ({ event, step }) => {
-    const importId = Number(event.data?.import_id);
-    const documentId = Number(event.data?.document_id);
-    const regulationId =
-      event.data?.regulation_id != null
-        ? Number(event.data.regulation_id)
-        : null;
-    if (!Number.isFinite(importId) || importId <= 0) {
-      throw new NonRetriableError(
-        `compliance.ingest.requested missing valid import_id: ${JSON.stringify(event.data)}`,
-      );
-    }
-    if (!Number.isFinite(documentId) || documentId <= 0) {
-      throw new NonRetriableError(
-        `compliance.ingest.requested missing valid document_id: ${JSON.stringify(event.data)}`,
-      );
-    }
-    return await step.run("extract-and-persist", async () => {
-      const { setImportDraft, setImportError } = await import(
-        "../../utils/regulationImportsDatabase"
-      );
-      const { extractClausesForDocument } = await import(
-        "../../mastra/tools/extractClausesFromStandardTool"
-      );
-      try {
-        const { draft } = await extractClausesForDocument(
-          documentId,
-          regulationId,
-        );
-        // Default every row to accepted=true so the review UI can flip
-        // off the bad ones rather than the user clicking through every
-        // good one.
-        const draftWithAccept = draft.map((d) => ({ ...d, accepted: true }));
-        await setImportDraft(importId, draftWithAccept, "awaiting_review");
-        return {
-          import_id: importId,
-          document_id: documentId,
-          draft_count: draft.length,
-          status: "awaiting_review",
-        };
-      } catch (err) {
-        const msg = (err as Error).message || "unknown error";
-        await setImportError(importId, msg);
-        return {
-          import_id: importId,
-          document_id: documentId,
-          status: "failed",
-          error: msg,
-        };
-      }
-    });
-  },
-);
-inngestFunctions.push(complianceIngestStandardFunction);
-
-// ──────────────────────────────────────────────────────────────────────
-// Phase 3.2 — Compliance LLM judge functions
-//
-//   compliance-judge-link        triggered by `compliance.mapping.applied`
-//   compliance-judge-pending     daily 02:00 UTC; re-judges links older
-//                                than 30 days or never-judged
-// ──────────────────────────────────────────────────────────────────────
-const complianceJudgeLinkFunction = inngest.createFunction(
-  { id: "compliance-judge-link", concurrency: 2, retries: 2 },
-  { event: "compliance.mapping.applied" },
-  async ({ event, step }) => {
-    const obligationId = Number(event.data?.obligation_id);
-    const documentId = Number(event.data?.document_id);
-    const appliedBy = String(event.data?.applied_by || "ai-suggest");
-    if (
-      !Number.isFinite(obligationId) ||
-      obligationId <= 0 ||
-      !Number.isFinite(documentId) ||
-      documentId <= 0
-    ) {
-      throw new NonRetriableError(
-        `compliance.mapping.applied missing valid ids: ${JSON.stringify(event.data)}`,
-      );
-    }
-    return await step.run("judge", async () => {
-      const { judgeEvidence } = await import("../../utils/complianceJudge");
-      try {
-        const verdict = await judgeEvidence(
-          obligationId,
-          documentId,
-          appliedBy,
-        );
-        return {
-          obligation_id: obligationId,
-          document_id: documentId,
-          status: verdict.status,
-        };
-      } catch (err) {
-        logger.warn(
-          `[compliance-judge-link] failed for ob=${obligationId} doc=${documentId}: ${(err as Error).message}`,
-        );
-        return {
-          obligation_id: obligationId,
-          document_id: documentId,
-          status: "error",
-          error: (err as Error).message,
-        };
-      }
-    });
-  },
-);
-inngestFunctions.push(complianceJudgeLinkFunction);
-
-const complianceJudgePendingFunction = inngest.createFunction(
-  { id: "compliance-judge-pending" },
-  { cron: process.env.COMPLIANCE_JUDGE_CRON || "0 2 * * *" },
-  async ({ step }) => {
-    return await step.run("judge-pending", async () => {
-      const { listLinksPendingJudgement } = await import(
-        "../../utils/complianceQualityDatabase"
-      );
-      const { judgeEvidence } = await import("../../utils/complianceJudge");
-      const batchSize = Number(process.env.COMPLIANCE_JUDGE_BATCH || 25);
-      const pending = await listLinksPendingJudgement({ limit: batchSize });
-      let ok = 0;
-      let fail = 0;
-      for (const link of pending) {
-        try {
-          await judgeEvidence(link.obligation_id, link.document_id, "ai-judge-cron");
-          ok++;
-        } catch (err) {
-          fail++;
-          logger.warn(
-            `[compliance-judge-pending] failed: ${(err as Error).message}`,
-          );
-        }
-      }
-      logger.info(
-        `[compliance-judge-pending] processed ${pending.length}: ${ok} ok, ${fail} failed`,
-      );
-      return { processed: pending.length, ok, fail };
-    });
-  },
-);
-inngestFunctions.push(complianceJudgePendingFunction);
 
 export function inngestServe({
   mastra,

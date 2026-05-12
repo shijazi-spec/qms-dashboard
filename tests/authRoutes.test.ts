@@ -60,15 +60,18 @@ await suite.test("GET /api/auth/me — 200 with admin user when X-Admin-Key matc
   suite.expectEqual(res.body?.user?.id, "admin", "body.user.id");
 });
 
-await suite.test("GET /api/auth/me — 200 with admin user when admin_key cookie matches", async () => {
+// Regression guard for Task #831: a request presenting ONLY the admin_key
+// cookie (no X-Admin-Key header) must NOT authenticate. The browser
+// admin_key cookie path has been removed; only the X-Admin-Key header is
+// trusted on this endpoint.
+await suite.test("GET /api/auth/me — 401 when only admin_key cookie is present (cookie path removed)", async () => {
   const handler = await buildHandler(authRoutes, "/api/auth/me", "GET");
   const res = await handler(makeContext({
     method: "GET",
     headers: { Cookie: `admin_key=${TEST_ADMIN_KEY}` },
   }));
-  suite.expectEqual(res.status, 200, "status");
-  suite.expectEqual(res.body?.authenticated, true, "body.authenticated");
-  suite.expectEqual(res.body?.user?.role, "admin", "body.user.role");
+  suite.expectEqual(res.status, 401, "status");
+  suite.expectEqual(res.body?.authenticated, false, "body.authenticated");
 });
 
 await suite.test("GET /api/auth/me — 401 when X-Admin-Key is wrong", async () => {

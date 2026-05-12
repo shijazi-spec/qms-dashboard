@@ -66,6 +66,7 @@ await suite.test("slack block payload renders 4 digest sections", async () => {
     audit_summary: { last_score: 82, last_date: "2026-05-06", trend: "stable" },
     kpi_summary: { green: 1, amber: 1, red: 0, total: 2 },
     compliance_summary: { met: 1, partial: 1, not_met: 0, total: 2 },
+    health_score: 72,
     top_alerts: [],
     capa_recurrences: 0,
     duplicate_clusters: 0,
@@ -81,6 +82,30 @@ await suite.test("slack block payload renders 4 digest sections", async () => {
       { module: "Leads", issue_type: "invalid_email_format", severity: "medium", count: 5 },
       { module: "Deals", issue_type: "stale_stage", severity: "high", count: 4 },
     ],
+    ai_feedback_summary: {
+      period: "01/05/2026 — 07/05/2026",
+      total: 0,
+      thumbs_up: 0,
+      thumbs_down: 0,
+      thumbs_up_pct: 0,
+      trend: {
+        first_half_total: 0,
+        second_half_total: 0,
+        first_half_down_rate: 0,
+        second_half_down_rate: 0,
+        days_observed: 0,
+      },
+    },
+    sop_gap_summary: {
+      documents_scanned: 0,
+      requirements_total: 0,
+      requirements_covered: 0,
+      open_gaps: 0,
+      coverage_pct: 0,
+      top_gaps: [],
+      coverage_breakdown: { obligation_id: 0, normalised_text: 0, ancestor: 0 },
+      reason: "test fixture",
+    },
     business_sections: [
       {
         id: "sdr_leads_only",

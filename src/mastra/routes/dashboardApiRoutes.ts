@@ -79,9 +79,16 @@ const _dashboardApiRoutesRaw = [
         v && isoDateRe.test(v) ? v : null;
       return async (c: any) => {
         try {
-          const startDate = sanitize(c.req.query("createdStart") || null);
-          const endDate = sanitize(c.req.query("createdEnd") || null);
-          const data = await getDashboardData({ startDate, endDate });
+          const createdStart = sanitize(c.req.query("createdStart") || null);
+          const createdEnd = sanitize(c.req.query("createdEnd") || null);
+          const modifiedStart = sanitize(c.req.query("modifiedStart") || null);
+          const modifiedEnd = sanitize(c.req.query("modifiedEnd") || null);
+          const data = await getDashboardData({
+            createdStart,
+            createdEnd,
+            modifiedStart,
+            modifiedEnd,
+          });
           return c.json(data);
         } catch (error) {
           safeLogger.error("Error fetching dashboard data:", error);
@@ -384,7 +391,24 @@ const _dashboardApiRoutesRaw = [
       return async (c: any) => {
         const logger = mastra?.getLogger();
         try {
-          const module = c.req.query("module") || "Leads";
+          const ALLOWED_CRM_MODULES = new Set([
+            "Leads",
+            "Deals",
+            "Contacts",
+            "Accounts",
+          ]);
+          const rawModule = c.req.query("module") || "Leads";
+          if (!ALLOWED_CRM_MODULES.has(rawModule)) {
+            return c.json(
+              {
+                success: false,
+                error: "Invalid module",
+                message: `Module '${rawModule}' is not permitted. Allowed values: ${[...ALLOWED_CRM_MODULES].join(", ")}.`,
+              },
+              400,
+            );
+          }
+          const module = rawModule;
           const page = parseInt(c.req.query("page") || "1");
           const perPage = parseInt(c.req.query("per_page") || "50");
           const status = getZohoConnectionStatus();
@@ -560,6 +584,39 @@ const _dashboardApiRoutesRaw = [
           }
           const userEmail = session?.email || "admin-key";
           lastTriggerTime.value = now;
+
+          // Read the user-selected date filter from the request body (sent
+          // by runManualAudit() on the dashboard). Validate light-weight —
+          // only YYYY-MM-DD strings are accepted; anything else is dropped.
+          let bodyDateFilters: any = null;
+          try {
+            const body = await c.req.json().catch(() => null);
+            const raw = body?.dateFilters;
+            if (raw && typeof raw === "object") {
+              const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+              const clean = (v: any) =>
+                typeof v === "string" && dateRe.test(v) ? v : null;
+              bodyDateFilters = {
+                created: {
+                  start: clean(raw.created?.start),
+                  end: clean(raw.created?.end),
+                },
+                modified: {
+                  start: clean(raw.modified?.start),
+                  end: clean(raw.modified?.end),
+                },
+              };
+              const any =
+                bodyDateFilters.created.start ||
+                bodyDateFilters.created.end ||
+                bodyDateFilters.modified.start ||
+                bodyDateFilters.modified.end;
+              if (!any) bodyDateFilters = null;
+            }
+          } catch (_) {
+            bodyDateFilters = null;
+          }
+
           try {
             await inngest.send({
               name: "replit/cron.trigger",
@@ -568,6 +625,7 @@ const _dashboardApiRoutesRaw = [
                 manualTrigger: true,
                 triggeredBy: userEmail,
                 triggeredAt: new Date().toISOString(),
+                dateFilters: bodyDateFilters,
               },
             });
           } catch (inngestError) {
@@ -575,11 +633,46 @@ const _dashboardApiRoutesRaw = [
               "⚠️ [API] Inngest dispatch failed (continuing with direct execution)",
             );
           }
+
+          // Fire an "Unplanned AI Audit" notification so manual runs are
+          // surfaced in the notifications panel and (when configured)
+          // Slack / email. The recurring weekly / monthly / quarterly
+          // schedules continue to rely on fireAuditCompletedTrigger and
+          // the Inngest cron pipeline as before — this is purely
+          // additive for the manual-trigger path.
+          try {
+            const { notifyEvent } = await import(
+              "../../utils/notificationHub"
+            );
+            await notifyEvent({
+              type: "unplanned_audit_started",
+              module: "quality",
+              title: "Unplanned AI Audit Started",
+              message:
+                `An unplanned AI quality audit was triggered by ${userEmail}` +
+                ` at ${new Date().toLocaleString()}. Results will appear in` +
+                ` Audit History when the run completes.`,
+              priority: "medium",
+              entityType: "audit_run",
+              actionUrl: "/dashboard",
+            });
+          } catch (notifyErr) {
+            logger?.warn(
+              "⚠️ [API] Unplanned-audit notification dispatch failed (audit will still run)",
+              {
+                error:
+                  notifyErr instanceof Error
+                    ? notifyErr.message
+                    : String(notifyErr),
+              },
+            );
+          }
+
           (async () => {
             try {
               const { runDirectAudit } =
                 await import("../../utils/directAuditRunner");
-              await runDirectAudit(logger);
+              await runDirectAudit(logger, bodyDateFilters || undefined);
             } catch (err) {
               safeLogger.error("Direct audit execution error:", err);
             }

@@ -94,6 +94,13 @@ export const qmsDocsRoutes = [
             await import("../../utils/fileUpload");
           await initQmsDocsTable();
 
+          const rawUploadLen = c.req.header('Content-Length');
+          if (!rawUploadLen) return c.json({ error: 'Content-Length header required for file uploads' }, 411);
+          const uploadContentLen = parseInt(rawUploadLen, 10);
+          if (!Number.isFinite(uploadContentLen) || uploadContentLen > 26 * 1024 * 1024) {
+            return c.json({ error: 'Request body too large (max 25 MB)' }, 413);
+          }
+
           const formData = await c.req.formData();
           const file = formData.get("file");
           const category = String(formData.get("category") || "").trim();
@@ -174,10 +181,17 @@ export const qmsDocsRoutes = [
             await import("../../utils/fileUpload");
           await initQmsDocsTable();
 
-          const MAX_FILES = 50;
-          const MAX_TOTAL_BYTES = 250 * 1024 * 1024;
+          const MAX_FILES = 20;
+          const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
           const MAX_NOTES = 2000;
           const MAX_REG_CSV = 1000;
+
+          const rawBatchLen = c.req.header('Content-Length');
+          if (!rawBatchLen) return c.json({ error: 'Content-Length header required for file uploads' }, 411);
+          const batchContentLen = parseInt(rawBatchLen, 10);
+          if (!Number.isFinite(batchContentLen) || batchContentLen > MAX_TOTAL_BYTES) {
+            return c.json({ error: 'Request body too large (max 50 MB total)' }, 413);
+          }
 
           const formData = await c.req.formData();
           const category = String(formData.get("category") || "").trim();
@@ -224,7 +238,7 @@ export const qmsDocsRoutes = [
                 error:
                   "Aggregate upload exceeds " +
                   Math.round(MAX_TOTAL_BYTES / 1024 / 1024) +
-                  " MB",
+                  " MB limit",
               },
               413,
             );

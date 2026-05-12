@@ -148,14 +148,15 @@
     </style>
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
     <script src="/js/csp-styles.js?v=1"></script>
 </head>
 <body class="bg-gray-50">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-    <script src="/js/navigation.js?v=4.7"></script>
+    <script src="/js/navigation.js?v=5.0"></script>
+    <script src="/js/alert-resolution.js?v=1"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('consultant');
@@ -165,7 +166,7 @@
     <div class="sidebar-overlay" id="sidebarOverlay" data-on-click="toggleSidebar"></div>
 
     <div class="chat-container flex">
-        <aside class="sidebar w-[280px] bg-white border-r border-gray-200 flex flex-col shrink-0" id="sidebar">
+        <aside class="sidebar w-[280px] bg-white border-e border-gray-200 flex flex-col shrink-0" id="sidebar">
             <div class="p-4 flex-1 overflow-y-auto">
                 <div class="flex items-center gap-2 mb-3">
                     <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
@@ -177,7 +178,7 @@
                 </div>
 
                 <div class="space-y-1.5" id="quickActions">
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="runFullScan">
+                    <button class="action-card w-full text-start p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="runFullScan">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-indigo-50 flex items-center justify-center shrink-0">
                                 <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -185,31 +186,31 @@
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.full_scan">Full Platform Scan</span>
                         </div>
                     </button>
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Check PDPL Compliance: Analyze our current compliance status with Saudi PDPL regulations, highlight any gaps, and recommend remediation actions.&quot;]">
+                    <button class="action-card w-full text-start p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Check PDPL Compliance: Analyze our current compliance status with Saudi PDPL regulations, highlight any gaps, and recommend remediation actions.&quot;]">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-emerald-50 flex items-center justify-center shrink-0"><svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.check_pdpl">Check PDPL Compliance</span>
                         </div>
                     </button>
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Analyze Nonconformances: Review all open nonconformances, identify trends and root causes, and suggest corrective actions prioritized by impact.&quot;]">
+                    <button class="action-card w-full text-start p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Analyze Nonconformances: Review all open nonconformances, identify trends and root causes, and suggest corrective actions prioritized by impact.&quot;]">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-amber-50 flex items-center justify-center shrink-0"><svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.analyze_nc">Analyze Nonconformances</span>
                         </div>
                     </button>
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Review Risk Register: Provide a comprehensive analysis of the current risk register including heat map insights, overdue mitigations, and risk appetite alignment.&quot;]">
+                    <button class="action-card w-full text-start p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Review Risk Register: Provide a comprehensive analysis of the current risk register including heat map insights, overdue mitigations, and risk appetite alignment.&quot;]">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-red-50 flex items-center justify-center shrink-0"><svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/></svg></div>
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.review_risk">Review Risk Register</span>
                         </div>
                     </button>
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Check KPI Status: Evaluate all active KPIs, identify those off-target, analyze trends, and recommend adjustments to meet our quality objectives.&quot;]">
+                    <button class="action-card w-full text-start p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Check KPI Status: Evaluate all active KPIs, identify those off-target, analyze trends, and recommend adjustments to meet our quality objectives.&quot;]">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center shrink-0"><svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.check_kpi">Check KPI Status</span>
                         </div>
                     </button>
-                    <button class="action-card w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Suggest Improvements: Based on current QMS data, audit findings, and industry best practices, suggest the top improvement opportunities with expected impact and effort estimates.&quot;]">
+                    <button class="action-card w-full text-start p-2.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-300" data-on-click="sendQuickMessage" data-args="[&quot;Suggest Improvements: Based on current QMS data, audit findings, and industry best practices, suggest the top improvement opportunities with expected impact and effort estimates.&quot;]">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-md bg-purple-50 flex items-center justify-center shrink-0"><svg class="w-3.5 h-3.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg></div>
                             <span class="text-xs font-medium text-gray-700" data-i18n="consultant.suggest_improvements">Suggest Improvements</span>
@@ -237,7 +238,7 @@
                     <div id="checklistsList" class="space-y-1 mb-2">
                         <div class="text-xs text-gray-400 py-1 text-center" data-i18n="common.loading">Loading...</div>
                     </div>
-                    <button class="w-full text-left p-2 rounded-lg border border-dashed border-gray-300 hover:border-indigo-300 text-xs text-gray-500 hover:text-indigo-600 transition" data-on-click="sendQuickMessage" data-args='["List all available compliance checklists. If none exist, create a starter checklist for ISO 9001 Clause 10.2 Nonconformity Management with automated checks."]' data-i18n="consultant.create_checklist">
+                    <button class="w-full text-start p-2 rounded-lg border border-dashed border-gray-300 hover:border-indigo-300 text-xs text-gray-500 hover:text-indigo-600 transition" data-on-click="sendQuickMessage" data-args='["List all available compliance checklists. If none exist, create a starter checklist for ISO 9001 Clause 10.2 Nonconformity Management with automated checks."]' data-i18n="consultant.create_checklist">
                         + Create Checklist via AI
                     </button>
                 </div>
@@ -251,9 +252,9 @@
                     <div id="knowledgeDocsList" class="space-y-1 mb-2">
                         <div class="text-xs text-gray-400 py-1 text-center" data-i18n="common.loading">Loading...</div>
                     </div>
-                    <button class="w-full text-left p-2 rounded-lg border border-dashed border-gray-300 hover:border-indigo-300 text-xs text-gray-500 hover:text-indigo-600 transition" data-on-click="removeClass" data-args='["docUploadModal","hidden"]' data-i18n="consultant.upload_document">
-                            + Upload Document
-                        </button>
+                    <button class="w-full text-start p-2 rounded-lg border border-dashed border-gray-300 hover:border-indigo-300 text-xs text-gray-500 hover:text-indigo-600 transition" data-on-click="removeClass" data-args='["docUploadModal","hidden"]' data-i18n="consultant.upload_document">
+                        + Upload Document
+                    </button>
                 </div>
 
                 <!-- Alerts Section -->
@@ -284,12 +285,12 @@
                     <h1 class="text-sm font-semibold text-gray-800" data-i18n="consultant.title">QMS AI Consultant</h1>
                     <p class="text-xs text-gray-500" data-i18n="consultant.subtitle">Powered by WalaPlus Intelligence</p>
                 </div>
-                <div class="ml-auto flex items-center gap-2">
+                <div class="ms-auto flex items-center gap-2">
                     <button data-on-click="exportChat" class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors" data-i18n-title="consultant.export_conversation" title="Export conversation">
                         <svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     </button>
                     <button data-on-click="clearChat" class="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-100 transition-colors" data-i18n-title="consultant.new_conversation" title="New conversation">
-                        <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        <svg class="w-4 h-4 inline-block me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         <span data-i18n="consultant.new_chat">New Chat</span>
                     </button>
                 </div>
@@ -346,7 +347,7 @@
             <div class="p-4 bg-white border-t border-gray-200 chat-input-area">
                 <form id="chatForm" class="flex items-end gap-3">
                     <div class="flex-1 relative">
-                        <textarea id="chatInput" rows="1" placeholder="Ask the AI Consultant anything about your QMS..." data-i18n-placeholder="consultant.input_placeholder" class="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 pr-12 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow chat-input-cap"></textarea>
+                        <textarea id="chatInput" rows="1" placeholder="Ask the AI Consultant anything about your QMS..." data-i18n-placeholder="consultant.input_placeholder" class="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 pe-12 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow chat-input-cap"></textarea>
                     </div>
                     <button type="submit" id="sendBtn" aria-label="Send message" class="shrink-0 w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors" disabled>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 0l-7 7m7-7l7 7"/></svg>
@@ -582,6 +583,14 @@
             bar.className = 'feedback-bar';
             if (messageId) bar.setAttribute('data-message-id', messageId);
             if (callId) bar.setAttribute('data-call-id', callId);
+            // Stash the prompt-version on the bar so the call-id rating
+            // path (sendFeedbackByCallId) and the deferred comment-prompt
+            // submit can echo back the exact revision the user saw, even
+            // when their click happens long after the closure that
+            // captured it. Mirrors data-call-id; the backend uses it to
+            // backfill ai_call_metrics.metadata.prompt_version when the
+            // row didn't already carry one.
+            if (promptVersion) bar.setAttribute('data-prompt-version', promptVersion);
 
             bar.innerHTML =
                 '<button class="feedback-thumb" data-rating="up" aria-label="Helpful" title="Helpful" data-testid="button-feedback-up-' + (messageId ? messageId.substring(0,8) : callId) + '">' +
@@ -610,7 +619,7 @@
                     submitFeedback(messageId, 'up', null, null, promptText, responseText, markSelected, promptVersion);
                 }
                 if (callId) {
-                    sendFeedbackByCallId(bar, 'thumbs_up', null, callId, markSelected);
+                    sendFeedbackByCallId(bar, 'thumbs_up', null, callId, markSelected, promptVersion);
                 }
             });
             downBtn.addEventListener('click', function() {
@@ -775,7 +784,7 @@
         }
 
         var FEEDBACK_COMMENT_MAX = 1000;
-        async function sendFeedbackByCallId(row, rating, comment, callId, onDone) {
+        async function sendFeedbackByCallId(row, rating, comment, callId, onDone, promptVersion) {
             if (row.dataset.locked === '1' && rating !== 'thumbs_down') return;
             var cid = callId || parseInt(row.dataset.callId, 10);
             if (!Number.isFinite(cid)) return;
@@ -783,6 +792,19 @@
                 var payload = { callId: cid, rating: rating };
                 if (typeof comment === 'string' && comment.trim()) {
                     payload.comment = comment.trim().slice(0, FEEDBACK_COMMENT_MAX);
+                }
+                // Echo back the prompt revision the user actually saw
+                // (captured from the chat stream's done frame and stashed
+                // on the bar via attachFeedbackUI). Falls back to the
+                // bar's data-prompt-version attribute so the deferred
+                // comment-prompt submit path — which loses the closure
+                // arg — still attributes correctly. Server validates the
+                // value and only writes it when ai_call_metrics.metadata
+                // doesn't already carry one (see
+                // setCallPromptVersionIfMissing).
+                var pv = promptVersion || (row && row.dataset ? row.dataset.promptVersion : null);
+                if (typeof pv === 'string' && pv.trim()) {
+                    payload.promptVersion = pv.trim().slice(0, 100);
                 }
                 var res = await fetch('/api/ai-ops/feedback', {
                     method: 'POST',
@@ -881,7 +903,7 @@
                 var rows = bodyRows.trim().split('\n').map(function(row) {
                     return row.split('|').map(function(c) { return c.trim(); }).filter(Boolean);
                 });
-                var table = '<table><thead><tr>' + headers.map(function(h) { return '<th>' + escapeHtml(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
+                var table = '<table><thead><tr>' + headers.map(function(h) { return '<th scope="col">' + escapeHtml(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
                 rows.forEach(function(row) {
                     table += '<tr>' + row.map(function(c) { return '<td>' + escapeHtml(c) + '</td>'; }).join('') + '</tr>';
                 });
@@ -949,6 +971,16 @@
             div.appendChild(document.createTextNode(str));
             return div.innerHTML;
         }
+
+        /* Expose escapeHtml and renderMarkdown to the global scope so the
+           inline approval-card renderer in the second <script> block (which
+           is not inside this IIFE) can reuse them. Without this, calls to
+           escapeHtml() / renderMarkdown() from renderApprovalCard() throw
+           ReferenceError and the catch in fetchAndRenderApprovalCard()
+           silently replaces the inline card with a "Could not load approval
+           card …" placeholder — Task #804. */
+        window.escapeHtml = escapeHtml;
+        window.renderMarkdown = renderMarkdown;
 
         function showTyping() { typingIndicator.classList.remove('hidden'); typingIndicator.classList.add('flex'); scrollToBottom(); }
         function hideTyping() { typingIndicator.classList.add('hidden'); typingIndicator.classList.remove('flex'); }
@@ -1204,9 +1236,25 @@
 
         window.alertAction = async function(id, action) {
             try {
+                // Task #324: capture an optional resolution note when the
+                // operator clicks Resolve so reviewers later get context
+                // beyond the bare "Manually resolved" badge. Cancelling
+                // the prompt aborts the action entirely; an empty string
+                // submits a no-note resolve (server treats it as none).
+                var bodyPayload = { acknowledgedBy: 'user' };
+                if (action === 'resolve') {
+                    var i18n = window.WalaPlusI18n;
+                    var promptMsg = i18n
+                        ? i18n.t('consultant.resolve_note_prompt')
+                        : 'Optional: add a resolution note (why/how this alert was closed). Leave blank to skip.';
+                    var noteInput = window.prompt(promptMsg, '');
+                    if (noteInput === null) return; // cancelled
+                    var trimmed = (noteInput || '').trim();
+                    if (trimmed.length > 0) bodyPayload.note = trimmed.slice(0, 1000);
+                }
                 var res = await fetch('/api/consultant/alerts/' + id + '/' + action, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin', body: JSON.stringify({ acknowledgedBy: 'user' })
+                    credentials: 'same-origin', body: JSON.stringify(bodyPayload)
                 });
                 if (res.ok) { loadAlerts(); updateAlertBadge(); }
             } catch(e) {}
@@ -1317,13 +1365,31 @@
         // An alert is "auto-resolved" when the recovery cron closed it on
         // the system's behalf rather than a human clicking Resolve. Both
         // the prompt-regression and tool-health crons stamp the
-        // resolution_note with an "auto-resolved" prefix when they do so;
-        // we centralize the detection here so the badge, filter, and any
-        // future surfaces stay in sync.
+        // resolution_note with an "auto-resolved" prefix when they do so.
+        // The shared categoriser in /js/alert-resolution.js owns the
+        // canonical prefix table and the 4-way bucketing; this thin
+        // wrapper preserves the historical isAutoResolved() entry point
+        // for any code that only needs the auto/manual binary view.
         function isAutoResolved(a) {
-            if (!a || a.status !== 'resolved') return false;
-            var note = (a.resolution_note || '').toString().trim().toLowerCase();
-            return note.indexOf('auto-resolved') === 0;
+            var R = window.WalaPlusAlertResolution;
+            if (!R) return false;
+            return R.isAutoResolved(a);
+        }
+        function categorizeResolution(a) {
+            var R = window.WalaPlusAlertResolution;
+            return R ? R.categorize(a) : null;
+        }
+        // Short, locale-aware "YYYY-MM-DD HH:MM UTC" so the inline
+        // recovery-event timestamp is unambiguous across operator
+        // locales. Falls back to the raw string on parse failure.
+        function formatResolvedTimestamp(ts) {
+            try {
+                var d = new Date(ts);
+                if (isNaN(d.getTime())) return String(ts);
+                return d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+            } catch (_e) {
+                return String(ts);
+            }
         }
 
         window.loadAllAlerts = async function() {
@@ -1337,29 +1403,19 @@
                 var url = '/api/consultant/alerts?limit=50';
                 if (status) url += '&status=' + status;
                 if (severity) url += '&severity=' + severity;
+                // Push the auto-vs-manual filter into SQL via the
+                // `resolution` query param (Task #417). Previously this
+                // was applied client-side AFTER the 50-row API cap, which
+                // silently dropped matches whenever closed-alert volume
+                // crossed the cap in a single status. The server
+                // whitelists the value so anything other than
+                // 'auto'/'manual' is a no-op.
+                if (resolutionFilter === 'auto' || resolutionFilter === 'manual') {
+                    url += '&resolution=' + resolutionFilter;
+                }
                 var res = await fetch(url, { credentials: 'same-origin' });
                 var data = await res.json();
                 var alerts = data.alerts || [];
-
-                // Apply the auto-vs-manual filter client-side. The API
-                // doesn't (yet) expose this distinction as a query param —
-                // it's a label derived from `resolution_note`. Filtering
-                // here keeps the wire contract unchanged.
-                if (resolutionFilter === 'auto') {
-                    alerts = alerts.filter(isAutoResolved);
-                } else if (resolutionFilter === 'manual') {
-                    // Manually-closed = resolved or dismissed by a human.
-                    // Dismissed alerts are always manual (cron auto-resolve
-                    // never dismisses), so include them too. Open and
-                    // acknowledged rows are excluded because the
-                    // auto/manual distinction only makes sense for closed
-                    // alerts.
-                    alerts = alerts.filter(function(a) {
-                        if (a.status === 'dismissed') return true;
-                        if (a.status === 'resolved') return !isAutoResolved(a);
-                        return false;
-                    });
-                }
 
                 if (!alerts.length) {
                     content.innerHTML = '<div class="text-center text-gray-600 py-8">No alerts match the selected filters</div>';
@@ -1369,6 +1425,7 @@
                 var i18n = window.WalaPlusI18n;
                 var autoLabel = i18n ? i18n.t('consultant.alert_badge_auto_resolved') : 'Auto-resolved';
                 var manualLabel = i18n ? i18n.t('consultant.alert_badge_manual_resolved') : 'Manually resolved';
+                var R = window.WalaPlusAlertResolution || null;
 
                 content.innerHTML = alerts.map(function(a) {
                     var icon = severityIcons[a.severity] || severityIcons.info;
@@ -1377,26 +1434,52 @@
                         resolved: 'bg-green-100 text-green-700', dismissed: 'bg-gray-100 text-gray-500'
                     }[a.status] || 'bg-gray-100 text-gray-500';
 
-                    // Resolution-source badge — only meaningful for resolved
-                    // alerts. Auto-resolved gets a distinct purple pill so
-                    // it stands out from the green "resolved" status pill.
+                    // Resolution-category badge (Task #346) — only meaningful
+                    // for resolved alerts. 4 distinct visual treatments per
+                    // bucket (recovered / went_silent / prompt_regression_auto
+                    // / manual). Recovery buckets get a green/teal pill so
+                    // operators can spot self-healing events at a glance.
                     var resolutionBadge = '';
-                    if (a.status === 'resolved') {
-                        var auto = isAutoResolved(a);
-                        var pillCls = auto
-                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-                        var pillText = auto ? autoLabel : manualLabel;
-                        var pillTip = a.resolution_note
-                            ? escAttr(a.resolution_note)
-                            : (auto ? escAttr('Closed automatically by the recovery cron.')
-                                    : escAttr('Closed by an operator.'));
-                        resolutionBadge =
-                            '<span class="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ' + pillCls + '" ' +
-                                'title="' + pillTip + '" ' +
-                                'data-testid="badge-resolution-' + (auto ? 'auto' : 'manual') + '-' + Number(a.id) + '">' +
-                                escapeHtml(pillText) +
-                            '</span>';
+                    var resolvedAtLine = '';
+                    if (a.status === 'resolved' && R) {
+                        var category = R.categorize(a);
+                        var spec = R.getBadgeSpec(category);
+                        var auto = category !== null && category !== 'manual';
+                        if (spec) {
+                            var pillTip = a.resolution_note
+                                ? escAttr(a.resolution_note)
+                                : escAttr(spec.defaultTooltip);
+                            // Override the per-spec text with the existing
+                            // i18n labels for the legacy auto/manual split
+                            // so the consultant copy stays translatable.
+                            // Recovery / went_silent / prompt_regression_auto
+                            // also map to "Auto-resolved" in the binary
+                            // copy, but their pill colour and category
+                            // testid are still distinct.
+                            var pillText = auto ? autoLabel : manualLabel;
+                            // Backwards-compatible "auto/manual" testid kept
+                            // alongside the new category-specific testid so
+                            // existing tests / saved selectors keep working.
+                            var compatTestid = 'badge-resolution-' + (auto ? 'auto' : 'manual') + '-' + Number(a.id);
+                            resolutionBadge =
+                                '<span class="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ' + spec.classes + '" ' +
+                                    'title="' + pillTip + '" ' +
+                                    'data-resolution-category="' + spec.slug + '" ' +
+                                    'data-testid="badge-resolution-' + spec.slug + '-' + Number(a.id) + '">' +
+                                    escapeHtml(pillText) +
+                                '</span>' +
+                                '<span class="sr-only" data-testid="' + compatTestid + '">' + escapeHtml(pillText) + '</span>';
+                            // Inline resolved-at timestamp for recovery
+                            // events — green text so a self-healed alert is
+                            // obvious without hovering the badge.
+                            if (R.isRecoveryCategory(category) && a.resolved_at) {
+                                resolvedAtLine =
+                                    '<p class="text-[11px] text-emerald-700 font-medium mt-1" ' +
+                                        'data-testid="text-resolution-resolved-at-' + Number(a.id) + '">' +
+                                        'Resolved ' + escapeHtml(formatResolvedTimestamp(a.resolved_at)) +
+                                    '</p>';
+                            }
+                        }
                     }
 
                     // Inline resolution-note line — shown for any closed
@@ -1421,6 +1504,7 @@
                             '</div>' +
                             '<p class="text-xs text-gray-500 line-clamp-2">' + escapeHtml(a.description || '') + '</p>' +
                             noteLine +
+                            resolvedAtLine +
                             '<div class="flex items-center gap-2 mt-2">' +
                                 '<span class="text-[10px] text-gray-400">' + timeAgo(a.created_at) + '</span>' +
                                 (a.status === 'open' ? '<button class="alert-action-btn bg-blue-50 text-blue-700 border-blue-200" data-on-click="alertAction,loadAllAlerts" data-args="' + escAttr(JSON.stringify([[a.id, 'acknowledge'], []])) + '">Acknowledge</button>' +
@@ -1510,7 +1594,7 @@
                     return;
                 }
                 container.innerHTML = data.checklists.slice(0, 5).map(function(cl) {
-                    return '<button class="w-full text-left p-2 rounded-md hover:bg-indigo-50 transition text-xs group" data-on-click="sendQuickMessage" data-args="' + escAttr(JSON.stringify(['Run checklist #' + cl.id + ': ' + cl.name])) + '">' +
+                    return '<button class="w-full text-start p-2 rounded-md hover:bg-indigo-50 transition text-xs group" data-on-click="sendQuickMessage" data-args="' + escAttr(JSON.stringify(['Run checklist #' + cl.id + ': ' + cl.name])) + '">' +
                         '<div class="font-medium text-gray-700 group-hover:text-indigo-700 truncate">' + escapeHtml(cl.name) + '</div>' +
                         '<div class="text-gray-400 mt-0.5">' + escapeHtml(cl.standard) + '</div>' +
                     '</button>';
@@ -1630,6 +1714,51 @@
         loadChatHistory();
         updateAlertBadge();
         loadWelcomeData();
+        loadThreadHistory();
+
+        /**
+         * Re-hydrate the chat transcript from the server when the user
+         * returns to the page. Uses the threadId persisted in
+         * sessionStorage (set by sendMessage) so refreshing or navigating
+         * away and back keeps the conversation visible — including the
+         * feedback bars on assistant turns. The bars rely on the
+         * Mastra-stored message id, which the chat endpoints now surface
+         * as `messageId`, so any prior thumbs the user gave will be
+         * pre-applied via attachFeedbackUI's existing per-message rating
+         * lookup.
+         */
+        async function loadThreadHistory() {
+            var tid = sessionStorage.getItem('consultant_threadId');
+            if (!tid) return;
+            try {
+                var res = await fetch('/api/consultant/history/' + encodeURIComponent(tid), {
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) return;
+                var data = await res.json();
+                var msgs = (data && data.messages) || [];
+                if (!msgs.length) return;
+                threadId = tid;
+                var pv = data.promptVersion || null;
+                clearWelcome();
+                msgs.forEach(function(m) {
+                    if (m.role === 'user') {
+                        appendUserMessage(m.content);
+                    } else if (m.role === 'assistant') {
+                        var bubble = createAssistantMessage();
+                        bubble.innerHTML = renderMarkdown(m.content);
+                        if (isArabic(m.content)) bubble.setAttribute('dir', 'rtl');
+                        chatMessages.push({ role: 'assistant', content: m.content, time: m.createdAt || new Date().toISOString() });
+                        if (m.messageId && m.content && m.content.trim()) {
+                            attachFeedbackUI(bubble, m.messageId, '', m.content, null, pv);
+                        }
+                    }
+                });
+                scrollToBottom();
+            } catch (e) {
+                /* history is best-effort; failures fall back to empty welcome */
+            }
+        }
 
         // D1: Use nav-level polling only — no separate consultant polling
         if (!window._consultantAlertPollRegistered) {
@@ -1755,6 +1884,34 @@
      *    before they click Approve.
      * ------------------------------------------------------------------ */
     var APPROVAL_POLL_MS = 30000;
+    var APPROVAL_META_TICK_MS = 15000;
+
+    /* ------------------------------------------------------------------ *
+     *  Task #733 — small "Updated <relative time>" hint shown next to
+     *  the prior-viewers strip. Without it, a Quality Manager who keeps
+     *  the chat open has no way to tell whether the chips they're seeing
+     *  are 5 seconds old or 5 minutes old (the silent poll above is
+     *  intentionally invisible). The relative format ("just now", "30s
+     *  ago", "2m ago"…) reads naturally in a passive indicator and the
+     *  full local-time stamp is exposed via the title attribute for
+     *  reviewers who want a precise value.
+     * ------------------------------------------------------------------ */
+    function formatUpdatedRelative(ts) {
+        // Use floor-based bucketing so the label only advances after a full
+        // unit has elapsed (e.g. "1m ago" appears at 60s, not 30s). This
+        // matches typical "X units have elapsed" reading and avoids the
+        // mild surprise of seeing a minute label half-way through the
+        // first minute of polling.
+        var diff = Math.max(0, Date.now() - ts);
+        var s = Math.floor(diff / 1000);
+        if (s < 5) return 'just now';
+        if (s < 60) return s + 's ago';
+        var m = Math.floor(s / 60);
+        if (m < 60) return m + 'm ago';
+        var h = Math.floor(m / 60);
+        if (h < 24) return h + 'h ago';
+        return new Date(ts).toLocaleString();
+    }
 
     function silentRefreshApprovalCard(code, container) {
         if (!document.body.contains(container)) return;
@@ -1771,10 +1928,12 @@
                     return;
                 }
                 // Still pending — patch only the metadata strip in place.
+                // Pass Date.now() so the embedded refresh-meta hint resets
+                // to "just now" on every successful silent poll.
                 var pv = container.querySelector('[data-prior-viewers]');
                 if (pv) {
                     var tmp = document.createElement('div');
-                    tmp.innerHTML = renderPriorViewers(data.prior_viewers);
+                    tmp.innerHTML = renderPriorViewers(data.prior_viewers, Date.now());
                     var fresh = tmp.firstElementChild;
                     if (fresh) pv.replaceWith(fresh);
                 }
@@ -1793,9 +1952,29 @@
         });
     }
 
+    /* ------------------------------------------------------------------ *
+     *  Task #733 — keep the "Updated <time>" text fresh between polls so
+     *  the reviewer sees it age from "just now" → "30s ago" → "1m ago"
+     *  without having to wait for the next 30s silent refresh. We only
+     *  rewrite the textContent (not innerHTML) so the title attribute
+     *  with the precise timestamp stays intact, and the change is a pure
+     *  in-place text swap so it cannot trigger layout shift.
+     * ------------------------------------------------------------------ */
+    function tickApprovalRefreshMetas() {
+        document.querySelectorAll('[data-refresh-meta][data-refreshed-at]').forEach(function (el) {
+            var ts = parseInt(el.getAttribute('data-refreshed-at'), 10);
+            if (!ts) return;
+            el.textContent = 'Updated ' + formatUpdatedRelative(ts);
+        });
+    }
+
     setInterval(pollPendingApprovalCards, APPROVAL_POLL_MS);
+    setInterval(tickApprovalRefreshMetas, APPROVAL_META_TICK_MS);
     document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') pollPendingApprovalCards();
+        if (document.visibilityState === 'visible') {
+            pollPendingApprovalCards();
+            tickApprovalRefreshMetas();
+        }
     });
 
     function riskBadgeClass(risk) {
@@ -1835,7 +2014,7 @@
      *  so a Quality Manager keeping the chat open sees other reviewers
      *  appear without needing to act on the card first.
      * ------------------------------------------------------------------ */
-    function renderPriorViewers(viewers) {
+    function renderPriorViewers(viewers, refreshedAt) {
         // Always emit the wrapper element (even when empty) so the silent
         // poll in Task #631 can grow the chip strip from zero in place,
         // without having to insert a brand-new node into the card body.
@@ -1859,8 +2038,25 @@
                 chips +
                 (extra ? '<span class="text-xs text-gray-400">' + escapeHtml(extra) + '</span>' : '');
         }
-        return '<div class="flex flex-wrap items-center gap-1' + (hasViewers ? ' mb-2' : '') + '" data-prior-viewers data-testid="section-prior-viewers">' +
+        // Task #733 — append a small, right-aligned "Updated <relative>"
+        // hint inside the same flex strip so it never adds a new row and
+        // therefore cannot cause vertical layout shift. The hint is only
+        // rendered when the caller provides a refreshedAt timestamp (i.e.
+        // for pending cards being polled); resolved cards render no hint
+        // because they no longer auto-refresh.
+        var metaHtml = '';
+        if (refreshedAt) {
+            var rel = formatUpdatedRelative(refreshedAt);
+            var fullTs = new Date(refreshedAt).toLocaleString();
+            metaHtml = '<span class="ms-auto text-[11px] text-gray-400 shrink-0" ' +
+                'data-refresh-meta data-refreshed-at="' + refreshedAt + '" ' +
+                'title="Last refreshed at ' + escapeHtml(fullTs) + '" ' +
+                'data-testid="text-approval-card-updated">Updated ' + escapeHtml(rel) + '</span>';
+        }
+        var showSpacing = hasViewers || !!refreshedAt;
+        return '<div class="flex flex-wrap items-center gap-1' + (showSpacing ? ' mb-2' : '') + '" data-prior-viewers data-testid="section-prior-viewers">' +
             inner +
+            metaHtml +
             '</div>';
     }
 
@@ -1884,9 +2080,9 @@
                 var doc = docLinks[code];
                 var label = doc ? (code + ' · v' + (doc.version || '1.0')) : code;
                 var title = doc ? doc.title : ref;
-                return '<a href="/policies?policy_number=' + code + '" target="_blank" title="' + title.replace(/"/g, '&quot;') + '" class="inline-block px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 rounded text-xs font-medium mr-1 mb-1">' + label + '</a>';
+                return '<a href="/policies?policy_number=' + code + '" target="_blank" title="' + title.replace(/"/g, '&quot;') + '" class="inline-block px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 rounded text-xs font-medium me-1 mb-1">' + label + '</a>';
             }
-            return '<span class="inline-block px-2 py-0.5 bg-gray-50 border border-gray-200 text-gray-700 rounded text-xs mr-1 mb-1">' + escapeHtml(ref) + '</span>';
+            return '<span class="inline-block px-2 py-0.5 bg-gray-50 border border-gray-200 text-gray-700 rounded text-xs me-1 mb-1">' + escapeHtml(ref) + '</span>';
         }).join('');
 
         var previewHtml = renderMarkdown(a.payload_preview || '_(no preview)_');
@@ -1896,7 +2092,7 @@
             if (data.can_approve) {
                 actionsHtml =
                     '<button data-action="approve" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">Approve ✓</button>' +
-                    '<button data-action="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ml-2">Reject ✗</button>';
+                    '<button data-action="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-2">Reject ✗</button>';
             } else {
                 actionsHtml = '<div class="text-xs text-gray-600 italic">' +
                     (data.can_approve_blocker || 'Only approved reviewers can action this.') +
@@ -1932,7 +2128,7 @@
               '<div class="text-sm font-medium text-gray-800 mb-1">' + escapeHtml(a.tool_label) + '</div>' +
               '<div class="text-xs text-gray-600 mb-2 bg-gray-50 p-2 rounded border border-gray-100 prose prose-sm max-w-none">' + previewHtml + '</div>' +
               (refsHtml ? '<div class="mb-2"><div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Compliance references</div>' + refsHtml + '</div>' : '') +
-              renderPriorViewers(data.prior_viewers) +
+              renderPriorViewers(data.prior_viewers, a.status === 'pending' ? Date.now() : null) +
               '<div class="flex items-center justify-between border-t border-gray-100 pt-2 mt-1">' +
                 '<div class="text-xs text-gray-500">' +
                   'Requested by ' + escapeHtml(a.requested_by_name || a.requested_by_email || 'unknown') +

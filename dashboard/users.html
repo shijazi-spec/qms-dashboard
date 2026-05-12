@@ -35,13 +35,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('admin');
@@ -54,12 +54,20 @@
                 <h1 class="text-2xl font-bold text-gray-900" data-i18n="users.title">Users & Access Control</h1>
                 <p class="text-gray-600" data-i18n="users.subtitle">Manage user invitations, approvals, and permissions</p>
             </div>
-            <button data-on-click="showInviteModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                </svg>
-                Invite User
-            </button>
+            <div class="flex items-center gap-2">
+                <button data-on-click="openDeleteUserModal" data-testid="button-delete-user" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center text-sm" title="Pick a user to permanently delete (Sarah Hijazi, a.amashah@walaplus.com, and you are protected)">
+                    <svg class="w-5 h-5 me-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/>
+                    </svg>
+                    Delete User
+                </button>
+                <button data-on-click="showInviteModal" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center">
+                    <svg class="w-5 h-5 me-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Invite User
+                </button>
+            </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
@@ -86,9 +94,9 @@
         </div>
 
         <div class="border-b border-gray-200 mb-6">
-            <nav class="flex space-x-8">
+            <nav class="flex gap-8">
                 <button data-on-click="switchTab" data-args="[&quot;pending&quot;]" id="tab-pending" class="py-3 px-1 tab-active font-medium text-sm">
-                    Pending Requests <span id="pending-badge" class="ml-2 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs">0</span>
+                    Pending Requests <span id="pending-badge" class="ms-2 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs">0</span>
                 </button>
                 <button data-on-click="switchTab" data-args="[&quot;active&quot;]" id="tab-active" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
                     Active Users
@@ -129,12 +137,12 @@
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.last_login">Last Login</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.last_login">Last Login</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="active-list" class="divide-y">
@@ -154,12 +162,12 @@
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.name">Name</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="all-list" class="divide-y">
@@ -179,12 +187,12 @@
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_invited_by">Invited By</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="common.expires">Expires</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.email">Email</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.role">Role</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.team">Team</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_invited_by">Invited By</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="common.expires">Expires</th>
                             </tr>
                         </thead>
                         <tbody id="invitations-list" class="divide-y">
@@ -228,11 +236,11 @@
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_event">Event</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_target">Target</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_action">Action</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_performed_by">Performed By</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_timestamp">Timestamp</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_event">Event</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_target">Target</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_action">Action</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_performed_by">Performed By</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="users.col_timestamp">Timestamp</th>
                             </tr>
                         </thead>
                         <tbody id="audit-list" class="divide-y">
@@ -240,6 +248,38 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-user-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-red-700">Delete User</h3>
+                <button data-on-click="hideDeleteUserModal" data-testid="button-close-delete-user" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <p class="text-sm text-gray-600 mb-3">
+                Pick a user to permanently delete. This is a HARD delete and cannot be undone.
+                Protected accounts (Sarah Hijazi, a.amashah@walaplus.com) and your own account
+                are not selectable.
+            </p>
+            <div class="space-y-3">
+                <div>
+                    <label for="delete-user-select" class="block text-sm font-medium mb-1">User</label>
+                    <select id="delete-user-select" data-testid="select-delete-user" class="w-full border rounded px-3 py-2">
+                        <option value="">Loading…</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="delete-user-confirm-input" class="block text-sm font-medium mb-1">
+                        Type <span class="font-mono font-bold">DELETE</span> to confirm
+                    </label>
+                    <input id="delete-user-confirm-input" data-testid="input-delete-user-confirm" type="text" class="w-full border rounded px-3 py-2" placeholder="DELETE" autocomplete="off" />
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" data-on-click="hideDeleteUserModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+                <button type="button" data-on-click="confirmDeleteUserFromModal" data-testid="button-confirm-delete-user" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Delete User</button>
             </div>
         </div>
     </div>
@@ -269,6 +309,7 @@
                                 <option value="Sales">Sales</option>
                                 <option value="Quality">Quality</option>
                                 <option value="GRC">GRC</option>
+                                <option value="MGMT">MGMT</option>
                                 <option value="Viewer">Viewer</option>
                                 <option value="Other">Other</option>
                             </select>
@@ -298,7 +339,7 @@
                             </select>
                         </div>
                         <div class="flex items-center pt-6">
-                            <input type="checkbox" name="require_mfa" id="require_mfa" class="mr-2" />
+                            <input type="checkbox" name="require_mfa" id="require_mfa" class="me-2" />
                             <label for="require_mfa" class="text-sm">Require MFA</label>
                         </div>
                     </div>
@@ -306,6 +347,55 @@
                 <div class="flex justify-end gap-3 mt-6">
                     <button type="button" data-on-click="hideInviteModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="users.send_invitation">Send Invitation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="invite-fallback-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold" data-i18n="dyn.users.invite_fallback_title" data-testid="text-invite-fallback-title">Invitation created — email not sent</h3>
+                <button data-on-click="hideInviteFallbackModal" class="text-gray-400 hover:text-gray-600" data-testid="button-close-invite-fallback">&times;</button>
+            </div>
+            <p class="text-sm text-gray-700 mb-3" data-i18n="dyn.users.invite_fallback_body">The invitation was created successfully, but the invitation email could not be delivered. Copy the link below and share it with the user manually.</p>
+            <p id="invite-fallback-reason" class="hidden text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3" data-testid="text-invite-fallback-reason"></p>
+            <label for="invite-fallback-link" class="block text-sm font-medium mb-1" data-i18n="dyn.users.invite_link_label">Invite link</label>
+            <input id="invite-fallback-link" type="text" readonly class="w-full border rounded px-3 py-2 text-sm bg-gray-50 mb-4" data-testid="input-invite-fallback-link" />
+            <div class="flex justify-end gap-3">
+                <button type="button" data-on-click="hideInviteFallbackModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50" data-i18n="dyn.users.close_btn" data-testid="button-close-invite-fallback-done">Close</button>
+                <button type="button" data-on-click="copyInviteFallbackLink" id="invite-fallback-copy-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="dyn.users.copy_link_btn" data-testid="button-copy-invite-fallback-link">Copy link</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirm-action-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="confirm-action-title" class="text-lg font-semibold" data-testid="text-confirm-modal-title"></h3>
+                <button type="button" data-on-click="cancelConfirmModal" class="text-gray-400 hover:text-gray-600" data-testid="button-confirm-modal-close">&times;</button>
+            </div>
+            <p id="confirm-action-body" class="text-sm text-gray-700 mb-6" data-testid="text-confirm-modal-body"></p>
+            <div class="flex justify-end gap-3">
+                <button type="button" data-on-click="cancelConfirmModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50" data-i18n="common.cancel" data-testid="button-confirm-modal-cancel">Cancel</button>
+                <button type="button" id="confirm-action-confirm" data-on-click="acceptConfirmModal" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-testid="button-confirm-modal-accept"></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="prompt-input-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="prompt-input-title" class="text-lg font-semibold" data-testid="text-prompt-modal-title"></h3>
+                <button type="button" data-on-click="cancelPromptModal" class="text-gray-400 hover:text-gray-600" data-testid="button-prompt-modal-close">&times;</button>
+            </div>
+            <p id="prompt-input-body" class="text-sm text-gray-700 mb-3" data-testid="text-prompt-modal-body"></p>
+            <form id="prompt-input-form" data-on-submit="submitPromptModal" data-pass-event="true">
+                <label id="prompt-input-label" for="prompt-input-field" class="block text-sm font-medium mb-1"></label>
+                <input id="prompt-input-field" type="text" class="w-full border rounded px-3 py-2 mb-4" data-testid="input-prompt-modal-field" />
+                <div class="flex justify-end gap-3">
+                    <button type="button" id="prompt-input-cancel" data-on-click="cancelPromptModal" class="px-4 py-2 border rounded-lg hover:bg-gray-50" data-testid="button-prompt-modal-cancel"></button>
+                    <button type="submit" id="prompt-input-submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-testid="button-prompt-modal-submit"></button>
                 </div>
             </form>
         </div>
@@ -322,26 +412,94 @@
     </div>
 
     <script>
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
-        let adminAuthenticated = false;
         let useSessionAuth = false;
         const headers = { 'Content-Type': 'application/json' };
+
+        let _confirmModalResolver = null;
+        function showConfirmModal({ title, body, confirmLabel, confirmVariant }) {
+            return new Promise((resolve) => {
+                _confirmModalResolver = resolve;
+                document.getElementById('confirm-action-title').textContent = title || '';
+                document.getElementById('confirm-action-body').textContent = body || '';
+                const btn = document.getElementById('confirm-action-confirm');
+                btn.textContent = confirmLabel || 'OK';
+                btn.className = 'px-4 py-2 text-white rounded-lg ' + (
+                    confirmVariant === 'danger'
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : confirmVariant === 'success'
+                            ? 'bg-green-600 hover:bg-green-700'
+                            : 'bg-blue-600 hover:bg-blue-700'
+                );
+                document.getElementById('confirm-action-modal').classList.add('active');
+                setTimeout(() => btn.focus(), 0);
+            });
+        }
+        function acceptConfirmModal() {
+            document.getElementById('confirm-action-modal').classList.remove('active');
+            const r = _confirmModalResolver; _confirmModalResolver = null;
+            if (r) r(true);
+        }
+        function cancelConfirmModal() {
+            document.getElementById('confirm-action-modal').classList.remove('active');
+            const r = _confirmModalResolver; _confirmModalResolver = null;
+            if (r) r(false);
+        }
+
+        let _promptModalResolver = null;
+        function showPromptModal({ title, body, label, placeholder, inputType, submitLabel, cancelLabel, submitVariant, required }) {
+            return new Promise((resolve) => {
+                _promptModalResolver = resolve;
+                document.getElementById('prompt-input-title').textContent = title || '';
+                const bodyEl = document.getElementById('prompt-input-body');
+                if (body) { bodyEl.textContent = body; bodyEl.classList.remove('hidden'); }
+                else { bodyEl.textContent = ''; bodyEl.classList.add('hidden'); }
+                const labelEl = document.getElementById('prompt-input-label');
+                if (label) { labelEl.textContent = label; labelEl.classList.remove('hidden'); }
+                else { labelEl.textContent = ''; labelEl.classList.add('hidden'); }
+                const input = document.getElementById('prompt-input-field');
+                input.type = inputType || 'text';
+                input.placeholder = placeholder || '';
+                input.required = !!required;
+                input.value = '';
+                const submit = document.getElementById('prompt-input-submit');
+                submit.textContent = submitLabel || 'OK';
+                submit.className = 'px-4 py-2 text-white rounded-lg ' + (
+                    submitVariant === 'danger'
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : 'bg-blue-600 hover:bg-blue-700'
+                );
+                const cancelBtn = document.getElementById('prompt-input-cancel');
+                if (cancelBtn) cancelBtn.textContent = cancelLabel || 'Cancel';
+                document.getElementById('prompt-input-modal').classList.add('active');
+                setTimeout(() => input.focus(), 0);
+            });
+        }
+        function submitPromptModal(event) {
+            if (event && event.preventDefault) event.preventDefault();
+            const value = document.getElementById('prompt-input-field').value;
+            document.getElementById('prompt-input-modal').classList.remove('active');
+            const r = _promptModalResolver; _promptModalResolver = null;
+            if (r) r(value);
+        }
+        function cancelPromptModal() {
+            document.getElementById('prompt-input-modal').classList.remove('active');
+            const r = _promptModalResolver; _promptModalResolver = null;
+            if (r) r(null);
+        }
 
         async function initAuth() {
             try {
                 const res = await fetch('/api/auth/me', { credentials: 'include' });
-                if (res.ok) {
+                const data = await res.json();
+                if (data.authenticated) {
                     useSessionAuth = true;
+                } else {
+                    window.location.href = '/login';
+                    return;
                 }
-            } catch (e) {}
-            if (!useSessionAuth) {
-                const key = prompt(_t('dyn.users.prompt_admin_api_key')) || '';
-                if (key) {
-                    try {
-                        const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
-                        if (res.ok) adminAuthenticated = true;
-                    } catch(e) {}
-                }
+            } catch (e) {
+                window.location.href = '/login';
+                return;
             }
             loadStats();
             switchTab('pending');
@@ -389,7 +547,7 @@
                 const container = document.getElementById('pending-list');
                 
                 if (!data.users || data.users.length === 0) {
-                    container.innerHTML = '<p class="text-gray-500 text-center py-8">' + _t('dyn.users.no_pending_requests') + '</p>';
+                    container.innerHTML = '<p class="text-gray-500 text-center py-8">' + WalaPlusI18n.t('dyn.users.no_pending_requests') + '</p>';
                     return;
                 }
 
@@ -426,7 +584,7 @@
                 const container = document.getElementById('active-list');
                 
                 if (!data.users || data.users.length === 0) {
-                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + _t('dyn.users.no_active_users') + '</td></tr>';
+                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_active_users') + '</td></tr>';
                     return;
                 }
 
@@ -438,8 +596,9 @@
                         <td class="px-4 py-3 text-sm">${u.team}</td>
                         <td class="px-4 py-3 text-sm text-gray-500">${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
                         <td class="px-4 py-3">
-                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm mr-2">Edit</button>
-                            <button data-on-click="disableUser" data-args="[${u.id}]" class="text-red-600 hover:text-red-800 text-sm">Disable</button>
+                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm me-2">Edit</button>
+                            <button data-on-click="disableUser" data-args="[${u.id}]" class="text-amber-600 hover:text-amber-800 text-sm me-2">Disable</button>
+                            <button data-on-click="deleteUserConfirm" data-args='[${u.id}, ${JSON.stringify(u.email)}]' class="text-red-600 hover:text-red-800 text-sm">Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -455,7 +614,7 @@
                 const container = document.getElementById('all-list');
                 
                 if (!data.users || data.users.length === 0) {
-                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + _t('dyn.users.no_users_found') + '</td></tr>';
+                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_users_found') + '</td></tr>';
                     return;
                 }
 
@@ -467,9 +626,10 @@
                         <td class="px-4 py-3 text-sm">${u.team}</td>
                         <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded status-${u.status}">${u.status.replace('_', ' ')}</span></td>
                         <td class="px-4 py-3">
-                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm mr-2">View</button>
-                            ${u.status === 'disabled' ? `<button data-on-click="enableUser" data-args="[${u.id}]" class="text-green-600 hover:text-green-800 text-sm">Enable</button>` : ''}
-                            ${u.status === 'active' ? `<button data-on-click="disableUser" data-args="[${u.id}]" class="text-red-600 hover:text-red-800 text-sm">Disable</button>` : ''}
+                            <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm me-2">View</button>
+                            ${u.status === 'disabled' ? `<button data-on-click="enableUser" data-args="[${u.id}]" class="text-green-600 hover:text-green-800 text-sm me-2">Enable</button>` : ''}
+                            ${u.status === 'active' ? `<button data-on-click="disableUser" data-args="[${u.id}]" class="text-amber-600 hover:text-amber-800 text-sm me-2">Disable</button>` : ''}
+                            <button data-on-click="deleteUserConfirm" data-args='[${u.id}, ${JSON.stringify(u.email)}]' class="text-red-600 hover:text-red-800 text-sm">Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -485,7 +645,7 @@
                 const container = document.getElementById('invitations-list');
                 
                 if (!data.invitations || data.invitations.length === 0) {
-                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + _t('dyn.users.no_invitations') + '</td></tr>';
+                    container.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_invitations') + '</td></tr>';
                     return;
                 }
 
@@ -516,7 +676,7 @@
                 const container = document.getElementById('roles-grid');
                 
                 if (!data.roles) {
-                    container.innerHTML = '<p class="text-gray-500">' + _t('dyn.users.could_not_load_roles') + '</p>';
+                    container.innerHTML = '<p class="text-gray-500">' + WalaPlusI18n.t('dyn.users.could_not_load_roles') + '</p>';
                     return;
                 }
 
@@ -563,7 +723,7 @@
                 const container = document.getElementById('audit-list');
                 
                 if (!data.logs || data.logs.length === 0) {
-                    container.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-500">' + _t('dyn.users.no_audit_logs') + '</td></tr>';
+                    container.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-500">' + WalaPlusI18n.t('dyn.users.no_audit_logs') + '</td></tr>';
                     return;
                 }
 
@@ -588,6 +748,52 @@
         function hideInviteModal() {
             document.getElementById('invite-modal').classList.remove('active');
             document.getElementById('invite-form').reset();
+        }
+
+        function showInviteFallbackModal(inviteLink, emailError) {
+            const modal = document.getElementById('invite-fallback-modal');
+            const linkInput = document.getElementById('invite-fallback-link');
+            const reasonEl = document.getElementById('invite-fallback-reason');
+            const copyBtn = document.getElementById('invite-fallback-copy-btn');
+            linkInput.value = inviteLink || '';
+            if (emailError) {
+                reasonEl.textContent = WalaPlusI18n.t('dyn.users.reason_prefix') + emailError;
+                reasonEl.classList.remove('hidden');
+            } else {
+                reasonEl.textContent = '';
+                reasonEl.classList.add('hidden');
+            }
+            copyBtn.textContent = WalaPlusI18n.t('dyn.users.copy_link_btn');
+            modal.classList.add('active');
+        }
+
+        function hideInviteFallbackModal() {
+            document.getElementById('invite-fallback-modal').classList.remove('active');
+            document.getElementById('invite-fallback-link').value = '';
+        }
+
+        function copyInviteFallbackLink() {
+            const linkInput = document.getElementById('invite-fallback-link');
+            const copyBtn = document.getElementById('invite-fallback-copy-btn');
+            const value = linkInput.value;
+            const showCopied = () => {
+                const original = WalaPlusI18n.t('dyn.users.copy_link_btn');
+                copyBtn.textContent = WalaPlusI18n.t('dyn.users.copy_link_done');
+                setTimeout(() => { copyBtn.textContent = original; }, 1500);
+            };
+            const fallbackSelect = () => {
+                try {
+                    linkInput.removeAttribute('readonly');
+                    linkInput.focus();
+                    linkInput.select();
+                    linkInput.setAttribute('readonly', 'readonly');
+                } catch (_) {}
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(value).then(showCopied).catch(fallbackSelect);
+            } else {
+                fallbackSelect();
+            }
         }
 
         async function sendInvitation(e) {
@@ -617,28 +823,26 @@
                     loadStats();
                     
                     if (result.email_sent) {
-                        alert(_t('dyn.users.invite_sent', { email: data.email }));
+                        alert(WalaPlusI18n.t('dyn.users.invite_sent', { email: data.email }));
                     } else {
-                        // Email failed - show the link to copy
-                        const copyLink = confirm(_t('dyn.users.confirm_copy_invite', { error: result.email_error ? _t('dyn.users.reason_prefix') + result.email_error + '\n\n' : '\n' }));
-                        if (copyLink && result.invite_link) {
-                            navigator.clipboard.writeText(result.invite_link).then(() => {
-                                alert(_t('dyn.users.link_copied', { email: data.email }));
-                            }).catch(() => {
-                                prompt(_t('dyn.users.prompt_copy_link'), result.invite_link);
-                            });
-                        }
+                        showInviteFallbackModal(result.invite_link, result.email_error);
                     }
                 } else {
-                    alert(_t('dyn.users.error_prefix', { msg: result.error || _t('dyn.users.failed_send_invite') }));
+                    alert(WalaPlusI18n.t('dyn.users.error_prefix', { msg: result.error || WalaPlusI18n.t('dyn.users.failed_send_invite') }));
                 }
             } catch (error) {
-                alert(_t('dyn.users.error_send_invite'));
+                alert(WalaPlusI18n.t('dyn.users.error_send_invite'));
             }
         }
 
         async function approveUser(userId) {
-            if (!confirm(_t('dyn.users.confirm_approve_access'))) return;
+            const ok = await showConfirmModal({
+                title: WalaPlusI18n.t('dyn.users.approve_access_title'),
+                body: WalaPlusI18n.t('dyn.users.confirm_approve_access'),
+                confirmLabel: WalaPlusI18n.t('dyn.users.approve_btn'),
+                confirmVariant: 'success',
+            });
+            if (!ok) return;
             try {
                 const res = await fetch(`/api/users/${userId}/approve`, {
                     method: 'POST',
@@ -646,19 +850,27 @@
                     body: JSON.stringify({ approved_by: 'admin@walaplus.com' })
                 });
                 if (res.ok) {
-                    alert(_t('dyn.users.user_approved'));
+                    alert(WalaPlusI18n.t('dyn.users.user_approved'));
                     loadPendingUsers();
                     loadStats();
                 } else {
-                    alert(_t('dyn.users.failed_approve'));
+                    alert(WalaPlusI18n.t('dyn.users.failed_approve'));
                 }
             } catch (error) {
-                alert(_t('dyn.users.error_approve'));
+                alert(WalaPlusI18n.t('dyn.users.error_approve'));
             }
         }
 
         async function denyUser(userId) {
-            const reason = prompt(_t('dyn.users.prompt_denial_reason'));
+            const reason = await showPromptModal({
+                title: WalaPlusI18n.t('dyn.users.deny_access_title'),
+                body: WalaPlusI18n.t('dyn.users.prompt_denial_reason'),
+                label: WalaPlusI18n.t('dyn.users.denial_reason_label'),
+                placeholder: WalaPlusI18n.t('dyn.users.denial_reason_placeholder'),
+                submitLabel: WalaPlusI18n.t('dyn.users.deny_btn'),
+                submitVariant: 'danger',
+            });
+            if (reason === null) return;
             try {
                 const res = await fetch(`/api/users/${userId}/deny`, {
                     method: 'POST',
@@ -666,19 +878,25 @@
                     body: JSON.stringify({ denied_by: 'admin@walaplus.com', reason })
                 });
                 if (res.ok) {
-                    alert(_t('dyn.users.user_denied'));
+                    alert(WalaPlusI18n.t('dyn.users.user_denied'));
                     loadPendingUsers();
                     loadStats();
                 } else {
-                    alert(_t('dyn.users.failed_deny'));
+                    alert(WalaPlusI18n.t('dyn.users.failed_deny'));
                 }
             } catch (error) {
-                alert(_t('dyn.users.error_deny'));
+                alert(WalaPlusI18n.t('dyn.users.error_deny'));
             }
         }
 
         async function disableUser(userId) {
-            if (!confirm(_t('dyn.users.confirm_disable_user'))) return;
+            const ok = await showConfirmModal({
+                title: WalaPlusI18n.t('dyn.users.disable_user_title'),
+                body: WalaPlusI18n.t('dyn.users.confirm_disable_user'),
+                confirmLabel: WalaPlusI18n.t('dyn.users.disable_btn'),
+                confirmVariant: 'danger',
+            });
+            if (!ok) return;
             try {
                 const res = await fetch(`/api/users/${userId}/disable`, {
                     method: 'POST',
@@ -686,13 +904,13 @@
                     body: JSON.stringify({ disabled_by: 'admin@walaplus.com' })
                 });
                 if (res.ok) {
-                    alert(_t('dyn.users.user_disabled'));
+                    alert(WalaPlusI18n.t('dyn.users.user_disabled'));
                     loadActiveUsers();
                     loadAllUsers();
                     loadStats();
                 }
             } catch (error) {
-                alert(_t('dyn.users.error_disable'));
+                alert(WalaPlusI18n.t('dyn.users.error_disable'));
             }
         }
 
@@ -704,60 +922,86 @@
                     body: JSON.stringify({ enabled_by: 'admin@walaplus.com' })
                 });
                 if (res.ok) {
-                    alert(_t('dyn.users.user_enabled'));
+                    alert(WalaPlusI18n.t('dyn.users.user_enabled'));
                     loadAllUsers();
                     loadStats();
                 }
             } catch (error) {
-                alert(_t('dyn.users.error_enable'));
+                alert(WalaPlusI18n.t('dyn.users.error_enable'));
             }
+        }
+
+        function escAttr(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
         async function viewUserDetail(userId) {
             document.getElementById('user-detail-modal').classList.add('active');
             const content = document.getElementById('user-detail-content');
-            content.innerHTML = _t('dyn.users.loading');
+            content.innerHTML = WalaPlusI18n.t('dyn.users.loading');
 
             try {
                 const res = await fetch(`/api/users/${userId}`, { headers });
                 const data = await res.json();
                 
                 if (!data.user) {
-                    content.innerHTML = '<p class="text-red-500">' + _t('dyn.users.user_not_found') + '</p>';
+                    content.innerHTML = '<p class="text-red-500">' + WalaPlusI18n.t('dyn.users.user_not_found') + '</p>';
                     return;
                 }
 
                 const u = data.user;
                 const perms = data.permissions || [];
-                
+                const ROLES = ['admin','quality_manager','quality_specialist','grc_manager','team_lead','department_viewer','auditor','ai_specialist','bu_owner','executive','custom'];
+                const TEAMS = ['SDR','Sales','Quality','GRC','MGMT','Viewer','Other'];
+                if (u.role && !ROLES.includes(u.role)) ROLES.unshift(u.role);
+                const roleOptions = ROLES.map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r}</option>`).join('');
+                const currentTeam = u.team || '';
+                if (currentTeam && !TEAMS.includes(currentTeam)) TEAMS.unshift(currentTeam);
+                const teamOptions = TEAMS.map(t => `<option value="${t}" ${currentTeam === t ? 'selected' : ''}>${t}</option>`).join('');
+
                 content.innerHTML = `
                     <div class="space-y-4">
-                        <div class="grid grid-cols-2 gap-4">
+                        <form id="user-edit-form" data-on-submit="saveUserProfile" data-pass-event="true" data-args="[${u.id}]" class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="text-sm text-gray-500">Name</label>
-                                <p class="font-medium">${u.full_name}</p>
+                                <label class="text-sm text-gray-500">Full Name</label>
+                                <input name="full_name" type="text" required value="${escAttr(u.full_name)}"
+                                       class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
-                                <label class="text-sm text-gray-500">Email</label>
-                                <p class="font-medium">${u.email}</p>
+                                <label class="text-sm text-gray-500">Email <span class="text-xs text-gray-400">(read-only)</span></label>
+                                <p class="font-medium mt-2">${escAttr(u.email)}</p>
                             </div>
                             <div>
                                 <label class="text-sm text-gray-500">Role</label>
-                                <p><span class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">${u.role}</span></p>
+                                <select name="role" class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    ${roleOptions}
+                                </select>
                             </div>
                             <div>
                                 <label class="text-sm text-gray-500">Team</label>
-                                <p>${u.team}</p>
+                                <select name="team" class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    ${teamOptions}
+                                </select>
                             </div>
                             <div>
                                 <label class="text-sm text-gray-500">Status</label>
-                                <p><span class="px-2 py-1 rounded text-sm status-${u.status}">${u.status.replace('_', ' ')}</span></p>
+                                <p class="mt-2"><span class="px-2 py-1 rounded text-sm status-${u.status}">${u.status.replace('_', ' ')}</span></p>
                             </div>
                             <div>
                                 <label class="text-sm text-gray-500">Created</label>
-                                <p class="text-sm">${new Date(u.created_at).toLocaleString()}</p>
+                                <p class="text-sm mt-2">${new Date(u.created_at).toLocaleString()}</p>
                             </div>
-                        </div>
+                            <div class="col-span-2 flex items-center justify-between pt-2">
+                                <button type="button" data-on-click="deleteUserConfirm" data-args="[${u.id}, &quot;${escAttr(u.email)}&quot;]"
+                                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium">
+                                    Hard Delete User
+                                </button>
+                                <button type="submit"
+                                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
+                                    Save Changes
+                                </button>
+                            </div>
+                        </form>
 
                         <div class="border-t pt-4">
                             <h4 class="font-medium mb-3">Screen Permissions</h4>
@@ -765,12 +1009,12 @@
                                 <table class="w-full text-sm">
                                     <thead class="bg-gray-50 sticky top-0">
                                         <tr>
-                                            <th class="px-2 py-1 text-left">Screen</th>
-                                            <th class="px-2 py-1 text-center">View</th>
-                                            <th class="px-2 py-1 text-center">Create</th>
-                                            <th class="px-2 py-1 text-center">Edit</th>
-                                            <th class="px-2 py-1 text-center">Delete</th>
-                                            <th class="px-2 py-1 text-center">Export</th>
+                                            <th scope="col" class="px-2 py-1 text-start">Screen</th>
+                                            <th scope="col" class="px-2 py-1 text-center">View</th>
+                                            <th scope="col" class="px-2 py-1 text-center">Create</th>
+                                            <th scope="col" class="px-2 py-1 text-center">Edit</th>
+                                            <th scope="col" class="px-2 py-1 text-center">Delete</th>
+                                            <th scope="col" class="px-2 py-1 text-center">Export</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -791,12 +1035,171 @@
                     </div>
                 `;
             } catch (error) {
-                content.innerHTML = '<p class="text-red-500">' + _t('dyn.users.error_loading_user') + '</p>';
+                content.innerHTML = '<p class="text-red-500">' + WalaPlusI18n.t('dyn.users.error_loading_user') + '</p>';
             }
         }
 
         function hideUserDetailModal() {
             document.getElementById('user-detail-modal').classList.remove('active');
+        }
+
+        async function saveUserProfile(userId, event) {
+            event.preventDefault();
+            const form = event.target;
+            const payload = {
+                full_name: form.full_name.value.trim(),
+                role: form.role.value,
+                team: form.team.value.trim(),
+            };
+            if (!payload.full_name) {
+                alert('Full name is required.');
+                return;
+            }
+            try {
+                const res = await fetch(`/api/users/${userId}`, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    alert('User updated.');
+                    hideUserDetailModal();
+                    loadActiveUsers();
+                    loadAllUsers();
+                    loadStats();
+                } else {
+                    alert('Update failed: ' + (data.error || res.status));
+                }
+            } catch (e) {
+                alert('Error updating user.');
+            }
+        }
+
+        const PROTECTED_EMAILS = ['a.amashah@walaplus.com'];
+        const PROTECTED_NAME_SUBSTR = 'sarah hijazi';
+
+        function isProtectedUser(u) {
+            const email = (u.email || '').toLowerCase();
+            const name = (u.full_name || '').toLowerCase();
+            if (PROTECTED_EMAILS.includes(email)) return true;
+            if (name.includes(PROTECTED_NAME_SUBSTR)) return true;
+            return false;
+        }
+
+        async function deleteUserConfirm(userId, email) {
+            const ok = confirm(`HARD DELETE user "${email}"?\n\nThis permanently removes the user and all their permissions/data scope. This cannot be undone.`);
+            if (!ok) return;
+            const typed = prompt(`Type the email to confirm deletion:\n${email}`);
+            if (typed !== email) {
+                alert('Email did not match. Deletion cancelled.');
+                return;
+            }
+            try {
+                const res = await fetch(`/api/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { ...headers, 'x-confirm-delete': 'true' },
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success) {
+                    alert('User deleted.');
+                    hideUserDetailModal();
+                    loadActiveUsers();
+                    loadAllUsers();
+                    loadStats();
+                } else {
+                    alert('Delete failed: ' + (data.error || res.status));
+                }
+            } catch (e) {
+                alert('Error deleting user.');
+            }
+        }
+
+        async function openDeleteUserModal() {
+            const modal = document.getElementById('delete-user-modal');
+            const select = document.getElementById('delete-user-select');
+            const confirmInput = document.getElementById('delete-user-confirm-input');
+            if (confirmInput) confirmInput.value = '';
+            if (select) {
+                select.innerHTML = '<option value="">Loading…</option>';
+                select.disabled = true;
+            }
+            modal.classList.add('active');
+
+            try {
+                let currentEmail = null;
+                try {
+                    const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+                    if (meRes.ok) {
+                        const me = await meRes.json();
+                        currentEmail = (me?.user?.email || me?.email || '').toLowerCase() || null;
+                    }
+                } catch {}
+
+                const res = await fetch('/api/users', { headers });
+                const data = await res.json();
+                const all = data.users || [];
+                const isSelf = u => currentEmail && (u.email || '').toLowerCase() === currentEmail;
+                const eligible = all
+                    .filter(u => !isProtectedUser(u) && !isSelf(u))
+                    .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+
+                if (eligible.length === 0) {
+                    select.innerHTML = '<option value="">No deletable users — only protected accounts remain</option>';
+                    select.disabled = true;
+                    return;
+                }
+
+                select.innerHTML =
+                    '<option value="">Select a user…</option>' +
+                    eligible.map(u => {
+                        const label = (u.full_name && u.full_name.trim())
+                            ? `${u.full_name} <${u.email}>`
+                            : u.email;
+                        return `<option value="${u.id}" data-email="${u.email}">${label}</option>`;
+                    }).join('');
+                select.disabled = false;
+            } catch (e) {
+                select.innerHTML = '<option value="">Error loading users</option>';
+                select.disabled = true;
+            }
+        }
+
+        function hideDeleteUserModal() {
+            document.getElementById('delete-user-modal').classList.remove('active');
+        }
+
+        async function confirmDeleteUserFromModal() {
+            const select = document.getElementById('delete-user-select');
+            const confirmInput = document.getElementById('delete-user-confirm-input');
+            const userId = select?.value;
+            const email = select?.selectedOptions?.[0]?.dataset?.email || '';
+            if (!userId) {
+                alert('Please pick a user to delete.');
+                return;
+            }
+            if ((confirmInput?.value || '').trim() !== 'DELETE') {
+                alert('Type DELETE in the confirmation box to proceed.');
+                return;
+            }
+            try {
+                const r = await fetch(`/api/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { ...headers, 'x-confirm-delete': 'true' },
+                });
+                const j = await r.json().catch(() => ({}));
+                if (r.ok && j.success) {
+                    alert(`Deleted: ${email}`);
+                    hideDeleteUserModal();
+                    loadActiveUsers();
+                    loadAllUsers();
+                    loadStats();
+                } else {
+                    alert(`Delete failed: ${j.error || r.status}`);
+                }
+            } catch (e) {
+                alert('Error deleting user: ' + e.message);
+            }
         }
 
         loadStats();

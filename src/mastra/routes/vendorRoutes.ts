@@ -59,7 +59,17 @@ export const vendorRoutes = [
     },
   },
   {
-    path: "/api/vendors/:id",
+    // Constrain :id to a numeric id or a UUID so literal segments like
+    // `/api/vendors/export` (and `/api/vendors/summary`, defined above) are
+    // not swallowed by this dynamic GET handler. See task-443 — without
+    // this, /api/vendors/export was shadowed and authorized governance
+    // roles received a 404 "Vendor not found" instead of the export stream.
+    // Mirrors the input formats accepted by `resolveGenericId`.
+    // The alternation is wrapped in `(...)` so that the numeric branch
+    // cannot greedily match only the leading digits of a digit-prefixed
+    // UUID (e.g. "550e8400-..."). Without the group, Hono would compile
+    // `[0-9]+|<UUID>` with `|` taking lowest precedence and capture id="550".
+    path: "/api/vendors/:id{([0-9]+|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})}",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {

@@ -723,22 +723,25 @@ export function streamCsv(
   chunkSize = 1000,
 ): Response {
   const headerLine = headers.join(",") + "\n";
+  const encoder = new TextEncoder();
 
-  let stream: ReadableStream<string>;
+  let stream: ReadableStream<Uint8Array>;
 
   if (Array.isArray(rows)) {
     // ── Synchronous array path: emit in chunks via pull() ──
     const arr = rows;
     let cursor = 0;
-    stream = new ReadableStream<string>({
+    stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(headerLine);
+        controller.enqueue(encoder.encode(headerLine));
       },
       pull(controller) {
         const batch = arr.slice(cursor, cursor + chunkSize);
         cursor += chunkSize;
         if (batch.length > 0) {
-          controller.enqueue(batch.map((r) => r.join(",")).join("\n") + "\n");
+          controller.enqueue(
+            encoder.encode(batch.map((r) => r.join(",")).join("\n") + "\n"),
+          );
         }
         if (cursor >= arr.length) {
           controller.close();
@@ -747,20 +750,20 @@ export function streamCsv(
     });
   } else {
     // ── AsyncIterable path: consume from iterator in start() ──
-    stream = new ReadableStream<string>({
+    stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
-          controller.enqueue(headerLine);
+          controller.enqueue(encoder.encode(headerLine));
           let buf: string[] = [];
           for await (const row of rows) {
             buf.push(row.join(","));
             if (buf.length >= chunkSize) {
-              controller.enqueue(buf.join("\n") + "\n");
+              controller.enqueue(encoder.encode(buf.join("\n") + "\n"));
               buf = [];
             }
           }
           if (buf.length > 0) {
-            controller.enqueue(buf.join("\n") + "\n");
+            controller.enqueue(encoder.encode(buf.join("\n") + "\n"));
           }
           controller.close();
         } catch (err) {
@@ -810,6 +813,50 @@ const STAGED_EXPORT_TTL_MS_DEFAULT = 60 * 60 * 1000; // 1 hour
  *  given the default 1-hour TTL — the lazy-on-access GC catches the rest. */
 const STAGED_EXPORT_JANITOR_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * Hard upper bound on the number of simultaneously cached export files.
+ * When the cache is full a new staging request returns 503 rather than
+ * writing an unbounded number of files to the host's temp volume.
+ * Override via STAGED_EXPORT_MAX_ENTRIES env.
+ */
+const STAGED_EXPORT_MAX_ENTRIES_DEFAULT = 200;
+
+/**
+ * Hard upper bound on the total bytes consumed by in-memory cache entries
+ * (sum of staged file sizes).  Prevents a single authorised user from
+ * filling the temp volume by requesting many large exports.
+ * Override via STAGED_EXPORT_MAX_TOTAL_BYTES env (default 512 MB).
+ */
+const STAGED_EXPORT_MAX_TOTAL_BYTES_DEFAULT = 512 * 1024 * 1024; // 512 MB
+
+/**
+ * Per-user hard cap on simultaneously cached export entries.  Prevents a
+ * single compromised or malicious account from monopolising the cache.
+ * Override via STAGED_EXPORT_MAX_ENTRIES_PER_USER env (default 10).
+ */
+const STAGED_EXPORT_MAX_ENTRIES_PER_USER_DEFAULT = 10;
+
+function stagedExportMaxEntries(): number {
+  const raw = process.env.STAGED_EXPORT_MAX_ENTRIES;
+  if (!raw) return STAGED_EXPORT_MAX_ENTRIES_DEFAULT;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : STAGED_EXPORT_MAX_ENTRIES_DEFAULT;
+}
+
+function stagedExportMaxTotalBytes(): number {
+  const raw = process.env.STAGED_EXPORT_MAX_TOTAL_BYTES;
+  if (!raw) return STAGED_EXPORT_MAX_TOTAL_BYTES_DEFAULT;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : STAGED_EXPORT_MAX_TOTAL_BYTES_DEFAULT;
+}
+
+function stagedExportMaxEntriesPerUser(): number {
+  const raw = process.env.STAGED_EXPORT_MAX_ENTRIES_PER_USER;
+  if (!raw) return STAGED_EXPORT_MAX_ENTRIES_PER_USER_DEFAULT;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : STAGED_EXPORT_MAX_ENTRIES_PER_USER_DEFAULT;
+}
+
 interface StagedExportEntry {
   filePath: string;
   size: number;
@@ -822,6 +869,10 @@ interface StagedExportEntry {
   /** Set by the janitor when refCount > 0 at TTL expiry — file is unlinked
    *  by the last reader's decRef rather than yanked out from under it. */
   pendingDelete: boolean;
+  /** SHA-256 hash of the user identity string — used for per-user quota
+   *  tracking.  Absent for entries staged before the quota feature was added
+   *  or when no identity is available. */
+  userIdentityHash?: string;
 }
 
 /**
@@ -845,6 +896,88 @@ const stagedExportCache = new Map<string, StagedExportEntry>();
 const inFlightStaging = new Map<string, Promise<StagingResult>>();
 let stagedExportJanitorTimer: NodeJS.Timeout | null = null;
 
+/**
+ * Per-user export entry tracking for quota enforcement.
+ * Maps userIdentityHash → Set of active jobKeys owned by that user.
+ * Kept in sync with stagedExportCache: entries are added on staging and
+ * removed in reapStagedEntry so the quota check never counts stale entries.
+ */
+const userExportKeys = new Map<string, Set<string>>();
+
+// ---------------------------------------------------------------------------
+// Cache size limits (Task #811 — disk exhaustion guard)
+// ---------------------------------------------------------------------------
+//
+// An authorized user can repeatedly request unique export URLs (e.g. by
+// appending arbitrary query params) and create a distinct staged file for each
+// one, filling the server's temp volume within the TTL window.  We bound both
+// the entry count and the total on-disk bytes to limit how much a single
+// process can accumulate.
+//
+// When either limit is reached, the oldest (LRU) non-in-flight entries are
+// evicted before staging a new one.  If the cache is still over budget after
+// eviction (e.g. all entries have active readers), the new export is served
+// without being cached — the caller still gets their response, we just don't
+// retain the file.
+//
+/**
+ * Current total bytes tracked across all in-memory cache entries.
+ * Maintained by a full map scan; called only during eviction so the cost is
+ * acceptable.
+ */
+function stagedExportCurrentBytes(): number {
+  let total = 0;
+  for (const entry of stagedExportCache.values()) total += entry.size;
+  return total;
+}
+
+/**
+ * Evict the oldest non-actively-read entries until the cache fits within the
+ * configured limits.  Returns true if the cache is now under budget (so the
+ * caller may safely add a new entry), false if it is still over budget (all
+ * remaining entries have active readers and cannot be evicted).
+ */
+async function evictStagedExportEntries(newEntrySize: number): Promise<boolean> {
+  const maxEntries = stagedExportMaxEntries();
+  const maxBytes = stagedExportMaxTotalBytes();
+
+  // Collect eviction candidates: entries without active readers, sorted
+  // oldest-expiry-first (i.e. the entries that have been in the cache longest).
+  const candidates = [...stagedExportCache.entries()]
+    .filter(([, e]) => e.refCount === 0 && !e.pendingDelete)
+    .sort(([, a], [, b]) => a.expiresAt - b.expiresAt);
+
+  for (const [key, entry] of candidates) {
+    const currentEntries = stagedExportCache.size;
+    const currentBytes = stagedExportCurrentBytes();
+    // Stop evicting once both limits are satisfied including the new entry.
+    if (
+      currentEntries < maxEntries &&
+      currentBytes + newEntrySize <= maxBytes
+    ) break;
+    await reapStagedEntry(key, entry);
+  }
+
+  // Report whether we have room now.
+  return (
+    stagedExportCache.size < stagedExportMaxEntries() &&
+    stagedExportCurrentBytes() + newEntrySize <= stagedExportMaxTotalBytes()
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Operator-visible counters (Task #755)
+// ---------------------------------------------------------------------------
+//
+// These are intentionally process-local (no DB, no IPC) — the export cache
+// itself is also process-local so a per-process count is the right granularity
+// and avoids paying a network hop on the hot path. Counters reset on every
+// restart, which is fine for a "is the cache doing work?" indicator.
+let stagedExportHitCount = 0;
+let stagedExportMissCount = 0;
+let stagedExportJanitorLastRunAt: number | null = null;
+let stagedExportJanitorLastReaped: number | null = null;
+
 function stagedExportCacheDir(): string {
   return process.env.STREAMING_EXPORT_CACHE_DIR || STAGED_EXPORT_DIR_DEFAULT;
 }
@@ -859,8 +992,299 @@ function stagedExportTtlMs(): number {
 
 async function ensureStagedExportDir(): Promise<string> {
   const dir = stagedExportCacheDir();
-  await fsPromises.mkdir(dir, { recursive: true });
+  // Create owner-only (0o700) so other OS users on the same host can't
+  // list the cache directory and discover staged export filenames.
+  // Staged files contain sensitive data (risk registers, audit findings,
+  // vendor records, PDPL data) and live on disk for up to an hour.
+  await fsPromises.mkdir(dir, { recursive: true, mode: 0o700 });
+  // mkdir's `mode` is only applied when the directory is created — if it
+  // pre-existed (e.g. created by an older build with default umask 0o755)
+  // we still need to tighten it. chmod is best-effort: we swallow EPERM
+  // so that pointing STREAMING_EXPORT_CACHE_DIR at a directory owned by
+  // another user (rare ops scenario) doesn't break the export pipeline.
+  try {
+    await fsPromises.chmod(dir, 0o700);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "EPERM" && code !== "ENOENT") throw err;
+    if (code === "EPERM") {
+      logger.warn(
+        "[stagedExport] could not chmod cache dir to 0o700 (not owner) — staged files are still 0o600",
+        dir,
+      );
+    }
+  }
   return dir;
+}
+
+/**
+ * Eagerly create (or re-chmod) the streaming-export cache directory at
+ * worker boot, *before* any export traffic is served.
+ *
+ * Why this exists separately from the lazy `ensureStagedExportDir` call
+ * inside `stageAndServeStreamingExport`:
+ *
+ *   - On a freshly restarted worker that hasn't served an export yet, an
+ *     inherited cache directory from a previous run could sit on disk
+ *     with the wrong (looser) permissions for an arbitrary window —
+ *     exactly the window during which other OS users on the same host
+ *     could list staged-export filenames or read in-flight files.
+ *   - Doing the chmod once at startup closes that window and surfaces
+ *     permission/IO problems immediately at boot rather than on the
+ *     first user export request.
+ *
+ * Logs a single startup line with the cache dir path and the resulting
+ * mode (in octal) so operators can confirm the lockdown actually took
+ * effect — useful when STREAMING_EXPORT_CACHE_DIR is pointed at an
+ * unexpected mount or owned by a different user (chmod becomes a no-op
+ * with an EPERM warning in that case, see `ensureStagedExportDir`).
+ *
+ * Failures are swallowed and logged at error level rather than thrown:
+ * the lazy `ensureStagedExportDir` inside the request path remains as a
+ * safety net, and we do not want a transient FS hiccup at boot to abort
+ * the whole worker.
+ */
+export async function lockDownStagedExportCacheDirAtStartup(): Promise<void> {
+  const dir = stagedExportCacheDir();
+  try {
+    await ensureStagedExportDir();
+    let modeStr = "unknown";
+    let actualMode: number | null = null;
+    try {
+      const st = await fsPromises.stat(dir);
+      actualMode = st.mode & 0o777;
+      modeStr = `0o${actualMode.toString(8).padStart(3, "0")}`;
+    } catch {
+      /* stat is best-effort for the log line */
+    }
+    if (actualMode !== null && actualMode !== 0o700) {
+      // chmod was a no-op (e.g. EPERM because dir is owned by another
+      // user) — staged files are still 0o600 but the dir itself is
+      // looser than intended. Surface this loudly at startup so ops
+      // can re-home STREAMING_EXPORT_CACHE_DIR rather than discover it
+      // post-incident.
+      logger.warn(
+        `[stagedExport] cache directory checked at startup: ${dir} (mode ${modeStr}) — expected 0o700, dir is looser than intended`,
+      );
+    } else {
+      logger.info(
+        `[stagedExport] cache directory locked down at startup: ${dir} (mode ${modeStr})`,
+      );
+    }
+  } catch (err) {
+    logger.error(
+      `[stagedExport] failed to lock down cache directory at startup: ${dir}`,
+      err,
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Startup health check — warn when the cache dir lives on a shared volume
+// ---------------------------------------------------------------------------
+//
+// Background (Task #770):
+//   The staged export cache directory itself is created with mode 0o700, but
+//   that only protects the *contents* of the directory — file names are still
+//   exposed via parent-directory traversal. If an operator points
+//   STREAMING_EXPORT_CACHE_DIR at e.g. `/srv/shared/exports` and the worker
+//   creates the missing `shared/` segment via `mkdir -p` with the default
+//   umask (0o022 → 0o755 mode), any user with execute on the chain can
+//   `ls /srv/shared` and harvest the staged file names (which embed tenant
+//   and report identifiers via the cache key) without ever reading a single
+//   file. A startup health check catches the misconfiguration on day one
+//   rather than during an audit.
+//
+// Scope of the walk (designed to avoid false positives on universal
+// system-default permissions):
+//
+//   We walk *upward from the cache dir* and report ancestors that grant
+//   group/other read or execute, but we deliberately stop:
+//
+//     1. At the first ancestor whose mode is tight (no g/o r+x). A tight
+//        barrier blocks everyone outside the owner from reading or
+//        traversing the chain above it — anything further up is protected
+//        regardless of how loose those higher ancestors are. So if a
+//        single 0o700 directory exists between the cache dir and root,
+//        we stay silent.
+//
+//     2. At well-known system roots we cannot meaningfully advise the
+//        operator to chmod: `/`, the resolved `os.tmpdir()`, and the
+//        single-segment FHS roots (`/var`, `/srv`, `/opt`, `/usr`,
+//        `/home`, `/mnt`, `/run`). These are universally g/o-traversable
+//        on a stock POSIX install; reporting them produces non-actionable
+//        noise on every boot. The operator-controlled portion of the
+//        configured path is below this boundary and is what we actually
+//        scan.
+//
+// Combined, these two rules mean a properly-configured custom path like
+// `/var/lib/walaplus/export-cache` (with `/var/lib/walaplus` chmod 0o700
+// and owned by the worker) produces zero findings, while the misconfig
+// the task targets (`/srv/shared/exports` with `/srv/shared` left at the
+// umask default 0o755) produces a single actionable finding for
+// `/srv/shared`.
+//
+// Behaviour:
+//   - No-op when STREAMING_EXPORT_CACHE_DIR is unset (default `/tmp`-based
+//     path on a single-tenant box; `/tmp` is intentionally sticky-bit
+//     world-traversable so warning on it would be noise on every boot).
+//   - POSIX-only. Skipped on win32 where Node ignores fs modes.
+
+export interface ExportCacheLocationFinding {
+  /** Ancestor path that triggered the warning. */
+  path: string;
+  /** Mode bits as stat'd (full `st.mode & 0o777`). */
+  mode: number;
+  /** Subset of group/other read+execute bits set on the path. */
+  permissiveBits: number;
+}
+
+export interface ExportCacheLocationCheckResult {
+  /** Resolved cache directory path the worker would use. */
+  cacheDir: string;
+  /** Whether the check actually ran (false on win32 or when env unset). */
+  checked: boolean;
+  /** Ancestor permission findings. Empty when the chain is tight. */
+  findings: ExportCacheLocationFinding[];
+}
+
+/**
+ * System paths the walk treats as a boundary — present on every POSIX host,
+ * universally g/o-traversable, and not something the operator can be
+ * advised to chmod. We stop at (and do not report) any of these.
+ */
+function exportCacheScanStopBoundaries(): Set<string> {
+  const stops = new Set<string>([
+    "/",
+    path.resolve(os.tmpdir()),
+    // Standard FHS roots one segment below `/`. Anything *under* these
+    // (e.g. `/var/lib/walaplus`) is operator-controlled and still scanned;
+    // the roots themselves are stock-installation defaults out of scope.
+    "/var",
+    "/srv",
+    "/opt",
+    "/usr",
+    "/home",
+    "/mnt",
+    "/run",
+  ]);
+  return stops;
+}
+
+/**
+ * Walk the parent chain of the configured staged-export cache directory and
+ * report ancestors that grant group/other read or execute. Intended to be
+ * called once at process boot so a permissive misconfiguration is logged
+ * before any sensitive export is staged.
+ *
+ * See the block comment above for the scope of the walk.
+ *
+ * Silent (no log) when:
+ *   - STREAMING_EXPORT_CACHE_DIR is not explicitly set,
+ *   - process.platform === "win32", or
+ *   - every operator-controlled ancestor between the cache dir and the
+ *     first tight barrier (or the system boundary) is owner-only.
+ */
+export async function checkStagedExportCacheLocation(): Promise<ExportCacheLocationCheckResult> {
+  const cacheDir = stagedExportCacheDir();
+
+  if (process.platform === "win32" || !process.env.STREAMING_EXPORT_CACHE_DIR) {
+    return { cacheDir, checked: false, findings: [] };
+  }
+
+  // Materialise the cache directory (and any missing parent segments) before
+  // we scan. This is what makes the check actually catch the misconfiguration
+  // the task targets: when an operator points STREAMING_EXPORT_CACHE_DIR at
+  // e.g. `/srv/shared/exports` and `/srv/shared` does not yet exist, the
+  // worker's `mkdir -p` here creates `/srv/shared` with the *current process
+  // umask* (typically 0o022 → 0o755). Without this preflight call the
+  // ancestor walk would just see ENOENT for `/srv/shared` and report
+  // nothing — exactly the false-negative the task is designed to prevent.
+  // ensureStagedExportDir is idempotent and also tightens the leaf to 0o700.
+  try {
+    await ensureStagedExportDir();
+  } catch (err) {
+    // If we can't even create the dir, the check is moot — the export
+    // pipeline will fail loudly on the first request with the same error.
+    // Surface the failure but don't throw out of the boot probe.
+    logger.warn(
+      "[stagedExport] healthcheck: could not ensure cache dir, skipping ancestor scan",
+      { cacheDir, err: String(err) },
+    );
+    return { cacheDir, checked: true, findings: [] };
+  }
+
+  const resolved = path.resolve(cacheDir);
+  const findings: ExportCacheLocationFinding[] = [];
+  const stopBoundaries = exportCacheScanStopBoundaries();
+
+  // Walk parents from the immediate parent upward. Skip the cache dir
+  // itself — that's locked down to 0o700 by ensureStagedExportDir; the
+  // threat model here is parent-directory traversal.
+  let current = path.dirname(resolved);
+  let previous = "";
+  while (current && current !== previous) {
+    if (stopBoundaries.has(current)) {
+      // Reached a system boundary the operator can't reasonably alter.
+      // Anything above is out of scope for this check.
+      break;
+    }
+
+    let mode: number | null = null;
+    try {
+      const st = await fsPromises.stat(current);
+      if (st.isDirectory()) {
+        mode = st.mode & 0o777;
+      }
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      // ENOENT/EACCES on an ancestor is not actionable here — surface
+      // anything else at warn so we don't silently swallow real disk
+      // errors during the boot probe.
+      if (code !== "ENOENT" && code !== "EACCES") {
+        logger.warn(
+          "[stagedExport] healthcheck: stat failed on ancestor",
+          { path: current, err: String(err) },
+        );
+      }
+    }
+
+    if (mode !== null) {
+      const permissiveBits = mode & 0o055; // g+o read | g+o execute
+      if (permissiveBits === 0) {
+        // Tight barrier — anything above is unreachable to non-owners
+        // regardless of those higher ancestors' modes. Stop and stay
+        // silent for the rest of the chain.
+        break;
+      }
+      findings.push({ path: current, mode, permissiveBits });
+    }
+
+    previous = current;
+    current = path.dirname(current);
+  }
+
+  if (findings.length > 0) {
+    logger.warn(
+      "[stagedExport] cache directory has world-traversable ancestors — staged export filenames may leak via parent listing. See docs/Security_Operations_SOP.md §5.14.",
+      {
+        cacheDir: resolved,
+        ancestors: findings.map((f) => ({
+          path: f.path,
+          mode: `0o${f.mode.toString(8).padStart(3, "0")}`,
+          permissiveBits: `0o${f.permissiveBits.toString(8).padStart(3, "0")}`,
+        })),
+        recommendedFix:
+          "chmod the offending ancestor(s) to remove group/other r+x " +
+          "(e.g. `chmod o-rx,g-rx /srv/shared`), or re-point " +
+          "STREAMING_EXPORT_CACHE_DIR at a path under a 0o700 parent " +
+          "owned by the worker user.",
+      },
+    );
+  }
+
+  return { cacheDir: resolved, checked: true, findings };
 }
 
 async function unlinkStagedFile(filePath: string): Promise<void> {
@@ -888,6 +1312,15 @@ async function reapStagedEntry(
   entry: StagedExportEntry,
 ): Promise<void> {
   stagedExportCache.delete(key);
+  // Clean up per-user quota tracking so the slot is reclaimed immediately
+  // rather than waiting for the next quota check.
+  if (entry.userIdentityHash) {
+    const keys = userExportKeys.get(entry.userIdentityHash);
+    if (keys) {
+      keys.delete(key);
+      if (keys.size === 0) userExportKeys.delete(entry.userIdentityHash);
+    }
+  }
   if (entry.refCount > 0) {
     // Defer unlink until the last reader drains.
     entry.pendingDelete = true;
@@ -951,18 +1384,48 @@ async function computeStagedFileWeakEtag(
   }
 }
 
+/**
+ * Drain a Response body to a file, aborting mid-stream if `maxBytes` is
+ * exceeded.  Throws `ExportSizeExceededError` on overflow so the caller can
+ * delete the partial file and return a 503.
+ *
+ * `maxBytes` should be set to the remaining capacity of the export cache
+ * (total budget minus already-staged bytes) so that a single large export
+ * cannot exceed the global disk quota even when the cache appears empty.
+ */
+class ExportSizeExceededError extends Error {
+  constructor(maxBytes: number) {
+    super(`Export exceeded maximum staging size of ${maxBytes} bytes`);
+    this.name = "ExportSizeExceededError";
+  }
+}
+
 async function drainResponseBodyToFile(
   response: Response,
   filePath: string,
+  maxBytes?: number,
 ): Promise<number> {
+  // mode 0o600 — owner-only read/write. Staged exports may contain sensitive
+  // data (risk registers, audit findings, vendor records, PDPL data); on a
+  // shared host the default umask (typically 0o022) would leave them
+  // world-readable for up to a TTL window. The `mode` option on
+  // open()/writeFile() is only honoured when the file is *created*, so
+  // existing files keep their mode — but staged files are minted with a
+  // fresh per-generation suffix in `mintStagedFilePath`, so every drain
+  // path here creates a brand-new file.
   if (!response.body) {
     // Empty body — write a 0-byte file so `serveFromStagedEntry` can still
-    // open it for a Range read without an ENOENT race.
-    await fsPromises.writeFile(filePath, Buffer.alloc(0));
+    // open it for a Range read without an ENOENT race. Mode 0o600 so the
+    // staged file is readable only by the process owner.
+    await fsPromises.writeFile(filePath, Buffer.alloc(0), { mode: 0o600 });
     return 0;
   }
   const reader = response.body.getReader();
-  const fh = await fsPromises.open(filePath, "w");
+  // Open with mode 0o600 (owner-read/write only). The third arg to
+  // fsPromises.open is the creation mode — it's only honoured on create,
+  // and `mintStagedFilePath` always returns a generation-unique path so
+  // the file is guaranteed fresh.
+  const fh = await fsPromises.open(filePath, "w", 0o600);
   let size = 0;
   try {
     // eslint-disable-next-line no-constant-condition
@@ -970,13 +1433,19 @@ async function drainResponseBodyToFile(
       const { value, done } = await reader.read();
       if (done) break;
       if (!value || !value.byteLength) continue;
+      size += value.byteLength;
+      // Enforce the per-export byte cap mid-stream so disk is never filled
+      // by a single oversized export, regardless of cache-level pre-checks.
+      if (maxBytes !== undefined && size > maxBytes) {
+        void reader.cancel().catch(() => { });
+        throw new ExportSizeExceededError(maxBytes);
+      }
       const chunk = Buffer.from(
         value.buffer,
         value.byteOffset,
         value.byteLength,
       );
       await fh.write(chunk);
-      size += chunk.byteLength;
     }
   } finally {
     await fh.close();
@@ -1005,6 +1474,11 @@ export async function runStagedExportJanitor(): Promise<number> {
   for (const [key, entry] of expired) {
     await reapStagedEntry(key, entry);
   }
+  // Record janitor visibility for the admin stats panel (Task #755).
+  // Stamp the timestamp regardless of how many entries were reaped — a "0
+  // reaped" pass still proves the janitor is running on schedule.
+  stagedExportJanitorLastRunAt = now;
+  stagedExportJanitorLastReaped = expired.length;
   return expired.length;
 }
 
@@ -1030,9 +1504,125 @@ export async function _resetStagedExportCacheForTests(): Promise<void> {
   inFlightStaging.clear();
   const entries = [...stagedExportCache.entries()];
   stagedExportCache.clear();
+  userExportKeys.clear();
   for (const [, entry] of entries) {
     await unlinkStagedFile(entry.filePath);
   }
+  stagedExportHitCount = 0;
+  stagedExportMissCount = 0;
+  stagedExportJanitorLastRunAt = null;
+  stagedExportJanitorLastReaped = null;
+}
+
+// ---------------------------------------------------------------------------
+// Operator-visible cache stats (Task #755)
+// ---------------------------------------------------------------------------
+
+export interface StagedExportCacheStats {
+  /** Number of in-memory cache entries (each backed by a temp file on disk). */
+  entryCount: number;
+  /** Sum of file sizes for live in-memory entries (bytes). */
+  totalBytes: number;
+  /** Cumulative cache-hit count since process start. */
+  hitCount: number;
+  /** Cumulative cache-miss count since process start. */
+  missCount: number;
+  /** Hit ratio (hits / (hits + misses)) in the [0, 1] range, or null when no
+   *  requests have been served yet. */
+  hitRate: number | null;
+  /** Unix-ms timestamp of the most recent janitor pass, or null if it has not
+   *  run yet (e.g. the process just started). */
+  lastJanitorRunAt: number | null;
+  /** Entries reaped in the most recent janitor pass, or null if not yet run. */
+  lastJanitorReaped: number | null;
+  /** Cache directory path the janitor scans — surfaced so operators can SSH
+   *  in and confirm what they're looking at when disk usage looks wrong. */
+  cacheDir: string;
+  /** TTL applied to newly-staged entries (ms). */
+  ttlMs: number;
+  /** Number of entries currently being streamed by at least one HTTP client.
+   *  These are the entries the janitor will defer-unlink rather than yank. */
+  activeReadCount: number;
+  /** Number of entries past their TTL but not yet reaped (waiting for the
+   *  next janitor pass or a lazy-on-access GC). */
+  expiredEntryCount: number;
+  /** Disk-side scan: the actual files in the cache directory. May exceed
+   *  `entryCount` when a generation roll-over left an older file pinned by
+   *  a slow downloader, or when leftover files from a previous process are
+   *  still on disk waiting for the janitor to notice. */
+  onDiskFileCount: number;
+  onDiskTotalBytes: number;
+}
+
+/**
+ * Snapshot the export cache for the admin stats panel.
+ *
+ * Reads both the in-memory map and the on-disk directory because they can
+ * legitimately diverge: a previous process's leftover files, or a still-
+ * being-read older generation of a re-staged export, will show up on disk
+ * but not in the live map. Operators care about both numbers when sizing
+ * the ephemeral volume.
+ */
+export async function getStagedExportCacheStats(): Promise<StagedExportCacheStats> {
+  const now = Date.now();
+  let totalBytes = 0;
+  let activeReadCount = 0;
+  let expiredEntryCount = 0;
+  for (const entry of stagedExportCache.values()) {
+    totalBytes += entry.size;
+    if (entry.refCount > 0) activeReadCount++;
+    if (entry.expiresAt <= now) expiredEntryCount++;
+  }
+
+  // Best-effort disk scan. The directory may not exist yet (no export has
+  // been served since boot) — treat that as "0 files / 0 bytes" rather
+  // than an error so the panel renders cleanly on a quiet system.
+  let onDiskFileCount = 0;
+  let onDiskTotalBytes = 0;
+  const dir = stagedExportCacheDir();
+  try {
+    const names = await fsPromises.readdir(dir);
+    for (const name of names) {
+      try {
+        const st = await fsPromises.stat(path.join(dir, name));
+        if (st.isFile()) {
+          onDiskFileCount++;
+          onDiskTotalBytes += st.size;
+        }
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException | undefined)?.code;
+        // ENOENT = file vanished between readdir and stat (the janitor or
+        // a release race) — skip it silently. Anything else is logged.
+        if (code !== "ENOENT") {
+          logger.warn("[stagedExport] stat failed during stats scan", name, err);
+        }
+      }
+    }
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "ENOENT") {
+      logger.warn("[stagedExport] readdir failed during stats scan", dir, err);
+    }
+  }
+
+  const totalRequests = stagedExportHitCount + stagedExportMissCount;
+  const hitRate = totalRequests > 0 ? stagedExportHitCount / totalRequests : null;
+
+  return {
+    entryCount: stagedExportCache.size,
+    totalBytes,
+    hitCount: stagedExportHitCount,
+    missCount: stagedExportMissCount,
+    hitRate,
+    lastJanitorRunAt: stagedExportJanitorLastRunAt,
+    lastJanitorReaped: stagedExportJanitorLastReaped,
+    cacheDir: dir,
+    ttlMs: stagedExportTtlMs(),
+    activeReadCount,
+    expiredEntryCount,
+    onDiskFileCount,
+    onDiskTotalBytes,
+  };
 }
 
 /**
@@ -1065,6 +1655,15 @@ export interface StreamingExportStagingOptions {
   /** TTL for the staged file (ms).  Defaults to env `STREAMING_EXPORT_TTL_MS`
    *  or 1 hour. */
   ttlMs?: number;
+  /**
+   * SHA-256 hash of the caller's identity string (cookie / admin key).
+   * When provided, `stageAndServeStreamingExport` tracks how many cache
+   * entries this user owns and enforces the per-user quota configured via
+   * `STAGED_EXPORT_MAX_ENTRIES_PER_USER`.  Callers should hash the raw
+   * credential before passing it here so the value is never stored
+   * in memory in its original form.
+   */
+  userIdentityHash?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1229,6 +1828,27 @@ export function instrumentExportResponseTiming(
         `budget_total=${EXPORT_TOTAL_BUDGET_MS}ms status=${effectiveStatus}` +
         (extra ? ` ${extra}` : ""),
     );
+    // Feed the in-memory rolling-window aggregator that the export-timing
+    // p95 alert cron (Task #440) consumes. Lazy-import to break the import
+    // cycle (exportTimingMetrics imports the budget constants from this
+    // file). Wrapped in try/catch so a metrics bug can never break the
+    // streaming response we just finished serving.
+    void (async () => {
+      try {
+        const { recordExportTimingSample } = await import(
+          "./exportTimingMetrics"
+        );
+        recordExportTimingSample({
+          routeLabel,
+          ttfbMs,
+          totalMs,
+          bytes: bytesObserved,
+          status: effectiveStatus,
+        });
+      } catch {
+        /* noop — metrics bookkeeping must never affect the response */
+      }
+    })();
     if (effectiveStatus === "over-budget") {
       logger.warn(
         `[export-timing] TOTAL OVER BUDGET on ${routeLabel}: ${totalMs}ms ` +
@@ -1327,11 +1947,75 @@ export async function stageAndServeStreamingExport(
     await reapStagedEntry(jobKey, stale);
   }
 
+  const userHash = options.userIdentityHash;
+
   let entry = stagedExportCache.get(jobKey);
   if (!entry) {
+    // Cache miss — count it once per request, regardless of whether this
+    // call owns the staging or piggy-backs on an in-flight one. Both
+    // paths represent "the cache could not satisfy this request from a
+    // ready entry" from an operator's perspective.
+    stagedExportMissCount++;
     let staging = inFlightStaging.get(jobKey);
     let owns = false;
     if (!staging) {
+      // ---------------------------------------------------------------
+      // Resource-exhaustion guards — enforced only when we are about to
+      // start a brand-new staging (not when piggybacking on an in-flight
+      // one, since that staging already committed its resources).
+      // ---------------------------------------------------------------
+
+      // Per-user quota: reject early if this user already has too many
+      // cached exports.  A nonce-variation attack (?nonce=1, ?nonce=2 …)
+      // produces distinct jobKeys but the same userIdentityHash, so the
+      // per-user cap bounds total disk consumption per account even when
+      // the global entry cap has not been reached.
+      if (userHash) {
+        const userKeys = userExportKeys.get(userHash);
+        if (userKeys && userKeys.size >= stagedExportMaxEntriesPerUser()) {
+          return new Response(
+            JSON.stringify({
+              error:
+                "Export quota exceeded: too many concurrent exports for this account. " +
+                "Wait for an existing export to expire or download it before requesting a new one.",
+            }),
+            { status: 503, headers: { "Content-Type": "application/json" } },
+          );
+        }
+      }
+
+      // Global entry cap: prevents unbounded file accumulation.
+      if (stagedExportCache.size >= stagedExportMaxEntries()) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Export service temporarily unavailable: cache capacity reached. " +
+              "Please retry after a short wait.",
+          }),
+          { status: 503, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      // Global byte cap: protects the temp volume even when individual
+      // exports are small but there are many of them.
+      let totalBytes = 0;
+      for (const e of stagedExportCache.values()) totalBytes += e.size;
+      const maxTotalBytes = stagedExportMaxTotalBytes();
+      if (totalBytes >= maxTotalBytes) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Export service temporarily unavailable: disk quota exceeded. " +
+              "Please retry after a short wait.",
+          }),
+          { status: 503, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      // The remaining capacity is passed to drainResponseBodyToFile as a hard
+      // per-export byte cap so a single large export cannot exceed the total
+      // disk budget even when the cache is otherwise empty.
+      const remainingCapacity = maxTotalBytes - totalBytes;
+
       owns = true;
       staging = (async (): Promise<StagingResult> => {
         const dir = await ensureStagedExportDir();
@@ -1363,7 +2047,29 @@ export async function stageAndServeStreamingExport(
         const contentDisposition =
           built.headers.get("content-disposition") ||
           'attachment; filename="export.bin"';
-        const size = await drainResponseBodyToFile(built, filePath);
+        let size: number;
+        try {
+          size = await drainResponseBodyToFile(built, filePath, remainingCapacity);
+        } catch (err) {
+          // Delete the partial file so disk space is immediately reclaimed.
+          await unlinkStagedFile(filePath);
+          if (err instanceof ExportSizeExceededError) {
+            return {
+              kind: "passthrough",
+              status: 503,
+              statusText: "Service Unavailable",
+              headers: [["Content-Type", "application/json"]],
+              body: new TextEncoder().encode(
+                JSON.stringify({
+                  error:
+                    "Export too large: the generated file exceeds the server's disk quota. " +
+                    "Narrow your filter criteria and retry.",
+                }),
+              ),
+            };
+          }
+          throw err;
+        }
         const etag = await computeStagedFileWeakEtag(filePath, size);
         const newEntry: StagedExportEntry = {
           filePath,
@@ -1374,8 +2080,35 @@ export async function stageAndServeStreamingExport(
           expiresAt: Date.now() + ttlMs,
           refCount: 0,
           pendingDelete: false,
+          userIdentityHash: userHash,
         };
-        stagedExportCache.set(jobKey, newEntry);
+        // Register in the per-user tracking map before inserting so that a
+        // concurrent reap by the janitor sees a consistent view.
+        if (userHash) {
+          if (!userExportKeys.has(userHash)) {
+            userExportKeys.set(userHash, new Set());
+          }
+          userExportKeys.get(userHash)!.add(jobKey);
+        }
+        // Enforce cache size limits before inserting.  Evict the oldest idle
+        // entries first.  If the cache is still over budget (e.g. every entry
+        // has an active reader that can't be evicted), skip storing — the
+        // caller still gets their response, we just don't retain the file on
+        // disk so a future request has to rebuild it.
+        const hasRoom = await evictStagedExportEntries(size);
+        if (hasRoom) {
+          stagedExportCache.set(jobKey, newEntry);
+        } else {
+          // No room — clean up per-user tracking and schedule file deletion.
+          if (userHash) {
+            const keys = userExportKeys.get(userHash);
+            if (keys) {
+              keys.delete(jobKey);
+              if (keys.size === 0) userExportKeys.delete(userHash);
+            }
+          }
+          void unlinkStagedFile(filePath);
+        }
         return { kind: "entry", entry: newEntry };
       })();
       inFlightStaging.set(jobKey, staging);
@@ -1400,6 +2133,12 @@ export async function stageAndServeStreamingExport(
       });
     }
     entry = result.entry;
+  } else {
+    // Cache hit — entry was already in the map and still within TTL after
+    // the lazy GC check above. We do not count a re-served range request
+    // any differently from a fresh GET; from a "did we avoid rebuilding
+    // the body?" perspective, both are wins.
+    stagedExportHitCount++;
   }
 
   return serveFromStagedEntry(entry, reqHeaders);
@@ -1549,10 +2288,38 @@ export async function stageStreamingExportFromHono(
     "";
 
   const method = (c.req.method || "GET").toUpperCase();
+
+  // Normalize the URL before deriving the cache key to prevent cache-bypass
+  // attacks where an attacker appends arbitrary nonce query params (e.g.
+  // ?nonce=1, ?nonce=2) to create distinct cache keys for identical exports.
+  // We canonicalise by sorting query params alphabetically so that
+  // ?b=2&a=1 and ?a=1&b=2 map to the same key.  Unknown/nonce params are
+  // still included in the sorted key — they appear in every key and therefore
+  // don't help an attacker who uses the same session across requests — while
+  // the global cache entry/size limits (Task #811) bound the total damage from
+  // high-cardinality key flooding.
+  let normalizedUrl: string;
+  try {
+    const parsedUrl = new URL(c.req.url, "http://x");
+    const sortedParams = [...parsedUrl.searchParams.entries()]
+      .sort(([a], [b]) => a.localeCompare(b));
+    const canonical = new URLSearchParams(sortedParams);
+    parsedUrl.search = canonical.toString();
+    normalizedUrl = `${parsedUrl.pathname}${parsedUrl.search}`;
+  } catch {
+    normalizedUrl = c.req.url;
+  }
+
   const jobKey = deriveStreamingExportJobKey({
-    url: `${method} ${c.req.url}`,
+    url: `${method} ${normalizedUrl}`,
     userIdentity,
   });
+
+  // Hash the raw identity string so the per-user quota tracking map never
+  // holds cookie values or admin keys in memory.
+  const userIdentityHash = createHash("sha256")
+    .update(userIdentity || "anon")
+    .digest("hex");
 
   // Build a stable, low-cardinality route label for log lines. Strip the
   // query string so log aggregation groups requests for the same export
@@ -1571,7 +2338,7 @@ export async function stageStreamingExportFromHono(
     reqHeaders,
     jobKey,
     build,
-    options,
+    { ...options, userIdentityHash },
   );
 
   // Only instrument 2xx/206 responses — passthrough errors (401/403/500)

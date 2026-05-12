@@ -53,13 +53,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-    <script src="/js/navigation.js?v=4.7"></script>
+    <script src="/js/navigation.js?v=5.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('compliance');
@@ -206,17 +206,30 @@
             </button>
         </div>
 
-        <!-- ─── Frameworks (replaces both Regulation Library list AND tab strip) -->
+        <!-- ─── Frameworks (with Regulation Library + frameworks grid) -->
         <section class="bg-white rounded-lg shadow mb-6" data-testid="section-frameworks">
             <div class="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.frameworks_title">Frameworks</h2>
                     <p class="text-xs text-gray-500" data-i18n="compliance.frameworks_subtitle">Each framework card shows its clauses, % assessed, and % compliant. Click a card to open its clauses & document mapping below.</p>
                 </div>
-                <a href="/document-mapping" class="text-xs text-emerald-700 hover:text-emerald-800 font-medium" data-testid="link-document-mapping" data-i18n="compliance.go_doc_mapping">Open Document Mapping →</a>
             </div>
-            <div id="frameworksGrid" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading frameworks…</div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-4">
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-white rounded-lg shadow">
+                        <div class="p-4 border-b border-gray-200">
+                            <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.regulation_library">Regulation Library</h2>
+                        </div>
+                        <div id="regulationsList" class="divide-y divide-gray-200">
+                            <div class="p-4 text-center text-gray-400">Loading regulations...</div>
+                        </div>
+                        <input type="file" id="regulationDocFileInput" accept="application/pdf,.pdf" class="hidden" data-testid="input-regulation-document-file" />
+                    </div>
+                    <a href="/document-mapping" class="text-xs text-emerald-700 hover:text-emerald-800 font-medium" data-testid="link-document-mapping" data-i18n="compliance.go_doc_mapping">Open Document Mapping →</a>
+                </div>
+                <div id="frameworksGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading frameworks…</div>
+                </div>
             </div>
         </section>
 
@@ -264,7 +277,7 @@
             </div>
             <div class="bg-white rounded-lg shadow p-6">
                 <h2 class="text-base font-semibold text-gray-900 mb-3" data-i18n="compliance.by_domain">By Domain</h2>
-                <div id="byDomainChart" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+                <div id="byDomainChart" class="space-y-2 max-h-64 overflow-y-auto pe-1">
                     <div class="text-gray-400 text-center py-4 text-sm">Loading…</div>
                 </div>
             </div>
@@ -504,11 +517,11 @@
                             <div>
                                 <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="compliance.f_category">Category</label>
                                 <select id="clauseBulkCategory" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                                    <option value="documents">Documents</option>
-                                    <option value="policies">Policies</option>
-                                    <option value="forms">Forms</option>
-                                    <option value="security_controls">Security Controls</option>
-                                    <option value="sops">SOPs</option>
+                                    <option value="documents" data-i18n="compliance.cat_documents">Documents</option>
+                                    <option value="policies" data-i18n="compliance.cat_policies">Policies</option>
+                                    <option value="forms" data-i18n="compliance.cat_forms">Forms</option>
+                                    <option value="security_controls" data-i18n="compliance.cat_security_controls">Security Controls</option>
+                                    <option value="sops" data-i18n="compliance.cat_sops">SOPs</option>
                                 </select>
                             </div>
                             <div>
@@ -688,6 +701,74 @@
             }
         }
 
+        function renderByRegulation(regs) {
+            const container = document.getElementById('byRegulationChart');
+            if (!regs || regs.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">' + _t('dyn.compliance.chart_no_data') + '</div>';
+                return;
+            }
+            container.innerHTML = regs.map(r => `
+                <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                    <span class="text-sm font-medium">${r.regulation_code}</span>
+                    <span class="text-sm text-gray-600">${_t('dyn.compliance.chart_obligations_count', { count: r.obligation_count })}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderByPriority(priorities) {
+            const container = document.getElementById('byPriorityChart');
+            if (!priorities || priorities.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-4">' + _t('dyn.compliance.chart_no_data') + '</div>';
+                return;
+            }
+            const colors = {
+                'critical': 'bg-red-100 text-red-800',
+                'high': 'bg-orange-100 text-orange-800',
+                'medium': 'bg-yellow-100 text-yellow-800',
+                'low': 'bg-green-100 text-green-800'
+            };
+            container.innerHTML = priorities.map(p => `
+                <div class="flex justify-between items-center p-2 rounded ${colors[p.priority] || 'bg-gray-100'}">
+                    <span class="text-sm font-medium capitalize">${_td('dyn.compliance.priority', p.priority)}</span>
+                    <span class="text-sm font-bold">${p.count}</span>
+                </div>
+            `).join('');
+        }
+
+        // Cached current-user role used to gate the regulation document
+        // upload / replace / remove buttons. Filled by loadCurrentUser()
+        // and re-checked by canManageRegulationDocs() so the UI never
+        // shows an action the API would refuse.
+        let currentUserRole = null;
+        const REGULATION_DOC_ROLES = ['admin', 'grc_manager'];
+        function canManageRegulationDocs() {
+            return REGULATION_DOC_ROLES.includes(currentUserRole);
+        }
+        async function loadCurrentUser() {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                if (!res.ok) { currentUserRole = null; return; }
+                const data = await res.json();
+                currentUserRole = (data && data.user && data.user.role) || null;
+            } catch (_e) {
+                currentUserRole = null;
+            }
+        }
+
+        async function loadRegulations() {
+            try {
+                if (currentUserRole === null) await loadCurrentUser();
+                const res = await fetch('/api/compliance/regulations');
+                const data = await res.json();
+                const regs = data.regulations || [];
+                const container = document.getElementById('regulationsList');
+                if (!container) return;
+                renderRegulations(regs, container);
+            } catch (e) {
+                console.error('Error loading regulations:', e);
+            }
+        }
+
         // ──────────────────────── Filter state ─────────────────────────
         function readFilterState() {
             filterState.framework  = document.getElementById('fltFramework').value;
@@ -731,6 +812,78 @@
                 if (filterState.owner      && (r.responsible_department || '') !== filterState.owner) return false;
                 return true;
             });
+        }
+
+        function renderRegulations(regs, container) {
+            const canManage = canManageRegulationDocs();
+            container.innerHTML = regs.map(r => {
+                const src = r.source_url ? String(r.source_url).trim() : '';
+                const safeSrc = src && /^https?:\/\//i.test(src) ? src : '';
+                const sourceLink = safeSrc
+                    ? `<a href="${escAttr(safeSrc)}" target="_blank" rel="noopener noreferrer"
+                          class="text-xs text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1"
+                          data-testid="link-regulation-source-${escAttr(r.regulation_code)}"
+                          title="${escAttr(safeSrc)}">
+                          View source
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                       </a>`
+                    : '';
+                const hasDoc = !!r.document_path;
+                const docHref = '/api/compliance/regulations/' + encodeURIComponent(r.id) + '/document';
+                const docTitle = r.document_filename
+                    ? r.document_filename + (r.document_size ? ' (' + Math.round(r.document_size / 1024) + ' KB)' : '')
+                    : 'Uploaded document';
+                const docLink = hasDoc
+                    ? `<a href="${escAttr(docHref)}" target="_blank" rel="noopener noreferrer"
+                          class="text-xs text-emerald-700 hover:text-emerald-900 hover:underline inline-flex items-center gap-1"
+                          data-testid="link-regulation-document-${escAttr(r.regulation_code)}"
+                          title="${escAttr(docTitle)}">
+                          View document
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                       </a>`
+                    : '';
+                const uploadBtn = canManage
+                    ? `<button type="button"
+                          data-on-click="triggerRegulationDocUpload"
+                          data-args="[${r.id},&quot;${escAttr(r.regulation_code)}&quot;]"
+                          class="text-xs ${hasDoc ? 'text-amber-700 hover:text-amber-900' : 'text-blue-700 hover:text-blue-900'} hover:underline inline-flex items-center gap-1"
+                          data-testid="button-regulation-document-${hasDoc ? 'replace' : 'upload'}-${escAttr(r.regulation_code)}">
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5m0 0l5 5m-5-5v12"/></svg>
+                          ${hasDoc ? 'Replace document' : 'Upload document'}
+                       </button>`
+                    : '';
+                const removeBtn = canManage && hasDoc
+                    ? `<button type="button"
+                          data-on-click="removeRegulationDoc"
+                          data-args="[${r.id},&quot;${escAttr(r.regulation_code)}&quot;]"
+                          class="text-xs text-red-600 hover:text-red-800 hover:underline inline-flex items-center gap-1"
+                          data-testid="button-regulation-document-remove-${escAttr(r.regulation_code)}">
+                          Remove
+                       </button>`
+                    : '';
+                return `
+                <div class="p-4 hover:bg-gray-50 flex justify-between items-center" data-testid="row-regulation-${escAttr(r.regulation_code)}">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-xs ${getJurisdictionColor(r.jurisdiction)}">
+                            ${r.regulation_code.substring(0, 3)}
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-900">${r.name}</div>
+                            <div class="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
+                                <span>${r.regulation_code} | ${r.issuing_body || 'Unknown'}</span>
+                                ${sourceLink}
+                                ${docLink}
+                                ${uploadBtn}
+                                ${removeBtn}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="px-2 py-1 text-xs rounded-full ${r.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}">${_td('dyn.compliance.reg_status', r.status)}</span>
+                        <span class="text-sm text-gray-500 capitalize">${_td('dyn.compliance.jurisdiction', r.jurisdiction)}</span>
+                    </div>
+                </div>
+            `;}).join('');
         }
 
         function renderFilterChips() {
@@ -962,9 +1115,9 @@
                 const c = colors[p];
                 const pct = Math.round(buckets[p] / total * 100);
                 const label = _td('dyn.compliance.priority', p) || p;
-                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;priority&quot;,&quot;' + p + '&quot;]" class="w-full text-left ' + c.bg + ' rounded p-2 hover:opacity-90" data-testid="chart-priority-' + p + '">'
+                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;priority&quot;,&quot;' + p + '&quot;]" class="w-full text-start ' + c.bg + ' rounded p-2 hover:opacity-90" data-testid="chart-priority-' + p + '">'
                     + '<div class="flex justify-between items-center text-xs ' + c.text + ' font-medium mb-1"><span class="capitalize">' + escAttr(label) + '</span><span>' + buckets[p] + ' (' + pct + '%)</span></div>'
-                    + '<div class="h-1.5 w-full bg-white/70 rounded-full overflow-hidden"><div class="h-full ' + c.bar + '" style="width:' + pct + '%"></div></div>'
+                    + '<div class="h-1.5 w-full bg-white/70 rounded-full overflow-hidden"><div class="h-full ' + c.bar + '" data-style="width:' + pct + '%"></div></div>'
                     + '</button>';
             }).join('');
             if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(container);
@@ -987,9 +1140,9 @@
                 const name = e[0]; const n = e[1];
                 const pct = Math.round(n / max * 100);
                 const safe = escAttr(name);
-                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;domain&quot;,&quot;' + safe.replace(/"/g, '\\&quot;') + '&quot;]" class="w-full text-left p-1.5 rounded hover:bg-gray-50">'
+                return '<button type="button" data-on-click="applyFilterChip" data-args="[&quot;domain&quot;,&quot;' + safe.replace(/"/g, '\\&quot;') + '&quot;]" class="w-full text-start p-1.5 rounded hover:bg-gray-50">'
                     + '<div class="flex justify-between items-center text-xs text-gray-700 mb-0.5"><span class="truncate" title="' + safe + '">' + safe + '</span><span class="text-gray-500">' + n + '</span></div>'
-                    + '<div class="h-1 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-indigo-500" style="width:' + pct + '%"></div></div>'
+                    + '<div class="h-1 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-indigo-500" data-style="width:' + pct + '%"></div></div>'
                     + '</button>';
             }).join('');
         }
@@ -1020,7 +1173,7 @@
             if (rows.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-10 text-center text-gray-400">'
                     + _ct('compliance.no_match', 'No clauses match the current filters.')
-                    + ' <button type="button" data-on-click="resetFilters" class="text-emerald-700 hover:underline ml-1">'
+                    + ' <button type="button" data-on-click="resetFilters" class="text-emerald-700 hover:underline ms-1">'
                     + _ct('compliance.flt_reset', 'Reset')
                     + '</button>'
                     + '</td></tr>';
@@ -1043,7 +1196,7 @@
                     + '<td class="px-3 py-2.5 text-center text-sm font-medium text-gray-700">' + (r.score != null ? (r.score + '%') : '—') + '</td>'
                     + '<td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">' + escAttr(dt) + '</td>'
                     + '<td class="px-3 py-2.5 text-center whitespace-nowrap">'
-                        + '<button data-title="' + escAttr(r.title) + '" data-on-click="openAssessmentModal" data-args="[' + r.id + ',&quot;@this.dataset.title&quot;]" class="text-green-600 hover:text-green-800 text-xs font-medium mr-2" data-testid="button-assess-' + r.id + '" data-i18n="compliance.assess_short">Assess</button>'
+                        + '<button data-title="' + escAttr(r.title) + '" data-on-click="openAssessmentModal" data-args="[' + r.id + ',&quot;@this.dataset.title&quot;]" class="text-green-600 hover:text-green-800 text-xs font-medium me-2" data-testid="button-assess-' + r.id + '" data-i18n="compliance.assess_short">Assess</button>'
                         + '<button data-on-click="openClauseDocsModal" data-args="[' + r.id + ',&quot;' + escAttr(r.obligation_code + ' — ' + (r.title || '')) + '&quot;]" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium" data-testid="button-link-' + r.id + '" data-i18n="compliance.link_docs_short">Link Docs</button>'
                     + '</td>'
                 + '</tr>';
@@ -1143,6 +1296,95 @@
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
         }
+
+        // === Per-regulation document upload (PDF only, ≤25MB) =============
+        // The visible button has no native file input; we open the shared
+        // hidden <input> and remember which regulation it belongs to.
+        let pendingRegulationDocId = null;
+        let pendingRegulationDocCode = null;
+
+        function triggerRegulationDocUpload(regulationId, regulationCode) {
+            if (!canManageRegulationDocs()) {
+                alert('Only admins or GRC managers can upload regulation documents.');
+                return;
+            }
+            const input = document.getElementById('regulationDocFileInput');
+            if (!input) return;
+            pendingRegulationDocId = regulationId;
+            pendingRegulationDocCode = regulationCode;
+            input.value = '';
+            input.click();
+        }
+
+        async function handleRegulationDocFileChange(event) {
+            const input = event.target;
+            const file = input && input.files && input.files[0];
+            const regulationId = pendingRegulationDocId;
+            const regulationCode = pendingRegulationDocCode;
+            pendingRegulationDocId = null;
+            pendingRegulationDocCode = null;
+            if (!file || !regulationId) return;
+
+            // Client-side guards mirror the server-side rules so we can fail
+            // fast without burning a network round-trip.
+            const isPdf = (file.type === 'application/pdf')
+                || /\.pdf$/i.test(file.name);
+            if (!isPdf) {
+                alert('Only PDF files are allowed.');
+                return;
+            }
+            const MAX = 25 * 1024 * 1024;
+            if (file.size > MAX) {
+                alert('File size exceeds the 25 MB limit.');
+                return;
+            }
+
+            try {
+                const fd = new FormData();
+                fd.append('file', file);
+                const res = await fetch(
+                    '/api/compliance/regulations/' + encodeURIComponent(regulationId) + '/document',
+                    { method: 'POST', credentials: 'same-origin', body: fd }
+                );
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    alert('Upload failed for ' + regulationCode + ': ' + (data.error || ('HTTP ' + res.status)));
+                    return;
+                }
+                await loadRegulations();
+            } catch (err) {
+                alert('Network error while uploading document.');
+            } finally {
+                if (input) input.value = '';
+            }
+        }
+
+        async function removeRegulationDoc(regulationId, regulationCode) {
+            if (!canManageRegulationDocs()) {
+                alert('Only admins or GRC managers can remove regulation documents.');
+                return;
+            }
+            if (!confirm('Remove the uploaded document for ' + regulationCode + '?')) return;
+            try {
+                const res = await fetch(
+                    '/api/compliance/regulations/' + encodeURIComponent(regulationId) + '/document',
+                    { method: 'DELETE', credentials: 'same-origin' }
+                );
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    alert('Remove failed: ' + (data.error || ('HTTP ' + res.status)));
+                    return;
+                }
+                await loadRegulations();
+            } catch (err) {
+                alert('Network error while removing document.');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const input = document.getElementById('regulationDocFileInput');
+            if (input) input.addEventListener('change', handleRegulationDocFileChange);
+        });
 
         async function submitObligation(event) {
             event.preventDefault();
@@ -1297,6 +1539,10 @@
         async function reloadAll() {
             await Promise.all([loadSummary(), loadAllData(), loadDeadlines()]);
         }
+
+        document.addEventListener('walaPlusLanguageChange', function () {
+            try { loadAll(); } catch (_) {}
+        });
 
         document.addEventListener('DOMContentLoaded', function () {
             reloadAll();

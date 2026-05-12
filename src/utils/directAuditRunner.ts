@@ -287,8 +287,167 @@ async function runAttachmentAudit(
   };
 }
 
-export async function runDirectAudit(logger?: any) {
-  logger?.info("🔍 [DirectAudit] Starting direct quality audit...");
+// User-selected date filter forwarded from the dashboard's upper-area
+// Created/Modified pickers via /api/audit/trigger. Either pair (or both)
+// may be set; both being set means a record must match BOTH ranges.
+// When unset (cron-driven audits), all records are scanned.
+export interface AuditDateFilters {
+  created?: { start?: string | null; end?: string | null };
+  modified?: { start?: string | null; end?: string | null };
+}
+
+function hasAnyAuditFilter(f?: AuditDateFilters): boolean {
+  if (!f) return false;
+  const c = f.created || {};
+  const m = f.modified || {};
+  return !!(c.start || c.end || m.start || m.end);
+}
+
+// Strictly parse a YYYY-MM-DD string into a KSA-anchored midnight Date.
+// Returns null when the input is not a calendar-valid date. Plain regex +
+// `new Date()` is not enough because JS silently rolls invalid days
+// (e.g. "2026-02-31" → 2026-03-03), which would make the Slack header
+// quietly lie. We round-trip the parsed components and compare back to
+// the input to reject any normalized values.
+function parseKsaDateOnly(input: string, endOfDay: boolean): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
+  if (!m) return null;
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const suffix = endOfDay ? "T23:59:59.999+03:00" : "T00:00:00+03:00";
+  const d = new Date(`${input}${suffix}`);
+  if (isNaN(d.getTime())) return null;
+  // Verify components round-trip in KSA (no silent rollover like 02-31).
+  const ksaParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  return ksaParts === input ? d : null;
+}
+
+function pickValidPair(
+  pair?: { start?: string | null; end?: string | null },
+): { start: Date; end: Date; label: string } | null {
+  const s = pair?.start;
+  const e = pair?.end;
+  if (typeof s !== "string" || typeof e !== "string") return null;
+  const start = parseKsaDateOnly(s, false);
+  const end = parseKsaDateOnly(e, true);
+  if (!start || !end) return null;
+  if (start.getTime() > end.getTime()) return null; // reject inverted ranges
+  const fmt = (d: Date) =>
+    d.toLocaleDateString("en-GB", { timeZone: "Asia/Riyadh" });
+  return { start, end, label: `${fmt(start)} - ${fmt(end)}` };
+}
+
+// Build a DigestWindow that mirrors the user-selected Created and/or Modified
+// period from the upper-area filter so the Slack "Period Covered" header on
+// a manual audit run shows the dd/mm/yyyy KSA range(s) the user actually
+// picked. Returns null when no fully-formed pair is set, in which case the
+// caller falls back to computeDigestWindow() (cron-style window).
+//
+// When BOTH Created and Modified are set, audit scoping is the intersection
+// of the two ranges (see filterRecordsByAuditDateFilters: hasC && hasM →
+// cMatch && mMatch), so the header text shows BOTH labels explicitly to
+// stay truthful with what was actually scanned. The window's start/end are
+// set to the union span so any downstream URL parameters that read
+// window_start/window_end (e.g. the digest's "Download Issues (Excel)"
+// link) can still resolve a contiguous range without dropping rows.
+//
+// Format matches the existing executive digest: dateLabelKsa() uses the
+// "en-GB" locale in Asia/Riyadh, which renders YYYY-MM-DD inputs as
+// dd/mm/yyyy — exactly the form shown in the screenshots
+// ("Period Covered: 01/05/2026 - 07/05/2026 (KSA)").
+function buildUserPeriodDigestWindow(
+  filters?: AuditDateFilters,
+): import("./executiveDigest").DigestWindow | null {
+  if (!filters) return null;
+  const created = pickValidPair(filters.created);
+  const modified = pickValidPair(filters.modified);
+  if (!created && !modified) return null;
+
+  let start: Date;
+  let end: Date;
+  let periodLabel: string;
+
+  if (created && modified) {
+    // Union span for the Date objects (covers both ranges so any consumer
+    // reading window_start/window_end gets a non-empty contiguous span);
+    // explicit dual label in the human-readable header so the recipient
+    // sees the real Created ∩ Modified scope of the audit.
+    start =
+      created.start.getTime() < modified.start.getTime()
+        ? created.start
+        : modified.start;
+    end =
+      created.end.getTime() > modified.end.getTime()
+        ? created.end
+        : modified.end;
+    periodLabel = `Created ${created.label} / Modified ${modified.label}`;
+  } else {
+    const chosen = (created || modified)!;
+    start = chosen.start;
+    end = chosen.end;
+    periodLabel = chosen.label;
+  }
+
+  return {
+    cadence: "weekly",
+    start,
+    end,
+    periodLabel,
+  };
+}
+
+// Apply the user-selected created/modified window to the records actually
+// scanned by this audit run. Mirrors the semantics of
+// isRecordInSeparateDateFilters in src/data/index.ts but operates on
+// ZohoCRMRecord (which nests timestamps under .data) so the live Zoho
+// pipeline and the cached-leads pipeline stay consistent.
+function filterRecordsByAuditDateFilters(
+  records: ZohoCRMRecord[],
+  filters: AuditDateFilters,
+): ZohoCRMRecord[] {
+  const cStart = filters.created?.start || null;
+  const cEnd = filters.created?.end || null;
+  const mStart = filters.modified?.start || null;
+  const mEnd = filters.modified?.end || null;
+  const hasC = !!(cStart && cEnd);
+  const hasM = !!(mStart && mEnd);
+  if (!hasC && !hasM) return records;
+
+  const inRange = (iso: string | undefined | null, s: string, e: string) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return false;
+    const start = new Date(s); start.setHours(0, 0, 0, 0);
+    const end = new Date(e); end.setHours(23, 59, 59, 999);
+    return d >= start && d <= end;
+  };
+
+  return records.filter((rec) => {
+    const created = rec.data?.Created_Time || rec.createdTime || null;
+    const modified = rec.data?.Modified_Time || rec.modifiedTime || null;
+    let cMatch = true;
+    let mMatch = true;
+    if (hasC) cMatch = inRange(created, cStart!, cEnd!);
+    if (hasM) mMatch = inRange(modified, mStart!, mEnd!);
+    if (hasC && hasM) return cMatch && mMatch;
+    return hasC ? cMatch : mMatch;
+  });
+}
+
+export async function runDirectAudit(
+  logger?: any,
+  dateFilters?: AuditDateFilters,
+) {
+  logger?.info("🔍 [DirectAudit] Starting direct quality audit...", {
+    dateFiltersApplied: hasAnyAuditFilter(dateFilters),
+    filters: dateFilters || null,
+  });
 
   const hasZohoCredentials = !!(process.env.ZOHO_ACCESS_TOKEN || (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN));
 
@@ -359,6 +518,21 @@ export async function runDirectAudit(logger?: any) {
             }
           }
           if (!allRecords) throw lastErr || new Error(`Failed to fetch ${moduleName}`);
+
+          // Scope the records actually audited to the user-selected
+          // Created/Modified window when one is supplied. This is what
+          // makes "Period Covered" in Audit History line up with the
+          // upper-area filter the user picked when they clicked
+          // "Run AI Audit" — and keeps every downstream count
+          // (records audited, issues, scores) consistent with that window.
+          if (hasAnyAuditFilter(dateFilters)) {
+            const before = allRecords.length;
+            allRecords = filterRecordsByAuditDateFilters(allRecords, dateFilters!);
+            logger?.info(
+              `🔎 [DirectAudit] ${moduleName}: filtered ${before} → ${allRecords.length} records by user-selected period`,
+            );
+          }
+
           const recordCount = allRecords.length;
           totalRecordsAudited += recordCount;
 
@@ -499,7 +673,16 @@ export async function runDirectAudit(logger?: any) {
       },
     };
 
-    const savedResult = await saveAuditResult(auditData);
+    const savedResult = await saveAuditResult({
+      ...auditData,
+      // Persist the user-selected period (from the upper-area Created /
+      // Modified pickers) so Audit History can render an accurate
+      // "Period Covered" cell instead of falling back to "All Data".
+      period_created_start: dateFilters?.created?.start ?? null,
+      period_created_end: dateFilters?.created?.end ?? null,
+      period_modified_start: dateFilters?.modified?.start ?? null,
+      period_modified_end: dateFilters?.modified?.end ?? null,
+    });
     logger?.info("✅ [DirectAudit] Audit results saved to database successfully");
 
     // Slack notification — audit completed. Posts to SLACK_CHANNEL_ID using
@@ -561,7 +744,17 @@ export async function runDirectAudit(logger?: any) {
         let executiveSectionText = "";
         try {
           const { generateDigestData } = await import("./executiveDigest");
-          const digestData = await generateDigestData({ cadence: "weekly", now: new Date() });
+          // When the user picked a Created/Modified period from the upper-area
+          // filter, override the digest window so the Slack "Period Covered"
+          // header reflects that exact selection instead of the auto-computed
+          // weekly window. Falls back to the cron-style weekly window when no
+          // user period is set (scheduled runs / admin-key triggers).
+          const userWindow = buildUserPeriodDigestWindow(dateFilters);
+          const digestData = await generateDigestData(
+            userWindow
+              ? { cadence: "weekly", window: userWindow, now: new Date() }
+              : { cadence: "weekly", now: new Date() },
+          );
           const sectionLines = digestData.business_sections.map(
             (section) =>
               `• *--- ${section.title} ---*\n  - Total ${section.total} (Leads ${section.leads} / Deals ${section.deals})\n  - New ${section.new_in_window}\n  - Progressed ${section.progressed}\n  - Stalled ${section.stalled}\n  - Severity: 🔴 Critical ${section.severity_counts.critical} | 🟠 High ${section.severity_counts.high} | 🟡 Medium ${section.severity_counts.medium} | 🟢 Low ${section.severity_counts.low}`,
@@ -668,7 +861,13 @@ export async function runDirectAudit(logger?: any) {
           const { sendDigestSlack, computeDigestWindow } = await import("./executiveDigest");
           const now = new Date();
           const cadence = "weekly" as const;
-          const window = computeDigestWindow(cadence, now);
+          // Mirror the user-selected period (if any) into the digest window so
+          // the Slack "Period Covered" header on this fallback path matches
+          // the dates the user picked when clicking "Run AI Audit". Scheduled
+          // runs (no dateFilters) keep the standard auto-computed weekly window.
+          const window =
+            buildUserPeriodDigestWindow(dateFilters) ||
+            computeDigestWindow(cadence, now);
           const fallbackResult = await sendDigestSlack({
             cadence,
             now,

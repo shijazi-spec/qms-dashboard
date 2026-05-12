@@ -7,6 +7,15 @@ import {
   type ZohoCRMRecord,
 } from "./zohoCRM";
 import { getGovernanceDocumentByModule } from "./database";
+import {
+  getWeeklyFeedbackDigest,
+  summarizeFeedbackTrend,
+  type FeedbackTrendSummary,
+} from "./aiFeedbackDatabase";
+import {
+  computeSopGapSummary,
+  type SopGapSummary,
+} from "./sopGapDetection";
 
 const { Pool } = pg;
 
@@ -95,6 +104,12 @@ export interface DigestData {
   };
   kpi_summary: { green: number; amber: number; red: number; total: number };
   compliance_summary: { met: number; partial: number; not_met: number; total: number };
+  /**
+   * Composite enterprise health score 0-100, derived from real GRC signals.
+   * Components (weights): audit score 30%, CAPA closure 20%, risk hygiene 25%,
+   * KPI green rate 15%, NC closure rate 10%. See `computeHealthScore()`.
+   */
+  health_score: number;
   top_alerts: Array<{ title: string; severity: string; module: string }>;
   capa_recurrences: number;
   duplicate_clusters: number;
@@ -112,6 +127,21 @@ export interface DigestData {
     count: number;
   }>;
   business_sections: DigestBusinessSection[];
+  ai_feedback_summary: {
+    period: string;
+    total: number;
+    thumbs_up: number;
+    thumbs_down: number;
+    thumbs_up_pct: number;
+    trend: FeedbackTrendSummary;
+  };
+  /**
+   * SOP-driven gap detection (Phase 2). Counts how many requirements
+   * derived from uploaded SOPs have no matching audit/CAPA/risk record,
+   * so Operating Officers see compliance gaps even when operational
+   * tables are sparse.
+   */
+  sop_gap_summary: SopGapSummary;
 }
 
 export interface DigestBuildOptions {
@@ -213,7 +243,7 @@ function toIsoDateOnly(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function dateLabelKsa(d: Date): string {
+export function dateLabelKsa(d: Date): string {
   return d.toLocaleDateString("en-GB", { timeZone: "Asia/Riyadh" });
 }
 
@@ -498,11 +528,21 @@ export function computeDigestWindow(
 
     const anchorThursdayDate = ksa.day + diffToThursday;
     const anchorThursdayStart = fromKsaParts(ksa.year, ksa.monthIndex, anchorThursdayDate);
-    const windowStart = new Date(anchorThursdayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const anchorParts = getKsaParts(anchorThursdayStart);
+    // windowStart is the Friday 6 KSA-days before the Thursday anchor.
+    // We anchor at UTC 00:00 on that KSA calendar date (rather than
+    // KSA-midnight, which falls on the previous UTC date) so that
+    // start.toISOString().slice(0,10) renders the correct Friday and
+    // matches the convention used by downstream consumers
+    // (window_start in slack blocks etc).
+    const fridayUtc = new Date(
+      Date.UTC(anchorParts.year, anchorParts.monthIndex, anchorParts.day - 6, 0, 0, 0, 0),
+    );
+    const windowStart = fridayUtc;
     const windowEnd = fromKsaParts(
-      getKsaParts(anchorThursdayStart).year,
-      getKsaParts(anchorThursdayStart).monthIndex,
-      getKsaParts(anchorThursdayStart).day,
+      anchorParts.year,
+      anchorParts.monthIndex,
+      anchorParts.day,
       23,
       59,
       59,
@@ -580,7 +620,7 @@ export function buildDigestRunKey(
   return `${cadence}:${toIsoDateOnly(window.start)}:${toIsoDateOnly(window.end)}:${channel}`;
 }
 
-async function safeQuery(sql: string, params: any[] = []): Promise<any[]> {
+export async function safeQuery(sql: string, params: any[] = []): Promise<any[]> {
   try {
     const result = await pool.query(sql, params);
     return result.rows;
@@ -694,17 +734,29 @@ export async function generateDigestData(
   const window = options.window || computeDigestWindow(cadence, now);
   const weekAgoStr = window.start.toISOString();
 
+  // Schema mapping (May 2026 audit):
+  //   NC      -> audit_findings (canonical NC source; nonconformance_records is unused)
+  //   CAPA    -> capas + capa_action_items (capa_records is unused)
+  //   Risk    -> enterprise_risks (risk_register does not exist)
+  //   KPI     -> kpi_values JOIN kpi_definitions (kpi_entries does not exist)
+  //   Compl.  -> compliance_assessments (compliance_obligations does not exist)
+  //   Audit   -> quality_audit_results (quality_audits does not exist)
+  // Each safeQuery falls back to [] if a table is missing in a future env,
+  // so the digest degrades gracefully rather than 500-ing.
   const [
     ncOpen,
     ncNewWeek,
     ncClosedWeek,
     ncOverdue,
+    ncTotal,
     capaOpen,
+    capaTotal,
     capaNewWeek,
     capaClosedWeek,
     capaEffective,
     riskActive,
     riskCritHigh,
+    riskTotal,
     riskNew,
     riskOverdueTreatments,
     auditRows,
@@ -716,56 +768,73 @@ export async function generateDigestData(
     businessRecords,
   ] = await Promise.all([
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM nonconformance_records WHERE status NOT IN ('closed', 'rejected')`,
+      `SELECT COUNT(*) as cnt FROM audit_findings WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed', 'resolved', 'rejected')`,
     ),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM nonconformance_records WHERE created_at >= $1`,
+      `SELECT COUNT(*) as cnt FROM audit_findings WHERE created_at >= $1`,
       [weekAgoStr],
     ),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM nonconformance_records WHERE closed_date >= $1`,
+      `SELECT COUNT(*) as cnt FROM audit_findings WHERE resolution_date >= $1`,
       [weekAgoStr],
     ),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM nonconformance_records WHERE status NOT IN ('closed', 'rejected') AND created_at < NOW() - INTERVAL '15 days'`,
+      `SELECT COUNT(*) as cnt FROM audit_findings WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed', 'resolved', 'rejected') AND target_date IS NOT NULL AND target_date < CURRENT_DATE`,
     ),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM capa_records WHERE status NOT IN ('closed', 'cancelled')`,
+      `SELECT COUNT(*) as cnt FROM audit_findings`,
     ),
-    safeQuery(`SELECT COUNT(*) as cnt FROM capa_records WHERE created_at >= $1`, [weekAgoStr]),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM capa_records WHERE completion_date >= $1`,
+      `SELECT COUNT(*) as cnt FROM capas WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed', 'cancelled', 'completed')`,
+    ),
+    safeQuery(`SELECT COUNT(*) as cnt FROM capas`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM capas WHERE created_at >= $1`, [weekAgoStr]),
+    safeQuery(
+      `SELECT COUNT(*) as cnt FROM capa_action_items WHERE completion_date >= $1`,
       [weekAgoStr],
     ),
+    // Effectiveness proxy: action-items completed vs total across all CAPAs
+    // (capas table has no effectiveness_result column).
     safeQuery(
-      `SELECT COUNT(*) FILTER (WHERE effectiveness_result = 'effective') as eff, COUNT(*) as total FROM capa_records WHERE effectiveness_result IS NOT NULL`,
+      `SELECT COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'open')) = 'completed') as eff, COUNT(*) as total FROM capa_action_items`,
     ),
-    safeQuery(`SELECT COUNT(*) as cnt FROM risk_register WHERE status != 'closed'`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed', 'accepted')`),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM risk_register WHERE (likelihood * impact) >= 15 AND status != 'closed'`,
+      `SELECT COUNT(*) as cnt FROM enterprise_risks WHERE COALESCE(risk_score,0) >= 15 AND LOWER(COALESCE(status,'open')) NOT IN ('closed', 'accepted')`,
     ),
-    safeQuery(`SELECT COUNT(*) as cnt FROM risk_register WHERE created_at >= $1`, [weekAgoStr]),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE created_at >= $1`, [weekAgoStr]),
     safeQuery(
-      `SELECT COUNT(*) as cnt FROM risk_treatment_actions WHERE due_date < CURRENT_DATE AND status NOT IN ('completed', 'cancelled')`,
+      `SELECT COUNT(*) as cnt FROM enterprise_risks WHERE treatment_deadline IS NOT NULL AND treatment_deadline < NOW() AND LOWER(COALESCE(status,'open')) NOT IN ('closed', 'accepted')`,
     ),
     safeQuery(
-      `SELECT overall_score, audit_date FROM quality_audits ORDER BY audit_date DESC LIMIT 3`,
+      `SELECT overall_score, people_score, process_score, governance_score,
+              total_records_audited, total_issues_found, dimension_details, audit_date
+       FROM quality_audit_results
+       ORDER BY audit_date DESC LIMIT 3`,
     ),
+    // Latest kpi_value per kpi_id, then bucket by status.  Falls back to
+    // raw status counts if the window-over-partition is unavailable.
     safeQuery(`
+      WITH latest AS (
+        SELECT DISTINCT ON (kpi_id) kpi_id, status
+        FROM kpi_values
+        ORDER BY kpi_id, period_end DESC NULLS LAST, id DESC
+      )
       SELECT
-        COUNT(*) FILTER (WHERE status IN ('green', 'on_track')) as green,
-        COUNT(*) FILTER (WHERE status IN ('amber', 'at_risk')) as amber,
-        COUNT(*) FILTER (WHERE status IN ('red', 'off_track')) as red,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('green', 'on_track')) as green,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('amber', 'at_risk')) as amber,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('red', 'off_track')) as red,
         COUNT(*) as total
-      FROM kpi_entries
+      FROM latest
     `),
     safeQuery(`
       SELECT
-        COUNT(*) FILTER (WHERE status = 'met') as met,
-        COUNT(*) FILTER (WHERE status = 'partial') as partial,
-        COUNT(*) FILTER (WHERE status = 'not_met') as not_met,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('met', 'compliant')) as met,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('partial', 'partially_compliant')) as partial,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('not_met', 'non_compliant')) as not_met,
         COUNT(*) as total
-      FROM compliance_obligations
+      FROM compliance_assessments
     `),
     safeQuery(`
       SELECT title, severity, related_module as module
@@ -773,11 +842,13 @@ export async function generateDigestData(
       WHERE status = 'active' AND severity IN ('critical', 'high')
       ORDER BY created_at DESC LIMIT 5
     `),
+    // Recurrence proxy: audit_findings with the same criteria_name appearing
+    // more than once (capas table has no root_cause column).
     safeQuery(`
-      SELECT root_cause, COUNT(*) as cnt
-      FROM capa_records
-      WHERE root_cause IS NOT NULL AND TRIM(root_cause) != ''
-      GROUP BY root_cause HAVING COUNT(*) > 1
+      SELECT criteria_name, COUNT(*) as cnt
+      FROM audit_findings
+      WHERE criteria_name IS NOT NULL AND TRIM(criteria_name) != ''
+      GROUP BY criteria_name HAVING COUNT(*) > 1
     `),
     safeQuery(`SELECT COUNT(*) as cnt FROM duplicate_clusters WHERE status = 'active'`),
     fetchWindowedBusinessRecords(window),
@@ -819,6 +890,54 @@ export async function generateDigestData(
   const totalLeads = businessSections.reduce((sum, s) => sum + s.leads, 0);
   const totalDeals = businessSections.reduce((sum, s) => sum + s.deals, 0);
   const totalRecords = businessSections.reduce((sum, s) => sum + s.total, 0);
+
+  let aiFeedbackSummary: DigestData['ai_feedback_summary'] = {
+    period: `${window.start.toDateString()} – ${now.toDateString()}`,
+    total: 0,
+    thumbs_up: 0,
+    thumbs_down: 0,
+    thumbs_up_pct: 0,
+    trend: {
+      direction: 'insufficient_data',
+      peak_negative_day: null,
+      peak_negative_count: 0,
+      total_thumbs_up: 0,
+      total_thumbs_down: 0,
+      first_half_down_rate: 0,
+      second_half_down_rate: 0,
+      days_observed: 0,
+    },
+  };
+  try {
+    const weekly = await getWeeklyFeedbackDigest();
+    aiFeedbackSummary = {
+      period: weekly.period,
+      total: weekly.total,
+      thumbs_up: weekly.thumbs_up,
+      thumbs_down: weekly.thumbs_down,
+      thumbs_up_pct: weekly.thumbs_up_pct,
+      trend: summarizeFeedbackTrend(weekly.trend),
+    };
+  } catch {}
+
+  let sopGapSummary: SopGapSummary;
+  try {
+    sopGapSummary = await computeSopGapSummary();
+  } catch (err) {
+    logger.warn("[Digest] SOP gap detection failed; defaulting to empty", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    sopGapSummary = {
+      documents_scanned: 0,
+      requirements_total: 0,
+      requirements_covered: 0,
+      open_gaps: 0,
+      coverage_pct: 0,
+      top_gaps: [],
+      coverage_breakdown: { obligation_id: 0, normalised_text: 0, ancestor: 0 },
+      reason: "SOP gap detection failed",
+    };
+  }
 
   return {
     generated_at: now.toISOString(),
@@ -868,6 +987,32 @@ export async function generateDigestData(
       not_met: parseInt(compRows[0]?.not_met || "0", 10),
       total: parseInt(compRows[0]?.total || "0", 10),
     },
+    health_score: computeEnterpriseHealthScore({
+      auditScore: auditRows[0]?.overall_score ? parseFloat(auditRows[0].overall_score) : null,
+      auditPeople: auditRows[0]?.people_score != null ? parseFloat(auditRows[0].people_score) : null,
+      auditProcess: auditRows[0]?.process_score != null ? parseFloat(auditRows[0].process_score) : null,
+      auditGovernance: auditRows[0]?.governance_score != null ? parseFloat(auditRows[0].governance_score) : null,
+      auditRecords: parseInt(auditRows[0]?.total_records_audited || "0", 10),
+      auditIssues: parseInt(auditRows[0]?.total_issues_found || "0", 10),
+      auditModuleBreakdown: parseAuditModuleBreakdown(auditRows[0]?.dimension_details),
+      ncOpen: parseInt(ncOpen[0]?.cnt || "0", 10),
+      ncTotal: parseInt(ncTotal[0]?.cnt || "0", 10),
+      capaOpen: parseInt(capaOpen[0]?.cnt || "0", 10),
+      capaTotal: parseInt(capaTotal[0]?.cnt || "0", 10),
+      capaEffectiveCompleted: parseInt(capaEffective[0]?.eff || "0", 10),
+      capaEffectiveTotal: parseInt(capaEffective[0]?.total || "0", 10),
+      riskActive: parseInt(riskActive[0]?.cnt || "0", 10),
+      riskCritHigh: parseInt(riskCritHigh[0]?.cnt || "0", 10),
+      riskTotal: parseInt(riskTotal[0]?.cnt || "0", 10),
+      kpiGreen: parseInt(kpiRows[0]?.green || "0", 10),
+      kpiAmber: parseInt(kpiRows[0]?.amber || "0", 10),
+      kpiTotal: parseInt(kpiRows[0]?.total || "0", 10),
+      complianceMet: parseInt(compRows[0]?.met || "0", 10),
+      compliancePartial: parseInt(compRows[0]?.partial || "0", 10),
+      complianceTotal: parseInt(compRows[0]?.total || "0", 10),
+      sopRequirementsTotal: sopGapSummary.requirements_total,
+      sopRequirementsCovered: sopGapSummary.requirements_covered,
+    }),
     top_alerts: alertRows,
     capa_recurrences: recurrenceRows.length,
     duplicate_clusters: parseInt(duplicateClusters[0]?.cnt || "0", 10),
@@ -880,13 +1025,800 @@ export async function generateDigestData(
     },
     finding_types: findingTypes,
     business_sections: businessSections,
+    ai_feedback_summary: aiFeedbackSummary,
+    sop_gap_summary: sopGapSummary,
   };
+}
+
+/**
+ * Composite enterprise health score (0-100) from real GRC signals.
+ *
+ * Component formulas (each clamped to 0-100):
+ *  - audit       (weight 25): NOT the QA scorer's flat-averaged
+ *                overall_score. We re-blend the three dimensions so
+ *                process problems (data quality / record errors) carry
+ *                more weight than people/governance — otherwise a high
+ *                people score papers over hundreds of thousands of
+ *                record-level issues:
+ *                    auditBlend = 0.5*process + 0.3*governance + 0.2*people
+ *                Then we apply an issue-density penalty:
+ *                    density   = total_issues_found / total_records_audited
+ *                    penalty   = max(0, 1 - 0.15 * density)
+ *                    auditValue = auditBlend * penalty
+ *                so a register averaging >1 issue per record is dragged
+ *                down accordingly. Falls back to overall_score if the
+ *                dimension breakdown is missing on legacy rows.
+ *                Omitted entirely if no audits recorded.
+ *  - capa        (weight 20): average of two sub-signals when both are
+ *                available, else whichever is present:
+ *                  · closureRate    = 100 * (1 - capaOpen / capaTotal)
+ *                  · completionRate = 100 * completed / total action items
+ *                Omitted entirely if neither the capas table nor the
+ *                action-items table has any rows.
+ *  - risk        (weight 20): 100 * (1 - critical_high / active).
+ *                Only credited when riskTotal > 0; an empty register is
+ *                treated as "no signal", not "perfectly healthy".
+ *  - kpi         (weight 15): (green + 0.5 * amber) / total * 100.
+ *                Amber gets half credit so partial-progress KPIs move the
+ *                score, instead of being lumped in with red.
+ *  - nc          (weight 10): 100 * (1 - open / total). Omitted if zero.
+ *  - compliance  (weight 10): (met + 0.5 * partial) / total * 100.
+ *                Omitted when no controls have been assessed.
+ *
+ * If a component is omitted, the remaining weights are re-normalised so
+ * the score still spans 0-100. Returns 0 only when no components have
+ * data (fully-empty system).
+ */
+export interface AuditModuleBreakdown {
+  module: string;
+  recordsAudited: number;
+  recordsWithIssues: number;
+  issuesFound?: number;
+}
+
+/**
+ * Pull the per-module breakdown out of `quality_audit_results.dimension_details`.
+ * Tolerates already-parsed jsonb (object) and string-encoded jsonb. Returns
+ * an empty array on any shape that doesn't expose the expected fields so the
+ * scorer falls back to the legacy global density penalty cleanly.
+ */
+export function parseAuditModuleBreakdown(raw: unknown): AuditModuleBreakdown[] {
+  if (raw === null || raw === undefined) return [];
+  let obj: any = raw;
+  if (typeof raw === "string") {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  const arr = obj && Array.isArray(obj.moduleBreakdown) ? obj.moduleBreakdown : null;
+  if (!arr) return [];
+  return arr
+    .map((m: any) => ({
+      module: String(m?.module ?? "").trim() || "(unknown)",
+      recordsAudited: Number(m?.recordsAudited) || 0,
+      recordsWithIssues: Number(m?.recordsWithIssues) || 0,
+      issuesFound: Number(m?.issuesFound) || 0,
+    }))
+    .filter((m: AuditModuleBreakdown) => m.recordsAudited > 0);
+}
+
+/**
+ * Reblend the audit component using process-weighted dimensions and a
+ * department-level contamination penalty.
+ *
+ * Penalty logic (preferred path):
+ *   For each department with recordsAudited > 0:
+ *       badRate_m = recordsWithIssues_m / recordsAudited_m
+ *   penalty = 1 - mean(badRate_m)   // unweighted across departments
+ *   so a small clean department isn't drowned out by a huge dirty one,
+ *   and "1 issue" vs "100 issues" on the same record both count as one
+ *   contaminated record.
+ *
+ * Fallback when no per-module breakdown is provided: the legacy global
+ * issue-density penalty `max(0, 1 - 0.15 * issues/records)`.
+ *
+ * Returns null when no audit signal is available at all.
+ */
+function computeAuditComponentValue(input: {
+  auditScore: number | null;
+  auditPeople?: number | null;
+  auditProcess?: number | null;
+  auditGovernance?: number | null;
+  auditRecords?: number;
+  auditIssues?: number;
+  auditModuleBreakdown?: AuditModuleBreakdown[];
+}): number | null {
+  const hasDimensions =
+    input.auditPeople != null && Number.isFinite(input.auditPeople) &&
+    input.auditProcess != null && Number.isFinite(input.auditProcess) &&
+    input.auditGovernance != null && Number.isFinite(input.auditGovernance);
+  let blend: number;
+  if (hasDimensions) {
+    blend =
+      0.5 * (input.auditProcess as number) +
+      0.3 * (input.auditGovernance as number) +
+      0.2 * (input.auditPeople as number);
+  } else if (input.auditScore !== null && Number.isFinite(input.auditScore)) {
+    blend = input.auditScore;
+  } else {
+    return null;
+  }
+  let penalty = 1;
+  const modules = (input.auditModuleBreakdown ?? []).filter(
+    (m) => Number.isFinite(m.recordsAudited) && m.recordsAudited > 0,
+  );
+  if (modules.length > 0) {
+    const avgBadRate =
+      modules.reduce(
+        (s, m) =>
+          s + Math.min(1, Math.max(0, (m.recordsWithIssues || 0) / m.recordsAudited)),
+        0,
+      ) / modules.length;
+    penalty = Math.max(0, 1 - avgBadRate);
+  } else {
+    const records = input.auditRecords ?? 0;
+    const issues = input.auditIssues ?? 0;
+    if (records > 0 && issues > 0) {
+      const density = issues / records;
+      penalty = Math.max(0, 1 - 0.15 * density);
+    }
+  }
+  return clampPct(blend * penalty);
+}
+
+export function computeEnterpriseHealthScore(input: {
+  auditScore: number | null;
+  auditPeople?: number | null;
+  auditProcess?: number | null;
+  auditGovernance?: number | null;
+  auditRecords?: number;
+  auditIssues?: number;
+  auditModuleBreakdown?: AuditModuleBreakdown[];
+  ncOpen: number;
+  ncTotal: number;
+  capaOpen: number;
+  capaTotal: number;
+  capaEffectiveCompleted: number;
+  capaEffectiveTotal: number;
+  riskActive: number;
+  riskCritHigh: number;
+  riskTotal: number;
+  kpiGreen: number;
+  kpiAmber: number;
+  kpiTotal: number;
+  complianceMet: number;
+  compliancePartial: number;
+  complianceTotal: number;
+  /** SOP-coverage signal: derived requirements vs satisfying records. */
+  sopRequirementsTotal?: number;
+  sopRequirementsCovered?: number;
+}): number {
+  const components: Array<{ value: number; weight: number }> = [];
+
+  const auditValue = computeAuditComponentValue(input);
+  if (auditValue !== null) {
+    components.push({ value: auditValue, weight: 25 });
+  }
+
+  // CAPA: combine open-vs-total closure (from `capas`) and action-item
+  // completion (from `capa_action_items`). Either signal alone counts;
+  // both averaged when present so backlog of open CAPAs is never ignored.
+  const capaSignals: number[] = [];
+  if (input.capaTotal > 0) {
+    capaSignals.push(clampPct((1 - input.capaOpen / input.capaTotal) * 100));
+  }
+  if (input.capaEffectiveTotal > 0) {
+    capaSignals.push(
+      clampPct((input.capaEffectiveCompleted / input.capaEffectiveTotal) * 100),
+    );
+  }
+  if (capaSignals.length > 0) {
+    const capaValue =
+      capaSignals.reduce((s, v) => s + v, 0) / capaSignals.length;
+    components.push({ value: capaValue, weight: 20 });
+  }
+
+  if (input.riskTotal > 0) {
+    const riskHygiene =
+      input.riskActive > 0
+        ? (1 - input.riskCritHigh / input.riskActive) * 100
+        : 100;
+    components.push({ value: clampPct(riskHygiene), weight: 20 });
+  }
+
+  if (input.kpiTotal > 0) {
+    const kpiPct =
+      ((input.kpiGreen + 0.5 * input.kpiAmber) / input.kpiTotal) * 100;
+    components.push({ value: clampPct(kpiPct), weight: 15 });
+  }
+
+  if (input.ncTotal > 0) {
+    components.push({
+      value: clampPct((1 - input.ncOpen / input.ncTotal) * 100),
+      weight: 10,
+    });
+  }
+
+  if (input.complianceTotal > 0) {
+    const compPct =
+      ((input.complianceMet + 0.5 * input.compliancePartial) /
+        input.complianceTotal) *
+      100;
+    components.push({ value: clampPct(compPct), weight: 10 });
+  }
+
+  // SOP coverage: percent of SOP-derived requirements with at least one
+  // satisfying audit/CAPA/risk record. Only credited when at least one
+  // requirement was extracted; an empty SOP corpus is treated as "no
+  // signal" rather than perfect coverage.
+  if ((input.sopRequirementsTotal ?? 0) > 0) {
+    const sopPct =
+      ((input.sopRequirementsCovered ?? 0) /
+        (input.sopRequirementsTotal as number)) *
+      100;
+    components.push({ value: clampPct(sopPct), weight: 10 });
+  }
+
+  const totalWeight = components.reduce((sum, c) => sum + c.weight, 0);
+  if (totalWeight === 0) return 0;
+  const weighted = components.reduce((sum, c) => sum + c.value * c.weight, 0);
+  return Math.round(weighted / totalWeight);
+}
+
+export interface EnterpriseHealthScoreComponent {
+  name: string;
+  value: number | null; // null when omitted
+  weight: number;
+  included: boolean;
+  reason?: string; // why omitted
+  raw?: Record<string, number | null>;
+}
+
+export interface EnterpriseHealthScoreDetail {
+  score: number;
+  rating: EnterpriseHealthRating;
+  components: EnterpriseHealthScoreComponent[];
+  totalWeight: number;
+}
+
+/**
+ * Same math as `computeEnterpriseHealthScore` but returns a per-component
+ * breakdown for display (cover sheets, audit, debugging). Keep the two
+ * functions in lock-step; this one delegates to no shared helper because
+ * we need `included`/`reason` per branch.
+ */
+export function computeEnterpriseHealthScoreDetail(
+  input: Parameters<typeof computeEnterpriseHealthScore>[0],
+): EnterpriseHealthScoreDetail {
+  const components: EnterpriseHealthScoreComponent[] = [];
+
+  const auditVal = computeAuditComponentValue(input);
+  if (auditVal !== null) {
+    const records = input.auditRecords ?? 0;
+    const issues = input.auditIssues ?? 0;
+    const density = records > 0 ? issues / records : 0;
+    const modules = (input.auditModuleBreakdown ?? []).filter(
+      (m) => Number.isFinite(m.recordsAudited) && m.recordsAudited > 0,
+    );
+    const perModuleBadRates = modules.map((m) => ({
+      module: m.module,
+      recordsAudited: m.recordsAudited,
+      recordsWithIssues: m.recordsWithIssues || 0,
+      badRatePct:
+        Math.round(
+          Math.min(1, Math.max(0, (m.recordsWithIssues || 0) / m.recordsAudited)) *
+            1000,
+        ) / 10,
+    }));
+    const avgBadRatePct =
+      perModuleBadRates.length > 0
+        ? Math.round(
+            (perModuleBadRates.reduce((s, m) => s + m.badRatePct, 0) /
+              perModuleBadRates.length) *
+              10,
+          ) / 10
+        : null;
+    components.push({
+      name: "Audit (process-weighted, dept-contamination-penalised)",
+      value: auditVal,
+      weight: 25,
+      included: true,
+      raw: {
+        people: input.auditPeople ?? null,
+        process: input.auditProcess ?? null,
+        governance: input.auditGovernance ?? null,
+        overall: input.auditScore,
+        records,
+        issues,
+        issuesPerRecord: Math.round(density * 100) / 100,
+        avgDeptBadRatePct: avgBadRatePct,
+        perModuleBadRates: perModuleBadRates.length > 0 ? perModuleBadRates : null,
+      },
+    });
+  } else {
+    components.push({
+      name: "Audit (process-weighted, dept-contamination-penalised)",
+      value: null,
+      weight: 25,
+      included: false,
+      reason: "No quality_audit_results recorded",
+    });
+  }
+
+  const capaSignals: number[] = [];
+  if (input.capaTotal > 0) {
+    capaSignals.push(clampPct((1 - input.capaOpen / input.capaTotal) * 100));
+  }
+  if (input.capaEffectiveTotal > 0) {
+    capaSignals.push(
+      clampPct((input.capaEffectiveCompleted / input.capaEffectiveTotal) * 100),
+    );
+  }
+  if (capaSignals.length > 0) {
+    components.push({
+      name: "CAPA (closure + action-item completion)",
+      value: capaSignals.reduce((s, v) => s + v, 0) / capaSignals.length,
+      weight: 20,
+      included: true,
+      raw: {
+        capaOpen: input.capaOpen,
+        capaTotal: input.capaTotal,
+        actionsCompleted: input.capaEffectiveCompleted,
+        actionsTotal: input.capaEffectiveTotal,
+      },
+    });
+  } else {
+    components.push({
+      name: "CAPA (closure + action-item completion)",
+      value: null,
+      weight: 20,
+      included: false,
+      reason: "No CAPAs and no action items recorded",
+    });
+  }
+
+  if (input.riskTotal > 0) {
+    const v =
+      input.riskActive > 0
+        ? (1 - input.riskCritHigh / input.riskActive) * 100
+        : 100;
+    components.push({
+      name: "Risk (hygiene of active register)",
+      value: clampPct(v),
+      weight: 20,
+      included: true,
+      raw: {
+        active: input.riskActive,
+        criticalHigh: input.riskCritHigh,
+        total: input.riskTotal,
+      },
+    });
+  } else {
+    components.push({
+      name: "Risk (hygiene of active register)",
+      value: null,
+      weight: 20,
+      included: false,
+      reason: "Risk register is empty (no signal)",
+    });
+  }
+
+  if (input.kpiTotal > 0) {
+    components.push({
+      name: "KPIs (green + half-credit amber)",
+      value: clampPct(
+        ((input.kpiGreen + 0.5 * input.kpiAmber) / input.kpiTotal) * 100,
+      ),
+      weight: 15,
+      included: true,
+      raw: {
+        green: input.kpiGreen,
+        amber: input.kpiAmber,
+        total: input.kpiTotal,
+      },
+    });
+  } else {
+    components.push({
+      name: "KPIs (green + half-credit amber)",
+      value: null,
+      weight: 15,
+      included: false,
+      reason: "No KPI values recorded",
+    });
+  }
+
+  if (input.ncTotal > 0) {
+    components.push({
+      name: "Nonconformances (closure rate)",
+      value: clampPct((1 - input.ncOpen / input.ncTotal) * 100),
+      weight: 10,
+      included: true,
+      raw: { open: input.ncOpen, total: input.ncTotal },
+    });
+  } else {
+    components.push({
+      name: "Nonconformances (closure rate)",
+      value: null,
+      weight: 10,
+      included: false,
+      reason: "No NCs recorded",
+    });
+  }
+
+  if (input.complianceTotal > 0) {
+    components.push({
+      name: "Compliance (met + half-credit partial)",
+      value: clampPct(
+        ((input.complianceMet + 0.5 * input.compliancePartial) /
+          input.complianceTotal) *
+          100,
+      ),
+      weight: 10,
+      included: true,
+      raw: {
+        met: input.complianceMet,
+        partial: input.compliancePartial,
+        total: input.complianceTotal,
+      },
+    });
+  } else {
+    components.push({
+      name: "Compliance (met + half-credit partial)",
+      value: null,
+      weight: 10,
+      included: false,
+      reason: "No compliance assessments recorded",
+    });
+  }
+
+  const sopTotal = input.sopRequirementsTotal ?? 0;
+  const sopCovered = input.sopRequirementsCovered ?? 0;
+  if (sopTotal > 0) {
+    components.push({
+      name: "SOP coverage (requirements with satisfying records)",
+      value: clampPct((sopCovered / sopTotal) * 100),
+      weight: 10,
+      included: true,
+      raw: {
+        sopRequirementsTotal: sopTotal,
+        sopRequirementsCovered: sopCovered,
+        sopOpenGaps: Math.max(0, sopTotal - sopCovered),
+      },
+    });
+  } else {
+    components.push({
+      name: "SOP coverage (requirements with satisfying records)",
+      value: null,
+      weight: 10,
+      included: false,
+      reason: "No SOP-derived requirements available",
+    });
+  }
+
+  const included = components.filter((c) => c.included);
+  const totalWeight = included.reduce((s, c) => s + c.weight, 0);
+  const score =
+    totalWeight === 0
+      ? 0
+      : Math.round(
+          included.reduce((s, c) => s + (c.value as number) * c.weight, 0) /
+            totalWeight,
+        );
+
+  return {
+    score,
+    rating: ratingForEnterpriseHealth(score),
+    components,
+    totalWeight,
+  };
+}
+
+export type EnterpriseHealthRating = "Excellent" | "Good" | "Needs Attention" | "At Risk";
+
+export function ratingForEnterpriseHealth(score: number): EnterpriseHealthRating {
+  return score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Needs Attention" : "At Risk";
+}
+
+export interface EnterpriseGRCSnapshot {
+  audit_score: number | null;
+  audit_dimensions: {
+    people: number | null;
+    process: number | null;
+    governance: number | null;
+  } | null;
+  audit_records: number;
+  audit_issues: number;
+  audit_module_breakdown: AuditModuleBreakdown[];
+  nc_summary: { open: number; total: number };
+  capa_summary: { open: number; total: number; effectiveness_rate: number };
+  risk_summary: { active: number; critical_high: number };
+  kpi_summary: { green: number; amber: number; red: number; total: number };
+  compliance_summary: { met: number; partial: number; not_met: number; total: number };
+  sop_gap_summary: SopGapSummary;
+  enterprise_health_score: number;
+  enterprise_health_rating: EnterpriseHealthRating;
+}
+
+// Brief in-process cache for the snapshot. The dashboard pulls /api/dashboard
+// on every page load and on the auto-refresh tick; without this, every load
+// fans out ~10 aggregate queries even though the underlying counts barely
+// change second-to-second. 30 s is short enough that operators see fresh
+// data after acting on a finding, while collapsing burst refreshes onto a
+// single DB pass. Single-process; tests can override with the env var.
+let _snapshotCache: { value: EnterpriseGRCSnapshot; expiresAt: number } | null = null;
+let _snapshotInflight: Promise<EnterpriseGRCSnapshot> | null = null;
+function snapshotCacheTtlMs(): number {
+  const raw = process.env.GRC_SNAPSHOT_CACHE_TTL_MS;
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n >= 0 ? n : 30_000;
+}
+
+/** Test-only: drop the in-process snapshot cache. */
+export function resetEnterpriseGRCSnapshotCache(): void {
+  _snapshotCache = null;
+  _snapshotInflight = null;
+}
+
+/**
+ * Lightweight snapshot of the same enterprise-wide GRC signals the executive
+ * digest summarises, without the Zoho CRM scan or business-section build.
+ *
+ * Mirrors `generateDigestData` numerically (uses the same queries and the
+ * same `computeEnterpriseHealthScore`) so any UI rendering this snapshot
+ * agrees with the Slack/email digest by construction. Cached in-process for
+ * `GRC_SNAPSHOT_CACHE_TTL_MS` (default 30 s) so the dashboard's per-request
+ * call doesn't multiply DB load on refresh storms.
+ */
+export async function getEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
+  const now = Date.now();
+  if (_snapshotCache && _snapshotCache.expiresAt > now) {
+    return _snapshotCache.value;
+  }
+  // Coalesce concurrent callers onto a single in-flight DB pass.
+  if (_snapshotInflight) return _snapshotInflight;
+  _snapshotInflight = (async () => {
+    try {
+      const value = await _computeEnterpriseGRCSnapshot();
+      _snapshotCache = { value, expiresAt: Date.now() + snapshotCacheTtlMs() };
+      return value;
+    } finally {
+      _snapshotInflight = null;
+    }
+  })();
+  return _snapshotInflight;
+}
+
+async function _computeEnterpriseGRCSnapshot(): Promise<EnterpriseGRCSnapshot> {
+  const [
+    ncOpen,
+    ncTotal,
+    capaOpen,
+    capaTotal,
+    capaEffective,
+    riskActive,
+    riskCritHigh,
+    riskTotal,
+    kpiRows,
+    compRows,
+    auditRows,
+  ] = await Promise.all([
+    safeQuery(`SELECT COUNT(*) as cnt FROM audit_findings WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed','resolved','rejected')`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM audit_findings`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM capas WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed','cancelled','completed')`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM capas`),
+    safeQuery(`SELECT COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'open')) = 'completed') as eff, COUNT(*) as total FROM capa_action_items`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE LOWER(COALESCE(status,'open')) NOT IN ('closed','accepted')`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks WHERE COALESCE(risk_score,0) >= 15 AND LOWER(COALESCE(status,'open')) NOT IN ('closed','accepted')`),
+    safeQuery(`SELECT COUNT(*) as cnt FROM enterprise_risks`),
+    safeQuery(`
+      WITH latest AS (
+        SELECT DISTINCT ON (kpi_id) kpi_id, status
+        FROM kpi_values
+        ORDER BY kpi_id, period_end DESC NULLS LAST, id DESC
+      )
+      SELECT
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('green','on_track')) as green,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('amber','at_risk')) as amber,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status,'')) IN ('red','off_track')) as red,
+        COUNT(*) as total FROM latest
+    `),
+    safeQuery(`
+      SELECT
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('met','compliant')) as met,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('partial','partially_compliant')) as partial,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(compliance_status,'')) IN ('not_met','non_compliant')) as not_met,
+        COUNT(*) as total
+      FROM compliance_assessments
+    `),
+    safeQuery(
+      `SELECT overall_score, people_score, process_score, governance_score,
+              total_records_audited, total_issues_found, dimension_details
+       FROM quality_audit_results
+       ORDER BY audit_date DESC LIMIT 1`,
+    ),
+  ]);
+
+  const auditScore = auditRows[0]?.overall_score
+    ? parseFloat(auditRows[0].overall_score)
+    : null;
+  const auditPeople = auditRows[0]?.people_score != null
+    ? parseFloat(auditRows[0].people_score)
+    : null;
+  const auditProcess = auditRows[0]?.process_score != null
+    ? parseFloat(auditRows[0].process_score)
+    : null;
+  const auditGovernance = auditRows[0]?.governance_score != null
+    ? parseFloat(auditRows[0].governance_score)
+    : null;
+  const auditRecords = parseInt(auditRows[0]?.total_records_audited || "0", 10);
+  const auditIssues = parseInt(auditRows[0]?.total_issues_found || "0", 10);
+  const auditModuleBreakdown = parseAuditModuleBreakdown(
+    auditRows[0]?.dimension_details,
+  );
+  const ncOpenN = parseInt(ncOpen[0]?.cnt || "0", 10);
+  const ncTotalN = parseInt(ncTotal[0]?.cnt || "0", 10);
+  const capaOpenN = parseInt(capaOpen[0]?.cnt || "0", 10);
+  const capaTotalN = parseInt(capaTotal[0]?.cnt || "0", 10);
+  const capaEffN = parseInt(capaEffective[0]?.eff || "0", 10);
+  const capaEffTotalN = parseInt(capaEffective[0]?.total || "0", 10);
+  const riskActiveN = parseInt(riskActive[0]?.cnt || "0", 10);
+  const riskCritHighN = parseInt(riskCritHigh[0]?.cnt || "0", 10);
+  const riskTotalN = parseInt(riskTotal[0]?.cnt || "0", 10);
+  const kpiGreenN = parseInt(kpiRows[0]?.green || "0", 10);
+  const kpiAmberN = parseInt(kpiRows[0]?.amber || "0", 10);
+  const kpiRedN = parseInt(kpiRows[0]?.red || "0", 10);
+  const kpiTotalN = parseInt(kpiRows[0]?.total || "0", 10);
+
+  const compMetN = parseInt(compRows[0]?.met || "0", 10);
+  const compPartialN = parseInt(compRows[0]?.partial || "0", 10);
+  const compTotalN = parseInt(compRows[0]?.total || "0", 10);
+
+  let sopSummary: SopGapSummary;
+  try {
+    sopSummary = await computeSopGapSummary();
+  } catch {
+    sopSummary = {
+      documents_scanned: 0,
+      requirements_total: 0,
+      requirements_covered: 0,
+      open_gaps: 0,
+      coverage_pct: 0,
+      top_gaps: [],
+      coverage_breakdown: { obligation_id: 0, normalised_text: 0, ancestor: 0 },
+      reason: "SOP gap detection failed",
+    };
+  }
+
+  const score = computeEnterpriseHealthScore({
+    auditScore,
+    auditPeople,
+    auditProcess,
+    auditGovernance,
+    auditRecords,
+    auditIssues,
+    auditModuleBreakdown,
+    ncOpen: ncOpenN,
+    ncTotal: ncTotalN,
+    capaOpen: capaOpenN,
+    capaTotal: capaTotalN,
+    capaEffectiveCompleted: capaEffN,
+    capaEffectiveTotal: capaEffTotalN,
+    riskActive: riskActiveN,
+    riskCritHigh: riskCritHighN,
+    riskTotal: riskTotalN,
+    kpiGreen: kpiGreenN,
+    kpiAmber: kpiAmberN,
+    kpiTotal: kpiTotalN,
+    complianceMet: compMetN,
+    compliancePartial: compPartialN,
+    complianceTotal: compTotalN,
+    sopRequirementsTotal: sopSummary.requirements_total,
+    sopRequirementsCovered: sopSummary.requirements_covered,
+  });
+
+  return {
+    audit_score: auditScore,
+    audit_dimensions:
+      auditPeople !== null || auditProcess !== null || auditGovernance !== null
+        ? { people: auditPeople, process: auditProcess, governance: auditGovernance }
+        : null,
+    audit_records: auditRecords,
+    audit_issues: auditIssues,
+    audit_module_breakdown: auditModuleBreakdown,
+    nc_summary: { open: ncOpenN, total: ncTotalN },
+    capa_summary: {
+      open: capaOpenN,
+      total: capaTotalN,
+      effectiveness_rate:
+        capaEffTotalN > 0 ? Math.round((capaEffN / capaEffTotalN) * 100) : 0,
+    },
+    risk_summary: { active: riskActiveN, critical_high: riskCritHighN },
+    kpi_summary: { green: kpiGreenN, amber: kpiAmberN, red: kpiRedN, total: kpiTotalN },
+    compliance_summary: {
+      met: parseInt(compRows[0]?.met || "0", 10),
+      partial: parseInt(compRows[0]?.partial || "0", 10),
+      not_met: parseInt(compRows[0]?.not_met || "0", 10),
+      total: parseInt(compRows[0]?.total || "0", 10),
+    },
+    sop_gap_summary: sopSummary,
+    enterprise_health_score: score,
+    enterprise_health_rating: ratingForEnterpriseHealth(score),
+  };
+}
+
+function clampPct(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  if (n < 0) return 0;
+  if (n > 100) return 100;
+  return n;
 }
 
 function cadenceLabel(cadence: DigestCadence): string {
   if (cadence === "monthly") return "Monthly";
   if (cadence === "quarterly") return "Quarterly";
   return "Weekly";
+}
+
+function escapeHtmlAttr(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeSlack(s: string): string {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+export function buildSopGapSlackBlocks(sop: SopGapSummary): Array<Record<string, unknown>> {
+  if (sop.documents_scanned === 0 || sop.requirements_total === 0) {
+    return [];
+  }
+  const lines = [
+    `*SOP gaps:* ${sop.open_gaps} expected NC(s) - ${sop.coverage_pct}% coverage (${sop.requirements_covered}/${sop.requirements_total} across ${sop.documents_scanned} SOP doc(s))`,
+  ];
+  const top = sop.top_gaps.slice(0, 5);
+  if (top.length > 0) {
+    lines.push(
+      ...top.map(
+        (g) =>
+          `- ${escapeSlack(g.framework_hint || g.category)} ${escapeSlack(g.raw_citation)} _(${escapeSlack(g.document_title)})_`,
+      ),
+    );
+  }
+  return [
+    { type: "section", text: { type: "mrkdwn", text: lines.join("\n") } },
+  ];
+}
+
+export function buildSopGapHtml(sop: SopGapSummary): string {
+  if (sop.documents_scanned === 0) {
+    return `<div class="card"><h3>SOP Gaps</h3><p style="font-size:13px;color:#6B7280">${escapeHtmlAttr(sop.reason || "No SOP documents available to scan.")}</p></div>`;
+  }
+  if (sop.requirements_total === 0) {
+    return `<div class="card"><h3>SOP Gaps</h3>
+<div class="metric-row"><span>SOP documents scanned</span><span class="metric-value">${sop.documents_scanned}</span></div>
+<p style="font-size:13px;color:#6B7280">${escapeHtmlAttr(sop.reason || "No clause/article references found in SOP text.")}</p></div>`;
+  }
+  const gapRows = sop.top_gaps
+    .map(
+      (g) => `<div class="alert-row"><span class="badge badge-${sop.open_gaps > 0 ? "amber" : "green"}">${escapeHtmlAttr(g.framework_hint || g.category)}</span> ${escapeHtmlAttr(g.raw_citation)} <span style="color:#6B7280">— ${escapeHtmlAttr(g.document_title)}</span></div>`,
+    )
+    .join("");
+  const color = sop.open_gaps > 0 ? "#B91C1C" : "#047857";
+  return `<div class="card">
+  <h3>SOP Gaps (derived from uploaded SOPs)</h3>
+  <div class="metric-row"><span>SOP documents scanned</span><span class="metric-value">${sop.documents_scanned}</span></div>
+  <div class="metric-row"><span>Requirements derived</span><span class="metric-value">${sop.requirements_total}</span></div>
+  <div class="metric-row"><span>Covered by audits/CAPAs/risks</span><span class="metric-value">${sop.requirements_covered}</span></div>
+  <div class="metric-row"><span>Open gaps (expected NCs)</span><span class="metric-value" style="color:${color}">${sop.open_gaps}</span></div>
+  <div class="metric-row"><span>Coverage</span><span class="metric-value">${sop.coverage_pct}%</span></div>
+  ${gapRows ? `<hr style="border:0;border-top:1px solid #E5E7EB;margin:10px 0;" />${gapRows}` : ""}
+</div>`;
 }
 
 export function buildDigestHTML(data: DigestData): string {
@@ -910,6 +1842,22 @@ export function buildDigestHTML(data: DigestData): string {
   <div class="metric-row"><span>Section Health</span><span class="metric-value">${section.health_score}%</span></div>`,
     )
     .join("");
+
+  const fb = data.ai_feedback_summary;
+  const fbDir = fb.trend.direction;
+  const fbIcon = fbDir === "improving" ? "↑" : fbDir === "worsening" ? "↓" : fbDir === "stable" ? "→" : "·";
+  const fbColor = fbDir === "improving" ? "#047857" : fbDir === "worsening" ? "#B91C1C" : "#6B7280";
+  const fbLabel = fbDir === "insufficient_data" ? "insufficient data" : fbDir;
+  const fbSection = fb.total === 0
+    ? `<div class="card"><h3>AI Consultant Feedback</h3><p style="font-size:13px;color:#6B7280">No feedback this week.</p></div>`
+    : `<div class="card">
+  <h3>AI Consultant Feedback</h3>
+  <div class="metric-row"><span>Total responses rated</span><span class="metric-value">${fb.total}</span></div>
+  <div class="metric-row"><span><span class="badge badge-green">Thumbs up</span></span><span class="metric-value">${fb.thumbs_up} (${fb.thumbs_up_pct}%)</span></div>
+  <div class="metric-row"><span><span class="badge badge-red">Thumbs down</span></span><span class="metric-value">${fb.thumbs_down}</span></div>
+  <div class="metric-row"><span>Trend</span><span class="metric-value" style="color:${fbColor}">${fbIcon} ${fbLabel}</span></div>
+  ${fb.trend.peak_negative_day && fb.trend.peak_negative_count > 0 ? `<div class="metric-row"><span>Peak negative day</span><span class="metric-value">${fb.trend.peak_negative_day} (${fb.trend.peak_negative_count})</span></div>` : ""}
+</div>`;
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WalaPlus ${cadenceLabel(data.cadence)} Quality Digest</title>
 <style>
@@ -970,6 +1918,7 @@ export function buildDigestHTML(data: DigestData): string {
   <h3>Quality Audit</h3>
   <div class="metric-row"><span>Last score</span><span class="metric-value">${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"}</span></div>
   <div class="metric-row"><span>Trend</span><span class="metric-value" style="color:${trendColor}">${trendIcon} ${data.audit_summary.trend}</span></div>
+  <div class="metric-row"><span>Enterprise Health</span><span class="metric-value" style="color:${data.health_score >= 75 ? "#047857" : data.health_score >= 50 ? "#D97706" : "#B91C1C"}">${data.health_score}%</span></div>
 </div>
 
 <div class="card">
@@ -978,6 +1927,8 @@ export function buildDigestHTML(data: DigestData): string {
   <div class="metric-row"><span><span class="badge badge-amber">Amber</span></span><span class="metric-value">${data.kpi_summary.amber}</span></div>
   <div class="metric-row"><span><span class="badge badge-red">Red</span></span><span class="metric-value">${data.kpi_summary.red}</span></div>
 </div>
+
+${fbSection}
 
 ${data.top_alerts.length > 0 ? `<div class="card">
   <h3>Top Alerts</h3>
@@ -988,13 +1939,15 @@ ${data.capa_recurrences > 0 ? `<div class="card"><h3>CAPA Recurrences</h3><p sty
 
 ${data.duplicate_clusters > 0 ? `<div class="card"><h3>Duplicate Radar</h3><p style="font-size:13px">${data.duplicate_clusters} active duplicate cluster(s) require attention.</p></div>` : ""}
 
+${buildSopGapHtml(data.sop_gap_summary)}
+
 <div class="footer">Generated by WalaPlus QMS Platform - ${data.generated_at}<br/>This is an automated quality digest. Do not reply.</div>
 </body></html>`;
 }
 
 export function buildDigestSlackBlocks(data: DigestData): any[] {
   const healthEmoji = (score: number): string =>
-    score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Watch" : "Alert";
+    score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Needs Attention" : "At Risk";
   const hasAbsoluteDashboardUrl = /^https?:\/\//i.test(DIGEST_DASHBOARD_LINK);
   const generatedTimeKsa = new Date(data.generated_at).toLocaleTimeString("en-US", {
     timeZone: "Asia/Riyadh",
@@ -1068,7 +2021,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         },
         {
           type: "mrkdwn",
-          text: `*Audit Snapshot*\nScore ${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"} - Trend ${data.audit_summary.trend}`,
+          text: `*Audit Snapshot*\nScore ${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"} - Trend ${data.audit_summary.trend}\nHealth ${healthEmoji(data.health_score)} *${data.health_score}%*`,
         },
       ],
     },
@@ -1082,6 +2035,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         text: `*Quality snapshot:* NC Open ${data.nc_summary.open} - CAPA Open ${data.capa_summary.open} - Risks ${data.risk_summary.total_active} - KPI Red ${data.kpi_summary.red}`,
       },
     },
+    ...buildSopGapSlackBlocks(data.sop_gap_summary),
     {
       type: "context",
       elements: [

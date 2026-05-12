@@ -130,19 +130,22 @@ console.log("Case: X-Admin-Key header matches ADMIN_API_KEY");
 }
 console.log();
 
-// ─── Case 2: cookie-only admin_key match ───
-console.log("Case: admin_key cookie matches ADMIN_API_KEY (no header)");
+// ─── Case 2: cookie-only admin_key match — REJECTED (Task #831) ───
+// Regression guard: the browser admin_key cookie path was removed. A request
+// that presents only the admin_key cookie (no X-Admin-Key header) must NOT
+// authenticate. Browser admin access requires OIDC login + admin role.
+console.log("Case: admin_key cookie alone is IGNORED (Task #831 regression guard)");
 {
   process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
   const c = makeContext({ cookies: { admin_key: TEST_ADMIN_KEY } });
-  assertEquals(getAdminKey(c), TEST_ADMIN_KEY, "getAdminKey returns the cookie value");
-  assertEquals(hasValidAdminApiKey(c), true, "hasValidAdminApiKey is true");
-  assertEquals(isAdminAuthorized(c), true, "isAdminAuthorized is true");
+  assertEquals(getAdminKey(c), null, "getAdminKey ignores admin_key cookie");
+  assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false (cookie path removed)");
+  assertEquals(isAdminAuthorized(c), false, "isAdminAuthorized is false (cookie path removed)");
 }
 console.log();
 
-// ─── Case 2b: cookie alongside other cookies ───
-console.log("Case: admin_key cookie surrounded by other cookies");
+// ─── Case 2b: cookie alongside other cookies — still ignored ───
+console.log("Case: admin_key cookie surrounded by other cookies is also ignored");
 {
   process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
   const c = makeContext({
@@ -152,12 +155,8 @@ console.log("Case: admin_key cookie surrounded by other cookies");
       baz: "qux",
     },
   });
-  assertEquals(
-    getAdminKey(c),
-    TEST_ADMIN_KEY,
-    "getAdminKey isolates admin_key from sibling cookies"
-  );
-  assertEquals(hasValidAdminApiKey(c), true, "hasValidAdminApiKey is true");
+  assertEquals(getAdminKey(c), null, "getAdminKey ignores admin_key even with siblings");
+  assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false");
 }
 console.log();
 
@@ -176,11 +175,11 @@ console.log("Case: header value present but does NOT match ADMIN_API_KEY");
 }
 console.log();
 
-console.log("Case: cookie value present but does NOT match ADMIN_API_KEY");
+console.log("Case: wrong-value admin_key cookie is still ignored (no leak path)");
 {
   process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
   const c = makeContext({ cookies: { admin_key: "also-wrong" } });
-  assertEquals(getAdminKey(c), "also-wrong", "getAdminKey returns the (wrong) cookie value");
+  assertEquals(getAdminKey(c), null, "getAdminKey ignores cookie regardless of value");
   assertEquals(hasValidAdminApiKey(c), false, "hasValidAdminApiKey is false");
 }
 console.log();
@@ -305,88 +304,29 @@ console.log("Case: tampered session cookie with admin role is rejected");
 }
 console.log();
 
-// ─── Case 8: admin key containing '=' characters in the cookie ───
-console.log("Case: admin_key cookie value contains embedded '=' (base64-padded / token-style key)");
+// ─── Case 8: admin_key cookie variants — all REJECTED (Task #831) ───
+// The browser admin_key cookie path is gone, so cookie value shape (embedded
+// '=', percent-encoding, malformed escapes) no longer matters: the cookie is
+// never read. These cases stay as regression guards against silently
+// re-introducing cookie acceptance.
+console.log("Case: admin_key cookie variants are uniformly ignored");
 {
-  const KEY_WITH_EQUALS = "abc=def=ghi";
-  process.env.ADMIN_API_KEY = KEY_WITH_EQUALS;
-  const c = makeContext({ cookies: { admin_key: KEY_WITH_EQUALS } });
-  assertEquals(
-    getAdminKey(c),
-    KEY_WITH_EQUALS,
-    "getAdminKey returns the full value including embedded '=' characters"
-  );
-  assertEquals(
-    hasValidAdminApiKey(c),
-    true,
-    "hasValidAdminApiKey is true for a key with embedded '=' read from cookie"
-  );
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-}
-console.log();
-
-// ─── Case 8b: admin key containing '=' characters alongside other cookies ───
-console.log("Case: admin_key with '=' surrounded by sibling cookies");
-{
-  const KEY_WITH_EQUALS = "tok==padded==";
-  process.env.ADMIN_API_KEY = KEY_WITH_EQUALS;
-  const c = makeContext({
-    cookies: {
-      session: "somesessionvalue",
-      admin_key: KEY_WITH_EQUALS,
-      other: "value",
-    },
-  });
-  assertEquals(
-    getAdminKey(c),
-    KEY_WITH_EQUALS,
-    "getAdminKey isolates admin_key and preserves all '=' in the value"
-  );
-  assertEquals(
-    hasValidAdminApiKey(c),
-    true,
-    "hasValidAdminApiKey is true despite multiple '=' in the cookie value"
-  );
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-}
-console.log();
-
-// ─── Case 8c: percent-encoded admin_key cookie from strict HTTP clients ───
-console.log("Case: admin_key cookie value is percent-encoded (strict HTTP client)");
-{
-  const KEY_WITH_EQUALS = "abc=def";
-  process.env.ADMIN_API_KEY = KEY_WITH_EQUALS;
-  // Some clients/browsers percent-encode reserved chars in cookie values.
-  // 'abc%3Ddef' must round-trip to 'abc=def' so the key still matches.
-  const c = makeContext({ cookies: { admin_key: "abc%3Ddef" } });
-  assertEquals(
-    getAdminKey(c),
-    KEY_WITH_EQUALS,
-    "getAdminKey decodes percent-encoded cookie values"
-  );
-  assertEquals(
-    hasValidAdminApiKey(c),
-    true,
-    "hasValidAdminApiKey is true for a percent-encoded cookie that matches the stored key"
-  );
-  process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
-}
-console.log();
-
-// ─── Case 8d: malformed percent sequence falls back to raw value ───
-console.log("Case: admin_key cookie with malformed percent escape falls back to raw value");
-{
-  // '%E0%A4%A' is an incomplete UTF-8 sequence and will throw inside
-  // decodeURIComponent. The helper should swallow the error and return
-  // the raw cookie text rather than crashing the auth check.
-  const RAW = "broken-%E0%A4%A";
-  process.env.ADMIN_API_KEY = RAW;
-  const c = makeContext({ cookies: { admin_key: RAW } });
-  assertEquals(
-    getAdminKey(c),
-    RAW,
-    "getAdminKey returns the raw value when decoding throws"
-  );
+  const cases: Array<[string, string]> = [
+    ["abc=def=ghi", "embedded '=' characters"],
+    ["tok==padded==", "multiple '=' characters"],
+    ["abc%3Ddef", "percent-encoded '='"],
+    ["broken-%E0%A4%A", "malformed percent escape"],
+  ];
+  for (const [value, label] of cases) {
+    process.env.ADMIN_API_KEY = value;
+    const c = makeContext({ cookies: { admin_key: value } });
+    assertEquals(getAdminKey(c), null, `getAdminKey ignores cookie (${label})`);
+    assertEquals(
+      hasValidAdminApiKey(c),
+      false,
+      `hasValidAdminApiKey is false (${label})`,
+    );
+  }
   process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 }
 console.log();
@@ -402,7 +342,7 @@ console.log("Case: header wins over cookie when both supply an admin key");
   assertEquals(
     getAdminKey(c),
     TEST_ADMIN_KEY,
-    "getAdminKey prefers the X-Admin-Key header"
+    "getAdminKey returns the X-Admin-Key header (cookie is ignored)"
   );
   assertEquals(hasValidAdminApiKey(c), true, "hasValidAdminApiKey is true");
 }

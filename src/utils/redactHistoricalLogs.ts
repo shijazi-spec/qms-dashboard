@@ -41,6 +41,7 @@ import {
   redactSensitiveFields,
   redactSecretLikeStrings,
   deepRedactSecretLikeStrings,
+  redactSensitiveDeep,
   detectCredentialLikeFields,
   isSensitiveField,
   REDACTED_SENTINEL,
@@ -203,6 +204,44 @@ export async function waitForTablesReady(
 }
 
 /**
+ * Common options accepted by every per-table sweep helper in this module.
+ *
+ *   - `dryRun` — Task #744. When `true`, the sweep performs the same
+ *     scan + per-row diffing it would do during a real run, increments
+ *     the same per-column change counters, but skips every UPDATE
+ *     statement. Used by operators (and CI) to preview what a
+ *     historical-redaction sweep would touch without committing any
+ *     changes — particularly important now that the sweep also
+ *     re-parses stringified-JSON column values, where a regression in
+ *     `redactSensitiveDeep` could rewrite far more rows than expected.
+ */
+export interface SweepOptions {
+  dryRun?: boolean;
+}
+
+/**
+ * Per-column change counters for the event_logs sweep (Task #744).
+ *
+ *   - `scanned` — total rows visited (regardless of whether they changed).
+ *   - `descriptionChanged` / `entityNameChanged` — TEXT columns rewritten
+ *     by the regex / JSON-of-JSON pass.
+ *   - `oldValueChanged` / `newValueChanged` — JSONB columns rewritten by
+ *     the deep redactor.
+ *   - `rowsUpdated` — distinct rows whose UPDATE actually fired (or
+ *     would have, in `dryRun` mode). A single row can change multiple
+ *     columns in one UPDATE, so the per-column counters can sum to more
+ *     than `rowsUpdated`.
+ */
+export interface EventLogsSweepResult {
+  scanned: number;
+  descriptionChanged: number;
+  entityNameChanged: number;
+  oldValueChanged: number;
+  newValueChanged: number;
+  rowsUpdated: number;
+}
+
+/**
  * Result counters for the ai_pending_actions sweep. Reported in the
  * console output and the audit-log entry emitted by main().
  */
@@ -296,8 +335,15 @@ function addBreadcrumb(obj: any): any {
 export async function redactEventLogs(
   client: any,
   batchSize: number = DEFAULT_SWEEP_BATCH_SIZE,
-): Promise<number> {
-  let updated = 0;
+  options: SweepOptions = {},
+): Promise<EventLogsSweepResult> {
+  const dryRun = options.dryRun === true;
+  let scanned = 0;
+  let descriptionChanged = 0;
+  let entityNameChanged = 0;
+  let oldValueChanged = 0;
+  let newValueChanged = 0;
+  let rowsUpdated = 0;
   let cursor = 0;
 
   while (true) {
@@ -313,62 +359,79 @@ export async function redactEventLogs(
     if (!page.rows || page.rows.length === 0) break;
 
     for (const row of page.rows) {
+      scanned++;
       let description: string | null = row.description ?? null;
       let entityName: string | null = row.entity_name ?? null;
       let oldVal = row.old_value;
       let newVal = row.new_value;
       let changed = false;
 
+      // Task #744: switch from `redactSecretLikeStrings` (regex-only) to
+      // `redactSensitiveDeep`, which additionally re-parses any string
+      // value that is itself valid JSON and walks the parsed object
+      // through both the key-based deny list and the regex pass before
+      // re-stringifying. This catches secrets buried in stringified-JSON
+      // descriptions (e.g. `'{"mfa_secret":"…"}'` written via legacy
+      // `description = JSON.stringify(payload)` patterns) that the
+      // regex-only pass would miss.
       if (typeof description === "string" && description.length > 0) {
-        const redacted = redactSecretLikeStrings(description) as string;
+        const redacted = redactSensitiveDeep(description) as string;
         if (redacted !== description) {
           description = redacted;
+          descriptionChanged++;
           changed = true;
         }
       }
 
       if (typeof entityName === "string" && entityName.length > 0) {
-        const redacted = redactSecretLikeStrings(entityName) as string;
+        const redacted = redactSensitiveDeep(entityName) as string;
         if (redacted !== entityName) {
           entityName = redacted;
+          entityNameChanged++;
           changed = true;
         }
       }
 
+      // For JSONB columns, `redactSensitiveDeep` subsumes the previous
+      // `redactSensitiveFields` + `deepRedactSecretLikeStrings` two-step
+      // and additionally handles JSON-of-JSON string leaves (Task #744 /
+      // Task #684 parity with the live write path).
       if (oldVal !== null && oldVal !== undefined) {
-        const keyScrubbed = redactSensitiveFields(oldVal);
-        const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
-        if (JSON.stringify(fullScrubbed) !== JSON.stringify(oldVal)) {
-          oldVal = addBreadcrumb(fullScrubbed);
+        const scrubbed = redactSensitiveDeep(oldVal);
+        if (JSON.stringify(scrubbed) !== JSON.stringify(oldVal)) {
+          oldVal = addBreadcrumb(scrubbed);
+          oldValueChanged++;
           changed = true;
         }
       }
 
       if (newVal !== null && newVal !== undefined) {
-        const keyScrubbed = redactSensitiveFields(newVal);
-        const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
-        if (JSON.stringify(fullScrubbed) !== JSON.stringify(newVal)) {
-          newVal = addBreadcrumb(fullScrubbed);
+        const scrubbed = redactSensitiveDeep(newVal);
+        if (JSON.stringify(scrubbed) !== JSON.stringify(newVal)) {
+          newVal = addBreadcrumb(scrubbed);
+          newValueChanged++;
           changed = true;
         }
       }
 
       if (changed) {
-        await client.query(
-          `UPDATE event_logs SET description = $1, entity_name = $2, old_value = $3, new_value = $4 WHERE id = $5`,
-          [
-            description,
-            entityName,
-            oldVal !== null && oldVal !== undefined
-              ? JSON.stringify(oldVal)
-              : null,
-            newVal !== null && newVal !== undefined
-              ? JSON.stringify(newVal)
-              : null,
-            row.id,
-          ],
-        );
-        updated++;
+        rowsUpdated++;
+        if (!dryRun) {
+          await client.query(
+            `UPDATE event_logs SET description = $1, entity_name = $2, old_value = $3, new_value = $4 WHERE id = $5`,
+            [
+              description,
+              entityName,
+              oldVal !== null && oldVal !== undefined
+                ? JSON.stringify(oldVal)
+                : null,
+              newVal !== null && newVal !== undefined
+                ? JSON.stringify(newVal)
+                : null,
+              row.id,
+            ],
+          );
+        }
       }
     }
 
@@ -379,7 +442,14 @@ export async function redactEventLogs(
     if (page.rows.length < batchSize) break;
   }
 
-  return updated;
+  return {
+    scanned,
+    descriptionChanged,
+    entityNameChanged,
+    oldValueChanged,
+    newValueChanged,
+    rowsUpdated,
+  };
 }
 
 /**
@@ -394,6 +464,16 @@ export async function redactEventLogs(
 export interface ChangeHistorySweepResult {
   rowsUpdated: number;
   changeReasonUpdated: number;
+  /**
+   * Task #744 additions: per-column change counters so the dry-run /
+   * preview pass can report exactly which columns the sweep would touch.
+   * `scanned` is the total rows visited; the per-column counts are
+   * subsets that each can sum to more than `rowsUpdated` because a
+   * single row can change multiple columns in one UPDATE.
+   */
+  scanned: number;
+  oldValueChanged: number;
+  newValueChanged: number;
 }
 
 /**
@@ -445,9 +525,14 @@ export async function redactChangeHistoryTable(
   client: any,
   tableName: string,
   batchSize: number = DEFAULT_SWEEP_BATCH_SIZE,
+  options: SweepOptions = {},
 ): Promise<ChangeHistorySweepResult> {
+  const dryRun = options.dryRun === true;
+  let scanned = 0;
   let rowsUpdated = 0;
   let changeReasonUpdated = 0;
+  let oldValueChanged = 0;
+  let newValueChanged = 0;
   let cursor = 0;
 
   while (true) {
@@ -463,10 +548,12 @@ export async function redactChangeHistoryTable(
     if (!page.rows || page.rows.length === 0) break;
 
     for (const row of page.rows) {
+      scanned++;
       let oldVal: string | null = row.old_value;
       let newVal: string | null = row.new_value;
       let reason: string | null = row.change_reason ?? null;
-      let valuesChanged = false;
+      let oldChanged = false;
+      let newChanged = false;
       let reasonChanged = false;
 
       if (isSensitiveField(row.field_changed)) {
@@ -479,7 +566,7 @@ export async function redactChangeHistoryTable(
           oldVal !== REDACTED_SENTINEL
         ) {
           oldVal = REDACTED_SENTINEL;
-          valuesChanged = true;
+          oldChanged = true;
         }
         if (
           newVal !== null &&
@@ -487,28 +574,30 @@ export async function redactChangeHistoryTable(
           newVal !== REDACTED_SENTINEL
         ) {
           newVal = REDACTED_SENTINEL;
-          valuesChanged = true;
+          newChanged = true;
         }
       } else {
-        // Layer 2 — regex scrubber on free-form values stored under a
-        // non-sensitive field name (description, notes, …). The value
-        // columns may contain a pasted credential from before Task #99
-        // hardened the write path. Scrub each column independently and
-        // only mark dirty when the scrubbed text differs byte-for-byte.
-        // Non-string / null inputs short-circuit to identity inside
-        // redactSecretLikeStrings.
+        // Layer 2 — Task #744: switch from `redactSecretLikeStrings`
+        // (regex-only) to `redactSensitiveDeep`. The deep helper still
+        // runs the same regex pass on plain prose, but additionally
+        // re-parses string values that are themselves valid JSON and
+        // walks the parsed object through the key-based deny list +
+        // regex pass before re-stringifying. That covers legacy rows
+        // whose `new_value` was written as `JSON.stringify(payload)`
+        // and embeds a sensitive field name (e.g. `mfa_secret`) whose
+        // value is shape-less (e.g. a UUID).
         if (typeof oldVal === "string" && oldVal.length > 0) {
-          const scrubbed = redactSecretLikeStrings(oldVal) as string;
+          const scrubbed = redactSensitiveDeep(oldVal) as string;
           if (scrubbed !== oldVal) {
             oldVal = scrubbed;
-            valuesChanged = true;
+            oldChanged = true;
           }
         }
         if (typeof newVal === "string" && newVal.length > 0) {
-          const scrubbed = redactSecretLikeStrings(newVal) as string;
+          const scrubbed = redactSensitiveDeep(newVal) as string;
           if (scrubbed !== newVal) {
             newVal = scrubbed;
-            valuesChanged = true;
+            newChanged = true;
           }
         }
       }
@@ -517,19 +606,23 @@ export async function redactChangeHistoryTable(
       // regardless of field_changed, so it always gets the regex pass
       // (matches the write-time path in logNCChange / logCAPAChange).
       if (typeof reason === "string" && reason.length > 0) {
-        const scrubbed = redactSecretLikeStrings(reason) as string;
+        const scrubbed = redactSensitiveDeep(reason) as string;
         if (scrubbed !== reason) {
           reason = scrubbed;
           reasonChanged = true;
         }
       }
 
-      if (valuesChanged || reasonChanged) {
-        await client.query(
-          `UPDATE ${tableName} SET old_value = $1, new_value = $2, change_reason = $3 WHERE id = $4`,
-          [oldVal, newVal, reason, row.id],
-        );
+      if (oldChanged || newChanged || reasonChanged) {
+        if (!dryRun) {
+          await client.query(
+            `UPDATE ${tableName} SET old_value = $1, new_value = $2, change_reason = $3 WHERE id = $4`,
+            [oldVal, newVal, reason, row.id],
+          );
+        }
         rowsUpdated++;
+        if (oldChanged) oldValueChanged++;
+        if (newChanged) newValueChanged++;
         if (reasonChanged) changeReasonUpdated++;
       }
     }
@@ -538,7 +631,13 @@ export async function redactChangeHistoryTable(
     if (page.rows.length < batchSize) break;
   }
 
-  return { rowsUpdated, changeReasonUpdated };
+  return {
+    rowsUpdated,
+    changeReasonUpdated,
+    scanned,
+    oldValueChanged,
+    newValueChanged,
+  };
 }
 
 /**
@@ -561,7 +660,9 @@ export async function redactChangeHistoryTable(
 export async function redactAiPendingActions(
   client: any,
   batchSize: number = DEFAULT_SWEEP_BATCH_SIZE,
+  options: SweepOptions = {},
 ): Promise<AiPendingActionsSweepResult> {
+  const dryRun = options.dryRun === true;
   let scanned = 0;
   let payloadChanged = 0;
   let previewChanged = 0;
@@ -592,17 +693,24 @@ export async function redactAiPendingActions(
       let previewDirty = false;
       let execDirty = false;
 
+      // Task #744: switch payload + execution_result from the
+      // `redactSensitiveFields` + `deepRedactSecretLikeStrings`
+      // two-step to `redactSensitiveDeep`, which additionally re-parses
+      // string leaves that are themselves valid JSON. payload_preview
+      // is also routed through `redactSensitiveDeep` so a preview
+      // string that happens to be a JSON-stringified payload (some
+      // older `policy.buildPreview()` callbacks did this) gets the
+      // same key-name + regex coverage.
       if (payload !== null && payload !== undefined) {
-        const keyScrubbed = redactSensitiveFields(payload);
-        const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
-        if (JSON.stringify(fullScrubbed) !== JSON.stringify(payload)) {
-          payload = fullScrubbed;
+        const scrubbed = redactSensitiveDeep(payload);
+        if (JSON.stringify(scrubbed) !== JSON.stringify(payload)) {
+          payload = scrubbed;
           payloadDirty = true;
         }
       }
 
       if (typeof preview === "string" && preview.length > 0) {
-        const redactedPreview = redactSecretLikeStrings(preview) as string;
+        const redactedPreview = redactSensitiveDeep(preview) as string;
         if (redactedPreview !== preview) {
           preview = redactedPreview;
           previewDirty = true;
@@ -610,10 +718,9 @@ export async function redactAiPendingActions(
       }
 
       if (execResult !== null && execResult !== undefined) {
-        const keyScrubbed = redactSensitiveFields(execResult);
-        const fullScrubbed = deepRedactSecretLikeStrings(keyScrubbed);
-        if (JSON.stringify(fullScrubbed) !== JSON.stringify(execResult)) {
-          execResult = fullScrubbed;
+        const scrubbed = redactSensitiveDeep(execResult);
+        if (JSON.stringify(scrubbed) !== JSON.stringify(execResult)) {
+          execResult = scrubbed;
           execDirty = true;
         }
       }
@@ -623,23 +730,25 @@ export async function redactAiPendingActions(
       if (execDirty) executionResultChanged++;
 
       if (payloadDirty || previewDirty || execDirty) {
-        await client.query(
-          `UPDATE ai_pending_actions
-              SET payload          = $1,
-                  payload_preview  = $2,
-                  execution_result = $3
-            WHERE id = $4`,
-          [
-            payload !== null && payload !== undefined
-              ? JSON.stringify(payload)
-              : null,
-            preview,
-            execResult !== null && execResult !== undefined
-              ? JSON.stringify(execResult)
-              : null,
-            row.id,
-          ],
-        );
+        if (!dryRun) {
+          await client.query(
+            `UPDATE ai_pending_actions
+                SET payload          = $1,
+                    payload_preview  = $2,
+                    execution_result = $3
+              WHERE id = $4`,
+            [
+              payload !== null && payload !== undefined
+                ? JSON.stringify(payload)
+                : null,
+              preview,
+              execResult !== null && execResult !== undefined
+                ? JSON.stringify(execResult)
+                : null,
+              row.id,
+            ],
+          );
+        }
         rowsUpdated++;
       }
     }
@@ -913,13 +1022,29 @@ export async function redactAiCallMetrics(
   };
 }
 
+/**
+ * Task #744: parse `--dry-run` (or `--dryRun`) from process.argv. The
+ * flag has no value — its presence anywhere in argv enables preview
+ * mode. Exposed as a helper so unit tests can assert the parser
+ * without spawning a subprocess.
+ */
+export function parseDryRunFromArgv(argv: ReadonlyArray<string>): boolean {
+  return argv.some((a) => a === "--dry-run" || a === "--dryRun");
+}
+
 async function main() {
+  const dryRun = parseDryRunFromArgv(process.argv.slice(2));
   const client = await pool.connect();
   try {
     safeLogger.info("[Redaction] Starting historical log redaction sweep...");
     safeLogger.info(`[Redaction] Sweep timestamp: ${REDACT_DATE}`);
+    if (dryRun) {
+      safeLogger.info(
+        "[Redaction] --dry-run flag detected: will preview changes without writing.",
+      );
+    }
 
-    const result = await runSweepWithClient(client, REDACT_DATE);
+    const result = await runSweepWithClient(client, REDACT_DATE, { dryRun });
 
     // Emit an immutable audit-log entry recording that the sweep ran. This
     // is the cross-table receipt auditors look for after the historical
@@ -1032,6 +1157,27 @@ export interface SweepResult {
     | { skipped: string };
   ai_call_metrics: AiCallMetricsSnapshot | { skipped: string };
   total_rows_updated: number;
+  /**
+   * Task #744: `true` when the sweep ran with `dryRun=true` — every
+   * counter in this snapshot reflects the rows that WOULD have been
+   * updated, but no UPDATE statements were issued. Defaults to `false`
+   * for normal commit-mode sweeps so existing audit-evidence consumers
+   * can treat a missing/false flag as "real run" without code changes.
+   */
+  dry_run?: boolean;
+  /**
+   * Task #744: snapshot of per-column change counters for `event_logs`.
+   * Populated for both real and dry-run sweeps so operators previewing a
+   * proposed run can see exactly which columns would be touched, and so
+   * audit-evidence after a real run preserves the same breakdown.
+   */
+  event_logs_columns?: {
+    scanned: number;
+    description_changed: number;
+    entity_name_changed: number;
+    old_value_changed: number;
+    new_value_changed: number;
+  };
 }
 
 /**
@@ -1045,9 +1191,27 @@ export interface SweepResult {
 export async function runSweepWithClient(
   client: any,
   sweepTimestamp: string,
+  options: SweepOptions = {},
 ): Promise<SweepResult> {
-  const elCount = await redactEventLogs(client);
-  safeLogger.info(`[Redaction] event_logs: ${elCount} rows updated`);
+  const dryRun = options.dryRun === true;
+  if (dryRun) {
+    safeLogger.info(
+      "[Redaction] DRY-RUN mode active — no UPDATE statements will be issued",
+    );
+  }
+  const elResult = await redactEventLogs(
+    client,
+    DEFAULT_SWEEP_BATCH_SIZE,
+    options,
+  );
+  const elCount = elResult.rowsUpdated;
+  safeLogger.info(
+    `[Redaction] event_logs: ${elCount} rows ${dryRun ? "would be updated" : "updated"} ` +
+      `(scanned=${elResult.scanned}, description=${elResult.descriptionChanged}, ` +
+      `entity_name=${elResult.entityNameChanged}, ` +
+      `old_value=${elResult.oldValueChanged}, ` +
+      `new_value=${elResult.newValueChanged})`,
+  );
 
   let ncCount = 0;
   let ncReasonCount = 0;
@@ -1067,12 +1231,15 @@ export async function runSweepWithClient(
     const ncResult = await redactChangeHistoryTable(
       client,
       "nc_change_history",
+      DEFAULT_SWEEP_BATCH_SIZE,
+      options,
     );
     ncCount = ncResult.rowsUpdated;
     ncReasonCount = ncResult.changeReasonUpdated;
     safeLogger.info(
-      `[Redaction] nc_change_history: ${ncCount} rows updated ` +
-        `(change_reason scrubs=${ncReasonCount})`,
+      `[Redaction] nc_change_history: ${ncCount} rows ${dryRun ? "would be updated" : "updated"} ` +
+        `(change_reason scrubs=${ncReasonCount}, ` +
+        `old_value=${ncResult.oldValueChanged}, new_value=${ncResult.newValueChanged})`,
     );
   } catch (e: any) {
     if (e.code === "42P01") {
@@ -1088,12 +1255,15 @@ export async function runSweepWithClient(
     const capaResult = await redactChangeHistoryTable(
       client,
       "capa_change_history",
+      DEFAULT_SWEEP_BATCH_SIZE,
+      options,
     );
     capaCount = capaResult.rowsUpdated;
     capaReasonCount = capaResult.changeReasonUpdated;
     safeLogger.info(
-      `[Redaction] capa_change_history: ${capaCount} rows updated ` +
-        `(change_reason scrubs=${capaReasonCount})`,
+      `[Redaction] capa_change_history: ${capaCount} rows ${dryRun ? "would be updated" : "updated"} ` +
+        `(change_reason scrubs=${capaReasonCount}, ` +
+        `old_value=${capaResult.oldValueChanged}, new_value=${capaResult.newValueChanged})`,
     );
   } catch (e: any) {
     if (e.code === "42P01") {
@@ -1106,10 +1276,14 @@ export async function runSweepWithClient(
   }
 
   try {
-    aiResult = await redactAiPendingActions(client);
+    aiResult = await redactAiPendingActions(
+      client,
+      DEFAULT_SWEEP_BATCH_SIZE,
+      options,
+    );
     aiCount = aiResult.rowsUpdated;
     safeLogger.info(
-      `[Redaction] ai_pending_actions: ${aiResult.rowsUpdated} rows updated ` +
+      `[Redaction] ai_pending_actions: ${aiResult.rowsUpdated} rows ${dryRun ? "would be updated" : "updated"} ` +
         `(scanned=${aiResult.scanned}, payload=${aiResult.payloadChanged}, ` +
         `payload_preview=${aiResult.previewChanged}, ` +
         `execution_result=${aiResult.executionResultChanged})`,
@@ -1229,6 +1403,14 @@ export async function runSweepWithClient(
         }
       : { skipped: metricsSkipReason ?? "unknown" },
     total_rows_updated: total,
+    dry_run: dryRun,
+    event_logs_columns: {
+      scanned: elResult.scanned,
+      description_changed: elResult.descriptionChanged,
+      entity_name_changed: elResult.entityNameChanged,
+      old_value_changed: elResult.oldValueChanged,
+      new_value_changed: elResult.newValueChanged,
+    },
   };
 }
 

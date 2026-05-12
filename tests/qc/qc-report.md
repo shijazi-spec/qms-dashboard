@@ -1,15 +1,15 @@
 # WalaPlus Platform QC Report
 
-**Generated:** 2026-04-26T20:44:53.785Z  
+**Generated:** 2026-05-12T13:54:05.259Z  
 **Base URL:** http://localhost:5000  
 
 ## Summary
 
 | Status | Count |
 |--------|-------|
-| ✅ Pass | 52 |
+| ✅ Pass | 53 |
 | ❌ Fail | 0 |
-| **Total** | **52** |
+| **Total** | **53** |
 
 ---
 
@@ -69,3 +69,4 @@
 | KPI Tracking | KPI list | ✅ pass | 200 | — |
 | KPI Tracking | KPI summary | ✅ pass | 200 | — |
 | Admin Panel | Triggers list | ✅ pass | 200 | — |
+| Call Evaluation | MCP import-sources catalog | ✅ pass | 200 | — |

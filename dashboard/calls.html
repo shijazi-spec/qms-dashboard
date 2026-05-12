@@ -63,13 +63,13 @@
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=1"></script>
-        <script src="/js/navigation.js?v=4.7"></script>
+        <script src="/js/navigation.js?v=5.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             WalaPlusNav.init('calls');
@@ -78,7 +78,7 @@
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <h1 class="text-2xl font-bold text-gray-900 mb-4" data-testid="text-page-title" data-i18n="nav.items.calls">Call Evaluation</h1>
-        <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-xl overflow-x-auto">
+        <div class="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl overflow-x-auto">
             <button data-on-click="showTab" data-args="[&quot;overview&quot;]" id="tab-overview" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition tab-active whitespace-nowrap" data-i18n="calls.tab_overview">
                 Overview
             </button>
@@ -234,7 +234,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
                     <h3 class="text-lg font-semibold" data-i18n="calls.sec_records">Call Records</h3>
-                    <div class="flex items-center space-x-3">
+                    <div class="flex items-center gap-3">
                         <select id="sourceFilter" data-on-change="loadCalls" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Sources</option>
                             <option value="five9">Five9</option>
@@ -254,15 +254,15 @@
                     <table class="min-w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_call_id">Call ID</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_source">Source</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Agent</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_contact">Contact</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_direction">Direction</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_duration">Duration</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_date">Date</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_call_id">Call ID</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_source">Source</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Agent</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_contact">Contact</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_direction">Direction</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_duration">Duration</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_date">Date</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="callsTable" class="divide-y divide-gray-100"></tbody>
@@ -272,7 +272,7 @@
                     <div class="text-sm text-gray-500">
                         Showing <span id="showingFrom">0</span>-<span id="showingTo">0</span> of <span id="totalRecords">0</span> records
                     </div>
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center gap-2">
                         <button data-on-click="prevPage" id="prevBtn" class="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50" disabled>Previous</button>
                         <button data-on-click="nextPage" id="nextBtn" class="px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Next</button>
                     </div>
@@ -443,7 +443,7 @@
                         </div>
                         <div>
                             <h3 class="text-lg font-semibold text-white" data-i18n="calls.sec_bulk_upload">Bulk Call Recordings Upload</h3>
-                            <p class="text-sm text-white/80">Upload multiple audio/video files for transcription & analysis (up to 10 files)</p>
+                            <p class="text-sm text-white/80">Upload multiple recordings — agent email & client phone are auto-detected from filenames like <code class="bg-white/20 px-1 rounded">+966500908386 by agent@walaplus.com @ 8_58_04 AM</code></p>
                         </div>
                     </div>
                 </div>
@@ -454,7 +454,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
                         </svg>
                         <p class="text-gray-600 font-medium mb-1">Drop audio/video files here or click to browse</p>
-                        <p class="text-sm text-gray-400">Supports MP3, WAV, M4A, MP4, WebM, OGG (max 25MB each, 10 files)</p>
+                        <p class="text-sm text-gray-400">Supports MP3, WAV, M4A, MP4, WebM, OGG (max 25MB each, 50 files)</p>
                     </div>
                     <div id="bulk-audio-list" class="hidden mt-4 space-y-2">
                         <div class="flex items-center justify-between mb-2">
@@ -465,14 +465,16 @@
                     </div>
                     <div class="mt-4 grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_default_agent">Default Agent Email *</label>
-                            <input type="email" id="bulk-agent-email" placeholder="agent@walaplus.com" 
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_default_agent">Fallback Agent Email</label>
+                            <input type="email" id="bulk-agent-email" placeholder="agent@walaplus.com"
                                    class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Used only for files where the agent email can't be detected from the filename.</p>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Default Agent Name</label>
-                            <input type="text" id="bulk-agent-name" placeholder="Agent Name" 
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Fallback Agent Name</label>
+                            <input type="text" id="bulk-agent-name" placeholder="Agent Name"
                                    class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Optional. Otherwise the local-part of the parsed email is used.</p>
                         </div>
                     </div>
                     <div class="mt-4 flex items-center gap-3">
@@ -668,15 +670,15 @@
                     <table class="min-w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_call_id">Call ID</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Agent</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lead/Deal ID</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Notes</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Call Logged</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Task Created</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Stage Updated</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Score</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_call_id">Call ID</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Agent</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Lead/Deal ID</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Notes</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Call Logged</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Task Created</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Stage Updated</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Score</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                             </tr>
                         </thead>
                         <tbody id="complianceTable" class="divide-y divide-gray-100"></tbody>
@@ -706,11 +708,11 @@
                     <table class="min-w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Agent</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Total Calls</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avg Sentiment</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avg QA Score</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Compliance Rate</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Agent</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Total Calls</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avg Sentiment</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avg QA Score</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Compliance Rate</th>
                             </tr>
                         </thead>
                         <tbody id="agentPerformanceTable" class="divide-y divide-gray-100"></tbody>
@@ -827,7 +829,33 @@
     </div>
 
     <script>
-        const _t = (k, v) => window.WalaPlusI18n ? WalaPlusI18n.t(k, v) : k;
+        function _momentLabel(key) {
+            switch (key) {
+                case 'greeting':           return WalaPlusI18n.t('dyn.calls.moment_greeting');
+                case 'consent':            return WalaPlusI18n.t('dyn.calls.moment_consent');
+                case 'discovery':          return WalaPlusI18n.t('dyn.calls.moment_discovery');
+                case 'objection_handling': return WalaPlusI18n.t('dyn.calls.moment_objection_handling');
+                case 'closing':            return WalaPlusI18n.t('dyn.calls.moment_closing');
+                case 'next_steps':         return WalaPlusI18n.t('dyn.calls.moment_next_steps');
+            }
+            return key;
+        }
+        function _dimLabel(key) {
+            switch (key) {
+                case 'governance': return WalaPlusI18n.t('dyn.calls.dim_governance');
+                case 'people':     return WalaPlusI18n.t('dyn.calls.dim_people');
+                case 'process':    return WalaPlusI18n.t('dyn.calls.dim_process');
+            }
+            return key;
+        }
+        function _sevLabel(sev) {
+            switch (sev) {
+                case 'critical': return WalaPlusI18n.t('dyn.calls.sev_critical');
+                case 'major':    return WalaPlusI18n.t('dyn.calls.sev_major');
+                case 'minor':    return WalaPlusI18n.t('dyn.calls.sev_minor');
+            }
+            return sev;
+        }
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
@@ -842,7 +870,55 @@
         let sentimentChart = null;
         let qaTrendChart = null;
 
+        function wireDropzone(zoneId, inputId, isMultiple) {
+            const zone = document.getElementById(zoneId);
+            const input = document.getElementById(inputId);
+            if (!zone || !input) return;
+            const activeCls = ['border-blue-400', 'bg-blue-50'];
+            const onOver = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+                zone.classList.add(...activeCls);
+            };
+            const onLeave = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.target === zone) zone.classList.remove(...activeCls);
+            };
+            const onDrop = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                zone.classList.remove(...activeCls);
+                const files = e.dataTransfer ? Array.from(e.dataTransfer.files) : [];
+                if (files.length === 0) return;
+                const dt = new DataTransfer();
+                const toAdd = isMultiple ? files : files.slice(0, 1);
+                toAdd.forEach(f => dt.items.add(f));
+                input.files = dt.files;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            zone.addEventListener('dragenter', onOver);
+            zone.addEventListener('dragover', onOver);
+            zone.addEventListener('dragleave', onLeave);
+            zone.addEventListener('drop', onDrop);
+        }
+
+        // Stop the browser from navigating when files are dropped outside the
+        // dropzones (default browser behavior opens the file as a new tab).
+        function preventWindowFileDropNav() {
+            ['dragover', 'drop'].forEach(ev => {
+                window.addEventListener(ev, (e) => {
+                    if (e.target && e.target.closest && e.target.closest('#upload-dropzone, #bulk-audio-dropzone')) return;
+                    e.preventDefault();
+                }, false);
+            });
+        }
+
         async function init() {
+            wireDropzone('upload-dropzone', 'call-file-input', false);
+            wireDropzone('bulk-audio-dropzone', 'bulk-audio-input', true);
+            preventWindowFileDropNav();
             await refreshData();
         }
 
@@ -866,7 +942,7 @@
                 complianceRecords = complianceData.records || [];
 
                 document.getElementById('loading').classList.add('hidden');
-                document.getElementById('lastUpdated').textContent = _t('dyn.crm.updated_at', { time: new Date().toLocaleTimeString() });
+                document.getElementById('lastUpdated').textContent = WalaPlusI18n.t('dyn.crm.updated_at', { time: new Date().toLocaleTimeString() });
 
                 if (analytics.totalCalls === 0) {
                     document.getElementById('noData').classList.remove('hidden');
@@ -931,7 +1007,7 @@
             callsBySourceChart = new Chart(sourceCtx, {
                 type: 'doughnut',
                 data: {
-                    labels: sourceData.map(s => s.source || _t('dyn.calls.unknown_contact')),
+                    labels: sourceData.map(s => s.source || WalaPlusI18n.t('dyn.calls.unknown_contact')),
                     datasets: [{
                         data: sourceData.map(s => parseInt(s.count)),
                         backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
@@ -948,9 +1024,9 @@
             callsByAgentChart = new Chart(agentCtx, {
                 type: 'bar',
                 data: {
-                    labels: agentData.slice(0, 10).map(a => a.agent_email?.split('@')[0] || _t('dyn.calls.unknown')),
+                    labels: agentData.slice(0, 10).map(a => a.agent_email?.split('@')[0] || WalaPlusI18n.t('dyn.calls.unknown')),
                     datasets: [{
-                        label: _t('dyn.calls.calls_label'),
+                        label: WalaPlusI18n.t('dyn.calls.calls_label'),
                         data: agentData.slice(0, 10).map(a => parseInt(a.count)),
                         backgroundColor: '#6366f1'
                     }]
@@ -984,7 +1060,7 @@
             document.getElementById('nextBtn').disabled = end >= filtered.length;
 
             if (pageData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">${escapeHtml(_t('dyn.calls.no_calls'))}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_calls'))}</td></tr>`;
                 return;
             }
 
@@ -1007,9 +1083,12 @@
                         </span>
                     </td>
                     <td class="px-4 py-3 text-center">
-                        <button data-on-click="analyzeCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" ${call.status === 'analyzed' ? 'disabled' : ''}>
-                            ${escapeHtml(call.status === 'analyzed' ? _t('dyn.calls.view_btn') : _t('dyn.calls.analyze_btn'))}
-                        </button>
+                        <div class="inline-flex items-center gap-3">
+                            ${call.status === 'analyzed'
+                                ? `<button data-on-click="viewCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-view-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.view_btn'))}</button>`
+                                : `<button data-on-click="analyzeCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-analyze-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.analyze_btn'))}</button>`}
+                            <button data-on-click="deleteCall" data-args="[${call.id},&quot;${escapeHtml(call.call_id)}&quot;]" class="text-red-600 hover:text-red-800 text-sm font-medium" data-testid="button-delete-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.delete_btn'))}</button>
+                        </div>
                     </td>
                 </tr>
             `).join('');
@@ -1019,7 +1098,7 @@
             const tbody = document.getElementById('complianceTable');
 
             if (complianceRecords.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">${escapeHtml(_t('dyn.calls.no_compliance'))}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_compliance'))}</td></tr>`;
                 return;
             }
 
@@ -1035,7 +1114,7 @@
                     <td class="px-4 py-3 text-center text-sm font-medium">${_fn(rec.compliance_score || 0)}%</td>
                     <td class="px-4 py-3 text-center">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${rec.overall_compliance ? 'compliance-pass' : 'compliance-fail'}">
-                            ${escapeHtml(rec.overall_compliance ? _t('dyn.calls.compliant') : _t('dyn.calls.non_compliant'))}
+                            ${escapeHtml(rec.overall_compliance ? WalaPlusI18n.t('dyn.calls.compliant') : WalaPlusI18n.t('dyn.calls.non_compliant'))}
                         </span>
                     </td>
                 </tr>
@@ -1050,7 +1129,7 @@
             sentimentChart = new Chart(sentimentCtx, {
                 type: 'pie',
                 data: {
-                    labels: [_t('dyn.calls.sentiment_positive'), _t('dyn.calls.sentiment_neutral'), _t('dyn.calls.sentiment_negative')],
+                    labels: [WalaPlusI18n.t('dyn.calls.sentiment_positive'), WalaPlusI18n.t('dyn.calls.sentiment_neutral'), WalaPlusI18n.t('dyn.calls.sentiment_negative')],
                     datasets: [{
                         data: [60, 30, 10],
                         backgroundColor: ['#10b981', '#6366f1', '#ef4444']
@@ -1067,9 +1146,9 @@
             qaTrendChart = new Chart(qaTrendCtx, {
                 type: 'line',
                 data: {
-                    labels: [_t('dyn.calls.week_n', { n: _fn(1) }), _t('dyn.calls.week_n', { n: _fn(2) }), _t('dyn.calls.week_n', { n: _fn(3) }), _t('dyn.calls.week_n', { n: _fn(4) })],
+                    labels: [WalaPlusI18n.t('dyn.calls.week_n', { n: _fn(1) }), WalaPlusI18n.t('dyn.calls.week_n', { n: _fn(2) }), WalaPlusI18n.t('dyn.calls.week_n', { n: _fn(3) }), WalaPlusI18n.t('dyn.calls.week_n', { n: _fn(4) })],
                     datasets: [{
-                        label: _t('dyn.calls.avg_qa_score'),
+                        label: WalaPlusI18n.t('dyn.calls.avg_qa_score'),
                         data: [75, 78, 82, 85],
                         borderColor: '#6366f1',
                         backgroundColor: 'rgba(99, 102, 241, 0.1)',
@@ -1089,13 +1168,13 @@
             const agentData = analytics.callsByAgent || [];
             agentTable.innerHTML = agentData.slice(0, 10).map(agent => `
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(agent.agent_email || _t('dyn.calls.unknown'))}</td>
+                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(agent.agent_email || WalaPlusI18n.t('dyn.calls.unknown'))}</td>
                     <td class="px-4 py-3 text-center text-sm text-gray-600">${_fn(agent.count)}</td>
                     <td class="px-4 py-3 text-center text-sm text-gray-600">--</td>
                     <td class="px-4 py-3 text-center text-sm text-gray-600">--</td>
                     <td class="px-4 py-3 text-center text-sm text-gray-600">--</td>
                 </tr>
-            `).join('') || `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">${escapeHtml(_t('dyn.calls.no_agent_data'))}</td></tr>`;
+            `).join('') || `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_agent_data'))}</td></tr>`;
         }
 
         function renderCheckmark(value) {
@@ -1290,74 +1369,100 @@
                 const res = await fetch(`/api/calls/${callId}`);
                 const data = await res.json();
 
-                document.getElementById('callModalTitle').textContent = _t('dyn.calls.modal_title', { id: data.record?.call_id || callId });
-                document.getElementById('callModalSubtitle').textContent = `${data.record?.agent_email || _t('dyn.calls.unknown_agent')} - ${new Date(data.record?.call_date).toLocaleString()}`;
+                document.getElementById('callModalTitle').textContent = WalaPlusI18n.t('dyn.calls.modal_title', { id: data.record?.call_id || callId });
+                document.getElementById('callModalSubtitle').textContent = `${data.record?.agent_email || WalaPlusI18n.t('dyn.calls.unknown_agent')} - ${new Date(data.record?.call_date).toLocaleString()}`;
 
                 document.getElementById('callModalContent').innerHTML = `
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(_t('dyn.calls.call_info'))}</h4>
+                            <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.call_info'))}</h4>
                             <dl class="space-y-2">
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(_t('dyn.calls.source_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.source || '--')}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(_t('dyn.calls.direction_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.direction || '--')}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(_t('dyn.calls.duration_label'))}</dt><dd class="font-medium">${formatDuration(data.record?.duration_seconds)}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(_t('dyn.calls.lead_id_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.lead_id || '--')}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(_t('dyn.calls.status_label'))}</dt><dd><span class="px-2 py-1 rounded-full text-xs font-medium status-${escapeHtml(data.record?.status)}">${escapeHtml(data.record?.status)}</span></dd></div>
+                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.source_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.source || '--')}</dd></div>
+                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.direction_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.direction || '--')}</dd></div>
+                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.duration_label'))}</dt><dd class="font-medium">${formatDuration(data.record?.duration_seconds)}</dd></div>
+                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.lead_id_label'))}</dt><dd class="font-medium">${data.record?.lead_id ? `<a href="https://crm.zoho.com/crm/org766568398/tab/Leads/${escapeHtml(data.record.lead_id)}" target="_blank" rel="noopener" class="text-blue-600 hover:underline" data-testid="link-lead-${escapeHtml(data.record.lead_id)}">${escapeHtml(data.record.lead_id)}</a>` : `<span class="text-gray-400">--</span> <button type="button" data-on-click="autoLinkLeadByCall" data-args="[${callId}]" class="ms-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700" data-testid="button-auto-link-lead-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.auto_link_lead'))}</button>`}</dd></div>
+                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.status_label'))}</dt><dd><span class="px-2 py-1 rounded-full text-xs font-medium status-${escapeHtml(data.record?.status)}">${escapeHtml(data.record?.status)}</span></dd></div>
                             </dl>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(_t('dyn.calls.analysis'))}</h4>
+                            <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.analysis'))}</h4>
                             ${data.analysis ? `
                                 <dl class="space-y-2">
-                                    <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(_t('dyn.calls.sentiment_label'))}</dt><dd class="font-medium">${escapeHtml(data.analysis.sentiment || '--')} (${_fn(((data.analysis.sentiment_score || 0) * 100).toFixed(0))}%)</dd></div>
-                                    <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(_t('dyn.calls.topics_label'))}</dt><dd class="font-medium">${(data.analysis.key_topics || []).map(t => escapeHtml(t)).join(', ') || '--'}</dd></div>
+                                    <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.sentiment_label'))}</dt><dd class="font-medium">${escapeHtml(data.analysis.sentiment || '--')} (${_fn(((data.analysis.sentiment_score || 0) * 100).toFixed(0))}%)</dd></div>
+                                    <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.topics_label'))}</dt><dd class="font-medium">${(data.analysis.key_topics || []).map(t => escapeHtml(t)).join(', ') || '--'}</dd></div>
                                 </dl>
                                 <div class="mt-4">
-                                    <h5 class="text-sm font-medium text-gray-700 mb-2">${escapeHtml(_t('dyn.calls.summary'))}</h5>
-                                    <p class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">${escapeHtml(data.analysis.call_summary || _t('dyn.calls.no_summary'))}</p>
+                                    <h5 class="text-sm font-medium text-gray-700 mb-2">${escapeHtml(WalaPlusI18n.t('dyn.calls.summary'))}</h5>
+                                    <p class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">${escapeHtml(data.analysis.call_summary || WalaPlusI18n.t('dyn.calls.no_summary'))}</p>
                                 </div>
-                            ` : `<p class="text-gray-500">${escapeHtml(_t('dyn.calls.not_analyzed_yet'))}</p>`}
+                            ` : `<p class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.not_analyzed_yet'))}</p>`}
                         </div>
                     </div>
                     ${data.compliance ? `
                         <div class="mt-6 pt-6 border-t">
-                            <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(_t('dyn.calls.crm_compliance'))}</h4>
+                            <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.crm_compliance'))}</h4>
                             <div class="grid grid-cols-5 gap-4">
                                 <div class="text-center p-3 bg-gray-50 rounded-lg">
                                     ${renderCheckmark(data.compliance.notes_updated)}
-                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(_t('dyn.calls.notes'))}</div>
+                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.notes'))}</div>
                                 </div>
                                 <div class="text-center p-3 bg-gray-50 rounded-lg">
                                     ${renderCheckmark(data.compliance.call_logged)}
-                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(_t('dyn.calls.call_logged'))}</div>
+                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.call_logged'))}</div>
                                 </div>
                                 <div class="text-center p-3 bg-gray-50 rounded-lg">
                                     ${renderCheckmark(data.compliance.task_created)}
-                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(_t('dyn.calls.task'))}</div>
+                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.task'))}</div>
                                 </div>
                                 <div class="text-center p-3 bg-gray-50 rounded-lg">
                                     ${renderCheckmark(data.compliance.stage_updated)}
-                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(_t('dyn.calls.stage'))}</div>
+                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.stage'))}</div>
                                 </div>
                                 <div class="text-center p-3 bg-gray-50 rounded-lg">
                                     <div class="text-lg font-bold ${data.compliance.overall_compliance ? 'text-green-600' : 'text-red-600'}">${_fn(data.compliance.compliance_score || 0)}%</div>
-                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(_t('dyn.calls.score'))}</div>
+                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.score'))}</div>
                                 </div>
                             </div>
                         </div>
                     ` : ''}
                     <div class="mt-6 pt-6 border-t">
+ slack-audit-notification-alignment
                         <h4 class="font-semibold text-gray-900 mb-2">${escapeHtml(_t('dyn.calls.mcp_reconcile_title'))}</h4>
                         <p class="text-xs text-gray-500 mb-3">${escapeHtml(_t('dyn.calls.mcp_reconcile_desc'))}</p>
                         <button type="button" data-on-click="loadCallMcpReconciliation" data-args="[${callId}]" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700">${escapeHtml(_t('dyn.calls.mcp_load_reconcile'))}</button>
                         <div id="mcp-reconcile-result" class="mt-4 hidden text-sm max-h-80 overflow-y-auto"></div>
+
+                        <h4 class="font-semibold text-gray-900 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_combined_title'))}</h4>
+                        <p class="text-xs text-gray-500 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_combined_desc'))}</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" data-on-click="loadCallSdrEvaluation" data-args="[${callId}]" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700" data-testid="button-load-sdr-eval-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_run'))}</button>
+                        </div>
+                        <div id="sdr-eval-combined-result" class="mt-4 hidden">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <div class="border border-violet-200 rounded-lg p-3 bg-violet-50/30">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-violet-600"></span>
+                                        <h5 class="text-sm font-semibold text-violet-900">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_process_title'))}</h5>
+                                    </div>
+                                    <div id="mcp-reconcile-result" class="text-sm max-h-96 overflow-y-auto"></div>
+                                </div>
+                                <div class="border border-emerald-200 rounded-lg p-3 bg-emerald-50/30">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-600"></span>
+                                        <h5 class="text-sm font-semibold text-emerald-900">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_quality_title'))}</h5>
+                                    </div>
+                                    <div id="copc-scorecard-result" class="text-sm max-h-96 overflow-y-auto"></div>
+                                </div>
+                            </div>
+                        </div>
+ main
                     </div>
                 `;
 
                 document.getElementById('callDetailModal').classList.remove('hidden');
             } catch (error) {
                 console.error('Error loading call details:', error);
-                alert(_t('dyn.calls.failed_load_call'));
+                alert(WalaPlusI18n.t('dyn.calls.failed_load_call'));
             }
         }
 
@@ -1365,19 +1470,294 @@
             document.getElementById('callDetailModal').classList.add('hidden');
         }
 
+        function mcpSeverityBadgeClass(sev) {
+            if (sev === 'critical') return 'bg-red-100 text-red-800';
+            if (sev === 'warning') return 'bg-amber-100 text-amber-800';
+            return 'bg-blue-100 text-blue-800';
+        }
+
+        function renderMcpIssuesList(issues) {
+            if (!issues || !issues.length) {
+                return `<p class="text-sm text-green-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_no_issues'))}</p>`;
+            }
+            return `<ul class="space-y-2">${issues.map((i) => `
+                <li class="p-3 rounded-lg border border-gray-100 bg-gray-50">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-mono text-gray-500">${escapeHtml(i.code || '')}</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full ${mcpSeverityBadgeClass(i.severity)}">${escapeHtml(i.severity || 'info')}</span>
+                    </div>
+                    <p class="text-sm text-gray-800">${escapeHtml(i.message || '')}</p>
+                    ${i.suggestion ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(i.suggestion)}</p>` : ''}
+                </li>`).join('')}</ul>`;
+        }
+
+        function renderMcpReportBlock(report, sdrScope) {
+            if (!report) return '<p class="text-sm text-gray-500">—</p>';
+            const g = report.governance || {};
+            let scopeHtml = '';
+            if (sdrScope && sdrScope.programmatic_checks) {
+                scopeHtml = `<div class="mb-3 p-3 bg-violet-50 rounded-lg text-xs text-violet-900">
+                    <div><strong>SDR ${escapeHtml(String(sdrScope.governance_version || ''))}</strong> · ${escapeHtml(sdrScope.five9_api_integration || '')}</div>
+                    <div class="mt-1">${escapeHtml(sdrScope.programmatic_checks.implementation || '')}</div>
+                </div>`;
+            }
+            return scopeHtml + `
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-xs">
+                    <div class="p-2 bg-gray-50 rounded">Transcript: <strong>${report.checks?.transcript_present ? 'Yes' : 'No'}</strong></div>
+                    <div class="p-2 bg-gray-50 rounded">QA: <strong>${report.checks?.qa_present ? 'Yes' : 'No'}</strong></div>
+                    <div class="p-2 bg-gray-50 rounded">Lead: <strong>${report.checks?.lead_linked ? 'Yes' : 'No'}</strong></div>
+                    <div class="p-2 bg-gray-50 rounded">QA %: <strong>${report.qa_score_percentage != null ? escapeHtml(String(report.qa_score_percentage)) : '—'}</strong></div>
+                </div>
+                ${g.ruleset_version ? `<p class="text-xs text-gray-600 mb-2">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_governance_rules'))}: <strong>${escapeHtml(g.ruleset_version)}</strong> · ${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_rules_evaluated'))}: ${escapeHtml(String(g.rules_evaluated || 0))} · ${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_governance_issues'))}: ${escapeHtml(String(g.governance_issue_count || 0))}</p>` : ''}
+                <h5 class="text-sm font-semibold text-gray-800 mb-2">Issues</h5>
+                ${renderMcpIssuesList(report.issues)}`;
+        }
+
+        async function refreshMcpImportCatalog() {
+            const ph = document.getElementById('mcp-catalog-placeholder');
+            const body = document.getElementById('mcp-catalog-body');
+            if (ph) ph.textContent = '…';
+            try {
+                const res = await fetch('/api/calls/mcp/import-sources');
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                if (ph) ph.classList.add('hidden');
+                if (body) {
+                    body.classList.remove('hidden');
+                    const scope = data.sdr_process_scope || {};
+                    const chans = data.channels || [];
+                    body.innerHTML = `
+                        <div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-800 space-y-2">
+                            <p><strong>CRM scope:</strong> ${escapeHtml(data.crm_phone_match_scope_description || data.crm_phone_match_scope || '')}</p>
+                            <p><strong>SDR docs:</strong> ${escapeHtml(scope.sdr_documentation_home || '')} · <strong>Five9 API:</strong> ${escapeHtml(scope.five9_api_integration || '')}</p>
+                        </div>
+                        ${chans.map((c) => `
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <div class="flex justify-between items-start gap-2">
+                                    <h4 class="font-semibold text-gray-900">${escapeHtml(c.label || c.id)}</h4>
+                                    <span class="text-xs px-2 py-1 rounded-full bg-gray-100">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_channel_status'))}: ${escapeHtml(c.status || '')}</span>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">${escapeHtml(c.description || '')}</p>
+                                <p class="text-xs font-medium text-gray-500 mt-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_channel_endpoints'))}</p>
+                                <ul class="text-xs text-indigo-700 mt-1 space-y-1">${(c.endpoints || []).map((e) => `<li><code>${escapeHtml(e.method)} ${escapeHtml(e.path)}</code>${e.notes ? ' — ' + escapeHtml(e.notes) : ''}</li>`).join('')}</ul>
+                            </div>
+                        `).join('')}
+                    `;
+                }
+            } catch (e) {
+                if (ph) {
+                    ph.classList.remove('hidden');
+                    ph.textContent = WalaPlusI18n.t('dyn.calls.mcp_catalog_failed', { msg: e instanceof Error ? e.message : String(e) });
+                }
+            }
+        }
+
+        async function runMcpPhoneMatch() {
+            const phone = (document.getElementById('mcp-phone-input') || {}).value?.trim();
+            const maxRaw = (document.getElementById('mcp-max-records') || {}).value;
+            const out = document.getElementById('mcp-phone-result');
+            if (!phone) {
+                alert(WalaPlusI18n.t('dyn.calls.mcp_phone_required'));
+                return;
+            }
+            if (out) {
+                out.classList.remove('hidden');
+                out.innerHTML = '<p class="text-gray-500">…</p>';
+            }
+            try {
+                const res = await fetch('/api/calls/mcp/leads/match-phone', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, max_records: maxRaw ? parseInt(maxRaw, 10) : undefined }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                const rows = data.matches || [];
+                if (out) {
+                    out.innerHTML = `
+                        <p class="text-xs text-gray-500 mb-2">Scanned: ${escapeHtml(String(data.scanned || 0))} · Normalized: <code>${escapeHtml(data.normalized_query || '')}</code></p>
+                        ${rows.length ? `<table class="w-full text-xs border-collapse"><thead><tr class="bg-gray-50"><th class="p-2 text-start">Lead ID</th><th class="p-2 text-start">Name</th><th class="p-2 text-start">Phone</th><th class="p-2 text-start">Email</th></tr></thead><tbody>
+                            ${rows.map((r) => `<tr class="border-t"><td class="p-2 font-mono">${escapeHtml(r.id)}</td><td class="p-2">${escapeHtml(r.full_name || '')}</td><td class="p-2">${escapeHtml(r.phone || '')}</td><td class="p-2">${escapeHtml(r.email || '')}</td></tr>`).join('')}
+                        </tbody></table>` : `<p class="text-amber-700">${escapeHtml(data.note || 'No matches')}</p>`}`;
+                }
+            } catch (e) {
+                alert(WalaPlusI18n.t('dyn.calls.mcp_match_failed', { msg: e instanceof Error ? e.message : String(e) }));
+                if (out) out.innerHTML = '';
+            }
+        }
+
+        async function runMcpReconciliationById() {
+            const raw = (document.getElementById('mcp-reconcile-record-id') || {}).value;
+            const id = parseInt(String(raw || ''), 10);
+            const out = document.getElementById('mcp-reconcile-full-result');
+            if (!Number.isFinite(id) || id <= 0) {
+                alert(WalaPlusI18n.t('dyn.calls.mcp_record_id_required'));
+                return;
+            }
+            if (out) {
+                out.classList.remove('hidden');
+                out.innerHTML = '<p class="text-gray-500">…</p>';
+            }
+            try {
+                const res = await fetch(`/api/calls/mcp/reconciliation/${id}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                if (out) {
+                    out.innerHTML = renderMcpReportBlock(data.report, data.sdr_process_scope);
+                }
+            } catch (e) {
+                alert(WalaPlusI18n.t('dyn.calls.mcp_reconcile_by_id_failed', { msg: e instanceof Error ? e.message : String(e) }));
+                if (out) out.innerHTML = '';
+            }
+        }
+
+        async function loadCallSdrEvaluation(callId) {
+            const wrapper = document.getElementById('sdr-eval-combined-result');
+            if (wrapper) wrapper.classList.remove('hidden');
+            // Run both in parallel — failures in one pane do not block the other.
+            await Promise.allSettled([
+                loadCallMcpReconciliation(callId),
+                loadCallCopcScorecard(callId),
+            ]);
+        }
+
+        async function loadCallMcpReconciliation(callId) {
+            const slot = document.getElementById('mcp-reconcile-result');
+            if (!slot) return;
+            slot.classList.remove('hidden');
+            slot.innerHTML = '<p class="text-sm text-gray-500">…</p>';
+            try {
+                const res = await fetch(`/api/calls/mcp/reconciliation/${callId}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                slot.innerHTML = renderMcpReportBlock(data.report, data.sdr_process_scope);
+            } catch (e) {
+                slot.innerHTML = `<p class="text-sm text-red-600">${escapeHtml(WalaPlusI18n.t('dyn.calls.mcp_reconcile_failed', { msg: e instanceof Error ? e.message : String(e) }))}</p>`;
+            }
+        }
+
+        function renderCopcScorecardBlock(scorecard) {
+            if (!scorecard) return `<p class="text-sm text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_no_data'))}</p>`;
+            if (scorecard.load_error) {
+                return `<p class="text-sm text-red-600">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_load_error', { msg: scorecard.load_error }))}</p>`;
+            }
+            const overall = scorecard.overall || {};
+            const totalPct = overall.weighted_total_pct;
+            const headerColor = totalPct == null ? 'bg-gray-100 text-gray-700' : (totalPct >= 75 ? 'bg-emerald-50 text-emerald-700' : totalPct >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700');
+            const totalLabel = totalPct == null ? '—' : `${totalPct}%`;
+            const sections = (scorecard.per_section || []).map(s => {
+                const pct = s.percentage == null ? '—' : `${s.percentage}%`;
+                return `<div class="flex items-center justify-between text-xs py-1 border-b border-gray-100" data-testid="section-score-${s.id}">
+                    <span class="font-medium text-gray-700">${escapeHtml(s.id)} · ${escapeHtml(s.title)} <span class="text-gray-400">(w ${s.weight_pct}%)</span></span>
+                    <span class="font-mono">${escapeHtml(pct)} <span class="text-gray-400">(${s.evaluable_count} scored)</span></span>
+                </div>`;
+            }).join('');
+            const sourced = (scorecard.per_checkpoint || []).filter(c => c.sourced).map(c => {
+                const scoreLabel = c.score == null ? '—' : `${c.score}/${c.max}`;
+                const badge = c.score == null ? 'bg-gray-100 text-gray-600' : (c.score === 2 ? 'bg-emerald-100 text-emerald-700' : c.score === 1 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700');
+                return `<div class="text-xs py-1 border-b border-gray-100" data-testid="cp-row-${c.id}">
+                    <div class="flex justify-between"><span class="font-medium">${escapeHtml(c.id)} · ${escapeHtml(c.name)}</span><span class="px-2 py-0.5 rounded ${badge} font-mono">${escapeHtml(scoreLabel)}</span></div>
+                    ${c.evidence ? `<div class="text-gray-500 mt-0.5">${escapeHtml(c.evidence)}</div>` : ''}
+                </div>`;
+            }).join('') || `<p class="text-xs text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_none_sourced'))}</p>`;
+            const notSourced = (scorecard.per_checkpoint || []).filter(c => !c.sourced).map(c =>
+                `<li class="text-xs text-gray-600" data-testid="cp-not-sourced-${c.id}"><span class="font-mono">${escapeHtml(c.id)}</span> · ${escapeHtml(c.name)} <span class="text-gray-400">— ${escapeHtml(c.data_source || WalaPlusI18n.t('dyn.calls.copc_not_yet_sourced'))}</span></li>`
+            ).join('');
+            return `
+                <div class="space-y-3">
+                    <div class="${headerColor} rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide opacity-80">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_weighted_total'))}</div>
+                            <div class="text-2xl font-bold" data-testid="copc-weighted-total">${escapeHtml(totalLabel)}</div>
+                        </div>
+                        <div class="text-right text-xs">
+                            <div>${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_coverage'))}: <span class="font-mono" data-testid="copc-coverage">${overall.coverage_pct ?? 0}%</span></div>
+                            <div>${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_sourced'))}: <span class="font-mono">${overall.sourced_count ?? 0}/${overall.total_checkpoints ?? 0}</span></div>
+                            <div class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_version'))}: <span class="font-mono">${escapeHtml(scorecard.scorecard_version || '?')}</span></div>
+                        </div>
+                    </div>
+                    <div>
+                        <h5 class="text-sm font-semibold mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_section_scores'))}</h5>
+                        ${sections || `<p class="text-xs text-gray-500">—</p>`}
+                    </div>
+                    <div>
+                        <h5 class="text-sm font-semibold mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_sourced_checkpoints'))}</h5>
+                        ${sourced}
+                    </div>
+                    <details class="text-xs">
+                        <summary class="cursor-pointer text-gray-700 font-medium" data-testid="copc-not-sourced-toggle">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_not_sourced_list'))} (${overall.not_yet_sourced_count ?? 0})</summary>
+                        <ul class="mt-2 space-y-1 ps-4 list-disc">${notSourced}</ul>
+                    </details>
+                </div>`;
+        }
+
+        async function loadCallCopcScorecard(callId) {
+            const slot = document.getElementById('copc-scorecard-result');
+            if (!slot) return;
+            slot.classList.remove('hidden');
+            slot.innerHTML = `<p class="text-sm text-gray-500">…</p>`;
+            try {
+                const res = await fetch(`/api/calls/mcp/scorecard/${callId}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                slot.innerHTML = renderCopcScorecardBlock(data.scorecard);
+            } catch (e) {
+                slot.innerHTML = `<p class="text-sm text-red-600">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_load_error', { msg: e instanceof Error ? e.message : String(e) }))}</p>`;
+            }
+        }
+
+        async function autoLinkLeadByCall(callId) {
+            try {
+                const res = await fetch(`/api/calls/${callId}/auto-link-lead`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(WalaPlusI18n.t('dyn.calls.auto_link_failed', { msg: data.error || res.statusText }));
+                    return;
+                }
+                if (data.linked) {
+                    alert(WalaPlusI18n.t('dyn.calls.auto_link_ok', { id: data.lead_id }));
+                    viewCall(callId);
+                } else {
+                    alert(WalaPlusI18n.t('dyn.calls.auto_link_none', { reason: data.reason || 'unknown' }));
+                }
+            } catch (e) {
+                alert(WalaPlusI18n.t('dyn.calls.auto_link_failed', { msg: e instanceof Error ? e.message : String(e) }));
+            }
+        }
+
+        async function deleteCall(callId, callIdLabel) {
+            const label = callIdLabel || `#${callId}`;
+            if (!window.confirm(WalaPlusI18n.t('dyn.calls.delete_confirm', { id: label }))) return;
+            try {
+                const res = await fetch(`/api/calls/${callId}`, { method: 'DELETE' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data?.success === false) {
+                    alert(WalaPlusI18n.t('dyn.calls.delete_failed', { msg: data?.error || res.statusText }));
+                    return;
+                }
+                refreshData();
+            } catch (e) {
+                alert(WalaPlusI18n.t('dyn.calls.delete_failed', { msg: e instanceof Error ? e.message : String(e) }));
+            }
+        }
+
         async function analyzeCall(callId) {
             try {
                 const res = await fetch(`/api/calls/${callId}/analyze`, { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
-                    alert(_t('dyn.calls.analyzed_ok'));
+                    alert(WalaPlusI18n.t('dyn.calls.analyzed_ok'));
                     refreshData();
                 } else {
-                    alert(_t('dyn.calls.analysis_failed', { msg: data.error || _t('dyn.common.unknown_error') }));
+                    alert(WalaPlusI18n.t('dyn.calls.analysis_failed', { msg: data.error || WalaPlusI18n.t('dyn.common.unknown_error') }));
                 }
             } catch (error) {
                 console.error('Error analyzing call:', error);
-                alert(_t('dyn.calls.failed_analyze'));
+                alert(WalaPlusI18n.t('dyn.calls.failed_analyze'));
             }
         }
 
@@ -1397,7 +1777,7 @@
 
         function exportCalls(format) {
             if (!callRecords || callRecords.length === 0) {
-                alert(_t('dyn.calls.no_export_records'));
+                alert(WalaPlusI18n.t('dyn.calls.no_export_records'));
                 return;
             }
             const headers = ['Call ID','Source','Agent Email','Contact Name','Direction','Duration (sec)','Call Date','Status','Lead ID','Deal ID'];
@@ -1412,7 +1792,7 @@
 
         function exportCompliance(format) {
             if (!complianceRecords || complianceRecords.length === 0) {
-                alert(_t('dyn.calls.no_export_compliance'));
+                alert(WalaPlusI18n.t('dyn.calls.no_export_compliance'));
                 return;
             }
             const headers = ['Call Record ID','Agent Email','Lead/Deal ID','Notes Updated','Call Logged','Task Created','Stage Updated','Score (%)','Overall Compliance'];
@@ -1426,25 +1806,14 @@
         }
 
         function showIngestModal() {
-            alert(_t('dyn.calls.sample_ingest_msg'));
+            alert(WalaPlusI18n.t('dyn.calls.sample_ingest_msg'));
         }
 
         let selectedUploadFile = null;
         let selectedEvalCall = null;
         let mcpCatalogBootstrapped = false;
         let callsForEval = [];
-        let adminAuthenticated = false;
-        
-        async function getAdminHeaders() {
-            if (!adminAuthenticated) {
-                const key = prompt(_t('dyn.calls.prompt_admin_key')) || '';
-                if (key) {
-                    try {
-                        const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
-                        if (res.ok) adminAuthenticated = true;
-                    } catch(e) {}
-                }
-            }
+        function getAdminHeaders() {
             return { 'Content-Type': 'application/json' };
         }
 
@@ -1452,7 +1821,7 @@
             const file = event.target.files[0];
             if (file) {
                 if (file.size > 100 * 1024 * 1024) {
-                    alert(_t('dyn.calls.file_too_large_100'));
+                    alert(WalaPlusI18n.t('dyn.calls.file_too_large_100'));
                     return;
                 }
                 selectedUploadFile = file;
@@ -1474,15 +1843,15 @@
 
         function handleBulkAudioSelect(event) {
             const files = Array.from(event.target.files);
-            if (files.length > 10) {
-                alert(_t('dyn.calls.max_files_10'));
+            if (files.length > 50) {
+                alert(WalaPlusI18n.t('dyn.calls.max_files_10'));
                 return;
             }
             
             const maxSize = 25 * 1024 * 1024; // 25MB
             const validFiles = files.filter(f => {
                 if (f.size > maxSize) {
-                    alert(_t('dyn.calls.file_too_large_25', { name: f.name }));
+                    alert(WalaPlusI18n.t('dyn.calls.file_too_large_25', { name: f.name }));
                     return false;
                 }
                 return true;
@@ -1492,34 +1861,63 @@
             updateBulkAudioList();
         }
 
+        // Parse "<phone> by <agent_email> @ <H_M_S> AM/PM[.ext]" filenames.
+        // Returns { phone, agentEmail } with empty strings when not found.
+        function parseCallFilename(name) {
+            const out = { phone: '', agentEmail: '' };
+            if (!name) return out;
+            const stem = String(name).replace(/\.[^./\\]+$/, '');
+            const phoneMatch = stem.match(/(\+?\d[\d\s\-]{5,}\d)/);
+            if (phoneMatch) {
+                out.phone = phoneMatch[1].replace(/[\s\-]/g, '');
+            }
+            const emailMatch = stem.match(/([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})/);
+            if (emailMatch) {
+                out.agentEmail = emailMatch[1].toLowerCase();
+            }
+            return out;
+        }
+
         function updateBulkAudioList() {
             const listDiv = document.getElementById('bulk-audio-list');
             const filesDiv = document.getElementById('bulk-audio-files');
-            
+
             if (bulkAudioFiles.length === 0) {
                 listDiv.classList.add('hidden');
                 document.getElementById('bulk-audio-upload-btn').disabled = true;
                 return;
             }
-            
+
             listDiv.classList.remove('hidden');
-            filesDiv.innerHTML = bulkAudioFiles.map((file, idx) => `
-                <div class="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
-                    <div class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
-                        </svg>
-                        <span class="text-sm font-medium text-blue-800">${escapeHtml(file.name)}</span>
-                        <span class="text-xs text-blue-600">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+            filesDiv.innerHTML = bulkAudioFiles.map((file, idx) => {
+                const parsed = parseCallFilename(file.name);
+                const agentChip = parsed.agentEmail
+                    ? `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">👤 ${escapeHtml(parsed.agentEmail)}</span>`
+                    : `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">⚠ no agent in filename — fallback used</span>`;
+                const phoneChip = parsed.phone
+                    ? `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">📞 ${escapeHtml(parsed.phone)}</span>`
+                    : '';
+                return `
+                <div class="p-2 bg-blue-50 rounded-lg">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <svg class="w-4 h-4 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                            </svg>
+                            <span class="text-sm font-medium text-blue-800 truncate">${escapeHtml(file.name)}</span>
+                            <span class="text-xs text-blue-600 flex-shrink-0">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                        </div>
+                        <button data-on-click="removeBulkAudioFile" data-args="[${idx}]" class="text-gray-400 hover:text-red-600 flex-shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
                     </div>
-                    <button data-on-click="removeBulkAudioFile" data-args="[${idx}]" class="text-gray-400 hover:text-red-600">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
+                    <div class="mt-1 flex flex-wrap gap-1">${agentChip}${phoneChip}</div>
                 </div>
-            `).join('');
-            
+                `;
+            }).join('');
+
             document.getElementById('bulk-audio-upload-btn').disabled = false;
         }
 
@@ -1537,22 +1935,24 @@
         }
 
         async function uploadBulkAudioCalls() {
-            const agentEmail = document.getElementById('bulk-agent-email').value;
-            if (!agentEmail) {
-                alert(_t('dyn.calls.agent_email_required'));
-                return;
-            }
             if (bulkAudioFiles.length === 0) {
-                alert(_t('dyn.calls.no_files_selected'));
+                alert(WalaPlusI18n.t('dyn.calls.no_files_selected'));
                 return;
             }
 
-            const agentName = document.getElementById('bulk-agent-name').value || '';
+            const fallbackEmail = (document.getElementById('bulk-agent-email').value || '').trim();
+            const fallbackName = (document.getElementById('bulk-agent-name').value || '').trim();
             const autoAnalyze = document.getElementById('bulk-auto-analyze').checked;
+
+            const unmatched = bulkAudioFiles.filter(f => !parseCallFilename(f.name).agentEmail);
+            if (unmatched.length > 0 && !fallbackEmail) {
+                alert(`${unmatched.length} file(s) have no agent email in the filename. Please provide a Fallback Agent Email or rename the files to include the agent's email (e.g. "+966500000000 by agent@walaplus.com @ 8_58_04 AM.mp3").`);
+                return;
+            }
 
             const btn = document.getElementById('bulk-audio-upload-btn');
             btn.disabled = true;
-            btn.innerHTML = '<span class="flex items-center justify-center gap-2"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>' + escapeHtml(_t('dyn.calls.uploading')) + '</span>';
+            btn.innerHTML = '<span class="flex items-center justify-center gap-2"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>' + escapeHtml(WalaPlusI18n.t('dyn.calls.uploading')) + '</span>';
 
             const progressDiv = document.getElementById('bulk-audio-progress');
             const progressBar = document.getElementById('bulk-progress-bar');
@@ -1564,14 +1964,39 @@
 
             for (let i = 0; i < bulkAudioFiles.length; i++) {
                 const file = bulkAudioFiles[i];
+                const parsed = parseCallFilename(file.name);
+                const fileAgentEmail = parsed.agentEmail || fallbackEmail;
+                const fileAgentName = parsed.agentEmail
+                    ? (fallbackName || parsed.agentEmail.split('@')[0])
+                    : (fallbackName || (fallbackEmail ? fallbackEmail.split('@')[0] : ''));
+                const fileLeadId = parsed.phone || '';
+                const fileContactName = parsed.phone || '';
+                // file.lastModified can be 0 (missing) or 315532800000 (FAT epoch
+                // 1980-01-01) when files were extracted from a ZIP / copied without
+                // preserving mtime. In those cases default to upload-time so we
+                // don't tag every record as "Jan 1, 1980".
+                const lastModMs = Number(file.lastModified) || 0;
+                const minTrustedMs = Date.UTC(2005, 0, 1);
+                const fileCallDate = lastModMs >= minTrustedMs
+                    ? new Date(lastModMs).toISOString()
+                    : new Date().toISOString();
+
                 progressText.textContent = `${_fn(i + 1)}/${_fn(bulkAudioFiles.length)} - ${file.name}`;
                 progressBar.style.width = `${((i + 1) / bulkAudioFiles.length) * 100}%`;
 
                 try {
+                    if (!fileAgentEmail) {
+                        errors.push({ file: file.name, error: 'No agent email in filename and no fallback provided' });
+                        continue;
+                    }
+
                     const formData = new FormData();
                     formData.append('file', file);
-                    formData.append('agent_email', agentEmail);
-                    formData.append('agent_name', agentName);
+                    formData.append('agent_email', fileAgentEmail);
+                    formData.append('agent_name', fileAgentName);
+                    if (fileLeadId) formData.append('lead_id', fileLeadId);
+                    if (fileContactName) formData.append('contact_name', fileContactName);
+                    if (fileCallDate) formData.append('call_date', fileCallDate);
                     formData.append('auto_analyze', autoAnalyze ? 'true' : 'false');
 
                     const res = await fetch('/api/calls/upload-audio', {
@@ -1581,7 +2006,7 @@
                     const data = await res.json();
 
                     if (data.success) {
-                        results.push({ file: file.name, call_id: data.call_record_id, status: data.analysis_status || 'uploaded' });
+                        results.push({ file: file.name, call_id: data.call_record_id, status: data.analysis_status || 'uploaded', agent: fileAgentEmail });
                     } else {
                         errors.push({ file: file.name, error: data.error });
                     }
@@ -1596,16 +2021,17 @@
             resultsDiv.classList.remove('hidden');
             resultsDiv.className = 'mt-4 p-4 rounded-lg ' + (errors.length > 0 ? 'bg-amber-50' : 'bg-green-50');
 
-            let html = `<p class="text-sm mb-2"><span class="font-medium text-green-700">${escapeHtml(_t('dyn.calls.n_successful', { n: _fn(results.length) }))}</span>`;
+            let html = `<p class="text-sm mb-2"><span class="font-medium text-green-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.n_successful', { n: _fn(results.length) }))}</span>`;
             if (errors.length > 0) {
-                html += ` | <span class="font-medium text-red-700">${escapeHtml(_t('dyn.calls.n_failed', { n: _fn(errors.length) }))}</span>`;
+                html += ` | <span class="font-medium text-red-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.n_failed', { n: _fn(errors.length) }))}</span>`;
             }
             html += `</p>`;
 
             if (results.length > 0) {
                 html += `<div class="text-xs text-green-700 space-y-1">`;
                 results.forEach(r => {
-                    html += `<p>${escapeHtml(r.file)} - ${escapeHtml(r.status)}</p>`;
+                    const agent = r.agent ? ` → ${escapeHtml(r.agent)}` : '';
+                    html += `<p>${escapeHtml(r.file)}${agent} — ${escapeHtml(r.status)}</p>`;
                 });
                 html += `</div>`;
             }
@@ -1631,17 +2057,17 @@
             const agentEmail = document.getElementById('upload-agent-email').value;
             
             if (!agentName || !agentEmail) {
-                alert(_t('dyn.calls.agent_required'));
+                alert(WalaPlusI18n.t('dyn.calls.agent_required'));
                 return;
             }
             if (!selectedUploadFile) {
-                alert(_t('dyn.calls.select_file'));
+                alert(WalaPlusI18n.t('dyn.calls.select_file'));
                 return;
             }
 
             const btn = document.getElementById('upload-submit-btn');
             btn.disabled = true;
-            btn.innerHTML = '<span class="flex items-center justify-center gap-2"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>' + escapeHtml(_t('dyn.calls.uploading')) + '</span>';
+            btn.innerHTML = '<span class="flex items-center justify-center gap-2"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>' + escapeHtml(WalaPlusI18n.t('dyn.calls.uploading')) + '</span>';
 
             try {
                 const formData = new FormData();
@@ -1661,7 +2087,7 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    alert(_t('dyn.calls.call_uploaded'));
+                    alert(WalaPlusI18n.t('dyn.calls.call_uploaded'));
                     clearUploadFile();
                     document.getElementById('upload-agent-name').value = '';
                     document.getElementById('upload-agent-email').value = '';
@@ -1670,11 +2096,11 @@
                     loadRecentUploads();
                     refreshData();
                 } else {
-                    alert(_t('dyn.calls.upload_failed', { msg: data.error || _t('dyn.common.unknown_error') }));
+                    alert(WalaPlusI18n.t('dyn.calls.upload_failed', { msg: data.error || WalaPlusI18n.t('dyn.common.unknown_error') }));
                 }
             } catch (error) {
                 console.error('Error uploading call:', error);
-                alert(_t('dyn.calls.failed_upload'));
+                alert(WalaPlusI18n.t('dyn.calls.failed_upload'));
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>Upload & Create Call Record</span>';
@@ -1698,14 +2124,14 @@
                                 </div>
                                 <div>
                                     <div class="text-sm font-medium">${escapeHtml(call.agent_name || call.agent_email)}</div>
-                                    <div class="text-xs text-gray-500">${escapeHtml(call.contact_name || _t('dyn.calls.unknown_contact'))} - ${escapeHtml(_fd(call.call_date))}</div>
+                                    <div class="text-xs text-gray-500">${escapeHtml(call.contact_name || WalaPlusI18n.t('dyn.calls.unknown_contact'))} - ${escapeHtml(_fd(call.call_date))}</div>
                                 </div>
                             </div>
                             <span class="px-2 py-1 text-xs rounded-full ${call.status === 'analyzed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${escapeHtml(call.status)}</span>
                         </div>
                     `).join('');
                 } else {
-                    container.innerHTML = `<p class="text-gray-500 text-sm">${escapeHtml(_t('dyn.calls.no_recent_uploads'))}</p>`;
+                    container.innerHTML = `<p class="text-gray-500 text-sm">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_recent_uploads'))}</p>`;
                 }
             } catch (error) {
                 console.error('Error loading recent uploads:', error);
@@ -1718,7 +2144,7 @@
             const password = document.getElementById('five9-password').value;
 
             if (!domain || !username || !password) {
-                alert(_t('dyn.calls.fill_five9_creds'));
+                alert(WalaPlusI18n.t('dyn.calls.fill_five9_creds'));
                 return;
             }
 
@@ -1731,15 +2157,15 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    alert(_t('dyn.calls.five9_test_ok'));
+                    alert(WalaPlusI18n.t('dyn.calls.five9_test_ok'));
                     document.getElementById('five9-connection-badge').className = 'px-2 py-1 text-xs rounded-full bg-green-100 text-green-700';
-                    document.getElementById('five9-connection-badge').textContent = _t('dyn.crm.connected');
+                    document.getElementById('five9-connection-badge').textContent = WalaPlusI18n.t('dyn.crm.connected');
                 } else {
-                    alert(_t('dyn.calls.five9_test_failed', { msg: data.error || _t('dyn.common.unknown_error') }));
+                    alert(WalaPlusI18n.t('dyn.calls.five9_test_failed', { msg: data.error || WalaPlusI18n.t('dyn.common.unknown_error') }));
                 }
             } catch (error) {
                 console.error('Error testing Five9 connection:', error);
-                alert(_t('dyn.calls.failed_test_conn'));
+                alert(WalaPlusI18n.t('dyn.calls.failed_test_conn'));
             }
         }
 
@@ -1749,7 +2175,7 @@
             const password = document.getElementById('five9-password').value;
 
             if (!domain || !username || !password) {
-                alert(_t('dyn.calls.fill_five9_creds'));
+                alert(WalaPlusI18n.t('dyn.calls.fill_five9_creds'));
                 return;
             }
 
@@ -1762,23 +2188,23 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    alert(_t('dyn.calls.five9_saved'));
+                    alert(WalaPlusI18n.t('dyn.calls.five9_saved'));
                     document.getElementById('five9-connection-badge').className = 'px-2 py-1 text-xs rounded-full bg-green-100 text-green-700';
-                    document.getElementById('five9-connection-badge').textContent = _t('dyn.calls.configured');
+                    document.getElementById('five9-connection-badge').textContent = WalaPlusI18n.t('dyn.calls.configured');
                     document.getElementById('five9-sync-btn').disabled = false;
                 } else {
-                    alert(_t('dyn.calls.five9_save_failed', { msg: data.error || _t('dyn.common.unknown_error') }));
+                    alert(WalaPlusI18n.t('dyn.calls.five9_save_failed', { msg: data.error || WalaPlusI18n.t('dyn.common.unknown_error') }));
                 }
             } catch (error) {
                 console.error('Error saving Five9 config:', error);
-                alert(_t('dyn.calls.failed_save_conn'));
+                alert(WalaPlusI18n.t('dyn.calls.failed_save_conn'));
             }
         }
 
         async function syncFive9Calls() {
             const btn = document.getElementById('five9-sync-btn');
             btn.disabled = true;
-            btn.innerHTML = '<span class="flex items-center justify-center gap-2"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>' + escapeHtml(_t('dyn.calls.syncing')) + '</span>';
+            btn.innerHTML = '<span class="flex items-center justify-center gap-2"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>' + escapeHtml(WalaPlusI18n.t('dyn.calls.syncing')) + '</span>';
 
             try {
                 const res = await fetch('/api/calls/five9/sync', { 
@@ -1788,15 +2214,15 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    alert(_t('dyn.calls.synced_n_calls', { n: _fn(data.synced_count || 0) }));
-                    document.getElementById('five9-last-sync').textContent = _t('dyn.calls.last_sync', { time: new Date().toLocaleString() });
+                    alert(WalaPlusI18n.t('dyn.calls.synced_n_calls', { n: _fn(data.synced_count || 0) }));
+                    document.getElementById('five9-last-sync').textContent = WalaPlusI18n.t('dyn.calls.last_sync', { time: new Date().toLocaleString() });
                     refreshData();
                 } else {
-                    alert(_t('dyn.calls.sync_failed', { msg: data.error || _t('dyn.common.unknown_error') }));
+                    alert(WalaPlusI18n.t('dyn.calls.sync_failed', { msg: data.error || WalaPlusI18n.t('dyn.common.unknown_error') }));
                 }
             } catch (error) {
                 console.error('Error syncing Five9 calls:', error);
-                alert(_t('dyn.calls.failed_sync'));
+                alert(WalaPlusI18n.t('dyn.calls.failed_sync'));
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>Sync Calls Now</span>';
@@ -1827,7 +2253,7 @@
         function renderEvalCallsList(calls) {
             const container = document.getElementById('eval-calls-list');
             if (calls.length === 0) {
-                container.innerHTML = `<p class="text-gray-500 text-sm p-2">${escapeHtml(_t('dyn.calls.no_calls_short'))}</p>`;
+                container.innerHTML = `<p class="text-gray-500 text-sm p-2">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_calls_short'))}</p>`;
                 return;
             }
             container.innerHTML = calls.map(call => `
@@ -1835,9 +2261,9 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="font-medium text-sm">${escapeHtml(call.agent_name || call.agent_email)}</div>
-                            <div class="text-xs text-gray-500">${escapeHtml(call.contact_name || _t('dyn.calls.unknown'))}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml(call.contact_name || WalaPlusI18n.t('dyn.calls.unknown'))}</div>
                         </div>
-                        <div class="text-right">
+                        <div class="text-end">
                             <div class="text-xs text-gray-400">${escapeHtml(_fd(call.call_date))}</div>
                             <span class="px-1.5 py-0.5 text-xs rounded ${call.source === 'manual' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}">${escapeHtml(call.source)}</span>
                         </div>
@@ -1854,7 +2280,7 @@
                 const data = await res.json();
                 selectedEvalCall = data.record;
                 
-                document.getElementById('eval-call-info').textContent = `${selectedEvalCall.agent_name || selectedEvalCall.agent_email} - ${selectedEvalCall.contact_name || _t('dyn.calls.unknown_contact')}`;
+                document.getElementById('eval-call-info').textContent = `${selectedEvalCall.agent_name || selectedEvalCall.agent_email} - ${selectedEvalCall.contact_name || WalaPlusI18n.t('dyn.calls.unknown_contact')}`;
                 renderEvalCallsList(callsForEval);
                 
                 // Try to fetch existing SDR evaluation
@@ -1883,10 +2309,10 @@
             container.innerHTML = `
                 <div class="bg-blue-50 rounded-lg p-4 mb-6">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div><span class="text-gray-500">${escapeHtml(_t('dyn.calls.call_id_label'))}</span> <span class="font-medium">${escapeHtml(call.call_id)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(_t('dyn.calls.duration_label'))}</span> <span class="font-medium">${formatDuration(call.duration_seconds)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(_t('dyn.calls.direction_label'))}</span> <span class="font-medium">${escapeHtml(call.direction)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(_t('dyn.calls.source_label'))}</span> <span class="font-medium">${escapeHtml(call.source)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.call_id_label'))}</span> <span class="font-medium">${escapeHtml(call.call_id)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.duration_label'))}</span> <span class="font-medium">${formatDuration(call.duration_seconds)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.direction_label'))}</span> <span class="font-medium">${escapeHtml(call.direction)}</span></div>
+                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.source_label'))}</span> <span class="font-medium">${escapeHtml(call.source)}</span></div>
                     </div>
                 </div>
                 
@@ -1896,11 +2322,11 @@
                     <div class="flex items-center justify-between mb-3">
                         <h4 class="font-semibold text-slate-800 flex items-center gap-2">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                            ${escapeHtml(_t('dyn.calls.call_transcript'))}
+                            ${escapeHtml(WalaPlusI18n.t('dyn.calls.call_transcript'))}
                         </h4>
-                        <button type="button" data-on-click="showTranscriptModal" data-args="${escAttr(JSON.stringify([transcript.transcript_text, (call.agent_name || call.agent_email) + ' - ' + (call.contact_name || _t('dyn.calls.unknown'))]))}" class="text-sm bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                        <button type="button" data-on-click="showTranscriptModal" data-args="${escAttr(JSON.stringify([transcript.transcript_text, (call.agent_name || call.agent_email) + ' - ' + (call.contact_name || WalaPlusI18n.t('dyn.calls.unknown'))]))}" class="text-sm bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-                            ${escapeHtml(_t('dyn.calls.view_full'))}
+                            ${escapeHtml(WalaPlusI18n.t('dyn.calls.view_full'))}
                         </button>
                     </div>
                     <div class="bg-white rounded-lg p-3 max-h-32 overflow-y-auto text-sm text-gray-700" dir="rtl">
@@ -1917,15 +2343,15 @@
                             </svg>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-purple-900">${escapeHtml(_t('dyn.calls.ai_sdr_eval'))}</h4>
-                            <p class="text-sm text-purple-700">${escapeHtml(_t('dyn.calls.ai_sdr_eval_desc'))}</p>
+                            <h4 class="font-semibold text-purple-900">${escapeHtml(WalaPlusI18n.t('dyn.calls.ai_sdr_eval'))}</h4>
+                            <p class="text-sm text-purple-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.ai_sdr_eval_desc'))}</p>
                         </div>
                     </div>
                     <button type="button" data-on-click="runAIEvaluation" id="btn-ai-eval" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                         </svg>
-                        ${escapeHtml(_t('dyn.calls.run_ai_eval'))}
+                        ${escapeHtml(WalaPlusI18n.t('dyn.calls.run_ai_eval'))}
                     </button>
                 </div>
                 ` : hasAudioFile ? `
@@ -1938,15 +2364,15 @@
                             </svg>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-purple-900">${escapeHtml(_t('dyn.calls.audio_avail'))}</h4>
-                            <p class="text-sm text-purple-700">${escapeHtml(_t('dyn.calls.audio_avail_desc'))}</p>
+                            <h4 class="font-semibold text-purple-900">${escapeHtml(WalaPlusI18n.t('dyn.calls.audio_avail'))}</h4>
+                            <p class="text-sm text-purple-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.audio_avail_desc'))}</p>
                         </div>
                     </div>
                     <button type="button" data-on-click="runAIEvaluation" id="btn-ai-eval" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                         </svg>
-                        ${escapeHtml(_t('dyn.calls.transcribe_eval'))}
+                        ${escapeHtml(WalaPlusI18n.t('dyn.calls.transcribe_eval'))}
                     </button>
                 </div>
                 ` : `
@@ -1956,22 +2382,22 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                         </svg>
                         <div>
-                            <h4 class="font-medium text-amber-800">${escapeHtml(_t('dyn.calls.no_audio_rec'))}</h4>
-                            <p class="text-sm text-amber-700">${escapeHtml(_t('dyn.calls.no_audio_rec_desc'))}</p>
+                            <h4 class="font-medium text-amber-800">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_audio_rec'))}</h4>
+                            <p class="text-sm text-amber-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_audio_rec_desc'))}</p>
                         </div>
                     </div>
                 </div>
                 `}
                 
                 <div class="border-t pt-6">
-                    <h4 class="font-semibold text-gray-900 mb-4">${escapeHtml(_t('dyn.calls.manual_eval'))}</h4>
+                    <h4 class="font-semibold text-gray-900 mb-4">${escapeHtml(WalaPlusI18n.t('dyn.calls.manual_eval'))}</h4>
                     <form id="sdr-eval-form" class="space-y-4">
                         ${renderManualEvalCriteria(existingScore)}
                         
                         <div class="bg-gray-50 rounded-lg p-4">
                             <div class="flex items-center justify-between">
-                                <span class="text-lg font-semibold">${escapeHtml(_t('dyn.calls.total_score'))}</span>
-                                <div class="text-right">
+                                <span class="text-lg font-semibold">${escapeHtml(WalaPlusI18n.t('dyn.calls.total_score'))}</span>
+                                <div class="text-end">
                                     <span id="eval-total-score" class="text-3xl font-bold text-blue-600">${_fn(existingScore?.total_score || 0)}</span>
                                     <span class="text-gray-400"> / ${_fn(100)}</span>
                                 </div>
@@ -1982,17 +2408,17 @@
                         </div>
                         
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">${escapeHtml(_t('dyn.calls.coaching_notes'))}</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.coaching_notes'))}</label>
                             <textarea id="eval-coaching-notes" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                      placeholder="${escapeHtml(_t('dyn.calls.coaching_notes_ph'))}">${escapeHtml(existingScore?.coaching_notes || '')}</textarea>
+                                      placeholder="${escapeHtml(WalaPlusI18n.t('dyn.calls.coaching_notes_ph'))}">${escapeHtml(existingScore?.coaching_notes || '')}</textarea>
                         </div>
                         
                         <div class="flex gap-3">
                             <button type="button" data-on-click="saveEvaluation" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium">
-                                ${escapeHtml(_t('dyn.calls.save_eval'))}
+                                ${escapeHtml(WalaPlusI18n.t('dyn.calls.save_eval'))}
                             </button>
                             <button type="button" data-on-click="saveEvaluation" data-args="[true]" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-medium">
-                                ${escapeHtml(_t('dyn.calls.save_complete'))}
+                                ${escapeHtml(WalaPlusI18n.t('dyn.calls.save_complete'))}
                             </button>
                         </div>
                     </form>
@@ -2003,14 +2429,14 @@
 
         function renderManualEvalCriteria(existingScore) {
             const criteria = [
-                { id: 'opening', name: _t('dyn.calls.crit_opening'), description: _t('dyn.calls.crit_opening_desc'), maxScore: 10 },
-                { id: 'discovery', name: _t('dyn.calls.crit_discovery'), description: _t('dyn.calls.crit_discovery_desc'), maxScore: 15 },
-                { id: 'product_knowledge', name: _t('dyn.calls.crit_product'), description: _t('dyn.calls.crit_product_desc'), maxScore: 15 },
-                { id: 'objection_handling', name: _t('dyn.calls.crit_objection'), description: _t('dyn.calls.crit_objection_desc'), maxScore: 15 },
-                { id: 'value_proposition', name: _t('dyn.calls.crit_value'), description: _t('dyn.calls.crit_value_desc'), maxScore: 15 },
-                { id: 'closing', name: _t('dyn.calls.crit_closing'), description: _t('dyn.calls.crit_closing_desc'), maxScore: 15 },
-                { id: 'communication', name: _t('dyn.calls.crit_comm'), description: _t('dyn.calls.crit_comm_desc'), maxScore: 10 },
-                { id: 'crm_compliance', name: _t('dyn.calls.crit_crm'), description: _t('dyn.calls.crit_crm_desc'), maxScore: 5 }
+                { id: 'opening', name: WalaPlusI18n.t('dyn.calls.crit_opening'), description: WalaPlusI18n.t('dyn.calls.crit_opening_desc'), maxScore: 10 },
+                { id: 'discovery', name: WalaPlusI18n.t('dyn.calls.crit_discovery'), description: WalaPlusI18n.t('dyn.calls.crit_discovery_desc'), maxScore: 15 },
+                { id: 'product_knowledge', name: WalaPlusI18n.t('dyn.calls.crit_product'), description: WalaPlusI18n.t('dyn.calls.crit_product_desc'), maxScore: 15 },
+                { id: 'objection_handling', name: WalaPlusI18n.t('dyn.calls.crit_objection'), description: WalaPlusI18n.t('dyn.calls.crit_objection_desc'), maxScore: 15 },
+                { id: 'value_proposition', name: WalaPlusI18n.t('dyn.calls.crit_value'), description: WalaPlusI18n.t('dyn.calls.crit_value_desc'), maxScore: 15 },
+                { id: 'closing', name: WalaPlusI18n.t('dyn.calls.crit_closing'), description: WalaPlusI18n.t('dyn.calls.crit_closing_desc'), maxScore: 15 },
+                { id: 'communication', name: WalaPlusI18n.t('dyn.calls.crit_comm'), description: WalaPlusI18n.t('dyn.calls.crit_comm_desc'), maxScore: 10 },
+                { id: 'crm_compliance', name: WalaPlusI18n.t('dyn.calls.crit_crm'), description: WalaPlusI18n.t('dyn.calls.crit_crm_desc'), maxScore: 5 }
             ];
 
             return `<div class="space-y-4">${criteria.map(c => `
@@ -2035,13 +2461,13 @@
 
         async function runAIEvaluation() {
             if (!selectedEvalCall) {
-                alert(_t('dyn.calls.select_call_first'));
+                alert(WalaPlusI18n.t('dyn.calls.select_call_first'));
                 return;
             }
 
             const btn = document.getElementById('btn-ai-eval');
             btn.disabled = true;
-            btn.innerHTML = `<svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> ${escapeHtml(_t('dyn.calls.running_eval'))}`;
+            btn.innerHTML = `<svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> ${escapeHtml(WalaPlusI18n.t('dyn.calls.running_eval'))}`;
 
             try {
                 const res = await fetch(`/api/calls/${selectedEvalCall.id}/sdr-evaluate`, {
@@ -2055,15 +2481,15 @@
                     currentSDREvaluation = data.full_evaluation;
                     renderAIEvalResults(currentSDREvaluation);
                 } else {
-                    alert(_t('dyn.calls.eval_failed', { msg: data.error || _t('dyn.common.unknown_error') }));
+                    alert(WalaPlusI18n.t('dyn.calls.eval_failed', { msg: data.error || WalaPlusI18n.t('dyn.common.unknown_error') }));
                     btn.disabled = false;
-                    btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> ${escapeHtml(_t('dyn.calls.run_ai_eval'))}`;
+                    btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> ${escapeHtml(WalaPlusI18n.t('dyn.calls.run_ai_eval'))}`;
                 }
             } catch (error) {
                 console.error('Error running AI evaluation:', error);
-                alert(_t('dyn.calls.failed_run_eval'));
+                alert(WalaPlusI18n.t('dyn.calls.failed_run_eval'));
                 btn.disabled = false;
-                btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> ${escapeHtml(_t('dyn.calls.run_ai_eval'))}`;
+                btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> ${escapeHtml(WalaPlusI18n.t('dyn.calls.run_ai_eval'))}`;
             }
         }
 
@@ -2079,15 +2505,15 @@
                     <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-6 text-white">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-blue-100 text-sm">${escapeHtml(_t('dyn.calls.overall_score'))}</p>
+                                <p class="text-blue-100 text-sm">${escapeHtml(WalaPlusI18n.t('dyn.calls.overall_score'))}</p>
                                 <p class="text-4xl font-bold">${_fn(Math.round(evaluation.overall_score || 0))}%</p>
-                                <p class="text-sm text-blue-200 mt-1">${escapeHtml(evaluation.scorecard_name || _t('dyn.calls.sdr_scorecard'))}</p>
+                                <p class="text-sm text-blue-200 mt-1">${escapeHtml(evaluation.scorecard_name || WalaPlusI18n.t('dyn.calls.sdr_scorecard'))}</p>
                             </div>
-                            <div class="text-right">
+                            <div class="text-end">
                                 <div class="text-sm space-y-1">
-                                    <div class="flex items-center gap-2"><span class="w-3 h-3 bg-blue-300 rounded-full"></span> ${escapeHtml(_t('dyn.calls.dim_people'))}: ${_fn(Math.round(dimScores.people || 0))}%</div>
-                                    <div class="flex items-center gap-2"><span class="w-3 h-3 bg-indigo-300 rounded-full"></span> ${escapeHtml(_t('dyn.calls.dim_process'))}: ${_fn(Math.round(dimScores.process || 0))}%</div>
-                                    <div class="flex items-center gap-2"><span class="w-3 h-3 bg-purple-300 rounded-full"></span> ${escapeHtml(_t('dyn.calls.dim_governance'))}: ${_fn(Math.round(dimScores.governance || 0))}%</div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 bg-blue-300 rounded-full"></span> ${escapeHtml(WalaPlusI18n.t('dyn.calls.dim_people'))}: ${_fn(Math.round(dimScores.people || 0))}%</div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 bg-indigo-300 rounded-full"></span> ${escapeHtml(WalaPlusI18n.t('dyn.calls.dim_process'))}: ${_fn(Math.round(dimScores.process || 0))}%</div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 bg-purple-300 rounded-full"></span> ${escapeHtml(WalaPlusI18n.t('dyn.calls.dim_governance'))}: ${_fn(Math.round(dimScores.governance || 0))}%</div>
                                 </div>
                             </div>
                         </div>
@@ -2095,12 +2521,12 @@
 
                     <!-- Key Moments -->
                     <div class="bg-white border rounded-xl p-4">
-                        <h4 class="font-semibold mb-3">${escapeHtml(_t('dyn.calls.key_moments'))}</h4>
+                        <h4 class="font-semibold mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.key_moments'))}</h4>
                         <div class="grid grid-cols-3 md:grid-cols-6 gap-2 text-center text-xs">
                             ${['greeting', 'consent', 'discovery', 'objection_handling', 'closing', 'next_steps'].map(key => {
                                 const moment = keyMoments[key] || { detected: false };
                                 return `<div class="p-2 rounded ${moment.detected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}">
-                                    ${moment.detected ? '✓' : '✗'} ${escapeHtml(_t('dyn.calls.moment_' + key))}
+                                    ${moment.detected ? '✓' : '✗'} ${escapeHtml(_momentLabel(key))}
                                 </div>`;
                             }).join('')}
                         </div>
@@ -2109,15 +2535,15 @@
                     <!-- Strengths & Gaps -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="bg-green-50 border border-green-200 rounded-xl p-4">
-                            <h4 class="font-semibold text-green-800 mb-2">💪 ${escapeHtml(_t('dyn.calls.top_strengths'))}</h4>
+                            <h4 class="font-semibold text-green-800 mb-2">💪 ${escapeHtml(WalaPlusI18n.t('dyn.calls.top_strengths'))}</h4>
                             <ul class="space-y-1 text-sm text-green-700">
-                                ${(evaluation.top_strengths || []).map(s => `<li>• ${escapeHtml(s)}</li>`).join('') || `<li class="text-gray-400">${escapeHtml(_t('dyn.calls.no_strengths'))}</li>`}
+                                ${(evaluation.top_strengths || []).map(s => `<li>• ${escapeHtml(s)}</li>`).join('') || `<li class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_strengths'))}</li>`}
                             </ul>
                         </div>
                         <div class="bg-red-50 border border-red-200 rounded-xl p-4">
-                            <h4 class="font-semibold text-red-800 mb-2">📉 ${escapeHtml(_t('dyn.calls.top_gaps'))}</h4>
+                            <h4 class="font-semibold text-red-800 mb-2">📉 ${escapeHtml(WalaPlusI18n.t('dyn.calls.top_gaps'))}</h4>
                             <ul class="space-y-1 text-sm text-red-700">
-                                ${(evaluation.top_gaps || []).map(g => `<li>• ${escapeHtml(g)}</li>`).join('') || `<li class="text-gray-400">${escapeHtml(_t('dyn.calls.no_gaps'))}</li>`}
+                                ${(evaluation.top_gaps || []).map(g => `<li>• ${escapeHtml(g)}</li>`).join('') || `<li class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_gaps'))}</li>`}
                             </ul>
                         </div>
                     </div>
@@ -2125,7 +2551,7 @@
                     <!-- Attribute Evaluations -->
                     <div class="bg-white border rounded-xl overflow-hidden">
                         <div class="px-4 py-3 bg-gray-50 border-b">
-                            <h4 class="font-semibold">${escapeHtml(_t('dyn.calls.detailed_attr_eval'))}</h4>
+                            <h4 class="font-semibold">${escapeHtml(WalaPlusI18n.t('dyn.calls.detailed_attr_eval'))}</h4>
                         </div>
                         <div class="divide-y max-h-80 overflow-y-auto">
                             ${attrs.map(attr => `
@@ -2140,18 +2566,18 @@
                                             ${attr.comment ? `<p class="text-sm text-gray-600 mt-1">${escapeHtml(attr.comment)}</p>` : ''}
                                             ${attr.evidence_quotes?.length ? `<p class="text-xs text-gray-400 mt-1 italic">"${escapeHtml(attr.evidence_quotes[0])}"</p>` : ''}
                                         </div>
-                                        ${attr.score !== null ? `<div class="text-right"><span class="text-lg font-bold ${attr.score >= 7 ? 'text-green-600' : attr.score >= 5 ? 'text-amber-600' : 'text-red-600'}">${_fn(attr.score)}</span><span class="text-gray-400">/${_fn(10)}</span></div>` : ''}
+                                        ${attr.score !== null ? `<div class="text-end"><span class="text-lg font-bold ${attr.score >= 7 ? 'text-green-600' : attr.score >= 5 ? 'text-amber-600' : 'text-red-600'}">${_fn(attr.score)}</span><span class="text-gray-400">/${_fn(10)}</span></div>` : ''}
                                     </div>
                                     ${attr.improvement_tip ? `<div class="mt-2 text-xs bg-blue-50 text-blue-700 p-2 rounded">💡 ${escapeHtml(attr.improvement_tip)}</div>` : ''}
                                 </div>
-                            `).join('') || `<div class="p-4 text-gray-400">${escapeHtml(_t('dyn.calls.no_attr_eval'))}</div>`}
+                            `).join('') || `<div class="p-4 text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_attr_eval'))}</div>`}
                         </div>
                     </div>
 
                     <!-- Coaching Message -->
                     ${evaluation.coaching_message_ar ? `
                     <div class="bg-purple-50 border border-purple-200 rounded-xl p-4">
-                        <h4 class="font-semibold text-purple-800 mb-2">🎯 ${escapeHtml(_t('dyn.calls.coaching_rec'))}</h4>
+                        <h4 class="font-semibold text-purple-800 mb-2">🎯 ${escapeHtml(WalaPlusI18n.t('dyn.calls.coaching_rec'))}</h4>
                         <p class="text-sm text-purple-700" dir="rtl">${escapeHtml(evaluation.coaching_message_ar)}</p>
                         ${evaluation.coaching_message_en ? `<p class="text-sm text-purple-600 mt-2">${escapeHtml(evaluation.coaching_message_en)}</p>` : ''}
                     </div>
@@ -2160,7 +2586,7 @@
                     <!-- Coaching Actions -->
                     ${(evaluation.coaching_actions || []).length > 0 ? `
                     <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                        <h4 class="font-semibold text-amber-800 mb-2">📋 ${escapeHtml(_t('dyn.calls.coaching_actions'))}</h4>
+                        <h4 class="font-semibold text-amber-800 mb-2">📋 ${escapeHtml(WalaPlusI18n.t('dyn.calls.coaching_actions'))}</h4>
                         <ol class="space-y-1 text-sm text-amber-700 list-decimal list-inside">
                             ${evaluation.coaching_actions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
                         </ol>
@@ -2170,7 +2596,7 @@
                     <!-- Micro Training Topics -->
                     ${(evaluation.micro_training_topics || []).length > 0 ? `
                     <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-                        <h4 class="font-semibold text-indigo-800 mb-2">📚 ${escapeHtml(_t('dyn.calls.training_topics'))}</h4>
+                        <h4 class="font-semibold text-indigo-800 mb-2">📚 ${escapeHtml(WalaPlusI18n.t('dyn.calls.training_topics'))}</h4>
                         <div class="flex flex-wrap gap-2">
                             ${evaluation.micro_training_topics.map(t => `<span class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm">${escapeHtml(t)}</span>`).join('')}
                         </div>
@@ -2179,35 +2605,35 @@
 
                     <!-- AI Training Feedback -->
                     <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-4">
-                        <p class="text-sm font-medium text-purple-900 mb-3">${escapeHtml(_t('dyn.calls.rate_ai_acc'))}</p>
+                        <p class="text-sm font-medium text-purple-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.rate_ai_acc'))}</p>
                         <div class="flex gap-2">
                             <button type="button" data-on-click="rateAIEvaluation" data-args="[${selectedEvalCall?.id || 0},${evaluation.id || 0},&quot;accurate&quot;]" class="flex-1 px-3 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                ${escapeHtml(_t('dyn.calls.accurate'))}
+                                ${escapeHtml(WalaPlusI18n.t('dyn.calls.accurate'))}
                             </button>
                             <button type="button" data-on-click="rateAIEvaluation" data-args="[${selectedEvalCall?.id || 0},${evaluation.id || 0},&quot;partially_accurate&quot;]" class="flex-1 px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                ${escapeHtml(_t('dyn.calls.partial'))}
+                                ${escapeHtml(WalaPlusI18n.t('dyn.calls.partial'))}
                             </button>
                             <button type="button" data-on-click="rateAIEvaluation" data-args="[${selectedEvalCall?.id || 0},${evaluation.id || 0},&quot;inaccurate&quot;]" class="flex-1 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                ${escapeHtml(_t('dyn.calls.incorrect'))}
+                                ${escapeHtml(WalaPlusI18n.t('dyn.calls.incorrect'))}
                             </button>
                         </div>
-                        <p class="text-xs text-purple-600 mt-2">${escapeHtml(_t('dyn.calls.feedback_help'))}</p>
+                        <p class="text-xs text-purple-600 mt-2">${escapeHtml(WalaPlusI18n.t('dyn.calls.feedback_help'))}</p>
                     </div>
 
                     <!-- Action Buttons -->
                     <div class="flex gap-3">
                         <button type="button" data-on-click="resetSDRAndReselect" class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition font-medium">
-                            ↻ ${escapeHtml(_t('dyn.calls.reevaluate'))}
+                            ↻ ${escapeHtml(WalaPlusI18n.t('dyn.calls.reevaluate'))}
                         </button>
                         <button type="button" data-on-click="syncToZoho" id="btn-sync-zoho" class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition font-medium flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
-                            ${escapeHtml(_t('dyn.calls.sync_to_zoho'))}
+                            ${escapeHtml(WalaPlusI18n.t('dyn.calls.sync_to_zoho'))}
                         </button>
                         <button type="button" data-on-click="exportEvaluation" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium">
-                            ${escapeHtml(_t('dyn.calls.export_pdf'))}
+                            ${escapeHtml(WalaPlusI18n.t('dyn.calls.export_pdf'))}
                         </button>
                     </div>
                 </div>
@@ -2216,13 +2642,13 @@
 
         async function syncToZoho() {
             if (!selectedEvalCall || !currentSDREvaluation) {
-                alert(_t('dyn.calls.no_eval_first'));
+                alert(WalaPlusI18n.t('dyn.calls.no_eval_first'));
                 return;
             }
 
             const btn = document.getElementById('btn-sync-zoho');
             btn.disabled = true;
-            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> ' + escapeHtml(_t('dyn.calls.syncing'));
+            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.calls.syncing'));
 
             try {
                 const res = await fetch(`/api/calls/${selectedEvalCall.id}/sync-zoho`, {
@@ -2232,22 +2658,22 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    alert(_t('dyn.calls.synced_to_zoho', { msg: data.message || '' }));
+                    alert(WalaPlusI18n.t('dyn.calls.synced_to_zoho', { msg: data.message || '' }));
                 } else {
-                    alert(_t('dyn.calls.failed_sync_zoho', { msg: data.error || _t('dyn.common.unknown_error') }));
+                    alert(WalaPlusI18n.t('dyn.calls.failed_sync_zoho', { msg: data.error || WalaPlusI18n.t('dyn.common.unknown_error') }));
                 }
             } catch (error) {
                 console.error('Error syncing to Zoho:', error);
-                alert(_t('dyn.calls.failed_sync_zoho_short'));
+                alert(WalaPlusI18n.t('dyn.calls.failed_sync_zoho_short'));
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg> ' + escapeHtml(_t('dyn.calls.sync_to_zoho'));
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.calls.sync_to_zoho'));
             }
         }
 
         function exportEvaluation() {
             if (!currentSDREvaluation) {
-                alert(_t('dyn.calls.no_eval_export'));
+                alert(WalaPlusI18n.t('dyn.calls.no_eval_export'));
                 return;
             }
             const dataStr = JSON.stringify(currentSDREvaluation, null, 2);
@@ -2291,7 +2717,7 @@
 
         async function saveEvaluation(complete = false) {
             if (!selectedEvalCall) {
-                alert(_t('dyn.calls.select_call_first'));
+                alert(WalaPlusI18n.t('dyn.calls.select_call_first'));
                 return;
             }
 
@@ -2322,14 +2748,14 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    alert(complete ? _t('dyn.calls.eval_completed') : _t('dyn.calls.eval_draft_saved'));
+                    alert(complete ? WalaPlusI18n.t('dyn.calls.eval_completed') : WalaPlusI18n.t('dyn.calls.eval_draft_saved'));
                     refreshData();
                 } else {
-                    alert(_t('dyn.calls.failed_save_eval', { msg: data.error || _t('dyn.common.unknown_error') }));
+                    alert(WalaPlusI18n.t('dyn.calls.failed_save_eval', { msg: data.error || WalaPlusI18n.t('dyn.common.unknown_error') }));
                 }
             } catch (error) {
                 console.error('Error saving evaluation:', error);
-                alert(_t('dyn.calls.failed_save_eval_short'));
+                alert(WalaPlusI18n.t('dyn.calls.failed_save_eval_short'));
             }
         }
 
@@ -2351,18 +2777,22 @@
 
         function renderScorecardsList() {
             const container = document.getElementById('scorecards-list');
-            if (!scorecards || scorecards.length === 0) {
+            // Hide inactive scorecards from this list — they're noise once
+            // deactivated. The active toggle on each card still lets users
+            // deactivate; restoring is handled via the admin path.
+            const visibleScorecards = (scorecards || []).filter(sc => sc.is_active);
+            if (visibleScorecards.length === 0) {
                 container.innerHTML = `
                     <div class="p-8 text-center text-gray-400">
                         <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                        <p>${escapeHtml(_t('dyn.calls.no_scorecards'))}</p>
-                        <button data-on-click="showCreateScorecardModal" class="mt-4 text-blue-600 hover:text-blue-700">${escapeHtml(_t('dyn.calls.create_first_scorecard'))}</button>
+                        <p>${escapeHtml(WalaPlusI18n.t('dyn.calls.no_scorecards'))}</p>
+                        <button data-on-click="showCreateScorecardModal" class="mt-4 text-blue-600 hover:text-blue-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.create_first_scorecard'))}</button>
                     </div>
                 `;
                 return;
             }
 
-            container.innerHTML = scorecards.map(sc => {
+            container.innerHTML = visibleScorecards.map(sc => {
                 const dims = sc.dimensions?.dimensions || sc.dimensions || {};
                 const attrCount = Object.values(dims).reduce((sum, d) => sum + (d.attributes?.length || 0), 0);
                 return `
@@ -2371,21 +2801,21 @@
                             <div class="flex-1">
                                 <div class="flex items-center gap-2">
                                     <h4 class="font-medium">${escapeHtml(sc.name)}</h4>
-                                    ${sc.is_active ? `<span class="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">${escapeHtml(_t('dyn.calls.active'))}</span>` : `<span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-500 rounded-full">${escapeHtml(_t('dyn.calls.inactive'))}</span>`}
+                                    ${sc.is_active ? `<span class="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">${escapeHtml(WalaPlusI18n.t('dyn.calls.active'))}</span>` : `<span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-500 rounded-full">${escapeHtml(WalaPlusI18n.t('dyn.calls.inactive'))}</span>`}
                                     ${sc.team_name ? `<span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">${escapeHtml(sc.team_name)}</span>` : ''}
                                 </div>
-                                <p class="text-sm text-gray-500 mt-1">${escapeHtml(sc.description || _t('dyn.calls.no_description'))}</p>
+                                <p class="text-sm text-gray-500 mt-1">${escapeHtml(sc.description || WalaPlusI18n.t('dyn.calls.no_description'))}</p>
                                 <div class="flex gap-4 mt-2 text-xs text-gray-400">
-                                    <span>${_t('dyn.calls.n_attributes', { n: _fn(attrCount) })}</span>
+                                    <span>${WalaPlusI18n.t('dyn.calls.n_attributes', { n: _fn(attrCount) })}</span>
                                     <span>v${escapeHtml(sc.version || '1.0')}</span>
-                                    <span>${_t('dyn.calls.updated_at_label', { date: _fd(sc.updated_at) })}</span>
+                                    <span>${WalaPlusI18n.t('dyn.calls.updated_at_label', { date: _fd(sc.updated_at) })}</span>
                                 </div>
                             </div>
                             <div class="flex gap-2">
-                                <button data-on-click="toggleScorecardActive" data-args="[${sc.id},${!sc.is_active}]" class="p-2 ${sc.is_active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'} rounded-lg transition" title="${escapeHtml(sc.is_active ? _t('dyn.calls.deactivate') : _t('dyn.calls.activate'))}">
+                                <button data-on-click="toggleScorecardActive" data-args="[${sc.id},${!sc.is_active}]" class="p-2 ${sc.is_active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'} rounded-lg transition" title="${escapeHtml(sc.is_active ? WalaPlusI18n.t('dyn.calls.deactivate') : WalaPlusI18n.t('dyn.calls.activate'))}">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 </button>
-                                <button data-on-click="viewScorecardDetails" data-args="[${sc.id}]" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="${escapeHtml(_t('dyn.calls.view_details'))}">
+                                <button data-on-click="viewScorecardDetails" data-args="[${sc.id}]" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="${escapeHtml(WalaPlusI18n.t('dyn.calls.view_details'))}">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                 </button>
                             </div>
@@ -2413,38 +2843,38 @@
             const attrHtml = `
                 <div id="attr-${attributeCounter}" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
                     <div class="flex items-start justify-between mb-3">
-                        <span class="font-medium text-sm text-gray-700">${escapeHtml(_t('dyn.calls.attribute_n', { n: _fn(attributeCounter) }))}</span>
-                        <button type="button" data-on-click="removeAttribute" data-args="[${attributeCounter}]" class="text-red-500 hover:text-red-700 text-sm">${escapeHtml(_t('dyn.calls.remove'))}</button>
+                        <span class="font-medium text-sm text-gray-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.attribute_n', { n: _fn(attributeCounter) }))}</span>
+                        <button type="button" data-on-click="removeAttribute" data-args="[${attributeCounter}]" class="text-red-500 hover:text-red-700 text-sm">${escapeHtml(WalaPlusI18n.t('dyn.calls.remove'))}</button>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(_t('dyn.calls.name_label'))}</label>
-                            <input type="text" name="attr-name-${attributeCounter}" required class="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-blue-500" placeholder="${escapeHtml(_t('dyn.calls.attr_name_ph'))}">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.name_label'))}</label>
+                            <input type="text" name="attr-name-${attributeCounter}" required class="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-blue-500" placeholder="${escapeHtml(WalaPlusI18n.t('dyn.calls.attr_name_ph'))}">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(_t('dyn.calls.dimension_label'))}</label>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.dimension_label'))}</label>
                             <select name="attr-dimension-${attributeCounter}" class="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-blue-500">
-                                <option value="people">${escapeHtml(_t('dyn.calls.dim_people'))}</option>
-                                <option value="process">${escapeHtml(_t('dyn.calls.dim_process'))}</option>
-                                <option value="governance">${escapeHtml(_t('dyn.calls.dim_governance'))}</option>
+                                <option value="people">${escapeHtml(WalaPlusI18n.t('dyn.calls.dim_people'))}</option>
+                                <option value="process">${escapeHtml(WalaPlusI18n.t('dyn.calls.dim_process'))}</option>
+                                <option value="governance">${escapeHtml(WalaPlusI18n.t('dyn.calls.dim_governance'))}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(_t('dyn.calls.weight_label'))}</label>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.weight_label'))}</label>
                             <input type="number" name="attr-weight-${attributeCounter}" min="1" max="100" value="10" class="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(_t('dyn.calls.severity_label'))}</label>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.severity_label'))}</label>
                             <select name="attr-severity-${attributeCounter}" class="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-blue-500">
-                                <option value="minor">${escapeHtml(_t('dyn.calls.sev_minor'))}</option>
-                                <option value="major">${escapeHtml(_t('dyn.calls.sev_major'))}</option>
-                                <option value="critical">${escapeHtml(_t('dyn.calls.sev_critical'))}</option>
+                                <option value="minor">${escapeHtml(WalaPlusI18n.t('dyn.calls.sev_minor'))}</option>
+                                <option value="major">${escapeHtml(WalaPlusI18n.t('dyn.calls.sev_major'))}</option>
+                                <option value="critical">${escapeHtml(WalaPlusI18n.t('dyn.calls.sev_critical'))}</option>
                             </select>
                         </div>
                     </div>
                     <div class="mt-3">
-                        <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(_t('dyn.calls.desc_eval_logic'))}</label>
-                        <textarea name="attr-description-${attributeCounter}" rows="2" class="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-blue-500" placeholder="${escapeHtml(_t('dyn.calls.desc_eval_ph'))}"></textarea>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.desc_eval_logic'))}</label>
+                        <textarea name="attr-description-${attributeCounter}" rows="2" class="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-blue-500" placeholder="${escapeHtml(WalaPlusI18n.t('dyn.calls.desc_eval_ph'))}"></textarea>
                     </div>
                 </div>
             `;
@@ -2495,15 +2925,15 @@
                 });
                 const data = await res.json();
                 if (data.success || data.id) {
-                    alert(_t('dyn.calls.scorecard_created'));
+                    alert(WalaPlusI18n.t('dyn.calls.scorecard_created'));
                     closeScorecardModal();
                     loadScorecards();
                 } else {
-                    alert(_t('dyn.calls.failed_create_scorecard', { msg: data.error || _t('dyn.common.unknown_error') }));
+                    alert(WalaPlusI18n.t('dyn.calls.failed_create_scorecard', { msg: data.error || WalaPlusI18n.t('dyn.common.unknown_error') }));
                 }
             } catch (error) {
                 console.error('Error creating scorecard:', error);
-                alert(_t('dyn.calls.failed_create_scorecard_short'));
+                alert(WalaPlusI18n.t('dyn.calls.failed_create_scorecard_short'));
             }
         });
 
@@ -2519,7 +2949,7 @@
                 if (data.success) {
                     loadScorecards();
                 } else {
-                    alert(_t('dyn.calls.failed_update_scorecard'));
+                    alert(WalaPlusI18n.t('dyn.calls.failed_update_scorecard'));
                 }
             } catch (error) {
                 console.error('Error updating scorecard:', error);
@@ -2534,11 +2964,11 @@
             let attrsHtml = '';
             Object.entries(dims).forEach(([dimKey, dim]) => {
                 if (dim.attributes?.length) {
-                    const dimLabel = _t('dyn.calls.dim_' + dimKey);
+                    const dimLabel = _dimLabel(dimKey);
                     attrsHtml += `<div class="mb-4"><h5 class="font-medium text-sm text-gray-700 mb-2">${escapeHtml(dimLabel)}</h5>`;
                     dim.attributes.forEach(a => {
                         const sev = a.severityIfFailed || 'minor';
-                        attrsHtml += `<div class="text-sm p-2 bg-gray-50 rounded mb-1"><strong>${escapeHtml(a.name)}</strong> (${escapeHtml(_t('dyn.calls.sev_' + sev))}) - ${escapeHtml(a.description || a.passingCriteria || _t('dyn.calls.no_description'))}</div>`;
+                        attrsHtml += `<div class="text-sm p-2 bg-gray-50 rounded mb-1"><strong>${escapeHtml(a.name)}</strong> (${escapeHtml(_sevLabel(sev))}) - ${escapeHtml(a.description || a.passingCriteria || WalaPlusI18n.t('dyn.calls.no_description'))}</div>`;
                     });
                     attrsHtml += '</div>';
                 }
@@ -2546,7 +2976,7 @@
             
             document.getElementById('callModalTitle').textContent = sc.name;
             document.getElementById('callModalSubtitle').textContent = sc.description || '';
-            document.getElementById('callModalContent').innerHTML = attrsHtml || `<p class="text-gray-500">${escapeHtml(_t('dyn.calls.no_attributes'))}</p>`;
+            document.getElementById('callModalContent').innerHTML = attrsHtml || `<p class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_attributes'))}</p>`;
             document.getElementById('callDetailModal').classList.remove('hidden');
         }
 
@@ -2557,8 +2987,8 @@
             document.getElementById('transcriptContent').innerHTML = `
                 <div class="bg-gray-50 rounded-lg p-4 mb-4">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm font-medium text-gray-700">${escapeHtml(_t('dyn.calls.full_transcript'))}</span>
-                        <button data-on-click="copyTranscript" class="text-sm text-blue-600 hover:text-blue-700">${escapeHtml(_t('dyn.calls.copy'))}</button>
+                        <span class="text-sm font-medium text-gray-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.full_transcript'))}</span>
+                        <button data-on-click="copyTranscript" class="text-sm text-blue-600 hover:text-blue-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.copy'))}</button>
                     </div>
                 </div>
                 <div class="whitespace-pre-wrap text-gray-700 leading-relaxed font-arabic font-segoe">${escapeHtml(transcriptText)}</div>
@@ -2572,7 +3002,7 @@
 
         function copyTranscript() {
             navigator.clipboard.writeText(currentTranscriptText).then(() => {
-                alert(_t('dyn.calls.transcript_copied'));
+                alert(WalaPlusI18n.t('dyn.calls.transcript_copied'));
             });
         }
 
@@ -2636,19 +3066,19 @@
         function renderAIFeedbackButtons(callId, evaluationId) {
             return `
                 <div class="mt-4 pt-4 border-t border-gray-100">
-                    <p class="text-sm font-medium text-gray-700 mb-3">${escapeHtml(_t('dyn.calls.rate_ai_acc'))}</p>
+                    <p class="text-sm font-medium text-gray-700 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.rate_ai_acc'))}</p>
                     <div class="flex gap-2">
                         <button data-on-click="rateAIEvaluation" data-args="[${callId},${evaluationId},&quot;accurate&quot;]" class="flex-1 px-3 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                            ${escapeHtml(_t('dyn.calls.accurate'))}
+                            ${escapeHtml(WalaPlusI18n.t('dyn.calls.accurate'))}
                         </button>
                         <button data-on-click="rateAIEvaluation" data-args="[${callId},${evaluationId},&quot;partially_accurate&quot;]" class="flex-1 px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            ${escapeHtml(_t('dyn.calls.partial'))}
+                            ${escapeHtml(WalaPlusI18n.t('dyn.calls.partial'))}
                         </button>
                         <button data-on-click="rateAIEvaluation" data-args="[${callId},${evaluationId},&quot;inaccurate&quot;]" class="flex-1 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                            ${escapeHtml(_t('dyn.calls.incorrect'))}
+                            ${escapeHtml(WalaPlusI18n.t('dyn.calls.incorrect'))}
                         </button>
                     </div>
                 </div>
@@ -2656,12 +3086,12 @@
         }
 
         async function rateAIEvaluation(callId, evaluationId, rating) {
-            const details = rating === 'inaccurate' ? prompt(_t('dyn.calls.describe_incorrect')) : '';
+            const details = rating === 'inaccurate' ? prompt(WalaPlusI18n.t('dyn.calls.describe_incorrect')) : '';
             if (rating === 'inaccurate' && !details) return;
             
             const success = await submitAIFeedback(callId, evaluationId, rating, details);
             if (success) {
-                alert(_t('dyn.calls.thanks_feedback'));
+                alert(WalaPlusI18n.t('dyn.calls.thanks_feedback'));
             }
         }
 

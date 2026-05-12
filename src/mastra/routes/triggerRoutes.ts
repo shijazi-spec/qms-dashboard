@@ -1,8 +1,10 @@
-import { logger as safeLogger } from "../../utils/logger"; // Roles that can see all triggers/notifications and action any trigger regardless of assigned_role
+import { logger as safeLogger } from "../../utils/logger";
+import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
+// Roles that can see all triggers/notifications and action any trigger regardless of assigned_role
 const TRIGGER_ADMIN_ROLES = new Set(["admin", "head_of_operations_quality"]);
 
 // Roles permitted to participate in trigger review workflows
-const TRIGGER_REVIEWER_ROLES = new Set([
+const TRIGGER_REVIEWER_ROLES: import("../../utils/rbacMiddleware").UserRole[] = [
   "admin",
   "head_of_operations_quality",
   "grc_manager",
@@ -12,7 +14,7 @@ const TRIGGER_REVIEWER_ROLES = new Set([
   "executive",
   "bu_owner",
   "ai_specialist",
-]);
+];
 
 export const triggerRoutes = [
   {
@@ -24,18 +26,16 @@ export const triggerRoutes = [
           const logger = mastra?.getLogger();
           const { getPendingTriggers, initAuditTriggerTables } =
             await import("../../utils/auditTriggerDatabase");
-          const { getSessionUser } = await import("../../utils/rbacMiddleware");
+          const { requireRole } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
 
-          const user = getSessionUser(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
-          if (!TRIGGER_REVIEWER_ROLES.has(user.role)) {
+          const user = await requireRole(c, TRIGGER_REVIEWER_ROLES);
+          if (!user)
             return c.json(
               { error: "Insufficient permissions to view triggers" },
               403,
             );
-          }
-          
+
           const url = new URL(c.req.url);
           const type = url.searchParams.get("type") || undefined;
 
@@ -71,17 +71,15 @@ export const triggerRoutes = [
           const logger = mastra?.getLogger();
           const { getTriggersStats, initAuditTriggerTables } =
             await import("../../utils/auditTriggerDatabase");
-          const { getSessionUser } = await import("../../utils/rbacMiddleware");
+          const { requireRole } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
-          
-          const user = getSessionUser(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
-          if (!TRIGGER_REVIEWER_ROLES.has(user.role)) {
+
+          const user = await requireRole(c, TRIGGER_REVIEWER_ROLES);
+          if (!user)
             return c.json(
               { error: "Insufficient permissions to view trigger stats" },
               403,
             );
-          }
 
           logger?.info("📊 [TriggerAPI] GET /api/triggers/stats", {
             userRole: user.role,
@@ -129,11 +127,12 @@ export const triggerRoutes = [
           const { updateTriggerStatus, initAuditTriggerTables } =
             await import("../../utils/auditTriggerDatabase");
           const { logEvent } = await import("../../utils/eventLogsDatabase");
-          const { getSessionUser } = await import("../../utils/rbacMiddleware");
+          const { requireRole } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
-          
-          const user = getSessionUser(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
+
+          const user = await requireRole(c, TRIGGER_REVIEWER_ROLES);
+          if (!user)
+            return c.json({ error: "Insufficient permissions" }, 403);
 
           const id = parseInt(c.req.param("id"));
           const body = await c.req.json().catch(() => ({}));
@@ -193,8 +192,15 @@ export const triggerRoutes = [
               );
             }
             status = "dismissed";
+            // Scrub deny-list keys / credential-shaped strings out of the
+            // free-text justification before it is persisted onto the
+            // audit_triggers row. Reviewers occasionally paste log excerpts
+            // into the dismissal reason — `redactSensitiveDeep` swaps in
+            // `***REDACTED***` for any embedded JWT, GitHub PAT (`ghp_…`),
+            // OpenAI key (`sk-…`), bcrypt hash, etc.
+            const safeReason = redactSensitiveDeep(reason) as string;
             extraUpdates = {
-              dismiss_reason: reason,
+              dismiss_reason: safeReason,
               dismissed_at: "NOW()",
               dismissed_by_email: user.email,
               // Re-evaluate in 24h — if the signal is still triggering, the
@@ -264,24 +270,16 @@ export const triggerRoutes = [
           const trigger = await updateTriggerStatus(id, status, decisionData);
           if (!trigger) return c.json({ error: "Trigger not found" }, 404);
 
-          // Persist the extra columns added in the P0 schema migration
+          // Persist the extra columns added in the P0 schema migration.
+          // Delegated to auditTriggerDatabase.updateTriggerExtraColumns so the
+          // INSERT/UPDATE lives alongside the rest of the audit_triggers
+          // writes and the secret-leak coverage gate doesn't have to track
+          // this route file separately (Task #746).
           if (Object.keys(extraUpdates).length > 0) {
-            const fields: string[] = [];
-            const vals: any[] = [];
-            let i = 1;
-            for (const [k, v] of Object.entries(extraUpdates)) {
-              if (v === "NOW()") {
-                fields.push(`${k} = NOW()`);
-              } else {
-                fields.push(`${k} = $${i++}`);
-                vals.push(v);
-              }
-            }
-            vals.push(id);
-            await pool.query(
-              `UPDATE audit_triggers SET ${fields.join(", ")} WHERE id = $${i}`,
-              vals,
+            const { updateTriggerExtraColumns } = await import(
+              "../../utils/auditTriggerDatabase"
             );
+            await updateTriggerExtraColumns(id, extraUpdates);
           }
 
           await logEvent({
@@ -327,17 +325,15 @@ export const triggerRoutes = [
           const logger = mastra?.getLogger();
           const { getTriggersByAudit, initAuditTriggerTables } =
             await import("../../utils/auditTriggerDatabase");
-          const { getSessionUser } = await import("../../utils/rbacMiddleware");
+          const { requireRole } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
-          
-          const user = getSessionUser(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
-          if (!TRIGGER_REVIEWER_ROLES.has(user.role)) {
+
+          const user = await requireRole(c, TRIGGER_REVIEWER_ROLES);
+          if (!user)
             return c.json(
               { error: "Insufficient permissions to view audit triggers" },
               403,
             );
-          }
 
           const auditId = parseInt(c.req.param("auditId"));
 
@@ -374,18 +370,16 @@ export const triggerRoutes = [
           const logger = mastra?.getLogger();
           const { getUnreadNotifications, initAuditTriggerTables } =
             await import("../../utils/auditTriggerDatabase");
-          const { getSessionUser } = await import("../../utils/rbacMiddleware");
+          const { requireRole } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
 
-          const user = getSessionUser(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
-          if (!TRIGGER_REVIEWER_ROLES.has(user.role)) {
+          const user = await requireRole(c, TRIGGER_REVIEWER_ROLES);
+          if (!user)
             return c.json(
               { error: "Insufficient permissions to view notifications" },
               403,
             );
-          }
-          
+
           const url = new URL(c.req.url);
 
           // Non-admin users can only see notifications addressed to their own role.
@@ -424,11 +418,12 @@ export const triggerRoutes = [
           const logger = mastra?.getLogger();
           const { markNotificationRead, initAuditTriggerTables } =
             await import("../../utils/auditTriggerDatabase");
-          const { getSessionUser } = await import("../../utils/rbacMiddleware");
+          const { requireRole } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
-          
-          const user = getSessionUser(c);
-          if (!user) return c.json({ error: "Authentication required" }, 401);
+
+          const user = await requireRole(c, TRIGGER_REVIEWER_ROLES);
+          if (!user)
+            return c.json({ error: "Insufficient permissions" }, 403);
 
           const id = parseInt(c.req.param("id"));
           logger?.info("📧 [TriggerAPI] POST /api/notifications/:id/read", {

@@ -84,3 +84,15 @@ id = "7k53bI3kSKxNrubjtZxKf"
 uri = "file://reports/attachments-2026-04-23T09-21-18.json"
 type = "unspecified"
 title = "Sample Attachments — JSON"
+
+[[outputs]]
+id = "gi-q6rHUjalmOTW-uR5VI"
+uri = "file://docs/PLATFORM_AUDIT.md"
+type = "text"
+title = "Platform Audit (what's shipped, working, broken)"
+
+[[outputs]]
+id = "pNCe7Uis44rTTUmJwDTxv"
+uri = "file://docs/PLATFORM_ROADMAP.md"
+type = "text"
+title = "Platform Roadmap (RICE backlog + Now/Next/Later)"

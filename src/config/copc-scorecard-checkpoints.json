@@ -1,0 +1,111 @@
+{
+  "scorecard_version": "2.1.0-copc-1",
+  "source_artifacts": [
+    "Five9_SDR_QA_Scorecard_COPC_Template.xlsx"
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 2,
+    "labels": {
+      "0": "Not Met",
+      "1": "Partially Met",
+      "2": "Fully Met"
+    }
+  },
+  "sections": [
+    {
+      "id": "S1",
+      "title": "Call Activity & Process Adherence",
+      "weight_pct": 30,
+      "checkpoints": [
+        { "id": "S1.1", "name": "Login to Call Gap", "metric": "Minutes from agent login to first outbound/answered call", "target": "≤ 10 minutes", "evaluator": "not_yet_sourced", "data_source": "Five9 agent state logs" },
+        { "id": "S1.2", "name": "Post Call Logout Gap", "metric": "Minutes from last call end to agent logout", "target": "≤ 15 minutes", "evaluator": "not_yet_sourced", "data_source": "Five9 agent state logs" },
+        { "id": "S1.3", "name": "Calls Made vs. Target", "metric": "Calls placed ÷ daily target × 100", "target": "≥ 100% of target", "evaluator": "not_yet_sourced", "data_source": "Five9 attempts vs. target table" },
+        { "id": "S1.4", "name": "Calls Answered %", "metric": "Answered calls ÷ attempted calls × 100", "target": "≥ campaign target (e.g. 20–30%)", "evaluator": "not_yet_sourced", "data_source": "Five9 disposition summary" },
+        { "id": "S1.5", "name": "Idle Time Ratio", "metric": "Total idle time ÷ login time × 100", "target": "≤ 15% of login time", "evaluator": "not_yet_sourced", "data_source": "Five9 agent state logs" },
+        { "id": "S1.6", "name": "Calls Logged in Real-Time", "metric": "% calls with matching CRM activity within 15 min of call end", "target": "≥ 95% within 15 minutes", "evaluator": "not_yet_sourced", "data_source": "Five9 ↔ CRM cross-check" },
+        { "id": "S1.7", "name": "SLA Follow-up Compliance", "metric": "% new/assigned leads first-contacted within 1 business day", "target": "≥ 95% within 1 business day", "evaluator": "not_yet_sourced", "data_source": "CRM activities vs lead create" },
+        { "id": "S1.8", "name": "Process Stage Accuracy", "metric": "% records following allowed next-stage transitions", "target": "≥ 98% valid transitions", "evaluator": "not_yet_sourced", "data_source": "CRM stage audit" }
+      ]
+    },
+    {
+      "id": "S2",
+      "title": "Call Quality & Soft Skills",
+      "weight_pct": 30,
+      "checkpoints": [
+        {
+          "id": "S2.1",
+          "name": "Communication Skills",
+          "metric": "Rubric 0–2 assessing clarity, professionalism, active listening",
+          "target": "Rubric ≥ 1.5/2 avg",
+          "evaluator": "transcript_communication",
+          "rubric": {
+            "min_transcript_chars": 200,
+            "greetings": ["hello", "good morning", "good afternoon", "hi ", "this is", "speaking with", "calling from", "thank you for", "مرحبا", "السلام عليكم", "صباح الخير", "مساء الخير", "معك"],
+            "closings": ["thank you", "have a good", "appreciate your time", "thanks for", "talk soon", "شكرا", "أشكرك", "سعدت بمحادثتك", "أتمنى لك"]
+          }
+        },
+        {
+          "id": "S2.2",
+          "name": "Objection Handling",
+          "metric": "Rubric 0–2 on probing, reframing, and resolving/parking objections",
+          "target": "Rubric ≥ 1.5/2 avg",
+          "evaluator": "transcript_objection",
+          "rubric": {
+            "min_transcript_chars": 250,
+            "objection_markers": ["not interested", "too expensive", "expensive", "no time", "busy right now", "send email", "later", "think about", "غالي", "مشغول", "مش مهتم", "غير مهتم", "ليس لدي وقت", "أفكر", "أرسل", "لا أستطيع"],
+            "response_phrases": ["understand", "appreciate", "may i ask", "what if", "would it help", "let me explain", "consider", "أفهم", "أقدر", "اسمح لي", "هل تسمح", "ربما", "لو سمحت", "لو ناسبك"]
+          }
+        },
+        {
+          "id": "S2.3",
+          "name": "Call Flow & Structure",
+          "metric": "Rubric 0–2 on following intro → discovery → next steps",
+          "target": "Rubric ≥ 1.5/2 avg",
+          "evaluator": "transcript_call_flow",
+          "rubric": {
+            "min_transcript_chars": 300,
+            "stages": {
+              "intro": ["this is", "calling from", "speaking with", "my name is", "معك", "اتصل من", "اسمي", "من شركة"],
+              "discovery": ["may i ask", "could you tell", "what is", "how do you", "currently", "do you", "هل لديك", "كم", "ما هو", "كيف", "متى", "حاليا"],
+              "next_steps": ["next step", "schedule", "calendar", "send you", "follow up", "call you back", "meeting", "موعد", "أرسل", "نتابع", "خطوة", "اتفقنا"]
+            }
+          }
+        },
+        {
+          "id": "S2.4",
+          "name": "Tone & Sentiment",
+          "metric": "Rubric 0–2 on positive, empathetic, confident tone",
+          "target": "Rubric ≥ 1.5/2 avg",
+          "evaluator": "sentiment_label",
+          "rubric": {
+            "positive_labels": ["positive", "إيجابي"],
+            "neutral_labels": ["neutral", "محايد"],
+            "negative_labels": ["negative", "سلبي"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "S3",
+      "title": "Coaching & Continuous Improvement",
+      "weight_pct": 20,
+      "checkpoints": [
+        { "id": "S3.1", "name": "Coaching Participation", "metric": "% scheduled coaching/shadowing sessions attended", "target": "≥ 95% sessions attended", "evaluator": "not_yet_sourced", "data_source": "coaching attendance log" },
+        { "id": "S3.2", "name": "Action Plan Follow-up", "metric": "% coaching action items completed by due date", "target": "≥ 90% actions completed", "evaluator": "not_yet_sourced", "data_source": "coaching action items" },
+        { "id": "S3.3", "name": "Performance Improvement", "metric": "Δ total score vs 4-week rolling baseline", "target": "≥ +5 pts vs 4-week baseline", "evaluator": "not_yet_sourced", "data_source": "rolling 4-week trend" }
+      ]
+    },
+    {
+      "id": "S4",
+      "title": "KPI & Correlation Analysis",
+      "weight_pct": 20,
+      "checkpoints": [
+        { "id": "S4.1", "name": "Conversion Ratio", "metric": "% of leads moved to next stage/meeting", "target": "≥ 10–20% (campaign-specific)", "evaluator": "not_yet_sourced", "data_source": "CRM funnel" },
+        { "id": "S4.2", "name": "Answer Rate", "metric": "Answered ÷ attempted × 100", "target": "Campaign-specific threshold", "evaluator": "not_yet_sourced", "data_source": "Five9" },
+        { "id": "S4.3", "name": "Utilization Ratio", "metric": "Talk time ÷ login time × 100", "target": "45–65% (campaign-specific)", "evaluator": "not_yet_sourced", "data_source": "Five9 agent states" },
+        { "id": "S4.4", "name": "Lead Volume Correlation", "metric": "Correlation between marketing lead volume and SDR activities", "target": "r ≥ +0.5 or qualitative pass", "evaluator": "not_yet_sourced", "data_source": "marketing lead volume vs SDR activities" }
+      ]
+    }
+  ]
+}

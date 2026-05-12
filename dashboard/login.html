@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .google-btn {
@@ -43,8 +43,7 @@
         </div>
 
         <!-- Iframe banner (only shown when this page is loaded inside an iframe, e.g. the Replit preview pane).
-             Cross-site iframes can't share the admin_key cookie because of SameSite=Lax, so we offer a one-click
-             "open in new tab" path — that gives a top-level navigation where the cookie works normally. -->
+             Sign-in requires a top-level navigation; iframes cannot share session cookies cross-site. -->
         <div id="iframe-banner" class="hidden mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
             <div class="flex items-start gap-3">
                 <svg class="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z"/></svg>
@@ -80,32 +79,6 @@
             </a>
             <p class="text-xs text-gray-400 text-center mt-3" data-i18n="login.sign_in_options">Sign in with Google, GitHub, Apple, or email</p>
 
-            <div class="relative my-8">
-                <div class="absolute inset-0 flex items-center">
-                    <div class="w-full border-t border-gray-200"></div>
-                </div>
-                <div class="relative flex justify-center">
-                    <span class="bg-white px-4 text-xs text-gray-400 uppercase tracking-wider" data-i18n="login.or">or</span>
-                </div>
-            </div>
-
-            <div>
-                <p class="text-sm text-gray-600 mb-3 font-medium" data-i18n="login.admin_key_label">Continue with Admin Key</p>
-                <form id="admin-key-form" autocomplete="on" data-on-submit="loginWithAdminKey">
-                    <div class="flex gap-2">
-                        <input type="password" id="admin-key-input" name="admin-key" data-testid="input-admin-key"
-                               autocomplete="current-password"
-                               data-i18n-placeholder="login.admin_key_placeholder"
-                               placeholder="Enter admin API key"
-                               class="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <button type="submit" data-testid="button-admin-login" data-i18n="login.admin_key_enter"
-                                class="px-5 py-2.5 bg-gray-800 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
-                            Enter
-                        </button>
-                    </div>
-                </form>
-                <p class="text-xs text-gray-400 mt-2" data-i18n="login.admin_key_note">For admin and QMS panel access only</p>
-            </div>
         </div>
 
         <p class="text-xs text-gray-400 text-center mt-6" data-i18n="login.footer">&copy; 2026 WalaPlus. Enterprise Quality Management.</p>
@@ -127,21 +100,25 @@
             }
         })();
 
-        // Auto-focus the admin key field so users can start typing immediately without hunting for it.
-        // Skipped on touch devices to avoid forcing the on-screen keyboard open.
-        window.addEventListener('DOMContentLoaded', () => {
-            const isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-            if (!isTouch) {
-                const input = document.getElementById('admin-key-input');
-                if (input) input.focus();
-            }
-        });
 
-        // Translate error messages using i18n if available, with English fallback
+        // Translate error messages using i18n if available, with English fallback.
+        // Each known key is enumerated as a literal _t('full.key') call so the
+        // i18n guardrail can statically verify it.
         function _loginT(key, fallback) {
             try {
                 if (window.WalaPlusI18n && typeof window.WalaPlusI18n.t === 'function') {
-                    var v = window.WalaPlusI18n.t(key);
+                    var I18N = window.WalaPlusI18n;
+                    var v;
+                    switch (key) {
+                        case 'login.errors.auth_denied':       v = I18N.t('login.errors.auth_denied'); break;
+                        case 'login.errors.no_code':           v = I18N.t('login.errors.no_code'); break;
+                        case 'login.errors.no_email':          v = I18N.t('login.errors.no_email'); break;
+                        case 'login.errors.callback_failed':   v = I18N.t('login.errors.callback_failed'); break;
+                        case 'login.errors.invalid_state':     v = I18N.t('login.errors.invalid_state'); break;
+                        case 'login.errors.session_expired':   v = I18N.t('login.errors.session_expired'); break;
+                        case 'login.errors.invalid_admin_key': v = I18N.t('login.errors.invalid_admin_key'); break;
+                        case 'login.errors.auth_failed':       v = I18N.t('login.errors.auth_failed'); break;
+                    }
                     if (v && v !== key.split('.').pop()) return v;
                 }
             } catch (_) {}
@@ -174,26 +151,6 @@
             };
             const e = errorMap[error] || { key: 'login.errors.callback_failed', fallback: 'An error occurred during sign-in. Please try again.' };
             showLoginError(msg, e.key, e.fallback);
-        }
-
-        async function loginWithAdminKey() {
-            const key = document.getElementById('admin-key-input').value.trim();
-            if (!key) return;
-            const banner = document.getElementById('error-banner');
-            const msg = document.getElementById('error-message');
-            banner.classList.add('hidden');
-            try {
-                const res = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
-                if (res.ok) {
-                    window.location.href = '/';
-                } else {
-                    banner.classList.remove('hidden');
-                    showLoginError(msg, 'login.errors.invalid_admin_key', 'Invalid admin key. Please check and try again.');
-                }
-            } catch(e) {
-                banner.classList.remove('hidden');
-                showLoginError(msg, 'login.errors.auth_failed', 'Authentication failed. Please try again.');
-            }
         }
 
         fetch('/api/auth/me')

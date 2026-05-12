@@ -1,4 +1,4 @@
-import { WebClient } from '@slack/web-api';
+import { WebClient, type ChatPostMessageResponse } from '@slack/web-api';
 import { logger } from './logger';
 
 let slackClient: WebClient | null = null;
@@ -43,22 +43,54 @@ function formatDate(date: Date): string {
   });
 }
 
+/**
+ * Post a Slack message and return both the delivery status and the message
+ * `ts` (timestamp id) the Slack API returned. The `ts` is needed by callers
+ * that want to thread subsequent posts under the same root — see
+ * `notifyToolHealthConfigChange` (Task #383), which stores the daily root
+ * `ts` in the DB so all threshold-tune messages on the same day fold into
+ * a single thread instead of spamming the channel feed.
+ *
+ * Pass `thread_ts` to post as a thread reply under an existing root.
+ */
+export async function postSlackMessage(
+  channel: string,
+  text: string,
+  blocks?: any[],
+  thread_ts?: string,
+): Promise<{ ok: boolean; ts: string | null }> {
+  const client = getSlackClient();
+  if (!client) return { ok: false, ts: null };
+
+  try {
+    const res: ChatPostMessageResponse = await client.chat.postMessage({
+      channel,
+      text,
+      blocks,
+      ...(thread_ts ? { thread_ts } : {}),
+    });
+    logger.info(`[Slack Notifications] Message sent to ${channel}`);
+    const ts = typeof res.ts === "string" ? res.ts : null;
+    return { ok: true, ts };
+  } catch (error: any) {
+    logger.error('[Slack Notifications] Failed to send', { error: error?.message || String(error) });
+    return { ok: false, ts: null };
+  }
+}
+
+/**
+ * Back-compat boolean wrapper for callers that don't need the message `ts`.
+ * Accepts an optional `thread_ts` so existing call sites can opt in to
+ * threading without switching to `postSlackMessage`.
+ */
 export async function sendSlackNotification(
   channel: string,
   text: string,
-  blocks?: any[]
+  blocks?: any[],
+  thread_ts?: string,
 ): Promise<boolean> {
-  const client = getSlackClient();
-  if (!client) return false;
-
-  try {
-    await client.chat.postMessage({ channel, text, blocks });
-    logger.info(`[Slack Notifications] Message sent to ${channel}`);
-    return true;
-  } catch (error: any) {
-    logger.error('[Slack Notifications] Failed to send', { error: error?.message || String(error) });
-    return false;
-  }
+  const r = await postSlackMessage(channel, text, blocks, thread_ts);
+  return r.ok;
 }
 
 export async function sendAuditCompletedNotification(
