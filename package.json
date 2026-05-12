@@ -10,6 +10,7 @@
     "check:format": "prettier --check '**/*.ts'",
     "format": "prettier --write '**/*.ts'",
     "qc": "npx tsx tests/qc/run-platform-qc.ts",
+    "mcp-eval": "npx tsx tests/mcp-eval/runMcpEval.ts",
     "postinstall": "node scripts/patch-lazystream.mjs"
   },
   "dependencies": {

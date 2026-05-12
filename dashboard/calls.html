@@ -973,6 +973,10 @@
             if (tab === 'calls') renderCallsTable();
             if (tab === 'compliance') renderComplianceTable();
             if (tab === 'analytics') renderAnalytics();
+            if (tab === 'reconcile' && !mcpCatalogBootstrapped) {
+                mcpCatalogBootstrapped = true;
+                refreshMcpImportCatalog();
+            }
         }
 
         function renderOverview() {
@@ -1204,6 +1208,162 @@
             renderCallsTable();
         }
 
+        function mcpSeverityBadgeClass(sev) {
+            if (sev === 'critical') return 'bg-red-100 text-red-800';
+            if (sev === 'warning') return 'bg-amber-100 text-amber-800';
+            return 'bg-blue-100 text-blue-800';
+        }
+
+        function renderMcpIssuesList(issues) {
+            if (!issues || !issues.length) {
+                return `<p class="text-sm text-green-700">${escapeHtml(_t('dyn.calls.mcp_no_issues'))}</p>`;
+            }
+            return `<ul class="space-y-2">${issues.map((i) => `
+                <li class="p-3 rounded-lg border border-gray-100 bg-gray-50">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-mono text-gray-500">${escapeHtml(i.code || '')}</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full ${mcpSeverityBadgeClass(i.severity)}">${escapeHtml(i.severity || 'info')}</span>
+                    </div>
+                    <p class="text-sm text-gray-800">${escapeHtml(i.message || '')}</p>
+                    ${i.suggestion ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(i.suggestion)}</p>` : ''}
+                </li>`).join('')}</ul>`;
+        }
+
+        function renderMcpReportBlock(report, sdrScope) {
+            if (!report) return '<p class="text-sm text-gray-500">—</p>';
+            const g = report.governance || {};
+            let scopeHtml = '';
+            if (sdrScope && sdrScope.programmatic_checks) {
+                scopeHtml = `<div class="mb-3 p-3 bg-violet-50 rounded-lg text-xs text-violet-900">
+                    <div><strong>SDR ${escapeHtml(String(sdrScope.governance_version || ''))}</strong> · ${escapeHtml(sdrScope.five9_api_integration || '')}</div>
+                    <div class="mt-1">${escapeHtml(sdrScope.programmatic_checks.implementation || '')}</div>
+                </div>`;
+            }
+            return scopeHtml + `
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-xs">
+                    <div class="p-2 bg-gray-50 rounded">Transcript: <strong>${report.checks?.transcript_present ? 'Yes' : 'No'}</strong></div>
+                    <div class="p-2 bg-gray-50 rounded">QA: <strong>${report.checks?.qa_present ? 'Yes' : 'No'}</strong></div>
+                    <div class="p-2 bg-gray-50 rounded">Lead: <strong>${report.checks?.lead_linked ? 'Yes' : 'No'}</strong></div>
+                    <div class="p-2 bg-gray-50 rounded">QA %: <strong>${report.qa_score_percentage != null ? escapeHtml(String(report.qa_score_percentage)) : '—'}</strong></div>
+                </div>
+                ${g.ruleset_version ? `<p class="text-xs text-gray-600 mb-2">${escapeHtml(_t('dyn.calls.mcp_governance_rules'))}: <strong>${escapeHtml(g.ruleset_version)}</strong> · ${escapeHtml(_t('dyn.calls.mcp_rules_evaluated'))}: ${escapeHtml(String(g.rules_evaluated || 0))} · ${escapeHtml(_t('dyn.calls.mcp_governance_issues'))}: ${escapeHtml(String(g.governance_issue_count || 0))}</p>` : ''}
+                <h5 class="text-sm font-semibold text-gray-800 mb-2">Issues</h5>
+                ${renderMcpIssuesList(report.issues)}`;
+        }
+
+        async function refreshMcpImportCatalog() {
+            const ph = document.getElementById('mcp-catalog-placeholder');
+            const body = document.getElementById('mcp-catalog-body');
+            if (ph) ph.textContent = '…';
+            try {
+                const res = await fetch('/api/calls/mcp/import-sources');
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                if (ph) ph.classList.add('hidden');
+                if (body) {
+                    body.classList.remove('hidden');
+                    const scope = data.sdr_process_scope || {};
+                    const chans = data.channels || [];
+                    body.innerHTML = `
+                        <div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-800 space-y-2">
+                            <p><strong>CRM scope:</strong> ${escapeHtml(data.crm_phone_match_scope_description || data.crm_phone_match_scope || '')}</p>
+                            <p><strong>SDR docs:</strong> ${escapeHtml(scope.sdr_documentation_home || '')} · <strong>Five9 API:</strong> ${escapeHtml(scope.five9_api_integration || '')}</p>
+                        </div>
+                        ${chans.map((c) => `
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <div class="flex justify-between items-start gap-2">
+                                    <h4 class="font-semibold text-gray-900">${escapeHtml(c.label || c.id)}</h4>
+                                    <span class="text-xs px-2 py-1 rounded-full bg-gray-100">${escapeHtml(_t('dyn.calls.mcp_channel_status'))}: ${escapeHtml(c.status || '')}</span>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">${escapeHtml(c.description || '')}</p>
+                                <p class="text-xs font-medium text-gray-500 mt-3">${escapeHtml(_t('dyn.calls.mcp_channel_endpoints'))}</p>
+                                <ul class="text-xs text-indigo-700 mt-1 space-y-1">${(c.endpoints || []).map((e) => `<li><code>${escapeHtml(e.method)} ${escapeHtml(e.path)}</code>${e.notes ? ' — ' + escapeHtml(e.notes) : ''}</li>`).join('')}</ul>
+                            </div>
+                        `).join('')}
+                    `;
+                }
+            } catch (e) {
+                if (ph) {
+                    ph.classList.remove('hidden');
+                    ph.textContent = _t('dyn.calls.mcp_catalog_failed', { msg: e instanceof Error ? e.message : String(e) });
+                }
+            }
+        }
+
+        async function runMcpPhoneMatch() {
+            const phone = (document.getElementById('mcp-phone-input') || {}).value?.trim();
+            const maxRaw = (document.getElementById('mcp-max-records') || {}).value;
+            const out = document.getElementById('mcp-phone-result');
+            if (!phone) {
+                alert(_t('dyn.calls.mcp_phone_required'));
+                return;
+            }
+            if (out) {
+                out.classList.remove('hidden');
+                out.innerHTML = '<p class="text-gray-500">…</p>';
+            }
+            try {
+                const res = await fetch('/api/calls/mcp/leads/match-phone', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, max_records: maxRaw ? parseInt(maxRaw, 10) : undefined }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                const rows = data.matches || [];
+                if (out) {
+                    out.innerHTML = `
+                        <p class="text-xs text-gray-500 mb-2">Scanned: ${escapeHtml(String(data.scanned || 0))} · Normalized: <code>${escapeHtml(data.normalized_query || '')}</code></p>
+                        ${rows.length ? `<table class="w-full text-xs border-collapse"><thead><tr class="bg-gray-50"><th class="p-2 text-left">Lead ID</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Phone</th><th class="p-2 text-left">Email</th></tr></thead><tbody>
+                            ${rows.map((r) => `<tr class="border-t"><td class="p-2 font-mono">${escapeHtml(r.id)}</td><td class="p-2">${escapeHtml(r.full_name || '')}</td><td class="p-2">${escapeHtml(r.phone || '')}</td><td class="p-2">${escapeHtml(r.email || '')}</td></tr>`).join('')}
+                        </tbody></table>` : `<p class="text-amber-700">${escapeHtml(data.note || 'No matches')}</p>`}`;
+                }
+            } catch (e) {
+                alert(_t('dyn.calls.mcp_match_failed', { msg: e instanceof Error ? e.message : String(e) }));
+                if (out) out.innerHTML = '';
+            }
+        }
+
+        async function runMcpReconciliationById() {
+            const raw = (document.getElementById('mcp-reconcile-record-id') || {}).value;
+            const id = parseInt(String(raw || ''), 10);
+            const out = document.getElementById('mcp-reconcile-full-result');
+            if (!Number.isFinite(id) || id <= 0) {
+                alert(_t('dyn.calls.mcp_record_id_required'));
+                return;
+            }
+            if (out) {
+                out.classList.remove('hidden');
+                out.innerHTML = '<p class="text-gray-500">…</p>';
+            }
+            try {
+                const res = await fetch(`/api/calls/mcp/reconciliation/${id}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                if (out) {
+                    out.innerHTML = renderMcpReportBlock(data.report, data.sdr_process_scope);
+                }
+            } catch (e) {
+                alert(_t('dyn.calls.mcp_reconcile_by_id_failed', { msg: e instanceof Error ? e.message : String(e) }));
+                if (out) out.innerHTML = '';
+            }
+        }
+
+        async function loadCallMcpReconciliation(callId) {
+            const slot = document.getElementById('mcp-reconcile-result');
+            if (!slot) return;
+            slot.classList.remove('hidden');
+            slot.innerHTML = '<p class="text-sm text-gray-500">…</p>';
+            try {
+                const res = await fetch(`/api/calls/mcp/reconciliation/${callId}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                slot.innerHTML = renderMcpReportBlock(data.report, data.sdr_process_scope);
+            } catch (e) {
+                slot.innerHTML = `<p class="text-sm text-red-600">${escapeHtml(_t('dyn.calls.mcp_reconcile_failed', { msg: e instanceof Error ? e.message : String(e) }))}</p>`;
+            }
+        }
+
         async function viewCall(callId) {
             try {
                 const res = await fetch(`/api/calls/${callId}`);
@@ -1266,6 +1426,12 @@
                         </div>
                     ` : ''}
                     <div class="mt-6 pt-6 border-t">
+ slack-audit-notification-alignment
+                        <h4 class="font-semibold text-gray-900 mb-2">${escapeHtml(_t('dyn.calls.mcp_reconcile_title'))}</h4>
+                        <p class="text-xs text-gray-500 mb-3">${escapeHtml(_t('dyn.calls.mcp_reconcile_desc'))}</p>
+                        <button type="button" data-on-click="loadCallMcpReconciliation" data-args="[${callId}]" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700">${escapeHtml(_t('dyn.calls.mcp_load_reconcile'))}</button>
+                        <div id="mcp-reconcile-result" class="mt-4 hidden text-sm max-h-80 overflow-y-auto"></div>
+
                         <h4 class="font-semibold text-gray-900 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_combined_title'))}</h4>
                         <p class="text-xs text-gray-500 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_combined_desc'))}</p>
                         <div class="flex flex-wrap gap-2">
@@ -1289,6 +1455,7 @@
                                 </div>
                             </div>
                         </div>
+ main
                     </div>
                 `;
 
@@ -1644,6 +1811,7 @@
 
         let selectedUploadFile = null;
         let selectedEvalCall = null;
+        let mcpCatalogBootstrapped = false;
         let callsForEval = [];
         function getAdminHeaders() {
             return { 'Content-Type': 'application/json' };

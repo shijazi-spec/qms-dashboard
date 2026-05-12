@@ -1238,6 +1238,9 @@
       "mcp_reconcile_by_id_failed": "فشلت المصالحة: {msg}",
       "mcp_tab_bridge": "جسر QMS",
       "mcp_channel_status": "الحالة",
+ slack-audit-notification-alignment
+      "mcp_channel_endpoints": "نقاط النهاية"
+
       "mcp_channel_endpoints": "نقاط النهاية",
       "auto_link_lead": "ربط بالهاتف",
       "auto_link_ok": "تم الربط بالعميل المحتمل {id}.",
@@ -1263,6 +1266,7 @@
       "delete_btn": "حذف",
       "delete_confirm": "حذف سجل المكالمة {id}؟ سيؤدي ذلك إلى إزالة النص والتحليل ودرجة الجودة وسجل الامتثال. لا يمكن التراجع عن هذا الإجراء.",
       "delete_failed": "فشل الحذف: {msg}"
+ main
     },
     "users": {
       "no_pending_requests": "لا توجد طلبات وصول معلّقة",
@@ -2539,6 +2543,7 @@
     "tab_overview": "نظرة عامة",
     "tab_records": "سجل المكالمات",
     "tab_sources": "مصادر البيانات",
+    "tab_mcp_bridge": "جسر QMS",
     "tab_sdr": "تقييم SDR",
     "tab_scorecards": "بطاقات التقييم",
     "tab_compliance": "امتثال CRM",

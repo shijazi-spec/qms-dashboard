@@ -1,0 +1,73 @@
+{
+  "ruleset_under_test": "src/config/sdr-governance-2.1.rules.json",
+  "scenarios": [
+    {
+      "id": "empty_transcript",
+      "description": "Empty transcript should not trigger any governance rule (min_transcript_length only fires when transcript is non-empty but short).",
+      "transcript": "",
+      "expect": {
+        "must_include_codes": [],
+        "must_exclude_codes": [
+          "sdr_gov_transcript_too_short",
+          "sdr_gov_opening_pattern",
+          "sdr_gov_call_purpose",
+          "sdr_gov_next_step",
+          "sdr_gov_forbidden_claim"
+        ],
+        "max_critical": 0
+      }
+    },
+    {
+      "id": "voicemail_short",
+      "description": "Very short transcript (< 120 chars) trips the short-transcript guard.",
+      "transcript": "Hi, this is Sara. Sorry I missed you, please call back.",
+      "expect": {
+        "must_include_codes": ["sdr_gov_transcript_too_short"],
+        "max_critical": 0
+      }
+    },
+    {
+      "id": "compliant_full_call",
+      "description": "Long, well-formed EN call with opening, purpose, and next-step language.",
+      "transcript": "Hello, good morning, this is Sara calling from WalaPlus. Thank you for your time today. The reason for my call is to follow up regarding the financial solutions we discussed. I wanted to share more about how we can help your team. As a next step, I will schedule a meeting and send you the proposal by end of week. We can follow up after the meeting to discuss further. Please let me know if any other times work better for you. I will call you back tomorrow afternoon to confirm. Thank you again for your time and have a good day.",
+      "expect": {
+        "must_include_codes": [],
+        "must_exclude_codes": [
+          "sdr_gov_transcript_too_short",
+          "sdr_gov_opening_pattern",
+          "sdr_gov_call_purpose",
+          "sdr_gov_next_step",
+          "sdr_gov_forbidden_claim"
+        ],
+        "max_critical": 0
+      }
+    },
+    {
+      "id": "missing_next_step",
+      "description": "Has opening + purpose but no next-step language.",
+      "transcript": "Hello, good morning, this is Sara from WalaPlus. The reason for my call is to discuss the financial offer we have for you. I wanted to share that we have a new program tailored for your needs. Let me know what you think about that. I appreciate you taking the time today to listen. We will see how it goes. Thank you and have a good day. Goodbye and take care now of yourself. Best wishes to you and your family. Have a wonderful rest of your day today.",
+      "expect": {
+        "must_include_codes": ["sdr_gov_next_step"],
+        "max_critical": 0
+      }
+    },
+    {
+      "id": "forbidden_guarantee_en",
+      "description": "Contains 'guaranteed approval' — must trip the compliance rule (critical).",
+      "transcript": "Hello, this is Sara from WalaPlus. I am calling to let you know that you have guaranteed approval for our financing package. There is no risk involved. We can schedule a follow up meeting next week. Please let me know when you are available. Thank you for your time and consideration of this generous offer that we have for you today and tomorrow.",
+      "expect": {
+        "must_include_codes": ["sdr_gov_forbidden_claim"],
+        "min_critical": 1
+      }
+    },
+    {
+      "id": "forbidden_guarantee_ar",
+      "description": "Arabic-language compliance violation: 'ضمان الموافقة'.",
+      "transcript": "مرحبا، معك سارة من ولاء بلس. اتصلت اليوم بخصوص عرض التمويل الذي ناقشناه سابقا مع فريقكم. لدينا ضمان الموافقة على طلبك بإذن الله، وسوف نتابع معك الخطوات القادمة. سأرسل لك المستندات قريبا ونحدد موعد للقاء التالي بعد المراجعة. شكرا جزيلا لوقتك الثمين ووجهة نظرك المهمة.",
+      "expect": {
+        "must_include_codes": ["sdr_gov_forbidden_claim"],
+        "min_critical": 1
+      }
+    }
+  ]
+}

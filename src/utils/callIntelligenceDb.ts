@@ -9,7 +9,15 @@ const pool = new Pool({
 export interface CallRecord {
   id?: number;
   call_id: string;
-  source: "five9" | "twilio" | "mobile" | "google_meet" | "manual" | "api";
+  source:
+    | "five9"
+    | "twilio"
+    | "mobile"
+    | "google_meet"
+    | "google_drive"
+    | "bulk_upload"
+    | "manual"
+    | "api";
   lead_id?: string;
   deal_id?: string;
   contact_name?: string;
