@@ -111,6 +111,22 @@ export interface MeetingMOM {
   created_at?: Date;
 }
 
+export interface CallGovernanceResult {
+  id?: number;
+  call_record_id: number;
+  ruleset_version: string | null;
+  verdict: "ok" | "needs_attention" | "critical";
+  critical_count: number;
+  warning_count: number;
+  info_count: number;
+  issues: any;
+  suggested_updates: any;
+  lead_match: any;
+  load_error: string | null;
+  evaluated_at?: Date;
+  created_at?: Date;
+}
+
 export async function initCallIntelligenceTables(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS call_records (
@@ -220,6 +236,24 @@ export async function initCallIntelligenceTables(): Promise<void> {
       created_at TIMESTAMP DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS call_governance_results (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER NOT NULL UNIQUE REFERENCES call_records(id) ON DELETE CASCADE,
+      ruleset_version VARCHAR(64),
+      verdict VARCHAR(32) NOT NULL,
+      critical_count INTEGER NOT NULL DEFAULT 0,
+      warning_count INTEGER NOT NULL DEFAULT 0,
+      info_count INTEGER NOT NULL DEFAULT 0,
+      issues JSONB,
+      suggested_updates JSONB,
+      lead_match JSONB,
+      load_error TEXT,
+      evaluated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_call_governance_results_verdict ON call_governance_results(verdict);
+    CREATE INDEX IF NOT EXISTS idx_call_governance_results_evaluated_at ON call_governance_results(evaluated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_call_records_source ON call_records(source);
     CREATE INDEX IF NOT EXISTS idx_call_records_agent ON call_records(agent_email);
     CREATE INDEX IF NOT EXISTS idx_call_records_status ON call_records(status);
@@ -463,7 +497,7 @@ export async function saveTranscript(
   transcript: CallTranscript,
 ): Promise<CallTranscript> {
   const result = await pool.query(
-    `INSERT INTO call_transcripts 
+    `INSERT INTO call_transcripts
      (call_record_id, transcript_text, speaker_segments, word_timestamps, language, confidence_score)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
@@ -476,6 +510,7 @@ export async function saveTranscript(
       transcript.confidence_score || null,
     ],
   );
+  await autoTriggerGovernanceAfterTranscript(transcript.call_record_id);
   return result.rows[0];
 }
 
@@ -487,6 +522,73 @@ export async function getTranscriptByCallId(
     [callRecordId],
   );
   return result.rows[0] || null;
+}
+
+export async function saveGovernanceResult(
+  result: CallGovernanceResult,
+): Promise<CallGovernanceResult> {
+  const row = await pool.query(
+    `INSERT INTO call_governance_results
+       (call_record_id, ruleset_version, verdict, critical_count, warning_count, info_count,
+        issues, suggested_updates, lead_match, load_error, evaluated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+     ON CONFLICT (call_record_id) DO UPDATE SET
+       ruleset_version    = EXCLUDED.ruleset_version,
+       verdict            = EXCLUDED.verdict,
+       critical_count     = EXCLUDED.critical_count,
+       warning_count      = EXCLUDED.warning_count,
+       info_count         = EXCLUDED.info_count,
+       issues             = EXCLUDED.issues,
+       suggested_updates  = EXCLUDED.suggested_updates,
+       lead_match         = EXCLUDED.lead_match,
+       load_error         = EXCLUDED.load_error,
+       evaluated_at       = NOW()
+     RETURNING *`,
+    [
+      result.call_record_id,
+      result.ruleset_version,
+      result.verdict,
+      result.critical_count,
+      result.warning_count,
+      result.info_count,
+      JSON.stringify(result.issues ?? []),
+      JSON.stringify(result.suggested_updates ?? []),
+      JSON.stringify(result.lead_match ?? null),
+      result.load_error,
+    ],
+  );
+  return row.rows[0];
+}
+
+export async function getGovernanceResultByCallId(
+  callRecordId: number,
+): Promise<CallGovernanceResult | null> {
+  const row = await pool.query(
+    "SELECT * FROM call_governance_results WHERE call_record_id = $1",
+    [callRecordId],
+  );
+  return row.rows[0] || null;
+}
+
+/**
+ * Auto-trigger hook: after a transcript is saved, run the SDR governance + reconciliation
+ * orchestrator and upsert the result. Error-isolated — a governance failure must never
+ * break the transcription flow. Dynamic import breaks the circular static dep with
+ * sdrCallValidation (which imports save/get from this module).
+ *
+ * Toggle off with SDR_GOVERNANCE_AUTOTRIGGER=off (e.g. for migration scripts).
+ */
+async function autoTriggerGovernanceAfterTranscript(callRecordId: number): Promise<void> {
+  if (process.env.SDR_GOVERNANCE_AUTOTRIGGER === "off") return;
+  try {
+    const { evaluateAndPersistGovernance } = await import("./sdrCallValidation");
+    await evaluateAndPersistGovernance(callRecordId);
+  } catch (err) {
+    logger.warn("[governance autotrigger] failed", {
+      call_record_id: callRecordId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 export async function saveCallAnalysis(

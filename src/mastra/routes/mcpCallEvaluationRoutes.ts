@@ -202,12 +202,46 @@ export const mcpCallEvaluationRoutes = [
           return c.json({ error: "Invalid call record id" }, 400);
         }
 
-        const { runSdrCallValidation } = await import("../../utils/sdrCallValidation");
+        const { runSdrCallValidation, evaluateAndPersistGovernance } =
+          await import("../../utils/sdrCallValidation");
         const result = await runSdrCallValidation(id);
         if (!result.found) {
           return c.json({ error: "Call record not found" }, 404);
         }
+        // Re-evaluate-and-persist so the dashboard snapshot reflects the latest run.
+        await evaluateAndPersistGovernance(id).catch(() => null);
         return c.json({ success: true, ...result });
+      };
+    },
+  },
+  {
+    path: "/api/calls/mcp/governance/:id",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await requireRoleOrKey(c, [...CALL_READ_ROLES]);
+        if (!user) return unauthorizedResponse(c);
+
+        const id = Number.parseInt(String(c.req.param("id") || ""), 10);
+        if (!Number.isFinite(id) || id <= 0) {
+          return c.json({ error: "Invalid call record id" }, 400);
+        }
+
+        const { getGovernanceResultByCallId, initCallIntelligenceTables } =
+          await import("../../utils/callIntelligenceDb");
+        await initCallIntelligenceTables();
+        const snapshot = await getGovernanceResultByCallId(id);
+        if (!snapshot) {
+          return c.json(
+            {
+              success: true,
+              found: false,
+              note: "No governance snapshot yet. POST /api/calls/mcp/validate/:id to create one.",
+            },
+            200,
+          );
+        }
+        return c.json({ success: true, found: true, snapshot });
       };
     },
   },

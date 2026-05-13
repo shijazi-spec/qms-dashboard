@@ -14,6 +14,7 @@
 import {
   getCallWithFullAnalysis,
   initCallIntelligenceTables,
+  saveGovernanceResult,
 } from "./callIntelligenceDb";
 import {
   buildTranscriptVsEvaluationReport,
@@ -21,6 +22,7 @@ import {
   type TranscriptVsEvaluationReport,
 } from "./callMcpReconciliation";
 import { findLeadsByPhoneMatch, type LeadPhoneMatch } from "./callLeadPhoneMatch";
+import { logger } from "./logger";
 
 export interface SdrCallValidationVerdict {
   verdict: "ok" | "needs_attention" | "critical";
@@ -72,9 +74,16 @@ function summarizeVerdict(issues: ReconciliationIssue[]): SdrCallValidationVerdi
  * Run the full programmatic SDR validation flow for a single call_record_id.
  * Pure programmatic — no LLM calls. Use this from the REST route or as a baseline
  * for MCP evals; the upgraded sdrQualityAgent layers AI reasoning on the same tools.
+ *
+ * Options:
+ *   skipLeadMatch — when true, do not call Zoho Leads (which can scan up to 2500
+ *   records and take 10-30s). Use this from auto-trigger paths where transcription
+ *   latency matters; the on-demand /validate/:id endpoint omits this flag so it
+ *   gets the full lead-match output.
  */
 export async function runSdrCallValidation(
   callRecordId: number,
+  options: { skipLeadMatch?: boolean } = {},
 ): Promise<SdrCallValidationResult> {
   await initCallIntelligenceTables();
   const bundle = await getCallWithFullAnalysis(callRecordId);
@@ -99,31 +108,7 @@ export async function runSdrCallValidation(
       | string
       | undefined;
 
-  if (!bundle.record.lead_id && contactPhone) {
-    try {
-      const match = await findLeadsByPhoneMatch(contactPhone);
-      lead_match = {
-        queried: true,
-        normalized_query: match.normalized_query,
-        scanned: match.scanned,
-        matches: match.matches,
-        note:
-          match.scanned === 0
-            ? "Zoho credentials missing or no Leads fetched."
-            : match.matches.length === 0
-              ? "No Lead phone match found in scanned Leads."
-              : undefined,
-      };
-    } catch (e) {
-      lead_match = {
-        queried: true,
-        normalized_query: "",
-        scanned: 0,
-        matches: [],
-        note: e instanceof Error ? e.message : "lead_match_failed",
-      };
-    }
-  } else if (bundle.record.lead_id) {
+  if (bundle.record.lead_id) {
     lead_match = {
       queried: false,
       normalized_query: "",
@@ -131,6 +116,40 @@ export async function runSdrCallValidation(
       matches: [],
       note: `Call already linked to lead_id=${bundle.record.lead_id}.`,
     };
+  } else if (contactPhone) {
+    if (options.skipLeadMatch) {
+      lead_match = {
+        queried: false,
+        normalized_query: "",
+        scanned: 0,
+        matches: [],
+        note: "Lead match skipped (auto-trigger path) — run /validate/:id to query Zoho.",
+      };
+    } else {
+      try {
+        const match = await findLeadsByPhoneMatch(contactPhone);
+        lead_match = {
+          queried: true,
+          normalized_query: match.normalized_query,
+          scanned: match.scanned,
+          matches: match.matches,
+          note:
+            match.scanned === 0
+              ? "Zoho credentials missing or no Leads fetched."
+              : match.matches.length === 0
+                ? "No Lead phone match found in scanned Leads."
+                : undefined,
+        };
+      } catch (e) {
+        lead_match = {
+          queried: true,
+          normalized_query: "",
+          scanned: 0,
+          matches: [],
+          note: e instanceof Error ? e.message : "lead_match_failed",
+        };
+      }
+    }
   }
 
   if (lead_match && !bundle.record.lead_id && lead_match.matches.length === 1) {
@@ -160,4 +179,61 @@ export async function runSdrCallValidation(
     lead_match,
     verdict,
   };
+}
+
+/**
+ * Run governance validation and upsert the result into `call_governance_results`.
+ * Called automatically from `saveTranscript` so every transcript produces a fresh
+ * governance snapshot; also re-callable on demand (e.g. via `/validate/:id` after
+ * late-arriving QA scores) to refresh the verdict.
+ *
+ * Returns the persisted summary, or null if the call_record was missing.
+ */
+export async function evaluateAndPersistGovernance(
+  callRecordId: number,
+): Promise<{
+  persisted: boolean;
+  verdict: SdrCallValidationVerdict["verdict"];
+  governance_issue_count: number;
+  ruleset_version: string | null;
+} | null> {
+  // skipLeadMatch=true: auto-trigger runs inside saveTranscript; don't block
+  // transcription on a 10-30s Zoho fetch. Operators can re-run via /validate/:id
+  // to get the full lead-match output.
+  const validation = await runSdrCallValidation(callRecordId, { skipLeadMatch: true });
+  if (!validation.found || !validation.verdict || !validation.report) {
+    return null;
+  }
+
+  try {
+    await saveGovernanceResult({
+      call_record_id: callRecordId,
+      ruleset_version: validation.report.governance?.ruleset_version ?? null,
+      verdict: validation.verdict.verdict,
+      critical_count: validation.verdict.critical_count,
+      warning_count: validation.verdict.warning_count,
+      info_count: validation.verdict.info_count,
+      issues: validation.report.issues,
+      suggested_updates: validation.verdict.suggested_updates,
+      lead_match: validation.lead_match ?? null,
+      load_error: validation.report.governance?.load_error ?? null,
+    });
+    return {
+      persisted: true,
+      verdict: validation.verdict.verdict,
+      governance_issue_count: validation.report.governance?.governance_issue_count ?? 0,
+      ruleset_version: validation.report.governance?.ruleset_version ?? null,
+    };
+  } catch (err) {
+    logger.warn("[sdrCallValidation] persist failed", {
+      call_record_id: callRecordId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return {
+      persisted: false,
+      verdict: validation.verdict.verdict,
+      governance_issue_count: validation.report.governance?.governance_issue_count ?? 0,
+      ruleset_version: validation.report.governance?.ruleset_version ?? null,
+    };
+  }
 }
