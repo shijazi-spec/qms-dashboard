@@ -1261,3 +1261,12 @@ const WalaPlusNav = {
 };
 
 window.WalaPlusNav = WalaPlusNav;
+// Register the WalaPlusNav namespace with SafeActions so that
+// data-on-click="WalaPlusNav.signOut" (and every other dotted handler the nav
+// renders — setLang, setNumerals, refreshDashboard, markRead, togglePin, …)
+// can be resolved by the strict allowlist resolver. Without this, the registry
+// only contains functions auto-scanned from window, and namespace objects are
+// silently dropped, leaving the buttons inert.
+if (window.SafeActions && typeof window.SafeActions.register === 'function') {
+  window.SafeActions.register('WalaPlusNav', WalaPlusNav);
+}

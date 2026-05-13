@@ -197,10 +197,26 @@
   global.SafeActions = {
     /** Invoke a registered handler by name (used by pages that need programmatic dispatch). */
     call: function (name, args) { callOne(name, args || []); },
-    /** Explicitly register a single handler function under the given name. */
-    register: function (name, fn) {
-      if (typeof fn === 'function' && !isNativeFn(fn)) {
-        registry[name] = fn;
+    /**
+     * Explicitly register a single handler under the given name.
+     * Accepts a function (regular handler) OR a plain namespace object whose
+     * own function properties become callable via dotted notation
+     * (e.g. register('Nav', NavObj) → data-on-click="Nav.signOut").
+     */
+    register: function (name, value) {
+      if (typeof value === 'function' && !isNativeFn(value)) {
+        registry[name] = value;
+        return;
+      }
+      // Namespace object: must be a plain (non-array, non-DOM, non-window) object.
+      if (
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        value !== global &&
+        typeof value.nodeType !== 'number'
+      ) {
+        registry[name] = value;
       }
     },
     /** Register all non-native functions from a namespace object into the allowlist. */
