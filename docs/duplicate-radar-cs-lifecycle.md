@@ -12,10 +12,19 @@ asks *"is CS following its own SLA on this customer?"*.
 | `phase_churn_desync` | **critical** | Churn Date is populated but Phase is anything other than Termination. | "When the churn date is added, the deal will move to Termination phase" |
 | `termination_missing_churn_date` | warning | Phase = Termination but Churn Date is empty. | Data-integrity corollary of the rule above |
 | `phase_transition_stalled` | info | Deal not modified in `CS_LIFECYCLE_STALLED_TRANSITION_DAYS` (default 7) and is not in a steady-state phase (Adoption / Renewal) and not Onboarding (covered above) and not Termination (terminal). | "One working day for movement from phase to phase" |
+| `adoption_premature` | warning | Phase = Adoption while (a) `Customer_Since` is less than `CS_LIFECYCLE_ADOPTION_MIN_CUSTOMER_AGE_DAYS` (default 30) — suggesting the deal jumped Onboarding — OR (b) `Trial_End_Date` is still in the future — suggesting the deal moved to Adoption before the trial closed. | "Adoption phase for clients who completed Onboarding + trial period (if found)" |
+
+Both signals (`Customer_Since`, `Trial_End_Date`) are env-configurable. When
+neither field is present on a record the rule does **not** fire (no false
+positives). Field-name mapping:
+
+```
+DUPLICATE_RADAR_FIELD_CUSTOMER_SINCE=Customer_Since
+DUPLICATE_RADAR_FIELD_TRIAL_END=Trial_End_Date
+```
 
 Deferred for a follow-up phase (need Zoho Stage History API):
-- "Adoption only after completed Onboarding + trial period"
-- Trial-period tracking
+- Full stage-history audit (deal walked through every required prior phase)
 
 ## How it scans
 
@@ -64,10 +73,15 @@ call the same idempotent `scanCsLifecycleViolations()`.
 
 ```
 # Phase 4 — CS Lifecycle Compliance
-CS_LIFECYCLE_ONBOARDING_MAX_DAYS=30           # rule #1 threshold
-CS_LIFECYCLE_STALLED_TRANSITION_DAYS=7        # rule #4 threshold
-CS_LIFECYCLE_STEADY_STATE_PHASES=Adoption,Renewal   # phases exempt from stalled-transition
-CS_LIFECYCLE_SCAN_CRON=45 3 * * *             # nightly schedule
+CS_LIFECYCLE_ONBOARDING_MAX_DAYS=30                    # rule #1 threshold
+CS_LIFECYCLE_STALLED_TRANSITION_DAYS=7                 # rule #4 threshold
+CS_LIFECYCLE_STEADY_STATE_PHASES=Adoption,Renewal      # phases exempt from stalled-transition
+CS_LIFECYCLE_ADOPTION_MIN_CUSTOMER_AGE_DAYS=30         # rule #5 threshold (adoption_premature)
+CS_LIFECYCLE_SCAN_CRON=45 3 * * *                      # nightly schedule
+
+# Field mapping (shared with CS-Overlap module)
+DUPLICATE_RADAR_FIELD_CUSTOMER_SINCE=Customer_Since
+DUPLICATE_RADAR_FIELD_TRIAL_END=Trial_End_Date
 ```
 
 Shared with the CS-Overlap module (so both stay aligned):

@@ -23,6 +23,7 @@ afterEach(() => {
   resetCsLifecycleConfigCache();
   delete process.env.CS_LIFECYCLE_ONBOARDING_MAX_DAYS;
   delete process.env.CS_LIFECYCLE_STALLED_TRANSITION_DAYS;
+  delete process.env.CS_LIFECYCLE_ADOPTION_MIN_CUSTOMER_AGE_DAYS;
 });
 
 function daysAgo(n: number): Date {
@@ -190,6 +191,88 @@ describe("phase_transition_stalled (info)", () => {
     });
     expect(result.violations.map((v) => v.code)).not.toContain(
       "phase_transition_stalled",
+    );
+  });
+});
+
+describe("adoption_premature", () => {
+  test("fires when Customer_Since is recent (< 30 days)", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Adoption",
+        Customer_Since: daysAgo(5).toISOString().slice(0, 10),
+      },
+      modified_date: daysAgo(2),
+    });
+    const codes = result.violations.map((v) => v.code);
+    expect(codes).toContain("adoption_premature");
+    const v = result.violations.find((x) => x.code === "adoption_premature")!;
+    expect(v.severity).toBe("warning");
+  });
+
+  test("fires when Trial_End_Date is in the future", () => {
+    const tomorrow = new Date(Date.now() + 5 * 86400 * 1000);
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Adoption",
+        Customer_Since: daysAgo(180).toISOString().slice(0, 10),
+        Trial_End_Date: tomorrow.toISOString().slice(0, 10),
+      },
+      modified_date: daysAgo(1),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "adoption_premature",
+    );
+  });
+
+  test("does NOT fire when Customer_Since is old AND no future trial", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Adoption",
+        Customer_Since: daysAgo(180).toISOString().slice(0, 10),
+      },
+      modified_date: daysAgo(1),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "adoption_premature",
+    );
+  });
+
+  test("does NOT fire when no Customer_Since AND no Trial_End present", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Adoption" },
+      modified_date: daysAgo(1),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "adoption_premature",
+    );
+  });
+
+  test("does NOT fire for non-Adoption phases", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Onboarding",
+        Customer_Since: daysAgo(5).toISOString().slice(0, 10),
+      },
+      modified_date: daysAgo(1),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "adoption_premature",
+    );
+  });
+
+  test("threshold configurable via env", () => {
+    process.env.CS_LIFECYCLE_ADOPTION_MIN_CUSTOMER_AGE_DAYS = "90";
+    resetCsLifecycleConfigCache();
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Adoption",
+        Customer_Since: daysAgo(60).toISOString().slice(0, 10),
+      },
+      modified_date: daysAgo(1),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "adoption_premature",
     );
   });
 });

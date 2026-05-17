@@ -240,11 +240,20 @@ export function classifyCsOverlap(
  * Pull CS-pipeline fields out of a Zoho raw_data JSON blob, tolerant of common
  * field-name variations (Phase / phase / Phase__c, etc). Specific keys can be
  * pinned via env (DUPLICATE_RADAR_FIELD_PHASE etc).
+ *
+ * Phase 4 completion: also extracts Customer_Since and Trial_End_Date when
+ * those fields are present (or env-mapped). These let the lifecycle module
+ * reason about whether an Adoption-phase deal actually completed Onboarding
+ * and/or its trial period.
  */
 export function extractCsFieldsFromRawData(
   rawData: unknown,
   context: { domain?: string | null } = {},
-): CsOverlapInput & { arr_value?: number | null } {
+): CsOverlapInput & {
+  arr_value?: number | null;
+  customer_since?: string | Date | null;
+  trial_end_date?: string | Date | null;
+} {
   if (!rawData || typeof rawData !== "object") {
     return { domain: context.domain ?? null };
   }
@@ -295,6 +304,23 @@ export function extractCsFieldsFromRawData(
       "ARR",
     ]),
   );
+  const customerSinceRaw = tryKeys(
+    envOr("DUPLICATE_RADAR_FIELD_CUSTOMER_SINCE", [
+      "Customer_Since",
+      "customer_since",
+      "CustomerSince",
+      "Customer Since",
+    ]),
+  );
+  const trialEndRaw = tryKeys(
+    envOr("DUPLICATE_RADAR_FIELD_TRIAL_END", [
+      "Trial_End_Date",
+      "trial_end_date",
+      "TrialEndDate",
+      "Trial End Date",
+      "Trial_End",
+    ]),
+  );
 
   const arrNum =
     arrRaw == null
@@ -309,6 +335,10 @@ export function extractCsFieldsFromRawData(
     gov_type: govRaw == null ? null : String(govRaw),
     domain: context.domain ?? null,
     arr_value: arrNum,
+    customer_since:
+      customerSinceRaw == null ? null : (customerSinceRaw as string | Date),
+    trial_end_date:
+      trialEndRaw == null ? null : (trialEndRaw as string | Date),
   };
 }
 

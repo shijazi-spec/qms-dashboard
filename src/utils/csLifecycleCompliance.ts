@@ -18,7 +18,8 @@ export type CsViolationCode =
   | "onboarding_overdue"
   | "phase_churn_desync"
   | "termination_missing_churn_date"
-  | "phase_transition_stalled";
+  | "phase_transition_stalled"
+  | "adoption_premature";
 
 export type CsViolationSeverity = "info" | "warning" | "critical";
 
@@ -53,6 +54,8 @@ interface Config {
   activePhases: string[];
   terminationPhase: string;
   steadyStatePhases: string[];
+  /** Minimum days a customer must have existed before Adoption is plausible. */
+  adoptionMinCustomerAgeDays: number;
 }
 
 let cachedConfig: Config | null = null;
@@ -88,6 +91,10 @@ function loadConfig(): Config {
       process.env.CS_LIFECYCLE_STEADY_STATE_PHASES,
       ["Adoption", "Renewal"],
     ),
+    adoptionMinCustomerAgeDays: num(
+      process.env.CS_LIFECYCLE_ADOPTION_MIN_CUSTOMER_AGE_DAYS,
+      30,
+    ),
   };
   return cachedConfig;
 }
@@ -116,6 +123,8 @@ const SUGGESTED_ACTIONS: Record<CsViolationCode, string> = {
     "Termination phase requires a Churn Date for downstream reporting. Backfill the date or revert the phase.",
   phase_transition_stalled:
     "Deal has not been touched recently and is not in a steady-state phase. Confirm CS is still working it or move to the appropriate next phase.",
+  adoption_premature:
+    "Deal moved to Adoption without evidence of a completed Onboarding period (or while still inside the trial window). Verify Onboarding sign-off and trial completion with CS before counting this as an active adopter.",
 };
 
 /**
@@ -215,6 +224,48 @@ export function evaluateCsLifecycle(
     });
   }
 
+  // 5. Adoption premature — Phase = Adoption but either (a) the customer was
+  //    created less than `adoptionMinCustomerAgeDays` ago (jumped over the
+  //    Onboarding period) or (b) the trial period has not yet ended.
+  //
+  //    This is the closest signal-only check we can do without Zoho Stage
+  //    History. Customer_Since and Trial_End_Date are env-mappable and may
+  //    be absent — when both are absent we skip the rule entirely rather
+  //    than fire false positives.
+  if (phase.toLowerCase() === "adoption") {
+    const customerSince = parseDate(fields.customer_since ?? null);
+    const trialEnd = parseDate(fields.trial_end_date ?? null);
+    const reasons: string[] = [];
+
+    if (customerSince) {
+      const ageDays = daysBetween(customerSince, now);
+      if (ageDays < cfg.adoptionMinCustomerAgeDays) {
+        reasons.push(
+          `customer is only ${ageDays}d old (< ${cfg.adoptionMinCustomerAgeDays}d, expected post-Onboarding)`,
+        );
+      }
+    }
+    if (trialEnd && trialEnd.getTime() > now.getTime()) {
+      const daysRemaining = Math.ceil(
+        (trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      reasons.push(
+        `trial ends in ${daysRemaining}d (deal moved to Adoption before trial completion)`,
+      );
+    }
+
+    if (reasons.length > 0) {
+      violations.push({
+        code: "adoption_premature",
+        severity: "warning",
+        message: `Adoption phase reached prematurely: ${reasons.join("; ")}.`,
+        days_in_phase: daysSinceModified,
+        current_phase: phase,
+        suggested_action: SUGGESTED_ACTIONS.adoption_premature,
+      });
+    }
+  }
+
   return {
     is_cs_deal: true,
     current_phase: phase,
@@ -248,6 +299,7 @@ export function summarizeViolations(
       phase_churn_desync: 0,
       termination_missing_churn_date: 0,
       phase_transition_stalled: 0,
+      adoption_premature: 0,
     },
   };
   for (const ev of evaluations) {

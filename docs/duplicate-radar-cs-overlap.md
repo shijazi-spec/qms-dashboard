@@ -80,6 +80,10 @@ double-firing is safe.
   summary tally + total ARR exposure of BLOCK rows. Use this from any source
   before pushing leads/deals into CRM — single SQL round trip even for
   thousands of rows.
+- `POST /api/duplicates/cs-overlap/auto-capa` — **manually trigger CAPA
+  creation** for BLOCK clusters above the ARR threshold. Body: `{ threshold_sar?, created_by? }`. Idempotent: existing open
+  CAPAs for the same cluster are skipped. Same job also runs automatically
+  inside the nightly `csOverlapAutoScan` cron.
 
 All three endpoints respect the existing Duplicate Radar role gate (`admin`,
 `grc_manager`, `quality_manager`, `head_of_operations_quality`,
@@ -134,7 +138,33 @@ DUPLICATE_RADAR_SCORING_PROFILE=b2b   # default; legacy: email_first
 
 # Nightly auto-scan (Phase 3)
 DUPLICATE_RADAR_CS_OVERLAP_CRON=30 3 * * *   # daily 03:30 UTC
+
+# Auto-CAPA on critical BLOCK clusters (Option B)
+AUTO_CAPA_ON_BLOCK_ENABLED=true             # set false to disable
+AUTO_CAPA_ARR_THRESHOLD_SAR=1000000         # min ARR exposure to open a CAPA
+AUTO_CAPA_DEFAULT_ASSIGNEE=                 # optional user/email
+AUTO_CAPA_TARGET_DAYS=7                     # target close window in days
 ```
+
+## Auto-CAPA on critical BLOCK (Option B)
+
+Inside the nightly cron, after the notification step, the radar now opens
+a CAPA automatically for every BLOCK cluster whose `arr_exposure` is at or
+above `AUTO_CAPA_ARR_THRESHOLD_SAR` (default SAR 1,000,000).
+
+- **Idempotency** — every CAPA uses `source_type='cs_overlap_block'` and
+  `source_id='cs_overlap_cluster:<cluster_id>'`. Before creating a new one
+  the helper checks for any non-closed CAPA with the same source_id; if
+  one exists, it skips. The cron is safe to re-run.
+- **Severity** — `critical` when ARR ≥ 2× threshold, else `major`.
+- **Priority** — `critical` when ARR ≥ 2× threshold, else `high`.
+- **Target date** — `now + AUTO_CAPA_TARGET_DAYS` (default 7 days).
+- **Title** — `CS Overlap BLOCK: <Company> pursued as new lead despite active Customer Success deal`.
+- **Description** — pre-templated investigation + corrective + preventive
+  action stub Quality can refine.
+
+When at least one CAPA is created, a second notification fires with the
+list of new CAPA numbers so Quality sees them in the inbox immediately.
 
 ## Tests
 

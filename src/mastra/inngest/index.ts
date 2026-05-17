@@ -448,6 +448,35 @@ const csOverlapAutoScanFunction = inngest.createFunction(
       }
     });
 
+    // Auto-open CAPAs for high-ARR BLOCK clusters that don't already have an
+    // open corrective action. Idempotent: matches on source_type+source_id so
+    // repeated cron runs never duplicate the same CAPA. Tunable via env:
+    //   AUTO_CAPA_ON_BLOCK_ENABLED, AUTO_CAPA_ARR_THRESHOLD_SAR, etc.
+    await step.run("auto-open-capas", async () => {
+      if (!result.block_count || result.block_count === 0) return;
+      try {
+        const { autoOpenCapasForBlockClusters } = await import(
+          "../../utils/csOverlapAutoCapa"
+        );
+        const capaResult = await autoOpenCapasForBlockClusters({});
+        logger.info("[CsOverlap] auto-CAPA pass complete", capaResult);
+        if (capaResult.created > 0) {
+          const { createNotification } = await import(
+            "../../utils/notificationHub"
+          );
+          await createNotification({
+            type: "alert",
+            title: `Auto-CAPA: ${capaResult.created} new corrective action(s) opened on CS overlap BLOCK`,
+            message: `${capaResult.created} CAPA(s) created (${capaResult.skipped_existing} skipped — already open). Threshold: SAR ${Number(capaResult.threshold_sar).toLocaleString()}. Numbers: ${capaResult.capa_numbers.join(", ") || "—"}.`,
+            link: "/duplicates",
+            severity: "high",
+          });
+        }
+      } catch (e) {
+        logger.warn("[CsOverlap] auto-CAPA failed:", e);
+      }
+    });
+
     return result;
   },
 );

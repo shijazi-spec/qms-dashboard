@@ -2747,6 +2747,42 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Manually trigger auto-CAPA for current BLOCK clusters above the ARR
+    // threshold. Idempotent: existing open CAPAs are skipped.
+    path: "/api/duplicates/cs-overlap/auto-capa",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          let body: { threshold_sar?: number; created_by?: string } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+
+          const { autoOpenCapasForBlockClusters } = await import(
+            "../../utils/csOverlapAutoCapa"
+          );
+          const result = await autoOpenCapasForBlockClusters({
+            thresholdSar:
+              typeof body.threshold_sar === "number"
+                ? body.threshold_sar
+                : undefined,
+            createdBy: body.created_by,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error running auto-CAPA:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // CS lifecycle compliance — list current violations.
     // Query params: severity={info|warning|critical}, code={onboarding_overdue|...}, limit=N
     path: "/api/duplicates/cs-lifecycle/violations",
