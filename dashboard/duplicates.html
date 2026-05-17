@@ -581,16 +581,16 @@
             <!-- Table -->
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
+                    <thead id="csOverlapTableHead" class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Verdict</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Sector</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">CS Phase</th>
-                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">ARR Exposure</th>
-                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Records</th>
-                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Updated</th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;verdict&quot;]" class="cs-overlap-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="verdict">Verdict <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;domain&quot;]" class="cs-overlap-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;company&quot;]" class="cs-overlap-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="company">Company <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;sector&quot;]" class="cs-overlap-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="sector">Sector <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;phase&quot;]" class="cs-overlap-sort px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="phase">CS Phase <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;arr&quot;]" class="cs-overlap-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="arr">ARR Exposure <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;records&quot;]" class="cs-overlap-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="records">Records <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;updated&quot;]" class="cs-overlap-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="updated">Updated <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody id="csOverlapTable" class="bg-white divide-y divide-gray-200">
@@ -1812,23 +1812,93 @@
 
         function filterCsOverlap(v) { loadCsOverlap(v); }
 
+        // Sort state — default to ARR desc (matches backend ORDER BY)
+        window._csOverlapSort = window._csOverlapSort || { key: 'arr', dir: 'desc' };
+        window._csOverlapData = window._csOverlapData || null;
+
+        const CS_OVERLAP_VERDICT_RANK = { block: 3, review: 2, warn: 1 };
+
+        function csOverlapSortValue(r, key) {
+            switch (key) {
+                case 'verdict':  return CS_OVERLAP_VERDICT_RANK[r.cs_overlap_verdict] || 0;
+                case 'domain':   return (r.domain || '').toLowerCase();
+                case 'company':  return (r.company_name || r.company_name_arabic || '').toLowerCase();
+                case 'sector':   return (r.client_sector || '').toLowerCase();
+                case 'phase':    return (r.pipeline_lifecycle_state || '').toLowerCase();
+                case 'arr':      return Number(r.arr_exposure || 0);
+                case 'records':  return Number(r.total_records || 0);
+                case 'updated':  return r.updated_at ? new Date(r.updated_at).getTime() : 0;
+                default:         return 0;
+            }
+        }
+
+        function sortCsOverlapRows(rows, key, dir) {
+            const factor = dir === 'asc' ? 1 : -1;
+            return rows.slice().sort((a, b) => {
+                const va = csOverlapSortValue(a, key);
+                const vb = csOverlapSortValue(b, key);
+                if (va < vb) return -1 * factor;
+                if (va > vb) return  1 * factor;
+                return 0;
+            });
+        }
+
+        function updateCsOverlapSortIndicators() {
+            const headers = document.querySelectorAll('#csOverlapTableHead .cs-overlap-sort');
+            headers.forEach(h => {
+                const key = h.getAttribute('data-sort-key');
+                const ind = h.querySelector('.cs-overlap-sort-indicator');
+                if (!ind) return;
+                if (key === window._csOverlapSort.key) {
+                    ind.textContent = window._csOverlapSort.dir === 'asc' ? '↑' : '↓';
+                    ind.classList.remove('opacity-30');
+                    ind.classList.add('text-gray-900');
+                } else {
+                    ind.textContent = '⇅';
+                    ind.classList.add('opacity-30');
+                    ind.classList.remove('text-gray-900');
+                }
+            });
+        }
+
+        function sortCsOverlap(key) {
+            const cur = window._csOverlapSort;
+            // Toggle direction if clicking the same column; default to a sensible
+            // first-click direction otherwise (desc for numeric/date, asc for text).
+            if (cur.key === key) {
+                cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                cur.key = key;
+                cur.dir = ['arr','records','updated','verdict'].includes(key) ? 'desc' : 'asc';
+            }
+            if (window._csOverlapData) renderCsOverlap(window._csOverlapData);
+        }
+
         function renderCsOverlap(data) {
+            window._csOverlapData = data;
             const sum = data.summary || {};
             document.getElementById('csOverlapBlockCount').textContent  = (sum.block  && sum.block.count)  || 0;
             document.getElementById('csOverlapReviewCount').textContent = (sum.review && sum.review.count) || 0;
             document.getElementById('csOverlapWarnCount').textContent   = (sum.warn   && sum.warn.count)   || 0;
             document.getElementById('csOverlapArrExposure').textContent = formatCurrency(data.total_arr_exposure || 0);
 
+            updateCsOverlapSortIndicators();
+
             const body = document.getElementById('csOverlapTable');
-            const rows = data.clusters || [];
-            if (rows.length === 0) {
+            const allRows = data.clusters || [];
+            if (allRows.length === 0) {
                 body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS-pipeline overlaps detected. Click <em>Run scan</em> to evaluate.</td></tr>';
                 return;
             }
+            const rows = sortCsOverlapRows(allRows, window._csOverlapSort.key, window._csOverlapSort.dir);
             body.innerHTML = rows.map(r => {
+                const safeDomain = escapeHtml(r.domain || '');
+                const domainCell = r.id
+                    ? '<a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[' + r.id + ']" class="text-blue-700 hover:text-blue-900 hover:underline font-mono text-xs" title="View this cluster\'s underlying records">' + safeDomain + '</a>'
+                    : '<span class="text-xs text-gray-700 font-mono">' + safeDomain + '</span>';
                 return '<tr class="hover:bg-gray-50">'
                     + '<td class="px-4 py-2 whitespace-nowrap">' + csVerdictBadge(r.cs_overlap_verdict) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-gray-700 font-mono">' + escapeHtml(r.domain || '') + '</td>'
+                    + '<td class="px-4 py-2">' + domainCell + '</td>'
                     + '<td class="px-4 py-2 text-xs text-gray-800">' + escapeHtml(r.company_name || r.company_name_arabic || '—') + '</td>'
                     + '<td class="px-4 py-2 text-xs">' + csSectorLabel(r.client_sector) + '</td>'
                     + '<td class="px-4 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.pipeline_lifecycle_state)) + '</td>'
