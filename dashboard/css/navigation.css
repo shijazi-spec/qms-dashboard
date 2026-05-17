@@ -276,3 +276,114 @@ body.wp-rail-collapsed .wp-rail .wp-pin-btn svg { width: 0.75rem; height: 0.75re
 /* ===== "No results" empty state ===== */
 .wp-nav-empty.hidden { display: none; }
 
+
+/* ============================================================
+ * Dark mode (toggle in topbar — see WalaPlusNav.toggleTheme)
+ * Activated by adding `wp-dark` class to <html>. Pure CSS
+ * overrides — no Tailwind config change required. Targets the
+ * most common surfaces (body, cards, headings, borders, inputs,
+ * tables, modals). Page-specific overrides can extend this with
+ * additional `html.wp-dark` selectors as needed.
+ * ============================================================ */
+html.wp-dark { color-scheme: dark; }
+html.wp-dark body { background-color: #0f172a; color: #e5e7eb; }
+
+/* Top nav surface */
+html.wp-dark .wp-topbar,
+html.wp-dark header,
+html.wp-dark nav { background-color: #1e293b; color: #e5e7eb; border-color: #334155; }
+html.wp-dark .wp-topbar a,
+html.wp-dark .wp-topbar button { color: #e5e7eb; }
+html.wp-dark .wp-topbar .text-gray-500,
+html.wp-dark .wp-topbar .text-gray-600,
+html.wp-dark .wp-topbar .text-gray-700,
+html.wp-dark .wp-topbar .text-gray-800,
+html.wp-dark .wp-topbar .text-gray-900 { color: #e5e7eb; }
+html.wp-dark .wp-topbar .hover\:bg-gray-100:hover { background-color: rgba(255,255,255,0.08); }
+
+/* Left rail */
+html.wp-dark .wp-rail { background-color: #1e293b; border-color: #334155; }
+html.wp-dark .wp-rail-item { color: #cbd5e1; }
+html.wp-dark .wp-rail-item:hover,
+html.wp-dark .wp-rail-row:hover { background-color: rgba(255,255,255,0.05); }
+html.wp-dark .wp-rail-row.wp-rail-row-active { background-color: rgba(99,102,241,0.22); }
+html.wp-dark .wp-rail-item.wp-rail-item-active { color: #c7d2fe; }
+html.wp-dark .wp-group-label,
+html.wp-dark .wp-label { color: #94a3b8; }
+html.wp-dark .wp-search-wrap input { background-color: #0f172a; color: #e5e7eb; border-color: #334155; }
+
+/* Backgrounds — common Tailwind utility classes used as cards */
+html.wp-dark .bg-white { background-color: #1e293b !important; }
+html.wp-dark .bg-gray-50 { background-color: #0f172a !important; }
+html.wp-dark .bg-gray-100 { background-color: #1e293b !important; }
+html.wp-dark .bg-gray-200 { background-color: #334155 !important; }
+html.wp-dark .bg-blue-50 { background-color: rgba(59,130,246,0.12) !important; }
+html.wp-dark .bg-indigo-50 { background-color: rgba(99,102,241,0.12) !important; }
+html.wp-dark .bg-purple-50 { background-color: rgba(168,85,247,0.12) !important; }
+html.wp-dark .bg-green-50 { background-color: rgba(34,197,94,0.12) !important; }
+html.wp-dark .bg-red-50 { background-color: rgba(239,68,68,0.12) !important; }
+html.wp-dark .bg-amber-50,
+html.wp-dark .bg-yellow-50 { background-color: rgba(245,158,11,0.12) !important; }
+
+/* Text colors — light shades over dark backgrounds */
+html.wp-dark .text-gray-900,
+html.wp-dark .text-gray-800,
+html.wp-dark .text-gray-700 { color: #e5e7eb !important; }
+html.wp-dark .text-gray-600,
+html.wp-dark .text-gray-500 { color: #cbd5e1 !important; }
+html.wp-dark .text-gray-400 { color: #94a3b8 !important; }
+
+/* Borders */
+html.wp-dark .border,
+html.wp-dark .border-t,
+html.wp-dark .border-b,
+html.wp-dark .border-l,
+html.wp-dark .border-r,
+html.wp-dark .border-gray-100,
+html.wp-dark .border-gray-200,
+html.wp-dark .border-gray-300 { border-color: #334155 !important; }
+html.wp-dark .divide-gray-100 > * + *,
+html.wp-dark .divide-gray-200 > * + * { border-color: #334155 !important; }
+
+/* Hover backgrounds */
+html.wp-dark .hover\:bg-gray-50:hover,
+html.wp-dark .hover\:bg-gray-100:hover { background-color: rgba(255,255,255,0.05) !important; }
+
+/* Form inputs / textarea / select */
+html.wp-dark input[type="text"],
+html.wp-dark input[type="search"],
+html.wp-dark input[type="email"],
+html.wp-dark input[type="number"],
+html.wp-dark input[type="date"],
+html.wp-dark input[type="datetime-local"],
+html.wp-dark input[type="url"],
+html.wp-dark input[type="password"],
+html.wp-dark textarea,
+html.wp-dark select {
+  background-color: #0f172a;
+  color: #e5e7eb;
+  border-color: #334155;
+}
+html.wp-dark input::placeholder,
+html.wp-dark textarea::placeholder { color: #64748b; }
+
+/* Tables — header strip + row hover */
+html.wp-dark thead.bg-gray-50,
+html.wp-dark thead .bg-gray-50 { background-color: #0f172a !important; }
+html.wp-dark tbody.bg-white,
+html.wp-dark tbody .bg-white { background-color: #1e293b !important; }
+html.wp-dark tbody tr:hover { background-color: rgba(255,255,255,0.04) !important; }
+
+/* Modal / dropdown surfaces */
+html.wp-dark .shadow,
+html.wp-dark .shadow-sm,
+html.wp-dark .shadow-md,
+html.wp-dark .shadow-lg { box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+html.wp-dark .dropdown-menu { background-color: #1e293b; border-color: #334155; color: #e5e7eb; }
+
+/* Code / monospace blocks */
+html.wp-dark code,
+html.wp-dark pre,
+html.wp-dark .font-mono { color: #e5e7eb; }
+html.wp-dark code.bg-gray-100,
+html.wp-dark .bg-amber-100 code { background-color: #334155 !important; }

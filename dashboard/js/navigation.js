@@ -380,8 +380,51 @@ const WalaPlusNav = {
     this.saveRecent(recent);
   },
 
+  // ─── Theme (light / dark) ──────────────────────────────────────────────
+  // Stored as 'walaplus_theme' = 'light' | 'dark'. Applied to <html> via the
+  // `wp-dark` class so CSS overrides in navigation.css can target it. We
+  // apply BEFORE render() to avoid a light-to-dark flash on every nav repaint.
+  _themeKey: 'walaplus_theme',
+  loadTheme() {
+    try {
+      const v = localStorage.getItem(this._themeKey);
+      return v === 'dark' ? 'dark' : 'light';
+    } catch { return 'light'; }
+  },
+  applyTheme(mode) {
+    const html = document.documentElement;
+    if (mode === 'dark') html.classList.add('wp-dark');
+    else html.classList.remove('wp-dark');
+    // Swap icon visibility on the toggle button (if rendered)
+    const btn = document.getElementById('wp-theme-toggle');
+    if (btn) {
+      const lightIcon = btn.querySelector('.wp-theme-icon-light');
+      const darkIcon  = btn.querySelector('.wp-theme-icon-dark');
+      if (lightIcon && darkIcon) {
+        if (mode === 'dark') {
+          lightIcon.classList.add('hidden');
+          darkIcon.classList.remove('hidden');
+          btn.setAttribute('aria-label', 'Switch to light mode');
+          btn.setAttribute('title', 'Switch to light mode');
+        } else {
+          lightIcon.classList.remove('hidden');
+          darkIcon.classList.add('hidden');
+          btn.setAttribute('aria-label', 'Switch to dark mode');
+          btn.setAttribute('title', 'Switch to dark mode');
+        }
+      }
+    }
+  },
+  toggleTheme() {
+    const next = this.loadTheme() === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(this._themeKey, next); } catch {}
+    this.applyTheme(next);
+  },
+
   init(currentPageId) {
     this.currentPage = currentPageId;
+    // Apply persisted theme BEFORE any DOM rendering so the page never flashes.
+    this.applyTheme(this.loadTheme());
     // The recent-pages visit is recorded later, inside loadUserInfo()'s
     // .then() — after the user id resolves — so the visit lands in the
     // correctly-namespaced storage bucket and never bleeds into another
@@ -391,6 +434,9 @@ const WalaPlusNav = {
       this.bindEvents();
       this.loadUserInfo();
       this.pollAlertCount();
+      // Re-apply once the nav (and toggle button) are in the DOM so the icon
+      // matches the stored preference.
+      this.applyTheme(this.loadTheme());
     };
     if (window.WalaPlusI18n) {
       window.WalaPlusI18n.init().then(doInit);
@@ -812,6 +858,10 @@ const WalaPlusNav = {
           <button data-on-click="WalaPlusNav.refreshDashboard" class="wp-desktop-only bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition items-center space-x-1 text-sm" aria-label="Refresh dashboard" data-testid="button-refresh">
             <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             <span data-i18n="nav.refresh">${this._t('nav.refresh')}</span>
+          </button>
+          <button id="wp-theme-toggle" data-on-click="WalaPlusNav.toggleTheme" class="wp-theme-toggle relative p-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="Toggle dark mode" title="Toggle dark mode" data-testid="button-theme-toggle">
+            <svg class="wp-theme-icon-light w-5 h-5 text-gray-500" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+            <svg class="wp-theme-icon-dark w-5 h-5 text-yellow-300 hidden" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
           </button>
           <div class="relative nav-dropdown" data-group="notifications">
             <button class="relative p-1.5 rounded-lg hover:bg-gray-100 transition" aria-label="${this._t('nav.notifications')}" aria-haspopup="true" aria-expanded="false" aria-controls="nav-notifications-list" data-testid="button-notifications">
