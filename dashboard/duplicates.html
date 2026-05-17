@@ -1273,17 +1273,69 @@
             document.getElementById('clusterModal').classList.remove('hidden');
             document.getElementById('modalContent').innerHTML = `<div class="text-center py-8 text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.loading_dots'))}</div>`;
 
-            const res = await fetch(`/api/duplicates/clusters/${id}`);
-            const data = await res.json();
-            const { cluster, records, recommendations, primary_type, is_cross_module, record_types, mixed_signal } = data;
+            // Wrap the whole render in a try/catch so any downstream exception
+            // (missing field on the API response, translation lookup miss, etc.)
+            // surfaces inside the modal instead of leaving it stuck on "Loading…".
+            let data, res;
+            try {
+                res = await fetch(`/api/duplicates/clusters/${id}`);
+            } catch (e) {
+                document.getElementById('modalContent').innerHTML =
+                    `<div class="text-center py-8 text-red-600 text-sm">Failed to reach server: ${escapeHtml(String(e && e.message || e))}</div>`;
+                return;
+            }
+            if (!res || !res.ok) {
+                document.getElementById('modalContent').innerHTML =
+                    `<div class="text-center py-8 text-red-600 text-sm">Server returned ${res ? res.status : '—'} for cluster ${escapeHtml(String(id))}. The cluster may have been resolved, ignored, or removed.</div>`;
+                return;
+            }
+            try {
+                data = await res.json();
+            } catch (e) {
+                document.getElementById('modalContent').innerHTML =
+                    `<div class="text-center py-8 text-red-600 text-sm">Response was not JSON: ${escapeHtml(String(e && e.message || e))}</div>`;
+                return;
+            }
+
+            const { cluster, records: recordsRaw, recommendations, primary_type, is_cross_module, record_types, mixed_signal } = data || {};
+            if (!cluster) {
+                document.getElementById('modalContent').innerHTML =
+                    `<div class="text-center py-8 text-amber-700 text-sm">Cluster ${escapeHtml(String(id))} not found in the API response.</div>`;
+                return;
+            }
+            const records = Array.isArray(recordsRaw) ? recordsRaw : [];
+
             window.__currentClusterId = id;
             window.__currentMixedSignal = mixed_signal || { domains: [], phones: [], domain_groups: {} };
 
             document.getElementById('modalTitle').textContent = cluster.company_name || cluster.domain;
-            document.getElementById('modalDomain').textContent = `${WalaPlusI18n.t('dyn.duplicates.domain_kw')} ${cluster.domain} | ${WalaPlusI18n.t('dyn.duplicates.score_kw')} ${_fn(cluster.confidence_score)}% | ${WalaPlusI18n.t('dyn.duplicates.status_kw')} ${cluster.status}`;
+            const isSynthetic = typeof cluster.domain === 'string' && cluster.domain.endsWith('.cluster');
+            const syntheticNote = isSynthetic
+                ? ' · <span class="text-amber-600" title="Synthetic domain — built from phone or company-name match, not a real web domain">synthetic cluster</span>'
+                : '';
+            document.getElementById('modalDomain').innerHTML =
+                `${escapeHtml(WalaPlusI18n.t('dyn.duplicates.domain_kw'))} ${escapeHtml(cluster.domain || '')} | ${escapeHtml(WalaPlusI18n.t('dyn.duplicates.score_kw'))} ${_fn(cluster.confidence_score || 0)}% | ${escapeHtml(WalaPlusI18n.t('dyn.duplicates.status_kw'))} ${escapeHtml(cluster.status || '')}` + syntheticNote;
 
             const recMap = {};
             (recommendations || []).forEach(r => { recMap[r.record_id] = r; });
+
+            // Catch any exception in the heavy body-render below so the modal
+            // never silently sticks on the original "Loading…" placeholder.
+            try {
+                __renderClusterDetailBody({ cluster, records, recommendations: recommendations || [], primary_type, is_cross_module, record_types, mixed_signal: window.__currentMixedSignal, recMap, id });
+            } catch (err) {
+                console.error('[clusterDetails] render failed', err);
+                document.getElementById('modalContent').innerHTML =
+                    `<div class="py-6 px-4 text-sm">
+                        <div class="text-red-700 font-medium mb-2">Failed to render cluster details.</div>
+                        <pre class="bg-gray-50 border border-gray-200 rounded p-2 overflow-auto text-xs text-gray-700">${escapeHtml(String(err && err.message || err))}</pre>
+                        <div class="text-xs text-gray-500 mt-2">Cluster ID ${escapeHtml(String(id))} — open browser DevTools for the full stack trace.</div>
+                    </div>`;
+            }
+            return;
+        }
+
+        function __renderClusterDetailBody({ cluster, records, recommendations, primary_type, is_cross_module, record_types, mixed_signal, recMap, id }) {
 
             let html = `<div class="mb-4 flex flex-wrap gap-2 items-center">
                 <span class="confidence-${['high','medium','low'].includes(cluster.confidence_level)?cluster.confidence_level:'low'} px-3 py-1 rounded-full text-sm font-medium">${_t('dyn.duplicates.badge_match', { score: _fn(cluster.confidence_score) })}</span>
