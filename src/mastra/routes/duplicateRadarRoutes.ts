@@ -2643,6 +2643,109 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // ─── CS-pipeline overlap: list + scan ──────────────────────────────────────
+  {
+    path: "/api/duplicates/cs-overlap/clusters",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const verdict = url.searchParams.get("verdict"); // block|review|warn|null
+          const limit = Math.min(
+            Math.max(parseInt(url.searchParams.get("limit") || "500"), 1),
+            2000,
+          );
+          const offset = Math.max(
+            parseInt(url.searchParams.get("offset") || "0"),
+            0,
+          );
+
+          const { pool } = await import("../../utils/duplicateRadarDatabase");
+          const conds: string[] = ["cs_overlap_verdict IS NOT NULL"];
+          const params: any[] = [];
+          if (verdict && ["block", "review", "warn"].includes(verdict)) {
+            params.push(verdict);
+            conds.push(`cs_overlap_verdict = $${params.length}`);
+          }
+          const where = conds.join(" AND ");
+
+          const sql = `SELECT id, domain, company_name, company_name_arabic,
+                              estimated_pipeline_value, total_records,
+                              total_leads, total_deals, total_contacts, total_accounts,
+                              confidence_score, confidence_level, status,
+                              cs_overlap_verdict, arr_exposure,
+                              pipeline_lifecycle_state, client_sector,
+                              updated_at
+                         FROM duplicate_clusters
+                        WHERE ${where}
+                        ORDER BY
+                          CASE cs_overlap_verdict
+                            WHEN 'block' THEN 1
+                            WHEN 'review' THEN 2
+                            WHEN 'warn' THEN 3
+                            ELSE 4
+                          END,
+                          arr_exposure DESC NULLS LAST
+                        LIMIT $${params.length + 1}
+                       OFFSET $${params.length + 2}`;
+          params.push(limit, offset);
+          const r = await pool.query(sql, params);
+
+          const sumRow = await pool.query(
+            `SELECT cs_overlap_verdict AS verdict,
+                    COUNT(*)::int AS count,
+                    COALESCE(SUM(arr_exposure),0)::float AS arr
+               FROM duplicate_clusters
+              WHERE cs_overlap_verdict IS NOT NULL
+              GROUP BY cs_overlap_verdict`,
+          );
+          const summary: Record<string, { count: number; arr: number }> = {};
+          let totalArr = 0;
+          for (const row of sumRow.rows) {
+            summary[row.verdict] = { count: row.count, arr: row.arr };
+            totalArr += row.arr;
+          }
+
+          return c.json({
+            clusters: r.rows,
+            total: r.rows.length,
+            limit,
+            offset,
+            summary,
+            total_arr_exposure: totalArr,
+          });
+        } catch (error: any) {
+          logger.error("Error fetching CS overlap clusters:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/duplicates/cs-overlap/scan",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const { scanAllClustersForCsOverlap, initDuplicateRadarTables } =
+            await import("../../utils/duplicateRadarDatabase");
+          await initDuplicateRadarTables();
+          const result = await scanAllClustersForCsOverlap();
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error running CS overlap scan:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
 ];
 
 export default duplicateRadarRoutes;

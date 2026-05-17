@@ -27,6 +27,20 @@ export interface DuplicateCluster {
   ai_recommendation?: string;
   resolved_by?: string;
   resolved_at?: Date;
+  /** CS-pipeline-overlap verdict: block (active customer), review (within churn cool-off), warn (past cool-off, sales may re-engage), null (no overlap). */
+  cs_overlap_verdict?: "block" | "review" | "warn" | null;
+  /** Aggregated ARR exposure across the CS-pipeline deals in this cluster. */
+  arr_exposure?: number;
+  /** Strongest active CS phase observed in the cluster (onboarding > adoption > renewal > termination_recent > termination_old). */
+  pipeline_lifecycle_state?:
+    | "onboarding"
+    | "adoption"
+    | "renewal"
+    | "termination_recent"
+    | "termination_old"
+    | null;
+  /** Client sector derived from gov_type field or domain heuristic ("private" | "government"). */
+  client_sector?: "private" | "government" | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -199,7 +213,8 @@ export async function getAllClustersByInflation(
     `SELECT id, domain, company_name, company_name_arabic,
             estimated_pipeline_value, total_records,
             total_leads, total_deals, total_contacts, total_accounts,
-            confidence_score, confidence_level, status
+            confidence_score, confidence_level, status,
+            cs_overlap_verdict, arr_exposure, pipeline_lifecycle_state, client_sector
        FROM duplicate_clusters
       WHERE estimated_pipeline_value > 0
         AND total_records > 1
@@ -224,7 +239,8 @@ export async function getClustersBySignal(
     `SELECT id, domain, company_name, company_name_arabic,
             estimated_pipeline_value, total_records,
             total_leads, total_deals, total_contacts, total_accounts,
-            confidence_score, confidence_level, status, match_signals
+            confidence_score, confidence_level, status, match_signals,
+            cs_overlap_verdict, arr_exposure, pipeline_lifecycle_state, client_sector
        FROM duplicate_clusters
       WHERE total_records > 1
         AND match_signals @> to_jsonb(ARRAY[$1::text])
@@ -312,6 +328,19 @@ export interface MatchResult {
   signals: string[];
 }
 
+/**
+ * Multi-signal duplicate match scoring.
+ *
+ * Weights are calibrated for B2B Saudi data (gov + private sector). In observed
+ * real-world data (see `docs/duplicate-radar-cs-overlap.md`), ~100% of true
+ * duplicates share the same domain while only ~12% share email — so domain
+ * carries more weight than email here. PUBLIC_DOMAINS callers should still
+ * suppress the domain signal when both records are personal-email accounts.
+ *
+ * Override profile by env if a different shape is needed:
+ *   DUPLICATE_RADAR_SCORING_PROFILE=b2b   (default, current weights)
+ *   DUPLICATE_RADAR_SCORING_PROFILE=email_first  (legacy: email=40, domain=25)
+ */
 export function calculateMultiSignalScore(
   record1: {
     email?: string;
@@ -326,6 +355,15 @@ export function calculateMultiSignalScore(
     company_name?: string;
   },
 ): MatchResult {
+  const profile =
+    process.env.DUPLICATE_RADAR_SCORING_PROFILE === "email_first"
+      ? "email_first"
+      : "b2b";
+  const weights =
+    profile === "email_first"
+      ? { email: 40, domain: 25, phone: 30, companyExact: 20, companyFuzzy: 10 }
+      : { email: 30, domain: 50, phone: 30, companyExact: 20, companyFuzzy: 10 };
+
   const signals: string[] = [];
   let score = 0;
 
@@ -334,12 +372,12 @@ export function calculateMultiSignalScore(
     record2.email &&
     record1.email.toLowerCase() === record2.email.toLowerCase()
   ) {
-    score += 40;
+    score += weights.email;
     signals.push("exact_email");
   }
 
   if (record1.domain && record2.domain && record1.domain === record2.domain) {
-    score += 25;
+    score += weights.domain;
     signals.push("domain_match");
   }
 
@@ -347,7 +385,7 @@ export function calculateMultiSignalScore(
     const p1 = normalizePhone(record1.phone);
     const p2 = normalizePhone(record2.phone);
     if (p1 && p2 && p1.length >= 7 && p1 === p2) {
-      score += 30;
+      score += weights.phone;
       signals.push("phone_match");
     }
   }
@@ -358,10 +396,10 @@ export function calculateMultiSignalScore(
       normalizeCompanyName(record2.company_name),
     );
     if (similarity >= 90) {
-      score += 20;
+      score += weights.companyExact;
       signals.push("company_exact");
     } else if (similarity >= 75) {
-      score += 10;
+      score += weights.companyFuzzy;
       signals.push("company_fuzzy");
     }
   }
@@ -415,6 +453,23 @@ export async function initDuplicateRadarTables(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS company_name_normalized VARCHAR(500)`,
+  );
+
+  // CS-pipeline overlap detection (sector-aware) — Phase 1
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS cs_overlap_verdict VARCHAR(16)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS arr_exposure DECIMAL(15,2) DEFAULT 0`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS pipeline_lifecycle_state VARCHAR(32)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS client_sector VARCHAR(16)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_cs_overlap ON duplicate_clusters(cs_overlap_verdict) WHERE cs_overlap_verdict IS NOT NULL`,
   );
 
   await pool.query(`
@@ -3328,6 +3383,155 @@ export async function runLiveQualityCheck(
     results[r.id] = { score: dq.score, flags: dq.flags, isJunk: dq.isJunk };
   }
   return results;
+}
+
+// ─── CS-pipeline overlap detection (Phase 1) ──────────────────────────────────
+// Scans duplicate_records belonging to a cluster, classifies any Deal records
+// whose raw_data exposes the Customer Success section (Phase + Churn Date),
+// rolls up to a cluster-level verdict (BLOCK / REVIEW / WARN), and persists
+// the verdict + ARR exposure + lifecycle state + sector on the cluster row.
+// All thresholds and field names are env-configurable; see duplicateRadarCsOverlap.
+
+import {
+  classifyCsOverlap,
+  extractCsFieldsFromRawData,
+  rollupClusterVerdict,
+  type CsLifecycleState,
+  type CsOverlapClassification,
+  type CsOverlapVerdict,
+  type ClientSector,
+} from "./duplicateRadarCsOverlap";
+
+export interface CsOverlapScanResult {
+  cluster_id: number;
+  verdict: CsOverlapVerdict;
+  lifecycle_state: CsLifecycleState;
+  sector: ClientSector;
+  arr_exposure: number;
+  classified_records: number;
+}
+
+/**
+ * Scan a single cluster's records and persist the cs_overlap verdict.
+ * Returns the persisted summary, or { verdict: null } if no CS deals found.
+ */
+export async function scanClusterForCsOverlap(
+  clusterId: number,
+): Promise<CsOverlapScanResult> {
+  const clusterRow = await pool.query(
+    `SELECT id, domain FROM duplicate_clusters WHERE id = $1`,
+    [clusterId],
+  );
+  if (clusterRow.rows.length === 0) {
+    return {
+      cluster_id: clusterId,
+      verdict: null,
+      lifecycle_state: null,
+      sector: null,
+      arr_exposure: 0,
+      classified_records: 0,
+    };
+  }
+  const domain = clusterRow.rows[0].domain as string;
+
+  const recordsRow = await pool.query(
+    `SELECT id, zoho_module, raw_data, gov_type
+       FROM duplicate_records
+       WHERE cluster_id = $1
+         AND zoho_module = 'Deals'`,
+    [clusterId],
+  );
+
+  const classifications: CsOverlapClassification[] = [];
+  let arrTotal = 0;
+
+  for (const rec of recordsRow.rows) {
+    const fields = extractCsFieldsFromRawData(rec.raw_data, { domain });
+    // gov_type column is preferred over raw_data lookup if present
+    if (rec.gov_type) fields.gov_type = rec.gov_type;
+    const cls = classifyCsOverlap(fields);
+    classifications.push(cls);
+    if (cls.verdict && fields.arr_value && fields.arr_value > 0) {
+      arrTotal += fields.arr_value;
+    }
+  }
+
+  const rollup = rollupClusterVerdict(classifications);
+
+  await pool.query(
+    `UPDATE duplicate_clusters
+       SET cs_overlap_verdict       = $2,
+           pipeline_lifecycle_state = $3,
+           client_sector            = $4,
+           arr_exposure             = $5,
+           updated_at               = NOW()
+       WHERE id = $1`,
+    [
+      clusterId,
+      rollup.verdict,
+      rollup.lifecycle_state,
+      rollup.sector,
+      arrTotal,
+    ],
+  );
+
+  return {
+    cluster_id: clusterId,
+    verdict: rollup.verdict,
+    lifecycle_state: rollup.lifecycle_state,
+    sector: rollup.sector,
+    arr_exposure: arrTotal,
+    classified_records: classifications.filter((c) => c.verdict !== null).length,
+  };
+}
+
+export interface CsOverlapBatchResult {
+  scanned: number;
+  flagged: number;
+  block_count: number;
+  review_count: number;
+  warn_count: number;
+  total_arr_exposure: number;
+  duration_ms: number;
+}
+
+/**
+ * Scan every cluster that has at least one Deal record. Idempotent — safe to
+ * re-run any time (e.g. nightly, or on-demand after Zoho resync).
+ */
+export async function scanAllClustersForCsOverlap(): Promise<CsOverlapBatchResult> {
+  const t0 = Date.now();
+  const eligible = await pool.query(
+    `SELECT DISTINCT c.id
+       FROM duplicate_clusters c
+       INNER JOIN duplicate_records r ON r.cluster_id = c.id
+       WHERE r.zoho_module = 'Deals'`,
+  );
+
+  const out: CsOverlapBatchResult = {
+    scanned: 0,
+    flagged: 0,
+    block_count: 0,
+    review_count: 0,
+    warn_count: 0,
+    total_arr_exposure: 0,
+    duration_ms: 0,
+  };
+
+  for (const row of eligible.rows) {
+    const res = await scanClusterForCsOverlap(row.id);
+    out.scanned++;
+    if (!res.verdict) continue;
+    out.flagged++;
+    if (res.verdict === "block") out.block_count++;
+    else if (res.verdict === "review") out.review_count++;
+    else if (res.verdict === "warn") out.warn_count++;
+    out.total_arr_exposure += res.arr_exposure;
+  }
+
+  out.duration_ms = Date.now() - t0;
+  logger.info("[duplicateRadar] CS overlap scan complete", out);
+  return out;
 }
 
 export { pool };

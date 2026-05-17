@@ -120,6 +120,10 @@
             <button data-on-click="showTab" data-args="[&quot;deals&quot;]" id="tab-deals" data-testid="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
             <button data-on-click="showTab" data-args="[&quot;contacts&quot;]" id="tab-contacts" data-testid="tab-contacts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Contact Duplicates</button>
             <button data-on-click="showTab" data-args="[&quot;accounts&quot;]" id="tab-accounts" data-testid="tab-accounts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Account Duplicates</button>
+            <button data-on-click="showTab" data-args="[&quot;cs-overlap&quot;]" id="tab-cs-overlap" data-testid="tab-cs-overlap" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Clusters where a new lead/deal overlaps with an active Customer Success deal on the same domain">
+                <span class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                CS Pipeline Overlap
+            </button>
             <button data-on-click="showTab" data-args="[&quot;owners&quot;]" id="tab-owners" data-testid="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
             <button data-on-click="showTab" data-args="[&quot;export&quot;]" id="tab-export" data-testid="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
             <button data-on-click="showTab" data-args="[&quot;logs&quot;]" id="tab-logs" data-testid="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
@@ -524,6 +528,68 @@
                 </table>
             </div>
             <div id="accountsPagination" class="flex justify-center gap-3 mt-4"></div>
+        </div>
+
+        <!-- ═══ CS PIPELINE OVERLAP TAB ═══ -->
+        <div id="content-cs-overlap" class="tab-content hidden">
+            <!-- Summary widget -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">ARR Exposure</div>
+                    <div id="csOverlapArrExposure" class="text-2xl font-bold text-gray-900 mt-1">—</div>
+                    <div class="text-xs text-gray-500 mt-1">Total annual revenue at risk</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+                    <div class="text-xs text-red-600 uppercase tracking-wide">Block</div>
+                    <div id="csOverlapBlockCount" class="text-2xl font-bold text-red-700 mt-1">—</div>
+                    <div class="text-xs text-gray-500 mt-1">Active customer — do not push as new</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
+                    <div class="text-xs text-amber-600 uppercase tracking-wide">Review</div>
+                    <div id="csOverlapReviewCount" class="text-2xl font-bold text-amber-700 mt-1">—</div>
+                    <div class="text-xs text-gray-500 mt-1">Within sector cool-off — CS to confirm</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-400">
+                    <div class="text-xs text-yellow-700 uppercase tracking-wide">Warn</div>
+                    <div id="csOverlapWarnCount" class="text-2xl font-bold text-yellow-700 mt-1">—</div>
+                    <div class="text-xs text-gray-500 mt-1">Past cool-off — Sales may re-engage</div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex flex-wrap items-center gap-2 mb-3">
+                <div class="flex items-center gap-1">
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;all&quot;]" id="csOverlapChip-all" data-testid="cs-overlap-chip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;block&quot;]" id="csOverlapChip-block" data-testid="cs-overlap-chip-block" class="px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200">Block</button>
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;review&quot;]" id="csOverlapChip-review" data-testid="cs-overlap-chip-review" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">Review</button>
+                    <button data-on-click="filterCsOverlap" data-args="[&quot;warn&quot;]" id="csOverlapChip-warn" data-testid="cs-overlap-chip-warn" class="px-3 py-1.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200">Warn</button>
+                </div>
+                <div class="flex-1"></div>
+                <button data-on-click="rescanCsOverlap" id="csOverlapScanBtn" data-testid="button-cs-overlap-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+                    Run scan
+                </button>
+            </div>
+
+            <!-- Table -->
+            <div class="bg-white rounded-lg shadow overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Verdict</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Sector</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">CS Phase</th>
+                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">ARR Exposure</th>
+                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Records</th>
+                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="csOverlapTable" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- ═══ OWNERS TAB (C3: RAG status) ═══ -->
@@ -1540,6 +1606,115 @@
             document.getElementById('content-' + tab).classList.remove('hidden');
             document.getElementById('tab-' + tab).classList.remove('tab-inactive');
             document.getElementById('tab-' + tab).classList.add('tab-active');
+            if (tab === 'cs-overlap') loadCsOverlap(window._csOverlapFilter || 'all');
+        }
+
+        // ─── CS-pipeline overlap loaders ─────────────────────────────────────
+        window._csOverlapFilter = 'all';
+
+        function csVerdictBadge(v) {
+            const map = {
+                block:  { bg: 'bg-red-100',    fg: 'text-red-700',    label: 'BLOCK'  },
+                review: { bg: 'bg-amber-100',  fg: 'text-amber-700',  label: 'REVIEW' },
+                warn:   { bg: 'bg-yellow-100', fg: 'text-yellow-700', label: 'WARN'   },
+            };
+            const m = map[v] || { bg: 'bg-gray-100', fg: 'text-gray-600', label: (v || '—').toUpperCase() };
+            return '<span class="px-2 py-1 text-xs font-bold rounded ' + m.bg + ' ' + m.fg + '">' + m.label + '</span>';
+        }
+
+        function csPhaseLabel(state) {
+            const map = {
+                onboarding:          'Onboarding',
+                adoption:            'Adoption',
+                renewal:             'Renewal',
+                termination_recent:  'Termination (recent)',
+                termination_old:     'Termination (≥ cool-off)',
+            };
+            return map[state] || '—';
+        }
+
+        function csSectorLabel(s) {
+            if (s === 'government') return '<span class="text-purple-700 font-medium">Government</span>';
+            if (s === 'private')    return '<span class="text-blue-700 font-medium">Private</span>';
+            return '<span class="text-gray-400">—</span>';
+        }
+
+        async function loadCsOverlap(verdict) {
+            window._csOverlapFilter = verdict || 'all';
+            ['all','block','review','warn'].forEach(k => {
+                const el = document.getElementById('csOverlapChip-' + k);
+                if (!el) return;
+                if (k === window._csOverlapFilter) {
+                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white';
+                } else {
+                    const palette = {
+                        all:    'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                        block:  'bg-red-100 text-red-700 hover:bg-red-200',
+                        review: 'bg-amber-100 text-amber-700 hover:bg-amber-200',
+                        warn:   'bg-yellow-100 text-yellow-700 hover:bg-yellow-200',
+                    };
+                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + palette[k];
+                }
+            });
+            const body = document.getElementById('csOverlapTable');
+            body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
+
+            let url = '/api/duplicates/cs-overlap/clusters?limit=500';
+            if (window._csOverlapFilter !== 'all') url += '&verdict=' + encodeURIComponent(window._csOverlapFilter);
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                renderCsOverlap(data);
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-red-600">Failed to load: ' + escapeHtml(String(e.message || e)) + '</td></tr>';
+            }
+        }
+
+        function filterCsOverlap(v) { loadCsOverlap(v); }
+
+        function renderCsOverlap(data) {
+            const sum = data.summary || {};
+            document.getElementById('csOverlapBlockCount').textContent  = (sum.block  && sum.block.count)  || 0;
+            document.getElementById('csOverlapReviewCount').textContent = (sum.review && sum.review.count) || 0;
+            document.getElementById('csOverlapWarnCount').textContent   = (sum.warn   && sum.warn.count)   || 0;
+            document.getElementById('csOverlapArrExposure').textContent = formatCurrency(data.total_arr_exposure || 0);
+
+            const body = document.getElementById('csOverlapTable');
+            const rows = data.clusters || [];
+            if (rows.length === 0) {
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS-pipeline overlaps detected. Click <em>Run scan</em> to evaluate.</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(r => {
+                return '<tr class="hover:bg-gray-50">'
+                    + '<td class="px-4 py-2 whitespace-nowrap">' + csVerdictBadge(r.cs_overlap_verdict) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-gray-700 font-mono">' + escapeHtml(r.domain || '') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-gray-800">' + escapeHtml(r.company_name || r.company_name_arabic || '—') + '</td>'
+                    + '<td class="px-4 py-2 text-xs">' + csSectorLabel(r.client_sector) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.pipeline_lifecycle_state)) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-end font-medium">' + formatCurrency(r.arr_exposure || 0) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-end text-gray-600">' + (r.total_records || 0) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-end text-gray-500">' + formatDate(r.updated_at) + '</td>'
+                    + '</tr>';
+            }).join('');
+        }
+
+        async function rescanCsOverlap() {
+            const btn = document.getElementById('csOverlapScanBtn');
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Scanning…';
+            try {
+                const res = await fetch('/api/duplicates/cs-overlap/scan', { method: 'POST' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                await loadCsOverlap(window._csOverlapFilter || 'all');
+            } catch (e) {
+                alert('Scan failed: ' + (e.message || e));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+            }
         }
 
         function escapeHtml(s) {
