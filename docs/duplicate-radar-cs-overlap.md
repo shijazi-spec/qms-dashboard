@@ -54,10 +54,34 @@ cluster whose records include a Deal with a populated CS section.
   per-verdict counts + total ARR exposure in `summary`.
 - `POST /api/duplicates/cs-overlap/scan` — manual re-scan of all clusters
   that include Deal records. Idempotent — safe to re-run.
+- `POST /api/duplicates/preflight` — **pre-import duplicate check**. Body:
+  `{ rows: [{ domain?, email?, company_name?, phone?, ref? }, ...], max_check? }`.
+  Returns per-row verdict (block / review / warn / duplicate / pass) plus a
+  summary tally + total ARR exposure of BLOCK rows. Use this from any source
+  before pushing leads/deals into CRM — single SQL round trip even for
+  thousands of rows.
 
-Both endpoints respect the existing Duplicate Radar role gate (`admin`,
+All three endpoints respect the existing Duplicate Radar role gate (`admin`,
 `grc_manager`, `quality_manager`, `head_of_operations_quality`,
 `ai_specialist`, `bu_owner`, `executive`).
+
+## Preflight workflow (Marketing pre-import)
+
+1. Marketing prepares an incoming lead/deal list (any source).
+2. Open Duplicates dashboard → **Preflight Check** tab.
+3. Paste the list as CSV (must include a `domain` column; `company_name`,
+   `email`, `phone`, `ref` are optional) or as a JSON array of row objects.
+4. Click **Check**. Each row gets one of:
+   - **BLOCK** — domain is an active CS customer (Onboarding/Adoption/Renewal). Do not push.
+   - **REVIEW** — domain churned within sector cool-off (private < 6mo, gov < 12mo). Coordinate with CS.
+   - **WARN** — domain churned past cool-off. Sales may re-engage; notify CS.
+   - **DUPLICATE** — domain already has Leads/Deals in CRM with no active CS overlap. Resolve in radar first.
+   - **PASS** — genuinely new. Safe to import.
+5. Drop the BLOCK rows from the batch, route REVIEW rows to CS for triage,
+   then import only the PASS + cleaned rows.
+
+The same endpoint can be called programmatically — useful for scripted ETL
+pipelines that push from external lead-gen tools.
 
 ## Configuration
 

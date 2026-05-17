@@ -1,0 +1,244 @@
+/**
+ * Unit tests for the Duplicate Radar preflight classifier.
+ *
+ * Run: npx vitest run tests/vitest/duplicateRadarPreflight.vitest.test.ts
+ *
+ * Scope: pure logic in classifyPreflightRows + resolveDomain. The DB-touching
+ * runPreflight wrapper is integration-tested manually against a live DB; here
+ * we exercise the verdict ladder against a hand-built clustersByDomain map so
+ * we don't need a database connection.
+ */
+import { describe, expect, test } from "vitest";
+import {
+  classifyPreflightRows,
+  resolveDomain,
+  type PreflightClusterRow,
+} from "../../src/utils/duplicateRadarPreflight";
+
+describe("resolveDomain", () => {
+  test("uses explicit domain when present", () => {
+    expect(resolveDomain({ domain: "Example.com" })).toBe("example.com");
+  });
+  test("falls back to email domain", () => {
+    expect(resolveDomain({ email: "alice@example.com" })).toBe("example.com");
+  });
+  test("strips whitespace", () => {
+    expect(resolveDomain({ domain: "  anb.com.sa  " })).toBe("anb.com.sa");
+  });
+  test("returns null when nothing parseable", () => {
+    expect(resolveDomain({})).toBeNull();
+    expect(resolveDomain({ email: "not-an-email" })).toBeNull();
+  });
+});
+
+function fakeCluster(
+  partial: Partial<PreflightClusterRow> & { domain: string },
+): PreflightClusterRow {
+  return {
+    id: 1,
+    cs_overlap_verdict: null,
+    pipeline_lifecycle_state: null,
+    client_sector: null,
+    arr_exposure: 0,
+    owners_involved: [],
+    total_leads: 0,
+    total_deals: 0,
+    total_contacts: 0,
+    total_accounts: 0,
+    ...partial,
+  };
+}
+
+describe("classifyPreflightRows verdict ladder", () => {
+  test("no clusters → all rows pass", () => {
+    const res = classifyPreflightRows({
+      rows: [{ domain: "newco.com" }, { domain: "another.com" }],
+      clustersByDomain: new Map(),
+    });
+    expect(res.summary.pass).toBe(2);
+    expect(res.summary.block).toBe(0);
+    expect(res.rows[0]!.verdict).toBe("pass");
+  });
+
+  test("block verdict from cluster cs_overlap_verdict=block", () => {
+    const c = fakeCluster({
+      id: 7,
+      domain: "anb.com.sa",
+      cs_overlap_verdict: "block",
+      pipeline_lifecycle_state: "adoption",
+      client_sector: "private",
+      arr_exposure: 47511,
+    });
+    const res = classifyPreflightRows({
+      rows: [{ domain: "anb.com.sa" }],
+      clustersByDomain: new Map([["anb.com.sa", c]]),
+    });
+    expect(res.summary.block).toBe(1);
+    expect(res.rows[0]!.verdict).toBe("block");
+    expect(res.rows[0]!.cluster_id).toBe(7);
+    expect(res.rows[0]!.arr_exposure).toBe(47511);
+    expect(res.total_arr_exposure_blocked).toBe(47511);
+  });
+
+  test("review verdict from cluster cs_overlap_verdict=review", () => {
+    const c = fakeCluster({
+      domain: "ex.com",
+      cs_overlap_verdict: "review",
+      pipeline_lifecycle_state: "termination_recent",
+      client_sector: "private",
+    });
+    const res = classifyPreflightRows({
+      rows: [{ domain: "ex.com" }],
+      clustersByDomain: new Map([["ex.com", c]]),
+    });
+    expect(res.summary.review).toBe(1);
+    expect(res.rows[0]!.verdict).toBe("review");
+  });
+
+  test("warn verdict from cluster cs_overlap_verdict=warn", () => {
+    const c = fakeCluster({
+      domain: "ex.com",
+      cs_overlap_verdict: "warn",
+      pipeline_lifecycle_state: "termination_old",
+    });
+    const res = classifyPreflightRows({
+      rows: [{ domain: "ex.com" }],
+      clustersByDomain: new Map([["ex.com", c]]),
+    });
+    expect(res.summary.warn).toBe(1);
+    expect(res.rows[0]!.verdict).toBe("warn");
+  });
+
+  test("duplicate verdict when cluster exists with no CS verdict", () => {
+    const c = fakeCluster({
+      domain: "ex.com",
+      cs_overlap_verdict: null,
+      total_leads: 3,
+    });
+    const res = classifyPreflightRows({
+      rows: [{ domain: "ex.com" }],
+      clustersByDomain: new Map([["ex.com", c]]),
+    });
+    expect(res.summary.duplicate).toBe(1);
+    expect(res.rows[0]!.verdict).toBe("duplicate");
+    expect(res.rows[0]!.reason).toMatch(/existing_record/);
+  });
+
+  test("mixed batch — summary tallies correctly", () => {
+    const clusters = new Map<string, PreflightClusterRow>([
+      [
+        "active.com",
+        fakeCluster({
+          domain: "active.com",
+          cs_overlap_verdict: "block",
+          arr_exposure: 100,
+        }),
+      ],
+      [
+        "churned-recent.com",
+        fakeCluster({
+          domain: "churned-recent.com",
+          cs_overlap_verdict: "review",
+        }),
+      ],
+      [
+        "churned-old.com",
+        fakeCluster({
+          domain: "churned-old.com",
+          cs_overlap_verdict: "warn",
+        }),
+      ],
+      [
+        "dup.com",
+        fakeCluster({ domain: "dup.com" }), // cs_overlap_verdict=null
+      ],
+    ]);
+    const res = classifyPreflightRows({
+      rows: [
+        { domain: "active.com" },
+        { domain: "churned-recent.com" },
+        { domain: "churned-old.com" },
+        { domain: "dup.com" },
+        { domain: "newco.com" }, // no cluster
+      ],
+      clustersByDomain: clusters,
+    });
+    expect(res.summary).toEqual({
+      block: 1,
+      review: 1,
+      warn: 1,
+      duplicate: 1,
+      pass: 1,
+    });
+    expect(res.total_arr_exposure_blocked).toBe(100);
+  });
+
+  test("rows without resolvable domain → pass with no_domain_resolved reason", () => {
+    const res = classifyPreflightRows({
+      rows: [{}, { email: "bad" }],
+      clustersByDomain: new Map(),
+    });
+    expect(res.summary.pass).toBe(2);
+    for (const r of res.rows) {
+      expect(r.reason).toBe("no_domain_resolved");
+    }
+  });
+
+  test("max_check caps examined rows, extras counted as skipped", () => {
+    const rows = Array.from({ length: 10 }, (_, i) => ({
+      domain: `co${i}.com`,
+    }));
+    const res = classifyPreflightRows({
+      rows,
+      clustersByDomain: new Map(),
+      max_check: 3,
+    });
+    expect(res.total_rows).toBe(10);
+    expect(res.examined).toBe(3);
+    expect(res.skipped).toBe(7);
+    expect(res.rows.length).toBe(3);
+  });
+
+  test("ref is echoed back when provided", () => {
+    const res = classifyPreflightRows({
+      rows: [{ domain: "x.com", ref: "row-42" }],
+      clustersByDomain: new Map(),
+    });
+    expect(res.rows[0]!.ref).toBe("row-42");
+  });
+
+  test("string arr_exposure is parsed to number", () => {
+    const c = fakeCluster({
+      domain: "x.com",
+      cs_overlap_verdict: "block",
+      arr_exposure: "12345.67" as any,
+    });
+    const res = classifyPreflightRows({
+      rows: [{ domain: "x.com" }],
+      clustersByDomain: new Map([["x.com", c]]),
+    });
+    expect(res.rows[0]!.arr_exposure).toBeCloseTo(12345.67);
+    expect(res.total_arr_exposure_blocked).toBeCloseTo(12345.67);
+  });
+
+  test("owners_involved JSON array is surfaced (max 5)", () => {
+    const c = fakeCluster({
+      domain: "x.com",
+      cs_overlap_verdict: "block",
+      owners_involved: [
+        "alice@walaplus.com",
+        "bob@walaplus.com",
+        "carol@walaplus.com",
+        "dan@walaplus.com",
+        "eve@walaplus.com",
+        "frank@walaplus.com",
+      ],
+    });
+    const res = classifyPreflightRows({
+      rows: [{ domain: "x.com" }],
+      clustersByDomain: new Map([["x.com", c]]),
+    });
+    expect(res.rows[0]!.owners).toHaveLength(5);
+    expect(res.rows[0]!.owners[0]).toBe("alice@walaplus.com");
+  });
+});

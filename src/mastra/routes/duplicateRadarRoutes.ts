@@ -2746,6 +2746,56 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  {
+    // Pre-import duplicate check for marketing batches.
+    // Body: { rows: [{ domain?, email?, company_name?, phone?, ref? }, ...], max_check? }
+    // Returns per-row verdict (block | review | warn | duplicate | pass) plus summary.
+    path: "/api/duplicates/preflight",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          let body: any = {};
+          try {
+            body = (await c.req.json()) ?? {};
+          } catch {
+            return c.json(
+              { error: "Body must be JSON: { rows: [...], max_check?: number }" },
+              400,
+            );
+          }
+          if (!Array.isArray(body.rows)) {
+            return c.json(
+              { error: "rows must be an array of row objects" },
+              400,
+            );
+          }
+          if (body.rows.length === 0) {
+            return c.json(
+              { error: "rows must contain at least one entry" },
+              400,
+            );
+          }
+
+          const { runPreflight } = await import(
+            "../../utils/duplicateRadarPreflight"
+          );
+          const result = await runPreflight({
+            rows: body.rows,
+            max_check:
+              typeof body.max_check === "number" ? body.max_check : undefined,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error running preflight:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
 ];
 
 export default duplicateRadarRoutes;

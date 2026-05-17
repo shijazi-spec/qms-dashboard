@@ -124,6 +124,10 @@
                 <span class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
                 CS Pipeline Overlap
             </button>
+            <button data-on-click="showTab" data-args="[&quot;preflight&quot;]" id="tab-preflight" data-testid="tab-preflight" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Check a batch of incoming leads/deals against existing CRM data BEFORE pushing to CRM">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Preflight Check
+            </button>
             <button data-on-click="showTab" data-args="[&quot;owners&quot;]" id="tab-owners" data-testid="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
             <button data-on-click="showTab" data-args="[&quot;export&quot;]" id="tab-export" data-testid="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
             <button data-on-click="showTab" data-args="[&quot;logs&quot;]" id="tab-logs" data-testid="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
@@ -587,6 +591,73 @@
                     </thead>
                     <tbody id="csOverlapTable" class="bg-white divide-y divide-gray-200">
                         <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══ PREFLIGHT CHECK TAB ═══ -->
+        <div id="content-preflight" class="tab-content hidden">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-sm text-blue-900">
+                <strong>Pre-import check.</strong> Paste your incoming lead/deal list (CSV with a <code>domain</code> column, or a JSON array) and click <em>Check</em>. Each row is matched against existing CRM data and gets a verdict so you don't push duplicates or active customers as fresh leads.
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label for="preflightInput" class="block text-xs font-medium text-gray-700 mb-1">Input (CSV or JSON)</label>
+                    <textarea id="preflightInput" rows="10" placeholder="domain,company_name&#10;anb.com.sa,Arab National Bank&#10;bahri.sa,Bahri&#10;example.gov.sa,Example Authority"
+                              class="w-full font-mono text-xs border rounded-lg px-3 py-2" data-testid="preflight-input"></textarea>
+                    <div class="flex items-center gap-2 mt-2">
+                        <button data-on-click="runPreflight" id="preflightRunBtn" data-testid="button-preflight-run" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Check</button>
+                        <button data-on-click="loadPreflightSample" id="preflightSampleBtn" data-testid="button-preflight-sample" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Load sample</button>
+                        <button data-on-click="clearPreflight" id="preflightClearBtn" data-testid="button-preflight-clear" class="px-3 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700">Clear</button>
+                        <span id="preflightParsedCount" class="ml-auto text-xs text-gray-500"></span>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-white rounded-lg shadow p-3 border-l-4 border-red-500">
+                        <div class="text-xs text-red-600 uppercase">Block</div>
+                        <div id="preflightSumBlock" class="text-2xl font-bold text-red-700">—</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-3 border-l-4 border-amber-500">
+                        <div class="text-xs text-amber-600 uppercase">Review</div>
+                        <div id="preflightSumReview" class="text-2xl font-bold text-amber-700">—</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-3 border-l-4 border-yellow-400">
+                        <div class="text-xs text-yellow-700 uppercase">Warn</div>
+                        <div id="preflightSumWarn" class="text-2xl font-bold text-yellow-700">—</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-3 border-l-4 border-gray-400">
+                        <div class="text-xs text-gray-600 uppercase">Duplicate</div>
+                        <div id="preflightSumDup" class="text-2xl font-bold text-gray-700">—</div>
+                    </div>
+                    <div class="col-span-2 bg-white rounded-lg shadow p-3 border-l-4 border-green-500">
+                        <div class="text-xs text-green-700 uppercase">Pass (safe to import)</div>
+                        <div id="preflightSumPass" class="text-2xl font-bold text-green-700">—</div>
+                        <div class="text-xs text-gray-500 mt-1">ARR exposure if BLOCK rows were imported: <span id="preflightArrBlocked" class="font-medium">—</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Result table -->
+            <div class="bg-white rounded-lg shadow overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">#</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Verdict</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Reason</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">CS Phase</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">ARR</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Suggested action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="preflightResultTable" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1715,6 +1786,149 @@
                 btn.disabled = false;
                 btn.textContent = original;
             }
+        }
+
+        // ─── Preflight check (pre-import) ────────────────────────────────────
+        function parsePreflightInput(raw) {
+            const text = (raw || '').trim();
+            if (!text) return [];
+            // JSON array form
+            if (text.startsWith('[') || text.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(text);
+                    if (Array.isArray(parsed)) return parsed;
+                    if (parsed && Array.isArray(parsed.rows)) return parsed.rows;
+                } catch (e) {
+                    throw new Error('Invalid JSON: ' + e.message);
+                }
+                return [];
+            }
+            // CSV form: first non-empty line is header
+            const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+            if (lines.length === 0) return [];
+            const splitCsv = (line) => {
+                const out = [];
+                let cur = '', inQ = false;
+                for (let i = 0; i < line.length; i++) {
+                    const ch = line[i];
+                    if (ch === '"') { inQ = !inQ; continue; }
+                    if (ch === ',' && !inQ) { out.push(cur); cur = ''; continue; }
+                    cur += ch;
+                }
+                out.push(cur);
+                return out.map(s => s.trim());
+            };
+            const headers = splitCsv(lines[0]).map(h => h.toLowerCase());
+            const allowed = ['domain','email','company_name','phone','ref'];
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                const parts = splitCsv(lines[i]);
+                const obj = {};
+                headers.forEach((h, idx) => {
+                    if (allowed.includes(h)) obj[h] = parts[idx] || '';
+                });
+                if (Object.values(obj).some(v => v && String(v).length > 0)) rows.push(obj);
+            }
+            return rows;
+        }
+
+        function preflightVerdictBadge(v) {
+            const map = {
+                block:     { bg: 'bg-red-100',     fg: 'text-red-700',    label: 'BLOCK'     },
+                review:    { bg: 'bg-amber-100',   fg: 'text-amber-700',  label: 'REVIEW'    },
+                warn:      { bg: 'bg-yellow-100',  fg: 'text-yellow-700', label: 'WARN'      },
+                duplicate: { bg: 'bg-gray-200',    fg: 'text-gray-700',   label: 'DUPLICATE' },
+                pass:      { bg: 'bg-green-100',   fg: 'text-green-700',  label: 'PASS'      },
+            };
+            const m = map[v] || { bg: 'bg-gray-100', fg: 'text-gray-600', label: (v || '—').toUpperCase() };
+            return '<span class="px-2 py-1 text-xs font-bold rounded ' + m.bg + ' ' + m.fg + '">' + m.label + '</span>';
+        }
+
+        function loadPreflightSample() {
+            const sample = 'domain,company_name\nanb.com.sa,Arab National Bank\nbahri.sa,Bahri\nawqaf.gov.sa,General Authority of Awqaf\nnewco.example.com,Brand New Co\n';
+            document.getElementById('preflightInput').value = sample;
+            document.getElementById('preflightParsedCount').textContent = '';
+        }
+
+        function clearPreflight() {
+            document.getElementById('preflightInput').value = '';
+            document.getElementById('preflightParsedCount').textContent = '';
+            const body = document.getElementById('preflightResultTable');
+            body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>';
+            ['Block','Review','Warn','Dup','Pass'].forEach(k => {
+                const el = document.getElementById('preflightSum' + k);
+                if (el) el.textContent = '—';
+            });
+            document.getElementById('preflightArrBlocked').textContent = '—';
+        }
+
+        async function runPreflight() {
+            const btn = document.getElementById('preflightRunBtn');
+            const original = btn.textContent;
+            const raw = document.getElementById('preflightInput').value;
+
+            let rows;
+            try {
+                rows = parsePreflightInput(raw);
+            } catch (e) {
+                alert('Could not parse input: ' + e.message);
+                return;
+            }
+            if (rows.length === 0) {
+                alert('No rows to check. Paste a CSV with a domain column or a JSON array.');
+                return;
+            }
+            document.getElementById('preflightParsedCount').textContent = rows.length + ' row(s) parsed';
+
+            btn.disabled = true;
+            btn.textContent = 'Checking…';
+            try {
+                const res = await fetch('/api/duplicates/preflight', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rows }),
+                });
+                if (!res.ok) {
+                    const txt = await res.text();
+                    throw new Error('HTTP ' + res.status + ': ' + txt);
+                }
+                const data = await res.json();
+                renderPreflight(data);
+            } catch (e) {
+                alert('Preflight failed: ' + (e.message || e));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+            }
+        }
+
+        function renderPreflight(data) {
+            const s = data.summary || {};
+            document.getElementById('preflightSumBlock').textContent  = s.block  || 0;
+            document.getElementById('preflightSumReview').textContent = s.review || 0;
+            document.getElementById('preflightSumWarn').textContent   = s.warn   || 0;
+            document.getElementById('preflightSumDup').textContent    = s.duplicate || 0;
+            document.getElementById('preflightSumPass').textContent   = s.pass   || 0;
+            document.getElementById('preflightArrBlocked').textContent = formatCurrency(data.total_arr_exposure_blocked || 0);
+
+            const body = document.getElementById('preflightResultTable');
+            const rows = data.rows || [];
+            if (rows.length === 0) {
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No rows processed.</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(r => {
+                return '<tr class="hover:bg-gray-50">'
+                    + '<td class="px-3 py-2 text-xs text-gray-500">' + (r.row_index + 1) + '</td>'
+                    + '<td class="px-3 py-2 whitespace-nowrap">' + preflightVerdictBadge(r.verdict) + '</td>'
+                    + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(r.input.domain || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(r.input.company_name || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.reason || '') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.lifecycle_state)) + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-end font-medium">' + (r.arr_exposure ? formatCurrency(r.arr_exposure) : '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(r.suggested_action || '') + '</td>'
+                    + '</tr>';
+            }).join('');
         }
 
         function escapeHtml(s) {
