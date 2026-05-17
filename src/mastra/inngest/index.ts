@@ -453,6 +453,57 @@ const csOverlapAutoScanFunction = inngest.createFunction(
 );
 inngestFunctions.push(csOverlapAutoScanFunction);
 
+// CS Lifecycle Compliance — nightly violation scan.
+// Reads every Deal record in duplicate_records and surfaces deviations from
+// the GRQ-defined CS process rules. Runs after csOverlapAutoScan so phase
+// data is fresh. Notifies on critical violations (phase ↔ churn-date desync).
+const csLifecycleScanFunction = inngest.createFunction(
+  { id: "duplicate-radar-cs-lifecycle-scan" },
+  {
+    cron: process.env.CS_LIFECYCLE_SCAN_CRON || "45 3 * * *",
+  },
+  async ({ step }) => {
+    const result = await step.run("scan-cs-lifecycle", async () => {
+      logger.info("[CsLifecycle] Nightly scan starting");
+      const { scanCsLifecycleViolations, initDuplicateRadarTables } =
+        await import("../../utils/duplicateRadarDatabase");
+      await initDuplicateRadarTables();
+      const r = await scanCsLifecycleViolations({ limit: 5000 });
+      logger.info("[CsLifecycle] Nightly scan complete", {
+        total_evaluated: r.summary.total_evaluated,
+        total_cs_deals: r.summary.total_cs_deals,
+        total_violations: r.summary.total_violations,
+        by_severity: r.summary.by_severity,
+        duration_ms: r.duration_ms,
+      });
+      return r;
+    });
+
+    await step.run("notify-on-critical", async () => {
+      const crit = result.summary.by_severity.critical || 0;
+      const warn = result.summary.by_severity.warning || 0;
+      if (crit === 0) return;
+      try {
+        const { createNotification } = await import(
+          "../../utils/notificationHub"
+        );
+        await createNotification({
+          type: "alert",
+          title: `CS Lifecycle: ${crit} critical compliance violation(s)`,
+          message: `Nightly scan found ${crit} critical and ${warn} warning violation(s) on CS-tracked deals. Resolve critical findings within one working day per CS team SLA.`,
+          link: "/duplicates",
+          severity: crit >= 5 ? "high" : "medium",
+        });
+      } catch (e) {
+        logger.warn("[CsLifecycle] Notification failed:", e);
+      }
+    });
+
+    return result.summary;
+  },
+);
+inngestFunctions.push(csLifecycleScanFunction);
+
 // HITL approval-queue expiry.
 // Rationale: ai_pending_actions rows auto-expire 24h after creation (see
 // WP-SOP-011 §Retention). We still need a cron to FLIP status from 'pending'

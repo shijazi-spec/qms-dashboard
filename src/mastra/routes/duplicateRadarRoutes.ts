@@ -2747,6 +2747,38 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // CS lifecycle compliance — list current violations.
+    // Query params: severity={info|warning|critical}, code={onboarding_overdue|...}, limit=N
+    path: "/api/duplicates/cs-lifecycle/violations",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const severity = url.searchParams.get("severity") || undefined;
+          const code = url.searchParams.get("code") || undefined;
+          const limit = parseInt(url.searchParams.get("limit") || "2000", 10);
+
+          const { scanCsLifecycleViolations } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const result = await scanCsLifecycleViolations({
+            severity: severity as any,
+            code: code as any,
+            limit,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error fetching CS lifecycle violations:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Pre-import duplicate check for marketing batches.
     // Body: { rows: [{ domain?, email?, company_name?, phone?, ref? }, ...], max_check? }
     // Returns per-row verdict (block | review | warn | duplicate | pass) plus summary.

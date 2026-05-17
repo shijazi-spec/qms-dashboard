@@ -3534,4 +3534,111 @@ export async function scanAllClustersForCsOverlap(): Promise<CsOverlapBatchResul
   return out;
 }
 
+// ─── CS Lifecycle Compliance scan (Phase 4) ──────────────────────────────────
+// Iterates every Deal record in duplicate_records and evaluates whether its
+// Customer Success section violates any of the GRQ-defined CS process rules
+// (onboarding duration, phase ↔ churn-date sync, phase-transition SLA).
+// Pure computation in csLifecycleCompliance.ts; this layer only does the
+// per-record fan-out and rollup.
+
+import {
+  evaluateCsLifecycle,
+  summarizeViolations,
+  type CsLifecycleEvaluation,
+  type CsLifecycleSummary,
+  type CsViolation,
+  type CsViolationCode,
+  type CsViolationSeverity,
+} from "./csLifecycleCompliance";
+
+export interface CsLifecycleViolationRow {
+  record_id: number;
+  cluster_id: number | null;
+  zoho_record_id: string | null;
+  account_name: string | null;
+  domain: string | null;
+  current_phase: string | null;
+  days_since_modified: number | null;
+  violation: CsViolation;
+}
+
+export interface CsLifecycleScanResult {
+  summary: CsLifecycleSummary;
+  violations: CsLifecycleViolationRow[];
+  duration_ms: number;
+}
+
+/**
+ * Scan every Deal record under duplicate_records for CS lifecycle violations.
+ * Returns the summary plus a flat array of violation rows. No persistence —
+ * the scan is cheap enough to recompute on demand (data is bounded to deals
+ * the radar already indexes).
+ */
+export async function scanCsLifecycleViolations(opts: {
+  severity?: CsViolationSeverity;
+  code?: CsViolationCode;
+  limit?: number;
+} = {}): Promise<CsLifecycleScanResult> {
+  const t0 = Date.now();
+  const limit = Math.max(1, Math.min(opts.limit ?? 2000, 5000));
+
+  const dealRows = await pool.query(
+    `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,
+            r.domain, r.modified_date, r.raw_data, r.gov_type
+       FROM duplicate_records r
+      WHERE r.zoho_module = 'Deals'
+      ORDER BY r.modified_date DESC NULLS LAST
+      LIMIT $1`,
+    [limit],
+  );
+
+  const evaluations: CsLifecycleEvaluation[] = [];
+  const violations: CsLifecycleViolationRow[] = [];
+
+  for (const row of dealRows.rows) {
+    const ev = evaluateCsLifecycle({
+      raw_data: row.raw_data,
+      modified_date: row.modified_date,
+      domain: row.domain,
+      gov_type: row.gov_type,
+    });
+    evaluations.push(ev);
+    if (!ev.is_cs_deal) continue;
+
+    for (const v of ev.violations) {
+      if (opts.severity && v.severity !== opts.severity) continue;
+      if (opts.code && v.code !== opts.code) continue;
+      violations.push({
+        record_id: row.id,
+        cluster_id: row.cluster_id ?? null,
+        zoho_record_id: row.zoho_record_id ?? null,
+        account_name: row.account_name ?? null,
+        domain: row.domain ?? null,
+        current_phase: ev.current_phase,
+        days_since_modified: ev.days_since_modified,
+        violation: v,
+      });
+    }
+  }
+
+  // Severity ordering: critical → warning → info
+  const sevOrder: Record<CsViolationSeverity, number> = {
+    critical: 0,
+    warning: 1,
+    info: 2,
+  };
+  violations.sort((a, b) => {
+    const s =
+      sevOrder[a.violation.severity] - sevOrder[b.violation.severity];
+    if (s !== 0) return s;
+    return (b.days_since_modified ?? 0) - (a.days_since_modified ?? 0);
+  });
+
+  return {
+    summary: summarizeViolations(evaluations),
+    violations,
+    duration_ms: Date.now() - t0,
+  };
+}
+
 export { pool };

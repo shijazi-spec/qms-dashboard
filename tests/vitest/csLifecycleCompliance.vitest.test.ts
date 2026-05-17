@@ -1,0 +1,230 @@
+/**
+ * Unit tests for the CS Lifecycle Compliance detector.
+ *
+ * Run: npx vitest run tests/vitest/csLifecycleCompliance.vitest.test.ts
+ *
+ * Pure logic only — does not touch the database. The detection rules
+ * mirror the CS team SLAs:
+ *
+ *   - Onboarding phase ≤ 30 calendar days
+ *   - Phase auto-moves to Termination when Churn Date is set
+ *   - Termination phase requires Churn Date
+ *   - One working day per phase-to-phase transition (steady-state phases
+ *     Adoption / Renewal are exempt)
+ */
+import { afterEach, describe, expect, test } from "vitest";
+import {
+  evaluateCsLifecycle,
+  resetCsLifecycleConfigCache,
+  summarizeViolations,
+} from "../../src/utils/csLifecycleCompliance";
+
+afterEach(() => {
+  resetCsLifecycleConfigCache();
+  delete process.env.CS_LIFECYCLE_ONBOARDING_MAX_DAYS;
+  delete process.env.CS_LIFECYCLE_STALLED_TRANSITION_DAYS;
+});
+
+function daysAgo(n: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d;
+}
+
+describe("evaluateCsLifecycle — non-CS deals are skipped", () => {
+  test("record without Phase field returns is_cs_deal=false", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Stage: "Closed Won" },
+      modified_date: new Date(),
+    });
+    expect(result.is_cs_deal).toBe(false);
+    expect(result.violations).toEqual([]);
+  });
+
+  test("null raw_data returns is_cs_deal=false", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: null,
+      modified_date: new Date(),
+    });
+    expect(result.is_cs_deal).toBe(false);
+  });
+});
+
+describe("onboarding_overdue", () => {
+  test("fires when Onboarding > 30 days", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Onboarding" },
+      modified_date: daysAgo(45),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "onboarding_overdue",
+    );
+    const v = result.violations.find((x) => x.code === "onboarding_overdue")!;
+    expect(v.severity).toBe("warning");
+    expect(v.days_in_phase).toBe(45);
+  });
+
+  test("does NOT fire when Onboarding ≤ 30 days", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Onboarding" },
+      modified_date: daysAgo(15),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "onboarding_overdue",
+    );
+  });
+
+  test("threshold configurable via env", () => {
+    process.env.CS_LIFECYCLE_ONBOARDING_MAX_DAYS = "10";
+    resetCsLifecycleConfigCache();
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Onboarding" },
+      modified_date: daysAgo(15),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "onboarding_overdue",
+    );
+  });
+});
+
+describe("phase_churn_desync (critical)", () => {
+  test("fires when Churn Date set but Phase is Adoption", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Adoption",
+        Churn_Date: "2026-04-01",
+      },
+      modified_date: daysAgo(2),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "phase_churn_desync",
+    );
+    const v = result.violations.find((x) => x.code === "phase_churn_desync")!;
+    expect(v.severity).toBe("critical");
+  });
+
+  test("does NOT fire when Churn Date set AND Phase is Termination", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Termination",
+        Churn_Date: "2026-04-01",
+      },
+      modified_date: daysAgo(2),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "phase_churn_desync",
+    );
+  });
+
+  test("does NOT fire when Phase is Onboarding and Churn Date null", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Onboarding" },
+      modified_date: daysAgo(5),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "phase_churn_desync",
+    );
+  });
+});
+
+describe("termination_missing_churn_date", () => {
+  test("fires when Phase is Termination but no Churn Date", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Termination" },
+      modified_date: daysAgo(10),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "termination_missing_churn_date",
+    );
+  });
+
+  test("does NOT fire when Churn Date present", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Termination",
+        Churn_Date: "2026-05-01",
+      },
+      modified_date: daysAgo(10),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "termination_missing_churn_date",
+    );
+  });
+});
+
+describe("phase_transition_stalled (info)", () => {
+  test("Adoption is steady-state — does not fire even at 60 days", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Adoption" },
+      modified_date: daysAgo(60),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "phase_transition_stalled",
+    );
+  });
+
+  test("Renewal is steady-state — does not fire", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Renewal" },
+      modified_date: daysAgo(30),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "phase_transition_stalled",
+    );
+  });
+
+  test("Onboarding is bounded by onboarding_overdue, not stalled", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Onboarding" },
+      modified_date: daysAgo(15),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "phase_transition_stalled",
+    );
+  });
+
+  test("Termination is terminal — does not fire", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Termination", Churn_Date: "2025-12-01" },
+      modified_date: daysAgo(120),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "phase_transition_stalled",
+    );
+  });
+});
+
+describe("summarizeViolations", () => {
+  test("rolls up severity + code counts correctly", () => {
+    const evals = [
+      evaluateCsLifecycle({
+        raw_data: { Phase: "Onboarding" },
+        modified_date: daysAgo(45),
+      }),
+      evaluateCsLifecycle({
+        raw_data: { Phase: "Adoption", Churn_Date: "2026-04-01" },
+        modified_date: daysAgo(2),
+      }),
+      evaluateCsLifecycle({
+        raw_data: { Phase: "Termination" },
+        modified_date: daysAgo(10),
+      }),
+      evaluateCsLifecycle({
+        raw_data: { Phase: "Adoption" },
+        modified_date: daysAgo(2),
+      }), // no violations
+      evaluateCsLifecycle({
+        raw_data: { Stage: "Closed Won" }, // not a CS deal
+        modified_date: daysAgo(1),
+      }),
+    ];
+    const s = summarizeViolations(evals);
+    expect(s.total_evaluated).toBe(5);
+    expect(s.total_cs_deals).toBe(4); // last one isn't a CS deal
+    expect(s.by_severity.critical).toBe(1); // phase_churn_desync
+    expect(s.by_severity.warning).toBeGreaterThanOrEqual(2); // onboarding_overdue + termination_missing_churn_date
+    expect(s.by_code.phase_churn_desync).toBe(1);
+    expect(s.by_code.onboarding_overdue).toBe(1);
+    expect(s.by_code.termination_missing_churn_date).toBe(1);
+  });
+});
