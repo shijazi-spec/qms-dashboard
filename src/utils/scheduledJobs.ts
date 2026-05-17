@@ -183,6 +183,56 @@ export async function runDuplicateScanIfStale(
   }
 }
 
+/**
+ * Hours since the most recent CS-pipeline overlap classification.
+ * Returns Infinity when no cluster has ever been classified.
+ */
+export async function hoursSinceLastCsOverlapScan(): Promise<number> {
+  try {
+    const r = await kpiPool.query(
+      `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(updated_at))) / 3600 AS hours
+         FROM duplicate_clusters
+        WHERE cs_overlap_verdict IS NOT NULL`,
+    );
+    const h = r.rows[0]?.hours;
+    return h == null ? Infinity : Number(h);
+  } catch {
+    return Infinity;
+  }
+}
+
+/**
+ * In-process fallback for the CS-pipeline overlap nightly scan.
+ *
+ * The Inngest cron `duplicate-radar-cs-overlap-scan` is the primary driver
+ * (default 03:30 UTC daily). This helper re-runs the scan when no cluster
+ * has been re-classified in the last `maxAgeHours` (defaults 25h to keep one
+ * hour of slack after the cron fire).
+ *
+ * Idempotent — safe to call on any interval.
+ */
+export async function runCsOverlapScanIfStale(
+  maxAgeHours = 25,
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  const ageHours = await hoursSinceLastCsOverlapScan();
+  if (ageHours < maxAgeHours) {
+    return { ran: false, ageHours };
+  }
+  logger.info(
+    `[CsOverlap Fallback] Last classification was ${ageHours === Infinity ? "never" : ageHours.toFixed(1) + "h ago"} (>= ${maxAgeHours}h); running scan.`,
+  );
+  try {
+    const { scanAllClustersForCsOverlap, initDuplicateRadarTables } =
+      await import("./duplicateRadarDatabase");
+    await initDuplicateRadarTables();
+    const result = await scanAllClustersForCsOverlap();
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    logger.error("[CsOverlap Fallback] Scan failed:", err);
+    return { ran: false, ageHours };
+  }
+}
+
 export async function runKPIAutoCalcIfStale(
   maxAgeHours = 24,
 ): Promise<{ ran: boolean; ageHours: number; result?: KPIAutoCalcResult }> {

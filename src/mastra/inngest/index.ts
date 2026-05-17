@@ -404,6 +404,55 @@ const duplicateSyncFunction = inngest.createFunction(
 );
 inngestFunctions.push(duplicateSyncFunction);
 
+// CS-pipeline overlap nightly refresh.
+// Re-classifies every duplicate cluster that contains a Deal record, so the
+// BLOCK / REVIEW / WARN verdicts surfaced on the Duplicates dashboard stay
+// current as Zoho Phases move (Onboarding → Adoption → Renewal → Termination).
+// Idempotent — safe to re-run on any interval. The in-process fallback in
+// src/mastra/index.ts will also catch missed cron fires.
+const csOverlapAutoScanFunction = inngest.createFunction(
+  { id: "duplicate-radar-cs-overlap-scan" },
+  {
+    cron: process.env.DUPLICATE_RADAR_CS_OVERLAP_CRON || "30 3 * * *",
+  },
+  async ({ step }) => {
+    const result = await step.run("scan-cs-overlaps", async () => {
+      logger.info("[CsOverlap] Nightly scan starting");
+      const { scanAllClustersForCsOverlap, initDuplicateRadarTables } =
+        await import("../../utils/duplicateRadarDatabase");
+      await initDuplicateRadarTables();
+      const r = await scanAllClustersForCsOverlap();
+      logger.info("[CsOverlap] Nightly scan complete", r);
+      return r;
+    });
+
+    await step.run("notify-on-blocks", async () => {
+      if (!result.block_count || result.block_count === 0) return;
+      try {
+        const { createNotification } = await import(
+          "../../utils/notificationHub"
+        );
+        const arrFmt =
+          result.total_arr_exposure > 0
+            ? ` (SAR ${Number(result.total_arr_exposure).toLocaleString()} ARR exposure)`
+            : "";
+        await createNotification({
+          type: "alert",
+          title: `Duplicate Radar: ${result.block_count} CS-pipeline overlap(s) blocking new pushes`,
+          message: `Nightly scan flagged ${result.block_count} BLOCK, ${result.review_count} REVIEW, ${result.warn_count} WARN${arrFmt}. Review on the Duplicates dashboard before approving any marketing batch.`,
+          link: "/duplicates",
+          severity: result.block_count >= 10 ? "high" : "medium",
+        });
+      } catch (e) {
+        logger.warn("[CsOverlap] Notification failed:", e);
+      }
+    });
+
+    return result;
+  },
+);
+inngestFunctions.push(csOverlapAutoScanFunction);
+
 // HITL approval-queue expiry.
 // Rationale: ai_pending_actions rows auto-expire 24h after creation (see
 // WP-SOP-011 §Retention). We still need a cron to FLIP status from 'pending'

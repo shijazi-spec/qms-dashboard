@@ -427,6 +427,7 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
         runConsultantScannerIfStale,
         runQualityAuditIfStale,
         runKPIAutoCalcIfStale,
+        runCsOverlapScanIfStale,
       } = await import("../utils/scheduledJobs");
       const helpers: Array<{
         name: string;
@@ -437,6 +438,7 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
         { name: "ConsultantScanner", fn: () => runConsultantScannerIfStale() },
         { name: "QualityAudit", fn: () => runQualityAuditIfStale() },
         { name: "KPIAutoCalc", fn: () => runKPIAutoCalcIfStale() },
+        { name: "CsOverlapScan", fn: () => runCsOverlapScanIfStale() },
       ];
       for (const h of helpers) {
         try {

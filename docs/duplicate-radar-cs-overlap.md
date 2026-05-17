@@ -47,6 +47,26 @@ Order of evaluation:
 To refresh after a Zoho resync, click **Run scan** — this re-classifies every
 cluster whose records include a Deal with a populated CS section.
 
+## Automatic refresh (Phase 3)
+
+The platform runs the scan automatically on a daily cron so verdicts stay
+fresh as Zoho `Phase` values move (Onboarding → Adoption → Renewal →
+Termination) without anyone clicking the button.
+
+| Surface | Default | Override |
+|---|---|---|
+| Inngest cron `duplicate-radar-cs-overlap-scan` | `30 3 * * *` (03:30 UTC daily) | `DUPLICATE_RADAR_CS_OVERLAP_CRON` env var |
+| In-process safety-net (catches missed cron fires) | re-scans when no cluster has been re-classified in 25h | Pass `maxAgeHours` to `runCsOverlapScanIfStale()` |
+| Notification on BLOCK | created when nightly scan finds ≥1 BLOCK | severity `high` when count ≥10, otherwise `medium` |
+
+The Inngest function is primary; the in-process fallback (registered in
+`src/mastra/index.ts`'s `startScheduledJobFallback` loop) re-runs the scan
+if the Inngest cron is silent for >25h — mirrors the existing pattern used
+by the Duplicate Radar full re-scan and the KPI auto-calc.
+
+Both paths call the same idempotent `scanAllClustersForCsOverlap()`, so
+double-firing is safe.
+
 ## API surface
 
 - `GET  /api/duplicates/cs-overlap/clusters?verdict={block|review|warn}` —
@@ -111,6 +131,9 @@ DUPLICATE_RADAR_FIELD_ARR_VALUE=ARR_value
 
 # Scoring profile
 DUPLICATE_RADAR_SCORING_PROFILE=b2b   # default; legacy: email_first
+
+# Nightly auto-scan (Phase 3)
+DUPLICATE_RADAR_CS_OVERLAP_CRON=30 3 * * *   # daily 03:30 UTC
 ```
 
 ## Tests
