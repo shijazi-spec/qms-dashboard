@@ -2783,6 +2783,45 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Manually trigger auto-CAPA for current CS Lifecycle violations
+    // (default: critical-severity only). Idempotent: existing open CAPAs
+    // for the same (record × code) pair are skipped.
+    path: "/api/duplicates/cs-lifecycle/auto-capa",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          let body: {
+            severities?: ("info" | "warning" | "critical")[];
+            codes?: string[];
+            created_by?: string;
+          } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+
+          const { autoOpenCapasForCsLifecycle } = await import(
+            "../../utils/csLifecycleAutoCapa"
+          );
+          const result = await autoOpenCapasForCsLifecycle({
+            severities: body.severities,
+            codes: body.codes as any,
+            createdBy: body.created_by,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error running CS lifecycle auto-CAPA:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // CS lifecycle compliance — list current violations.
     // Query params: severity={info|warning|critical}, code={onboarding_overdue|...}, limit=N
     path: "/api/duplicates/cs-lifecycle/violations",

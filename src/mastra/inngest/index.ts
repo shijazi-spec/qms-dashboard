@@ -528,6 +528,35 @@ const csLifecycleScanFunction = inngest.createFunction(
       }
     });
 
+    // Phase 5: auto-open CAPAs for critical lifecycle violations. Idempotent
+    // on (record × code), so re-runs don't duplicate. Default scope is the
+    // 'critical' severity only — operators can expand via AUTO_CAPA_LIFECYCLE_SEVERITIES.
+    await step.run("auto-open-lifecycle-capas", async () => {
+      const crit = result.summary.by_severity.critical || 0;
+      if (crit === 0) return;
+      try {
+        const { autoOpenCapasForCsLifecycle } = await import(
+          "../../utils/csLifecycleAutoCapa"
+        );
+        const capaResult = await autoOpenCapasForCsLifecycle({});
+        logger.info("[CsLifecycle] auto-CAPA pass complete", capaResult);
+        if (capaResult.created > 0) {
+          const { createNotification } = await import(
+            "../../utils/notificationHub"
+          );
+          await createNotification({
+            type: "alert",
+            title: `Auto-CAPA: ${capaResult.created} new corrective action(s) opened on CS lifecycle violations`,
+            message: `${capaResult.created} CAPA(s) created (${capaResult.skipped_existing} skipped — already open). Severities: ${capaResult.severities.join(", ")}. Numbers: ${capaResult.capa_numbers.join(", ") || "—"}.`,
+            link: "/duplicates",
+            severity: "high",
+          });
+        }
+      } catch (e) {
+        logger.warn("[CsLifecycle] auto-CAPA failed:", e);
+      }
+    });
+
     return result.summary;
   },
 );

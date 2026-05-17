@@ -51,9 +51,13 @@ not all CRM records) keeps each scan well under a second.
 
 ## API surface
 
-- `GET /api/duplicates/cs-lifecycle/violations?severity={info|warning|critical}&code={onboarding_overdue|phase_churn_desync|termination_missing_churn_date|phase_transition_stalled}&limit=N`
+- `GET /api/duplicates/cs-lifecycle/violations?severity={info|warning|critical}&code={onboarding_overdue|phase_churn_desync|termination_missing_churn_date|phase_transition_stalled|adoption_premature}&limit=N`
   - Default limit 2000, hard cap 5000.
   - Returns `{ summary, violations, duration_ms }`.
+- `POST /api/duplicates/cs-lifecycle/auto-capa` — manually trigger CAPA
+  creation for current lifecycle violations. Body: `{ severities?, codes?, created_by? }`
+  (all optional; defaults to severity=critical only). Idempotent. Same job
+  also runs automatically inside the nightly `csLifecycleScan` cron.
 
 Role gate matches the rest of the Duplicate Radar (admin, grc_manager,
 quality_manager, head_of_operations_quality, ai_specialist, bu_owner,
@@ -65,9 +69,47 @@ executive).
 |---|---|---|
 | **Inngest cron** `duplicate-radar-cs-lifecycle-scan` | 03:45 UTC daily (env `CS_LIFECYCLE_SCAN_CRON`) | Runs 15 minutes after the CS-Overlap scan so phase data is fresh |
 | **Notification on critical** | Posted when nightly scan finds ≥1 critical violation | Severity `high` if ≥5, otherwise `medium`, links to `/duplicates` |
+| **Auto-CAPA on critical violations (Phase 5)** | Opens corrective CAPAs automatically for severity-`critical` violations after each nightly scan | Idempotent on `(record × violation_code)` — re-runs never duplicate open CAPAs |
 
 The same cron-then-fallback pattern as the rest of the radar — both paths
 call the same idempotent `scanCsLifecycleViolations()`.
+
+## Auto-CAPA on critical violations (Phase 5)
+
+When the nightly scan finds at least one **critical** violation, the radar
+opens a CAPA per violation automatically. Today the only currently-critical
+rule is `phase_churn_desync` (Churn Date populated without moving to
+Termination — CS SLA breach). The scope is intentionally narrow to avoid
+noise; warnings and info-level violations only become CAPAs when an
+operator explicitly opts in.
+
+- **Idempotency** — every CAPA uses `source_type='cs_lifecycle_violation'`
+  and `source_id='cs_lifecycle:<duplicate_record_id>:<violation_code>'`.
+  Before creating a new one the helper checks for any non-closed CAPA with
+  the same source_id; if one exists, it skips.
+- **CAPA severity mapping** —
+  - violation `critical` → CAPA severity `critical`, priority `critical`
+  - violation `warning`  → CAPA severity `major`,    priority `high`
+  - violation `info`     → CAPA severity `minor`,    priority `medium`
+- **Target date** — `now + AUTO_CAPA_LIFECYCLE_TARGET_DAYS` (default 3
+  days, matching the urgency of a one-working-day SLA breach).
+- **Title** — `<violation title>: <account or domain>`.
+- **Description** — pre-populated with the account, domain, current phase,
+  days since last modification, the violation message, and the suggested
+  remediation. Quality refines from there.
+
+When at least one CAPA is created, a notification fires with the list of
+new CAPA numbers so Quality sees them in the inbox immediately.
+
+### Env knobs
+
+```
+AUTO_CAPA_LIFECYCLE_ENABLED=true              # set false to disable entirely
+AUTO_CAPA_LIFECYCLE_SEVERITIES=critical       # expand to e.g. "critical,warning" if desired
+AUTO_CAPA_LIFECYCLE_CODES=                    # optional code-level filter (default: all in selected severities)
+AUTO_CAPA_LIFECYCLE_TARGET_DAYS=3             # target close window
+AUTO_CAPA_DEFAULT_ASSIGNEE=                   # optional user/email (shared with CS-Overlap)
+```
 
 ## Tuning
 
