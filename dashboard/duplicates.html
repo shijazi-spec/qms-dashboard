@@ -132,6 +132,10 @@
                 <span class="inline-block w-2 h-2 rounded-full bg-purple-500"></span>
                 CS Lifecycle
             </button>
+            <button data-on-click="showTab" data-args="[&quot;auto-capa-kpis&quot;]" id="tab-auto-capa-kpis" data-testid="tab-auto-capa-kpis" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="KPIs for auto-created CAPAs from the CS overlap + CS lifecycle pipelines">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                Auto-CAPA KPIs
+            </button>
             <button data-on-click="showTab" data-args="[&quot;owners&quot;]" id="tab-owners" data-testid="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
             <button data-on-click="showTab" data-args="[&quot;export&quot;]" id="tab-export" data-testid="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
             <button data-on-click="showTab" data-args="[&quot;logs&quot;]" id="tab-logs" data-testid="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
@@ -727,6 +731,77 @@
                         <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- ═══ AUTO-CAPA KPIs TAB ═══ -->
+        <div id="content-auto-capa-kpis" class="tab-content hidden">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-sm text-blue-900">
+                <strong>Auto-CAPA performance.</strong> Tracks corrective actions opened automatically by the radar (CS Overlap BLOCK clusters above the ARR threshold + critical CS Lifecycle violations). Measures whether the loop is closing — open count, average days to close over the last 30 days, SLA hit rate, and age distribution of currently-open CAPAs.
+            </div>
+
+            <!-- Top KPI cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">Open</div>
+                    <div id="autoCapaKpiOpen" class="text-3xl font-bold text-gray-900 mt-1">—</div>
+                    <div class="text-xs text-gray-500 mt-1">Currently-open auto-CAPAs</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">Closed (30d)</div>
+                    <div id="autoCapaKpiClosed" class="text-3xl font-bold text-gray-900 mt-1">—</div>
+                    <div class="text-xs text-gray-500 mt-1">Resolved in last 30 days</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">Avg days to close</div>
+                    <div id="autoCapaKpiAvg" class="text-3xl font-bold text-gray-900 mt-1">—</div>
+                    <div class="text-xs text-gray-500 mt-1">Median: <span id="autoCapaKpiMedian">—</span></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">SLA hit rate</div>
+                    <div id="autoCapaKpiSla" class="text-3xl font-bold text-gray-900 mt-1">—</div>
+                    <div class="text-xs text-gray-500 mt-1">Closed on or before target date</div>
+                </div>
+            </div>
+
+            <!-- Aging buckets + by-source -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Aging — currently-open CAPAs</h3>
+                    <div id="autoCapaAgingBars" class="space-y-2"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">By source</h3>
+                    <table class="min-w-full text-sm">
+                        <thead class="text-xs text-gray-500 uppercase">
+                            <tr>
+                                <th class="text-start py-1.5 font-medium">Source</th>
+                                <th class="text-end py-1.5 font-medium">Open</th>
+                                <th class="text-end py-1.5 font-medium">Closed 30d</th>
+                                <th class="text-end py-1.5 font-medium">Avg days</th>
+                                <th class="text-end py-1.5 font-medium">SLA</th>
+                            </tr>
+                        </thead>
+                        <tbody id="autoCapaBySourceBody" class="divide-y divide-gray-100">
+                            <tr><td colspan="5" class="py-3 text-center text-gray-400">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Trend -->
+            <div class="bg-white rounded-lg shadow p-4 mb-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-gray-700">Opened per day · last 30 days</h3>
+                    <span id="autoCapaTrendTotal" class="text-xs text-gray-500"></span>
+                </div>
+                <div id="autoCapaTrendChart" class="flex items-end gap-[2px] h-24"></div>
+                <div id="autoCapaTrendLabels" class="flex justify-between text-[10px] text-gray-400 mt-1"></div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button data-on-click="loadAutoCapaKpis" id="autoCapaKpiRefreshBtn" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Refresh</button>
+                <span id="autoCapaKpiGeneratedAt" class="text-xs text-gray-500"></span>
             </div>
         </div>
 
@@ -1746,6 +1821,7 @@
             document.getElementById('tab-' + tab).classList.add('tab-active');
             if (tab === 'cs-overlap') loadCsOverlap(window._csOverlapFilter || 'all');
             if (tab === 'cs-lifecycle') loadCsLifecycle(window._csLifecycleFilter || 'all');
+            if (tab === 'auto-capa-kpis') loadAutoCapaKpis();
         }
 
         // ─── CS-pipeline overlap loaders ─────────────────────────────────────
@@ -2123,6 +2199,122 @@
                     + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(v.message || '') + '</td>'
                     + '</tr>';
             }).join('');
+        }
+
+        // ─── Auto-CAPA KPIs ──────────────────────────────────────────────────
+        function autoCapaFmtAvg(v) {
+            if (v == null) return '—';
+            return (Math.round(v * 10) / 10).toFixed(1) + 'd';
+        }
+        function autoCapaFmtPct(v) {
+            if (v == null) return '—';
+            return Math.round(v * 100) + '%';
+        }
+        function autoCapaSourceLabel(s) {
+            if (s === 'cs_overlap_block')        return 'CS Overlap BLOCK';
+            if (s === 'cs_lifecycle_violation')  return 'CS Lifecycle (critical)';
+            return s;
+        }
+
+        async function loadAutoCapaKpis() {
+            const setLoading = () => {
+                document.getElementById('autoCapaBySourceBody').innerHTML =
+                    '<tr><td colspan="5" class="py-3 text-center text-gray-400">Loading…</td></tr>';
+            };
+            setLoading();
+            try {
+                const res = await fetch('/api/duplicates/auto-capa/kpis');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                renderAutoCapaKpis(data);
+            } catch (e) {
+                document.getElementById('autoCapaBySourceBody').innerHTML =
+                    '<tr><td colspan="5" class="py-3 text-center text-red-600">Failed: ' + escapeHtml(String(e.message || e)) + '</td></tr>';
+            }
+        }
+
+        function renderAutoCapaKpis(data) {
+            const t = data.totals || {};
+            document.getElementById('autoCapaKpiOpen').textContent    = t.open_count || 0;
+            document.getElementById('autoCapaKpiClosed').textContent  = t.closed_last_30d || 0;
+            document.getElementById('autoCapaKpiAvg').textContent     = autoCapaFmtAvg(t.avg_days_to_close);
+            document.getElementById('autoCapaKpiMedian').textContent  = autoCapaFmtAvg(t.median_days_to_close);
+            document.getElementById('autoCapaKpiSla').textContent     = autoCapaFmtPct(t.sla_hit_rate);
+
+            // Aging bars
+            const bk = t.aging_buckets || { d0_3:0, d4_7:0, d8_14:0, d15_plus:0 };
+            const total = (bk.d0_3 || 0) + (bk.d4_7 || 0) + (bk.d8_14 || 0) + (bk.d15_plus || 0);
+            const bucket = (label, value, color) => {
+                const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+                return '<div>'
+                    + '<div class="flex justify-between text-xs text-gray-700 mb-0.5">'
+                    +   '<span>' + label + '</span>'
+                    +   '<span class="font-medium">' + value + (total > 0 ? ' · ' + pct + '%' : '') + '</span>'
+                    + '</div>'
+                    + '<div class="h-2 w-full bg-gray-100 rounded-full overflow-hidden">'
+                    +   '<div class="h-full ' + color + '" data-style="width:' + pct + '%"></div>'
+                    + '</div>'
+                + '</div>';
+            };
+            document.getElementById('autoCapaAgingBars').innerHTML =
+                bucket('0–3 days',     bk.d0_3 || 0,    'bg-green-500')   +
+                bucket('4–7 days',     bk.d4_7 || 0,    'bg-yellow-400')  +
+                bucket('8–14 days',    bk.d8_14 || 0,   'bg-amber-500')   +
+                bucket('15+ days',     bk.d15_plus || 0,'bg-red-500');
+
+            // Apply data-style as inline width — same pattern used elsewhere by the CSP hook
+            document.querySelectorAll('#autoCapaAgingBars [data-style]').forEach(el => {
+                el.setAttribute('style', el.getAttribute('data-style') || '');
+            });
+
+            // By-source table
+            const bs = data.by_source_type || {};
+            const sources = ['cs_overlap_block', 'cs_lifecycle_violation'];
+            document.getElementById('autoCapaBySourceBody').innerHTML = sources.map(src => {
+                const k = bs[src] || { open_count: 0, closed_last_30d: 0, avg_days_to_close: null, sla_hit_rate: null };
+                return '<tr>'
+                    + '<td class="py-2 text-gray-800">' + escapeHtml(autoCapaSourceLabel(src)) + '</td>'
+                    + '<td class="py-2 text-end font-medium">' + (k.open_count || 0) + '</td>'
+                    + '<td class="py-2 text-end">' + (k.closed_last_30d || 0) + '</td>'
+                    + '<td class="py-2 text-end">' + autoCapaFmtAvg(k.avg_days_to_close) + '</td>'
+                    + '<td class="py-2 text-end">' + autoCapaFmtPct(k.sla_hit_rate) + '</td>'
+                    + '</tr>';
+            }).join('');
+
+            // Trend chart — simple inline bars
+            const trend = data.trend_30d || [];
+            const max = Math.max(1, ...trend.map(d => d.opened || 0));
+            const chart = document.getElementById('autoCapaTrendChart');
+            chart.innerHTML = trend.map(d => {
+                const h = Math.round(((d.opened || 0) / max) * 96); // 96px ≈ h-24
+                const color = (d.opened || 0) === 0 ? 'bg-gray-200' : 'bg-blue-500';
+                return '<div class="flex-1 ' + color + ' rounded-t" data-style="height:' + h + 'px" title="' + d.date + ' · ' + (d.opened || 0) + ' opened"></div>';
+            }).join('');
+            chart.querySelectorAll('[data-style]').forEach(el => {
+                el.setAttribute('style', el.getAttribute('data-style') || '');
+            });
+
+            // Trend axis labels — first / mid / last date
+            const labels = document.getElementById('autoCapaTrendLabels');
+            if (trend.length > 0) {
+                const first = trend[0]?.date || '';
+                const mid   = trend[Math.floor(trend.length / 2)]?.date || '';
+                const last  = trend[trend.length - 1]?.date || '';
+                labels.innerHTML = '<span>' + escapeHtml(first) + '</span>'
+                    + '<span>' + escapeHtml(mid) + '</span>'
+                    + '<span>' + escapeHtml(last) + '</span>';
+            } else {
+                labels.innerHTML = '';
+            }
+            const totalOpened = trend.reduce((s, d) => s + (d.opened || 0), 0);
+            document.getElementById('autoCapaTrendTotal').textContent =
+                totalOpened + ' opened in window';
+
+            // Generated-at
+            if (data.generated_at) {
+                document.getElementById('autoCapaKpiGeneratedAt').textContent =
+                    'Generated ' + new Date(data.generated_at).toLocaleString();
+            }
         }
 
         function renderPreflight(data) {

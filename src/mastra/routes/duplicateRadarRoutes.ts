@@ -2783,6 +2783,29 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // KPI rollup over auto-created CAPAs (CS-overlap + CS-lifecycle).
+    // Returns: totals, per-source-type breakdown, and a 30-day opened trend.
+    path: "/api/duplicates/auto-capa/kpis",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const { getAutoCapaKpis } = await import(
+            "../../utils/autoCapaKpis"
+          );
+          const result = await getAutoCapaKpis({});
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error computing auto-CAPA KPIs:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Manually trigger auto-CAPA for current CS Lifecycle violations
     // (default: critical-severity only). Idempotent: existing open CAPAs
     // for the same (record × code) pair are skipped.

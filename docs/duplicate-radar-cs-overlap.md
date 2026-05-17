@@ -84,6 +84,11 @@ double-firing is safe.
   creation** for BLOCK clusters above the ARR threshold. Body: `{ threshold_sar?, created_by? }`. Idempotent: existing open
   CAPAs for the same cluster are skipped. Same job also runs automatically
   inside the nightly `csOverlapAutoScan` cron.
+- `GET /api/duplicates/auto-capa/kpis` — **KPI rollup over all auto-CAPAs**
+  (both `cs_overlap_block` and `cs_lifecycle_violation`). Returns totals,
+  per-source-type breakdown (open count, closed-30d, avg/median days to
+  close, SLA hit rate, aging buckets), and a 30-day daily opened trend.
+  Surfaced in the dashboard's "Auto-CAPA KPIs" tab.
 
 All three endpoints respect the existing Duplicate Radar role gate (`admin`,
 `grc_manager`, `quality_manager`, `head_of_operations_quality`,
