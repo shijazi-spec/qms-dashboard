@@ -236,7 +236,14 @@ export const qmsConsultantAgent = new Agent({
 
   instructions: QMS_CONSULTANT_INSTRUCTIONS,
 
-  model: openai.responses("gpt-4o"),
+  // Use the Chat Completions adapter (`openai(...)`) — not the Responses
+  // API adapter (`openai.responses(...)`) — because Mastra's stream() is not
+  // compatible with the Responses API model under AI SDK v4. The streaming
+  // endpoint was returning HTTP 500 with: "Agent ... is using AI SDK v4
+  // model (openai.responses:gpt-4o) which is not compatible with stream()".
+  // Per the convention documented in exampleAgent.ts, `openai.responses()`
+  // is for gpt-5 class models; gpt-4o should use plain `openai()`.
+  model: openai("gpt-4o"),
 
   // Tools: read-only tools pass through unchanged; write-tools are wrapped
   // by withApprovalGate() so they enqueue a pending action instead of
