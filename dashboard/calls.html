@@ -977,6 +977,11 @@
                 mcpCatalogBootstrapped = true;
                 refreshMcpImportCatalog();
             }
+            // Refresh scorecards when the user navigates back to this tab so
+            // any changes made via the admin route (or by another user) show
+            // up without a page reload. The initial load still happens once
+            // at init() in case the user lands directly on this tab.
+            if (tab === 'scorecards') loadScorecards();
         }
 
         function renderOverview() {

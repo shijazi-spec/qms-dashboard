@@ -432,78 +432,96 @@ Respond with JSON only:
             "notes_updated",
             "call_logged",
             "task_created",
+            "stage_updated",
           ];
 
-          let notesUpdated = Math.random() > 0.3;
-          let callLogged = Math.random() > 0.2;
-          let taskCreated = Math.random() > 0.4;
-          let stageUpdated = Math.random() > 0.5;
-          let meetingOutcomeLogged = Math.random() > 0.6;
+          // Real Zoho-backed compliance check. Replaces the previous
+          // Math.random()-based mock that produced misleading dashboard
+          // KPIs. See src/utils/crmComplianceCheck.ts for the evidence
+          // model (one API call each to Notes / Calls / Tasks / Events +
+          // a self-fetch of the parent Lead/Deal for Modified_Time).
+          const { runCrmComplianceCheck } = await import(
+            "../../utils/crmComplianceCheck"
+          );
+          const checked = await runCrmComplianceCheck({
+            callRecordId: callId,
+            leadId,
+            dealId,
+            callDate: callRecord.call_date,
+            expectedActions,
+          });
 
-          const missingActions: string[] = [];
-          if (expectedActions.includes("notes_updated") && !notesUpdated) {
-            missingActions.push("Notes not updated after call");
-          }
-          if (expectedActions.includes("call_logged") && !callLogged) {
-            missingActions.push("Call not logged in CRM");
-          }
-          if (expectedActions.includes("task_created") && !taskCreated) {
-            missingActions.push("No follow-up task created");
-          }
-          if (expectedActions.includes("stage_updated") && !stageUpdated) {
-            missingActions.push("Lead/Deal stage not updated");
-          }
-          if (
-            expectedActions.includes("meeting_outcome_logged") &&
-            !meetingOutcomeLogged
-          ) {
-            missingActions.push("Meeting outcome not logged");
+          if (!checked.success || !checked.result) {
+            // Don't fabricate booleans when Zoho is unreachable or the
+            // call has no CRM linkage. Persist a sentinel row so the UI
+            // can show "Not checked — reason" instead of a fake pass.
+            await saveCompliance({
+              call_record_id: callId,
+              lead_id: leadId,
+              deal_id: dealId,
+              notes_updated: false,
+              call_logged: false,
+              task_created: false,
+              stage_updated: false,
+              meeting_outcome_logged: false,
+              overall_compliance: false,
+              compliance_score: 0,
+              missing_actions: [`Not checked: ${checked.reason}`],
+              compliance_details: {
+                mode: "not_checked",
+                reason: checked.reason,
+              },
+            });
+            logger?.warn("⚠️ [API] Compliance check skipped", {
+              callId,
+              reason: checked.reason,
+            });
+            return c.json({
+              success: false,
+              call_record_id: callId,
+              reason: checked.reason,
+              message: `Compliance check skipped: ${checked.reason}`,
+            });
           }
 
-          const totalChecks = expectedActions.length;
-          const passedChecks = totalChecks - missingActions.length;
-          const complianceScore =
-            totalChecks > 0
-              ? Math.round((passedChecks / totalChecks) * 100)
-              : 0;
-          const overallCompliance = missingActions.length === 0;
-
+          const r = checked.result;
           await saveCompliance({
             call_record_id: callId,
             lead_id: leadId,
             deal_id: dealId,
-            notes_updated: notesUpdated,
-            call_logged: callLogged,
-            task_created: taskCreated,
-            stage_updated: stageUpdated,
-            meeting_outcome_logged: meetingOutcomeLogged,
-            overall_compliance: overallCompliance,
-            compliance_score: complianceScore,
-            missing_actions: missingActions,
-            compliance_details: { mode: "simulated" },
+            notes_updated: r.notes_updated,
+            call_logged: r.call_logged,
+            task_created: r.task_created,
+            stage_updated: r.stage_updated,
+            meeting_outcome_logged: r.meeting_outcome_logged,
+            overall_compliance: r.overall_compliance,
+            compliance_score: r.compliance_score,
+            missing_actions: r.missing_actions,
+            compliance_details: r.evidence,
           });
 
           const complianceResult = {
             success: true,
             call_record_id: callId,
             compliance: {
-              notes_updated: notesUpdated,
-              call_logged: callLogged,
-              task_created: taskCreated,
-              stage_updated: stageUpdated,
-              meeting_outcome_logged: meetingOutcomeLogged,
-              overall_compliance: overallCompliance,
-              compliance_score: complianceScore,
-              missing_actions: missingActions,
+              notes_updated: r.notes_updated,
+              call_logged: r.call_logged,
+              task_created: r.task_created,
+              stage_updated: r.stage_updated,
+              meeting_outcome_logged: r.meeting_outcome_logged,
+              overall_compliance: r.overall_compliance,
+              compliance_score: r.compliance_score,
+              missing_actions: r.missing_actions,
+              evidence: r.evidence,
             },
-            message: overallCompliance
+            message: r.overall_compliance
               ? "CRM compliance passed"
-              : `${missingActions.length} missing actions`,
+              : `${r.missing_actions.length} missing actions`,
           };
 
           logger?.info("✅ [API] Compliance check completed", {
             callId,
-            success: complianceResult.success,
+            score: r.compliance_score,
           });
 
           return c.json(complianceResult);
