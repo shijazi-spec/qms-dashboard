@@ -89,6 +89,36 @@ double-firing is safe.
   per-source-type breakdown (open count, closed-30d, avg/median days to
   close, SLA hit rate, aging buckets), and a 30-day daily opened trend.
   Surfaced in the dashboard's "Auto-CAPA KPIs" tab.
+- `POST /api/duplicates/reconcile-synthetic-domains` — **promote synthetic
+  cluster domains to the CS-curated `Company_Domain`**. Scans every cluster
+  whose `domain` looks synthetic (ends with `.cluster` or has no dot), looks
+  at the Deal records inside, and renames the cluster to the authoritative
+  domain when every Deal agrees. Skips clusters with conflicting domains
+  and skips clusters that would collide with an already-real cluster
+  (manual merge needed). Body: `{ dry_run?: boolean, limit?: number }`.
+  Idempotent.
+
+### `Company_Domain` field on the Deal Customer Success section
+
+CS curates an authoritative `Company_Domain` at Onboarding handoff (the
+real web domain like `alsahab.sa`). The radar reads it out of `raw_data`
+during the CS overlap scan and uses it for two things:
+
+1. **Domain reconciliation** — synthetic clusters (e.g. `kfupm.cluster`)
+   get promoted to the real domain so Marketing's preflight checks can
+   match on it directly.
+2. **Lifecycle compliance** — see the new `missing_company_domain` rule
+   in `duplicate-radar-cs-lifecycle.md`. Fires only for active CS phases
+   (Onboarding / Adoption / Renewal); does NOT fire for pre-Onboarding
+   leads or for Termination.
+
+The field name is read with a fallback chain (`Company_Domain`,
+`company_domain`, `CompanyDomain`, `Company Domain`, `Domain`, `domain`)
+so it works regardless of the exact Zoho API key. Pin via env if needed:
+
+```
+DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN=Company_Domain
+```
 
 All three endpoints respect the existing Duplicate Radar role gate (`admin`,
 `grc_manager`, `quality_manager`, `head_of_operations_quality`,

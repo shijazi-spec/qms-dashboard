@@ -277,6 +277,90 @@ describe("adoption_premature", () => {
   });
 });
 
+describe("missing_company_domain", () => {
+  test("fires for Onboarding when Company_Domain is empty", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Onboarding" },
+      modified_date: daysAgo(5),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "missing_company_domain",
+    );
+    const v = result.violations.find((x) => x.code === "missing_company_domain")!;
+    expect(v.severity).toBe("warning");
+  });
+
+  test("fires for Adoption when Company_Domain is empty", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Adoption" },
+      modified_date: daysAgo(60),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "missing_company_domain",
+    );
+  });
+
+  test("fires for Renewal when Company_Domain is empty", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Renewal" },
+      modified_date: daysAgo(10),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "missing_company_domain",
+    );
+  });
+
+  test("does NOT fire when Company_Domain is populated", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Onboarding", Company_Domain: "alsahab.sa" },
+      modified_date: daysAgo(5),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "missing_company_domain",
+    );
+  });
+
+  test("does NOT fire for Termination phase (out of scope per ops decision)", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Termination" },
+      modified_date: daysAgo(5),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "missing_company_domain",
+    );
+  });
+
+  test("does NOT fire for non-CS deals (no Phase field)", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Stage: "Closed Won" },
+      modified_date: daysAgo(5),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "missing_company_domain",
+    );
+  });
+
+  test("tolerates camelCase field variation 'CompanyDomain'", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Adoption", CompanyDomain: "example.com" },
+      modified_date: daysAgo(2),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "missing_company_domain",
+    );
+  });
+
+  test("whitespace-only Company_Domain still triggers the rule", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Onboarding", Company_Domain: "   " },
+      modified_date: daysAgo(3),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "missing_company_domain",
+    );
+  });
+});
+
 describe("summarizeViolations", () => {
   test("rolls up severity + code counts correctly", () => {
     const evals = [

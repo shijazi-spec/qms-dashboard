@@ -19,7 +19,8 @@ export type CsViolationCode =
   | "phase_churn_desync"
   | "termination_missing_churn_date"
   | "phase_transition_stalled"
-  | "adoption_premature";
+  | "adoption_premature"
+  | "missing_company_domain";
 
 export type CsViolationSeverity = "info" | "warning" | "critical";
 
@@ -125,6 +126,8 @@ const SUGGESTED_ACTIONS: Record<CsViolationCode, string> = {
     "Deal has not been touched recently and is not in a steady-state phase. Confirm CS is still working it or move to the appropriate next phase.",
   adoption_premature:
     "Deal moved to Adoption without evidence of a completed Onboarding period (or while still inside the trial window). Verify Onboarding sign-off and trial completion with CS before counting this as an active adopter.",
+  missing_company_domain:
+    "Active Customer Success deal has no Company_Domain populated. CS team should fill this field at Onboarding handoff so Marketing / Sales preflight checks recognise this account as an active customer.",
 };
 
 /**
@@ -266,6 +269,28 @@ export function evaluateCsLifecycle(
     }
   }
 
+  // 6. Missing Company_Domain — only fires for ACTIVE CS phases where CS is
+  //    expected to have curated the authoritative domain at Onboarding
+  //    handoff. Skipped for pre-Onboarding records and Termination (per
+  //    GRQ ops decision: only enforce for clients currently in the CS
+  //    pipeline). Severity = warning (data quality, not SLA breach).
+  const isActiveCsPhase = cfg.phaseFieldActive.some(
+    (p) => p.toLowerCase() === phase.toLowerCase(),
+  );
+  if (isActiveCsPhase) {
+    const cd = (fields.company_domain ?? "").trim();
+    if (!cd) {
+      violations.push({
+        code: "missing_company_domain",
+        severity: "warning",
+        message: `Active CS deal in phase "${phase}" has no Company_Domain populated. Without it, Marketing/Sales preflight cannot recognise this as an existing customer.`,
+        days_in_phase: daysSinceModified,
+        current_phase: phase,
+        suggested_action: SUGGESTED_ACTIONS.missing_company_domain,
+      });
+    }
+  }
+
   return {
     is_cs_deal: true,
     current_phase: phase,
@@ -300,6 +325,7 @@ export function summarizeViolations(
       termination_missing_churn_date: 0,
       phase_transition_stalled: 0,
       adoption_premature: 0,
+      missing_company_domain: 0,
     },
   };
   for (const ev of evaluations) {

@@ -13,6 +13,7 @@ asks *"is CS following its own SLA on this customer?"*.
 | `termination_missing_churn_date` | warning | Phase = Termination but Churn Date is empty. | Data-integrity corollary of the rule above |
 | `phase_transition_stalled` | info | Deal not modified in `CS_LIFECYCLE_STALLED_TRANSITION_DAYS` (default 7) and is not in a steady-state phase (Adoption / Renewal) and not Onboarding (covered above) and not Termination (terminal). | "One working day for movement from phase to phase" |
 | `adoption_premature` | warning | Phase = Adoption while (a) `Customer_Since` is less than `CS_LIFECYCLE_ADOPTION_MIN_CUSTOMER_AGE_DAYS` (default 30) — suggesting the deal jumped Onboarding — OR (b) `Trial_End_Date` is still in the future — suggesting the deal moved to Adoption before the trial closed. | "Adoption phase for clients who completed Onboarding + trial period (if found)" |
+| `missing_company_domain` | warning | Phase ∈ {Onboarding, Adoption, Renewal} AND `Company_Domain` is empty. **Does not fire for Termination or pre-Onboarding records** — CS only curates this field during Onboarding handoff. | Data-quality gate so Marketing / Sales preflight checks recognise active customers by exact-domain match. |
 
 Both signals (`Customer_Since`, `Trial_End_Date`) are env-configurable. When
 neither field is present on a record the rule does **not** fire (no false

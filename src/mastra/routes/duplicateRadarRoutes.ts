@@ -2783,6 +2783,42 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Reconcile synthetic cluster domains (`*.cluster` / company-name slugs)
+    // with the authoritative Company_Domain that CS adds during Onboarding.
+    // Promotes the cluster's `domain` to the real one whenever every Deal in
+    // the cluster agrees. Idempotent + safe to re-run. Pass {dry_run:true}
+    // to preview without writing.
+    path: "/api/duplicates/reconcile-synthetic-domains",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          let body: { dry_run?: boolean; limit?: number } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+
+          const { reconcileSyntheticClusterDomains } = await import(
+            "../../utils/duplicateRadarDomainReconciler"
+          );
+          const result = await reconcileSyntheticClusterDomains({
+            dryRun: !!body.dry_run,
+            limit: typeof body.limit === "number" ? body.limit : undefined,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error reconciling synthetic domains:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // KPI rollup over auto-created CAPAs (CS-overlap + CS-lifecycle).
     // Returns: totals, per-source-type breakdown, and a 30-day opened trend.
     path: "/api/duplicates/auto-capa/kpis",

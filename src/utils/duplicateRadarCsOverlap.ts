@@ -253,6 +253,7 @@ export function extractCsFieldsFromRawData(
   arr_value?: number | null;
   customer_since?: string | Date | null;
   trial_end_date?: string | Date | null;
+  company_domain?: string | null;
 } {
   if (!rawData || typeof rawData !== "object") {
     return { domain: context.domain ?? null };
@@ -321,6 +322,19 @@ export function extractCsFieldsFromRawData(
       "Trial_End",
     ]),
   );
+  // CS team's curated authoritative domain — populated at Onboarding handoff.
+  // Tolerant of the common Zoho key variations; pin via env if your field has
+  // a different API name (DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN=Company_Domain).
+  const companyDomainRaw = tryKeys(
+    envOr("DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN", [
+      "Company_Domain",
+      "company_domain",
+      "CompanyDomain",
+      "Company Domain",
+      "Domain",
+      "domain",
+    ]),
+  );
 
   const arrNum =
     arrRaw == null
@@ -339,6 +353,10 @@ export function extractCsFieldsFromRawData(
       customerSinceRaw == null ? null : (customerSinceRaw as string | Date),
     trial_end_date:
       trialEndRaw == null ? null : (trialEndRaw as string | Date),
+    company_domain:
+      companyDomainRaw == null
+        ? null
+        : String(companyDomainRaw).trim().toLowerCase() || null,
   };
 }
 
