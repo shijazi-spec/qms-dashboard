@@ -302,3 +302,5 @@ export const qmsConsultantAgent = new Agent({
     storage: sharedPostgresStorage,
   }),
 });
+
+// Build cache invalidation: 20260518142921
