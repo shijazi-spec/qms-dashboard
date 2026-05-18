@@ -67,10 +67,56 @@ export const callIntelligenceRoutes = [
 
           logger?.info("✅ [API] Call record created", { id: callRecord.id });
 
+          // Auto-link to Zoho Lead/Deal by phone — SDR pre-qualification
+          // stage. Skipped if the caller already provided a lead_id or
+          // deal_id on the ingest payload (manual linking wins).
+          let autoLinkResult: any = null;
+          if (!data.lead_id && !data.deal_id) {
+            try {
+              const { autoLinkCallToCrm } = await import(
+                "../../utils/sdrCallLinking"
+              );
+              const {
+                extractCallPhoneCandidates,
+              } = await import("../../utils/callLeadPhoneMatch");
+              const {
+                updateCallRecordLeadId,
+                updateCallRecordDealId,
+              } = await import("../../utils/callIntelligenceDb");
+              const candidates = extractCallPhoneCandidates(callRecord);
+              autoLinkResult = await autoLinkCallToCrm(
+                callRecord.id!,
+                candidates,
+                updateCallRecordLeadId,
+                updateCallRecordDealId,
+              );
+              if (autoLinkResult.linked) {
+                logger?.info("🔗 [API] Auto-linked call to Zoho", {
+                  callId: callRecord.id,
+                  module: autoLinkResult.picked_module,
+                  recordId:
+                    autoLinkResult.lead_id || autoLinkResult.deal_id,
+                });
+              } else {
+                logger?.info("ℹ️ [API] Auto-link skipped/failed", {
+                  callId: callRecord.id,
+                  reason: autoLinkResult.reason,
+                });
+              }
+            } catch (err: any) {
+              // Auto-link is best-effort — never fail the ingest because
+              // of a CRM lookup hiccup.
+              logger?.warn("[API] Auto-link threw, continuing", {
+                error: err?.message || String(err),
+              });
+            }
+          }
+
           return c.json({
             success: true,
             call_record_id: callRecord.id,
             call_id: callRecord.call_id,
+            auto_link: autoLinkResult,
             message: "Call ingested successfully. Ready for analysis.",
           });
         } catch (error) {
@@ -2250,6 +2296,117 @@ ${transcriptText}
           safeLogger.error("Error syncing to Zoho:", error);
           return c.json(
             { success: false, error: "Failed to sync to Zoho" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    // SDR Activity Timeline for a linked call. Returns recent Zoho
+    // activities (Notes / Calls / Tasks / Events) on the call's linked
+    // Lead or Deal since the call_date. Powers the "what did the SDR do
+    // with this prospect after the call" view in the Calls dashboard.
+    path: "/api/calls/:callId/activity-timeline",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await verifyCallAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        try {
+          const callId = parseInt(c.req.param("callId"));
+          if (!Number.isFinite(callId) || callId <= 0) {
+            return c.json({ error: "invalid call id" }, 400);
+          }
+          const { getCallRecordById } = await import(
+            "../../utils/callIntelligenceDb"
+          );
+          const record = await getCallRecordById(callId);
+          if (!record) {
+            return c.json({ error: "call record not found" }, 404);
+          }
+          const recordId = record.lead_id || record.deal_id;
+          if (!recordId) {
+            return c.json({
+              success: false,
+              reason: "no_crm_linkage",
+              message:
+                "Call is not linked to a Zoho Lead or Deal — run auto-link first.",
+            });
+          }
+          const module = record.lead_id ? "Leads" : "Deals";
+          const { getSdrActivityTimeline } = await import(
+            "../../utils/sdrCallLinking"
+          );
+          const timeline = await getSdrActivityTimeline(
+            recordId,
+            module,
+            record.call_date,
+          );
+          return c.json({ success: true, ...timeline });
+        } catch (error: any) {
+          safeLogger.error("[API] activity-timeline failed", {
+            error: error?.message || String(error),
+          });
+          return c.json(
+            { success: false, error: "Failed to load activity timeline" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    // Manual auto-link trigger — re-runs the Lead+Deal phone match on a
+    // call after the fact (e.g. for calls ingested before the auto-link
+    // feature shipped, or when Zoho was unreachable at ingest time).
+    path: "/api/calls/:callId/auto-link",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await verifyCallAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        try {
+          const callId = parseInt(c.req.param("callId"));
+          if (!Number.isFinite(callId) || callId <= 0) {
+            return c.json({ error: "invalid call id" }, 400);
+          }
+          const {
+            getCallRecordById,
+            updateCallRecordLeadId,
+            updateCallRecordDealId,
+          } = await import("../../utils/callIntelligenceDb");
+          const record = await getCallRecordById(callId);
+          if (!record) {
+            return c.json({ error: "call record not found" }, 404);
+          }
+          if (record.lead_id || record.deal_id) {
+            return c.json({
+              linked: false,
+              reason: "already_linked",
+              lead_id: record.lead_id ?? null,
+              deal_id: record.deal_id ?? null,
+            });
+          }
+          const { autoLinkCallToCrm } = await import(
+            "../../utils/sdrCallLinking"
+          );
+          const { extractCallPhoneCandidates } = await import(
+            "../../utils/callLeadPhoneMatch"
+          );
+          const result = await autoLinkCallToCrm(
+            callId,
+            extractCallPhoneCandidates(record),
+            updateCallRecordLeadId,
+            updateCallRecordDealId,
+          );
+          return c.json(result);
+        } catch (error: any) {
+          safeLogger.error("[API] auto-link failed", {
+            error: error?.message || String(error),
+          });
+          return c.json(
+            { linked: false, reason: "exception", error: error?.message },
             500,
           );
         }
