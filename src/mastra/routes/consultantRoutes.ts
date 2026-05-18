@@ -556,7 +556,10 @@ export const consultantRoutes = [
                   threadId: resolvedThreadId,
                 },
                 () =>
-                  agent.stream(message, {
+                  // streamLegacy() is required because the Consultant agent is
+                  // configured with an AI SDK v4 model (openai.responses:gpt-4o);
+                  // Mastra's newer .stream() call rejects v4 models at runtime.
+                  agent.streamLegacy(message, {
                     threadId: resolvedThreadId,
                     resourceId,
                     abortSignal: controller.signal,

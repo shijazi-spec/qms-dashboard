@@ -36,7 +36,15 @@
 
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { Pool } from "pg";
+
+// ESM shim: the Mastra build emits this file as ESM under .mastra/output/,
+// where the CommonJS __dirname global does not exist. Recompute it from
+// import.meta.url so resolveAuditEvidenceDir() works in both tsx (CJS-like)
+// and bundled-ESM execution contexts.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import {
   redactSensitiveFields,
   redactSecretLikeStrings,
