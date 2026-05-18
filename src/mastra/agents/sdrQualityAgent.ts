@@ -11,6 +11,7 @@ import { evaluateSdrGovernanceTool } from "../tools/sdrGovernanceTool";
 import { reconcileCallTool } from "../tools/callReconciliationTool";
 import { matchLeadByPhoneTool } from "../tools/leadPhoneMatchTool";
 import { driveCallImportTool } from "../tools/driveCallImportTool";
+import { checkCommunicationEligibilityTool } from "../tools/checkCommunicationEligibilityTool";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
 
 const AGENT_NAME = "WalaPlus SDR Quality Specialist";
@@ -140,10 +141,11 @@ export const sdrQualityAgent = new Agent({
     checkCRMActivityTool:       wt(checkCRMActivityTool,       AGENT_NAME),
     sendQualityReportTool:      wt(sendQualityReportTool,      AGENT_NAME),
     sendAlertTool:              wt(sendAlertTool,              AGENT_NAME),
-    reconcileCallTool:          wt(reconcileCallTool,          AGENT_NAME),
-    evaluateSdrGovernanceTool:  wt(evaluateSdrGovernanceTool,  AGENT_NAME),
-    matchLeadByPhoneTool:       wt(matchLeadByPhoneTool,       AGENT_NAME),
-    driveCallImportTool:        wt(driveCallImportTool,        AGENT_NAME),
+    reconcileCallTool:               wt(reconcileCallTool,               AGENT_NAME),
+    evaluateSdrGovernanceTool:       wt(evaluateSdrGovernanceTool,       AGENT_NAME),
+    matchLeadByPhoneTool:            wt(matchLeadByPhoneTool,            AGENT_NAME),
+    driveCallImportTool:             wt(driveCallImportTool,             AGENT_NAME),
+    checkCommunicationEligibilityTool: wt(checkCommunicationEligibilityTool, AGENT_NAME),
   },
 
   memory: new Memory({

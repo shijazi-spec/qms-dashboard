@@ -2783,6 +2783,46 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Communication-eligibility check — answers "can SDR/Marketing contact
+    // this domain right now?". Combines contract state (signed/paid),
+    // CS Phase, Churn Date, and sector-based cool-off into a single
+    // verdict (block / review / allow) with per-deal reasoning.
+    path: "/api/duplicates/communication-check",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          let body: { domain?: string } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          if (!body.domain || typeof body.domain !== "string") {
+            return c.json(
+              { error: "Body must include { domain: string }" },
+              400,
+            );
+          }
+
+          const { checkCommunicationEligibility } = await import(
+            "../../utils/csCommunicationCheck"
+          );
+          const result = await checkCommunicationEligibility({
+            domain: body.domain,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error running communication-check:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Reconcile synthetic cluster domains (`*.cluster` / company-name slugs)
     // with the authoritative Company_Domain that CS adds during Onboarding.
     // Promotes the cluster's `domain` to the real one whenever every Deal in

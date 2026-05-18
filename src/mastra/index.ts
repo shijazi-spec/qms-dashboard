@@ -15,6 +15,7 @@ import { evaluateSdrGovernanceTool } from "./tools/sdrGovernanceTool";
 import { reconcileCallTool } from "./tools/callReconciliationTool";
 import { matchLeadByPhoneTool } from "./tools/leadPhoneMatchTool";
 import { driveCallImportTool } from "./tools/driveCallImportTool";
+import { checkCommunicationEligibilityTool } from "./tools/checkCommunicationEligibilityTool";
 
 import { globalMiddleware } from "./middleware";
 import { dashboardApiRoutes } from "./routes/dashboardApiRoutes";
@@ -165,6 +166,7 @@ export const mastra = new Mastra({
         reconcileCallTool,
         matchLeadByPhoneTool,
         driveCallImportTool,
+        checkCommunicationEligibilityTool,
       },
     }),
   },
