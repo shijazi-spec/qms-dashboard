@@ -43,6 +43,7 @@ import path from "path";
 import crypto from "crypto";
 
 import { logger } from "../../utils/logger";
+import { getOpenAIApiKey } from "../../utils/openaiCredentials";
 const INTAKE_UPLOAD_DIR =
   process.env.MANUAL_INTAKE_DIR ||
   path.join(process.env.UPLOAD_DIR || "/data/documents", "manual-intake");
@@ -145,7 +146,7 @@ async function extractFindingsFromText(text: string): Promise<any[]> {
   const { createOpenAI } = await import("@ai-sdk/openai");
   const { generateText } = await import("ai");
   const openai = createOpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: getOpenAIApiKey(),
   });
 
   // Truncate if absurdly long (GPT-4o handles ~128k tokens but the intake
@@ -153,7 +154,11 @@ async function extractFindingsFromText(text: string): Promise<any[]> {
   const safeText = text.length > 100_000 ? text.slice(0, 100_000) : text;
 
   const { text: raw } = await generateText({
-    model: openai.responses("gpt-4o"),
+    // Use the Chat Completions adapter (`openai(...)`) — the Responses API
+    // adapter `openai.responses(...)` is incompatible with stream() under
+    // AI SDK v4 and is conventionally reserved for gpt-5 class models
+    // (see exampleAgent.ts:73). Same fix as the QMS consultant agent.
+    model: openai("gpt-4o"),
     system: EXTRACTION_SYSTEM_PROMPT,
     prompt: `Extract audit findings from the following report.\n\nReport:\n"""\n${safeText}\n"""\n\nReturn ONLY valid JSON as specified.`,
   });

@@ -3,6 +3,7 @@ import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
 import { exampleTool } from "../tools/exampleTool";
 import { createOpenAI } from "@ai-sdk/openai";
+import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
 
 /**
  * LLM CLIENT CONFIGURATION
@@ -19,8 +20,8 @@ import { createOpenAI } from "@ai-sdk/openai";
  * Automatic key rotation and management
  */
 const openai = createOpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  baseURL: getOpenAIBaseUrl(),
+  apiKey: getOpenAIApiKey(),
 });
 /*
  * OPTION 2: Standard OpenAI Setup (Your Own API Key)

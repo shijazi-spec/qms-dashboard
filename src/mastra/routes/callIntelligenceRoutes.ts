@@ -8,6 +8,7 @@ import {
 
 import { logger as safeLogger } from "../../utils/logger";
 import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
+import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
 const CALL_READ_ROLES = [
   "admin",
   "ai_specialist",
@@ -315,10 +316,8 @@ export const callIntelligenceRoutes = [
           });
 
           const openai = createOpenAI({
-            baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-            apiKey:
-              process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
-              process.env.OPENAI_API_KEY,
+            baseURL: getOpenAIBaseUrl(),
+            apiKey: getOpenAIApiKey(),
           });
 
           const analysisPrompt = `Analyze this sales call transcript and provide JSON:
@@ -682,10 +681,8 @@ Respond with JSON only:
           const { generateText } = await import("ai");
 
           const openai = createOpenAI({
-            baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-            apiKey:
-              process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
-              process.env.OPENAI_API_KEY,
+            baseURL: getOpenAIBaseUrl(),
+            apiKey: getOpenAIApiKey(),
           });
 
           const momPrompt = `Analyze this meeting and generate Minutes of Meeting (MoM):
@@ -1118,10 +1115,8 @@ Respond with JSON only:
 
               const OpenAI = (await import("openai")).default;
               const openai = new OpenAI({
-                apiKey:
-                  process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
-                  process.env.OPENAI_API_KEY,
-                baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+                apiKey: getOpenAIApiKey(),
+                baseURL: getOpenAIBaseUrl(),
               });
 
               logger?.info(
@@ -1155,10 +1150,8 @@ Respond with JSON only:
               const { createOpenAI } = await import("@ai-sdk/openai");
 
               const aiSdk = createOpenAI({
-                baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-                apiKey:
-                  process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
-                  process.env.OPENAI_API_KEY,
+                baseURL: getOpenAIBaseUrl(),
+                apiKey: getOpenAIApiKey(),
               });
 
               logger?.info("🔬 [API] Starting comprehensive call analysis");
@@ -1667,7 +1660,7 @@ ${transcriptText}
                 {
                   method: "POST",
                   headers: {
-                    Authorization: `Bearer ${process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY}`,
+                    Authorization: `Bearer ${getOpenAIApiKey() ?? ""}`,
                   },
                   body: formData,
                 },
@@ -1755,10 +1748,8 @@ ${transcriptText}
           const { createOpenAI } = await import("@ai-sdk/openai");
 
           const aiSdk = createOpenAI({
-            baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-            apiKey:
-              process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
-              process.env.OPENAI_API_KEY,
+            baseURL: getOpenAIBaseUrl(),
+            apiKey: getOpenAIApiKey(),
           });
 
           logger?.info("🔬 [API] Sending evaluation to AI");

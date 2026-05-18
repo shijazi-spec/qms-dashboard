@@ -1,5 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
 
 export const callAnalysisTool = createTool({
   id: "call-analysis-tool",
@@ -139,8 +140,8 @@ Respond ONLY with the JSON.` : '';
       const { generateText } = await import("ai");
 
       const openai = createOpenAI({
-        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY
+        baseURL: getOpenAIBaseUrl(),
+        apiKey: getOpenAIApiKey()
       });
 
       const analysisResult = await generateText({

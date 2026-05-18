@@ -8,6 +8,7 @@ import type { UserRole } from "../../utils/rbacDatabase";
 import { getSessionFromCookie } from "./authRoutes";
 
 import { logger as safeLogger } from "../../utils/logger";
+import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
 const PMP_READ_ROLES: UserRole[] = [
   "admin",
   "head_of_operations_quality",
@@ -968,10 +969,8 @@ const _pmpRoutesRaw = [
           const { generateText } = await import("ai");
 
           const openai = createOpenAI({
-            baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-            apiKey:
-              process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
-              process.env.OPENAI_API_KEY,
+            baseURL: getOpenAIBaseUrl(),
+            apiKey: getOpenAIApiKey(),
           });
 
           const prompt = `Generate a comprehensive PMP-compliant Project Charter for the following project:

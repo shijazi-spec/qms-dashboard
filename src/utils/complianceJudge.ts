@@ -18,6 +18,7 @@
 
 import { sharedPool as pool } from "./sharedPool";
 import { logger } from "./logger";
+import { getOpenAIApiKey, getOpenAIBaseUrl } from "./openaiCredentials";
 import {
   upsertEvidenceQuality,
   type EvidenceQualityStatus,
@@ -242,10 +243,8 @@ export async function judgeEvidence(
     const { createOpenAI } = await import("@ai-sdk/openai");
     const { generateText } = await import("ai");
     const openai = createOpenAI({
-      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-      apiKey:
-        process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
-        process.env.OPENAI_API_KEY,
+      baseURL: getOpenAIBaseUrl(),
+      apiKey: getOpenAIApiKey(),
     });
     const result = await generateText({
       model: openai(JUDGE_MODEL),

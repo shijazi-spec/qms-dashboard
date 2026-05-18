@@ -3,6 +3,7 @@ import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createHash } from "crypto";
+import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
 
 import { queryPlatformDataTool } from "../tools/queryPlatformDataTool";
 import { analyzeNonconformitiesTool } from "../tools/analyzeNonconformitiesTool";
@@ -24,8 +25,8 @@ import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
 const AGENT_NAME = "WalaPlus QMS Consultant";
 
 const openai = createOpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  baseURL: getOpenAIBaseUrl(),
+  apiKey: getOpenAIApiKey(),
 });
 
 const QMS_CONSULTANT_INSTRUCTIONS = `

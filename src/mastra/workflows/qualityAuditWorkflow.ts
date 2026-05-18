@@ -4,6 +4,7 @@ import { qualitySpecialistAgent } from "../agents/qualitySpecialistAgent";
 import { sdrQualityAgent } from "../agents/sdrQualityAgent";
 import { salesQualityAgent } from "../agents/salesQualityAgent";
 import { withAiTelemetry, buildAiCallTelemetryMetadata } from "../../utils/aiTelemetry";
+import { hasOpenAIApiKey } from "../../utils/openaiCredentials";
 import { SDR_QUALITY_PROMPT_VERSION } from "../agents/sdrQualityAgent";
 import { SALES_QUALITY_PROMPT_VERSION } from "../agents/salesQualityAgent";
 import { QUALITY_SPECIALIST_PROMPT_VERSION } from "../agents/qualitySpecialistAgent";
@@ -47,7 +48,7 @@ const validateEnvironmentStep = createStep({
       warnings.push("CRM integration not configured - CRM audit will be skipped");
     }
 
-    if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY && !process.env.OPENAI_API_KEY) {
+    if (!hasOpenAIApiKey()) {
       warnings.push("OpenAI API key is not configured - AI insights will use fallback recommendations");
     }
 
@@ -235,7 +236,7 @@ const auditCRMWithAgentStep = createStep({
       process.env.ZOHO_ACCESS_TOKEN ||
       (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN)
     );
-    const hasOpenAIKey = !!(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
+    const hasOpenAIKey = hasOpenAIApiKey();
 
     if (!hasZohoCredentials) {
       logger?.warn("⚠️ [Step 2] Zoho CRM credentials not configured - skipping CRM audit");
@@ -832,7 +833,7 @@ const generateInsightsStep = createStep({
     const logger = mastra?.getLogger();
     logger?.info("🤖 [Step 3] Generating AI-powered insights...");
 
-    const hasOpenAIKey = !!(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
+    const hasOpenAIKey = hasOpenAIApiKey();
 
     if (inputData.crmAudit.skipped) {
       logger?.info("📝 [Step 3] CRM audit was skipped, generating configuration guidance...");

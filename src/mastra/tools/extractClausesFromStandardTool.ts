@@ -22,6 +22,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { sharedPool as pool } from "../../utils/sharedPool";
+import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
 
 export const EXTRACT_MAX_DOC_CHARS = 24_000;
 export const EXTRACT_MAX_CLAUSES = 200;
@@ -179,10 +180,8 @@ export async function extractClausesForDocument(
   const { createOpenAI } = await import("@ai-sdk/openai");
   const { generateText } = await import("ai");
   const openai = createOpenAI({
-    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-    apiKey:
-      process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
-      process.env.OPENAI_API_KEY,
+    baseURL: getOpenAIBaseUrl(),
+    apiKey: getOpenAIApiKey(),
   });
 
   const result = await generateText({

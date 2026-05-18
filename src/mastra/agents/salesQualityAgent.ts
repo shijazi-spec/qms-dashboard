@@ -8,12 +8,13 @@ import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/googleCalen
 import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/zohoCRMTool";
 import { sendQualityReportTool, sendAlertTool } from "../tools/emailReportTool";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
+import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
 
 const AGENT_NAME = "WalaPlus Sales Quality Specialist";
 
 const openai = createOpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  baseURL: getOpenAIBaseUrl(),
+  apiKey: getOpenAIApiKey(),
 });
 
 const SALES_QUALITY_INSTRUCTIONS = `

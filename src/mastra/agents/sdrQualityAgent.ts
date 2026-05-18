@@ -13,12 +13,13 @@ import { matchLeadByPhoneTool } from "../tools/leadPhoneMatchTool";
 import { driveCallImportTool } from "../tools/driveCallImportTool";
 import { checkCommunicationEligibilityTool } from "../tools/checkCommunicationEligibilityTool";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
+import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
 
 const AGENT_NAME = "WalaPlus SDR Quality Specialist";
 
 const openai = createOpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  baseURL: getOpenAIBaseUrl(),
+  apiKey: getOpenAIApiKey(),
 });
 
 const SDR_QUALITY_INSTRUCTIONS = `

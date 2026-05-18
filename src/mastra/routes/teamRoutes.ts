@@ -1,6 +1,7 @@
 import type { UserRole } from "../../utils/rbacDatabase";
 
 import { logger as safeLogger } from "../../utils/logger";
+import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
 const TEAM_MGMT_ROLES: UserRole[] = [
   "admin",
   "head_of_operations_quality",
@@ -919,10 +920,8 @@ export const teamRoutes = [
           await initTeamTables();
 
           const openai = createOpenAI({
-            baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-            apiKey:
-              process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
-              process.env.OPENAI_API_KEY,
+            baseURL: getOpenAIBaseUrl(),
+            apiKey: getOpenAIApiKey(),
           });
 
           const prompt = `You are a Quality Management expert. Based on the following project information, generate a comprehensive project scope document.
