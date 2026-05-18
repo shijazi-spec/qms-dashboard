@@ -1,4 +1,3 @@
- slack-audit-notification-alignment
 name: AI Approval Redaction Integration
 
 on:
@@ -76,8 +75,3 @@ jobs:
         with:
           name: ai-approval-redaction-dev-server-log
           path: /tmp/dev-server.log
-
-# OPTIONAL: back up the file content before removing it
-cp .github/workflows/ai-approval-redaction-integration.yml /tmp/ai-approval-redaction-integration.yml.bak
-cat /tmp/ai-approval-redaction-integration.yml.bak   # to view/copy later
- main
