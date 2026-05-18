@@ -324,6 +324,31 @@ html.wp-dark .bg-green-50 { background-color: rgba(34,197,94,0.12) !important; }
 html.wp-dark .bg-red-50 { background-color: rgba(239,68,68,0.12) !important; }
 html.wp-dark .bg-amber-50,
 html.wp-dark .bg-yellow-50 { background-color: rgba(245,158,11,0.12) !important; }
+html.wp-dark .bg-emerald-50 { background-color: rgba(16,185,129,0.12) !important; }
+html.wp-dark .bg-teal-50 { background-color: rgba(20,184,166,0.12) !important; }
+html.wp-dark .bg-pink-50 { background-color: rgba(236,72,153,0.12) !important; }
+html.wp-dark .bg-orange-50 { background-color: rgba(249,115,22,0.12) !important; }
+html.wp-dark .bg-cyan-50 { background-color: rgba(34,211,238,0.12) !important; }
+
+/* Coloured pills (bg-{color}-100) — heavily used for status badges,
+ * KPI summary cells, severity chips. In light mode they're pale tints
+ * over white; in dark mode they need a darker tint so the brighter
+ * text colours from the rules further below stay legible inside them.
+ * 20% opacity blends with whatever surface they sit on (body or card)
+ * and produces a noticeably darker patch than the soft-alert 12%
+ * banner background. */
+html.wp-dark .bg-blue-100   { background-color: rgba(59,130,246,0.22)  !important; }
+html.wp-dark .bg-indigo-100 { background-color: rgba(99,102,241,0.22)  !important; }
+html.wp-dark .bg-purple-100 { background-color: rgba(168,85,247,0.22)  !important; }
+html.wp-dark .bg-green-100  { background-color: rgba(34,197,94,0.22)   !important; }
+html.wp-dark .bg-emerald-100{ background-color: rgba(16,185,129,0.22)  !important; }
+html.wp-dark .bg-red-100    { background-color: rgba(239,68,68,0.22)   !important; }
+html.wp-dark .bg-amber-100,
+html.wp-dark .bg-yellow-100 { background-color: rgba(245,158,11,0.22)  !important; }
+html.wp-dark .bg-pink-100   { background-color: rgba(236,72,153,0.22)  !important; }
+html.wp-dark .bg-teal-100   { background-color: rgba(20,184,166,0.22)  !important; }
+html.wp-dark .bg-cyan-100   { background-color: rgba(34,211,238,0.22)  !important; }
+html.wp-dark .bg-orange-100 { background-color: rgba(249,115,22,0.22)  !important; }
 
 /* Text colors — light shades over dark backgrounds.
  * Prior tier (gray-500/600 → #cbd5e1) gave only ~4.5:1 contrast on the
@@ -394,6 +419,73 @@ html.wp-dark .text-cyan-700 { color: #22d3ee !important; }
 html.wp-dark .text-orange-500,
 html.wp-dark .text-orange-600,
 html.wp-dark .text-orange-700 { color: #fb923c !important; }
+
+/* Soft alert banners — text INSIDE a bg-{color}-50 panel.
+ * The semantic text rules above lift colour text into the *-400 tint,
+ * which is mid-saturation. When that text sits inside a banner whose
+ * background is a 12% tint of the SAME family, contrast collapses
+ * ("blue on blue"). Override to a near-white tint of the family so
+ * the banner reads as "tinted background, almost-white text". Higher
+ * specificity than the parent rules above; both use !important so the
+ * extra class selector wins. */
+html.wp-dark .bg-blue-50 .text-blue-700,
+html.wp-dark .bg-blue-50 .text-blue-800,
+html.wp-dark .bg-blue-50 .text-blue-900 { color: #dbeafe !important; }
+html.wp-dark .bg-indigo-50 .text-indigo-700,
+html.wp-dark .bg-indigo-50 .text-indigo-800,
+html.wp-dark .bg-indigo-50 .text-indigo-900 { color: #e0e7ff !important; }
+html.wp-dark .bg-purple-50 .text-purple-700,
+html.wp-dark .bg-purple-50 .text-purple-800,
+html.wp-dark .bg-purple-50 .text-purple-900 { color: #ede9fe !important; }
+html.wp-dark .bg-red-50 .text-red-700,
+html.wp-dark .bg-red-50 .text-red-800,
+html.wp-dark .bg-red-50 .text-red-900 { color: #fee2e2 !important; }
+html.wp-dark .bg-amber-50 .text-amber-700,
+html.wp-dark .bg-amber-50 .text-amber-800,
+html.wp-dark .bg-amber-50 .text-amber-900,
+html.wp-dark .bg-yellow-50 .text-yellow-700,
+html.wp-dark .bg-yellow-50 .text-yellow-800,
+html.wp-dark .bg-yellow-50 .text-yellow-900 { color: #fef3c7 !important; }
+html.wp-dark .bg-green-50 .text-green-700,
+html.wp-dark .bg-green-50 .text-green-800,
+html.wp-dark .bg-green-50 .text-green-900,
+html.wp-dark .bg-emerald-50 .text-emerald-700,
+html.wp-dark .bg-emerald-50 .text-emerald-800,
+html.wp-dark .bg-emerald-50 .text-emerald-900 { color: #d1fae5 !important; }
+html.wp-dark .bg-pink-50 .text-pink-700,
+html.wp-dark .bg-pink-50 .text-pink-800 { color: #fce7f3 !important; }
+html.wp-dark .bg-teal-50 .text-teal-700,
+html.wp-dark .bg-teal-50 .text-teal-800 { color: #ccfbf1 !important; }
+html.wp-dark .bg-cyan-50 .text-cyan-700,
+html.wp-dark .bg-cyan-50 .text-cyan-800 { color: #cffafe !important; }
+html.wp-dark .bg-orange-50 .text-orange-700,
+html.wp-dark .bg-orange-50 .text-orange-800 { color: #ffedd5 !important; }
+
+/* Same pattern for the slightly stronger banner pattern (bg-{color}-100)
+ * — these are often used as inline callouts or KPI strips. Brighten the
+ * darker-tone *-700/800/900 text so it pops on the 22%-tint background. */
+html.wp-dark .bg-blue-100 .text-blue-700,
+html.wp-dark .bg-blue-100 .text-blue-800,
+html.wp-dark .bg-blue-100 .text-blue-900 { color: #dbeafe !important; }
+html.wp-dark .bg-indigo-100 .text-indigo-700,
+html.wp-dark .bg-indigo-100 .text-indigo-800,
+html.wp-dark .bg-indigo-100 .text-indigo-900 { color: #e0e7ff !important; }
+html.wp-dark .bg-purple-100 .text-purple-700,
+html.wp-dark .bg-purple-100 .text-purple-800,
+html.wp-dark .bg-purple-100 .text-purple-900 { color: #ede9fe !important; }
+html.wp-dark .bg-red-100 .text-red-700,
+html.wp-dark .bg-red-100 .text-red-800,
+html.wp-dark .bg-red-100 .text-red-900 { color: #fee2e2 !important; }
+html.wp-dark .bg-amber-100 .text-amber-700,
+html.wp-dark .bg-amber-100 .text-amber-800,
+html.wp-dark .bg-amber-100 .text-amber-900,
+html.wp-dark .bg-yellow-100 .text-yellow-700,
+html.wp-dark .bg-yellow-100 .text-yellow-800 { color: #fef3c7 !important; }
+html.wp-dark .bg-green-100 .text-green-700,
+html.wp-dark .bg-green-100 .text-green-800,
+html.wp-dark .bg-green-100 .text-green-900,
+html.wp-dark .bg-emerald-100 .text-emerald-700,
+html.wp-dark .bg-emerald-100 .text-emerald-800 { color: #d1fae5 !important; }
 
 /* Borders */
 html.wp-dark .border,
