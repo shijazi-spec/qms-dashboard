@@ -1,28 +1,32 @@
 name: Digest Notification Smoke
 
 on:
+  # Manual-only — required secrets (DATABASE_URL) aren't configured in this
+  # repo and the platform deploys via Replit, not GitHub Actions. Re-enable
+  # the push / pull_request triggers below once secrets are in place if
+  # you want this to gate merges.
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/digest-notification-smoke.yml"
-      - "src/utils/executiveDigest.ts"
-      - "src/utils/directAuditRunner.ts"
-      - "src/mastra/routes/analyticsRoutes.ts"
-      - "src/mastra/inngest/index.ts"
-      - "src/utils/slackNotifications.ts"
-      - "tests/executiveDigestCadence.test.ts"
-      - "tests/analyticsRoutes.test.ts"
-  pull_request:
-    paths:
-      - ".github/workflows/digest-notification-smoke.yml"
-      - "src/utils/executiveDigest.ts"
-      - "src/utils/directAuditRunner.ts"
-      - "src/mastra/routes/analyticsRoutes.ts"
-      - "src/mastra/inngest/index.ts"
-      - "src/utils/slackNotifications.ts"
-      - "tests/executiveDigestCadence.test.ts"
-      - "tests/analyticsRoutes.test.ts"
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - ".github/workflows/digest-notification-smoke.yml"
+  #     - "src/utils/executiveDigest.ts"
+  #     - "src/utils/directAuditRunner.ts"
+  #     - "src/mastra/routes/analyticsRoutes.ts"
+  #     - "src/mastra/inngest/index.ts"
+  #     - "src/utils/slackNotifications.ts"
+  #     - "tests/executiveDigestCadence.test.ts"
+  #     - "tests/analyticsRoutes.test.ts"
+  # pull_request:
+  #   paths:
+  #     - ".github/workflows/digest-notification-smoke.yml"
+  #     - "src/utils/executiveDigest.ts"
+  #     - "src/utils/directAuditRunner.ts"
+  #     - "src/mastra/routes/analyticsRoutes.ts"
+  #     - "src/mastra/inngest/index.ts"
+  #     - "src/utils/slackNotifications.ts"
+  #     - "tests/executiveDigestCadence.test.ts"
+  #     - "tests/analyticsRoutes.test.ts"
 
 concurrency:
   group: digest-notification-smoke-${{ github.ref }}
