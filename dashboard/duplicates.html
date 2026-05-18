@@ -2435,12 +2435,27 @@
 
         function csLifeViolationLabel(code) {
             const map = {
-                onboarding_overdue:             'Onboarding overdue',
-                phase_churn_desync:             'Phase ↔ Churn desync',
-                termination_missing_churn_date: 'Termination missing Churn Date',
-                phase_transition_stalled:       'Phase transition stalled',
+                onboarding_overdue:               'Onboarding overdue',
+                phase_churn_desync:               'Phase ↔ Churn desync',
+                termination_missing_churn_date:   'Termination missing Churn Date',
+                termination_missing_churn_reason: 'Termination missing Churn Reason',
+                phase_transition_stalled:         'Phase transition stalled',
+                adoption_premature:               'Adoption premature',
+                missing_company_domain:           'Missing Company_Domain',
             };
             return map[code] || code || '—';
+        }
+
+        // Severity-pill helper used inside grouped violation rows. Smaller
+        // than csLifeSeverityBadge — pills sit next to each other in the
+        // violation column, so they need to be compact.
+        function csLifeSeverityPill(severity) {
+            const m = severity === 'critical'
+                ? { bg: 'bg-red-100',   fg: 'text-red-800' }
+                : severity === 'warning'
+                ? { bg: 'bg-amber-100', fg: 'text-amber-800' }
+                : { bg: 'bg-blue-100',  fg: 'text-blue-800' };
+            return m.bg + ' ' + m.fg;
         }
 
         function filterCsLifecycle(sev) { loadCsLifecycle(sev); }
@@ -2483,23 +2498,60 @@
 
         const CS_LIFE_SEVERITY_RANK = { critical: 3, warning: 2, info: 1 };
 
-        function csLifecycleSortValue(r, key) {
-            const v = r.violation || {};
+        // Group flat violation rows from the API into one entry per deal so a
+        // single account with two violations renders as ONE table row with
+        // both violations stacked, not as duplicate rows. Grouping key is
+        // record_id (stable, unique per Zoho record). Within each group we
+        // sort the violations by severity desc so the worst one anchors the
+        // row's severity badge and is shown first.
+        function groupCsLifecycleByDeal(violations) {
+            const map = new Map();
+            for (const v of violations) {
+                const key = v.record_id ?? (v.zoho_record_id || '__noid__' + Math.random());
+                if (!map.has(key)) {
+                    map.set(key, {
+                        record_id: v.record_id,
+                        zoho_record_id: v.zoho_record_id,
+                        account_name: v.account_name,
+                        domain: v.domain,
+                        current_phase: v.current_phase,
+                        days_since_modified: v.days_since_modified,
+                        violations: [],
+                    });
+                }
+                map.get(key).violations.push(v.violation);
+            }
+            // Sort the violations inside each group: worst severity first,
+            // then alphabetic by code for stable display.
+            for (const g of map.values()) {
+                g.violations.sort((a, b) => {
+                    const d = (CS_LIFE_SEVERITY_RANK[b.severity] || 0) - (CS_LIFE_SEVERITY_RANK[a.severity] || 0);
+                    if (d !== 0) return d;
+                    return (a.code || '').localeCompare(b.code || '');
+                });
+                g.worst_severity = g.violations[0]?.severity || 'info';
+                g.worst_violation = g.violations[0] || null;
+            }
+            return Array.from(map.values());
+        }
+
+        function csLifecycleSortValue(g, key) {
+            const worst = g.worst_violation || {};
             switch (key) {
-                case 'severity':  return CS_LIFE_SEVERITY_RANK[v.severity] || 0;
-                case 'account':   return (r.account_name || '').toLowerCase();
-                case 'domain':    return (r.domain || '').toLowerCase();
-                case 'phase':     return (r.current_phase || '').toLowerCase();
-                case 'days':      return r.days_since_modified == null ? -1 : Number(r.days_since_modified);
-                case 'violation': return csLifeViolationLabel(v.code).toLowerCase();
-                case 'message':   return (v.message || '').toLowerCase();
+                case 'severity':  return CS_LIFE_SEVERITY_RANK[g.worst_severity] || 0;
+                case 'account':   return (g.account_name || '').toLowerCase();
+                case 'domain':    return (g.domain || '').toLowerCase();
+                case 'phase':     return (g.current_phase || '').toLowerCase();
+                case 'days':      return g.days_since_modified == null ? -1 : Number(g.days_since_modified);
+                case 'violation': return csLifeViolationLabel(worst.code).toLowerCase();
+                case 'message':   return (worst.message || '').toLowerCase();
                 default:          return 0;
             }
         }
 
-        function sortCsLifecycleRows(rows, key, dir) {
+        function sortCsLifecycleRows(groups, key, dir) {
             const factor = dir === 'asc' ? 1 : -1;
-            return rows.slice().sort((a, b) => {
+            return groups.slice().sort((a, b) => {
                 const va = csLifecycleSortValue(a, key);
                 const vb = csLifecycleSortValue(b, key);
                 if (va < vb) return -1 * factor;
@@ -2550,28 +2602,42 @@
             updateCsLifecycleSortIndicators();
 
             const body = document.getElementById('csLifecycleTable');
-            const allRows = data.violations || [];
-            if (allRows.length === 0) {
+            const allViolations = data.violations || [];
+            if (allViolations.length === 0) {
                 body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No violations detected. CS is compliant for the current filter.</td></tr>';
                 return;
             }
-            const rows = sortCsLifecycleRows(allRows, window._csLifecycleSort.key, window._csLifecycleSort.dir);
-            body.innerHTML = rows.map(r => {
-                const v = r.violation;
+            // Each API row is one (deal × violation) pair. Group into one
+            // entry per deal so the table reads "this deal failed X and Y"
+            // instead of duplicating the account name twice.
+            const groups = groupCsLifecycleByDeal(allViolations);
+            const sorted = sortCsLifecycleRows(groups, window._csLifecycleSort.key, window._csLifecycleSort.dir);
+            body.innerHTML = sorted.map(g => {
                 // CS Lifecycle violations are always Deal records (see
                 // scanCsLifecycleViolations: WHERE zoho_module = 'Deals'), so
                 // the Zoho link target is hard-coded to 'Deals'.
-                const accountCell = r.zoho_record_id
-                    ? zohoLink(r.zoho_record_id, 'Deals', r.account_name || '—')
-                    : escapeHtml(r.account_name || '—');
-                return '<tr class="hover:bg-gray-50">'
-                    + '<td class="px-3 py-2 whitespace-nowrap">' + csLifeSeverityBadge(v.severity) + '</td>'
+                const accountCell = g.zoho_record_id
+                    ? zohoLink(g.zoho_record_id, 'Deals', g.account_name || '—')
+                    : escapeHtml(g.account_name || '—');
+                const violationPills = g.violations.map(v =>
+                    '<span class="inline-block px-2 py-0.5 rounded text-[11px] font-medium ' + csLifeSeverityPill(v.severity) + '" title="' + escapeHtml(v.severity) + '">'
+                    + escapeHtml(csLifeViolationLabel(v.code))
+                    + '</span>'
+                ).join(' ');
+                const messageStack = g.violations.map(v =>
+                    '<div class="mb-1 last:mb-0"><span class="text-[10px] uppercase font-medium ' + (v.severity === 'critical' ? 'text-red-700' : v.severity === 'warning' ? 'text-amber-700' : 'text-blue-700') + ' mr-1">' + escapeHtml(v.severity) + '</span>' + escapeHtml(v.message || '') + '</div>'
+                ).join('');
+                const countSuffix = g.violations.length > 1
+                    ? ' <span class="text-[10px] text-gray-500">(' + g.violations.length + ')</span>'
+                    : '';
+                return '<tr class="hover:bg-gray-50 align-top">'
+                    + '<td class="px-3 py-2 whitespace-nowrap">' + csLifeSeverityBadge(g.worst_severity) + countSuffix + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-800">' + accountCell + '</td>'
-                    + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(r.domain || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(r.current_phase || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-end text-gray-600">' + (r.days_since_modified == null ? '—' : r.days_since_modified) + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-700 font-medium">' + escapeHtml(csLifeViolationLabel(v.code)) + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(v.message || '') + '</td>'
+                    + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(g.domain || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(g.current_phase || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-end text-gray-600">' + (g.days_since_modified == null ? '—' : g.days_since_modified) + '</td>'
+                    + '<td class="px-3 py-2 text-xs"><div class="flex flex-wrap gap-1">' + violationPills + '</div></td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-700">' + messageStack + '</td>'
                     + '</tr>';
             }).join('');
         }

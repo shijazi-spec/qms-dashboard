@@ -18,6 +18,7 @@ export type CsViolationCode =
   | "onboarding_overdue"
   | "phase_churn_desync"
   | "termination_missing_churn_date"
+  | "termination_missing_churn_reason"
   | "phase_transition_stalled"
   | "adoption_premature"
   | "missing_company_domain";
@@ -122,6 +123,8 @@ const SUGGESTED_ACTIONS: Record<CsViolationCode, string> = {
     "Churn Date is populated but Phase is not Termination. Move the deal to Termination phase (CS SLA: one working day).",
   termination_missing_churn_date:
     "Termination phase requires a Churn Date for downstream reporting. Backfill the date or revert the phase.",
+  termination_missing_churn_reason:
+    "Termination phase requires a Churn Reason so CS can analyse churn drivers (price, fit, competitor, …). Fill the Churn_Reason field on the Deal in Zoho.",
   phase_transition_stalled:
     "Deal has not been touched recently and is not in a steady-state phase. Confirm CS is still working it or move to the appropriate next phase.",
   adoption_premature:
@@ -201,6 +204,23 @@ export function evaluateCsLifecycle(
       days_in_phase: daysSinceModified,
       current_phase: phase,
       suggested_action: SUGGESTED_ACTIONS.termination_missing_churn_date,
+    });
+  }
+
+  // 3b. Termination without Churn Reason — independent of the Churn Date
+  //     check above. Both can fire on the same deal; the UI groups
+  //     violations by deal so duplicates don't show as separate table rows.
+  if (
+    phase.toLowerCase() === cfg.terminationPhase.toLowerCase() &&
+    !(fields.churn_reason ?? "").trim()
+  ) {
+    violations.push({
+      code: "termination_missing_churn_reason",
+      severity: "warning",
+      message: `Phase is "${phase}" but Churn Reason is empty — CS can't analyse churn drivers without it.`,
+      days_in_phase: daysSinceModified,
+      current_phase: phase,
+      suggested_action: SUGGESTED_ACTIONS.termination_missing_churn_reason,
     });
   }
 
@@ -323,6 +343,7 @@ export function summarizeViolations(
       onboarding_overdue: 0,
       phase_churn_desync: 0,
       termination_missing_churn_date: 0,
+      termination_missing_churn_reason: 0,
       phase_transition_stalled: 0,
       adoption_premature: 0,
       missing_company_domain: 0,

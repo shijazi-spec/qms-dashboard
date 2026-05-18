@@ -254,6 +254,7 @@ export function extractCsFieldsFromRawData(
   customer_since?: string | Date | null;
   trial_end_date?: string | Date | null;
   company_domain?: string | null;
+  churn_reason?: string | null;
 } {
   if (!rawData || typeof rawData !== "object") {
     return { domain: context.domain ?? null };
@@ -335,6 +336,19 @@ export function extractCsFieldsFromRawData(
       "domain",
     ]),
   );
+  // Churn reason — required alongside Churn_Date when a deal moves to
+  // Termination phase. Without it the CS team can't run reason-level
+  // analytics ("why are private clients churning at month 6?").
+  const churnReasonRaw = tryKeys(
+    envOr("DUPLICATE_RADAR_FIELD_CHURN_REASON", [
+      "Churn_Reason",
+      "churn_reason",
+      "ChurnReason",
+      "Churn Reason",
+      "Reason_For_Churn",
+      "Reason for Churn",
+    ]),
+  );
 
   const arrNum =
     arrRaw == null
@@ -357,6 +371,10 @@ export function extractCsFieldsFromRawData(
       companyDomainRaw == null
         ? null
         : String(companyDomainRaw).trim().toLowerCase() || null,
+    churn_reason:
+      churnReasonRaw == null
+        ? null
+        : String(churnReasonRaw).trim() || null,
   };
 }
 

@@ -120,6 +120,7 @@ const VIOLATION_TITLES: Record<CsViolationCode, string> = {
   phase_churn_desync: "CS SLA breach: Churn Date set without Termination phase",
   onboarding_overdue: "CS SLA breach: Onboarding exceeds 30-day target",
   termination_missing_churn_date: "CS data integrity: Termination phase missing Churn Date",
+  termination_missing_churn_reason: "CS data integrity: Termination phase missing Churn Reason",
   phase_transition_stalled: "CS SLA breach: phase transition stalled",
   adoption_premature: "CS process breach: Adoption reached without Onboarding completion",
 };
