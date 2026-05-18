@@ -714,6 +714,33 @@ export async function initDuplicateRadarTables(): Promise<void> {
       "⚠️ [DuplicateRadar] pg_trgm not available, falling back to Levenshtein matching",
     );
   }
+
+  // Account inference hints — see src/utils/accountInference.ts. Stored
+  // suggestions for sales: "this deal looks like it belongs to Account X
+  // because the contact's email domain matches". Sales work the queue from
+  // the Account Hints tab.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS account_inference_hints (
+      id SERIAL PRIMARY KEY,
+      deal_record_id INTEGER NOT NULL REFERENCES duplicate_records(id) ON DELETE CASCADE,
+      suggested_account_record_id INTEGER REFERENCES duplicate_records(id) ON DELETE CASCADE,
+      suggested_account_name TEXT,
+      suggested_domain TEXT,
+      evidence_contact_record_id INTEGER REFERENCES duplicate_records(id) ON DELETE SET NULL,
+      evidence_contact_email TEXT,
+      confidence INTEGER DEFAULT 0,
+      status VARCHAR(16) DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (deal_record_id, suggested_account_record_id)
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_account_inference_status ON account_inference_hints(status)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_account_inference_confidence ON account_inference_hints(confidence DESC) WHERE status = 'pending'`,
+  );
 }
 
 export async function createCluster(

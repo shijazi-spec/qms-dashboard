@@ -2956,6 +2956,101 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Account inference scan — walks every deal that lacks a real Account
+    // and tries to infer one from its linked contact's email domain. See
+    // src/utils/accountInference.ts for the walk + scoring.
+    path: "/api/duplicates/account-hints/scan",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const { initDuplicateRadarTables } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          await initDuplicateRadarTables();
+          const { scanDealsForAccountHints } = await import(
+            "../../utils/accountInference"
+          );
+          const result = await scanDealsForAccountHints();
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error running account-hints scan:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // List account inference hints. Query params:
+    //   ?status=pending|dismissed|applied (default pending)
+    //   ?limit=N (default 500, max 2000)
+    path: "/api/duplicates/account-hints",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const status = url.searchParams.get("status") || undefined;
+          const limit = parseInt(url.searchParams.get("limit") || "500", 10);
+
+          const { listAccountInferenceHints } = await import(
+            "../../utils/accountInference"
+          );
+          const result = await listAccountInferenceHints({ status, limit });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error listing account-hints:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Mark a hint as dismissed (sales reviewed and rejected) or applied
+    // (sales fixed the Zoho Account_Name and the next sync will reclassify).
+    // Body: { status: "dismissed" | "applied" }
+    path: "/api/duplicates/account-hints/:id/status",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid hint id" }, 400);
+          let body: { status?: string } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          if (body.status !== "dismissed" && body.status !== "applied") {
+            return c.json(
+              { error: 'status must be "dismissed" or "applied"' },
+              400,
+            );
+          }
+          const { setHintStatus } = await import(
+            "../../utils/accountInference"
+          );
+          const ok = await setHintStatus(id, body.status);
+          if (!ok) return c.json({ error: "Hint not found" }, 404);
+          return c.json({ success: true });
+        } catch (error: any) {
+          logger.error("Error updating account-hint status:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Pre-import duplicate check for marketing batches.
     // Body: { rows: [{ domain?, email?, company_name?, phone?, ref? }, ...], max_check? }
     // Returns per-row verdict (block | review | warn | duplicate | pass) plus summary.
