@@ -325,13 +325,75 @@ html.wp-dark .bg-red-50 { background-color: rgba(239,68,68,0.12) !important; }
 html.wp-dark .bg-amber-50,
 html.wp-dark .bg-yellow-50 { background-color: rgba(245,158,11,0.12) !important; }
 
-/* Text colors — light shades over dark backgrounds */
+/* Text colors — light shades over dark backgrounds.
+ * Prior tier (gray-500/600 → #cbd5e1) gave only ~4.5:1 contrast on the
+ * #1e293b card background — borderline AA, hard to read. Raised across
+ * the board so body text reads cleanly inside cards (#1e293b) AND on
+ * the body (#0f172a). */
 html.wp-dark .text-gray-900,
 html.wp-dark .text-gray-800,
-html.wp-dark .text-gray-700 { color: #e5e7eb !important; }
+html.wp-dark .text-gray-700 { color: #f8fafc !important; }
 html.wp-dark .text-gray-600,
-html.wp-dark .text-gray-500 { color: #cbd5e1 !important; }
-html.wp-dark .text-gray-400 { color: #94a3b8 !important; }
+html.wp-dark .text-gray-500 { color: #e2e8f0 !important; }
+html.wp-dark .text-gray-400 { color: #cbd5e1 !important; }
+html.wp-dark .text-gray-300 { color: #94a3b8 !important; }
+
+/* Semantic colour text on dark backgrounds.
+ * Tailwind's *-600/*-700/*-800 tints (used heavily for KPI numbers,
+ * status labels, badge text, dashboard accents) are tuned for light
+ * mode — they go nearly invisible on dark cards. Lift each common
+ * colour family to its *-400 tint so "Critical 1", "Warning 60",
+ * inflation totals, severity labels etc. stay legible in dark mode.
+ * Keep the original Tailwind class names in the markup; this stylesheet
+ * does the dark-mode remap centrally. */
+html.wp-dark .text-red-500,
+html.wp-dark .text-red-600,
+html.wp-dark .text-red-700,
+html.wp-dark .text-red-800,
+html.wp-dark .text-red-900 { color: #f87171 !important; }
+html.wp-dark .text-amber-500,
+html.wp-dark .text-amber-600,
+html.wp-dark .text-amber-700,
+html.wp-dark .text-amber-800,
+html.wp-dark .text-amber-900 { color: #fbbf24 !important; }
+html.wp-dark .text-yellow-500,
+html.wp-dark .text-yellow-600,
+html.wp-dark .text-yellow-700,
+html.wp-dark .text-yellow-800 { color: #facc15 !important; }
+html.wp-dark .text-green-500,
+html.wp-dark .text-green-600,
+html.wp-dark .text-green-700,
+html.wp-dark .text-green-800,
+html.wp-dark .text-emerald-500,
+html.wp-dark .text-emerald-600,
+html.wp-dark .text-emerald-700,
+html.wp-dark .text-emerald-800 { color: #4ade80 !important; }
+html.wp-dark .text-blue-500,
+html.wp-dark .text-blue-600,
+html.wp-dark .text-blue-700,
+html.wp-dark .text-blue-800,
+html.wp-dark .text-blue-900 { color: #60a5fa !important; }
+html.wp-dark .text-indigo-500,
+html.wp-dark .text-indigo-600,
+html.wp-dark .text-indigo-700,
+html.wp-dark .text-indigo-800 { color: #818cf8 !important; }
+html.wp-dark .text-purple-500,
+html.wp-dark .text-purple-600,
+html.wp-dark .text-purple-700,
+html.wp-dark .text-purple-800,
+html.wp-dark .text-purple-900 { color: #c084fc !important; }
+html.wp-dark .text-pink-500,
+html.wp-dark .text-pink-600,
+html.wp-dark .text-pink-700 { color: #f472b6 !important; }
+html.wp-dark .text-teal-500,
+html.wp-dark .text-teal-600,
+html.wp-dark .text-teal-700 { color: #2dd4bf !important; }
+html.wp-dark .text-cyan-500,
+html.wp-dark .text-cyan-600,
+html.wp-dark .text-cyan-700 { color: #22d3ee !important; }
+html.wp-dark .text-orange-500,
+html.wp-dark .text-orange-600,
+html.wp-dark .text-orange-700 { color: #fb923c !important; }
 
 /* Borders */
 html.wp-dark .border,
