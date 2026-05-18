@@ -342,7 +342,72 @@
                         </div>
                     </div>
                 </div>
-                
+
+                <!-- Zoho Calls Import — pulls call records logged in Zoho's
+                     Calls module into call_records so calls that exist only
+                     in the CRM (never uploaded here) can be QA-evaluated. -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-orange-600 to-red-600">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-white">Zoho Calls Import</h3>
+                                <p class="text-sm text-white/80">Pull SDR calls logged directly in Zoho's Calls module</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <p class="text-sm text-gray-600 mb-4">
+                            Imports calls from Zoho's Calls module into the evaluation pipeline. Calls without a recording URL get status=<code>analyzed</code> immediately so the scorecard can run against the Zoho-stored Description text. Re-running is safe — calls are upserted on <code>call_id</code>.
+                        </p>
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Since (last N days)</label>
+                                <select id="zohoImportSinceDays" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                                    <option value="7">Last 7 days</option>
+                                    <option value="30" selected>Last 30 days</option>
+                                    <option value="90">Last 90 days</option>
+                                    <option value="180">Last 180 days</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Max records</label>
+                                <select id="zohoImportMax" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                                    <option value="100">100</option>
+                                    <option value="500" selected>500</option>
+                                    <option value="1000">1,000</option>
+                                    <option value="2000">2,000</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Owner email (optional filter)</label>
+                                <input type="email" id="zohoImportOwnerEmail" placeholder="agent@walaplus.com" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Direction</label>
+                                <select id="zohoImportDirection" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                                    <option value="">All</option>
+                                    <option value="outbound">Outbound only (SDR)</option>
+                                    <option value="inbound">Inbound only</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button data-on-click="runZohoCallsImport" id="zohoImportBtn" class="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition font-medium disabled:opacity-50">
+                            <span class="flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                </svg>
+                                Import from Zoho Calls
+                            </span>
+                        </button>
+                        <div id="zohoImportResult" class="hidden mt-4 p-3 rounded-lg text-sm"></div>
+                    </div>
+                </div>
+
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-emerald-600 to-teal-600">
                         <div class="flex items-center gap-3">
@@ -797,13 +862,17 @@
                             <input type="text" id="sc-name" required class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="SDR Quality Scorecard v1.0">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Team</label>
-                            <select id="sc-team" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                <option value="SDR">SDR</option>
-                                <option value="Sales">Sales</option>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Team / Role</label>
+                            <select id="sc-team" data-on-change="toggleScorecardCustomTeam" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="SDR">SDR (pre-qualification)</option>
+                                <option value="Sales">Sales (deal-closing)</option>
                                 <option value="CS">Customer Success</option>
+                                <option value="Support">Support</option>
+                                <option value="Customer Service">Customer Service</option>
                                 <option value="Marketplace">Marketplace</option>
+                                <option value="__custom__">Custom — type your own</option>
                             </select>
+                            <input type="text" id="sc-team-custom" placeholder="Custom team name, e.g. Account Management" class="w-full mt-2 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 hidden">
                         </div>
                     </div>
                     <div>
@@ -2387,6 +2456,69 @@
             }
         }
 
+        // Zoho Calls Import — calls the /api/calls/import-from-zoho endpoint
+        // built in Phase 2. Reads the form filters (days, max, owner, direction),
+        // shows a result banner (green/amber/red), and refreshes the calls table
+        // so newly-imported rows appear immediately.
+        async function runZohoCallsImport() {
+            const btn = document.getElementById('zohoImportBtn');
+            const out = document.getElementById('zohoImportResult');
+            const days = parseInt(document.getElementById('zohoImportSinceDays').value, 10) || 30;
+            const max = parseInt(document.getElementById('zohoImportMax').value, 10) || 500;
+            const ownerEmail = (document.getElementById('zohoImportOwnerEmail').value || '').trim();
+            const direction = document.getElementById('zohoImportDirection').value || '';
+            const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+            btn.disabled = true;
+            const originalLabel = btn.innerHTML;
+            btn.innerHTML = '<span class="flex items-center justify-center gap-2"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Importing…</span>';
+            out.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/calls/import-from-zoho', {
+                    method: 'POST',
+                    headers: { ...(await getAdminHeaders()), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        since: sinceIso,
+                        max,
+                        owner_email: ownerEmail || undefined,
+                        direction: direction || undefined,
+                    }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Import failed');
+
+                const lines = [
+                    `Scanned ${_fn(data.scanned)} Zoho calls`,
+                    `New: ${_fn(data.imported_new)}`,
+                    `Updated: ${_fn(data.updated_existing)}`,
+                    `No linkage: ${_fn(data.skipped_no_linkage)}`,
+                    `Errors: ${_fn(data.errors)}`,
+                    `Duration: ${(data.duration_ms / 1000).toFixed(1)}s`,
+                ];
+                const color = data.errors > 0
+                    ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                    : 'bg-emerald-50 border border-emerald-200 text-emerald-800';
+                out.className = 'mt-4 p-3 rounded-lg text-sm ' + color;
+                out.innerHTML = '<div class="font-medium mb-1">Import complete</div><div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">'
+                    + lines.map(l => '<div>' + escapeHtml(l) + '</div>').join('')
+                    + '</div>'
+                    + (data.error_samples && data.error_samples.length > 0
+                        ? '<div class="mt-2 text-xs"><strong>Error samples:</strong><ul class="list-disc list-inside">' + data.error_samples.map(e => '<li>' + escapeHtml(e) + '</li>').join('') + '</ul></div>'
+                        : '');
+                out.classList.remove('hidden');
+                // Refresh the calls table so freshly-imported rows show up.
+                refreshData();
+            } catch (e) {
+                out.className = 'mt-4 p-3 rounded-lg text-sm bg-red-50 border border-red-200 text-red-800';
+                out.textContent = 'Import failed: ' + (e.message || e);
+                out.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalLabel;
+            }
+        }
+
         async function loadCallsForEval() {
             try {
                 const res = await fetch('/api/calls?limit=50');
@@ -2987,8 +3119,30 @@
             document.getElementById('scorecardModal').classList.remove('hidden');
             document.getElementById('scorecard-form').reset();
             document.getElementById('attributes-container').innerHTML = '';
+            // Hide the custom-team text field whenever the modal opens fresh
+            // — it only re-appears when the user picks "Custom" from the
+            // Team / Role dropdown.
+            const custom = document.getElementById('sc-team-custom');
+            if (custom) custom.classList.add('hidden');
             attributeCounter = 0;
             addAttribute(); // Add first attribute by default
+        }
+
+        // Show or hide the free-text team-name input based on whether the
+        // user picked "Custom" from the Team / Role dropdown. Keeps the
+        // common-case (preset roles) clean while still allowing arbitrary
+        // role names like "Account Management" or "Onboarding".
+        function toggleScorecardCustomTeam() {
+            const select = document.getElementById('sc-team');
+            const custom = document.getElementById('sc-team-custom');
+            if (!select || !custom) return;
+            if (select.value === '__custom__') {
+                custom.classList.remove('hidden');
+                custom.focus();
+            } else {
+                custom.classList.add('hidden');
+                custom.value = '';
+            }
         }
 
         function closeScorecardModal() {
@@ -3068,6 +3222,19 @@
                 if (dimensions[a.dimension]) dimensions[a.dimension].attributes.push(a);
             });
 
+            // Resolve the team_name from the select OR the custom free-text
+            // field that appears when "Custom — type your own" is selected.
+            // Without this branch a custom role would be saved as the literal
+            // string "__custom__" which would never match any evaluation route.
+            let teamName = document.getElementById('sc-team').value;
+            if (teamName === '__custom__') {
+                const custom = (document.getElementById('sc-team-custom').value || '').trim();
+                if (!custom) {
+                    alert('Please type a custom team name or pick a preset from the dropdown.');
+                    return;
+                }
+                teamName = custom;
+            }
             try {
                 const res = await fetch('/api/quality-scorecards', {
                     method: 'POST',
@@ -3076,7 +3243,7 @@
                     body: JSON.stringify({
                         name: document.getElementById('sc-name').value,
                         description: document.getElementById('sc-description').value,
-                        team_name: document.getElementById('sc-team').value,
+                        team_name: teamName,
                         dimensions: { dimensions },
                         is_active: false
                     })

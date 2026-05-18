@@ -2414,6 +2414,57 @@ ${transcriptText}
     },
   },
   {
+    // Import calls from the Zoho Calls module. Pulls recent records,
+    // normalises Zoho's Call_Type / Call_Duration / Who_Id / What_Id
+    // into our call_records schema, and upserts via createCallRecord
+    // (idempotent on call_id, so re-runs are safe). The default scope is
+    // calls created in the last 30 days, capped at 500 records per run.
+    //
+    // Body: { since?: ISO, max?: N, owner_email?: string, direction?: in|out }
+    path: "/api/calls/import-from-zoho",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        const user = await verifyCallAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        try {
+          let body: any = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          const { runZohoCallsImport } = await import(
+            "../../utils/zohoCallsImport"
+          );
+          const result = await runZohoCallsImport({
+            maxRecords:
+              typeof body.max === "number" ? body.max : undefined,
+            sinceIso:
+              typeof body.since === "string" ? body.since : undefined,
+            ownerEmailFilter:
+              typeof body.owner_email === "string"
+                ? body.owner_email
+                : undefined,
+            directionFilter:
+              body.direction === "inbound" || body.direction === "outbound"
+                ? body.direction
+                : undefined,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          safeLogger.error("[API] zoho-calls import failed", {
+            error: error?.message || String(error),
+          });
+          return c.json(
+            { success: false, error: "Failed to import from Zoho" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/calls/mcp/import-sources",
     method: "GET" as const,
     createHandler: async () => {
