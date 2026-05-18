@@ -716,15 +716,15 @@
             <!-- Table -->
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
+                    <thead id="csLifecycleTableHead" class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Severity</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Account</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Phase</th>
-                            <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Days since modified</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Violation</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Message</th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;severity&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="severity">Severity <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;account&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="account">Account <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;domain&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;phase&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="phase">Phase <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;days&quot;]" class="cs-lifecycle-sort px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="days">Days since modified <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="violation">Violation <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;message&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="message">Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody id="csLifecycleTable" class="bg-white divide-y divide-gray-200">
@@ -1165,9 +1165,14 @@
             renderPagination(type + 'Pagination', page, pages, (p) => loadRecordTab(type, p));
         }
 
-        function zohoLink(id, module) {
-            if (!id || id.startsWith('test_') || id.startsWith('LEAD_') || id.startsWith('DEAL_')) return `<span class="text-xs font-mono text-gray-400">${id || '-'}</span>`;
-            return `<a href="https://crm.zoho.com/crm/org766568398/tab/${module}/${id}" target="_blank" class="text-blue-600 hover:underline text-xs font-mono" data-testid="link-zoho-${id}">${id}</a>`;
+        function zohoLink(id, module, label) {
+            // When a custom label is provided (e.g. "render the account name as
+            // the clickable text rather than the Zoho record id"), it must be
+            // HTML-escaped — the id-only path is safe because Zoho ids are
+            // numeric, but free-text labels can contain quotes/brackets.
+            const text = label != null ? escapeHtml(String(label)) : (id || '-');
+            if (!id || id.startsWith('test_') || id.startsWith('LEAD_') || id.startsWith('DEAL_')) return `<span class="text-xs font-mono text-gray-400">${text}</span>`;
+            return `<a href="https://crm.zoho.com/crm/org766568398/tab/${module}/${id}" target="_blank" class="text-blue-600 hover:underline text-xs font-mono" data-testid="link-zoho-${id}">${text}</a>`;
         }
 
         // Render the "Created By" cell from the Zoho raw_data payload.
@@ -2024,10 +2029,18 @@
                 const domainCell = r.id
                     ? '<a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[' + r.id + ']" class="text-blue-700 hover:text-blue-900 hover:underline font-mono text-xs" title="View this cluster\'s underlying records">' + safeDomain + '</a>'
                     : '<span class="text-xs text-gray-700 font-mono">' + safeDomain + '</span>';
+                const safeCompany = escapeHtml(r.company_name || r.company_name_arabic || '—');
+                // Company name opens the same cluster-detail modal as the
+                // domain cell, since each CS Overlap row IS a cluster (not a
+                // single Zoho record) — so an external Zoho link would not
+                // have a unique target.
+                const companyCell = r.id
+                    ? '<a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[' + r.id + ']" class="text-blue-700 hover:text-blue-900 hover:underline text-xs" title="View this cluster\'s underlying records">' + safeCompany + '</a>'
+                    : safeCompany;
                 return '<tr class="hover:bg-gray-50">'
                     + '<td class="px-4 py-2 whitespace-nowrap">' + csVerdictBadge(r.cs_overlap_verdict) + '</td>'
                     + '<td class="px-4 py-2">' + domainCell + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-gray-800">' + escapeHtml(r.company_name || r.company_name_arabic || '—') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-gray-800">' + companyCell + '</td>'
                     + '<td class="px-4 py-2 text-xs">' + csSectorLabel(r.client_sector) + '</td>'
                     + '<td class="px-4 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.pipeline_lifecycle_state)) + '</td>'
                     + '<td class="px-4 py-2 text-xs text-end font-medium">' + formatCurrency(r.arr_exposure || 0) + '</td>'
@@ -2225,7 +2238,69 @@
             }
         }
 
+        // Sort state — default to severity desc so critical floats to the top.
+        window._csLifecycleSort = window._csLifecycleSort || { key: 'severity', dir: 'desc' };
+        window._csLifecycleData = window._csLifecycleData || null;
+
+        const CS_LIFE_SEVERITY_RANK = { critical: 3, warning: 2, info: 1 };
+
+        function csLifecycleSortValue(r, key) {
+            const v = r.violation || {};
+            switch (key) {
+                case 'severity':  return CS_LIFE_SEVERITY_RANK[v.severity] || 0;
+                case 'account':   return (r.account_name || '').toLowerCase();
+                case 'domain':    return (r.domain || '').toLowerCase();
+                case 'phase':     return (r.current_phase || '').toLowerCase();
+                case 'days':      return r.days_since_modified == null ? -1 : Number(r.days_since_modified);
+                case 'violation': return csLifeViolationLabel(v.code).toLowerCase();
+                case 'message':   return (v.message || '').toLowerCase();
+                default:          return 0;
+            }
+        }
+
+        function sortCsLifecycleRows(rows, key, dir) {
+            const factor = dir === 'asc' ? 1 : -1;
+            return rows.slice().sort((a, b) => {
+                const va = csLifecycleSortValue(a, key);
+                const vb = csLifecycleSortValue(b, key);
+                if (va < vb) return -1 * factor;
+                if (va > vb) return  1 * factor;
+                return 0;
+            });
+        }
+
+        function updateCsLifecycleSortIndicators() {
+            const headers = document.querySelectorAll('#csLifecycleTableHead .cs-lifecycle-sort');
+            headers.forEach(h => {
+                const key = h.getAttribute('data-sort-key');
+                const ind = h.querySelector('.cs-lifecycle-sort-indicator');
+                if (!ind) return;
+                if (key === window._csLifecycleSort.key) {
+                    ind.textContent = window._csLifecycleSort.dir === 'asc' ? '↑' : '↓';
+                    ind.classList.remove('opacity-30');
+                    ind.classList.add('text-gray-900');
+                } else {
+                    ind.textContent = '⇅';
+                    ind.classList.add('opacity-30');
+                    ind.classList.remove('text-gray-900');
+                }
+            });
+        }
+
+        function sortCsLifecycle(key) {
+            const cur = window._csLifecycleSort;
+            if (cur.key === key) {
+                cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                cur.key = key;
+                // Numeric / ranked keys default to desc; text columns default to asc.
+                cur.dir = ['severity','days'].includes(key) ? 'desc' : 'asc';
+            }
+            if (window._csLifecycleData) renderCsLifecycle(window._csLifecycleData);
+        }
+
         function renderCsLifecycle(data) {
+            window._csLifecycleData = data;
             const s = (data.summary && data.summary.by_severity) || {};
             document.getElementById('csLifeSumCritical').textContent = s.critical || 0;
             document.getElementById('csLifeSumWarning').textContent  = s.warning  || 0;
@@ -2233,17 +2308,26 @@
             document.getElementById('csLifeSumDeals').textContent    = (data.summary && data.summary.total_cs_deals) || 0;
             document.getElementById('csLifeSumTotal').textContent    = (data.summary && data.summary.total_violations) || 0;
 
+            updateCsLifecycleSortIndicators();
+
             const body = document.getElementById('csLifecycleTable');
-            const rows = data.violations || [];
-            if (rows.length === 0) {
+            const allRows = data.violations || [];
+            if (allRows.length === 0) {
                 body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No violations detected. CS is compliant for the current filter.</td></tr>';
                 return;
             }
+            const rows = sortCsLifecycleRows(allRows, window._csLifecycleSort.key, window._csLifecycleSort.dir);
             body.innerHTML = rows.map(r => {
                 const v = r.violation;
+                // CS Lifecycle violations are always Deal records (see
+                // scanCsLifecycleViolations: WHERE zoho_module = 'Deals'), so
+                // the Zoho link target is hard-coded to 'Deals'.
+                const accountCell = r.zoho_record_id
+                    ? zohoLink(r.zoho_record_id, 'Deals', r.account_name || '—')
+                    : escapeHtml(r.account_name || '—');
                 return '<tr class="hover:bg-gray-50">'
                     + '<td class="px-3 py-2 whitespace-nowrap">' + csLifeSeverityBadge(v.severity) + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(r.account_name || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-800">' + accountCell + '</td>'
                     + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(r.domain || '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(r.current_phase || '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs text-end text-gray-600">' + (r.days_since_modified == null ? '—' : r.days_since_modified) + '</td>'

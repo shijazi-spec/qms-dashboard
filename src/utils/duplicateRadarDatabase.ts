@@ -3538,15 +3538,26 @@ export async function scanAllClustersForCsOverlap(): Promise<CsOverlapBatchResul
     duration_ms: 0,
   };
 
-  for (const row of eligible.rows) {
-    const res = await scanClusterForCsOverlap(row.id);
-    out.scanned++;
-    if (!res.verdict) continue;
-    out.flagged++;
-    if (res.verdict === "block") out.block_count++;
-    else if (res.verdict === "review") out.review_count++;
-    else if (res.verdict === "warn") out.warn_count++;
-    out.total_arr_exposure += res.arr_exposure;
+  // Per-cluster scan was sequential, which gave us 3 DB round-trips × N clusters
+  // and a 504 from the gateway on datasets with several hundred eligible
+  // clusters. Run a small batch in parallel (6 ≤ default pg pool size 10, so
+  // the route handler's own connection still has room) — wall time drops by
+  // roughly the batch size.
+  const CONCURRENCY = 6;
+  for (let i = 0; i < eligible.rows.length; i += CONCURRENCY) {
+    const batch = eligible.rows.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((row) => scanClusterForCsOverlap(row.id)),
+    );
+    for (const res of results) {
+      out.scanned++;
+      if (!res.verdict) continue;
+      out.flagged++;
+      if (res.verdict === "block") out.block_count++;
+      else if (res.verdict === "review") out.review_count++;
+      else if (res.verdict === "warn") out.warn_count++;
+      out.total_arr_exposure += res.arr_exposure;
+    }
   }
 
   out.duration_ms = Date.now() - t0;
