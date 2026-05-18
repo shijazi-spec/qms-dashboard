@@ -274,7 +274,7 @@ export function evaluateCsLifecycle(
   //    handoff. Skipped for pre-Onboarding records and Termination (per
   //    GRQ ops decision: only enforce for clients currently in the CS
   //    pipeline). Severity = warning (data quality, not SLA breach).
-  const isActiveCsPhase = cfg.phaseFieldActive.some(
+  const isActiveCsPhase = cfg.activePhases.some(
     (p) => p.toLowerCase() === phase.toLowerCase(),
   );
   if (isActiveCsPhase) {
