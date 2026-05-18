@@ -943,6 +943,18 @@ function buildClusterFilterClause(
   return { clause, params, nextIndex: paramIndex };
 }
 
+// Whitelisted sort columns. Only allow values mapped here to be interpolated
+// into the ORDER BY — guards against SQL injection from the query string.
+const CLUSTER_SORT_COLUMNS: Record<string, string> = {
+  records:    "total_records",
+  similarity: "confidence_score",
+  domain:     "domain",
+  company:    "company_name",
+  status:     "status",
+  inflation:  "estimated_pipeline_value",
+  updated:    "updated_at",
+};
+
 export async function getAllClusters(filters?: {
   status?: string;
   confidence_level?: string;
@@ -952,12 +964,44 @@ export async function getAllClusters(filters?: {
   end_date?: string;
   hide_hierarchies?: boolean;
   layouts?: string[];
-}): Promise<DuplicateCluster[]> {
+  sort?: string;
+  dir?: string;
+}): Promise<Array<DuplicateCluster & { domain_count?: number }>> {
   const { clause, params, nextIndex } = buildClusterFilterClause(filters, 1);
   let paramIndex = nextIndex;
-  let query = "SELECT * FROM duplicate_clusters WHERE 1=1" + clause;
+  // domain_count is a correlated subquery counting DISTINCT corporate-shaped
+  // domains across the cluster's records. The frontend uses values >= 2 to
+  // flag mixed clusters at the card level without an N+1 per-card fetch.
+  // We approximate isCorporateDomain() in SQL by excluding empty values and
+  // free-mail domains; the JS-side helper is authoritative for the modal,
+  // this is just a cheap card-level hint.
+  // domain_count is a correlated subquery that the frontend uses to flag
+  // mixed-domain clusters at the card level (≥2 ⇒ mixed). We avoid a table
+  // alias on the outer FROM because buildClusterFilterClause references
+  // `duplicate_clusters.id` unqualified inside its EXISTS sub-clause for
+  // the layouts filter.
+  let query =
+    `SELECT duplicate_clusters.*,
+            (SELECT COUNT(DISTINCT LOWER(r.domain))
+               FROM duplicate_records r
+              WHERE r.cluster_id = duplicate_clusters.id
+                AND r.domain IS NOT NULL
+                AND r.domain <> ''
+                AND LOWER(r.domain) NOT IN (
+                  'gmail.com','yahoo.com','hotmail.com','outlook.com',
+                  'live.com','aol.com','icloud.com','mail.com',
+                  'protonmail.com','yandex.com','zoho.com'
+                )
+            ) AS domain_count
+       FROM duplicate_clusters
+      WHERE 1=1` + clause;
 
-  query += " ORDER BY total_records DESC, confidence_score DESC";
+  const sortKey = filters?.sort && CLUSTER_SORT_COLUMNS[filters.sort]
+    ? CLUSTER_SORT_COLUMNS[filters.sort]
+    : "total_records";
+  const dir = filters?.dir === "asc" ? "ASC" : "DESC";
+  // Stable secondary sort so equal primary values don't churn between pages.
+  query += ` ORDER BY ${sortKey} ${dir} NULLS LAST, id ASC`;
 
   if (filters?.limit) {
     query += ` LIMIT $${paramIndex++}`;
@@ -1877,6 +1921,38 @@ function isCorporateDomain(d: string | null | undefined): boolean {
   return !PUBLIC_EMAIL_DOMAINS.has(norm);
 }
 
+// Placeholder / sentinel company names that CS users type into Zoho when the
+// real company name is unknown. These should never form identity-bearing
+// clusters — two unrelated records both named "N/A" are not duplicates of
+// each other. Records with these names get routed to a single quarantine
+// cluster so CS can fix the names at source rather than seeing the dashboard
+// fan them out into bogus "duplicate" groups.
+const PLACEHOLDER_COMPANY_NAMES = new Set<string>([
+  // English
+  "n/a", "na", "n.a", "n.a.",
+  "unknown", "tbd", "tba", "pending",
+  "test", "testing", "demo",
+  "none", "null", "no name",
+  "-", "--", "---", "0",
+  // Arabic
+  "لا يوجد", "لايوجد", "غير معروف", "غير محدد", "تجريبي",
+  "لا شيء", "بدون اسم", "اختبار",
+]);
+
+const PLACEHOLDER_CLUSTER_DOMAIN = "_placeholder.cluster";
+
+export function isPlaceholderName(
+  name: string | null | undefined,
+): boolean {
+  if (!name) return true;
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return true;
+  const lower = trimmed.toLowerCase();
+  if (PLACEHOLDER_COMPANY_NAMES.has(lower)) return true;
+  if (PLACEHOLDER_COMPANY_NAMES.has(trimmed)) return true;
+  return false;
+}
+
 /**
  * Returns true if `clusterId` already has at least one record whose
  * corporate domain differs from `candidateDomain`. Used as a guard so
@@ -1939,6 +2015,14 @@ export async function findOrCreateClusterByCompany(
   // generic Saudi/Arabic company names.
   const effectiveDomain = domain || (email ? extractDomain(email) : null);
 
+  // Placeholder company names ("N/A", "لا يوجد", "TBD", …) are not identity
+  // signals. Two records both named "N/A" are not duplicates of each other.
+  // When we hit one, suppress the name-similarity branches entirely so the
+  // record only fuses on real identity (domain / email / phone). If those
+  // also fail, route the record to a single quarantine cluster instead of
+  // creating one synthetic "n-a.cluster" per placeholder string.
+  const placeholder = isPlaceholderName(companyName);
+
   if (domain) {
     const existingByDomain = await pool.query(
       "SELECT * FROM duplicate_clusters WHERE domain = $1",
@@ -1978,7 +2062,7 @@ export async function findOrCreateClusterByCompany(
   // Only use a substring ILIKE shortcut when the normalized name is distinctive
   // enough (>= 5 chars). Short fragments like "شركة" or "ltd" (after partial
   // strips) used to match unrelated rows.
-  if (normalizedName && normalizedName.length >= 5) {
+  if (!placeholder && normalizedName && normalizedName.length >= 5) {
     const existingByCompany = await pool.query(
       `SELECT * FROM duplicate_clusters 
        WHERE company_name_normalized = $1`,
@@ -2007,7 +2091,7 @@ export async function findOrCreateClusterByCompany(
   // B4: Try pg_trgm similarity() first, fallback to limited Levenshtein.
   // Threshold raised to 0.6 — at 0.4, unrelated Arabic LLCs sharing only the
   // boilerplate "شركة ... المحدودة" were being clustered together.
-  if (normalizedName && normalizedName.length > 2) {
+  if (!placeholder && normalizedName && normalizedName.length > 2) {
     try {
       // Pull the top few candidates so the domain guard can skip a bad
       // top hit (e.g. "alsuwaidi industrial services") and still pick a
@@ -2063,6 +2147,29 @@ export async function findOrCreateClusterByCompany(
         }
       }
     }
+  }
+
+  // Placeholder-named record with no real identity → quarantine bucket.
+  // Look up the existing quarantine cluster before creating a new one so
+  // every subsequent placeholder record fuses there instead of fanning out.
+  if (placeholder && !domain) {
+    const existing = await pool.query(
+      "SELECT * FROM duplicate_clusters WHERE domain = $1 LIMIT 1",
+      [PLACEHOLDER_CLUSTER_DOMAIN],
+    );
+    if (existing.rows[0]) return existing.rows[0];
+    return await createCluster({
+      domain: PLACEHOLDER_CLUSTER_DOMAIN,
+      company_name: "[Placeholder names — needs CS review]",
+      total_leads: 0,
+      total_deals: 0,
+      total_contacts: 0,
+      total_accounts: 0,
+      total_records: 0,
+      confidence_level: "low",
+      confidence_score: 0,
+      status: "active",
+    });
   }
 
   return await createCluster({

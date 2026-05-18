@@ -801,6 +801,9 @@ export const duplicateRadarRoutes = [
                 .filter(Boolean)
             : undefined;
 
+          const sort = url.searchParams.get("sort") || undefined;
+          const dir = url.searchParams.get("dir") || undefined;
+
           const filters = {
             status: status || undefined,
             confidence_level: confidence_level || undefined,
@@ -811,7 +814,7 @@ export const duplicateRadarRoutes = [
           };
 
           const [clusters, total] = await Promise.all([
-            getAllClusters({ ...filters, limit, offset }),
+            getAllClusters({ ...filters, limit, offset, sort, dir }),
             getClusterCount(filters),
           ]);
 

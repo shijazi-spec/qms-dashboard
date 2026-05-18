@@ -441,6 +441,18 @@
                     <option value="">All Layouts</option>
                 </select>
                 <span id="layoutFilterHint" class="text-xs text-gray-400"></span>
+                <div class="flex-1"></div>
+                <label class="text-xs text-gray-500 uppercase tracking-wide">Sort by</label>
+                <select id="clusterSort" aria-label="Sort clusters" data-on-change="loadClusters" data-testid="select-cluster-sort" class="border rounded-lg px-3 py-2">
+                    <option value="records">Records</option>
+                    <option value="similarity">Similarity %</option>
+                    <option value="inflation">Inflation</option>
+                    <option value="updated">Updated</option>
+                    <option value="domain">Domain</option>
+                    <option value="company">Company</option>
+                    <option value="status">Status</option>
+                </select>
+                <button id="clusterSortDir" data-on-click="toggleClusterSortDir" data-sort-dir="desc" data-testid="button-cluster-sort-dir" class="border rounded-lg px-3 py-2 text-sm font-mono hover:bg-gray-50" title="Toggle sort direction">↓</button>
             </div>
             <div id="clustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             <div id="clustersPagination" class="flex justify-center gap-3 mt-6"></div>
@@ -1078,8 +1090,11 @@
             const conf = document.getElementById('clusterFilter').value;
             const status = document.getElementById('statusFilter').value;
             const layout = document.getElementById('layoutFilter')?.value || '';
+            const sort = document.getElementById('clusterSort')?.value || 'records';
+            const dirBtn = document.getElementById('clusterSortDir');
+            const dir = (dirBtn && dirBtn.getAttribute('data-sort-dir')) || 'desc';
             const range = getDateRange();
-            let url = `/api/duplicates/clusters?limit=30&offset=${page * 30}`;
+            let url = `/api/duplicates/clusters?limit=30&offset=${page * 30}&sort=${encodeURIComponent(sort)}&dir=${encodeURIComponent(dir)}`;
             if (conf) url += `&confidence_level=${conf}`;
             if (status) url += `&status=${status}`;
             if (layout) url += `&layouts=${encodeURIComponent(layout)}`;
@@ -1092,6 +1107,15 @@
             renderPagination('clustersPagination', page, data.pages || 1, loadClusters);
             const hint = document.getElementById('layoutFilterHint');
             if (hint) hint.textContent = layout ? WalaPlusI18n.t('dyn.duplicates.filtered_in_layout', { n: _fn(data.total ?? 0), layout: layout }) : '';
+        }
+
+        function toggleClusterSortDir() {
+            const btn = document.getElementById('clusterSortDir');
+            if (!btn) return;
+            const next = btn.getAttribute('data-sort-dir') === 'asc' ? 'desc' : 'asc';
+            btn.setAttribute('data-sort-dir', next);
+            btn.textContent = next === 'asc' ? '↑' : '↓';
+            loadClusters(0);
         }
 
         async function populateLayoutFilter() {
@@ -1111,9 +1135,37 @@
             }
         }
 
+        // Data-quality flags shown at the top of each cluster card so users can
+        // triage without opening every modal. All three are cheap derivations
+        // from fields already on the cluster row.
+        //   - synthetic: cluster keyed on a name-built ".cluster" pseudo-domain
+        //     (no real Company_Domain available at sync time)
+        //   - placeholder: routed to the quarantine bucket because the company
+        //     name was a sentinel value like "N/A" / "لا يوجد" — needs CS to
+        //     backfill the real name in Zoho
+        //   - mixed: 2+ distinct corporate email domains across the cluster's
+        //     records (domain_count comes from the list-endpoint subquery).
+        //     Almost always means unrelated companies sharing a name fragment.
+        function clusterCardFlags(c) {
+            const flags = [];
+            const isPlaceholder = c.domain === '_placeholder.cluster';
+            const isSynthetic = typeof c.domain === 'string' && c.domain.endsWith('.cluster') && !isPlaceholder;
+            const isMixed = Number(c.domain_count || 0) >= 2;
+            if (isPlaceholder) {
+                flags.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-800" title="Placeholder company name — CS needs to backfill the real name in Zoho">❓ placeholder</span>');
+            } else if (isSynthetic) {
+                flags.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800" title="Synthetic cluster — built from normalized company name, not a real corporate domain. Going forward these only form when there is no email/phone identity either.">🔧 synthetic</span>');
+            }
+            if (isMixed) {
+                flags.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="' + Number(c.domain_count) + ' distinct corporate domains inside this cluster — usually two unrelated companies sharing a name fragment. Open the cluster and use Split by domain.">⚠ mixed (' + Number(c.domain_count) + ')</span>');
+            }
+            return flags.length ? '<div class="flex flex-wrap gap-1 mb-2">' + flags.join('') + '</div>' : '';
+        }
+
         function renderClusters(clusters) {
             document.getElementById('clustersGrid').innerHTML = clusters.map(c => `
                 <div class="bg-white rounded-lg shadow p-4 cluster-card cursor-pointer" data-on-click="showClusterDetails" data-args="[${c.id}]" data-testid="card-cluster-${c.id}">
+                    ${clusterCardFlags(c)}
                     <div class="flex justify-between items-start mb-3">
                         <div>
                             <h4 class="font-semibold text-gray-900">${escapeHtml(c.domain)}</h4>
@@ -1127,7 +1179,7 @@
                         <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.contacts'))}</span> <span class="font-medium text-teal-600">${_fn(c.total_contacts||0)}</span></div>
                         <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.accounts'))}</span> <span class="font-medium text-indigo-600">${_fn(c.total_accounts||0)}</span></div>
                         <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.status_kw'))}</span> <span class="font-medium capitalize">${escapeHtml(c.status)}</span></div>
-                        <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.value_kw'))}</span> <span class="font-medium">${formatCurrency(c.estimated_pipeline_value||0)}</span></div>
+                        <div title="Pipeline inflation — sum of deal values for non-primary (duplicate) deals in this cluster. Not the cluster's total pipeline value."><span class="text-gray-500">Inflation:</span> <span class="font-medium">${formatCurrency(c.estimated_pipeline_value||0)}</span></div>
                     </div>
                 </div>
             `).join('') || `<div class="col-span-3 text-center py-8 text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_clusters_found'))}</div>`;
