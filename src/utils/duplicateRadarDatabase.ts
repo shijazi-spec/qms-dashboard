@@ -1893,18 +1893,29 @@ async function clusterHasConflictingDomain(
 ): Promise<boolean> {
   if (!isCorporateDomain(candidateDomain)) return false;
   const candidate = candidateDomain.toLowerCase().trim();
+  // Pull both the explicit domain column AND the email so we can derive
+  // the corporate part of the email when Company_Domain is empty. Without
+  // this, a cluster whose existing records have email-only identity
+  // (Zoho Company_Domain blank) returns an empty conflict set and the
+  // guard becomes a no-op.
   const res = await pool.query(
-    `SELECT DISTINCT LOWER(domain) AS d
+    `SELECT LOWER(domain) AS d, email
        FROM duplicate_records
       WHERE cluster_id = $1
-        AND domain IS NOT NULL
-        AND domain <> ''`,
+        AND (
+          (domain IS NOT NULL AND domain <> '')
+          OR (email IS NOT NULL AND email <> '')
+        )`,
     [clusterId],
   );
+  const seen = new Set<string>();
   for (const row of res.rows) {
-    const d = (row.d || "").trim();
-    if (!d) continue;
-    if (!isCorporateDomain(d)) continue;
+    const explicit = (row.d || "").trim();
+    if (explicit && isCorporateDomain(explicit)) seen.add(explicit);
+    const fromEmail = row.email ? extractDomain(row.email) : null;
+    if (fromEmail && isCorporateDomain(fromEmail)) seen.add(fromEmail);
+  }
+  for (const d of seen) {
     if (d !== candidate) return true;
   }
   return false;
@@ -1919,6 +1930,14 @@ export async function findOrCreateClusterByCompany(
 ): Promise<DuplicateCluster> {
   const normalizedName = normalizeCompanyName(companyName);
   const normalizedPhone = phone ? normalizePhone(phone) : "";
+
+  // Effective identity domain: prefer the explicit Company_Domain field, but
+  // fall back to the corporate part of the email address. Without this fallback
+  // a record whose Zoho Company_Domain is empty (but whose email is on a real
+  // corporate domain) bypasses the conflict guard below and gets fused with
+  // any same-named cluster — the root cause of mixed-cluster fan-outs on
+  // generic Saudi/Arabic company names.
+  const effectiveDomain = domain || (email ? extractDomain(email) : null);
 
   if (domain) {
     const existingByDomain = await pool.query(
@@ -1968,14 +1987,15 @@ export async function findOrCreateClusterByCompany(
     if (existingByCompany.rows[0]) {
       const candidate = existingByCompany.rows[0];
       // Domain conflict guard — if this incoming record carries a corporate
-      // domain and the candidate cluster already holds records with a
-      // *different* corporate domain, do NOT fuse them. Two unrelated
-      // companies that share an identical normalized name (e.g. "industrial
-      // services") are a real-world scenario in this dataset.
+      // domain (explicit Company_Domain OR derived from its email) and the
+      // candidate cluster already holds records with a *different* corporate
+      // domain, do NOT fuse them. Two unrelated companies that share an
+      // identical normalized name (e.g. "industrial services") are a
+      // real-world scenario in this dataset.
       if (
-        domain &&
-        isCorporateDomain(domain) &&
-        (await clusterHasConflictingDomain(candidate.id, domain))
+        effectiveDomain &&
+        isCorporateDomain(effectiveDomain) &&
+        (await clusterHasConflictingDomain(candidate.id, effectiveDomain))
       ) {
         // fall through to fuzzy step / new-cluster creation below
       } else {
@@ -2003,9 +2023,9 @@ export async function findOrCreateClusterByCompany(
       for (const candidate of trgmResult.rows) {
         if (!(candidate.sim >= 0.6)) continue;
         if (
-          domain &&
-          isCorporateDomain(domain) &&
-          (await clusterHasConflictingDomain(candidate.id, domain))
+          effectiveDomain &&
+          isCorporateDomain(effectiveDomain) &&
+          (await clusterHasConflictingDomain(candidate.id, effectiveDomain))
         ) {
           continue; // try next-best candidate
         }
@@ -2032,9 +2052,9 @@ export async function findOrCreateClusterByCompany(
           if (similarity >= 85) {
             // Same domain conflict guard for the Levenshtein fallback path.
             if (
-              domain &&
-              isCorporateDomain(domain) &&
-              (await clusterHasConflictingDomain(cluster.id, domain))
+              effectiveDomain &&
+              isCorporateDomain(effectiveDomain) &&
+              (await clusterHasConflictingDomain(cluster.id, effectiveDomain))
             ) {
               continue;
             }
