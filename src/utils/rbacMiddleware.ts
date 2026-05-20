@@ -940,13 +940,28 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   },
 
   {
+    // AI Consultant chat — intentionally open to every authenticated role.
+    // Per product decision (May 2026) the consultant is a self-service team
+    // helper, not an admin-only tool. The data-access tools the consultant
+    // invokes still apply their own per-module RBAC, so lower-privilege
+    // callers can chat but the consultant only surfaces data they are
+    // already entitled to see. Keep this list in sync with CONSULTANT_ROLES
+    // in src/mastra/routes/consultantRoutes.ts.
     pattern: /^\/api\/consultant\/chat(\/stream)?$/,
     methods: ["POST"],
     roles: [
       "admin",
-      "ai_specialist",
-      "grc_manager",
       "head_of_operations_quality",
+      "quality_manager",
+      "quality_specialist",
+      "grc_manager",
+      "team_lead",
+      "department_viewer",
+      "auditor",
+      "ai_specialist",
+      "bu_owner",
+      "executive",
+      "custom",
     ],
   },
   {

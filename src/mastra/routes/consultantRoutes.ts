@@ -164,11 +164,25 @@ async function withThreadLock<T>(
   }
 }
 
+// AI Consultant is intentionally available to every authenticated platform
+// user, regardless of role. Per product decision (May 2026): the consultant
+// is a self-service helper for the whole team, not an admin-only tool. The
+// underlying data tools the consultant invokes still apply their own per-
+// module RBAC, so a viewer-level user can chat with the consultant but the
+// consultant will only see / surface data that user is allowed to see.
 const CONSULTANT_ROLES: UserRole[] = [
   "admin",
-  "ai_specialist",
-  "grc_manager",
   "head_of_operations_quality",
+  "quality_manager",
+  "quality_specialist",
+  "grc_manager",
+  "team_lead",
+  "department_viewer",
+  "auditor",
+  "ai_specialist",
+  "bu_owner",
+  "executive",
+  "custom",
 ];
 
 initAIAlertsTable().catch((err) =>
