@@ -87,7 +87,6 @@
     "@opentelemetry/sdk-node": "^0.217.0",
     "@opentelemetry/auto-instrumentations-node": "^0.75.0",
     "protobufjs": "^7.5.9",
-    "@protobufjs/utf8": "^1.1.1",
-    "ai": "^4"
+    "@protobufjs/utf8": "^1.1.1"
   }
 }
