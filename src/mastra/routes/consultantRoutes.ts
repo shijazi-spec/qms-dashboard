@@ -407,7 +407,12 @@ export const consultantRoutes = [
                         threadId: resolvedThreadId,
                       },
                       () =>
-                        agent.generate(message, {
+                        // generateLegacy() is required because the Consultant
+                        // agent uses an AI SDK v4 model (openai.chat:gpt-4o);
+                        // Mastra's newer .generate() routes through .stream()
+                        // and rejects v4 models at runtime. Mirrors the
+                        // streamLegacy() call in the SSE path below.
+                        agent.generateLegacy(message, {
                           threadId: resolvedThreadId,
                           resourceId,
                           abortSignal: controller.signal,
@@ -1180,7 +1185,9 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
                 }),
               },
               async () =>
-                (await agent.generate(scanPrompt, {
+                // generateLegacy() — see note in the non-streaming chat
+                // handler above; the v4 openai.chat model requires it.
+                (await agent.generateLegacy(scanPrompt, {
                   threadId: `scan-${Date.now()}`,
                   resourceId: "system-scanner",
                   abortSignal: scanController.signal,
