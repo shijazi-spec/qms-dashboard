@@ -343,9 +343,12 @@
                     </div>
                 </div>
 
-                <!-- Zoho Calls Import — pulls call records logged in Zoho's
-                     Calls module into call_records so calls that exist only
-                     in the CRM (never uploaded here) can be QA-evaluated. -->
+                <!-- Zoho Calls Import — pulls call ACTIVITY records (timestamps,
+                     agent, lead/deal linkage) from Zoho's Calls module. Audio
+                     recordings are NOT in Zoho — those come from the Bulk
+                     Upload card below. The import's value is surfacing calls
+                     that the SDR team logged in Zoho but never uploaded a
+                     recording for, so a coverage gap becomes visible. -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-orange-600 to-red-600">
                         <div class="flex items-center gap-3">
@@ -355,14 +358,17 @@
                                 </svg>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold text-white">Zoho Calls Import</h3>
-                                <p class="text-sm text-white/80">Pull SDR calls logged directly in Zoho's Calls module</p>
+                                <h3 class="text-lg font-semibold text-white">Zoho Calls Activity Import</h3>
+                                <p class="text-sm text-white/80">Pull call timestamps + lead/deal linkage from Zoho's Calls module</p>
                             </div>
                         </div>
                     </div>
                     <div class="p-6">
+                        <div class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                            <strong>Note:</strong> Zoho stores call <em>activity</em> data (who called, when, duration, linked lead/deal) but NOT the audio recording itself. For audio, use <strong>Bulk Call Recordings Upload</strong> below. The value of this import is surfacing calls the SDR team logged in Zoho but never uploaded a recording for — i.e. visible coverage gaps.
+                        </div>
                         <p class="text-sm text-gray-600 mb-4">
-                            Imports calls from Zoho's Calls module into the evaluation pipeline. Calls without a recording URL get status=<code>analyzed</code> immediately so the scorecard can run against the Zoho-stored Description text. Re-running is safe — calls are upserted on <code>call_id</code>.
+                            Imports go into <code>call_records</code> with status=<code>analyzed</code> so the scorecard can run against the Zoho-stored Description text. Re-running is safe — calls upsert on <code>call_id</code>.
                         </p>
                         <div class="grid grid-cols-2 gap-3 mb-4">
                             <div>
@@ -408,7 +414,11 @@
                     </div>
                 </div>
 
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <!-- Manual Call Upload card removed — it duplicated the Bulk
+                     Call Recordings Upload below, which auto-detects agent
+                     email + phone from the filename. Users only need one
+                     upload surface for SDR call audio. -->
+                <div class="hidden">
                     <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-emerald-600 to-teal-600">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
