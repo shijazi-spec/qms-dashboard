@@ -71,8 +71,22 @@ function computeCost(
   );
 }
 
-function hashValue(value: string): string {
-  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+function hashValue(value: unknown): string {
+  const coerced =
+    typeof value === "string"
+      ? value
+      : value == null
+        ? ""
+        : typeof value === "object"
+          ? (() => {
+              try {
+                return JSON.stringify(value);
+              } catch {
+                return String(value);
+              }
+            })()
+          : String(value);
+  return createHash("sha256").update(coerced).digest("hex").slice(0, 16);
 }
 
 const PII_PATTERNS: [RegExp, string][] = [
