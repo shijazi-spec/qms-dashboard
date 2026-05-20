@@ -673,6 +673,34 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       `${p?.severity ?? 'info'}: ${trim(p?.subject ?? p?.title, 100)}`,
   },
 
+  // --- call intelligence / lead matching (read-only) ---
+  'match-lead-by-phone': {
+    toolId: 'match-lead-by-phone',
+    label: 'Match Zoho CRM leads by phone (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only Zoho Leads lookup, no platform write',
+    ],
+    entityType: 'lead_phone_match',
+    buildPreview: (p: any) =>
+      `Phone: ${trim(p?.phone, 40) || '—'}` +
+      (typeof p?.max_records === 'number' ? ` · scan up to ${p.max_records}` : ''),
+  },
+
+  'reconcile-call': {
+    toolId: 'reconcile-call',
+    label: 'Reconcile call transcript vs. evaluation (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only call intelligence reconciliation, no platform write',
+    ],
+    entityType: 'call_reconciliation',
+    buildPreview: (p: any) =>
+      `Call #${p?.call_record_id ?? '—'}`,
+  },
+
   // --- scaffolding / docs ---
   'example-tool': {
     toolId: 'example-tool',
