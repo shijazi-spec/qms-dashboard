@@ -24,7 +24,6 @@
     "@mastra/mcp": "^0.14.5",
     "@mastra/memory": "^0.15.13",
     "@mastra/pg": "^0.17.10",
-    "@openrouter/ai-sdk-provider": "^2.2.3",
     "@opentelemetry/auto-instrumentations-node": "^0.75.0",
     "@opentelemetry/exporter-prometheus": "^0.217.0",
     "@opentelemetry/sdk-node": "^0.217.0",
