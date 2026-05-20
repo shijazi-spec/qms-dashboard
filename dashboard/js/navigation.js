@@ -230,6 +230,7 @@ const WalaPlusNav = {
         { label: 'User Guide', href: '/guide', icon: 'book-open', id: 'guide' },
         { label: 'Help', href: '/onboarding', icon: 'question-mark-circle', id: 'onboarding' },
         { label: 'Give Feedback', href: '/feedback', icon: 'chat-alt', id: 'feedback' },
+        { label: 'Users & Access', href: '/users', icon: 'users', id: 'support-users', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
         { label: 'Scope of Work', href: '/docs/SCOPE_OF_WORK.html', icon: 'document', id: 'scope', external: true }
       ]
     }
@@ -338,6 +339,7 @@ const WalaPlusNav = {
     this.navigationGroups.forEach(function (group) {
       if (!self._canSeeGroup(group)) return;
       group.items.forEach(function (item) {
+        if (!self._canSeeItem(item)) return;
         idx[item.id] = { item: item, group: group };
       });
     });
@@ -355,6 +357,17 @@ const WalaPlusNav = {
     var role = this._userRole;
     if (!role) return false;
     return group.requiresRole.indexOf(role) !== -1;
+  },
+
+  // RBAC: an individual item may carry its own requiresRole gate (used
+  // when an item lives inside an ungated group — e.g. "Users & Access"
+  // under Support). Same conservative behaviour as _canSeeGroup: hide
+  // until the role is known.
+  _canSeeItem(item) {
+    if (!item || !Array.isArray(item.requiresRole) || !item.requiresRole.length) return true;
+    var role = this._userRole;
+    if (!role) return false;
+    return item.requiresRole.indexOf(role) !== -1;
   },
 
   togglePin(itemId) {
@@ -920,7 +933,7 @@ const WalaPlusNav = {
           <span id="tooltip-group-${this.escapeHtml(group.id)}" role="tooltip" class="wp-nav-tooltip">${this.escapeHtml(label)}</span>
         </button>
         <div class="wp-group-items mt-0.5 gap-y-0.5 ps-1" role="group" aria-label="${this.escapeHtml(label)}">
-          ${group.items.map(item => this.renderRailItem(item, colors, { showPin: true })).join('')}
+          ${group.items.filter(item => this._canSeeItem(item)).map(item => this.renderRailItem(item, colors, { showPin: true })).join('')}
         </div>
       </div>
     `;
