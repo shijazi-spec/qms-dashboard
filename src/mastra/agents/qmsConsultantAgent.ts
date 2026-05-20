@@ -237,14 +237,16 @@ export const qmsConsultantAgent = new Agent({
 
   instructions: QMS_CONSULTANT_INSTRUCTIONS,
 
-  // Use the Chat Completions adapter (`openai(...)`) — not the Responses
-  // API adapter (`openai.responses(...)`) — because Mastra's stream() is not
-  // compatible with the Responses API model under AI SDK v4. The streaming
-  // endpoint was returning HTTP 500 with: "Agent ... is using AI SDK v4
-  // model (openai.responses:gpt-4o) which is not compatible with stream()".
-  // Per the convention documented in exampleAgent.ts, `openai.responses()`
-  // is for gpt-5 class models; gpt-4o should use plain `openai()`.
-  model: openai("gpt-4o"),
+  // Use the Chat Completions adapter explicitly (`openai.chat(...)`). In
+  // @ai-sdk/openai v3.x, the bare `openai("gpt-4o")` call returns the
+  // Responses-API model (provider: "openai.responses",
+  // constructor: OpenAIResponsesLanguageModel) — verified at runtime. That
+  // model is rejected by Mastra's stream()/streamLegacy() under AI SDK v4
+  // with: "Agent ... is using AI SDK v4 model (openai.responses:gpt-4o)
+  // which is not compatible with stream()". Only `openai.chat("gpt-4o")`
+  // gives the Chat Completions adapter (provider: "openai.chat") that
+  // streamLegacy() in src/mastra/routes/consultantRoutes.ts can drive.
+  model: openai.chat("gpt-4o"),
 
   // Tools: read-only tools pass through unchanged; write-tools are wrapped
   // by withApprovalGate() so they enqueue a pending action instead of
