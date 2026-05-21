@@ -437,11 +437,28 @@ Respond with JSON only:
 
           return c.json(analysisResult);
         } catch (error) {
-          safeLogger.error("Error analyzing call:", error);
+          const errAny: any = error;
+          const errMsg =
+            errAny?.message ??
+            (typeof errAny === "string" ? errAny : "Failed to analyze call");
+          const errCode =
+            errAny?.code || errAny?.statusCode || errAny?.status || null;
+          safeLogger.error("Error analyzing call:", {
+            message: errMsg,
+            code: errCode,
+            stack: errAny?.stack,
+          });
+          // Surface the real reason so the UI alert shows "Analysis failed:
+          // 429 Rate limit exceeded for gpt-4o" instead of an opaque
+          // "Failed to analyze call". Phase A applied the same pattern to
+          // the upload endpoint; this matches it for the standalone
+          // re-analyze button.
           return c.json(
             {
               success: false,
-              error: "Failed to analyze call",
+              error: errCode
+                ? `${errCode}: ${errMsg}`
+                : errMsg,
             },
             500,
           );
@@ -1914,9 +1931,26 @@ ${transcriptText}
             full_evaluation: evaluation,
           });
         } catch (error) {
-          safeLogger.error("Error in SDR evaluation:", error);
+          const errAny: any = error;
+          const errMsg =
+            errAny?.message ??
+            (typeof errAny === "string" ? errAny : "Failed to evaluate call");
+          const errCode =
+            errAny?.code || errAny?.statusCode || errAny?.status || null;
+          safeLogger.error("Error in SDR evaluation:", {
+            message: errMsg,
+            code: errCode,
+            stack: errAny?.stack,
+          });
+          // Surface the real reason — most common causes are OpenAI quota
+          // exhaustion, transcript missing on the call record, or no active
+          // SDR scorecard in quality_scorecards. Opaque "Failed to evaluate
+          // call" hides all three.
           return c.json(
-            { success: false, error: "Failed to evaluate call" },
+            {
+              success: false,
+              error: errCode ? `${errCode}: ${errMsg}` : errMsg,
+            },
             500,
           );
         }
