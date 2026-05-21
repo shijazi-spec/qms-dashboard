@@ -189,8 +189,13 @@ console.log("Branch: '/api' without trailing slash is NOT gated (only /api/ pref
 }
 console.log();
 
-// ─── Branch 2: /api/ + valid admin key → inner handler runs ─────────────────
-console.log("Branch: /api/ path with valid X-Admin-Key → inner handler runs");
+// ─── Branch 2: /api/ + valid admin key only → 401 (key is not a session) ────
+// The X-Admin-Key is scoped to /api/admin/* routes.  gateApiRoute wraps
+// application /api/* routes which require a real OIDC session.  An admin key
+// without a session must NOT bypass the gate; routes that legitimately need
+// server-to-server admin-key access call requireAdminOrKey() themselves AND
+// are reached through the global middleware's /api/admin/* fast-path.
+console.log("Branch: /api/ path with valid X-Admin-Key but no session → 401 (key is not a session)");
 await (async () => {
   process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
   let innerCalled = 0;
@@ -227,12 +232,8 @@ await (async () => {
   const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
   const res = await handler(c);
 
-  assertEquals(innerCalled, 1, "inner handler is invoked exactly once");
-  assertEquals(res.status, 200, "response status is 200 (from inner handler)");
-  assert(
-    Array.isArray(res.body.widgets) && res.body.widgets.length === 3,
-    "response body comes from the inner handler"
-  );
+  assertEquals(innerCalled, 0, "inner handler is NOT invoked for key-only callers");
+  assertEquals(res.status, 401, "response status is 401 (key is not a session identity)");
 })();
 console.log();
 
@@ -405,8 +406,10 @@ await (async () => {
   const wrapped = gateApiRoute(route);
   const handler = await (wrapped.createHandler as any)({});
 
-  // Authenticated → inner runs.
-  const cAuth = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
+  // Authenticated via session → inner runs.
+  const cAuth = makeContext({
+    cookies: { [SESSION_COOKIE_NAME]: adminSessionCookie("quality_manager") },
+  });
   const okRes = await handler(cAuth);
   assertEquals(innerCalled, 1, "async inner handler runs for authenticated caller");
   assertEquals(okRes.status, 200, "async inner handler response is 200");

@@ -278,11 +278,23 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
     return c.json({ error: 'Too many requests' }, 429);
   }
 
-  if (!session && !hasAdminKey) {
+  // Admin-key authentication is intentionally scoped to /api/admin/* routes
+  // and the /api/inngest* server-to-server webhook path.  All other /api/*
+  // routes require a real OIDC user session.  Accepting the shared key as a
+  // universal credential would allow any service or operator holding the key
+  // to read and mutate unrelated regulated business data.
+  const isAdminRoute = urlPath.startsWith('/api/admin/') || urlPath === '/api/admin';
+  // /api/inngest uses key-based machine auth via checkInngestAccess() which
+  // runs before checkApiAuth() in the middleware chain.  We must not reject
+  // key-only callers here, or the Inngest serve handler will never be reached.
+  const isInngestRoute = urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest/');
+  const isKeyAllowedRoute = isAdminRoute || isInngestRoute;
+
+  if (!session && !(hasAdminKey && isKeyAllowedRoute)) {
     return c.json({ error: 'Authentication required' }, 401);
   }
 
-  if (session && !hasAdminKey) {
+  if (session) {
     const { checkPlatformUserActive } = await import('../../utils/rbacMiddleware');
     const isActive = await checkPlatformUserActive(session.email);
     if (!isActive) {
@@ -290,18 +302,28 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
     }
   }
 
-  if (urlPath.startsWith('/api/admin/') || urlPath === '/api/admin') {
+  if (isAdminRoute) {
     if (!hasAdminKey) {
       return c.json({ error: 'X-Admin-Key header required for admin endpoints' }, 403);
     }
+    // Valid admin key on an admin route: allow without further RBAC checks.
+    return null;
   }
 
-  if (!hasAdminKey) {
-    const { enforceRoutePermission } = await import('../../utils/rbacMiddleware');
-    const result = await enforceRoutePermission(c, urlPath, method);
-    if (!result.allowed) {
-      return c.json({ error: result.error || 'Insufficient permissions' }, 403);
-    }
+  if (isInngestRoute) {
+    // Valid admin key on the Inngest webhook path: allow without RBAC.
+    // checkInngestAccess() already validated the signing key; we only reach
+    // here when that check passed and control falls through to checkApiAuth().
+    if (hasAdminKey) return null;
+    // Session callers on /api/inngest fall through to normal RBAC below.
+  }
+
+  // For all non-admin routes enforce RBAC unconditionally.  The admin key
+  // does not bypass route-level permission checks outside /api/admin/*.
+  const { enforceRoutePermission } = await import('../../utils/rbacMiddleware');
+  const result = await enforceRoutePermission(c, urlPath, method);
+  if (!result.allowed) {
+    return c.json({ error: result.error || 'Insufficient permissions' }, 403);
   }
 
   return null;

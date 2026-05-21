@@ -5,6 +5,10 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
+
           const { getReviews } =
             await import("../../utils/managementReviewDatabase");
           const status = c.req.query("status") || undefined;
@@ -27,6 +31,10 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
           const { getReviewById } =
@@ -46,6 +54,10 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
+
           const body = await c.req.json();
           const { createReview } =
             await import("../../utils/managementReviewDatabase");
@@ -74,6 +86,10 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
           const body = await c.req.json();
@@ -105,6 +121,10 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
           const { deleteReview } =
@@ -124,6 +144,10 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
+
           const reviewId = parseInt(c.req.param("id"));
           if (isNaN(reviewId)) return c.json({ error: "Invalid ID" }, 400);
           const body = await c.req.json();
@@ -143,6 +167,10 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
+
           const actionId = parseInt(c.req.param("actionId"));
           if (isNaN(actionId)) return c.json({ error: "Invalid ID" }, 400);
           const body = await c.req.json();
@@ -163,6 +191,10 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
+
           const { getReviewActionsSummary } =
             await import("../../utils/managementReviewDatabase");
           const summary = await getReviewActionsSummary();
@@ -179,6 +211,10 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
           const { gatherReviewInputs, updateReview } =

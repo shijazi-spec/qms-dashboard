@@ -72,15 +72,19 @@ console.log("1. getSessionUser — no auth");
   assert(user === null, "getSessionUser returns null for unauthenticated context");
 }
 
-console.log("2. getSessionUser — valid admin API key");
+console.log("2. getSessionUser — X-Admin-Key alone → null (key is not a session identity)");
+// The X-Admin-Key is a server-to-server credential scoped to /api/admin/*
+// routes only.  getSessionUser() no longer synthesises an admin SessionUser
+// from it; routes that legitimately need key access call requireAdminOrKey()
+// directly.  Any caller sending only X-Admin-Key must get null here so the
+// gate can return 401/403 before the handler runs.
 {
   const ctx = makeCtx({ adminKey: TEST_KEY });
   const user = getSessionUser(ctx);
-  assert(user !== null, "getSessionUser returns user for valid admin API key");
-  assert(user?.role === "admin", "role is 'admin' for API-key user");
+  assert(user === null, "getSessionUser returns null for admin key (key is not a session)");
 }
 
-console.log("3. getSessionUser — wrong admin API key");
+console.log("3. getSessionUser — wrong admin API key → null");
 {
   const ctx = makeCtx({ adminKey: "wrong-key" });
   const user = getSessionUser(ctx);
@@ -95,22 +99,26 @@ console.log("4. requireRole — no auth → returns null (gate should respond 40
   assert(result === null, "requireRole returns null with no auth context");
 }
 
-console.log("5. requireRole — admin key in allowed list → returns user");
+console.log("5. requireRole — X-Admin-Key alone → null (no session, no DB query attempted)");
+// requireRole() now always requires a real OIDC-issued session.  An admin key
+// without a session cookie fails at getSessionUser() — which returns null —
+// before requireRole() ever reaches the getPlatformUser DB query.  This is
+// the correct scoping: key-only callers are never treated as role-bearing users.
 {
   const ctx = makeCtx({ adminKey: TEST_KEY });
   const result = await requireRole(ctx, ["admin", "quality_manager"]);
-  assert(result !== null, "requireRole returns user for admin key");
-  assert(result?.role === "admin", "returned user has role 'admin'");
+  assert(result === null, "requireRole returns null for key-only callers (no session)");
 }
 
-console.log("6. requireRole — admin key but role not in allowed list → null");
+console.log("6. requireRole — admin key regardless of allowedRoles → always null");
 {
   const ctx = makeCtx({ adminKey: TEST_KEY });
+  // Even when 'admin' is in the allowed list, key-only → null.
   const resultBlocked = await requireRole(ctx, ["department_viewer"]);
-  assert(resultBlocked === null, "role 'admin' not in ['department_viewer'] → requireRole returns null");
+  assert(resultBlocked === null, "key-only caller blocked on ['department_viewer'] → null");
 
-  const resultAllowed = await requireRole(ctx, ["admin"]);
-  assert(resultAllowed !== null, "role 'admin' in ['admin'] → requireRole returns user");
+  const resultAdmin = await requireRole(ctx, ["admin"]);
+  assert(resultAdmin === null, "key-only caller blocked on ['admin'] → null (key is not a session)");
 }
 
 // ─── 3. forbiddenResponse integration ────────────────────────────────────────
@@ -149,14 +157,18 @@ console.log("8. Gate simulation — no-auth + forbidden → 403 status captured"
   assert(dashCtx.capturedStatus === 403, "/api/dashboard gate: no-auth context → 403 status");
 }
 
-// ─── 5. Gate simulation: admin-key → 200 (no 403 fired) ─────────────────────
-console.log("9. Gate simulation — admin-key + in-role → no 403 fired");
+// ─── 5. Gate simulation: admin-key alone → 403 (key is not a session) ────────
+// Previously the admin key granted synthetic admin access through requireRole().
+// Now the key is scoped to /api/admin/* server-to-server routes only.  An
+// admin-key-only caller hitting a role-gated handler gets null from requireRole()
+// (because getSessionUser() returns null) and the gate fires 403.
+console.log("9. Gate simulation — admin-key without session → 403 fired");
 {
   const ctx = makeCtx({ adminKey: TEST_KEY });
   const user = await requireRole(ctx, ["admin"] as any);
   if (!user) forbiddenResponse(ctx);
-  assert(user !== null, "admin-key user passes requireRole for ['admin']");
-  assert(ctx.capturedStatus === 200, "no forbiddenResponse called → status stays 200");
+  assert(user === null, "admin-key-only caller returns null from requireRole (no session)");
+  assert(ctx.capturedStatus === 403, "forbiddenResponse called → status is 403");
 }
 
 // ─── 6. /api/inngest exemption semantics ─────────────────────────────────────
@@ -192,10 +204,12 @@ console.log("10. /api/inngest exemption — dashboardGate skips inngest path");
   await wrappedHandler(noAuthCtx);
   assert(noAuthCtx.capturedStatus === 403, "no-auth request to gated dashboard route → 403");
 
-  const authCtx = makeCtx({ adminKey: TEST_KEY });
-  const authHandler = await gatedOther.createHandler({});
-  await authHandler(authCtx);
-  assert(authCtx.capturedStatus === 200, "admin-key request to gated dashboard route → 200");
+  // Admin-key-only caller → requireRole returns null → gate fires 403.
+  // (requireRole now requires a real session; admin key is not a session identity.)
+  const keyOnlyCtx = makeCtx({ adminKey: TEST_KEY });
+  const keyOnlyHandler = await gatedOther.createHandler({});
+  await keyOnlyHandler(keyOnlyCtx);
+  assert(keyOnlyCtx.capturedStatus === 403, "admin-key-only request to gated dashboard route → 403 (key is not a session)");
 }
 
 // ─── 7. Compliance export canAccessRoute policy ───────────────────────────────

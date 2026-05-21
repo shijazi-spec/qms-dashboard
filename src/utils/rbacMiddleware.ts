@@ -98,17 +98,12 @@ export function getSessionUser(c: any): SessionUser | null {
       picture: session.picture,
     };
   }
-  // Accept admin identity via X-Admin-Key header only (server-to-server / CLI path).
-  // The browser admin-key cookie path has been fully removed (Task #831).
-  // Browser admin access requires OIDC login with the admin platform role.
-  if (hasValidAdminApiKey(c)) {
-    return {
-      userId: 0,
-      email: "admin-key@system",
-      name: "Admin API",
-      role: "admin",
-    };
-  }
+  // The X-Admin-Key header is intentionally NOT accepted here.  It is a
+  // server-to-server credential scoped to /api/admin/* routes and to route
+  // handlers that explicitly call requireAdminOrKey().  Synthesising an admin
+  // identity from the key here would grant it universal access to every
+  // application route that calls getSessionUser(), which violates the intended
+  // trust boundary.  Browser/application routes require a real OIDC session.
   return null;
 }
 
@@ -124,11 +119,12 @@ export async function requireRole(
 ): Promise<SessionUser | null> {
   const user = getSessionUser(c);
   if (!user) return null;
-  if (!hasValidAdminApiKey(c)) {
-    const platformUser = await getPlatformUser(user.email);
-    if (!platformUser || platformUser.status !== "active") return null;
-    user.role = platformUser.role;
-  }
+  // Always verify the live platform role from the DB — the cookie role is not
+  // trusted for access control decisions (a role demotion must take effect
+  // on the next request even if the cookie is still valid).
+  const platformUser = await getPlatformUser(user.email);
+  if (!platformUser || platformUser.status !== "active") return null;
+  user.role = platformUser.role;
   if (!allowedRoles.includes(user.role as UserRole)) return null;
   return user;
 }
@@ -356,26 +352,17 @@ export async function requireRoleOrKey(
   c: any,
   allowedRoles: UserRole[],
 ): Promise<SessionUser | null> {
-  if (hasValidAdminApiKey(c)) {
-    return {
-      userId: 0,
-      email: "api-key@system",
-      name: "API Key Access",
-      role: "admin",
-    };
-  }
+  // X-Admin-Key is NOT accepted here.  The shared admin key is scoped to
+  // /api/admin/* and to handlers that call requireAdminOrKey() explicitly.
+  // Accepting it here would silently grant admin-level access to every
+  // role-gated application route, bypassing intended RBAC boundaries.
   return requireRole(c, allowedRoles);
 }
 
 export function requireAuthOrKey(c: any): SessionUser | null {
-  if (hasValidAdminApiKey(c)) {
-    return {
-      userId: 0,
-      email: "api-key@system",
-      name: "API Key Access",
-      role: "admin",
-    };
-  }
+  // X-Admin-Key is NOT accepted here.  Use requireAdminOrKey() for routes
+  // that are explicitly designed to accept the shared server-to-server key.
+  // Accepting it here bypasses authentication checks on ordinary app routes.
   return getSessionUser(c);
 }
 

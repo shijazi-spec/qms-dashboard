@@ -348,17 +348,19 @@ console.log("Case: header wins over cookie when both supply an admin key");
 }
 console.log();
 
-// ─── getSessionUser: admin-key fallback ───────────────────────────────────────
+// ─── getSessionUser: admin-key is NOT accepted (trust-boundary fix) ───────────
+// The X-Admin-Key header is a server-to-server credential scoped only to
+// /api/admin/* routes and to handlers that explicitly call requireAdminOrKey().
+// It must NOT synthesise an admin identity visible to arbitrary app routes via
+// getSessionUser(), because that would let any key-holder bypass application
+// RBAC by reaching any route that calls getSessionUser() internally.
 
-console.log("Case: getSessionUser — X-Admin-Key present, no session → synthetic admin");
+console.log("Case: getSessionUser — X-Admin-Key present, no session → null (key is not a session)");
 {
   process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
   const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
   const user = getSessionUser(c);
-  assert(user !== null, "getSessionUser returns a non-null user");
-  assertEquals(user?.userId, 0, "synthetic user has userId 0");
-  assertEquals(user?.role, "admin", "synthetic user has role admin");
-  assertEquals(user?.email, "admin-key@system", "synthetic user has admin-key email");
+  assertEquals(user, null, "getSessionUser returns null for admin-key-only requests");
 }
 console.log();
 
@@ -393,14 +395,12 @@ console.log();
 
 // ─── requireAuthOrKey ─────────────────────────────────────────────────────────
 
-console.log("Case: requireAuthOrKey — valid key → synthetic admin");
+console.log("Case: requireAuthOrKey — valid key, no session → null (key is not a session identity)");
 {
   process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
   const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
   const user = requireAuthOrKey(c);
-  assert(user !== null, "requireAuthOrKey returns a non-null user");
-  assertEquals(user?.userId, 0, "synthetic user has userId 0");
-  assertEquals(user?.role, "admin", "synthetic user has role admin");
+  assertEquals(user, null, "requireAuthOrKey returns null for key-only callers; use requireAdminOrKey() instead");
 }
 console.log();
 
@@ -448,24 +448,21 @@ await (async () => {
   }
   console.log();
 
-  console.log("Case: requireRoleOrKey — valid key → synthetic admin, ignores allowedRoles");
+  console.log("Case: requireRoleOrKey — valid key, no session → null (key does not bypass role checks)");
   {
     process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
     const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
     const user = await requireRoleOrKey(c, ["quality_manager"]);
-    assert(user !== null, "requireRoleOrKey returns a non-null user");
-    assertEquals(user?.role, "admin", "synthetic user has role admin");
-    assertEquals(user?.userId, 0, "synthetic user has userId 0");
+    assertEquals(user, null, "requireRoleOrKey returns null for key-only callers; use requireAdminOrKey() for admin-only operations");
   }
   console.log();
 
-  console.log("Case: requireRoleOrKey — valid key wins even when role not in allowedRoles list");
+  console.log("Case: requireRoleOrKey — valid key, no session → null regardless of allowedRoles");
   {
     process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
     const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
-    const user = await requireRoleOrKey(c, ["department_viewer"]);
-    assert(user !== null, "requireRoleOrKey returns a non-null user with empty-ish roles list");
-    assertEquals(user?.role, "admin", "synthetic user still has admin role");
+    const user = await requireRoleOrKey(c, ["admin"]);
+    assertEquals(user, null, "requireRoleOrKey returns null even when admin is in allowedRoles; key is not a session");
   }
   console.log();
 

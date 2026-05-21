@@ -1,20 +1,31 @@
 /**
  * MCP Call Evaluation — backend smoke test
  *
- * Exercises the three new SDR 2.1 governance routes added to
- * src/mastra/routes/callIntelligenceRoutes.ts:
+ * Exercises routes added to src/mastra/routes/callIntelligenceRoutes.ts:
  *
  *   GET  /api/calls/mcp/import-sources
  *   POST /api/calls/mcp/leads/match-phone
  *   GET  /api/calls/mcp/reconciliation/:id
+ *   GET  /api/calls/mcp/scorecard/:id
+ *   POST /api/calls/:id/auto-link-lead
  *
- * Auth pattern mirrors realExportEndpoint.spec.ts: POST /api/admin/auth
- * with ADMIN_API_KEY (or TEST_ADMIN_KEY) and also send the X-Admin-Key
- * header on each request, since verifyCallAccess → requireRoleOrKey
- * recognises the header form.
+ * Security model (post-fix):
+ *   X-Admin-Key is scoped to /api/admin/* routes ONLY.  All /api/calls/mcp/*
+ *   routes are authenticated-user routes that require a real OIDC session.
+ *   An X-Admin-Key header on these routes is rejected with 401 by the global
+ *   middleware before the handler runs.
+ *
+ * This file therefore tests two things:
+ *   1. Unauthenticated requests (no auth at all) → 401.
+ *   2. Admin-key-only requests (X-Admin-Key header, no session) → 401,
+ *      confirming the key is NOT treated as a bypass for application routes.
+ *
+ * Full route-behavior smoke tests (400 input validation, 404 not-found, 200
+ * happy-path) require a real OIDC-issued session and are deferred to the
+ * session-authenticated integration test suite.
  */
 
-import { test, expect, type BrowserContext } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 
@@ -23,64 +34,14 @@ function resolveAdminKey(): string | null {
   return key || null;
 }
 
-async function authenticateAdmin(ctx: BrowserContext, key: string) {
-  const res = await ctx.request.post(`${BASE_URL}/api/admin/auth`, {
-    data: { key },
-    headers: { 'Content-Type': 'application/json' },
-  });
-  expect(res.status(), `admin auth failed: ${res.status()}`).toBe(200);
-}
-
-test.describe('MCP Call Evaluation routes', () => {
+test.describe('MCP Call Evaluation routes — auth enforcement', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeAll(async ({ browser }) => {
-    const key = resolveAdminKey();
-    if (!key) return;
-    const ctx = await browser.newContext();
-    // Single auth shared across the suite to avoid the /api/admin/auth rate limiter.
-    await authenticateAdmin(ctx, key);
-    await ctx.close();
-  });
+  // ── Unauthenticated (no credentials at all) ─────────────────────────────
 
   test('unauthenticated GET /import-sources returns 401', async ({ request }) => {
     const res = await request.get(`${BASE_URL}/api/calls/mcp/import-sources`);
     expect(res.status()).toBe(401);
-  });
-
-  test('authenticated GET /import-sources returns Zoho-Leads catalog', async ({ context, request }) => {
-    const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
-
-    const res = await request.get(`${BASE_URL}/api/calls/mcp/import-sources`, {
-      headers: { 'X-Admin-Key': key! },
-    });
-    expect(res.status()).toBe(200);
-    const body = await res.json();
-    expect(body).toBeTruthy();
-    // Catalog must be an object/array referencing the Zoho-Leads scope.
-    const txt = JSON.stringify(body).toLowerCase();
-    expect(txt).toContain('lead');
-  });
-
-  test('GET /reconciliation/:id with non-numeric id returns 400', async ({ context, request }) => {
-    const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
-
-    const res = await request.get(`${BASE_URL}/api/calls/mcp/reconciliation/abc`, {
-      headers: { 'X-Admin-Key': key! },
-    });
-    expect(res.status()).toBe(400);
-  });
-
-  test('GET /reconciliation/:id with unknown id returns 404', async ({ context, request }) => {
-    const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
-
-    const res = await request.get(`${BASE_URL}/api/calls/mcp/reconciliation/99999999`, {
-      headers: { 'X-Admin-Key': key! },
-    });
-    expect([404, 400]).toContain(res.status());
   });
 
   test('POST /leads/match-phone unauthenticated returns 401', async ({ request }) => {
@@ -92,60 +53,9 @@ test.describe('MCP Call Evaluation routes', () => {
     expect([401, 429]).toContain(res.status());
   });
 
-  test('POST /leads/match-phone authenticated accepts a valid phone', async ({ context, request }) => {
-    const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
-
-    const res = await request.post(`${BASE_URL}/api/calls/mcp/leads/match-phone`, {
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key! },
-      data: { phone: '+966500000000', max_records: 10 },
-    });
-    // Reachability check: handler must run (auth + routing OK) and respond.
-    // - 200 = matched (or empty) result
-    // - 500 = downstream Zoho call missing creds in dev
-    // - 400 = pre-existing dev-only `applyBodySanitization` middleware quirk
-    //   (src/mastra/middleware/index.ts:382-404) that empties POST bodies.
-    //   Documented infrastructure issue affecting ALL POST routes equally,
-    //   not specific to this feature; production deploy is unaffected.
-    expect([200, 400, 500]).toContain(res.status());
-  });
-
-  test('POST /leads/match-phone rejects phone with too few digits (<7)', async ({ context, request }) => {
-    const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
-
-    const res = await request.post(`${BASE_URL}/api/calls/mcp/leads/match-phone`, {
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key! },
-      data: { phone: '12345' },
-    });
-    expect(res.status()).toBe(400);
-    const body = await res.json();
-    expect(JSON.stringify(body).toLowerCase()).toMatch(/digit|phone/);
-  });
-
-  test('GET /mcp/scorecard/:id with non-numeric id returns 400', async ({ request }) => {
-    const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
-
-    const res = await request.get(`${BASE_URL}/api/calls/mcp/scorecard/abc`, {
-      headers: { 'X-Admin-Key': key! },
-    });
-    expect(res.status()).toBe(400);
-  });
-
   test('GET /mcp/scorecard/:id unauthenticated returns 401', async ({ request }) => {
     const res = await request.get(`${BASE_URL}/api/calls/mcp/scorecard/1`);
     expect(res.status()).toBe(401);
-  });
-
-  test('GET /mcp/scorecard/:id with unknown id returns 404', async ({ request }) => {
-    const key = resolveAdminKey();
-    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
-
-    const res = await request.get(`${BASE_URL}/api/calls/mcp/scorecard/99999999`, {
-      headers: { 'X-Admin-Key': key! },
-    });
-    expect([404, 400]).toContain(res.status());
   });
 
   test('POST /:id/auto-link-lead unauthenticated returns 401', async ({ request }) => {
@@ -159,7 +69,53 @@ test.describe('MCP Call Evaluation routes', () => {
     expect([401, 429]).toContain(res.status());
   });
 
-  test('POST /:id/auto-link-lead with unknown id returns 404', async ({ request }) => {
+  // ── Admin-key-only (key present but no session) ─────────────────────────
+  // These tests verify that the X-Admin-Key header alone is NOT treated as a
+  // valid credential for application routes (/api/calls/*).  The key is scoped
+  // exclusively to /api/admin/* server-to-server paths.
+
+  test('GET /import-sources with X-Admin-Key only → 401 (key not a session)', async ({ request }) => {
+    const key = resolveAdminKey();
+    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
+
+    const res = await request.get(`${BASE_URL}/api/calls/mcp/import-sources`, {
+      headers: { 'X-Admin-Key': key! },
+    });
+    expect(res.status(), `expected 401 (key scoped to /api/admin/* only), got ${res.status()}`).toBe(401);
+  });
+
+  test('GET /reconciliation/:id with X-Admin-Key only → 401', async ({ request }) => {
+    const key = resolveAdminKey();
+    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
+
+    const res = await request.get(`${BASE_URL}/api/calls/mcp/reconciliation/99999999`, {
+      headers: { 'X-Admin-Key': key! },
+    });
+    expect(res.status(), `expected 401, got ${res.status()}`).toBe(401);
+  });
+
+  test('POST /leads/match-phone with X-Admin-Key only → 401', async ({ request }) => {
+    const key = resolveAdminKey();
+    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
+
+    const res = await request.post(`${BASE_URL}/api/calls/mcp/leads/match-phone`, {
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key! },
+      data: { phone: '+966500000000', max_records: 10 },
+    });
+    expect(res.status(), `expected 401, got ${res.status()}`).toBe(401);
+  });
+
+  test('GET /mcp/scorecard/:id with X-Admin-Key only → 401', async ({ request }) => {
+    const key = resolveAdminKey();
+    test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
+
+    const res = await request.get(`${BASE_URL}/api/calls/mcp/scorecard/abc`, {
+      headers: { 'X-Admin-Key': key! },
+    });
+    expect(res.status(), `expected 401, got ${res.status()}`).toBe(401);
+  });
+
+  test('POST /:id/auto-link-lead with X-Admin-Key only → 401', async ({ request }) => {
     const key = resolveAdminKey();
     test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
 
@@ -167,8 +123,6 @@ test.describe('MCP Call Evaluation routes', () => {
       headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key! },
       data: {},
     });
-    // 404 in the happy path; 400 acceptable if dev body-sanitization quirk strips body
-    // before id lookup is reached. Either way the route exists and is auth-gated.
-    expect([404, 400]).toContain(res.status());
+    expect(res.status(), `expected 401, got ${res.status()}`).toBe(401);
   });
 });

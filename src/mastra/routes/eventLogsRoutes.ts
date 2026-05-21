@@ -9,6 +9,10 @@ export const eventLogsRoutes = [
           const logger = mastra?.getLogger();
           logger?.info("📋 [EventLogs API] Fetching paginated logs");
 
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
+
           const { getEventLogs, initializeEventLogsTable } =
             await import("../../utils/eventLogsDatabase");
           await initializeEventLogsTable();
@@ -74,6 +78,10 @@ export const eventLogsRoutes = [
         try {
           const logger = mastra?.getLogger();
           logger?.info("📋 [EventLogs API] Fetching log statistics");
+
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
 
           const { getEventLogStats, initializeEventLogsTable } =
             await import("../../utils/eventLogsDatabase");
@@ -218,6 +226,10 @@ export const eventLogsRoutes = [
         try {
           const logger = mastra?.getLogger();
           logger?.info("📋 [EventLogs API] Exporting logs as CSV");
+
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
 
           const { initializeEventLogsTable } =
             await import("../../utils/eventLogsDatabase");
@@ -397,6 +409,10 @@ export const eventLogsRoutes = [
           const logger = mastra?.getLogger();
           const id = parseInt(c.req.param("id"));
           logger?.info("📋 [EventLogs API] Fetching log by ID", { id });
+
+          const { getSessionUser, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          if (!getSessionUser(c)) return unauthorizedResponse(c);
 
           const { getEventLogById, initializeEventLogsTable } =
             await import("../../utils/eventLogsDatabase");

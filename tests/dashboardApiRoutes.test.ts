@@ -19,6 +19,7 @@
 import { dashboardApiRoutes } from "../src/mastra/routes/dashboardApiRoutes";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
+import pg from "pg";
 
 const suite = new TestSuite("dashboardApiRoutes");
 const HAS_DB = !!process.env.DATABASE_URL;
@@ -28,11 +29,53 @@ const HAS_DB = !!process.env.DATABASE_URL;
 // Authentication required`. These tests are exercising the *business
 // logic* of each handler (200 happy paths, 400 validation errors), not
 // the auth layer (which has its own dedicated test in
-// tests/gateApiRoute.test.ts). Bypass the gate by sending the admin API
-// key on every request — the same key real CI/operator scripts use.
-const ADMIN_KEY = process.env.ADMIN_API_KEY || "test-admin-key";
-if (!process.env.ADMIN_API_KEY) process.env.ADMIN_API_KEY = ADMIN_KEY;
-const ADMIN_HEADERS = { "X-Admin-Key": ADMIN_KEY };
+// tests/gateApiRoute.test.ts).
+//
+// Bypass the gate by providing a real signed session cookie.  gateApiRoute
+// uses requireAuthOrKey() → getSessionUser() which reads only the signed
+// cookie (no DB lookup), so a syntactically-valid session is sufficient.
+// The X-Admin-Key header is intentionally NOT used here: it is scoped to
+// /api/admin/* routes and must NOT bypass gateApiRoute on application routes.
+import crypto from "crypto";
+const SESSION_SECRET = process.env.SESSION_SECRET ?? "dashboard-test-secret-2026";
+if (!process.env.SESSION_SECRET) process.env.SESSION_SECRET = SESSION_SECRET;
+
+function dashboardSignSession(payload: Record<string, any>): string {
+  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto.createHmac("sha256", SESSION_SECRET).update(data).digest("base64url");
+  return `${data}.${sig}`;
+}
+
+const SESSION_TOKEN = dashboardSignSession({
+  userId: 1,
+  email: "test-admin@dashboard-test.internal",
+  name: "Test Admin",
+  role: "admin",
+  exp: Date.now() + 3_600_000,
+});
+// Cookie header value: walaplus_session=<url-encoded-token>
+const ADMIN_HEADERS = { Cookie: `walaplus_session=${encodeURIComponent(SESSION_TOKEN)}` };
+
+// The dashboardGate inside these routes calls requireRole() which does a DB
+// lookup in platform_users. Seed a test user so the gate allows the request.
+const DASHBOARD_TEST_EMAIL = "test-admin@dashboard-test.internal";
+let dashboardPool: pg.Pool | null = null;
+
+if (HAS_DB) {
+  dashboardPool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  // Ensure the test user exists with role=admin, status=active.
+  await dashboardPool.query(
+    `INSERT INTO platform_users (email, full_name, role, status)
+     VALUES ($1, 'Test Admin', 'admin', 'active')
+     ON CONFLICT (email) DO UPDATE SET role = 'admin', status = 'active'`,
+    [DASHBOARD_TEST_EMAIL],
+  );
+  // Clear any in-process cache so the fresh DB row is picked up.
+  try {
+    const { invalidatePlatformUserCache } = await import("../src/utils/rbacMiddleware");
+    invalidatePlatformUserCache(DASHBOARD_TEST_EMAIL);
+  } catch {}
+}
 
 console.log("\n=== dashboardApiRoutes integration tests ===\n");
 
@@ -130,6 +173,21 @@ await suite.test("GET /api/agents/performance — 400 when modifiedStart is afte
 // produce flaky failures (e.g. 500 from Zoho rate-limiting). The four 400
 // validation tests above already exercise the route's input-validation paths
 // deterministically without any external dependency.
-void HAS_DB;
+
+// Cleanup: remove the seeded platform_users row and close the pool.
+if (dashboardPool) {
+  await suite.test("cleanup: remove seeded platform_users row", async () => {
+    try {
+      await dashboardPool!.query(
+        `DELETE FROM platform_users WHERE email = $1`,
+        [DASHBOARD_TEST_EMAIL],
+      );
+    } catch (err) {
+      console.warn("[dashboardApiRoutes test] cleanup failed:", err);
+    } finally {
+      await dashboardPool!.end().catch(() => {});
+    }
+  });
+}
 
 suite.finishOrExit();

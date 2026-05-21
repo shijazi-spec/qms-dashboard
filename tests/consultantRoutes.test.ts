@@ -27,10 +27,33 @@ import { buildHandler, makeContext, type FakeContext } from "./_helpers/fakeCont
 
 const { Pool } = pg;
 const HAS_DB = !!process.env.DATABASE_URL;
-// Long-enough random key — getSessionUser/hasValidAdminApiKey only check
-// equality with ADMIN_API_KEY, so any opaque value works for the test
-// session. Mirrors the ADMIN_KEY used by tests/aiOpsRoutes.test.ts.
-const ADMIN_KEY = "integration-test-consultant-feedback-2026";
+// Test session credentials — used to authenticate happy-path requests that
+// call requireRole() inside the handler (which now always does a DB lookup).
+// A platform_users row is seeded before the DB-backed tests run and torn down
+// in the cleanup step at the end.
+const TEST_SESSION_SECRET = process.env.SESSION_SECRET ?? "consultant-test-secret-2026";
+if (!process.env.SESSION_SECRET) process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+const TEST_AUTH_EMAIL = "test-admin@walaplus-consultant-test.internal";
+const TEST_AUTH_ROLE = "admin"; // admin role: can access consultant routes and sees isAdmin=true in feedback stats
+
+import crypto from "crypto";
+
+function consultantSignSession(payload: Record<string, any>): string {
+  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto.createHmac("sha256", TEST_SESSION_SECRET).update(data).digest("base64url");
+  return `${data}.${sig}`;
+}
+
+function makeSessionCookieHeader(): string {
+  const token = consultantSignSession({
+    userId: 9999,
+    email: TEST_AUTH_EMAIL,
+    name: "Test AI Specialist",
+    role: TEST_AUTH_ROLE,
+    exp: Date.now() + 3_600_000,
+  });
+  return `walaplus_session=${encodeURIComponent(token)}`;
+}
 
 const suite = new TestSuite("consultantRoutes");
 
@@ -77,17 +100,25 @@ for (const route of apiRoutes) {
 // handler against a live `ai_response_feedback` row to lock in that the
 // JSONB metadata column is actually populated end-to-end.
 //
-// Auth: we reuse the X-Admin-Key path the other tests use. Both
-// getSessionUser() and hasValidAdminApiKey() are satisfied by setting
-// ADMIN_API_KEY === the value sent in the X-Admin-Key header, which gives
-// us a synthetic admin SessionUser without depending on platform_users
-// rows being seeded in the test DB.
+// Auth: happy-path tests use a signed session cookie that authenticates as
+// TEST_AUTH_EMAIL (ai_specialist role).  The handler calls requireRole() which
+// reads the session and then looks up the user in platform_users.  We seed
+// one platform_users row for TEST_AUTH_EMAIL with status='active' before the
+// tests and delete it in the cleanup step.
 // ---------------------------------------------------------------------------
 if (!HAS_DB) {
   console.log("\n(skipping happy-path feedback metadata tests — DATABASE_URL not set)\n");
 } else {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const seededMessageIds: string[] = [];
+
+  // Seed a platform_users row so requireRole() can verify the test user.
+  await pool.query(
+    `INSERT INTO platform_users (email, full_name, role, status)
+     VALUES ($1, $2, $3, 'active')
+     ON CONFLICT (email) DO UPDATE SET role = $3, status = 'active'`,
+    [TEST_AUTH_EMAIL, "Test AI Specialist", TEST_AUTH_ROLE],
+  );
 
   const fetchMetadata = async (messageId: string): Promise<Record<string, unknown> | null> => {
     const res = await pool.query(
@@ -102,24 +133,17 @@ if (!HAS_DB) {
   };
 
   const postFeedback = async (body: Record<string, unknown>) => {
-    const original = process.env.ADMIN_API_KEY;
-    process.env.ADMIN_API_KEY = ADMIN_KEY;
-    try {
-      const handler = await buildHandler(
-        consultantRoutes,
-        "/api/consultant/feedback",
-        "POST",
-      );
-      const ctx = makeContext({
-        method: "POST",
-        headers: { "X-Admin-Key": ADMIN_KEY },
-        body,
-      });
-      return await handler(ctx);
-    } finally {
-      if (original === undefined) delete process.env.ADMIN_API_KEY;
-      else process.env.ADMIN_API_KEY = original;
-    }
+    const handler = await buildHandler(
+      consultantRoutes,
+      "/api/consultant/feedback",
+      "POST",
+    );
+    const ctx = makeContext({
+      method: "POST",
+      headers: { Cookie: makeSessionCookieHeader() },
+      body,
+    });
+    return await handler(ctx);
   };
 
   await suite.test(
@@ -307,10 +331,8 @@ if (!HAS_DB) {
         [ids[3]],
       );
 
-      const original = process.env.ADMIN_API_KEY;
-      process.env.ADMIN_API_KEY = ADMIN_KEY;
       let res;
-      try {
+      {
         const handler = await buildHandler(
           consultantRoutes,
           "/api/consultant/feedback/stats",
@@ -318,13 +340,10 @@ if (!HAS_DB) {
         );
         const ctx = makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: makeSessionCookieHeader() },
           query: { days: "30" },
         });
         res = await handler(ctx);
-      } finally {
-        if (original === undefined) delete process.env.ADMIN_API_KEY;
-        else process.env.ADMIN_API_KEY = original;
       }
 
       suite.expectEqual(res.status, 200, "status");
@@ -391,10 +410,8 @@ if (!HAS_DB) {
         [messageIdLegacy],
       );
 
-      const original = process.env.ADMIN_API_KEY;
-      process.env.ADMIN_API_KEY = ADMIN_KEY;
       let res;
-      try {
+      {
         const handler = await buildHandler(
           consultantRoutes,
           "/api/consultant/feedback/stats",
@@ -402,12 +419,9 @@ if (!HAS_DB) {
         );
         const ctx = makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: makeSessionCookieHeader() },
         });
         res = await handler(ctx);
-      } finally {
-        if (original === undefined) delete process.env.ADMIN_API_KEY;
-        else process.env.ADMIN_API_KEY = original;
       }
 
       suite.expectEqual(res.status, 200, "status");
@@ -485,10 +499,8 @@ if (!HAS_DB) {
         [ids[3]],
       );
 
-      const original = process.env.ADMIN_API_KEY;
-      process.env.ADMIN_API_KEY = ADMIN_KEY;
       let res;
-      try {
+      {
         const handler = await buildHandler(
           consultantRoutes,
           "/api/consultant/feedback/stats",
@@ -496,13 +508,10 @@ if (!HAS_DB) {
         );
         const ctx = makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: makeSessionCookieHeader() },
           query: { days: "30" },
         });
         res = await handler(ctx);
-      } finally {
-        if (original === undefined) delete process.env.ADMIN_API_KEY;
-        else process.env.ADMIN_API_KEY = original;
       }
 
       suite.expectEqual(res.status, 200, "status");
@@ -587,10 +596,8 @@ if (!HAS_DB) {
         [ids[3]],
       );
 
-      const original = process.env.ADMIN_API_KEY;
-      process.env.ADMIN_API_KEY = ADMIN_KEY;
       let res;
-      try {
+      {
         const handler = await buildHandler(
           consultantRoutes,
           "/api/consultant/feedback/stats",
@@ -598,15 +605,11 @@ if (!HAS_DB) {
         );
         const ctx = makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: makeSessionCookieHeader() },
           query: { days: "30" },
         });
         res = await handler(ctx);
-      } finally {
-        if (original === undefined) delete process.env.ADMIN_API_KEY;
-        else process.env.ADMIN_API_KEY = original;
       }
-
       suite.expectEqual(res.status, 200, "status");
       const xtabRaw: unknown = res.body?.stats?.prompt_version_surfaces;
       suite.expect(Array.isArray(xtabRaw), "stats.prompt_version_surfaces is an array");
@@ -652,10 +655,16 @@ if (!HAS_DB) {
   // failure doesn't mask the real test result.
   await suite.test("cleanup: delete seeded ai_response_feedback rows", async () => {
     try {
-      if (seededMessageIds.length === 0) return;
+      if (seededMessageIds.length > 0) {
+        await pool.query(
+          `DELETE FROM ai_response_feedback WHERE message_id = ANY($1::text[])`,
+          [seededMessageIds],
+        );
+      }
+      // Remove the platform_users row we seeded for the test session.
       await pool.query(
-        `DELETE FROM ai_response_feedback WHERE message_id = ANY($1::text[])`,
-        [seededMessageIds],
+        `DELETE FROM platform_users WHERE email = $1`,
+        [TEST_AUTH_EMAIL],
       );
     } catch (err) {
       console.warn("[consultantRoutes test] cleanup failed:", err);

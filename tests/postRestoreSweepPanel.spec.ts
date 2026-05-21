@@ -57,10 +57,37 @@
 
 import { test, expect, request as pwRequest } from '@playwright/test';
 import pg from 'pg';
+import crypto from 'crypto';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 const ADMIN_KEY = process.env.ADMIN_API_KEY || process.env.TEST_ADMIN_KEY || '';
 const DATABASE_URL = process.env.DATABASE_URL || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || '';
+
+// Signed session cookie so the browser can authenticate against
+// application-level routes (e.g. GET /api/logs) that now require a real OIDC
+// session rather than an X-Admin-Key header.  X-Admin-Key is still used by
+// apiCtx for /api/admin/* routes, which remain key-accessible.
+const E2E_SESSION_EMAIL = 'test-admin@postrestoresweep-e2e.internal';
+
+function signE2ESession(): string {
+  if (!SESSION_SECRET) return '';
+  const payload = {
+    userId: 0,
+    email: E2E_SESSION_EMAIL,
+    name: 'E2E Test Admin',
+    role: 'admin',
+    exp: Date.now() + 86_400_000,
+  };
+  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
+  return `${data}.${sig}`;
+}
+
+const E2E_SESSION_TOKEN = signE2ESession();
+const E2E_SESSION_COOKIE = E2E_SESSION_TOKEN
+  ? `walaplus_session=${encodeURIComponent(E2E_SESSION_TOKEN)}`
+  : '';
 
 const ALERTS_PATH = '/api/admin/redaction-sweep/alerts';
 const SWEEP_MODULE = 'security/redaction-sweep';
@@ -177,6 +204,16 @@ test.describe('Post-restore sweep alerts panel — /logs (Task #657)', () => {
     // intermittent HTTP 429 failures when this workflow restarts back-to-back.
 
     pool = new pg.Pool({ connectionString: DATABASE_URL });
+    // Seed a platform_users row for the E2E session email so requireRole()
+    // and enforceRoutePermission() can verify the user on /api/logs calls.
+    if (E2E_SESSION_COOKIE) {
+      await pool.query(
+        `INSERT INTO platform_users (email, full_name, role, status)
+         VALUES ($1, 'E2E Test Admin', 'admin', 'active')
+         ON CONFLICT (email) DO UPDATE SET role = 'admin', status = 'active'`,
+        [E2E_SESSION_EMAIL],
+      );
+    }
     await ensureNotificationsTableInitialized();
     await seedFixtures();
   });
@@ -184,6 +221,10 @@ test.describe('Post-restore sweep alerts panel — /logs (Task #657)', () => {
   test.afterAll(async () => {
     try {
       await cleanupFixtures();
+      // Remove the E2E platform_users row seeded for session auth.
+      if (pool && E2E_SESSION_COOKIE) {
+        await pool.query(`DELETE FROM platform_users WHERE email = $1`, [E2E_SESSION_EMAIL]);
+      }
     } finally {
       if (pool) await pool.end();
       pool = null;
@@ -191,11 +232,15 @@ test.describe('Post-restore sweep alerts panel — /logs (Task #657)', () => {
     }
   });
 
-  // Pin admin auth on every browser request — both the page load AND the
-  // AJAX calls fired by logs.html (GET /api/admin/redaction-sweep/alerts,
-  // GET /api/logs) need to be admin-authorized.
+  // Pin auth on every browser request:
+  //   - X-Admin-Key for /api/admin/* routes (redaction-sweep alerts panel)
+  //   - walaplus_session cookie for application routes like GET /api/logs
+  //     which now require a real session rather than an admin key.
   test.use({
-    extraHTTPHeaders: ADMIN_KEY ? { 'X-Admin-Key': ADMIN_KEY } : {},
+    extraHTTPHeaders: {
+      ...(ADMIN_KEY ? { 'X-Admin-Key': ADMIN_KEY } : {}),
+      ...(E2E_SESSION_COOKIE ? { Cookie: E2E_SESSION_COOKIE } : {}),
+    },
   });
 
   test('Panel renders with the correct badge count and lists the seeded alert', async ({ page }) => {

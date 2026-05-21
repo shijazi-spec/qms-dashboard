@@ -90,7 +90,11 @@ await suite.test("GET /api/health-index — 403 with no session and no admin key
   }
 });
 
-await suite.test("GET /api/health-index — passes auth gate with X-Admin-Key header", async () => {
+await suite.test("GET /api/health-index — X-Admin-Key alone is rejected (key is not a session)", async () => {
+  // The shared X-Admin-Key is scoped to /api/admin/* routes. /api/health-index
+  // uses requireRoleOrKey() which now requires a real user session; a key-only
+  // caller must receive 401 so that monitoring jobs or integrations that know
+  // the key cannot read organisation-wide quality/compliance aggregates.
   const handler = await buildHandler(notificationRoutes, "/api/health-index", "GET");
   const prevAdmin = process.env.ADMIN_API_KEY;
   const ADMIN_KEY = "test-health-index-admin-key-do-not-leak-0002";
@@ -99,23 +103,10 @@ await suite.test("GET /api/health-index — passes auth gate with X-Admin-Key he
     const res = await handler(
       makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
     );
-    // The auth gate must let this request through. Whether the DB query
-    // succeeds depends on the test environment, so we accept either:
-    //   200 → handler computed a healthIndex
-    //   500 → DB unreachable / pg pool failure (still past the auth gate)
-    // We must NOT see 401 or 403 here — that would mean the gate rejected a
-    // valid admin key.
     suite.expect(
-      res.status !== 401 && res.status !== 403,
-      `expected non-401/403, got ${res.status}`,
+      res.status === 401 || res.status === 403,
+      `expected 401 or 403 for key-only caller, got ${res.status}`,
     );
-    if (res.status === 200) {
-      suite.expect(typeof res.body?.healthIndex === "number", "body.healthIndex is number");
-      suite.expect(typeof res.body?.healthStatus === "string", "body.healthStatus is string");
-    } else {
-      suite.expectEqual(res.status, 500, "status 500 fallback");
-      suite.expect(typeof res.body?.error === "string", "body.error is string");
-    }
   } finally {
     if (prevAdmin === undefined) delete process.env.ADMIN_API_KEY;
     else process.env.ADMIN_API_KEY = prevAdmin;

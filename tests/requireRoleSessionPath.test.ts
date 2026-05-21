@@ -354,25 +354,24 @@ console.log(
 }
 console.log();
 
-// ─── Admin-key short-circuit: with a valid key, DB is NOT consulted ───
+// ─── Admin-key path: key-only callers are rejected by requireRole ───
+// The X-Admin-Key header is scoped to /api/admin/* routes and handlers that
+// explicitly call requireAdminOrKey(). requireRole() delegates to
+// getSessionUser(), which no longer synthesises a session from the key, so
+// key-only callers receive null without any DB lookup.
 console.log(
-  "Case: valid X-Admin-Key short-circuits past getPlatformUser (no DB query)"
+  "Case: X-Admin-Key alone → requireRole returns null (no session, no DB query)"
 );
 {
-  // Pre-arm the stub to return an *inactive* row — if the key path
-  // erroneously consulted the DB, this test would still pass only
-  // because the inactive check would block it. To make the assertion
-  // unambiguous we instead assert the call count is 0.
-  setPlatformRow("admin-key@system", { status: "disabled", role: "admin" });
+  setPlatformRow("nobody@example.com", { status: "active", role: "admin" });
   stub.callCount = 0;
   const c = makeContext({ adminKeyHeader: TEST_ADMIN_KEY });
   const user = await requireRole(c, ["admin"]);
-  assert(user !== null, "requireRole returned the synthetic admin-key user");
-  assertEquals(user?.role, "admin", "synthetic user has admin role");
+  assertEquals(user, null, "requireRole returns null for key-only callers");
   assertEquals(
     stub.callCount,
     0,
-    "platform_users query was not issued on the admin-key path"
+    "platform_users was not queried (cheap reject via getSessionUser() returning null)"
   );
 }
 console.log();
