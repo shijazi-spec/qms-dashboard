@@ -1,1 +1,1 @@
-- [Dev/prod DB parity](dev-prod-db-parity.md) — schema-only Publish; manage admin via ADMIN_BOOTSTRAP_EMAILS, not DB edits.
+- [Dev/prod DB parity](dev-prod-db-parity.md) — manual sync procedure (executeSql notebook) and nightly Inngest cron for prod→dev table mirroring; argv-limit and live-write gotchas

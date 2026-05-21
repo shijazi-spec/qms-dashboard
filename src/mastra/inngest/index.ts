@@ -5,6 +5,7 @@ import { type Mastra } from "@mastra/core";
 import { type Inngest, InngestFunction, NonRetriableError } from "inngest";
 import { toolHealthAlertsCronFunction } from "../workflows/toolHealthAlertsCron";
 import { promptRegressionAlertsCronFunction } from "../workflows/promptRegressionAlertsCron";
+import { prodToDevSyncFunction } from "../workflows/prodToDevSyncCron";
 
 import { logger } from "../../utils/logger";
 // Initialize Inngest with Mastra to get Inngest-compatible workflow helpers
@@ -1266,6 +1267,14 @@ inngestFunctions.push(toolHealthAlertsCronFunction);
 // dashboard).
 // ──────────────────────────────────────────────────────────────────────────────
 inngestFunctions.push(promptRegressionAlertsCronFunction);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Nightly prod → dev DB sync — defined in workflows/prodToDevSyncCron.ts.
+// Fail-closed: never runs in production, skips when PROD_DATABASE_URL is unset
+// or equals DATABASE_URL. Truncates + reloads a fixed list of business tables
+// so the dev preview mirrors production each morning.
+// ──────────────────────────────────────────────────────────────────────────────
+inngestFunctions.push(prodToDevSyncFunction);
 
 async function runExecutiveDigestCadence(
   cadence: "weekly" | "monthly" | "quarterly",
