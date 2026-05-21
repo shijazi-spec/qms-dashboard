@@ -282,8 +282,12 @@ const _dashboardApiRoutesRaw = [
             1,
             Math.min(parseInt(c.req.query("limit") || "30"), 90),
           );
+          // Skip "ghost audits" (total_records_audited = 0, from the
+          // directAuditRunner fallback path) so the trend chart reflects real
+          // scans only. Otherwise a run of zero-record fallback rows visually
+          // crashes the chart to zero across all modules.
           const res = await pool.query(
-            `SELECT * FROM (SELECT audit_date, issues_by_category FROM quality_audit_results ORDER BY audit_date DESC LIMIT $1) latest ORDER BY audit_date ASC`,
+            `SELECT * FROM (SELECT audit_date, issues_by_category FROM quality_audit_results WHERE total_records_audited > 0 ORDER BY audit_date DESC LIMIT $1) latest ORDER BY audit_date ASC`,
             [limit],
           );
           const modules = ["Deals", "Contacts", "Leads", "Accounts"];

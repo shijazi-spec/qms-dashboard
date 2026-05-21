@@ -166,7 +166,31 @@
         .history-scroll {
             max-height: 480px;
             overflow-y: auto;
+            /* overflow-x kept as auto for very narrow viewports, but the
+               cell-padding + wrap rules below let the table fit at typical
+               desktop widths without horizontal scrolling. */
             overflow-x: auto;
+        }
+        .history-scroll table {
+            width: 100%;
+            table-layout: auto;
+        }
+        /* Tighten the Tailwind px-6 / py-4 cell padding so all 8 columns
+           fit the container — score columns stay nowrap, only the wide
+           "Period Covered" cell wraps. */
+        .history-scroll table th,
+        .history-scroll table td {
+            padding-left: 0.625rem;
+            padding-right: 0.625rem;
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        .history-scroll table td:nth-child(2),
+        .history-scroll table th:nth-child(2) {
+            white-space: normal;
+            word-break: break-word;
+            min-width: 9rem;
+            max-width: 14rem;
         }
         .history-scroll table thead th {
             position: sticky;

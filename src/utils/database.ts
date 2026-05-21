@@ -472,13 +472,27 @@ function buildAuditDateRangeClause(
   return { clause, params };
 }
 
+// Skip "ghost audits" — rows with total_records_audited = 0 created when
+// directAuditRunner falls back (missing Zoho credentials, transient fetch
+// failures). They carry default scores (72%/75%/68%/72%) and pollute the
+// dashboard summary / latest-audit views. Callers needing the raw history
+// (debug / forensics) opt in via includeEmpty: true.
+function appendGhostFilter(clause: string, includeEmpty?: boolean): string {
+  if (includeEmpty) return clause;
+  return clause
+    ? `${clause} AND total_records_audited > 0`
+    : ` WHERE total_records_audited > 0`;
+}
+
 export async function getLatestAuditResult(opts?: {
   startDate?: string | null;
   endDate?: string | null;
+  includeEmpty?: boolean;
 }): Promise<QualityAuditResult | null> {
   const { clause, params } = buildAuditDateRangeClause(opts, 1);
+  const fullClause = appendGhostFilter(clause, opts?.includeEmpty);
   const result = await pool.query(
-    `SELECT * FROM quality_audit_results${clause} ORDER BY audit_date DESC LIMIT 1`,
+    `SELECT * FROM quality_audit_results${fullClause} ORDER BY audit_date DESC LIMIT 1`,
     params,
   );
   return result.rows[0] || null;
@@ -486,12 +500,17 @@ export async function getLatestAuditResult(opts?: {
 
 export async function getAuditHistory(
   limit: number = 10,
-  opts?: { startDate?: string | null; endDate?: string | null },
+  opts?: {
+    startDate?: string | null;
+    endDate?: string | null;
+    includeEmpty?: boolean;
+  },
 ): Promise<QualityAuditResult[]> {
   const { clause, params } = buildAuditDateRangeClause(opts, 1);
+  const fullClause = appendGhostFilter(clause, opts?.includeEmpty);
   params.push(limit);
   const result = await pool.query(
-    `SELECT * FROM quality_audit_results${clause} ORDER BY audit_date DESC LIMIT $${params.length}`,
+    `SELECT * FROM quality_audit_results${fullClause} ORDER BY audit_date DESC LIMIT $${params.length}`,
     params,
   );
   return result.rows;
