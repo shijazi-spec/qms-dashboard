@@ -286,8 +286,13 @@ WalaPlus Enterprise GRC & Quality Management Platform is an enterprise-grade sys
   - Priority levels
 - AI Scope Generator:
   - Generates project scope documents using GPT-4o
+- **Team Performance Scorecards (GRQ scope — deferred, see [§4.1.2](#412-grq-role-based-scorecard-management-api-new-in-v21) + [§5.15](#515-grq-role-based-scorecard-tables-new-in-v21)):**
+  - Per-role KPI scorecards for GRQ team members with platform access
+  - In-scope roles: `head_of_operations_quality` (Head of Ops & GRQ), `quality_manager`, `grc_manager`, `quality_specialist` (GRQ Specialist)
+  - Each scorecard follows the Mohammed pattern: weighted KPIs with current value, target, RAG status, trend, navigation_map, and data_sources
+  - Surfaced as the "Team Performance" tab within `/team` once delivered — not as a standalone `/scorecard` page
 
-**Tabs:** Overview, Team Members, Training Courses, Training Matrix, Projects, Analytics
+**Tabs:** Overview, Team Members, Training Courses, Training Matrix, Projects, Analytics, **Team Performance** *(scorecards — deferred)*
 
 ---
 
@@ -456,6 +461,8 @@ WalaPlus Enterprise GRC & Quality Management Platform is an enterprise-grade sys
 > **Intent:** The scorecard system is a tracking surface for **all KPIs assigned to each GRQ team role** — one scorecard per role (Quality Manager, GRC Manager, Quality & GRC Governance Officer, Quality Specialist, Auditor, AI Specialist, Head of Operations & Quality, etc.). Each scorecard carries the KPIs relevant to that role on the same pattern shipped today for Mohammed: weighted KPIs with current value, target, RAG status, trend, navigation_map (drill-down path), and data_sources. The endpoints below are what an Admin needs to author, version, and activate those role scorecards from the platform UI.
 >
 > **Current state:** Only `getMohammedScorecard()` is implemented (`src/mastra/routes/scorecardRoutes.ts:77`), serving the **single Quality & GRC Governance Officer scorecard** for Mohammed Al Muzaini with 6 hard-coded KPIs (see [MOHAMMED_SCOPE_OF_WORK.md](./MOHAMMED_SCOPE_OF_WORK.md)). The remaining GRQ team roles have **no scorecard surface**. The endpoints below — CRUD per role, activate, clone, attribute management — are not built, and the §5.15 schema is not yet created in the database.
+>
+> **Placement (when built):** Lives inside the Quality Team Performance Tracker (§3.7) as a new "Team Performance" tab within `/team` — **not** as a standalone `/scorecard` page. Audience is restricted to GRQ team members with platform access: `head_of_operations_quality`, `quality_manager`, `grc_manager`, `quality_specialist`. The `/scorecard` page may be retired or redirected once Team Performance ships.
 >
 > **Resolution path:** Either (a) extend the Mohammed pattern role-by-role into the schema in §5.15, (b) descope the role-based scorecard from the SoW, or (c) re-baseline before v2.3. The pattern itself is sound — only the multiplexing across roles is missing.
 
@@ -1234,7 +1241,7 @@ ALTER TABLE enterprise_risks ADD COLUMN grc_approval_required BOOLEAN DEFAULT FA
 
 ### 5.15 GRQ Role-Based Scorecard Tables (NEW in v2.1)
 
-> **DELIVERY STATUS — DEFERRED (as of v2.2 / 2026-05-21):** Tables below back the role-based scorecard system described in §4.1.2 — one `quality_scorecards` row per GRQ team role, with each role's KPIs broken out into `scorecard_attributes`. Tables are **not yet created** in the live database. The platform today uses only the single-employee `employee_scorecards` table (`src/utils/scorecardDatabase.ts:49`), which stores the Mohammed scorecard as a row with `kpi_details` JSONB rather than as relational attributes. Paired with the deferred API in §4.1.2; resolve together.
+> **DELIVERY STATUS — DEFERRED (as of v2.2 / 2026-05-21):** Tables below back the role-based scorecard system described in §4.1.2 — one `quality_scorecards` row per GRQ team role, with each role's KPIs broken out into `scorecard_attributes`. Tables are **not yet created** in the live database. The platform today uses only the single-employee `employee_scorecards` table (`src/utils/scorecardDatabase.ts:49`), which stores the Mohammed scorecard as a row with `kpi_details` JSONB rather than as relational attributes. Paired with the deferred API in §4.1.2; resolve together. When built, the data surfaces under §3.7's "Team Performance" tab and is scoped to GRQ roles: `head_of_operations_quality`, `quality_manager`, `grc_manager`, `quality_specialist`.
 
 **quality_scorecards**
 ```sql
