@@ -1,0 +1,1 @@
+- [Dev/prod DB parity](dev-prod-db-parity.md) — schema-only Publish; manage admin via ADMIN_BOOTSTRAP_EMAILS, not DB edits.

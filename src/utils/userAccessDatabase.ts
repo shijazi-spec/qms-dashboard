@@ -95,12 +95,41 @@ async function ensureOidcAuthTables(): Promise<void> {
 }
 
 /**
+ * Returns the lowercased set of admin emails declared via the
+ * `ADMIN_BOOTSTRAP_EMAILS` environment variable (comma- or whitespace-
+ * separated). Used by `upsertOidcUser()` to auto-promote configured
+ * operators to `admin`/`active` on OIDC login so role state survives
+ * fresh deployments and DB resets.
+ *
+ * Exported for unit tests; production callers should go through
+ * `upsertOidcUser()`.
+ */
+export function getAdminBootstrapEmails(): Set<string> {
+  const raw = process.env.ADMIN_BOOTSTRAP_EMAILS;
+  if (!raw) return new Set();
+  return new Set(
+    raw
+      .split(/[\s,]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => e.length > 0 && e.includes("@")),
+  );
+}
+
+/**
  * Upsert a `platform_users` row from an OIDC profile callback.
  *
  * Free-text fields are scrubbed via `redactSensitiveDeep()` BEFORE any
  * SELECT/INSERT/UPDATE so a hostile or misconfigured upstream IdP cannot
  * smuggle a `password_hash`, `access_token`, JWT, GitHub PAT (`ghp_…`) or
  * `sk-…` token into `full_name` / `picture`.
+ *
+ * Admin bootstrap: if the caller's email is listed in the
+ * `ADMIN_BOOTSTRAP_EMAILS` env var (comma/space-separated), the row is
+ * created or upgraded to `role='admin'` / `status='active'` instead of the
+ * default `department_viewer` / `pending_approval`. This is the supported
+ * way to seed admin access on a fresh production database — managing role
+ * state via env vars keeps dev and prod in sync across republishes,
+ * whereas DB-only role edits drift the first time prod is reseeded.
  */
 export async function upsertOidcUser(profile: {
   sub: string;
@@ -111,6 +140,10 @@ export async function upsertOidcUser(profile: {
   await ensureOidcAuthTables();
 
   const safeProfile = redactSensitiveDeep(profile) as typeof profile;
+  const bootstrapEmails = getAdminBootstrapEmails();
+  const isBootstrapAdmin = bootstrapEmails.has(
+    safeProfile.email.toLowerCase(),
+  );
 
   const existing = await pool.query(
     "SELECT * FROM platform_users WHERE email = $1",
@@ -119,6 +152,25 @@ export async function upsertOidcUser(profile: {
 
   if (existing.rows.length > 0) {
     const existingUser = existing.rows[0];
+
+    if (isBootstrapAdmin) {
+      const result = await pool.query(
+        `UPDATE platform_users
+         SET google_id = $1, full_name = $2, picture = $3, auth_provider = 'replit',
+             role = 'admin', status = 'active',
+             last_login_at = NOW(), login_count = login_count + 1, updated_at = NOW()
+         WHERE email = $4
+         RETURNING *`,
+        [
+          safeProfile.sub,
+          safeProfile.name,
+          safeProfile.picture,
+          safeProfile.email,
+        ],
+      );
+      return result.rows[0] || existingUser;
+    }
+
     if (existingUser.status !== "active") {
       return existingUser;
     }
@@ -137,15 +189,19 @@ export async function upsertOidcUser(profile: {
     );
     return result.rows[0] || existingUser;
   } else {
+    const role = isBootstrapAdmin ? "admin" : "department_viewer";
+    const status = isBootstrapAdmin ? "active" : "pending_approval";
     const result = await pool.query(
       `INSERT INTO platform_users (email, full_name, google_id, picture, auth_provider, team, role, status, mfa_enabled, login_count, last_login_at)
-       VALUES ($1, $2, $3, $4, 'replit', 'Other', 'department_viewer', 'pending_approval', false, 0, NOW())
+       VALUES ($1, $2, $3, $4, 'replit', 'Other', $5, $6, false, 0, NOW())
        RETURNING *`,
       [
         safeProfile.email,
         safeProfile.name,
         safeProfile.sub,
         safeProfile.picture,
+        role,
+        status,
       ],
     );
     return result.rows[0];
