@@ -269,7 +269,18 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
   // tab — rate-limiting it produces user-visible 429s and test flakes for
   // a no-op endpoint. Bypass the limiter for this exact path only.
   const isLanguagePreference = urlPath === '/api/user/language-preference';
-  const rateCheck = isLanguagePreference
+  // Authenticated batch-upload endpoints. The 10-write/min default is too
+  // tight for legitimate SDR call-recording batches (typical session uploads
+  // 20–50 .wav files at once). Auth + session checks downstream still apply,
+  // so abuse risk is bounded to a logged-in user's own work.
+  const isBatchCallUpload =
+    isAuthenticated &&
+    (urlPath === '/api/calls/upload' ||
+      urlPath === '/api/calls/upload-audio' ||
+      urlPath.startsWith('/api/calls/upload/') ||
+      urlPath.startsWith('/api/calls/upload-audio/'));
+  const skipRateLimit = isLanguagePreference || isBatchCallUpload;
+  const rateCheck = skipRateLimit
     ? { allowed: true as const }
     : await checkRateLimit(ip, isWrite, urlPath, isAuthenticated, session?.userId ? String(session.userId) : undefined);
   if (!rateCheck.allowed) {

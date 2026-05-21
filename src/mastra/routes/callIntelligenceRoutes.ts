@@ -1308,11 +1308,30 @@ ${transcriptText}
               analysisStatus = "analyzed";
               logger?.info("✅ [API] Full analysis completed", { callId });
             } catch (analysisError) {
+              const errAny: any = analysisError;
+              const errMsg =
+                errAny?.message ??
+                (typeof errAny === "string" ? errAny : "Unknown error");
+              const errCode = errAny?.code || errAny?.statusCode || errAny?.status;
               logger?.error("❌ [API] Analysis failed", {
-                error: analysisError,
+                callId,
+                error: errMsg,
+                code: errCode,
+                stack: errAny?.stack,
               });
-              await updateCallRecord(callId, { status: "pending" });
+              await updateCallRecord(callId, {
+                status: "pending",
+                ai_insights: JSON.stringify({
+                  last_analysis_error: errMsg,
+                  last_analysis_error_code: errCode || null,
+                  last_analysis_attempted_at: new Date().toISOString(),
+                }),
+              });
               analysisStatus = "analysis_failed";
+              // Bubble the reason up to the caller so the upload-results UI
+              // can show "analysis_failed: <reason>" instead of an opaque
+              // "analysis_failed". The upload itself still succeeded.
+              (analysisStatus as any) = `analysis_failed: ${errMsg}`;
             }
           }
 
@@ -1322,7 +1341,9 @@ ${transcriptText}
             call_id: callRecord.call_id,
             analysis_status: analysisStatus,
             message: autoAnalyze
-              ? "Call uploaded and analysis completed"
+              ? analysisStatus === "analyzed"
+                ? "Call uploaded and analysis completed"
+                : `Call uploaded, analysis did not complete (${analysisStatus})`
               : "Call uploaded successfully",
           });
         } catch (error) {
