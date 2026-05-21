@@ -710,7 +710,7 @@ The platform defines **12 roles** in `UserRole` (`src/utils/rbacDatabase.ts:8-20
 | auditor | Secondary | None by default — customizable in admin (intended read-only audit access) | Internal/External Auditors |
 | custom | Secondary | None by default — fully configurable per user | Tenant-specific roles |
 
-> **Doc-sync note (2026-05-21):** The §5.6 `role_permissions` schema below predates the current `RolePermission` interface (`rbacDatabase.ts:48-58`). Code adds `can_close_finding`, `can_view_executive`, `can_edit_controls`, `can_submit_evidence` and removes `can_approve_capa`, `can_create_finding`, `can_create_training`, `can_approve_compliance`, `can_view_dashboards`. Schema reconciliation to be tracked in a separate ticket.
+The 8 `can_*` permission flags listed in §5.6 are derived directly from the `RolePermission` interface (`src/utils/rbacDatabase.ts:48-58`); each role above lists its primary capabilities, and §5.6 has the full per-role default grid.
 
 ---
 
@@ -1139,13 +1139,16 @@ CREATE TABLE system_users (
   id SERIAL PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
   name VARCHAR(255) NOT NULL,
-  role VARCHAR(50) NOT NULL,
+  role VARCHAR(50) NOT NULL DEFAULT 'bu_owner',
   department VARCHAR(100),
   is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  permissions JSONB DEFAULT '[]',
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 ```
+
+The `permissions` JSONB column holds per-user permission overrides on top of the role's default permissions (rare; the role gate is usually sufficient). Default `role = 'bu_owner'` makes unknown users land at the most restrictive non-zero level.
 
 **Default Users Seeded:**
 | Email | Name | Role | Department |
@@ -1164,40 +1167,55 @@ CREATE TABLE bu_processes (
   process_code VARCHAR(50) UNIQUE NOT NULL,
   process_name VARCHAR(255) NOT NULL,
   department VARCHAR(100) NOT NULL,
+  owner_name VARCHAR(255),
   owner_email VARCHAR(255),
   description TEXT,
   is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  linked_control_ids INTEGER[],
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 ```
+
+`linked_control_ids` is a PostgreSQL `INTEGER[]` array; each entry references a `grc_controls.id` so a single BU process can be mapped to multiple compliance controls (see §11.7 Quality–GRC Handoff Engine).
 
 **role_permissions**
 ```sql
 CREATE TABLE role_permissions (
   id SERIAL PRIMARY KEY,
   role VARCHAR(50) UNIQUE NOT NULL,
-  can_create_capa BOOLEAN DEFAULT FALSE,
-  can_approve_capa BOOLEAN DEFAULT FALSE,
-  can_create_finding BOOLEAN DEFAULT FALSE,
-  can_create_training BOOLEAN DEFAULT FALSE,
   can_accept_risk BOOLEAN DEFAULT FALSE,
   can_approve_policy BOOLEAN DEFAULT FALSE,
-  can_approve_compliance BOOLEAN DEFAULT FALSE,
+  can_close_finding BOOLEAN DEFAULT FALSE,
   can_manage_users BOOLEAN DEFAULT FALSE,
-  can_view_dashboards BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  can_view_executive BOOLEAN DEFAULT FALSE,
+  can_edit_controls BOOLEAN DEFAULT FALSE,
+  can_create_capa BOOLEAN DEFAULT FALSE,
+  can_submit_evidence BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW()
 );
 ```
 
-**Default Role Permissions:**
-| Role | Accept Risk | Approve Policy | Manage Users |
-|------|-------------|----------------|--------------|
-| quality_manager | No | No | No |
-| grc_manager | Yes | Yes | No |
-| ai_specialist | No | No | No |
-| bu_owner | No | No | No |
-| executive | No | No | No |
-| admin | Yes | Yes | Yes |
+The 8 permission flags align with the `RolePermission` interface in `src/utils/rbacDatabase.ts:48-58`. Naming convention: capability verbs only (`can_close_finding`, not `can_create_finding`; `can_view_executive`, not `can_view_dashboards`) so the meaning maps 1:1 to the platform action it gates.
+
+**Default Role Permissions (seeded by `seedRolePermissions()` in `rbacDatabase.ts`):**
+
+| Role | accept_risk | approve_policy | close_finding | manage_users | view_executive | edit_controls | create_capa | submit_evidence |
+|------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| admin | Y | Y | Y | Y | Y | Y | Y | Y |
+| head_of_operations_quality | Y | Y | Y | — | Y | Y | Y | Y |
+| grc_manager | Y | Y | Y | — | Y | Y | Y | Y |
+| quality_manager | — | — | Y | — | — | Y | Y | Y |
+| ai_specialist | — | — | — | — | Y | — | — | — |
+| executive | — | — | — | — | Y | — | — | — |
+| bu_owner | — | — | — | — | — | — | — | Y |
+| quality_specialist | — | — | — | — | — | — | — | — |
+| team_lead | — | — | — | — | — | — | — | — |
+| department_viewer | — | — | — | — | — | — | — | — |
+| auditor | — | — | — | — | — | — | — | — |
+| custom | — | — | — | — | — | — | — | — |
+
+Roles in the bottom block (quality_specialist, team_lead, department_viewer, auditor, custom) are declared in `UserRole` but have no entry in `ROLE_PERMISSIONS` — they inherit `FALSE` on every column from the schema default and are intended for org-specific customisation via the admin UI.
 
 **escalation_log**
 ```sql
@@ -1205,16 +1223,17 @@ CREATE TABLE escalation_log (
   id SERIAL PRIMARY KEY,
   source_type VARCHAR(50) NOT NULL,
   source_id INTEGER NOT NULL,
-  source_title VARCHAR(255),
-  days_overdue INTEGER,
+  escalation_reason VARCHAR(255) NOT NULL,
   escalated_to VARCHAR(255),
-  status VARCHAR(50) DEFAULT 'pending',
+  status VARCHAR(20) DEFAULT 'pending',
+  resolved_at TIMESTAMP,
   resolved_by VARCHAR(255),
-  resolved_at TIMESTAMPTZ,
-  resolution_notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
 );
 ```
+
+`escalation_reason` is the short label shown in the GRC Control Tower "Recent Handoff Events" feed; `notes` carries the longer resolution rationale once the escalation is closed.
 
 **Policy Table Extensions (Added to existing policies table):**
 ```sql
