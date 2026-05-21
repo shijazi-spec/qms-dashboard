@@ -1,6 +1,8 @@
 # WalaPlus Enterprise GRC & Quality Management Platform - Technical Scope of Work
 
-**Version 2.1** | Last Updated: January 2026
+**Version 2.2** | Last Updated: 2026-05-21
+
+> **Companion document:** [USER_MANUAL.md](./USER_MANUAL.md) — end-user documentation for every module specified here. Section cross-references are noted at each module spec.
 
 ---
 
@@ -39,7 +41,7 @@ WalaPlus Enterprise GRC & Quality Management Platform is an enterprise-grade sys
 | Frontend | HTML5, TailwindCSS, Chart.js |
 | Runtime | Node.js 20+ |
 
-### Core Modules (18 Total)
+### Core Modules (19 Total)
 
 #### Quality Management Modules (10)
 1. Quality Dashboard (`/`)
@@ -62,6 +64,9 @@ WalaPlus Enterprise GRC & Quality Management Platform is an enterprise-grade sys
 16. Vendor Risk Management (`/vendors`)
 17. Data Migration Engine (`/migration`)
 18. Duplicate Radar (`/duplicates`)
+
+#### Support Modules (1)
+19. User Onboarding & Help (`/onboarding`)
 
 ---
 
@@ -357,6 +362,37 @@ WalaPlus Enterprise GRC & Quality Management Platform is an enterprise-grade sys
 
 ---
 
+### 3.11 User Onboarding & Help
+
+> **Documented in:** [USER_MANUAL.md §21 — User Onboarding & Help](./USER_MANUAL.md#21-user-onboarding--help).
+
+**File:** `dashboard/onboarding.html`
+**Route File:** `src/mastra/routes/onboardingRoutes.ts`
+
+**Purpose:** Guided activation surface for new users and a shareable demo channel for external stakeholders. Reduces time-to-first-value and gives admins visibility into adoption.
+
+**Features:**
+- **Welcome modal** — Introduction video (2–4 min) + Start Tour / Skip controls
+- **Guided tour (6 steps)** — Walks new users through: Dashboard Overview → Projects & Governance → ROI/NPV Calculator → Event Logs → AI Assistance → Submission Flow
+- **Progress tracking** — Per-user completion state (video watched, tour completed) with a visual progress bar
+- **Quick actions** — "Watch Introduction Video", "Restart Guided Tour", "Submit New Initiative" deep-links
+- **Contextual tooltips** — Purple `?` icons on ROI form fields with field-level explanations
+- **Shareable demo links** — Admins can mint time-limited, view-only links for external stakeholders with view-count tracking
+- **Admin view** — `/onboarding?admin=true` exposes: total onboarded users, video watch count, tour completion rate, demo-link management
+
+**API Endpoints (see also §4):**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/onboarding/status` | Get current user's onboarding state |
+| GET | `/api/onboarding/stats` | Admin-only aggregate stats |
+| POST | `/api/onboarding/demo-link` | Mint a new shareable demo link |
+| GET | `/api/onboarding/demo-links` | List existing demo links (admin) |
+
+**Access Control:** Any authenticated user can access `/onboarding`. The admin sub-view and demo-link mint are gated to `admin` role.
+
+---
+
 ## 4. API Reference
 
 ### 4.1 Dashboard Routes
@@ -414,6 +450,8 @@ WalaPlus Enterprise GRC & Quality Management Platform is an enterprise-grade sys
 ---
 
 ### 4.1.2 Multi-Scorecard Management API (NEW in v2.1)
+
+> **DELIVERY STATUS — DEFERRED (as of v2.2 / 2026-05-21):** The endpoints below were specified in v2.1 but are **not yet implemented** in the platform. The current code (`src/mastra/routes/scorecardRoutes.ts`) ships only a single-employee scorecard (`getMohammedScorecard()`), not the multi-team CRUD/activate/clone API specified here. This section is retained as a tracking item; the §5.15 schema is also deferred. Build, descope, or re-baseline before v2.3.
 
 **File:** `src/mastra/index.ts` (Admin Scorecard Routes)
 
@@ -642,14 +680,24 @@ WalaPlus Enterprise GRC & Quality Management Platform is an enterprise-grade sys
 
 **System Roles:**
 
-| Role | Permissions | Typical User |
-|------|-------------|--------------|
-| quality_manager | CAPA, audits, findings, training | Sara |
-| grc_manager | Accept risks, approve policies, compliance sign-off | Maram |
-| ai_specialist | View dashboards, configure AI settings | AI Team |
-| bu_owner | Submit evidence, update action status | Department Heads |
-| executive | Read-only strategic views | C-Suite |
-| admin | Full system access | System Admin |
+The platform defines **12 roles** in `UserRole` (`src/utils/rbacDatabase.ts:8-20`). Default permissions for the 7 primary roles are seeded in `ROLE_PERMISSIONS` (`rbacDatabase.ts:60-141`); the 5 secondary roles inherit zero defaults from `DEFAULT FALSE` on every permission column and are intended for org-specific customization.
+
+| Role | Tier | Default Capabilities | Typical User |
+|------|------|----------------------|--------------|
+| admin | Primary | Full system access incl. user management | System Admin |
+| head_of_operations_quality | Primary | Accept risks, approve policies, close findings, edit controls, create CAPA, executive view (audit programme sign-off per ISO 19011 §5.2) | Head of Ops & Quality |
+| grc_manager | Primary | Accept risks, approve policies, compliance sign-off, executive view | Maram |
+| quality_manager | Primary | Close findings, edit controls, create CAPA, submit evidence | Sara |
+| ai_specialist | Primary | Executive view + configure AI settings (no write actions) | AI Team |
+| bu_owner | Primary | Submit evidence; update action status only | Department Heads |
+| executive | Primary | Read-only strategic / executive views | C-Suite |
+| quality_specialist | Secondary | None by default — customizable in admin | Quality Analysts |
+| team_lead | Secondary | None by default — customizable in admin | Team Leads |
+| department_viewer | Secondary | None by default — customizable in admin | Departmental Reviewers |
+| auditor | Secondary | None by default — customizable in admin (intended read-only audit access) | Internal/External Auditors |
+| custom | Secondary | None by default — fully configurable per user | Tenant-specific roles |
+
+> **Doc-sync note (2026-05-21):** The §5.6 `role_permissions` schema below predates the current `RolePermission` interface (`rbacDatabase.ts:48-58`). Code adds `can_close_finding`, `can_view_executive`, `can_edit_controls`, `can_submit_evidence` and removes `can_approve_capa`, `can_create_finding`, `can_create_training`, `can_approve_compliance`, `can_view_dashboards`. Schema reconciliation to be tracked in a separate ticket.
 
 ---
 
@@ -1180,6 +1228,8 @@ ALTER TABLE enterprise_risks ADD COLUMN grc_approval_required BOOLEAN DEFAULT FA
 
 ### 5.15 Multi-Scorecard Tables (NEW in v2.1)
 
+> **DELIVERY STATUS — DEFERRED (as of v2.2 / 2026-05-21):** Tables below are specified but **not yet created** in the live database. The platform currently uses the single-employee `employee_scorecards` table (`src/utils/scorecardDatabase.ts:49`). Paired with the deferred API in §4.1.2.
+
 **quality_scorecards**
 ```sql
 CREATE TABLE quality_scorecards (
@@ -1504,7 +1554,39 @@ Event logs capture:
 
 ## 11. GRC Module Specifications
 
+### 11.0 GRC Control Tower Dashboard
+
+> **Documented in:** [USER_MANUAL.md §13 — GRC Control Tower](./USER_MANUAL.md#13-grc-control-tower).
+
+**Dashboard File:** `dashboard/grc.html`
+**Route:** `GET /grc` (served by `src/mastra/routes/staticPageRoutes.ts`)
+
+**Purpose:** Unified executive view across the six underlying GRC modules (§11.1–§11.6). Read-only aggregation page — all writes happen in the individual module dashboards. Designed for `executive` and `grc_manager` roles as a single-pane situational view.
+
+**Aggregated Components:**
+
+| Component | Source Module(s) | Data |
+|-----------|------------------|------|
+| KPI Cards (6) | All GRC modules | Active risks, policies count, compliance score, open findings, vendors at-risk, control effectiveness |
+| Risk Heat Map | §11.1 Risk Register | 5×5 likelihood × impact matrix with drill-down |
+| GRC Module Status Chart | All GRC modules | Per-module health indicator (green/amber/red) |
+| Compliance by Framework | §11.3 Compliance Tracker | Horizontal bar chart per regulatory framework (PDPL, NCA-ECC, ISO-9001, etc.) |
+| Handoff Rules Table | §11.7 Quality-GRC Handoff Engine | Active rules and their last-fired timestamps |
+| Control Effectiveness Table | §11.7 Handoff Engine | Per-control type effectiveness ratings |
+| Audit Readiness Summary | §11.4 Audit Module | Upcoming audits + finding closure rate |
+| Recent Handoff Events | §11.7 Handoff Engine | Last 20 cross-module escalation events |
+
+**Data Sources:** No dedicated tables. The page calls existing module summary endpoints in parallel: `/api/risks/summary`, `/api/policies/summary`, `/api/compliance/summary`, `/api/audits/summary`, `/api/vendors/summary`, `/api/handoff/summary`, `/api/handoff/controls`.
+
+**Refresh:** Page refreshes module summaries on load and on the "Refresh" button. No automatic polling.
+
+**Access Control:** Visible to any authenticated user; the data shown is already filtered by each underlying summary endpoint's own role gates.
+
+---
+
 ### 11.1 Enterprise Risk Register
+
+> **Documented in:** [USER_MANUAL.md §14 — Enterprise Risk Register](./USER_MANUAL.md#14-enterprise-risk-register). Schema extensions for risk acceptance live in [§5.6 RBAC Tables](#56-rbac-role-based-access-control-tables).
 
 **Route File:** `src/mastra/routes/riskRoutes.ts`
 
@@ -1522,6 +1604,18 @@ Event logs capture:
 | POST | `/api/risks/:id/treatments` | Add treatment |
 | PUT | `/api/risks/treatments/:id` | Update treatment |
 | POST | `/api/risks/:id/audit` | Record audit trail |
+| POST | `/api/risks/:id/accept` | Accept risk — **grc_manager only** (see §4.8 + acceptance workflow below) |
+
+#### Risk Acceptance Workflow
+
+The risk acceptance endpoint `POST /api/risks/:id/accept` enforces a four-gate workflow before a risk's status is set to `accepted`:
+
+1. **Role gate** — Caller must hold the `grc_manager` role (or `admin`). Other roles receive `403 Forbidden`. Permission flag: `can_accept_risk` (see [§5.6 role_permissions](#56-rbac-role-based-access-control-tables)).
+2. **Justification required** — Request body must include a non-empty `justification` field. Missing or blank → `400 Bad Request`.
+3. **Email verification** — The acting user's email must resolve to a registered `system_user`. Anonymous or unknown emails → `403 Forbidden`.
+4. **Audit persistence** — On success, the risk row is updated with `accepted_by`, `accepted_by_role`, `accepted_at`, and `acceptance_justification` (see schema extensions in [§5.6](#56-rbac-role-based-access-control-tables)). A corresponding entry is written to `event_logs` with `severity = 'WARNING'`.
+
+UI flow: The Risk Register dashboard shows an "Accept Risk" action only when the current user has `can_accept_risk = true`. The action opens a modal that requires the justification text; a 403 from the API surfaces as an inline error and no state changes.
 
 #### Database Tables
 
@@ -1556,6 +1650,8 @@ effectiveness_rating INTEGER
 
 ### 11.2 Policy & Document Governance
 
+> **Documented in:** [USER_MANUAL.md §15 — Policy & Document Governance](./USER_MANUAL.md#15-policy--document-governance). Dual-ownership schema extensions live in [§5.6 RBAC Tables](#56-rbac-role-based-access-control-tables).
+
 **Route File:** `src/mastra/routes/policyRoutes.ts`
 
 #### Endpoints
@@ -1564,7 +1660,7 @@ effectiveness_rating INTEGER
 |--------|------|-------------|
 | GET | `/api/policies` | List policies |
 | GET | `/api/policies/:id` | Get single policy |
-| POST | `/api/policies` | Create policy |
+| POST | `/api/policies` | Create policy (dual ownership required) |
 | PUT | `/api/policies/:id` | Update policy |
 | PUT | `/api/policies/:id/transition` | Transition lifecycle |
 | DELETE | `/api/policies/:id` | Delete policy |
@@ -1572,6 +1668,18 @@ effectiveness_rating INTEGER
 | GET | `/api/policies/:id/versions` | Get version history |
 | POST | `/api/policies/:id/versions` | Create new version |
 | POST | `/api/policies/:id/comments` | Add comment |
+| POST | `/api/policies/:id/set-owners` | Set/update operational + compliance owners |
+| POST | `/api/policies/:id/grc-approval` | GRC compliance sign-off — **grc_manager only** (see §4.8) |
+| POST | `/api/policies/:id/publish` | Publish policy (blocked if `compliance_approved = false`) |
+
+#### Dual-Ownership Approval Workflow
+
+Every policy carries two owners — an **operational owner** (the business unit accountable for execution) and a **compliance owner** (the GRC representative accountable for regulatory sign-off). Publication is gated on both ownership being set and on explicit GRC approval.
+
+1. **Owner assignment** — `POST /api/policies` and `POST /api/policies/:id/set-owners` both require non-empty `operational_owner` and `compliance_owner` (plus emails). Missing either → `400 Bad Request` with the offending field named.
+2. **GRC approval gate** — `POST /api/policies/:id/grc-approval` is the only path that flips `compliance_approved` to `true`. It requires the `grc_manager` role (`can_approve_policy` permission). On success, the row is updated with `compliance_approved`, `compliance_approved_by`, and `compliance_approved_at`. Rejection records `approval_blocked_reason`.
+3. **Publish gate** — `POST /api/policies/:id/publish` reads `compliance_approved`. If `false`, returns `409 Conflict` with `approval_blocked_reason` echoed back. UI surfaces this as a banner: *"Publish blocked — awaiting GRC compliance sign-off from <compliance_owner>."*
+4. **Audit trail** — Each transition (owners set, approval granted, publish) emits an `event_logs` entry tagged with `module = 'policies'` and the correlation ID of the originating request.
 
 #### Database Tables
 
@@ -2060,5 +2168,5 @@ This Scope of Work document should be updated whenever:
 - Integration points are added/removed
 - Hosting or infrastructure changes occur
 
-**Last Updated:** March 2026
+**Last Updated:** 2026-05-21
 **Version:** 2.2
