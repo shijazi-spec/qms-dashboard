@@ -217,3 +217,65 @@ auto-applied on next boot via `initDuplicateRadarTables`):
 - `pipeline_lifecycle_state` — onboarding / adoption / renewal /
   termination_recent / termination_old / null
 - `client_sector` — private / government / null
+
+## Known issues / Phase 3 follow-ups (surfaced + closed 2026-05-21)
+
+Phase 3 was verified operationally healthy on 2026-05-21 (260 BLOCK / 64 REVIEW
+/ 190 WARN across 21,278 clusters; staleness 4h 20m; 1 auto-CAPA created from
+this path plus 3 from CS-Lifecycle). Two gaps surfaced during that audit and
+were closed in the same session.
+
+### 1. Audit-trail write to `event_logs` — FIXED
+
+**Symptom:** The nightly Inngest function (`src/mastra/inngest/index.ts:413-482`)
+and the in-process fallback (`src/utils/scheduledJobs.ts:214-234`) both call
+`scanAllClustersForCsOverlap()` and log via `logger.info(...)` — but neither
+wrote a row to the `event_logs` table. For GRQ compliance-grade traceability
+(ISO 9001 / ISO 27001 audit-trail requirements), each scan run must persist to
+the immutable audit trail.
+
+**Fix:** Added a `logEvent({ actionType: "scan", entityType: "duplicate_radar_cs_overlap", module: "duplicates", severity: "WARNING" if block_count > 0 else "INFO", newValue: r })` call inside the `scan-cs-overlaps` step after `scanAllClustersForCsOverlap()` returns. Same change made on the cs-lifecycle scan step (`entityType: "duplicate_radar_cs_lifecycle"`). Wrapped in try/catch so a logging failure never blocks the scan itself. The in-process fallback in `scheduledJobs.ts` calls the same scan function and inherits the audit trail through it.
+
+### 2. `createNotification` calls misaligned with schema — FIXED
+
+**Symptom — bigger than first documented:** The Inngest code passed four
+non-existent / mismatched fields to `createNotification()`:
+- `type: "alert"` — not in the `Notification` interface
+- `link: "/duplicates"` — should be `action_url`
+- `severity: "high" | "medium"` — should be `priority` (the column is named `priority`, not `severity`)
+- **Missing required field `module`** — `NOT NULL` on the schema
+
+Because `createNotification` is imported dynamically (`const { createNotification } = await import(...)`), TypeScript could not catch this at compile time. At runtime, every notification call hit the `module NOT NULL` constraint and threw. The errors were caught by the surrounding `try/catch` and reported via `logger.warn(...)`, so the failures were silent. **Effect: no BLOCK or auto-CAPA notification ever persisted** for either the CS-overlap or CS-lifecycle path — a real Phase 3 bug, not just a schema cosmetic issue.
+
+**Fix:** Updated all four `createNotification` call sites in `src/mastra/inngest/index.ts` to use the correct field names and include the required fields:
+```
+module: "duplicates",
+channel: "in_app",
+title: ...,
+message: ...,
+action_url: "/duplicates",
+priority: "high" | "medium",
+```
+(One pair each in the cs-overlap-scan and cs-lifecycle-scan functions: the BLOCK/critical notification + the auto-CAPA-created notification.) No schema migration needed — the existing `priority VARCHAR(20)` column already accepts `"critical" | "high" | "medium" | "low"`.
+
+### Verification after deploy
+
+Re-run query C from the Phase 3 verification recipe after the next nightly cron fires (or after a manual `POST /api/duplicates/cs-overlap/scan` that detects ≥1 BLOCK):
+
+```sql
+SELECT title, priority, module, created_at, action_url
+FROM notifications
+WHERE module = 'duplicates'
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+Healthy = at least one row from each scan path with priority and module populated. Likewise, audit-trail rows should appear:
+
+```sql
+SELECT timestamp, severity, action_type, entity_type, description
+FROM event_logs
+WHERE module = 'duplicates' AND action_type = 'scan'
+ORDER BY timestamp DESC
+LIMIT 10;
+```

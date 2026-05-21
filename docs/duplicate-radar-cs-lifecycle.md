@@ -11,6 +11,7 @@ asks *"is CS following its own SLA on this customer?"*.
 | `onboarding_overdue` | warning | Phase = Onboarding for more than `CS_LIFECYCLE_ONBOARDING_MAX_DAYS` (default 30 calendar days). | "Onboarding stage will be around 30 calendar days" |
 | `phase_churn_desync` | **critical** | Churn Date is populated but Phase is anything other than Termination. | "When the churn date is added, the deal will move to Termination phase" |
 | `termination_missing_churn_date` | warning | Phase = Termination but Churn Date is empty. | Data-integrity corollary of the rule above |
+| `termination_missing_churn_reason` | warning | Phase = Termination but Churn Reason is empty. | Data-integrity check — every churned deal must record *why* it churned for retention analytics. |
 | `phase_transition_stalled` | info | Deal not modified in `CS_LIFECYCLE_STALLED_TRANSITION_DAYS` (default 7) and is not in a steady-state phase (Adoption / Renewal) and not Onboarding (covered above) and not Termination (terminal). | "One working day for movement from phase to phase" |
 | `adoption_premature` | warning | Phase = Adoption while (a) `Customer_Since` is less than `CS_LIFECYCLE_ADOPTION_MIN_CUSTOMER_AGE_DAYS` (default 30) — suggesting the deal jumped Onboarding — OR (b) `Trial_End_Date` is still in the future — suggesting the deal moved to Adoption before the trial closed. | "Adoption phase for clients who completed Onboarding + trial period (if found)" |
 | `missing_company_domain` | warning | Phase ∈ {Onboarding, Adoption, Renewal} AND `Company_Domain` is empty. **Does not fire for Termination or pre-Onboarding records** — CS only curates this field during Onboarding handoff. | Data-quality gate so Marketing / Sales preflight checks recognise active customers by exact-domain match. |
@@ -134,11 +135,12 @@ DUPLICATE_RADAR_CS_ACTIVE_PHASES=Onboarding,Adoption,Renewal
 DUPLICATE_RADAR_CS_TERMINATION_PHASE=Termination
 DUPLICATE_RADAR_FIELD_PHASE=Phase
 DUPLICATE_RADAR_FIELD_CHURN_DATE=Churn_Date
+DUPLICATE_RADAR_FIELD_CHURN_REASON=Churn_Reason       # used by rule #4 (termination_missing_churn_reason)
 DUPLICATE_RADAR_FIELD_GOV_TYPE=Gov_Type
 ```
 
 ## Tests
 
 [`tests/vitest/csLifecycleCompliance.vitest.test.ts`](../tests/vitest/csLifecycleCompliance.vitest.test.ts)
-— 14 cases covering all four violation rules, steady-state phase exemption,
+— 14+ cases covering all seven violation rules, steady-state phase exemption,
 env threshold overrides, and the summary rollup.
