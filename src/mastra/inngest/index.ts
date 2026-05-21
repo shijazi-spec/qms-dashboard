@@ -423,6 +423,22 @@ const csOverlapAutoScanFunction = inngest.createFunction(
       await initDuplicateRadarTables();
       const r = await scanAllClustersForCsOverlap();
       logger.info("[CsOverlap] Nightly scan complete", r);
+      // Audit-trail: write a row to event_logs so the scan is part of the
+      // immutable compliance trail (not just stdout/Inngest logs). Fails
+      // soft so the scan result is never blocked by a logging hiccup.
+      try {
+        const { logEvent } = await import("../../utils/eventLogsDatabase");
+        await logEvent({
+          actionType: "scan",
+          entityType: "duplicate_radar_cs_overlap",
+          module: "duplicates",
+          severity: (r.block_count || 0) > 0 ? "WARNING" : "INFO",
+          description: `CS Pipeline Overlap nightly scan complete: ${r.block_count || 0} BLOCK, ${r.review_count || 0} REVIEW, ${r.warn_count || 0} WARN.`,
+          newValue: r,
+        });
+      } catch (e) {
+        logger.warn("[CsOverlap] event_logs write failed:", e);
+      }
       return r;
     });
 
@@ -437,11 +453,12 @@ const csOverlapAutoScanFunction = inngest.createFunction(
             ? ` (SAR ${Number(result.total_arr_exposure).toLocaleString()} ARR exposure)`
             : "";
         await createNotification({
-          type: "alert",
+          module: "duplicates",
+          channel: "in_app",
           title: `Duplicate Radar: ${result.block_count} CS-pipeline overlap(s) blocking new pushes`,
           message: `Nightly scan flagged ${result.block_count} BLOCK, ${result.review_count} REVIEW, ${result.warn_count} WARN${arrFmt}. Review on the Duplicates dashboard before approving any marketing batch.`,
-          link: "/duplicates",
-          severity: result.block_count >= 10 ? "high" : "medium",
+          action_url: "/duplicates",
+          priority: result.block_count >= 10 ? "high" : "medium",
         });
       } catch (e) {
         logger.warn("[CsOverlap] Notification failed:", e);
@@ -465,11 +482,12 @@ const csOverlapAutoScanFunction = inngest.createFunction(
             "../../utils/notificationHub"
           );
           await createNotification({
-            type: "alert",
+            module: "duplicates",
+            channel: "in_app",
             title: `Auto-CAPA: ${capaResult.created} new corrective action(s) opened on CS overlap BLOCK`,
             message: `${capaResult.created} CAPA(s) created (${capaResult.skipped_existing} skipped — already open). Threshold: SAR ${Number(capaResult.threshold_sar).toLocaleString()}. Numbers: ${capaResult.capa_numbers.join(", ") || "—"}.`,
-            link: "/duplicates",
-            severity: "high",
+            action_url: "/duplicates",
+            priority: "high",
           });
         }
       } catch (e) {
@@ -505,6 +523,24 @@ const csLifecycleScanFunction = inngest.createFunction(
         by_severity: r.summary.by_severity,
         duration_ms: r.duration_ms,
       });
+      // Audit-trail: write a row to event_logs so the scan is part of the
+      // immutable compliance trail (not just stdout/Inngest logs). Fails
+      // soft so the scan result is never blocked by a logging hiccup.
+      try {
+        const { logEvent } = await import("../../utils/eventLogsDatabase");
+        const critical = r.summary.by_severity?.critical || 0;
+        const warning = r.summary.by_severity?.warning || 0;
+        await logEvent({
+          actionType: "scan",
+          entityType: "duplicate_radar_cs_lifecycle",
+          module: "duplicates",
+          severity: critical > 0 ? "WARNING" : "INFO",
+          description: `CS Lifecycle nightly scan complete: ${r.summary.total_violations} violation(s) across ${r.summary.total_cs_deals} CS deals (${critical} critical, ${warning} warning).`,
+          newValue: r.summary,
+        });
+      } catch (e) {
+        logger.warn("[CsLifecycle] event_logs write failed:", e);
+      }
       return r;
     });
 
@@ -517,11 +553,12 @@ const csLifecycleScanFunction = inngest.createFunction(
           "../../utils/notificationHub"
         );
         await createNotification({
-          type: "alert",
+          module: "duplicates",
+          channel: "in_app",
           title: `CS Lifecycle: ${crit} critical compliance violation(s)`,
           message: `Nightly scan found ${crit} critical and ${warn} warning violation(s) on CS-tracked deals. Resolve critical findings within one working day per CS team SLA.`,
-          link: "/duplicates",
-          severity: crit >= 5 ? "high" : "medium",
+          action_url: "/duplicates",
+          priority: crit >= 5 ? "high" : "medium",
         });
       } catch (e) {
         logger.warn("[CsLifecycle] Notification failed:", e);
@@ -545,11 +582,12 @@ const csLifecycleScanFunction = inngest.createFunction(
             "../../utils/notificationHub"
           );
           await createNotification({
-            type: "alert",
+            module: "duplicates",
+            channel: "in_app",
             title: `Auto-CAPA: ${capaResult.created} new corrective action(s) opened on CS lifecycle violations`,
             message: `${capaResult.created} CAPA(s) created (${capaResult.skipped_existing} skipped — already open). Severities: ${capaResult.severities.join(", ")}. Numbers: ${capaResult.capa_numbers.join(", ") || "—"}.`,
-            link: "/duplicates",
-            severity: "high",
+            action_url: "/duplicates",
+            priority: "high",
           });
         }
       } catch (e) {
