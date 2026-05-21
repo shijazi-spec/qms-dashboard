@@ -1136,11 +1136,15 @@
                 mcpCatalogBootstrapped = true;
                 refreshMcpImportCatalog();
             }
-            // Refresh scorecards when the user navigates back to this tab so
-            // any changes made via the admin route (or by another user) show
-            // up without a page reload. The initial load still happens once
-            // at init() in case the user lands directly on this tab.
             if (tab === 'scorecards') loadScorecards();
+            // The SDR Evaluation tab now embeds the scorecards panel at
+            // the top. Trigger loadScorecards so the "Active Scorecard"
+            // summary line (#embedded-scorecard-summary) populates with
+            // the active scorecard name + attribute count without the
+            // user having to click "Manage" first.
+            if (tab === 'evaluate' && typeof loadScorecards === 'function') {
+                try { loadScorecards(); } catch (e) { console.error('loadScorecards on evaluate tab failed:', e); }
+            }
         }
 
         function renderOverview() {
