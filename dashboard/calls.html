@@ -94,9 +94,13 @@
             <button data-on-click="showTab" data-args="[&quot;evaluate&quot;]" id="tab-evaluate" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_sdr">
                 SDR Evaluation
             </button>
-            <button data-on-click="showTab" data-args="[&quot;scorecards&quot;]" id="tab-scorecards" style="display:none" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_scorecards">
-                Scorecards
-            </button>
+            <!-- Scorecards tab removed — full scorecard management is now
+                 embedded inside the SDR Evaluation tab via the "Active
+                 Scorecard" collapsible banner at the top. Removing this
+                 button also eliminates the duplicate-id collision (the
+                 old #scorecards-list + #ai-training-stats also lived
+                 inside the now-deleted content-scorecards div). -->
+
             <button data-on-click="showTab" data-args="[&quot;compliance&quot;]" id="tab-compliance" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_compliance">
                 CRM Compliance
             </button>
@@ -727,7 +731,9 @@
             </div>
         </div>
 
-        <div id="content-scorecards" class="tab-content hidden fade-in">
+        <div id="content-scorecards" class="tab-content hidden fade-in" style="display:none !important;"
+            data-deprecated="scorecards-merged-into-sdr-evaluation"
+            hidden>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-2">
                     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
