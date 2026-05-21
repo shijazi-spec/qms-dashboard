@@ -892,12 +892,37 @@ export async function getCallAnalyticsSummary(
     params,
   );
 
+  // Phase C — pull per-agent averages across every measurement surface
+  // (sentiment, QA score, compliance), not just the legacy call_qa_scores
+  // table. Phase B writes QA scores to sdr_call_evaluations.overall_score,
+  // so that's the source of truth for "Avg QA Score" going forward.
+  // Sentiment comes from call_analysis; compliance from call_compliance.
+  // All joins are LEFT so an agent with calls but no analysis still shows
+  // a count (Avg columns just degrade to NULL → "--" in the UI).
   const byAgentResult = await pool.query(
     `
-    SELECT agent_email, agent_name, COUNT(*) as count, AVG(cq.score_percentage) as avg_score
-    FROM call_records cr
-    LEFT JOIN call_qa_scores cq ON cr.id = cq.call_record_id
-    ${whereClause}
+    WITH agent_metrics AS (
+      SELECT
+        cr.id AS call_id,
+        cr.agent_email,
+        cr.agent_name,
+        ca.sentiment_score,
+        se.overall_score AS qa_score,
+        cc.compliance_score
+      FROM call_records cr
+      LEFT JOIN call_analysis ca ON ca.call_record_id = cr.id
+      LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+      LEFT JOIN call_compliance cc ON cc.call_record_id = cr.id
+      ${whereClause}
+    )
+    SELECT
+      agent_email,
+      agent_name,
+      COUNT(*) AS count,
+      AVG(sentiment_score) AS avg_sentiment,
+      AVG(qa_score) AS avg_qa_score,
+      AVG(compliance_score) AS avg_compliance
+    FROM agent_metrics
     GROUP BY agent_email, agent_name
     ORDER BY count DESC
     LIMIT 10
