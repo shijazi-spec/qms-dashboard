@@ -188,7 +188,12 @@ const WalaPlusNav = {
       items: [
         { label: 'KPIs', href: '/kpis', icon: 'chart-bar', id: 'kpis' },
         { label: 'Board Dashboard', href: '/executive', icon: 'office-building', id: 'executive' },
-        { label: 'Team Performance', href: '/team', icon: 'user-group', id: 'team' }
+        { label: 'Team Performance', href: '/team', icon: 'user-group', id: 'team' },
+        // AI Approvals Queue lives under Team Mgmt per user request — it is
+        // a people/queue management surface (approvers reviewing pending AI
+        // actions) rather than a platform-admin tool. Item-level requiresRole
+        // keeps it visible only to the same admin-tier audience as before.
+        { label: 'AI Approvals Queue', href: '/ai-approvals', icon: 'check-circle', id: 'ai-approvals', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] }
       ]
     },
     {
