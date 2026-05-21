@@ -449,9 +449,15 @@ WalaPlus Enterprise GRC & Quality Management Platform is an enterprise-grade sys
 
 ---
 
-### 4.1.2 Multi-Scorecard Management API (NEW in v2.1)
+### 4.1.2 GRQ Role-Based Scorecard Management API (NEW in v2.1)
 
-> **DELIVERY STATUS — DEFERRED (as of v2.2 / 2026-05-21):** The endpoints below were specified in v2.1 but are **not yet implemented** in the platform. The current code (`src/mastra/routes/scorecardRoutes.ts`) ships only a single-employee scorecard (`getMohammedScorecard()`), not the multi-team CRUD/activate/clone API specified here. This section is retained as a tracking item; the §5.15 schema is also deferred. Build, descope, or re-baseline before v2.3.
+> **DELIVERY STATUS — DEFERRED (as of v2.2 / 2026-05-21):**
+>
+> **Intent:** The scorecard system is a tracking surface for **all KPIs assigned to each GRQ team role** — one scorecard per role (Quality Manager, GRC Manager, Quality & GRC Governance Officer, Quality Specialist, Auditor, AI Specialist, Head of Operations & Quality, etc.). Each scorecard carries the KPIs relevant to that role on the same pattern shipped today for Mohammed: weighted KPIs with current value, target, RAG status, trend, navigation_map (drill-down path), and data_sources. The endpoints below are what an Admin needs to author, version, and activate those role scorecards from the platform UI.
+>
+> **Current state:** Only `getMohammedScorecard()` is implemented (`src/mastra/routes/scorecardRoutes.ts:77`), serving the **single Quality & GRC Governance Officer scorecard** for Mohammed Al Muzaini with 6 hard-coded KPIs (see [MOHAMMED_SCOPE_OF_WORK.md](./MOHAMMED_SCOPE_OF_WORK.md)). The remaining GRQ team roles have **no scorecard surface**. The endpoints below — CRUD per role, activate, clone, attribute management — are not built, and the §5.15 schema is not yet created in the database.
+>
+> **Resolution path:** Either (a) extend the Mohammed pattern role-by-role into the schema in §5.15, (b) descope the role-based scorecard from the SoW, or (c) re-baseline before v2.3. The pattern itself is sound — only the multiplexing across roles is missing.
 
 **File:** `src/mastra/index.ts` (Admin Scorecard Routes)
 
@@ -1226,9 +1232,9 @@ ALTER TABLE enterprise_risks ADD COLUMN grc_approval_required BOOLEAN DEFAULT FA
 
 ---
 
-### 5.15 Multi-Scorecard Tables (NEW in v2.1)
+### 5.15 GRQ Role-Based Scorecard Tables (NEW in v2.1)
 
-> **DELIVERY STATUS — DEFERRED (as of v2.2 / 2026-05-21):** Tables below are specified but **not yet created** in the live database. The platform currently uses the single-employee `employee_scorecards` table (`src/utils/scorecardDatabase.ts:49`). Paired with the deferred API in §4.1.2.
+> **DELIVERY STATUS — DEFERRED (as of v2.2 / 2026-05-21):** Tables below back the role-based scorecard system described in §4.1.2 — one `quality_scorecards` row per GRQ team role, with each role's KPIs broken out into `scorecard_attributes`. Tables are **not yet created** in the live database. The platform today uses only the single-employee `employee_scorecards` table (`src/utils/scorecardDatabase.ts:49`), which stores the Mohammed scorecard as a row with `kpi_details` JSONB rather than as relational attributes. Paired with the deferred API in §4.1.2; resolve together.
 
 **quality_scorecards**
 ```sql
