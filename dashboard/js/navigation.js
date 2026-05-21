@@ -251,9 +251,12 @@ const WalaPlusNav = {
       color: 'purple',
       items: [
         { label: 'User Guide', href: '/guide', icon: 'book-open', id: 'guide' },
-        { label: 'Help', href: '/onboarding', icon: 'question-mark-circle', id: 'onboarding' },
         { label: 'Give Feedback', href: '/feedback', icon: 'chat-alt', id: 'feedback' },
-        { label: 'Scope of Work', href: '/docs/SCOPE_OF_WORK.html', icon: 'document', id: 'scope', external: true }
+        { label: 'Scope of Work', href: '/docs/SCOPE_OF_WORK.html', icon: 'document', id: 'scope', external: true },
+        // Help moved to the end of Support per user request — it is the
+        // generic onboarding/help page and acts as a fallback after the
+        // more specific items above.
+        { label: 'Help', href: '/onboarding', icon: 'question-mark-circle', id: 'onboarding' }
       ]
     }
   ],
