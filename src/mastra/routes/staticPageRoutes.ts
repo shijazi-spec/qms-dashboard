@@ -401,18 +401,10 @@ export const staticPageRoutes = [
         `To access this dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
-  // /crm → /api/crm/data GET — governance + executive.
-  {
-    path: "/crm",
-    method: "GET",
-    createHandler: async () =>
-      serveDashboardPageWithRoleGate(
-        "crm.html",
-        GOVERNANCE_AND_EXECUTIVE,
-        "CRM Setup Required",
-        `To access the CRM dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
-      ),
-  },
+  // /crm route + crm.html removed 2026-05-22 — the CRM Data Hub was
+  // redundant with Duplicate Radar's per-record views and was stuck in
+  // "Not Connected" state. The underlying /api/crm/data endpoint is kept
+  // for any legacy callers but no longer reachable from the UI.
   // /audits → /api/audits GET — governance + executive.
   {
     path: "/audits",
@@ -841,11 +833,7 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
     allowedRoles: ANY_DASHBOARD_ROLES,
     backingApiPath: "/api/sandbox/health",
   },
-  {
-    path: "/crm",
-    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
-    backingApiPath: "/api/crm/data",
-  },
+  // /crm role-gate entry removed 2026-05-22 alongside the route + page.
   {
     path: "/audits",
     allowedRoles: GOVERNANCE_AND_EXECUTIVE,

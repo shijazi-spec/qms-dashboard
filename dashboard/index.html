@@ -166,32 +166,40 @@
         .history-scroll {
             max-height: 480px;
             overflow-y: auto;
-            /* overflow-x kept as auto for very narrow viewports, but the
-               cell-padding + wrap rules below let the table fit at typical
-               desktop widths without horizontal scrolling. */
-            overflow-x: auto;
+            /* Hard-no horizontal scroll. Fixed column widths + compact date
+               format (formatAuditPeriod) keep all 8 columns inside the
+               widget; any future overflow clips instead of scrolling. */
+            overflow-x: hidden;
         }
         .history-scroll table {
             width: 100%;
-            table-layout: auto;
+            table-layout: fixed;
         }
-        /* Tighten the Tailwind px-6 / py-4 cell padding so all 8 columns
-           fit the container — score columns stay nowrap, only the wide
-           "Period Covered" cell wraps. */
+        /* Cell padding well below Tailwind's px-6 / py-4 defaults so the
+           8 columns fit. !important to win against the inline class. */
         .history-scroll table th,
         .history-scroll table td {
-            padding-left: 0.625rem;
-            padding-right: 0.625rem;
-            padding-top: 0.5rem;
-            padding-bottom: 0.5rem;
+            padding: 0.4rem 0.5rem !important;
+            font-size: 0.75rem;
         }
+        /* Period Covered (col 2) is the only column allowed to wrap. */
         .history-scroll table td:nth-child(2),
         .history-scroll table th:nth-child(2) {
-            white-space: normal;
+            white-space: normal !important;
             word-break: break-word;
-            min-width: 9rem;
-            max-width: 14rem;
+            width: 7.5rem;
         }
+        /* Date/Time + numeric/score columns get fixed compact widths. */
+        .history-scroll table th:nth-child(1),
+        .history-scroll table td:nth-child(1) { width: 9.5rem; }
+        .history-scroll table th:nth-child(n+3):nth-child(-n+6),
+        .history-scroll table td:nth-child(n+3):nth-child(-n+6) { width: 4.5rem; }
+        .history-scroll table th:nth-child(7),
+        .history-scroll table td:nth-child(7),
+        .history-scroll table th:nth-child(8),
+        .history-scroll table td:nth-child(8) { width: 4rem; }
+        .history-scroll .score-cell-bar .bar { width: 3px; height: 16px; }
+        .history-scroll .score-cell-bar .val { font-size: 0.7rem; }
         .history-scroll table thead th {
             position: sticky;
             top: 0;
@@ -3281,20 +3289,36 @@
             const ce = audit.period_created_end;
             const ms = audit.period_modified_start;
             const me = audit.period_modified_end;
-            const fmtDate = (v) => {
+            // Compact M/D format keeps the Period Covered cell narrow enough
+            // for the 8-column Audit History table to fit without horizontal
+            // scrolling. Full ISO date stays in the hover tooltip.
+            const fmtShort = (v) => {
                 if (!v) return '';
-                // Postgres returns dates as ISO timestamps; keep just YYYY-MM-DD
-                // for a compact, locale-stable display.
+                const s = String(v);
+                const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (!m) return s;
+                return `${parseInt(m[2], 10)}/${parseInt(m[3], 10)}`;
+            };
+            const fmtIso = (v) => {
+                if (!v) return '';
                 const s = String(v);
                 const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
                 return m ? m[1] : s;
             };
+            const sameWindow = cs && ce && ms && me && cs === ms && ce === me;
             const lines = [];
-            if (cs && ce) {
-                lines.push(`<div class="text-xs text-gray-700"><span class="text-blue-600 font-medium">Created:</span> ${fmtDate(cs)} → ${fmtDate(ce)}</div>`);
-            }
-            if (ms && me) {
-                lines.push(`<div class="text-xs text-gray-700"><span class="text-green-700 font-medium">Modified:</span> ${fmtDate(ms)} → ${fmtDate(me)}</div>`);
+            if (sameWindow) {
+                const tip = `Created &amp; Modified: ${fmtIso(cs)} → ${fmtIso(ce)}`;
+                lines.push(`<div class="text-xs text-gray-700" title="${tip}"><span class="text-indigo-600 font-medium">C+M:</span> ${fmtShort(cs)}–${fmtShort(ce)}</div>`);
+            } else {
+                if (cs && ce) {
+                    const tip = `Created: ${fmtIso(cs)} → ${fmtIso(ce)}`;
+                    lines.push(`<div class="text-xs text-gray-700" title="${tip}"><span class="text-blue-600 font-medium">C:</span> ${fmtShort(cs)}–${fmtShort(ce)}</div>`);
+                }
+                if (ms && me) {
+                    const tip = `Modified: ${fmtIso(ms)} → ${fmtIso(me)}`;
+                    lines.push(`<div class="text-xs text-gray-700" title="${tip}"><span class="text-green-700 font-medium">M:</span> ${fmtShort(ms)}–${fmtShort(me)}</div>`);
+                }
             }
             if (lines.length === 0) {
                 return '<span class="text-xs text-gray-500" title="No date filter was applied when this audit ran (or the audit predates this feature)">All Data</span>';

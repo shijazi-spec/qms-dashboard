@@ -120,7 +120,6 @@ const WalaPlusNav = {
       color: 'blue',
       items: [
         { label: 'Dashboard', href: '/', icon: 'chart-bar', id: 'dashboard' },
-        { label: 'CRM Data', href: '/crm', icon: 'database', id: 'crm' },
         { label: 'Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Call Evaluation', href: '/calls', icon: 'phone', id: 'calls' },
         { label: 'Duplicates Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' },
