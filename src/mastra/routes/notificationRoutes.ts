@@ -24,13 +24,27 @@ export const notificationRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, hasValidAdminApiKey } =
+            await import("../../utils/rbacMiddleware");
           const { getNotifications } =
             await import("../../utils/notificationHub");
           const status = c.req.query("status");
           const module = c.req.query("module");
           const limit = parseInt(c.req.query("limit") || "50");
           const offset = parseInt(c.req.query("offset") || "0");
+
+          const isAdminKey = hasValidAdminApiKey(c);
+          const user = isAdminKey ? null : getSessionUser(c);
+
+          // Admins and admin-key callers may see all notifications; everyone
+          // else is scoped to their own email (plus unscoped system alerts).
+          const recipientFilter =
+            isAdminKey || user?.role === "admin"
+              ? undefined
+              : user?.email ?? undefined;
+
           const result = await getNotifications({
+            recipient: recipientFilter,
             status,
             module,
             limit,
@@ -49,9 +63,20 @@ export const notificationRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, hasValidAdminApiKey } =
+            await import("../../utils/rbacMiddleware");
           const { getUnreadCount } =
             await import("../../utils/notificationHub");
-          const count = await getUnreadCount();
+
+          const isAdminKey = hasValidAdminApiKey(c);
+          const user = isAdminKey ? null : getSessionUser(c);
+
+          const recipientFilter =
+            isAdminKey || user?.role === "admin"
+              ? undefined
+              : user?.email ?? undefined;
+
+          const count = await getUnreadCount(recipientFilter);
           return c.json({ count });
         } catch (error) {
           return c.json({ error: "Failed to fetch count" }, 500);
@@ -65,12 +90,38 @@ export const notificationRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const { getSessionUser, forbiddenResponse, hasValidAdminApiKey } =
+            await import("../../utils/rbacMiddleware");
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
-          const { markAsRead } = await import("../../utils/notificationHub");
-          const notif = await markAsRead(id);
+
+          const { getNotificationById, markAsRead } =
+            await import("../../utils/notificationHub");
+
+          const notif = await getNotificationById(id);
           if (!notif) return c.json({ error: "Not found" }, 404);
-          return c.json({ success: true, notification: notif });
+
+          const isAdminKey = hasValidAdminApiKey(c);
+          if (!isAdminKey) {
+            const user = getSessionUser(c);
+            if (!user) return c.json({ error: "Authentication required" }, 401);
+
+            const isAdmin = user.role === "admin";
+            const isRecipient =
+              notif.recipient && notif.recipient === user.email;
+
+            if (!isAdmin && !isRecipient) {
+              return forbiddenResponse(
+                c,
+                "You may only mark your own notifications as read",
+              );
+            }
+          }
+
+          const updated = await markAsRead(id);
+          if (!updated) return c.json({ error: "Not found" }, 404);
+          return c.json({ success: true, notification: updated });
         } catch (error) {
           return c.json({ error: "Failed to mark as read" }, 500);
         }

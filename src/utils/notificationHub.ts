@@ -100,7 +100,7 @@ export async function getNotifications(filters: {
   let paramIdx = 1;
 
   if (filters.recipient) {
-    conditions.push(`recipient = $${paramIdx++}`);
+    conditions.push(`(recipient = $${paramIdx++} OR recipient IS NULL)`);
     params.push(filters.recipient);
   }
   if (filters.status) {
