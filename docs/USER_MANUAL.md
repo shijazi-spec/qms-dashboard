@@ -1,6 +1,8 @@
 # WalaPlus Enterprise GRC & Quality Management Platform - User Manual
 
-**Version 2.1** | Last Updated: January 2026
+**Version 2.2** | Last Updated: 2026-05-21
+
+> **Companion document:** [SCOPE_OF_WORK.md](./SCOPE_OF_WORK.md) — the technical contract this manual documents. Section cross-references are noted at each module heading.
 
 ---
 
@@ -47,7 +49,7 @@ WalaPlus Enterprise GRC & Quality Management Platform is a comprehensive, AI-pow
 - **Policy Governance** with document lifecycle management
 - **Regulatory Compliance Tracking** for PDPL, NCA-ECC, ISO 9001, and more
 - **Quality Assurance** with automated weekly audits and AI recommendations
-- **17 integrated dashboards** covering Quality Management and Enterprise GRC
+- **19 integrated dashboards** covering Quality Management, Enterprise GRC, and User Onboarding
 
 ### Key Capabilities
 
@@ -78,6 +80,12 @@ WalaPlus Enterprise GRC & Quality Management Platform is a comprehensive, AI-pow
 | Vendor Risk | `/vendors` | Third-party risk assessments |
 | Data Migration | `/migration` | CSV/Excel import with AI mapping |
 | Duplicate Radar | `/duplicates` | AI-powered CRM duplicate detection |
+
+#### Support Modules
+
+| Module | URL | Purpose |
+|--------|-----|---------|
+| User Onboarding | `/onboarding` | Welcome modal, guided tour, demo links (see §21) |
 
 ---
 
@@ -911,6 +919,8 @@ Pre-configured test sets to quickly populate duplicate scenarios:
 
 ## 13. GRC Control Tower
 
+> **Implements:** [SCOPE_OF_WORK.md §11.0 — GRC Control Tower Dashboard](./SCOPE_OF_WORK.md#110-grc-control-tower-dashboard).
+
 **URL:** `/grc`
 
 ### Overview
@@ -948,6 +958,8 @@ Displays control mappings with effectiveness scores.
 ---
 
 ## 14. Enterprise Risk Register
+
+> **Implements:** [SCOPE_OF_WORK.md §11.1 — Enterprise Risk Register](./SCOPE_OF_WORK.md#111-enterprise-risk-register), with RBAC gates defined in [§4.8](./SCOPE_OF_WORK.md#48-rbac-role-based-access-control-routes).
 
 **URL:** `/risks`
 
@@ -1007,6 +1019,8 @@ Once a risk is accepted, a slate-colored banner appears showing:
 ---
 
 ## 15. Policy & Document Governance
+
+> **Implements:** [SCOPE_OF_WORK.md §11.2 — Policy & Document Governance](./SCOPE_OF_WORK.md#112-policy--document-governance). Dual-ownership schema in [§5.6](./SCOPE_OF_WORK.md#56-rbac-role-based-access-control-tables).
 
 **URL:** `/policies`
 
@@ -1246,6 +1260,8 @@ If issues are found after import:
 
 ## 20. Duplicate Radar
 
+> **Implements:** [SCOPE_OF_WORK.md §11.8 — Duplicate Radar Module](./SCOPE_OF_WORK.md#118-duplicate-radar-module).
+
 **URL:** `/duplicates`
 
 ### Overview
@@ -1359,6 +1375,8 @@ You can test duplicate detection logic in the Testing Sandbox (`/sandbox`):
 
 ## 21. User Onboarding & Help
 
+> **Implements:** [SCOPE_OF_WORK.md §3.11 — User Onboarding & Help](./SCOPE_OF_WORK.md#311-user-onboarding--help).
+
 **URL:** `/onboarding`
 
 ### Overview
@@ -1418,7 +1436,7 @@ Access admin statistics at `/onboarding?admin=true`:
 
 ---
 
-## 14. AI Features Overview
+## 22. AI Features Overview
 
 ### How the AI Works
 
@@ -1457,7 +1475,7 @@ The **Quality Specialist Agent** runs automatically:
 
 ---
 
-## 15. Frequently Asked Questions
+## 23. Frequently Asked Questions
 
 ### General
 
