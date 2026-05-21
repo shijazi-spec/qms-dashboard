@@ -301,6 +301,40 @@ html.wp-dark .wp-topbar .text-gray-800,
 html.wp-dark .wp-topbar .text-gray-900 { color: #e5e7eb; }
 html.wp-dark .wp-topbar .hover\:bg-gray-100:hover { background-color: rgba(255,255,255,0.08); }
 
+/* ===== Left rail overflow hardening ===== */
+/* Eliminate horizontal scroll on the sidebar. The aside + its inner nav
+   each clamp overflow-x; long item labels truncate with ellipsis instead
+   of forcing the rail wider than its column. */
+.wp-rail {
+    overflow-x: hidden;
+    max-width: 100%;
+    min-width: 0;
+}
+.wp-rail nav,
+.wp-rail .wp-rail-group,
+.wp-rail .wp-group-items {
+    overflow-x: hidden;
+    max-width: 100%;
+    min-width: 0;
+}
+.wp-rail .wp-rail-item,
+.wp-rail .wp-group-toggle {
+    overflow: hidden;
+    max-width: 100%;
+    min-width: 0;
+}
+/* Truncate long labels with ellipsis rather than letting them push the
+   row wider. flex-1 children need min-width:0 so flexbox actually allows
+   them to shrink past their content's intrinsic width. */
+.wp-rail .wp-rail-item .wp-label,
+.wp-rail .wp-group-toggle .wp-label,
+.wp-rail .wp-rail-row .wp-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
 /* Left rail */
 html.wp-dark .wp-rail { background-color: #1e293b; border-color: #334155; }
 html.wp-dark .wp-rail-item { color: #cbd5e1; }
