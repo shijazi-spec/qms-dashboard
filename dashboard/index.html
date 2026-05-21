@@ -424,6 +424,18 @@
                 </button>
             </div>
 
+            <div id="filterEmpty" class="hidden text-center py-20" data-testid="state-filter-empty">
+                <svg class="mx-auto h-16 w-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                <h3 class="mt-4 text-lg font-medium text-gray-900">No audits match the current filter</h3>
+                <p class="mt-2 text-gray-500 max-w-md mx-auto">You have <span id="filterEmptyTotalAudits" class="font-semibold">audits</span> in the system, but none of them cover the CRM record period you've filtered by.</p>
+                <p id="filterEmptyDescription" class="mt-2 text-xs text-gray-400"></p>
+                <button data-on-click="clearDateFilters" data-testid="button-clear-filters" class="mt-4 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
+                    Clear filters &amp; show all audits
+                </button>
+            </div>
+
             <div id="dbWarmingUp" class="hidden text-center py-20" data-testid="state-db-warming-up">
                 <svg class="mx-auto h-16 w-16 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
@@ -2580,15 +2592,43 @@
 
         function updateDashboard(data) {
             document.getElementById('loading').classList.add('hidden');
-            
+            const noDataEl = document.getElementById('noData');
+            const filterEmptyEl = document.getElementById('filterEmpty');
+            const dashEl = document.getElementById('dashboard');
+
             if (!data.latestAudit) {
-                document.getElementById('noData').classList.remove('hidden');
-                document.getElementById('dashboard').classList.add('hidden');
+                // Distinguish "filter hides everything" from "truly no audits".
+                // The backend always populates absoluteLatestAudit with the most
+                // recent audit, ignoring filters. If it's present, the system
+                // has audits — the active Created/Modified filter is just
+                // hiding them — so guide the user to clear filters instead of
+                // suggesting they run a new audit.
+                if (data.absoluteLatestAudit) {
+                    if (filterEmptyEl) {
+                        const totalEl = document.getElementById('filterEmptyTotalAudits');
+                        if (totalEl) {
+                            const n = Array.isArray(data.auditHistory) ? data.auditHistory.length : 0;
+                            totalEl.textContent = n > 0 ? `${n}+ audits` : 'audits';
+                        }
+                        const descEl = document.getElementById('filterEmptyDescription');
+                        if (descEl && typeof getFilterDescription === 'function') {
+                            const d = getFilterDescription();
+                            descEl.textContent = d ? `Active filter — ${d}` : '';
+                        }
+                        filterEmptyEl.classList.remove('hidden');
+                    }
+                    if (noDataEl) noDataEl.classList.add('hidden');
+                } else {
+                    if (noDataEl) noDataEl.classList.remove('hidden');
+                    if (filterEmptyEl) filterEmptyEl.classList.add('hidden');
+                }
+                if (dashEl) dashEl.classList.add('hidden');
                 return;
             }
 
-            document.getElementById('noData').classList.add('hidden');
-            document.getElementById('dashboard').classList.remove('hidden');
+            if (noDataEl) noDataEl.classList.add('hidden');
+            if (filterEmptyEl) filterEmptyEl.classList.add('hidden');
+            if (dashEl) dashEl.classList.remove('hidden');
 
             const audit = data.latestAudit;
             const overallScore = parseFloat(audit.overall_score) || 0;
@@ -3325,6 +3365,8 @@
             loadingEl.style.removeProperty('display');
             document.getElementById('dashboard').classList.add('hidden');
             document.getElementById('noData').classList.add('hidden');
+            const filterEmptyEl = document.getElementById('filterEmpty');
+            if (filterEmptyEl) filterEmptyEl.classList.add('hidden');
             const warmEl = document.getElementById('dbWarmingUp');
             if (warmEl) warmEl.classList.add('hidden');
 
