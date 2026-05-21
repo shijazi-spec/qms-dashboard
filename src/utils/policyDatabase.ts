@@ -478,10 +478,22 @@ export async function getAllPolicies(filters?: {
   return { policies: result.rows, total };
 }
 
-export async function getPolicySummaryStats(): Promise<any> {
+export async function getPolicySummaryStats(
+  allowedConfidentiality?: string[],
+): Promise<any> {
   logger.info("📊 [PolicyDB] Generating policy summary statistics...");
 
-  const stats = await pool.query(`
+  const confFilter =
+    allowedConfidentiality && allowedConfidentiality.length > 0
+      ? `AND COALESCE(confidentiality, 'internal') = ANY($1::text[])`
+      : "";
+  const confParams =
+    allowedConfidentiality && allowedConfidentiality.length > 0
+      ? [allowedConfidentiality]
+      : [];
+
+  const stats = await pool.query(
+    `
     SELECT 
       COUNT(*) as total_policies,
       COUNT(*) FILTER (WHERE status = 'draft') as draft_count,
@@ -493,32 +505,45 @@ export async function getPolicySummaryStats(): Promise<any> {
       COUNT(*) FILTER (WHERE expiry_date < NOW() AND status = 'published') as expired,
       COUNT(*) FILTER (WHERE requires_acknowledgment = true) as requires_ack
     FROM policies
-  `);
+    WHERE 1=1 ${confFilter}
+  `,
+    confParams,
+  );
 
-  const byCategory = await pool.query(`
+  const byCategory = await pool.query(
+    `
     SELECT category, COUNT(*) as count
     FROM policies
-    WHERE status NOT IN ('retired', 'archived')
+    WHERE status NOT IN ('retired', 'archived') ${confFilter}
     GROUP BY category
     ORDER BY count DESC
-  `);
+  `,
+    confParams,
+  );
 
-  const byDepartment = await pool.query(`
+  const byDepartment = await pool.query(
+    `
     SELECT owner_department, COUNT(*) as count
     FROM policies
-    WHERE status NOT IN ('retired', 'archived') AND owner_department IS NOT NULL
+    WHERE status NOT IN ('retired', 'archived') AND owner_department IS NOT NULL ${confFilter}
     GROUP BY owner_department
     ORDER BY count DESC
-  `);
+  `,
+    confParams,
+  );
 
-  const upcomingReviews = await pool.query(`
+  const upcomingReviews = await pool.query(
+    `
     SELECT id, policy_number, title, review_date, owner_name
     FROM policies
     WHERE status = 'published' 
     AND review_date BETWEEN NOW() AND NOW() + INTERVAL '30 days'
+    ${confFilter}
     ORDER BY review_date ASC
     LIMIT 10
-  `);
+  `,
+    confParams,
+  );
 
   logger.info("✅ [PolicyDB] Summary statistics generated");
   return {
@@ -669,15 +694,30 @@ export async function transitionPolicyStatus(
   return updatePolicy(id, updates, transitionedBy);
 }
 
-export async function getOverduePolicies(): Promise<Policy[]> {
+export async function getOverduePolicies(
+  allowedConfidentiality?: string[],
+): Promise<Policy[]> {
   logger.info("📊 [PolicyDB] Fetching overdue policies...");
 
-  const result = await pool.query(`
+  const confFilter =
+    allowedConfidentiality && allowedConfidentiality.length > 0
+      ? `AND COALESCE(confidentiality, 'internal') = ANY($1::text[])`
+      : "";
+  const confParams =
+    allowedConfidentiality && allowedConfidentiality.length > 0
+      ? [allowedConfidentiality]
+      : [];
+
+  const result = await pool.query(
+    `
     SELECT * FROM policies
     WHERE status = 'published'
     AND (review_date < NOW() OR expiry_date < NOW())
+    ${confFilter}
     ORDER BY COALESCE(review_date, expiry_date) ASC
-  `);
+  `,
+    confParams,
+  );
 
   logger.info("✅ [PolicyDB] Found", result.rows.length, "overdue policies");
   return result.rows;
@@ -685,9 +725,11 @@ export async function getOverduePolicies(): Promise<Policy[]> {
 
 export async function getPendingAcknowledgments(
   department?: string,
+  allowedConfidentiality?: string[],
 ): Promise<any[]> {
   logger.info("📊 [PolicyDB] Fetching policies pending acknowledgment...");
 
+  const params: any[] = [];
   let query = `
     SELECT p.id, p.policy_number, p.title, p.category, p.owner_department,
            (SELECT COUNT(*) FROM policy_acknowledgments WHERE policy_id = p.id) as ack_count
@@ -696,10 +738,14 @@ export async function getPendingAcknowledgments(
     AND p.status = 'published'
   `;
 
-  const params: any[] = [];
+  if (allowedConfidentiality && allowedConfidentiality.length > 0) {
+    params.push(allowedConfidentiality);
+    query += ` AND COALESCE(p.confidentiality, 'internal') = ANY($${params.length}::text[])`;
+  }
+
   if (department) {
-    query += ` AND p.owner_department = $1`;
     params.push(department);
+    query += ` AND p.owner_department = $${params.length}`;
   }
 
   query += ` ORDER BY p.updated_at DESC`;
@@ -730,8 +776,20 @@ export async function linkPolicyToEntities(
   return updatePolicy(policyId, updates, "system");
 }
 
-export async function getDocumentsByTypeSummary(): Promise<any[]> {
-  const result = await pool.query(`
+export async function getDocumentsByTypeSummary(
+  allowedConfidentiality?: string[],
+): Promise<any[]> {
+  const confFilter =
+    allowedConfidentiality && allowedConfidentiality.length > 0
+      ? `WHERE COALESCE(confidentiality, 'internal') = ANY($1::text[])`
+      : "";
+  const confParams =
+    allowedConfidentiality && allowedConfidentiality.length > 0
+      ? [allowedConfidentiality]
+      : [];
+
+  const result = await pool.query(
+    `
     SELECT 
       COALESCE(document_type, 'policy') as document_type,
       COUNT(*) as count,
@@ -740,23 +798,38 @@ export async function getDocumentsByTypeSummary(): Promise<any[]> {
       COUNT(*) FILTER (WHERE status = 'review') as in_review,
       COUNT(*) FILTER (WHERE status = 'approval') as pending_approval
     FROM policies
+    ${confFilter}
     GROUP BY COALESCE(document_type, 'policy')
     ORDER BY count DESC
-  `);
+  `,
+    confParams,
+  );
   return result.rows;
 }
 
 export async function getReviewCycles(
   policyId?: number,
+  allowedConfidentiality?: string[],
 ): Promise<PolicyReviewCycle[]> {
-  let query =
-    "SELECT prc.*, p.title as policy_title, p.policy_number FROM policy_review_cycles prc JOIN policies p ON prc.policy_id = p.id";
   const params: any[] = [];
-  if (policyId) {
-    query += " WHERE prc.policy_id = $1";
-    params.push(policyId);
+  const conditions: string[] = [];
+
+  if (allowedConfidentiality && allowedConfidentiality.length > 0) {
+    params.push(allowedConfidentiality);
+    conditions.push(
+      `COALESCE(p.confidentiality, 'internal') = ANY($${params.length}::text[])`,
+    );
   }
-  query += " ORDER BY prc.scheduled_date DESC";
+
+  if (policyId) {
+    params.push(policyId);
+    conditions.push(`prc.policy_id = $${params.length}`);
+  }
+
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const query = `SELECT prc.*, p.title as policy_title, p.policy_number FROM policy_review_cycles prc JOIN policies p ON prc.policy_id = p.id ${whereClause} ORDER BY prc.scheduled_date DESC`;
   const result = await pool.query(query, params);
   return result.rows;
 }

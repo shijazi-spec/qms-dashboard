@@ -109,7 +109,8 @@ export const policyRoutes = [
           await initPolicyTables();
 
           logger?.info("📊 [PolicyAPI] GET /api/policies/summary");
-          const summary = await getPolicySummaryStats();
+          const allowedConfidentiality = getAllowedConfidentiality(admin.role);
+          const summary = await getPolicySummaryStats(allowedConfidentiality);
           return c.json(summary);
         } catch (error) {
           safeLogger.error("❌ [PolicyAPI] Error fetching summary:", error);
@@ -133,7 +134,8 @@ export const policyRoutes = [
           await initPolicyTables();
 
           logger?.info("📋 [PolicyAPI] GET /api/policies/overdue");
-          const policies = await getOverduePolicies();
+          const allowedConfidentiality = getAllowedConfidentiality(admin.role);
+          const policies = await getOverduePolicies(allowedConfidentiality);
           return c.json({ policies });
         } catch (error) {
           safeLogger.error(
@@ -157,7 +159,8 @@ export const policyRoutes = [
           const { getDocumentsByTypeSummary, initPolicyTables } =
             await import("../../utils/policyDatabase");
           await initPolicyTables();
-          const summary = await getDocumentsByTypeSummary();
+          const allowedConfidentiality = getAllowedConfidentiality(admin.role);
+          const summary = await getDocumentsByTypeSummary(allowedConfidentiality);
           return c.json({ summary });
         } catch (error) {
           safeLogger.error(
@@ -185,7 +188,8 @@ export const policyRoutes = [
           const policyId = url.searchParams.get("policy_id")
             ? parseInt(url.searchParams.get("policy_id")!)
             : undefined;
-          const cycles = await getReviewCycles(policyId);
+          const allowedConfidentiality = getAllowedConfidentiality(admin.role);
+          const cycles = await getReviewCycles(policyId, allowedConfidentiality);
           return c.json({ review_cycles: cycles });
         } catch (error) {
           safeLogger.error(
@@ -417,7 +421,11 @@ export const policyRoutes = [
             "📋 [PolicyAPI] GET /api/policies/pending-acknowledgments",
             { department },
           );
-          const policies = await getPendingAcknowledgments(department);
+          const allowedConfidentiality = getAllowedConfidentiality(admin.role);
+          const policies = await getPendingAcknowledgments(
+            department,
+            allowedConfidentiality,
+          );
           return c.json({ policies });
         } catch (error) {
           safeLogger.error(
