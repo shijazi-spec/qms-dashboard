@@ -19,7 +19,7 @@
  *   • Skips entirely if PROD_DATABASE_URL === DATABASE_URL (i.e. someone
  *     mis-configured dev to point at prod).
  *
- * Schedule: daily at 04:00 by default; override with PROD_TO_DEV_SYNC_CRON.
+ * Schedule: daily at 06:00 by default; override with PROD_TO_DEV_SYNC_CRON.
  */
 
 import pg from "pg";
@@ -309,7 +309,7 @@ export async function runProdToDevSync(): Promise<SyncRunResult> {
 
 export const prodToDevSyncFunction = inngest.createFunction(
   { id: "prod-to-dev-db-sync" },
-  { cron: process.env.PROD_TO_DEV_SYNC_CRON || "0 4 * * *" },
+  { cron: process.env.PROD_TO_DEV_SYNC_CRON || "0 6 * * *" },
   async ({ step }) => {
     return await step.run("run-prod-to-dev-sync", async () => {
       return await runProdToDevSync();
