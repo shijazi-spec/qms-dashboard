@@ -95,10 +95,10 @@
 
         <div class="border-b border-gray-200 mb-6">
             <nav class="flex gap-8">
-                <button data-on-click="switchTab" data-args="[&quot;pending&quot;]" id="tab-pending" class="py-3 px-1 tab-active font-medium text-sm">
+                <button data-on-click="switchTab" data-args="[&quot;pending&quot;]" id="tab-pending" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
                     Pending Requests <span id="pending-badge" class="ms-2 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs">0</span>
                 </button>
-                <button data-on-click="switchTab" data-args="[&quot;active&quot;]" id="tab-active" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
+                <button data-on-click="switchTab" data-args="[&quot;active&quot;]" id="tab-active" class="py-3 px-1 tab-active font-medium text-sm">
                     Active Users
                 </button>
                 <button data-on-click="switchTab" data-args="[&quot;all&quot;]" id="tab-all" class="py-3 px-1 text-gray-500 hover:text-gray-700 font-medium text-sm">
@@ -502,7 +502,7 @@
                 return;
             }
             loadStats();
-            switchTab('pending');
+            switchTab('active');
         }
 
         initAuth();
