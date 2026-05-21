@@ -202,20 +202,36 @@ const WalaPlusNav = {
       ]
     },
     {
-      // Admin & Tools: houses platform-wide operator tooling that is not
-      // day-to-day for Quality/GRC users (data loading, RBAC, HITL queue,
-      // system health, logs). Gated by role at render time.
+      // Tools: cross-cutting operator utilities that are not strictly admin-
+      // only. AI Consultant lives here (now open to all roles) alongside the
+      // data-migration and infographic generators.
+      id: 'tools',
+      label: 'Tools',
+      icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>`,
+      color: 'teal',
+      items: [
+        { label: 'Data Migration Engine', href: '/migration', icon: 'database', id: 'migration', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] },
+        { label: 'Infographic Generator', href: '/infographic', icon: 'document', id: 'infographic', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] },
+        { label: 'AI Consultant', href: '/consultant', icon: 'brain', id: 'consultant' }
+      ]
+    },
+    {
+      // Admin Permission: platform-wide administrative controls. Gated by
+      // role at render time so non-admins never see this group.
       id: 'admin',
-      label: 'Admin & Tools',
+      label: 'Admin Permission',
       icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`,
       color: 'slate',
       requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'],
       items: [
-        { label: 'Data Migration Engine', href: '/migration', icon: 'database', id: 'migration' },
-        { label: 'User & Role Management', href: '/admin', icon: 'cog', id: 'admin' },
-        { label: 'Users & Access', href: '/users', icon: 'users', id: 'users' },
-        { label: 'AI Approvals Queue', href: '/ai-approvals', icon: 'check-circle', id: 'ai-approvals' },
-        { label: 'Infographic Generator', href: '/infographic', icon: 'photograph', id: 'infographic' },
+        // Merged entry: previously "User & Role Management" (/admin) and
+        // "Users & Access" (/users) were two separate links. Both pages
+        // still exist; this single link points to /users (Users & Access
+        // Control — has Invite User / Delete User / status + role display),
+        // which is the actively-used surface for onboarding team members.
+        // The legacy /admin page remains URL-reachable for role-config
+        // workflows until the two pages are fully merged at the HTML level.
+        { label: 'User Access & Role Management', href: '/users', icon: 'users', id: 'user-access' },
         { label: 'System Logs', href: '/logs', icon: 'document-report', id: 'logs' },
         { label: 'Health Pulse', href: '/dashboard/health', icon: 'shield-check', id: 'health' }
       ]
@@ -226,7 +242,6 @@ const WalaPlusNav = {
       icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
       color: 'purple',
       items: [
-        { label: 'AI Consultant', href: '/consultant', icon: 'brain', id: 'consultant' },
         { label: 'User Guide', href: '/guide', icon: 'book-open', id: 'guide' },
         { label: 'Help', href: '/onboarding', icon: 'question-mark-circle', id: 'onboarding' },
         { label: 'Give Feedback', href: '/feedback', icon: 'chat-alt', id: 'feedback' },
