@@ -217,3 +217,43 @@ auto-applied on next boot via `initDuplicateRadarTables`):
 - `pipeline_lifecycle_state` — onboarding / adoption / renewal /
   termination_recent / termination_old / null
 - `client_sector` — private / government / null
+
+## Known issues / Phase 3 follow-ups (surfaced 2026-05-21)
+
+Phase 3 was verified operationally healthy on 2026-05-21 (260 BLOCK / 64 REVIEW
+/ 190 WARN across 21,278 clusters; staleness 4h 20m; 1 auto-CAPA created from
+this path plus 3 from CS-Lifecycle). Two small gaps surfaced during that audit
+— neither blocks the phase from being declared done, but both should be picked
+up in a Phase 3.1 cleanup PR.
+
+### 1. Audit-trail write to `event_logs`
+
+The nightly Inngest function (`src/mastra/inngest/index.ts:413-482`) and the
+in-process fallback (`src/utils/scheduledJobs.ts:214-234`) both call
+`scanAllClustersForCsOverlap()` and log via `logger.info(...)` — but neither
+writes a row to the `event_logs` table. For GRQ compliance-grade traceability
+(ISO 9001 / ISO 27001 audit-trail requirements), each scan run should append
+an `event_logs` entry tagged `module='duplicates'`, `action_type='scan'`,
+`severity='INFO'` (or `'WARNING'` when BLOCK > 0), with the result counts in
+`new_value` JSONB. Today only `logger.info` writes to stdout / Inngest logs,
+which are not part of the immutable audit trail.
+
+**Fix scope:** ~10 lines inside the `scan-cs-overlaps` step that wrap
+`scanAllClustersForCsOverlap()`'s return value and call `createLogEntry()`
+(already imported elsewhere in the codebase). Same change should be made on
+the cs-lifecycle scan (`src/mastra/inngest/index.ts:489-509`).
+
+### 2. `notifications.severity` column missing
+
+`src/mastra/inngest/index.ts:444` passes `severity: result.block_count >= 10 ? "high" : "medium"` into `createNotification()`, but the live
+`notifications` table has no `severity` column — so the field is silently
+dropped and downstream alert routing (Slack, email) can't differentiate
+critical from routine BLOCKs. The same drop happens for the auto-CAPA
+notification at line 472 (`severity: "high"`).
+
+**Fix scope:** Two-step.
+- Schema migration: `ALTER TABLE notifications ADD COLUMN severity VARCHAR(20) DEFAULT 'medium';` plus an index on `(severity, created_at)` if alert UI filters by it.
+- Code: verify `notificationHub.ts`'s `createNotification()` actually persists `severity` after the migration; add a fallback if older rows have NULL.
+
+Both items are low-risk and contained — good candidates for a single small
+PR titled `phase3-cleanup: audit-trail + notification severity`.
