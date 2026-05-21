@@ -892,6 +892,24 @@ export async function getCallAnalyticsSummary(
     params,
   );
 
+ fix/analytics-500-and-scorecard-loading
+  // Phase C — per-agent averages across every measurement surface
+  // (sentiment, QA score from Phase B, compliance). LEFT JOINs so an
+  // agent with calls but no analysis still appears (Avg columns fall
+  // to NULL → "--" in the UI). Wrapped in try/catch below so a bad
+  // schema or missing table never 500s the whole analytics endpoint.
+  let byAgentResult: any;
+  try {
+    byAgentResult = await pool.query(
+      `
+      SELECT
+        cr.agent_email,
+        cr.agent_name,
+        COUNT(*) AS count,
+        AVG(ca.sentiment_score) AS avg_sentiment,
+        AVG(se.overall_score) AS avg_qa_score,
+        AVG(cc.compliance_score) AS avg_compliance
+
   // Phase C — pull per-agent averages across every measurement surface
   // (sentiment, QA score, compliance), not just the legacy call_qa_scores
   // table. Phase B writes QA scores to sdr_call_evaluations.overall_score,
@@ -909,11 +927,41 @@ export async function getCallAnalyticsSummary(
         ca.sentiment_score,
         se.overall_score AS qa_score,
         cc.compliance_score
+ main
       FROM call_records cr
       LEFT JOIN call_analysis ca ON ca.call_record_id = cr.id
       LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
       LEFT JOIN call_compliance cc ON cc.call_record_id = cr.id
       ${whereClause}
+ fix/analytics-500-and-scorecard-loading
+      GROUP BY cr.agent_email, cr.agent_name
+      ORDER BY count DESC
+      LIMIT 10
+    `,
+      params,
+    );
+  } catch (perAgentErr) {
+    // Fall back to legacy single-column query if the joined query fails
+    // (e.g. one of the tables doesn't exist yet in this environment).
+    // The Avg columns will then be NULL → render as "--" in the UI,
+    // but the rest of the analytics page still loads.
+    logger.warn(
+      "Per-agent metrics query failed, falling back to count-only:",
+      perAgentErr,
+    );
+    byAgentResult = await pool.query(
+      `
+      SELECT agent_email, agent_name, COUNT(*) AS count
+      FROM call_records cr
+      ${whereClause}
+      GROUP BY agent_email, agent_name
+      ORDER BY count DESC
+      LIMIT 10
+    `,
+      params,
+    );
+  }
+
     )
     SELECT
       agent_email,
@@ -929,6 +977,7 @@ export async function getCallAnalyticsSummary(
   `,
     params,
   );
+ main
 
   const complianceResult = await pool.query(
     `
