@@ -423,10 +423,41 @@ Respond with JSON only:
 
           await updateCallRecord(callId, { status: "analyzed" });
 
+          // Phase B — fire-and-forget SDR scorecard evaluation. Runs the
+          // active scorecard against this call's transcript so the SDR
+          // Evaluation tab list and the per-agent Avg QA Score in Analytics
+          // get populated automatically. Wrapped so a scorecard failure
+          // never affects the analyze response the caller is waiting on.
+          let autoEvalOutcome: any = null;
+          try {
+            const { triggerSDREvaluationForCall } = await import(
+              "../../utils/sdrAutoEvaluator"
+            );
+            autoEvalOutcome = await triggerSDREvaluationForCall(callId, "SDR");
+            if (autoEvalOutcome.ran) {
+              logger?.info("📋 [API] Auto-SDR-eval succeeded", {
+                callId,
+                scorecardId: autoEvalOutcome.scorecardId,
+                overallScore: autoEvalOutcome.overallScore,
+              });
+            } else {
+              logger?.info("📋 [API] Auto-SDR-eval skipped", {
+                callId,
+                reason: autoEvalOutcome.skipReason,
+              });
+            }
+          } catch (e: any) {
+            logger?.warn("⚠️ [API] Auto-SDR-eval threw unexpectedly", {
+              callId,
+              error: e?.message || String(e),
+            });
+          }
+
           const analysisResult = {
             success: true,
             call_record_id: callId,
             analysis: analysisData,
+            auto_sdr_evaluation: autoEvalOutcome,
             message: "Call analysis completed successfully",
           };
 
@@ -1324,6 +1355,33 @@ ${transcriptText}
               await updateCallRecord(callId, { status: "analyzed" });
               analysisStatus = "analyzed";
               logger?.info("✅ [API] Full analysis completed", { callId });
+
+              // Phase B — same auto-eval hook on the upload-audio →
+              // autoAnalyze path so batch-uploaded calls get scorecard-
+              // scored on ingest, not just on manual re-analyze.
+              try {
+                const { triggerSDREvaluationForCall } = await import(
+                  "../../utils/sdrAutoEvaluator"
+                );
+                const outcome = await triggerSDREvaluationForCall(callId, "SDR");
+                if (outcome.ran) {
+                  logger?.info("📋 [API] Auto-SDR-eval on upload", {
+                    callId,
+                    scorecardId: outcome.scorecardId,
+                    overallScore: outcome.overallScore,
+                  });
+                } else {
+                  logger?.info("📋 [API] Auto-SDR-eval skipped on upload", {
+                    callId,
+                    reason: outcome.skipReason,
+                  });
+                }
+              } catch (e: any) {
+                logger?.warn("⚠️ [API] Auto-SDR-eval threw on upload", {
+                  callId,
+                  error: e?.message || String(e),
+                });
+              }
             } catch (analysisError) {
               const errAny: any = analysisError;
               const errMsg =
