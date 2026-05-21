@@ -94,9 +94,13 @@
             <button data-on-click="showTab" data-args="[&quot;evaluate&quot;]" id="tab-evaluate" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_sdr">
                 SDR Evaluation
             </button>
-            <button data-on-click="showTab" data-args="[&quot;scorecards&quot;]" id="tab-scorecards" style="display:none" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_scorecards">
-                Scorecards
-            </button>
+            <!-- Scorecards tab removed — full scorecard management is now
+                 embedded inside the SDR Evaluation tab via the "Active
+                 Scorecard" collapsible banner at the top. Removing this
+                 button also eliminates the duplicate-id collision (the
+                 old #scorecards-list + #ai-training-stats also lived
+                 inside the now-deleted content-scorecards div). -->
+
             <button data-on-click="showTab" data-args="[&quot;compliance&quot;]" id="tab-compliance" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_compliance">
                 CRM Compliance
             </button>
@@ -727,7 +731,9 @@
             </div>
         </div>
 
-        <div id="content-scorecards" class="tab-content hidden fade-in">
+        <div id="content-scorecards" class="tab-content hidden fade-in" style="display:none !important;"
+            data-deprecated="scorecards-merged-into-sdr-evaluation"
+            hidden>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-2">
                     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -1491,13 +1497,31 @@
 
             const agentTable = document.getElementById('agentPerformanceTable');
             const agentData = analytics.callsByAgent || [];
+            // Phase C — render real per-agent metrics. The backend now ships
+            // avg_sentiment / avg_qa_score / avg_compliance computed from the
+            // joined call_analysis / sdr_call_evaluations / call_compliance
+            // tables. Missing values (no analysis yet) fall back to "--".
+            const fmtScore = (v, suffix) => {
+                if (v === null || v === undefined || v === '') return '--';
+                const n = Number(v);
+                if (!Number.isFinite(n)) return '--';
+                return n.toFixed(1) + (suffix || '');
+            };
+            const scoreClass = (v, thresholds) => {
+                if (v === null || v === undefined || v === '') return 'text-gray-600';
+                const n = Number(v);
+                if (!Number.isFinite(n)) return 'text-gray-600';
+                if (n >= thresholds.green) return 'text-green-600 font-medium';
+                if (n >= thresholds.amber) return 'text-amber-600 font-medium';
+                return 'text-red-600 font-medium';
+            };
             agentTable.innerHTML = agentData.slice(0, 10).map(agent => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(agent.agent_email || WalaPlusI18n.t('dyn.calls.unknown'))}</td>
                     <td class="px-4 py-3 text-center text-sm text-gray-600">${_fn(agent.count)}</td>
-                    <td class="px-4 py-3 text-center text-sm text-gray-600">--</td>
-                    <td class="px-4 py-3 text-center text-sm text-gray-600">--</td>
-                    <td class="px-4 py-3 text-center text-sm text-gray-600">--</td>
+                    <td class="px-4 py-3 text-center text-sm ${scoreClass(agent.avg_sentiment, { green: 70, amber: 50 })}" title="Average sentiment across this agent's analyzed calls">${fmtScore(agent.avg_sentiment, '')}</td>
+                    <td class="px-4 py-3 text-center text-sm ${scoreClass(agent.avg_qa_score, { green: 80, amber: 60 })}" title="Average SDR scorecard score (overall_score from sdr_call_evaluations)">${fmtScore(agent.avg_qa_score, '%')}</td>
+                    <td class="px-4 py-3 text-center text-sm ${scoreClass(agent.avg_compliance, { green: 80, amber: 60 })}" title="Average CRM compliance score across this agent's calls">${fmtScore(agent.avg_compliance, '%')}</td>
                 </tr>
             `).join('') || `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_agent_data'))}</td></tr>`;
         }
