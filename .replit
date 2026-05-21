@@ -105,6 +105,7 @@ ZOHO_ACCOUNTS_URL = "https://accounts.zoho.com"
 ZOHO_API_DOMAIN = "https://www.zohoapis.com"
 DATA_MODE = "REAL"
 MANUAL_INTAKE_DIR = "./data/manual-intake"
+ADMIN_BOOTSTRAP_EMAILS = "s.hijazi@walaplus.com,a.amashah@walaplus.com,m.alharbi@walaplus.com"
 
 [userenv.development]
 
