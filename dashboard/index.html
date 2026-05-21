@@ -424,6 +424,18 @@
                 </button>
             </div>
 
+            <div id="dbWarmingUp" class="hidden text-center py-20" data-testid="state-db-warming-up">
+                <svg class="mx-auto h-16 w-16 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                </svg>
+                <h3 class="mt-4 text-lg font-medium text-gray-900">Database is waking up</h3>
+                <p class="mt-2 text-gray-500 max-w-md mx-auto">Your data is safe — the database just needs a moment after a fresh deploy or idle period. This usually takes 30–60 seconds.</p>
+                <p id="dbWarmingUpRetryStatus" class="mt-2 text-xs text-gray-400"></p>
+                <button id="dbWarmingUpRetryBtn" data-on-click="refreshDashboard" data-testid="button-retry-dashboard" class="mt-4 bg-amber-600 text-white px-6 py-3 rounded-lg hover:bg-amber-700 transition">
+                    Retry now
+                </button>
+            </div>
+
             <div id="dashboard" class="hidden">
                 <!-- Dashboard Header with Actions -->
                 <div class="flex flex-wrap items-center justify-between mb-6 gap-4">
@@ -2424,21 +2436,29 @@
         }
 
         async function fetchDashboardData() {
+            // Returns { ok: true, data } on success, { ok: false, status, error }
+            // on failure. The caller distinguishes "the server answered with no
+            // audits" (show the original "No audit data yet" empty state) from
+            // "the request failed / timed out" (show the "Database is waking up"
+            // state with a retry button) — a fresh Replit deploy can take 30-60s
+            // for its serverless Postgres to authenticate the first connection,
+            // and during that window /api/dashboard returns 5xx or times out.
             try {
                 let url = `${API_BASE}/dashboard`;
-                // Use separate date filters
                 const filterParams = getDateFilterParams();
                 if (filterParams) {
                     url += `?${filterParams}`;
                 }
                 const response = await fetch(url, { credentials: 'include' });
-                if (!response.ok) throw new Error('Failed to fetch dashboard data');
+                if (!response.ok) {
+                    return { ok: false, status: response.status, error: `HTTP ${response.status}` };
+                }
                 const data = await response.json();
                 allDashboardData = data;
-                return data;
+                return { ok: true, data };
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
-                return null;
+                return { ok: false, status: 0, error: (error && error.message) || 'network' };
             }
         }
 
@@ -3305,13 +3325,35 @@
             loadingEl.style.removeProperty('display');
             document.getElementById('dashboard').classList.add('hidden');
             document.getElementById('noData').classList.add('hidden');
-            
-            const data = await fetchDashboardData();
-            if (data) {
-                updateDashboard(data);
-            } else {
-                document.getElementById('loading').classList.add('hidden');
-                document.getElementById('noData').classList.remove('hidden');
+            const warmEl = document.getElementById('dbWarmingUp');
+            if (warmEl) warmEl.classList.add('hidden');
+
+            const result = await fetchDashboardData();
+            if (result && result.ok) {
+                updateDashboard(result.data);
+                return;
+            }
+
+            // Fetch failed (timeout / 5xx / network). Distinguish from the
+            // "server returned no audits" case so admins don't get a misleading
+            // "No audit data yet" screen when the real cause is a sleeping DB.
+            loadingEl.classList.add('hidden');
+            const status = result ? result.status : 0;
+            const statusEl = document.getElementById('dbWarmingUpRetryStatus');
+            if (statusEl) {
+                statusEl.textContent = status
+                    ? `Last attempt: HTTP ${status}. Auto-retrying in 15 seconds…`
+                    : 'Last attempt: connection failed. Auto-retrying in 15 seconds…';
+            }
+            if (warmEl) warmEl.classList.remove('hidden');
+            // Auto-retry once after 15s — covers the typical 30-60s cold-start
+            // window without forcing the user to click. Guarded so concurrent
+            // refreshDashboard() calls don't stack timers.
+            if (!window.__dashboardWarmupTimer) {
+                window.__dashboardWarmupTimer = setTimeout(() => {
+                    window.__dashboardWarmupTimer = null;
+                    refreshDashboard();
+                }, 15000);
             }
         }
 
