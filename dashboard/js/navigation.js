@@ -56,6 +56,7 @@ const WalaPlusNav = {
       case 'value':     return this._t('nav.groups.value');
       case 'support':   return this._t('nav.groups.support');
       case 'admin':     return this._t('nav.groups.admin');
+      case 'tools':     return this._t('nav.groups.tools');
       case 'triggers':  return this._t('nav.groups.triggers');
     }
     return '';
@@ -923,7 +924,7 @@ const WalaPlusNav = {
             <input id="wp-rail-search" type="search" placeholder="${this._t('nav.search_placeholder')}" aria-label="${this._t('nav.search_placeholder')}" data-testid="input-nav-search" class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
           </div>
         </div>
-        <nav class="flex-1 overflow-y-auto py-2" id="wp-rail-nav">
+        <nav class="flex-1 overflow-y-auto overflow-x-hidden py-2" id="wp-rail-nav">
           ${this.renderPinnedGroup()}
           ${this.renderRecentGroup()}
           ${this.navigationGroups.filter(g => this._canSeeGroup(g)).map(group => this.renderRailGroup(group)).join('')}

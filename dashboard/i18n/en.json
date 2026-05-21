@@ -26,7 +26,8 @@
       "analytics": "Team Mgmt",
       "value": "Value",
       "support": "Support",
-      "admin": "Admin & Tools",
+      "admin": "Admin Settings",
+      "tools": "Tools",
       "triggers": "Trigger Alerts"
     },
     "items": {
