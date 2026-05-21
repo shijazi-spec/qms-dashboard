@@ -94,7 +94,7 @@
             <button data-on-click="showTab" data-args="[&quot;evaluate&quot;]" id="tab-evaluate" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_sdr">
                 SDR Evaluation
             </button>
-            <button data-on-click="showTab" data-args="[&quot;scorecards&quot;]" id="tab-scorecards" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_scorecards">
+            <button data-on-click="showTab" data-args="[&quot;scorecards&quot;]" id="tab-scorecards" style="display:none" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_scorecards">
                 Scorecards
             </button>
             <button data-on-click="showTab" data-args="[&quot;compliance&quot;]" id="tab-compliance" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_compliance">
@@ -632,6 +632,63 @@
         </div>
 
         <div id="content-evaluate" class="tab-content hidden fade-in">
+            <!-- Embedded Scorecard Management panel — merged in from the
+                 standalone Scorecards tab so evaluators can see, edit, swap,
+                 or create scorecards without leaving this view. Collapsed by
+                 default to keep the call-evaluation work area uncluttered. -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                <button type="button" data-on-click="toggleScorecardPanel" class="w-full px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition" aria-expanded="false" aria-controls="embedded-scorecard-panel" id="embedded-scorecard-toggle">
+                    <div class="flex items-center gap-3 text-left">
+                        <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-purple-100 text-purple-700">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                        </span>
+                        <div>
+                            <div class="text-sm font-semibold text-gray-900">Active Scorecard</div>
+                            <div class="text-xs text-gray-600" id="embedded-scorecard-summary">Loading active scorecard…</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500" id="embedded-scorecard-action-hint">Click to manage</span>
+                        <svg class="w-4 h-4 text-gray-400 transition-transform" id="embedded-scorecard-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </div>
+                </button>
+                <div id="embedded-scorecard-panel" class="hidden border-t border-gray-100 px-6 py-5 bg-gray-50">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="text-sm font-semibold text-gray-900">SDR Evaluation Scorecards</h4>
+                        <button data-on-click="showCreateScorecardModal" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Create / Edit Scorecard
+                        </button>
+                    </div>
+                    <!-- The scorecards-list and AI Training Feedback move
+                         into this embedded panel; the original Scorecards
+                         tab is now hidden. Same DOM ids preserved so existing
+                         JS handlers (loadScorecards, activateScorecard,
+                         showCreateScorecardModal) keep working unchanged. -->
+                    <div id="scorecards-list" class="bg-white rounded-lg border border-gray-100 divide-y">
+                        <div class="p-6 text-center text-gray-400 text-xs">Loading scorecards…</div>
+                    </div>
+                    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-200 p-4">
+                            <h5 class="text-xs font-semibold text-purple-900 mb-2">AI Training Feedback</h5>
+                            <div id="ai-training-stats" class="space-y-1.5 text-xs">
+                                <div class="flex justify-between"><span class="text-gray-600">Evaluations Reviewed</span><span id="stat-reviewed" class="font-medium">0</span></div>
+                                <div class="flex justify-between"><span class="text-gray-600">Accuracy Rating</span><span id="stat-accuracy" class="font-medium text-green-600">--</span></div>
+                                <div class="flex justify-between"><span class="text-gray-600">Corrections Made</span><span id="stat-corrections" class="font-medium">0</span></div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg border border-gray-100 p-4">
+                            <h5 class="text-xs font-semibold mb-2">Quick Guide</h5>
+                            <ol class="text-xs text-gray-600 space-y-1 list-decimal list-inside">
+                                <li>Create a scorecard with evaluation attributes</li>
+                                <li>Define dimensions: People, Process, Governance</li>
+                                <li>Set severity levels &amp; evaluation logic</li>
+                                <li>Activate the scorecard so AI uses it on new calls</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-1">
                     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -1202,28 +1259,48 @@
             `).join('');
         }
 
-        // Render the CRM Link cell for a call row. Three states:
-        //   - Linked to a Lead: green pill linking to the Zoho Lead + activity button
-        //   - Linked to a Deal: indigo pill linking to the Zoho Deal + activity button
-        //   - Unlinked: small "Link now" button that runs the auto-link helper
+        // Render the CRM Link cell for a call row. The link always points to
+        // a Zoho search scoped to the call's phone number, so a click always
+        // shows the user "what CRM data exists for this phone number" — Leads,
+        // Deals, Contacts, and Accounts combined. A direct lead/deal pill is
+        // shown when we already know the specific match; otherwise an empty
+        // dash is shown when no phone number is available (rare for SDR calls).
         function renderCrmLinkCell(call) {
+            // Pull a usable phone number from the call record. Field names vary
+            // across upload paths (filename-parsed vs. Five9-ingested vs.
+            // manual), so try the common ones in priority order. Strip the
+            // leading + (Zoho search expects digits only) but keep the rest.
+            const rawPhone = call.contact_phone || call.phone || call.contact_number
+                || (call.metadata && (call.metadata.contact_phone || call.metadata.phone))
+                || '';
+            const phoneForSearch = String(rawPhone).replace(/^\+/, '').replace(/[\s\-()]/g, '');
+            if (!phoneForSearch) {
+                return '<span class="text-xs text-gray-400">--</span>';
+            }
+            // Zoho global search by phone — returns matches across Leads, Deals,
+            // Contacts, and Accounts in one view. Tied to the actual phone of
+            // THIS call, not a stale lead_id pointer that may not exist anymore.
+            const zohoSearchUrl = `https://crm.zoho.com/crm/org766568398/search?searchword=${encodeURIComponent(phoneForSearch)}&searchWordKeyType=phone`;
+            // Tag with the most-specific match type we already know about, so
+            // the operator sees at a glance whether this phone is already in
+            // CRM as a Lead, Deal, or neither.
+            let tagLabel = 'CRM';
+            let tagClasses = 'bg-gray-100 text-gray-700 hover:bg-gray-200';
+            let tagTitle = `Search CRM for ${rawPhone}`;
             if (call.lead_id) {
-                const zohoUrl = `https://crm.zoho.com/crm/org766568398/tab/Leads/${call.lead_id}`;
-                return `
-                    <div class="inline-flex flex-col items-center gap-1">
-                        <a href="${zohoUrl}" target="_blank" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-green-100 text-green-800 hover:bg-green-200" title="Open Lead in Zoho">Lead</a>
-                        <button data-on-click="showActivityTimeline" data-args="[${call.id}]" class="text-[10px] text-indigo-600 hover:text-indigo-800 underline">Activity</button>
-                    </div>`;
+                tagLabel = 'Lead';
+                tagClasses = 'bg-green-100 text-green-800 hover:bg-green-200';
+                tagTitle = `Lead match for ${rawPhone} — open in Zoho`;
+            } else if (call.deal_id) {
+                tagLabel = 'Deal';
+                tagClasses = 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200';
+                tagTitle = `Deal match for ${rawPhone} — open in Zoho`;
             }
-            if (call.deal_id) {
-                const zohoUrl = `https://crm.zoho.com/crm/org766568398/tab/Deals/${call.deal_id}`;
-                return `
-                    <div class="inline-flex flex-col items-center gap-1">
-                        <a href="${zohoUrl}" target="_blank" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200" title="Open Deal in Zoho">Deal</a>
-                        <button data-on-click="showActivityTimeline" data-args="[${call.id}]" class="text-[10px] text-indigo-600 hover:text-indigo-800 underline">Activity</button>
-                    </div>`;
-            }
-            return `<button data-on-click="autoLinkCall" data-args="[${call.id}]" class="text-[11px] text-gray-500 hover:text-indigo-600 underline" title="Match this call to a Zoho Lead or Deal by phone">Link now</button>`;
+            return `
+                <div class="inline-flex flex-col items-center gap-1">
+                    <a href="${zohoSearchUrl}" target="_blank" rel="noopener" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${tagClasses}" title="${tagTitle}">${tagLabel}</a>
+                    <button data-on-click="showActivityTimeline" data-args="[${call.id}]" class="text-[10px] text-indigo-600 hover:text-indigo-800 underline">Activity</button>
+                </div>`;
         }
 
         // Manually re-run the phone-based auto-link on an existing call. Used
@@ -2757,6 +2834,56 @@
                            data-criteria-id="${c.id}" data-on-input="updateCriteriaSlider" data-pass-event="true">
                 </div>
             `).join('')}</div>`;
+        }
+
+        // Toggle the embedded scorecard-management panel inside SDR Evaluation.
+        // The standalone Scorecards tab is hidden; this collapsible region
+        // exposes the same scorecards-list + AI Training Feedback + create/
+        // edit affordance inline, so an evaluator can adjust the active
+        // scorecard without leaving the evaluation view.
+        function toggleScorecardPanel() {
+            const panel = document.getElementById('embedded-scorecard-panel');
+            const chevron = document.getElementById('embedded-scorecard-chevron');
+            const toggle = document.getElementById('embedded-scorecard-toggle');
+            const hint = document.getElementById('embedded-scorecard-action-hint');
+            if (!panel) return;
+            const willOpen = panel.classList.contains('hidden');
+            if (willOpen) {
+                panel.classList.remove('hidden');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+                if (toggle) toggle.setAttribute('aria-expanded', 'true');
+                if (hint) hint.textContent = 'Click to collapse';
+                // Lazy-load scorecards the first time the panel opens so the
+                // list inside is populated. loadScorecards is idempotent.
+                if (typeof loadScorecards === 'function') {
+                    try { loadScorecards(); } catch (e) { console.error('loadScorecards failed:', e); }
+                }
+            } else {
+                panel.classList.add('hidden');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+                if (toggle) toggle.setAttribute('aria-expanded', 'false');
+                if (hint) hint.textContent = 'Click to manage';
+            }
+        }
+
+        // Refresh the embedded "Active Scorecard" summary line whenever the
+        // scorecards list reloads. Called from loadScorecards on success.
+        function updateEmbeddedScorecardSummary(scorecards) {
+            const el = document.getElementById('embedded-scorecard-summary');
+            if (!el) return;
+            const active = (scorecards || []).find(s => s.is_active);
+            if (active) {
+                const dimCount = (active.dimensions && typeof active.dimensions === 'object')
+                    ? Object.keys(active.dimensions).length
+                    : 0;
+                const attrCount = active.attribute_count || active.attributes_count
+                    || (active.dimensions
+                        ? Object.values(active.dimensions).reduce((n, d) => n + ((d && d.attributes) ? d.attributes.length : 0), 0)
+                        : 0);
+                el.textContent = `${active.name} v${active.version || '1.0'} · ${attrCount || '?'} attributes · ${dimCount} dimensions`;
+            } else {
+                el.textContent = 'No active scorecard — click to create one.';
+            }
         }
 
         async function runAIEvaluation() {
