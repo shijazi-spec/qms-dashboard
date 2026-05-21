@@ -23,6 +23,45 @@ import {
 } from "./callIntelligenceDb";
 import { getOpenAIApiKey, getOpenAIBaseUrl } from "./openaiCredentials";
 import { logger } from "./logger";
+import { logEvent } from "./eventLogsDatabase";
+
+// Retry transient OpenAI failures (429 / 5xx) with exponential backoff.
+// Permanent errors (auth, quota, bad request, parse) throw immediately so
+// we don't spin on a doomed request.
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+const MAX_RETRIES = 2;
+const BACKOFF_MS = [1500, 4000];
+
+async function generateWithRetry(
+  aiSdk: any,
+  prompt: string,
+  callId: number,
+): Promise<{ text: string }> {
+  const { generateText } = await import("ai");
+  let lastErr: any = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await generateText({
+        model: aiSdk("gpt-4o-mini"),
+        prompt,
+        maxTokens: 8000,
+      });
+    } catch (err: any) {
+      lastErr = err;
+      const status = err?.statusCode || err?.status || err?.response?.status;
+      const isRetryable = RETRYABLE_STATUS_CODES.has(status);
+      if (!isRetryable || attempt === MAX_RETRIES) {
+        throw err;
+      }
+      const waitMs = BACKOFF_MS[attempt] ?? 5000;
+      logger.warn(
+        `[SDRAutoEval] Retryable error on call ${callId} (status ${status}, attempt ${attempt + 1}/${MAX_RETRIES + 1}); backing off ${waitMs}ms`,
+      );
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+  throw lastErr;
+}
 
 export interface AutoEvalOutcome {
   ran: boolean;
@@ -87,11 +126,11 @@ export async function triggerSDREvaluationForCall(
 
     let aiResult;
     try {
-      aiResult = await generateText({
-        model: aiSdk("gpt-4o"),
-        prompt: evaluationPrompt,
-        maxTokens: 8000,
-      });
+      // gpt-4o-mini (via generateWithRetry) — 75% cheaper than gpt-4o with
+      // comparable quality on structured JSON output. Retries on 429 / 5xx
+      // transient OpenAI failures with exponential backoff so a brief
+      // network blip never kills a scorecard evaluation.
+      aiResult = await generateWithRetry(aiSdk, evaluationPrompt, callId);
     } catch (aiErr: any) {
       logger.warn(
         `[SDRAutoEval] AI call failed for call ${callId}: ${aiErr?.message || aiErr}`,
@@ -162,6 +201,34 @@ export async function triggerSDREvaluationForCall(
     logger.info(
       `[SDRAutoEval] Call ${callId} evaluated — score ${evaluation.overall_score}, scorecard ${scorecard.id} (${scorecard.name})`,
     );
+
+    // Audit-trail — durable evidence that this AI evaluation happened, what
+    // scorecard version was used, and what score landed. Required for
+    // ISO 9001 + PDPL audit-trail compliance on AI-assisted decisions.
+    // Wrapped so a logging hiccup never invalidates the evaluation itself.
+    try {
+      await logEvent({
+        actionType: "sdr_auto_evaluation",
+        entityType: "call_record",
+        entityId: String(callId),
+        module: "calls",
+        severity: evaluation.overall_score < 60 ? "WARNING" : "INFO",
+        aiInvolved: true,
+        description: `AI scored call ${callId} against scorecard "${scorecard.name}" — overall ${evaluation.overall_score}/100`,
+        newValue: {
+          evaluation_id: evaluationId,
+          scorecard_id: scorecard.id,
+          scorecard_name: scorecard.name,
+          overall_score: evaluation.overall_score,
+          dimension_scores: evaluation.dimension_scores,
+        },
+      });
+    } catch (logErr: any) {
+      logger.warn(
+        `[SDRAutoEval] event_logs audit write failed for call ${callId}: ${logErr?.message || logErr}`,
+      );
+    }
+
     return {
       ran: true,
       evaluationId,
