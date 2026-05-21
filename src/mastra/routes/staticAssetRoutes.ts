@@ -151,6 +151,30 @@ export const staticAssetRoutes = [
       ),
   },
   {
+    // Chart.js color palette + helpers used by dashboard/index.html and
+    // dashboard/consultant.html. Without an explicit route here, the
+    // deployment's SPA fallback serves dashboard HTML for /js/chart-theme.js,
+    // the browser rejects it as the wrong MIME type, downstream chart code
+    // ReferenceErrors on `ChartTheme.*`, and the dashboard render aborts
+    // before painting — surfaces as a misleading "No audit data yet" screen.
+    path: "/js/chart-theme.js",
+    method: "GET" as const,
+    createHandler: async () =>
+      serveStaticText(
+        "js/chart-theme.js",
+        "application/javascript; charset=utf-8",
+      ),
+  },
+  {
+    path: "/js/alert-resolution.js",
+    method: "GET" as const,
+    createHandler: async () =>
+      serveStaticText(
+        "js/alert-resolution.js",
+        "application/javascript; charset=utf-8",
+      ),
+  },
+  {
     path: "/dashboard/i18n/:lang",
     method: "GET" as const,
     createHandler: async () => {
