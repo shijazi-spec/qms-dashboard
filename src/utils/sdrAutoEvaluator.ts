@@ -126,11 +126,22 @@ export async function triggerSDREvaluationForCall(
 
     let aiResult;
     try {
+ feat/sdr-eval-quick-wins
       // gpt-4o-mini (via generateWithRetry) — 75% cheaper than gpt-4o with
       // comparable quality on structured JSON output. Retries on 429 / 5xx
       // transient OpenAI failures with exponential backoff so a brief
       // network blip never kills a scorecard evaluation.
       aiResult = await generateWithRetry(aiSdk, evaluationPrompt, callId);
+
+      // gpt-4o-mini — ~75% cheaper than gpt-4o with comparable quality on
+      // the structured 18-attribute JSON output. Keeps Phase B
+      // fire-and-forget evaluation cost-friendly even at SDR-team scale.
+      aiResult = await generateText({
+        model: aiSdk("gpt-4o-mini"),
+        prompt: evaluationPrompt,
+        maxTokens: 8000,
+      });
+ main
     } catch (aiErr: any) {
       logger.warn(
         `[SDRAutoEval] AI call failed for call ${callId}: ${aiErr?.message || aiErr}`,
