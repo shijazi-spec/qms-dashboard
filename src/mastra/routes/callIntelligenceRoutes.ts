@@ -1302,8 +1302,11 @@ ${transcriptText}
   "ai_insights": "رؤى وتحليلات إضافية من الذكاء الاصطناعي"
 }`;
 
+              // gpt-4o-mini: ~75% cheaper than gpt-4o with comparable quality
+              // on structured-output tasks like this JSON-extracting prompt.
+              // Per-call analysis cost drops from ~$0.005 to ~$0.001.
               const aiResult = await generateText({
-                model: aiSdk("gpt-4o"),
+                model: aiSdk("gpt-4o-mini"),
                 prompt: analysisPrompt,
                 maxTokens: 4000,
               });
@@ -1914,8 +1917,11 @@ ${transcriptText}
 
           logger?.info("🔬 [API] Sending evaluation to AI");
 
+          // gpt-4o-mini for SDR scorecard evaluation — same cost reduction
+          // logic as the analysis step above. The 18-attribute structured
+          // JSON output is well within mini's quality range.
           const aiResult = await generateText({
-            model: aiSdk("gpt-4o"),
+            model: aiSdk("gpt-4o-mini"),
             prompt: evaluationPrompt,
             maxTokens: 8000,
           });

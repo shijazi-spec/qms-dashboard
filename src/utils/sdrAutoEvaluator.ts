@@ -87,8 +87,11 @@ export async function triggerSDREvaluationForCall(
 
     let aiResult;
     try {
+      // gpt-4o-mini — ~75% cheaper than gpt-4o with comparable quality on
+      // the structured 18-attribute JSON output. Keeps Phase B
+      // fire-and-forget evaluation cost-friendly even at SDR-team scale.
       aiResult = await generateText({
-        model: aiSdk("gpt-4o"),
+        model: aiSdk("gpt-4o-mini"),
         prompt: evaluationPrompt,
         maxTokens: 8000,
       });
