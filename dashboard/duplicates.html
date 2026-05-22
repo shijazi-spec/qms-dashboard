@@ -2221,16 +2221,37 @@
                 const v = data.verification || {};
                 if (v.verified) {
                     alert(`✓ Verified — ${v.confirmed_deleted} record(s) confirmed deleted in Zoho.\n\n${v.notes}`);
+                    closeModal();
+                    refreshData();
                 } else {
-                    alert(
-                        `⚠ Verification failed — Zoho still shows ${v.still_present} non-primary record(s).\n\n` +
-                        `${v.notes}\n\n` +
-                        `The cluster has been re-opened so it stays in your queue. ` +
-                        `Confirm the merge in Zoho, then try Mark Resolved + Verify again.`
-                    );
+                    // Follow-up 2: on verification failure, immediately
+                    // open the pre-resolve snapshot viewer so the
+                    // operator sees what was about to be merged. The
+                    // resolve-and-verify endpoint returns latest_snapshot_id
+                    // (the snapshot captured by resolveCluster as its
+                    // first step). If for some reason the lookup failed
+                    // we fall back to the original alert-only flow.
+                    const snapshotId = data.latest_snapshot_id;
+                    const messageParts = [
+                        `⚠ Verification failed — Zoho still shows ${v.still_present} non-primary record(s).`,
+                        '',
+                        v.notes,
+                        '',
+                        'The cluster has been re-opened so it stays in your queue.',
+                        'Confirm the merge in Zoho, then try Mark Resolved + Verify again.',
+                    ];
+                    if (snapshotId) {
+                        messageParts.push('', 'Click OK to view the pre-resolve snapshot showing what was about to be merged.');
+                    }
+                    alert(messageParts.join('\n'));
+                    closeModal();
+                    refreshData();
+                    if (snapshotId) {
+                        // Layered above the (now closed) cluster modal —
+                        // openSnapshotViewer manages its own modal.
+                        openSnapshotViewer(snapshotId);
+                    }
                 }
-                closeModal();
-                refreshData();
             } catch (e) {
                 alert('Network error during resolve + verify: ' + (e && e.message || e));
                 if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.innerHTML = originalLabel; }
