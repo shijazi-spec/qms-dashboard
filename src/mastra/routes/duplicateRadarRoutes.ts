@@ -2863,6 +2863,109 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // List synthetic-domain clusters whose proposed authoritative domain
+    // collides with another active cluster. Each row pairs the synthetic
+    // cluster with the authoritative one so an operator can decide which
+    // to keep. Optional ?limit= caps how many synthetic clusters are scanned.
+    path: "/api/duplicates/domain-reconcile/collisions",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const limitQ = c.req.query("limit");
+          const limit = limitQ ? Number.parseInt(limitQ, 10) : undefined;
+
+          const { listDomainReconcileCollisions } = await import(
+            "../../utils/duplicateRadarDomainReconciler"
+          );
+          const result = await listDomainReconcileCollisions({
+            limit: Number.isFinite(limit as number) ? (limit as number) : undefined,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error listing domain-reconcile collisions:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Resolve a domain-reconcile collision by merging the synthetic cluster
+    // INTO the authoritative one. Body: { authoritative_cluster_id, notes? }.
+    // Records the action in duplicate_merge_actions as 'domain_collision_merge'.
+    // Requires the standard Duplicate Radar write role.
+    path: "/api/duplicates/domain-reconcile/collisions/:syntheticId/merge",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const user = await requireAdminOrKey(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const syntheticId = Number.parseInt(
+            c.req.param("syntheticId") ?? "",
+            10,
+          );
+          if (!Number.isFinite(syntheticId) || syntheticId <= 0) {
+            return c.json(
+              { success: false, error: "Invalid syntheticId path param" },
+              400,
+            );
+          }
+
+          let body: { authoritative_cluster_id?: number; notes?: string } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          const authoritativeId = Number(body.authoritative_cluster_id);
+          if (!Number.isFinite(authoritativeId) || authoritativeId <= 0) {
+            return c.json(
+              {
+                success: false,
+                error: "Body must include numeric authoritative_cluster_id",
+              },
+              400,
+            );
+          }
+
+          const { mergeSyntheticIntoAuthoritative } = await import(
+            "../../utils/duplicateRadarDomainReconciler"
+          );
+          const result = await mergeSyntheticIntoAuthoritative({
+            syntheticClusterId: syntheticId,
+            authoritativeClusterId: authoritativeId,
+            performedBy:
+              (user as any).email ?? (user as any).id ?? "domain-reconcile",
+            notes: body.notes,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error merging collision pair:", error);
+          const msg = String(error?.message ?? "");
+          // Validation errors (cluster not active / not synthetic / etc.) carry
+          // operator-actionable info — surface them rather than a generic 500.
+          const isValidation =
+            msg.includes("not found") ||
+            msg.includes("not active") ||
+            msg.includes("real domain") ||
+            msg.includes("must differ");
+          return c.json(
+            { success: false, error: isValidation ? msg : "An internal error occurred" },
+            isValidation ? 400 : 500,
+          );
+        }
+      };
+    },
+  },
+  {
     // KPI rollup over auto-created CAPAs (CS-overlap + CS-lifecycle).
     // Returns: totals, per-source-type breakdown, and a 30-day opened trend.
     path: "/api/duplicates/auto-capa/kpis",
