@@ -197,6 +197,13 @@ export interface AutoLinkResult {
   matches_count: number;
   scanned_leads: number;
   scanned_deals: number;
+  scanned_activities?: number;
+  /**
+   * How the link was decided. "phone" = phone digit match against
+   * Leads/Deals. "activity" = fallback heuristic that finds Leads/Deals
+   * the same agent touched in CRM on the same day as the call.
+   */
+  linked_via?: "phone" | "activity" | null;
   reason:
     | "linked"
     | "no_phone"
@@ -208,6 +215,217 @@ export interface AutoLinkResult {
   attempted_phone?: string;
 }
 
+// ─── Activity-based fallback matcher ───────────────────────────────────
+//
+// Phone matching is the primary signal but misses real cases:
+//   • The SDR called from a number not on file (mobile vs office).
+//   • Zoho stores phone in a custom field we don't read.
+//   • The lead was deduped/merged and the original phone moved.
+//
+// Fallback: every SDR call in CRM is typically followed by an activity
+// (Note, Call log, Task, Event) on the parent Lead/Deal. If the same
+// agent logged exactly one such activity on the same day as the
+// recorded call, we link the recording to that parent. Same-agent
+// same-day matching has a strong precision-vs-recall trade-off — we
+// only auto-link when there is exactly one candidate parent.
+
+interface ActivityParent {
+  module: CrmModule;
+  id: string;
+  activities: number;
+}
+
+function ymdInUTC(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function activityFallsOnDay(
+  ts: string | undefined | null,
+  targetDay: string,
+): boolean {
+  if (!ts) return false;
+  const parsed = new Date(ts);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return ymdInUTC(parsed) === targetDay;
+}
+
+function ownerMatchesAgent(
+  ownerName: string | undefined,
+  agentEmail: string,
+  agentName: string | null,
+): boolean {
+  if (!ownerName) return false;
+  const ownerLower = ownerName.toLowerCase();
+  // Zoho's `r.owner` is set to either Owner.name or Owner.id depending
+  // on what came back. Match conservatively: exact case-insensitive
+  // match against the agent's email local part OR full name.
+  if (agentEmail) {
+    const local = agentEmail.split("@")[0]?.toLowerCase();
+    if (local && ownerLower === local) return true;
+    if (ownerLower === agentEmail.toLowerCase()) return true;
+  }
+  if (agentName && ownerLower === agentName.toLowerCase()) return true;
+  return false;
+}
+
+function pushParent(
+  parents: Map<string, ActivityParent>,
+  module: CrmModule,
+  id: string | undefined,
+): void {
+  if (!id) return;
+  const key = `${module}:${id}`;
+  const existing = parents.get(key);
+  if (existing) {
+    existing.activities += 1;
+  } else {
+    parents.set(key, { module, id, activities: 1 });
+  }
+}
+
+export interface ActivityMatchResult {
+  matches: CrmPhoneMatch[];
+  scanned_activities: number;
+  errors: Record<string, string>;
+}
+
+/**
+ * Find Leads/Deals the same agent touched in CRM on the same day as the
+ * call. Used as a fallback when phone matching returns nothing.
+ *
+ * Strategy: pull recent Notes/Calls/Tasks/Events for the day window
+ * (±24h to absorb timezone skew), filter to those owned by the agent,
+ * collect every distinct Who_Id (→ Lead) and What_Id (→ Deal). Hydrate
+ * each unique parent so the caller has full match metadata.
+ */
+export async function findCrmRecordsByAgentActivity(
+  agentEmail: string,
+  agentName: string | null,
+  callDate: Date,
+  options: { perPage?: number } = {},
+): Promise<ActivityMatchResult> {
+  const errors: Record<string, string> = {};
+  if (!agentEmail && !agentName) {
+    return { matches: [], scanned_activities: 0, errors };
+  }
+  const hasZoho =
+    process.env.ZOHO_ACCESS_TOKEN ||
+    (process.env.ZOHO_CLIENT_ID &&
+      process.env.ZOHO_CLIENT_SECRET &&
+      process.env.ZOHO_REFRESH_TOKEN);
+  if (!hasZoho) {
+    return { matches: [], scanned_activities: 0, errors };
+  }
+
+  const perPage = options.perPage ?? 200;
+  // ±24h window absorbs UTC vs Asia/Riyadh skew without admitting cross-
+  // day false positives. Activity must also fall on the call's own day
+  // (in UTC) to be counted — the filter below enforces this.
+  const from = new Date(callDate.getTime() - 24 * 60 * 60 * 1000);
+  const to = new Date(callDate.getTime() + 24 * 60 * 60 * 1000);
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
+  const targetDay = ymdInUTC(callDate);
+
+  const safeFetch = async (
+    moduleName: "Notes" | "Calls" | "Tasks" | "Events",
+    timeField: string,
+  ): Promise<ZohoCRMRecord[]> => {
+    try {
+      return await fetchZohoRecords(moduleName, {
+        criteria: `(${timeField}:greater_than:${fromIso})and(${timeField}:less_than:${toIso})`,
+        perPage,
+      });
+    } catch (err: any) {
+      errors[moduleName] = String(err?.message || err);
+      return [];
+    }
+  };
+
+  const [notes, calls, tasks, events] = await Promise.all([
+    safeFetch("Notes", "Created_Time"),
+    safeFetch("Calls", "Call_Start_Time"),
+    safeFetch("Tasks", "Created_Time"),
+    safeFetch("Events", "Start_DateTime"),
+  ]);
+
+  const parents = new Map<string, ActivityParent>();
+  let scanned = 0;
+
+  const ingest = (
+    rows: ZohoCRMRecord[],
+    timeFieldGetter: (d: any) => string | undefined,
+  ): void => {
+    for (const r of rows) {
+      scanned += 1;
+      const ts = timeFieldGetter(r.data || {}) || r.createdTime;
+      if (!activityFallsOnDay(ts, targetDay)) continue;
+      if (!ownerMatchesAgent(r.owner, agentEmail, agentName)) continue;
+      const d: any = r.data || {};
+      // Who_Id → Leads or Contacts; What_Id → Deals/Accounts. We only
+      // claim Lead/Deal links here; Contact links would need a follow-up
+      // resolve step (skipped for MVP — the phone matcher already covers
+      // that path for converted-contact deals).
+      const who = d.Who_Id;
+      const what = d.What_Id;
+      if (who?.module === "Leads" || (typeof who === "object" && who?.id && d.$se_module === "Leads")) {
+        pushParent(parents, "Leads", who.id || who);
+      } else if (typeof who === "string") {
+        // Older Zoho payload — id only, module unknown. Skip.
+      }
+      if (what?.module === "Deals" || (typeof what === "object" && what?.id && d.$se_module === "Deals")) {
+        pushParent(parents, "Deals", what.id || what);
+      }
+      // Newer Zoho payload shape: $se_module flags the parent module.
+      if (d.$se_module === "Leads" && (who?.id || typeof who === "string")) {
+        pushParent(parents, "Leads", who?.id || who);
+      }
+      if (d.$se_module === "Deals" && (what?.id || typeof what === "string")) {
+        pushParent(parents, "Deals", what?.id || what);
+      }
+    }
+  };
+
+  ingest(notes, (d) => d?.Created_Time);
+  ingest(calls, (d) => d?.Call_Start_Time);
+  ingest(tasks, (d) => d?.Created_Time);
+  ingest(events, (d) => d?.Start_DateTime);
+
+  if (parents.size === 0) {
+    return { matches: [], scanned_activities: scanned, errors };
+  }
+
+  // Hydrate each unique parent so the caller has full match metadata
+  // (display name, owner, status). Fetches done in parallel; failures
+  // are tolerated per-record so a single 404 doesn't drop the rest.
+  const hydrated: CrmPhoneMatch[] = [];
+  await Promise.all(
+    Array.from(parents.values()).map(async (p) => {
+      try {
+        const rows = await fetchZohoRecords(p.module, {
+          criteria: `(id:equals:${p.id})`,
+          perPage: 1,
+        });
+        if (rows[0]) {
+          hydrated.push(p.module === "Leads" ? leadToMatch(rows[0]) : dealToMatch(rows[0]));
+        } else {
+          // Fall back to a bare match so the caller still sees the id.
+          hydrated.push({
+            id: p.id,
+            module: p.module,
+            display_name: undefined,
+          });
+        }
+      } catch (err: any) {
+        errors[`hydrate_${p.module}_${p.id}`] = String(err?.message || err);
+        hydrated.push({ id: p.id, module: p.module, display_name: undefined });
+      }
+    }),
+  );
+
+  return { matches: hydrated, scanned_activities: scanned, errors };
+}
+
 /**
  * Attempt to auto-link a call to a CRM record by phone. Tries Leads AND
  * Deals; prefers Deals when both contain a unique match because a Deal
@@ -217,34 +435,36 @@ export interface AutoLinkResult {
  * Persistence is split into two callbacks so callers don't need to import
  * the DB layer here.
  */
+export interface AutoLinkOptions {
+  maxRecordsPerModule?: number;
+  /** Enables activity-based fallback when phone match is no_phone/no_match. */
+  agentEmail?: string;
+  agentName?: string | null;
+  callDate?: Date | null;
+}
+
 export async function autoLinkCallToCrm(
   callRecordId: number,
   phoneCandidates: Array<string | undefined | null>,
   persistLeadId: (callRecordId: number, leadId: string) => Promise<unknown>,
   persistDealId: (callRecordId: number, dealId: string) => Promise<unknown>,
-  options: { maxRecordsPerModule?: number } = {},
+  options: AutoLinkOptions = {},
 ): Promise<AutoLinkResult> {
   const phones = (phoneCandidates || []).filter(
     (p): p is string => typeof p === "string" && p.trim().length > 0,
   );
-  if (phones.length === 0) {
-    return {
-      linked: false,
-      lead_id: null,
-      deal_id: null,
-      picked_module: null,
-      matches_count: 0,
-      scanned_leads: 0,
-      scanned_deals: 0,
-      reason: "no_phone",
-    };
-  }
 
   let ambiguousFallback: AutoLinkResult | null = null;
+  let phoneScannedLeads = 0;
+  let phoneScannedDeals = 0;
+  let lastAttemptedPhone: string | undefined;
+  let noZohoBail = false;
 
+  // Phase 1 — phone match (unchanged primary signal).
   for (const phone of phones) {
     const normalized = normalizePhoneDigits(phone);
     if (!normalized || normalized.length < 7) continue;
+    lastAttemptedPhone = phone;
 
     let result: CombinedPhoneMatchResult;
     try {
@@ -254,24 +474,16 @@ export async function autoLinkCallToCrm(
     } catch {
       continue;
     }
+    phoneScannedLeads = Math.max(phoneScannedLeads, result.scanned_leads);
+    phoneScannedDeals = Math.max(phoneScannedDeals, result.scanned_deals);
 
     if (
       result.scanned_leads === 0 &&
       result.scanned_deals === 0 &&
       result.matches.length === 0
     ) {
-      // Both fetches returned nothing — likely no Zoho creds.
-      return {
-        linked: false,
-        lead_id: null,
-        deal_id: null,
-        picked_module: null,
-        matches_count: 0,
-        scanned_leads: 0,
-        scanned_deals: 0,
-        reason: "no_zoho",
-        attempted_phone: phone,
-      };
+      noZohoBail = true;
+      continue;
     }
 
     // Prefer Deals when at least one Deal matched — a converted Deal
@@ -288,7 +500,7 @@ export async function autoLinkCallToCrm(
         } else {
           await persistLeadId(callRecordId, match.id);
         }
-      } catch (err: any) {
+      } catch {
         return {
           linked: false,
           lead_id: match.module === "Leads" ? match.id : null,
@@ -298,6 +510,7 @@ export async function autoLinkCallToCrm(
           matches_count: 1,
           scanned_leads: result.scanned_leads,
           scanned_deals: result.scanned_deals,
+          linked_via: "phone",
           reason: "persist_failed",
           attempted_phone: phone,
         };
@@ -311,6 +524,7 @@ export async function autoLinkCallToCrm(
         matches_count: 1,
         scanned_leads: result.scanned_leads,
         scanned_deals: result.scanned_deals,
+        linked_via: "phone",
         reason: "linked",
         attempted_phone: phone,
       };
@@ -325,13 +539,109 @@ export async function autoLinkCallToCrm(
         matches_count: preferred.length,
         scanned_leads: result.scanned_leads,
         scanned_deals: result.scanned_deals,
+        linked_via: null,
         reason: "ambiguous",
         attempted_phone: phone,
       };
     }
   }
 
+  // Phase 2 — activity-based fallback. Runs when phone matching didn't
+  // produce a unique winner: caller passed no phones, all phones came
+  // up empty, or the phone matches were ambiguous. Single unique parent
+  // wins; multiple parents stay ambiguous (returned for manual review).
+  if (options.agentEmail && options.callDate) {
+    const activityRes = await findCrmRecordsByAgentActivity(
+      options.agentEmail,
+      options.agentName ?? null,
+      options.callDate,
+    );
+    if (activityRes.matches.length === 1) {
+      const match = activityRes.matches[0];
+      try {
+        if (match.module === "Deals") {
+          await persistDealId(callRecordId, match.id);
+        } else {
+          await persistLeadId(callRecordId, match.id);
+        }
+      } catch {
+        return {
+          linked: false,
+          lead_id: match.module === "Leads" ? match.id : null,
+          deal_id: match.module === "Deals" ? match.id : null,
+          picked_module: match.module,
+          picked_match: match,
+          matches_count: 1,
+          scanned_leads: phoneScannedLeads,
+          scanned_deals: phoneScannedDeals,
+          scanned_activities: activityRes.scanned_activities,
+          linked_via: "activity",
+          reason: "persist_failed",
+          attempted_phone: lastAttemptedPhone,
+        };
+      }
+      return {
+        linked: true,
+        lead_id: match.module === "Leads" ? match.id : null,
+        deal_id: match.module === "Deals" ? match.id : null,
+        picked_module: match.module,
+        picked_match: match,
+        matches_count: 1,
+        scanned_leads: phoneScannedLeads,
+        scanned_deals: phoneScannedDeals,
+        scanned_activities: activityRes.scanned_activities,
+        linked_via: "activity",
+        reason: "linked",
+        attempted_phone: lastAttemptedPhone,
+      };
+    }
+    if (activityRes.matches.length > 1 && !ambiguousFallback) {
+      ambiguousFallback = {
+        linked: false,
+        lead_id: null,
+        deal_id: null,
+        picked_module: null,
+        matches_count: activityRes.matches.length,
+        scanned_leads: phoneScannedLeads,
+        scanned_deals: phoneScannedDeals,
+        scanned_activities: activityRes.scanned_activities,
+        linked_via: null,
+        reason: "ambiguous",
+        attempted_phone: lastAttemptedPhone,
+      };
+    }
+  }
+
   if (ambiguousFallback) return ambiguousFallback;
+
+  if (phones.length === 0 && !options.agentEmail) {
+    return {
+      linked: false,
+      lead_id: null,
+      deal_id: null,
+      picked_module: null,
+      matches_count: 0,
+      scanned_leads: 0,
+      scanned_deals: 0,
+      linked_via: null,
+      reason: "no_phone",
+    };
+  }
+
+  if (noZohoBail) {
+    return {
+      linked: false,
+      lead_id: null,
+      deal_id: null,
+      picked_module: null,
+      matches_count: 0,
+      scanned_leads: 0,
+      scanned_deals: 0,
+      linked_via: null,
+      reason: "no_zoho",
+      attempted_phone: lastAttemptedPhone,
+    };
+  }
 
   return {
     linked: false,
@@ -339,9 +649,11 @@ export async function autoLinkCallToCrm(
     deal_id: null,
     picked_module: null,
     matches_count: 0,
-    scanned_leads: 0,
-    scanned_deals: 0,
+    scanned_leads: phoneScannedLeads,
+    scanned_deals: phoneScannedDeals,
+    linked_via: null,
     reason: "no_match",
+    attempted_phone: lastAttemptedPhone,
   };
 }
 

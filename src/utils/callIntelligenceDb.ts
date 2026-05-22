@@ -358,6 +358,36 @@ export async function updateCallRecordDealId(
   return result.rows[0] || null;
 }
 
+// Persist which signal produced the CRM link — "phone" (digit match
+// against Leads/Deals) or "activity" (same-day same-agent CRM activity).
+// Diagnostic only; the eval panel surfaces this as a confidence badge.
+// Idempotent column add so existing deploys don't need a migration step.
+let _linkedViaColumnReady: Promise<void> | null = null;
+async function ensureLinkedViaColumn(): Promise<void> {
+  if (_linkedViaColumnReady) return _linkedViaColumnReady;
+  _linkedViaColumnReady = pool
+    .query(
+      `ALTER TABLE call_records ADD COLUMN IF NOT EXISTS linked_via VARCHAR(20)`,
+    )
+    .then(() => undefined)
+    .catch((err) => {
+      logger.warn("[CallDB] linked_via column add failed (will retry):", err);
+      _linkedViaColumnReady = null;
+    });
+  return _linkedViaColumnReady;
+}
+
+export async function updateCallRecordLinkedVia(
+  id: number,
+  linkedVia: "phone" | "activity",
+): Promise<void> {
+  await ensureLinkedViaColumn();
+  await pool.query(
+    `UPDATE call_records SET linked_via = $1, updated_at = NOW() WHERE id = $2`,
+    [linkedVia, id],
+  );
+}
+
 export async function getCallRecordById(
   id: number,
 ): Promise<CallRecord | null> {
