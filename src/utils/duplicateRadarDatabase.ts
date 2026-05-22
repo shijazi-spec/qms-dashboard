@@ -491,6 +491,34 @@ export async function initDuplicateRadarTables(): Promise<void> {
   await pool.query(
     `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS verification_notes TEXT`,
   );
+  // R10 (medium-term): pre-merge snapshots. Cloudingo's flagship feature is
+  // "Undo Merge" — we can't actually undo a Zoho merge (Zoho deletes the
+  // record), but we can freeze a JSON copy of the cluster + every record
+  // (including raw_data) at the moment "Mark Resolved" is clicked. The
+  // forensic trail lets owners audit what was about to be lost if a
+  // verification later flags the merge as wrong, or settle a dispute weeks
+  // later when memories fade. ON DELETE SET NULL so the snapshot survives
+  // even if the cluster row is purged in a cleanup job.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS duplicate_cluster_snapshots (
+      id              SERIAL PRIMARY KEY,
+      cluster_id      INTEGER REFERENCES duplicate_clusters(id) ON DELETE SET NULL,
+      snapshot_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      taken_by        VARCHAR(255),
+      trigger         VARCHAR(64) NOT NULL,
+      merge_action_id INTEGER,
+      record_count    INTEGER NOT NULL DEFAULT 0,
+      cluster_snapshot JSONB NOT NULL,
+      records_snapshot JSONB NOT NULL,
+      notes           TEXT
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_dr_cluster_snapshots_cluster ON duplicate_cluster_snapshots(cluster_id) WHERE cluster_id IS NOT NULL`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_dr_cluster_snapshots_at ON duplicate_cluster_snapshots(snapshot_at DESC)`,
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_records (
@@ -2256,6 +2284,109 @@ export async function markPrimaryRecord(
   return result.rows.length > 0;
 }
 
+/**
+ * R10 — Freeze the current cluster + record state into duplicate_cluster_snapshots
+ * so that future audit / dispute / forensic queries can see exactly what the
+ * cluster looked like at the moment of an action.
+ *
+ * Best-effort by design: callers should wrap calls in try/catch but a thrown
+ * snapshot error must NOT block the operator's primary action (resolve,
+ * split, etc). Returns the new snapshot id on success or null on failure.
+ *
+ * Trigger labels currently in use:
+ *   'pre_resolve' — before resolveCluster mutates status to resolved/ignored
+ */
+export async function captureClusterSnapshot(
+  clusterId: number,
+  takenBy: string,
+  trigger: string,
+  opts: { mergeActionId?: number | null; notes?: string | null } = {},
+): Promise<number | null> {
+  try {
+    const clusterR = await pool.query(
+      "SELECT * FROM duplicate_clusters WHERE id = $1",
+      [clusterId],
+    );
+    if (clusterR.rows.length === 0) {
+      logger.warn(
+        `[duplicate-radar/snapshot] cluster ${clusterId} not found; skipping snapshot`,
+      );
+      return null;
+    }
+    const recordsR = await pool.query(
+      "SELECT * FROM duplicate_records WHERE cluster_id = $1 ORDER BY is_primary DESC, id ASC",
+      [clusterId],
+    );
+    const result = await pool.query<{ id: number }>(
+      `INSERT INTO duplicate_cluster_snapshots
+         (cluster_id, taken_by, trigger, merge_action_id,
+          record_count, cluster_snapshot, records_snapshot, notes)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)
+       RETURNING id`,
+      [
+        clusterId,
+        takenBy,
+        trigger,
+        opts.mergeActionId ?? null,
+        recordsR.rows.length,
+        JSON.stringify(clusterR.rows[0]),
+        JSON.stringify(recordsR.rows),
+        opts.notes ?? null,
+      ],
+    );
+    return result.rows[0]?.id ?? null;
+  } catch (err) {
+    logger.warn(
+      `[duplicate-radar/snapshot] failed to capture snapshot for cluster ${clusterId} (trigger=${trigger}): ${(err as Error).message}`,
+    );
+    return null;
+  }
+}
+
+export interface ClusterSnapshotSummary {
+  id: number;
+  cluster_id: number | null;
+  snapshot_at: Date;
+  taken_by: string | null;
+  trigger: string;
+  merge_action_id: number | null;
+  record_count: number;
+  notes: string | null;
+}
+
+export interface ClusterSnapshotFull extends ClusterSnapshotSummary {
+  cluster_snapshot: any;
+  records_snapshot: any[];
+}
+
+export async function listClusterSnapshots(
+  clusterId: number,
+): Promise<ClusterSnapshotSummary[]> {
+  const r = await pool.query<ClusterSnapshotSummary>(
+    `SELECT id, cluster_id, snapshot_at, taken_by, trigger,
+            merge_action_id, record_count, notes
+       FROM duplicate_cluster_snapshots
+      WHERE cluster_id = $1
+      ORDER BY snapshot_at DESC`,
+    [clusterId],
+  );
+  return r.rows;
+}
+
+export async function getClusterSnapshot(
+  snapshotId: number,
+): Promise<ClusterSnapshotFull | null> {
+  const r = await pool.query(
+    `SELECT id, cluster_id, snapshot_at, taken_by, trigger,
+            merge_action_id, record_count, notes,
+            cluster_snapshot, records_snapshot
+       FROM duplicate_cluster_snapshots
+      WHERE id = $1`,
+    [snapshotId],
+  );
+  return (r.rows[0] as ClusterSnapshotFull) ?? null;
+}
+
 export async function resolveCluster(
   clusterId: number,
   action: "resolve" | "ignore",
@@ -2266,6 +2397,15 @@ export async function resolveCluster(
   if (primaryRecordId) {
     await markPrimaryRecord(clusterId, primaryRecordId);
   }
+
+  // R10: freeze the cluster + records BEFORE we mutate state. Best-effort —
+  // a snapshot failure must not block the operator's primary action.
+  await captureClusterSnapshot(clusterId, performedBy, "pre_resolve", {
+    notes:
+      action === "resolve"
+        ? "Pre-resolve snapshot taken when operator clicked Mark Resolved"
+        : "Pre-ignore snapshot taken when operator clicked Ignore",
+  });
 
   const nonPrimary = await pool.query(
     "SELECT id FROM duplicate_records WHERE cluster_id = $1 AND is_primary = false",

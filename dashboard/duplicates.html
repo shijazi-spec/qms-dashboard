@@ -973,6 +973,25 @@
                 </div>
             </div>
         </div>
+
+        <!-- R10: pre-merge snapshot viewer. Layered above the cluster modal
+             (z-60) so an operator can keep both open and compare. -->
+        <div id="clusterSnapshotModal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center" style="z-index: 60;" data-testid="modal-snapshot">
+            <div class="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[85vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900">Cluster Snapshot</h3>
+                            <p class="text-xs text-gray-500">Frozen state at the moment Mark Resolved was clicked.</p>
+                        </div>
+                        <button data-on-click="closeSnapshotViewer" data-testid="button-close-snapshot" class="text-gray-400 hover:text-gray-600" aria-label="Close snapshot viewer">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <div id="clusterSnapshotBody" class="text-sm"></div>
+                </div>
+            </div>
+        </div>
     </main>
     </div>
 
@@ -1624,7 +1643,115 @@
                 </div>`;
             }
 
+            // R10: snapshots section. Empty placeholder rendered with the
+            // modal; the async loadClusterSnapshots() fetch populates it
+            // after the main modal content is in place so the modal doesn't
+            // block on a second round-trip.
+            html += `<div class="border-t pt-4 mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-sm font-semibold text-gray-700">Pre-merge snapshots</h4>
+                    <span class="text-xs text-gray-400">Forensic trail — frozen at Mark Resolved click</span>
+                </div>
+                <div id="clusterSnapshotsList" data-cluster-id="${cluster.id}" class="text-xs text-gray-500">Loading snapshots…</div>
+            </div>`;
+
             document.getElementById('modalContent').innerHTML = html;
+            loadClusterSnapshots(cluster.id);
+        }
+
+        // R10: fetch + render the snapshot list for the current cluster.
+        // Silent on errors (we don't want a transient network blip to make
+        // the whole cluster modal look broken — the section just stays in
+        // its placeholder state).
+        async function loadClusterSnapshots(clusterId) {
+            const listEl = document.getElementById('clusterSnapshotsList');
+            if (!listEl || String(listEl.dataset.clusterId) !== String(clusterId)) return;
+            try {
+                const res = await fetch(`/api/duplicates/clusters/${clusterId}/snapshots`);
+                if (!res.ok) { listEl.textContent = 'Snapshots unavailable.'; return; }
+                const data = await res.json();
+                const snaps = (data && data.snapshots) || [];
+                if (snaps.length === 0) {
+                    listEl.innerHTML = '<span class="text-gray-400 italic">No snapshots yet — they\'re created automatically when an operator clicks Mark Resolved.</span>';
+                    return;
+                }
+                listEl.innerHTML = '<ul class="divide-y divide-gray-100 border border-gray-100 rounded">' + snaps.map(s => {
+                    const when = formatDate(s.snapshot_at);
+                    const who = escapeHtml(s.taken_by || 'system');
+                    const trig = escapeHtml(s.trigger || 'unknown');
+                    const cnt = Number(s.record_count || 0);
+                    return `<li class="px-3 py-2 flex items-center justify-between gap-3">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs text-gray-700"><span class="font-medium">${escapeHtml(trig)}</span> · ${when} · by ${who}</div>
+                            <div class="text-[11px] text-gray-500">${cnt} record${cnt === 1 ? '' : 's'} frozen${s.notes ? ' · ' + escapeHtml(s.notes) : ''}</div>
+                        </div>
+                        <button data-on-click="openSnapshotViewer" data-args="[${s.id}]" data-testid="button-view-snapshot-${s.id}" class="px-2 py-1 text-xs font-medium rounded bg-gray-100 hover:bg-gray-200 text-gray-700 whitespace-nowrap">View</button>
+                    </li>`;
+                }).join('') + '</ul>';
+            } catch (e) {
+                listEl.textContent = 'Snapshots unavailable.';
+            }
+        }
+
+        // R10: open the snapshot viewer modal and lazy-fetch the full
+        // frozen state. Separate modal (clusterSnapshotModal) layered on
+        // top of the cluster modal so the operator can keep both views
+        // available side-by-side.
+        async function openSnapshotViewer(snapshotId) {
+            const m = document.getElementById('clusterSnapshotModal');
+            const body = document.getElementById('clusterSnapshotBody');
+            if (!m || !body) return;
+            m.classList.remove('hidden');
+            body.innerHTML = `<div class="text-center text-gray-400 py-8">Loading snapshot…</div>`;
+            try {
+                const res = await fetch(`/api/duplicates/snapshots/${snapshotId}`);
+                if (!res.ok) {
+                    body.innerHTML = `<div class="text-center text-red-600 py-6 text-sm">Server returned ${res.status} for snapshot ${escapeHtml(String(snapshotId))}.</div>`;
+                    return;
+                }
+                const data = await res.json();
+                const s = data && data.snapshot;
+                if (!s) {
+                    body.innerHTML = `<div class="text-center text-red-600 py-6 text-sm">Snapshot not found.</div>`;
+                    return;
+                }
+                renderSnapshotDetail(s);
+            } catch (e) {
+                body.innerHTML = `<div class="text-center text-red-600 py-6 text-sm">Failed to load snapshot: ${escapeHtml(String(e && e.message || e))}</div>`;
+            }
+        }
+        function closeSnapshotViewer() {
+            const m = document.getElementById('clusterSnapshotModal');
+            if (m) m.classList.add('hidden');
+        }
+        function renderSnapshotDetail(s) {
+            const body = document.getElementById('clusterSnapshotBody');
+            if (!body) return;
+            const meta = `<div class="bg-amber-50 border border-amber-200 rounded p-3 mb-4 text-xs text-amber-900">
+                <div class="font-semibold mb-1">Forensic snapshot — read-only frozen state</div>
+                <div>Trigger: <span class="font-medium">${escapeHtml(s.trigger || '—')}</span> · Captured: ${formatDate(s.snapshot_at)} · By: ${escapeHtml(s.taken_by || 'system')}</div>
+                ${s.notes ? '<div class="opacity-80 mt-1">' + escapeHtml(s.notes) + '</div>' : ''}
+            </div>`;
+            const cluster = s.cluster_snapshot || {};
+            const records = Array.isArray(s.records_snapshot) ? s.records_snapshot : [];
+            const clusterFacts = `<div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4 text-xs">
+                ${[
+                    ['Cluster ID', cluster.id],
+                    ['Domain', cluster.domain],
+                    ['Company', cluster.company_name],
+                    ['Confidence', (cluster.confidence_score || 0) + '%'],
+                    ['Status at snapshot', cluster.status],
+                    ['Total records', cluster.total_records],
+                ].map(([k, v]) => `<div><div class="text-gray-500">${escapeHtml(k)}</div><div class="font-medium text-gray-800">${escapeHtml(String(v ?? '—'))}</div></div>`).join('')}
+            </div>`;
+            const rowsHtml = records.length === 0
+                ? '<div class="text-xs text-gray-400 italic">No records were attached to this cluster at snapshot time.</div>'
+                : '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>'
+                    + ['Zoho ID','Type','Name','Company','Owner','Status/Stage','Primary'].map(h => `<th class="px-2 py-1 text-start font-medium text-gray-600">${escapeHtml(h)}</th>`).join('')
+                    + '</tr></thead><tbody>'
+                    + records.map(r => `<tr class="border-t border-gray-100"><td class="px-2 py-1 font-mono text-gray-700">${escapeHtml(r.zoho_record_id || '—')}</td><td class="px-2 py-1">${escapeHtml(r.record_type || '—')}</td><td class="px-2 py-1">${escapeHtml(r.record_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.company_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.owner_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.status || r.stage || '—')}</td><td class="px-2 py-1">${r.is_primary ? '<span class="text-green-700 font-medium">Yes</span>' : '<span class="text-gray-400">No</span>'}</td></tr>`).join('')
+                    + '</tbody></table></div>';
+            body.innerHTML = meta + clusterFacts + '<h4 class="text-sm font-semibold text-gray-700 mb-2">Records (frozen)</h4>' + rowsHtml;
         }
 
         async function splitClusterByDomain(clusterId) {
