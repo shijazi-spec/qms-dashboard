@@ -3277,13 +3277,14 @@
                         </div>
                         <div class="divide-y max-h-80 overflow-y-auto">
                             ${attrs.map(attr => `
-                                <div class="p-4">
+                                <div class="p-4" data-attribute-id="${escapeHtml(attr.attribute_id || '')}">
                                     <div class="flex items-start justify-between">
                                         <div class="flex-1">
-                                            <div class="flex items-center gap-2">
+                                            <div class="flex items-center gap-2 flex-wrap">
                                                 <span class="px-2 py-0.5 text-xs rounded ${attr.status === 'PASS' ? 'bg-green-100 text-green-700' : attr.status === 'FAIL' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}">${escapeHtml(attr.status)}</span>
                                                 <span class="font-medium">${escapeHtml(attr.attribute_name)}</span>
                                                 <span class="text-xs text-gray-400 capitalize">(${escapeHtml(attr.dimension)})</span>
+                                                <span class="coaching-priority-slot"></span>
                                             </div>
                                             ${attr.comment ? `<p class="text-sm text-gray-600 mt-1">${escapeHtml(attr.comment)}</p>` : ''}
                                             ${attr.evidence_quotes?.length ? `<p class="text-xs text-gray-400 mt-1 italic">"${escapeHtml(attr.evidence_quotes[0])}"</p>` : ''}
@@ -3291,6 +3292,7 @@
                                         ${attr.score !== null ? `<div class="text-end"><span class="text-lg font-bold ${attr.score >= 7 ? 'text-green-600' : attr.score >= 5 ? 'text-amber-600' : 'text-red-600'}">${_fn(attr.score)}</span><span class="text-gray-400">/${_fn(10)}</span></div>` : ''}
                                     </div>
                                     ${attr.improvement_tip ? `<div class="mt-2 text-xs bg-blue-50 text-blue-700 p-2 rounded">💡 ${escapeHtml(attr.improvement_tip)}</div>` : ''}
+                                    <div class="coaching-courses-slot mt-2"></div>
                                 </div>
                             `).join('') || `<div class="p-4 text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_attr_eval'))}</div>`}
                         </div>
@@ -3324,6 +3326,23 @@
                         </div>
                     </div>
                     ` : ''}
+
+                    <!-- Medium #7 — Coaching Plan rollup. Loaded async from
+                         /api/calls/:id/coaching-suggestions after the eval
+                         renders. Lists every attribute below the 80% band
+                         grouped by priority, each linked to matched courses
+                         from the training_courses catalog. -->
+                    <div id="coaching-plan-panel" class="hidden bg-white border-2 border-amber-200 rounded-xl p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <h4 class="font-semibold text-amber-900">🎓 Coaching Plan</h4>
+                                <p class="text-xs text-gray-500 mt-0.5">Attributes below 80% with matched training courses, prioritised Urgent → Medium.</p>
+                            </div>
+                            <span id="coaching-plan-highest" class="text-xs"></span>
+                        </div>
+                        <div id="coaching-plan-rollup" class="text-xs text-gray-500 mb-2"></div>
+                        <div id="coaching-plan-list" class="space-y-3"></div>
+                    </div>
 
                     <!-- Manager Review (Quick Win #6) — Approve / Disagree
                          flow that determines the canonical score for this
@@ -3399,6 +3418,7 @@
             // Fires once per evaluation render so re-eval refreshes it too.
             if (selectedEvalCall?.id) {
                 loadManagerReviewHistory(selectedEvalCall.id);
+                loadCoachingPlan(selectedEvalCall.id);
             }
         }
 
@@ -3480,6 +3500,100 @@
             } catch (e) {
                 console.warn('loadManagerReviewHistory failed:', e);
                 if (summary) summary.textContent = '';
+            }
+        }
+
+        // ===================================================================
+        // Medium #7 — Coaching loop integration.
+        // After the SDR evaluation renders, fetch prioritised coaching
+        // suggestions and (a) inject priority badges + course pills next to
+        // each below-threshold attribute, (b) populate the roll-up plan
+        // panel so managers can see the full coaching agenda at a glance.
+        // ===================================================================
+        async function loadCoachingPlan(callId) {
+            const panel = document.getElementById('coaching-plan-panel');
+            const list = document.getElementById('coaching-plan-list');
+            const rollup = document.getElementById('coaching-plan-rollup');
+            const highest = document.getElementById('coaching-plan-highest');
+            if (!panel || !list) return;
+
+            try {
+                const res = await fetch(`/api/calls/${callId}/coaching-suggestions`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data.success || !data.plan) return;
+
+                const suggestions = data.plan.suggestions || [];
+                const priorityClass = (p) => ({
+                    urgent: 'bg-red-100 text-red-700 border-red-300',
+                    high:   'bg-orange-100 text-orange-700 border-orange-300',
+                    medium: 'bg-amber-100 text-amber-700 border-amber-300',
+                    low:    'bg-gray-100 text-gray-600 border-gray-200',
+                }[p] || 'bg-gray-100 text-gray-600 border-gray-200');
+
+                // (a) Inject priority badge + course pills inline on each attribute row
+                suggestions.forEach(s => {
+                    const row = document.querySelector(`[data-attribute-id="${s.attribute_id}"]`);
+                    if (!row) return;
+                    const slot = row.querySelector('.coaching-priority-slot');
+                    if (slot) {
+                        slot.innerHTML = `<span class="px-2 py-0.5 text-[10px] rounded border ${priorityClass(s.priority)} font-medium uppercase">${escapeHtml(s.priority_label)}${s.score_pct !== null ? ' · ' + s.score_pct + '%' : ''}</span>`;
+                    }
+                    const courseSlot = row.querySelector('.coaching-courses-slot');
+                    if (courseSlot && s.matched_courses.length > 0) {
+                        courseSlot.innerHTML = `
+                            <div class="text-xs text-gray-600 mb-1">📚 Suggested training:</div>
+                            <div class="flex flex-wrap gap-1.5">
+                                ${s.matched_courses.map(c => `
+                                    <a href="/team#training" title="${escapeHtml(c.description || '')}" class="px-2 py-0.5 text-xs rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">
+                                        ${escapeHtml(c.name)}<span class="text-indigo-400"> · ${c.duration_hours}h</span>
+                                    </a>
+                                `).join('')}
+                            </div>
+                        `;
+                    } else if (courseSlot) {
+                        courseSlot.innerHTML = `<div class="text-xs text-gray-400 italic">No catalog course matched — coach manually using the tip above.</div>`;
+                    }
+                });
+
+                // (b) Render the roll-up Coaching Plan panel
+                if (suggestions.length === 0) {
+                    panel.classList.remove('hidden');
+                    list.innerHTML = '';
+                    if (rollup) rollup.textContent = data.plan.rollup_message_en || '';
+                    if (highest) highest.innerHTML = `<span class="px-2 py-0.5 text-[10px] rounded bg-green-100 text-green-700 font-medium uppercase">No gaps</span>`;
+                    return;
+                }
+
+                panel.classList.remove('hidden');
+                if (rollup) rollup.textContent = data.plan.rollup_message_en || '';
+                if (highest) {
+                    const p = data.plan.highest_priority;
+                    highest.innerHTML = `<span class="px-2 py-0.5 text-[10px] rounded border ${priorityClass(p)} font-medium uppercase">Top: ${escapeHtml(p)}</span>`;
+                }
+
+                list.innerHTML = suggestions.map(s => `
+                    <div class="border-l-4 ${s.priority === 'urgent' ? 'border-red-500' : s.priority === 'high' ? 'border-orange-500' : 'border-amber-400'} pl-3 py-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="px-2 py-0.5 text-[10px] rounded border ${priorityClass(s.priority)} font-medium uppercase">${escapeHtml(s.priority_label)}</span>
+                            <span class="font-medium text-sm">${escapeHtml(s.attribute_name)}</span>
+                            <span class="text-xs text-gray-400 capitalize">(${escapeHtml(s.dimension)})</span>
+                            ${s.score_pct !== null ? `<span class="text-xs text-gray-600">${s.score_pct}%</span>` : ''}
+                        </div>
+                        ${s.improvement_tip ? `<p class="text-xs text-gray-600 mt-1">${escapeHtml(s.improvement_tip)}</p>` : ''}
+                        ${s.matched_courses.length > 0 ? `
+                            <div class="flex flex-wrap gap-1.5 mt-1.5">
+                                ${s.matched_courses.map(c => `
+                                    <a href="/team#training" title="${escapeHtml(c.description || '')}" class="px-2 py-0.5 text-xs rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">
+                                        ${escapeHtml(c.name)}<span class="text-indigo-400"> · ${c.duration_hours}h</span>
+                                    </a>
+                                `).join('')}
+                            </div>
+                        ` : `<div class="text-xs text-gray-400 italic mt-1">No catalog course matched yet — add one in Team Tracker → Training.</div>`}
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.warn('loadCoachingPlan failed:', e);
             }
         }
 

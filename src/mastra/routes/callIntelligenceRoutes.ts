@@ -2209,6 +2209,56 @@ ${transcriptText}
     },
   },
   // ===================================================================
+  // Medium #7 — Coaching loop integration.
+  // Returns prioritised coaching suggestions for a call by mapping
+  // every below-threshold attribute against the training_courses
+  // catalog. On-demand so it always reflects the current catalog.
+  // ===================================================================
+  {
+    path: "/api/calls/:id/coaching-suggestions",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const callId = parseInt(c.req.param("id"));
+          const { getSDREvaluation, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          const evaluation = await getSDREvaluation(callId);
+          if (!evaluation) {
+            return c.json(
+              { success: false, error: "No SDR evaluation exists for this call yet" },
+              404,
+            );
+          }
+
+          const { buildCoachingPlan } = await import(
+            "../../utils/sdrCoachingSuggestions"
+          );
+          const plan = await buildCoachingPlan(evaluation);
+
+          return c.json({ success: true, plan });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Error building coaching suggestions:", {
+            message: errAny?.message,
+          });
+          return c.json(
+            {
+              success: false,
+              error: errAny?.message || "Failed to build coaching suggestions",
+            },
+            500,
+          );
+        }
+      };
+    },
+  },
+  // ===================================================================
   // Medium #10 — Excel export of one call's SDR evaluation.
   // Multi-sheet workbook (Summary, Attribute Evaluations, Coaching,
   // Review History) so Quality team can email a shareable .xlsx to
