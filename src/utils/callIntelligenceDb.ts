@@ -884,17 +884,31 @@ export async function getCallAnalyticsSummary(
     paramIndex++;
   }
 
+  // Headline avg_qa_score uses the same canonical-score rule as the
+  // per-agent breakdown below: when a manager review carries an
+  // adjusted_overall_score, that value wins over the raw AI score.
+  // Prior to this fix the headline read from the legacy call_qa_scores
+  // table while per-agent rows read from sdr_call_evaluations with
+  // COALESCE — inconsistent UX where headline and rows disagreed.
   const summaryResult = await pool.query(
     `
-    SELECT 
+    SELECT
       COUNT(DISTINCT cr.id) as total_calls,
       COUNT(DISTINCT CASE WHEN cr.status = 'analyzed' THEN cr.id END) as analyzed_calls,
       AVG(ca.sentiment_score) as avg_sentiment,
-      AVG(cq.score_percentage) as avg_qa_score,
+      AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) as avg_qa_score,
       AVG(cc.compliance_score) as avg_compliance
     FROM call_records cr
     LEFT JOIN call_analysis ca ON cr.id = ca.call_record_id
-    LEFT JOIN call_qa_scores cq ON cr.id = cq.call_record_id
+    LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+    LEFT JOIN LATERAL (
+      SELECT adjusted_overall_score
+      FROM sdr_evaluation_reviews sr
+      WHERE sr.evaluation_id = se.id
+        AND sr.adjusted_overall_score IS NOT NULL
+      ORDER BY sr.reviewed_at DESC
+      LIMIT 1
+    ) latest_review ON TRUE
     LEFT JOIN call_compliance cc ON cr.id = cc.call_record_id
     ${whereClause}
   `,

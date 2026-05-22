@@ -252,6 +252,11 @@ export async function getEligibleCalls(limit = 200): Promise<EligibleCall[]> {
 
 // ============================= Submission =========================
 
+// Single shared advisory-lock key for the batch-submit critical section.
+// 32-bit signed int chosen by hashing "sdr_batch_submit" — any constant
+// works as long as it's unique to this code path within the database.
+const SUBMIT_BATCH_ADVISORY_LOCK_KEY = 871_452_193;
+
 export async function submitPendingForBatch(opts: {
   scorecardTeam?: string;
   submittedBy?: string;
@@ -266,35 +271,63 @@ export async function submitPendingForBatch(opts: {
   if (!scorecard) {
     throw new Error("No active SDR scorecard configured");
   }
-  const eligible = await getEligibleCalls(opts.maxCalls || 200);
-  if (eligible.length === 0) {
-    throw new Error("No eligible calls — nothing to batch");
+
+  // Run the eligibility check + job row insert under a transaction-scoped
+  // advisory lock so two concurrent POSTs cannot pass the eligibility
+  // gate in parallel and double-bill OpenAI for the same call_ids. The
+  // lock releases automatically when the transaction commits or rolls
+  // back; we hold a single client through the critical section. The
+  // outbound OpenAI calls happen AFTER COMMIT so we don't hold the lock
+  // across slow network IO.
+  const client = await pool.connect();
+  let batchJobId: number;
+  let eligible: EligibleCall[];
+  let jsonl: string;
+  try {
+    await client.query("BEGIN");
+    await client.query(`SELECT pg_advisory_xact_lock($1)`, [
+      SUBMIT_BATCH_ADVISORY_LOCK_KEY,
+    ]);
+
+    eligible = await getEligibleCalls(opts.maxCalls || 200);
+    if (eligible.length === 0) {
+      await client.query("ROLLBACK");
+      throw new Error("No eligible calls — nothing to batch");
+    }
+
+    jsonl = buildBatchJsonl(eligible, scorecard);
+    const callIds = eligible.map((c) => c.call_record_id);
+
+    // Insert the job row up front in a placeholder state so we have a
+    // durable record even if the OpenAI submission fails midway. If
+    // file upload or batch create errors, we mark it submission_failed;
+    // the poller ignores it and the row stays as evidence in the UI.
+    // Within the advisory lock so the next caller's eligibility check
+    // sees these call_ids as already-queued.
+    const insertRes = await client.query(
+      `
+      INSERT INTO sdr_batch_jobs (
+        status, call_count, scorecard_id, scorecard_name,
+        submitted_by, metadata
+      ) VALUES ('validating', $1, $2, $3, $4, $5)
+      RETURNING id
+      `,
+      [
+        eligible.length,
+        scorecard.id,
+        scorecard.name,
+        opts.submittedBy || null,
+        JSON.stringify({ call_ids: callIds }),
+      ],
+    );
+    batchJobId = insertRes.rows[0].id;
+    await client.query("COMMIT");
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch { /* ignore */ }
+    throw err;
+  } finally {
+    client.release();
   }
-
-  const jsonl = buildBatchJsonl(eligible, scorecard);
-  const callIds = eligible.map((c) => c.call_record_id);
-
-  // Insert the job row up front in a placeholder state so we have a
-  // durable record even if the OpenAI submission fails midway. If file
-  // upload or batch create errors, we mark it submission_failed; the
-  // poller ignores it and the row stays as evidence in the UI.
-  const insertRes = await pool.query(
-    `
-    INSERT INTO sdr_batch_jobs (
-      status, call_count, scorecard_id, scorecard_name,
-      submitted_by, metadata
-    ) VALUES ('validating', $1, $2, $3, $4, $5)
-    RETURNING id
-    `,
-    [
-      eligible.length,
-      scorecard.id,
-      scorecard.name,
-      opts.submittedBy || null,
-      JSON.stringify({ call_ids: callIds }),
-    ],
-  );
-  const batchJobId: number = insertRes.rows[0].id;
 
   try {
     logger.info(`[SDRBatch] Uploading input file for ${eligible.length} calls`);
@@ -355,97 +388,136 @@ export async function pollAndProcessOpenBatches(): Promise<{
   failed_lines: number;
 }> {
   await ensureSDRBatchJobsTable();
-  const open = await pool.query(
-    `SELECT * FROM sdr_batch_jobs WHERE status = ANY($1::text[]) AND openai_batch_id IS NOT NULL`,
+
+  // Claim open jobs row-by-row with SELECT FOR UPDATE SKIP LOCKED so two
+  // concurrent pollers (Inngest cron + manual sync, or two Inngest
+  // workers) cannot process the same OpenAI batch twice — duplicate
+  // processing wastes a download, duplicates event_logs entries, and
+  // double-logs the audit trail. Per-row transactions release locks
+  // promptly even when the OpenAI fetch hangs on one batch.
+  const candidateIds = await pool.query(
+    `SELECT id FROM sdr_batch_jobs
+       WHERE status = ANY($1::text[]) AND openai_batch_id IS NOT NULL
+       ORDER BY submitted_at ASC`,
     [OPEN_BATCH_STATUSES],
   );
 
+  let inspected = 0;
   let completed = 0;
   let evaluationsSaved = 0;
   let failedLines = 0;
 
-  for (const job of open.rows) {
+  for (const candidate of candidateIds.rows) {
+    const client = await pool.connect();
     try {
-      const live = await retrieveBatch(job.openai_batch_id);
-      // Always reflect the latest status — managers see in_progress
-      // transition to finalizing in the UI between poll runs.
-      if (live.status !== job.status) {
-        await pool.query(
-          `UPDATE sdr_batch_jobs SET status = $1 WHERE id = $2`,
-          [live.status, job.id],
-        );
-      }
-      if (live.status !== "completed") continue;
-
-      // Completed — fetch the output file and process each line.
-      if (!live.output_file_id) {
-        await markFailed(job.id, "Batch completed but no output_file_id");
+      await client.query("BEGIN");
+      const claim = await client.query(
+        `SELECT * FROM sdr_batch_jobs
+           WHERE id = $1 AND status = ANY($2::text[]) AND openai_batch_id IS NOT NULL
+           FOR UPDATE SKIP LOCKED`,
+        [candidate.id, OPEN_BATCH_STATUSES],
+      );
+      if (claim.rows.length === 0) {
+        // Another worker grabbed this row (or it transitioned to a
+        // terminal state between candidate fetch and lock attempt).
+        await client.query("COMMIT");
         continue;
       }
-      const outputJsonl = await downloadFileContent(live.output_file_id);
-      const result = await processBatchOutput(
-        job.id,
-        outputJsonl,
-        job.scorecard_id,
-        job.scorecard_name,
-      );
-      evaluationsSaved += result.saved;
-      failedLines += result.failed;
-
-      await pool.query(
-        `UPDATE sdr_batch_jobs
-         SET status = 'completed', completed_at = NOW(),
-             openai_output_file_id = $1,
-             processed_count = $2, failed_count = $3
-         WHERE id = $4`,
-        [live.output_file_id, result.saved, result.failed, job.id],
-      );
-      completed += 1;
+      const job = claim.rows[0];
+      inspected += 1;
 
       try {
-        await logEvent({
-          actionType: "sdr_batch_completed",
-          entityType: "sdr_batch_job",
-          entityId: String(job.id),
-          module: "calls",
-          severity: result.failed > 0 ? "WARNING" : "INFO",
-          aiInvolved: true,
-          description: `SDR batch ${job.openai_batch_id} completed — ${result.saved} evaluation(s) saved, ${result.failed} failed`,
-          newValue: {
-            batch_job_id: job.id,
-            openai_batch_id: job.openai_batch_id,
-            saved: result.saved,
-            failed: result.failed,
-          },
-        });
-      } catch (logErr: any) {
-        logger.warn(`[SDRBatch] event_logs audit write failed: ${logErr?.message}`);
+        const live = await retrieveBatch(job.openai_batch_id);
+        // Always reflect the latest status — managers see in_progress
+        // transition to finalizing in the UI between poll runs.
+        if (live.status !== job.status) {
+          await client.query(
+            `UPDATE sdr_batch_jobs SET status = $1 WHERE id = $2`,
+            [live.status, job.id],
+          );
+        }
+        if (live.status !== "completed") {
+          await client.query("COMMIT");
+          continue;
+        }
+
+        // Completed — fetch the output file and process each line.
+        if (!live.output_file_id) {
+          await client.query(
+            `UPDATE sdr_batch_jobs
+               SET status = 'failed', error_message = $1, completed_at = NOW()
+               WHERE id = $2`,
+            ["Batch completed but no output_file_id", job.id],
+          );
+          await client.query("COMMIT");
+          continue;
+        }
+        const outputJsonl = await downloadFileContent(live.output_file_id);
+        const result = await processBatchOutput(
+          job.id,
+          outputJsonl,
+          job.scorecard_id,
+          job.scorecard_name,
+        );
+        evaluationsSaved += result.saved;
+        failedLines += result.failed;
+
+        await client.query(
+          `UPDATE sdr_batch_jobs
+             SET status = 'completed', completed_at = NOW(),
+                 openai_output_file_id = $1,
+                 processed_count = $2, failed_count = $3
+             WHERE id = $4`,
+          [live.output_file_id, result.saved, result.failed, job.id],
+        );
+        completed += 1;
+        await client.query("COMMIT");
+
+        try {
+          await logEvent({
+            actionType: "sdr_batch_completed",
+            entityType: "sdr_batch_job",
+            entityId: String(job.id),
+            module: "calls",
+            severity: result.failed > 0 ? "WARNING" : "INFO",
+            aiInvolved: true,
+            description: `SDR batch ${job.openai_batch_id} completed — ${result.saved} evaluation(s) saved, ${result.failed} failed`,
+            newValue: {
+              batch_job_id: job.id,
+              openai_batch_id: job.openai_batch_id,
+              saved: result.saved,
+              failed: result.failed,
+            },
+          });
+        } catch (logErr: any) {
+          logger.warn(`[SDRBatch] event_logs audit write failed: ${logErr?.message}`);
+        }
+      } catch (err: any) {
+        // Transient poll error — rollback the status change so the next
+        // pass retries from the same starting state. Don't mark the job
+        // failed: OpenAI itself returns a terminal status when the batch
+        // truly fails (handled in the live.status branch above).
+        await client.query("ROLLBACK");
+        logger.warn(
+          `[SDRBatch] Poll for job ${job.id} (${job.openai_batch_id}) failed: ${err?.message}`,
+        );
       }
-    } catch (err: any) {
+    } catch (outerErr: any) {
+      try { await client.query("ROLLBACK"); } catch { /* ignore */ }
       logger.warn(
-        `[SDRBatch] Poll for job ${job.id} (${job.openai_batch_id}) failed: ${err?.message}`,
+        `[SDRBatch] Lock/claim failed for job ${candidate.id}: ${outerErr?.message}`,
       );
-      // Don't mark the job failed on a transient poll error — next pass
-      // will retry. Only terminal errors from OpenAI itself transition
-      // the job to a failed state (handled when retrieveBatch returns).
+    } finally {
+      client.release();
     }
   }
 
   return {
-    inspected: open.rows.length,
+    inspected,
     completed,
     evaluations_saved: evaluationsSaved,
     failed_lines: failedLines,
   };
-}
-
-async function markFailed(jobId: number, msg: string): Promise<void> {
-  await pool.query(
-    `UPDATE sdr_batch_jobs
-     SET status = 'failed', error_message = $1, completed_at = NOW()
-     WHERE id = $2`,
-    [msg, jobId],
-  );
 }
 
 // =========================== Output parsing ========================

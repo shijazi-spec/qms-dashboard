@@ -28,6 +28,20 @@
 const MIN_VALID_KEY_LENGTH = 40;
 
 let warnedShortKey = false;
+let warnedFallbackBypassesProxy = false;
+
+/**
+ * True when the AI_INTEGRATIONS_OPENAI_API_KEY env var holds a value that
+ * looks like a real OpenAI key (length >= MIN_VALID_KEY_LENGTH). Used by
+ * `getOpenAIBaseUrl()` to gate whether the integrations gateway URL is
+ * honoured. Sending a real `OPENAI_API_KEY` to the modelfarm proxy yields
+ * a 401 with no useful root-cause signal; pairing them is the Russian-doll
+ * bug we hit in the prior session, so refuse to expose that combination.
+ */
+function aiIntegrationsKeyIsValid(): boolean {
+  const ai = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+  return !!(ai && ai.length >= MIN_VALID_KEY_LENGTH);
+}
 
 /**
  * Resolved OpenAI API key, or undefined if neither env var is set or both
@@ -58,10 +72,30 @@ export function getOpenAIApiKey(): string | undefined {
 /**
  * Resolved OpenAI base URL for routing through the AI integrations gateway.
  * Returns undefined when unset so callers can use the OpenAI default.
+ *
+ * Russian-doll guard: when the AI_INTEGRATIONS key is missing or too short
+ * to be real, `getOpenAIApiKey()` falls back to OPENAI_API_KEY. Returning
+ * the gateway base URL in that case would route a real `sk-…` key through
+ * the gateway, which rejects it. Force-undefined the base URL when the
+ * gateway key isn't usable so callers default to api.openai.com.
  */
 export function getOpenAIBaseUrl(): string | undefined {
   const v = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
-  return v && v.trim() ? v : undefined;
+  if (!v || !v.trim()) return undefined;
+  if (!aiIntegrationsKeyIsValid()) {
+    if (!warnedFallbackBypassesProxy) {
+      warnedFallbackBypassesProxy = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[openaiCredentials] AI_INTEGRATIONS_OPENAI_BASE_URL is set but " +
+          "AI_INTEGRATIONS_OPENAI_API_KEY is missing or too short — " +
+          "ignoring the gateway URL so the OPENAI_API_KEY fallback isn't " +
+          "routed through the wrong endpoint.",
+      );
+    }
+    return undefined;
+  }
+  return v;
 }
 
 /**
