@@ -501,6 +501,55 @@ const csOverlapAutoScanFunction = inngest.createFunction(
 );
 inngestFunctions.push(csOverlapAutoScanFunction);
 
+// Medium #9 — SDR Batch evaluation poller.
+// Every 15 minutes, polls every open OpenAI batch job. When a batch
+// transitions to "completed", downloads the output file and saves each
+// successful per-call evaluation through the standard saveSDREvaluation
+// path so Analytics + the SDR Evaluation tab pick them up identically
+// to real-time results. Idempotent — re-polling a completed batch is a
+// no-op because the status filter excludes terminal states.
+// Disable via SDR_BATCH_POLLER_CRON="" if needed during incidents.
+const sdrBatchPollerFunction = inngest.createFunction(
+  { id: "sdr-batch-poller" },
+  {
+    cron: process.env.SDR_BATCH_POLLER_CRON || "*/15 * * * *",
+  },
+  async ({ step }) => {
+    return await step.run("poll-open-sdr-batches", async () => {
+      logger.info("[SDRBatch] Poller fire");
+      const { pollAndProcessOpenBatches } = await import(
+        "../../utils/sdrBatchEvaluator"
+      );
+      const summary = await pollAndProcessOpenBatches();
+      logger.info("[SDRBatch] Poll complete", summary);
+      // Audit-trail: only log when something actually moved so we don't
+      // pollute event_logs with empty 15-min noise.
+      if (
+        summary.completed > 0 ||
+        summary.evaluations_saved > 0 ||
+        summary.failed_lines > 0
+      ) {
+        try {
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          await logEvent({
+            actionType: "sdr_batch_poll",
+            entityType: "sdr_batch_job",
+            module: "calls",
+            severity: summary.failed_lines > 0 ? "WARNING" : "INFO",
+            aiInvolved: true,
+            description: `SDR batch poll drained ${summary.completed} batch(es), saved ${summary.evaluations_saved} evaluation(s), ${summary.failed_lines} line(s) failed.`,
+            newValue: summary,
+          });
+        } catch (e) {
+          logger.warn("[SDRBatch] event_logs write failed:", e);
+        }
+      }
+      return summary;
+    });
+  },
+);
+inngestFunctions.push(sdrBatchPollerFunction);
+
 // CS Lifecycle Compliance — nightly violation scan.
 // Reads every Deal record in duplicate_records and surfaces deviations from
 // the GRQ-defined CS process rules. Runs after csOverlapAutoScan so phase

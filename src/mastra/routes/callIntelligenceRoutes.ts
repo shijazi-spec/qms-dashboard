@@ -2270,6 +2270,146 @@ ${transcriptText}
     },
   },
   // ===================================================================
+  // Medium #9 — OpenAI Batch API for bulk SDR evaluation.
+  //   POST   /api/calls/batch/submit-pending  → bundle all eligible calls
+  //   GET    /api/calls/batch/jobs            → list recent batches
+  //   GET    /api/calls/batch/jobs/:id        → one batch + linked calls
+  //   POST   /api/calls/batch/jobs/:id/sync   → manual poll trigger
+  // Interactive single-call evaluation still uses the real-time path.
+  // ===================================================================
+  {
+    path: "/api/calls/batch/eligibility",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const { countEligibleCalls } = await import(
+            "../../utils/sdrBatchEvaluator"
+          );
+          const count = await countEligibleCalls();
+          // Rough cost guidance: gpt-4o-mini batch ≈ $0.000625/call
+          // (50% of the real-time ~$0.00125). Use 0.001 to be safe.
+          const estimatedCostUsd = Number((count * 0.001).toFixed(4));
+          return c.json({ success: true, eligible_count: count, estimated_cost_usd: estimatedCostUsd });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Batch eligibility check failed:", { message: errAny?.message });
+          return c.json(
+            { success: false, error: errAny?.message || "Eligibility check failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/calls/batch/submit-pending",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const { submitPendingForBatch } = await import(
+            "../../utils/sdrBatchEvaluator"
+          );
+          const result = await submitPendingForBatch({
+            scorecardTeam: body.scorecard_team || "SDR",
+            submittedBy: admin.email || admin.id || null,
+            maxCalls: typeof body.max_calls === "number" ? body.max_calls : 200,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Batch submit failed:", { message: errAny?.message });
+          return c.json(
+            { success: false, error: errAny?.message || "Batch submit failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/calls/batch/jobs",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const { listBatchJobs } = await import("../../utils/sdrBatchEvaluator");
+          const jobs = await listBatchJobs(50);
+          return c.json({ success: true, jobs });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("List batch jobs failed:", { message: errAny?.message });
+          return c.json(
+            { success: false, error: errAny?.message || "List batch jobs failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/calls/batch/jobs/:id",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"), 10);
+          const { getBatchJob } = await import("../../utils/sdrBatchEvaluator");
+          const job = await getBatchJob(id);
+          if (!job) return c.json({ success: false, error: "Batch job not found" }, 404);
+          return c.json({ success: true, job });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Get batch job failed:", { message: errAny?.message });
+          return c.json(
+            { success: false, error: errAny?.message || "Get batch job failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/calls/batch/jobs/:id/sync",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          // Triggers a poll across ALL open batches — manual fallback when
+          // the Inngest 15min poller is too slow. The endpoint is :id-scoped
+          // for URL clarity but the poll itself is global (cheaper than
+          // single-target lookups against OpenAI).
+          const { pollAndProcessOpenBatches, getBatchJob } = await import(
+            "../../utils/sdrBatchEvaluator"
+          );
+          const summary = await pollAndProcessOpenBatches();
+          const id = parseInt(c.req.param("id"), 10);
+          const job = await getBatchJob(id);
+          return c.json({ success: true, poll_summary: summary, job });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Batch sync failed:", { message: errAny?.message });
+          return c.json(
+            { success: false, error: errAny?.message || "Batch sync failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  // ===================================================================
   // Medium #10 — Excel export of one call's SDR evaluation.
   // Multi-sheet workbook (Summary, Attribute Evaluations, Coaching,
   // Review History) so Quality team can email a shareable .xlsx to

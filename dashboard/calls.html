@@ -671,6 +671,58 @@
         </div>
 
         <div id="content-evaluate" class="tab-content hidden fade-in">
+            <!-- Medium #9 — Batch Evaluation panel.
+                 Submits all eligible (transcript present, no SDR eval yet,
+                 not already queued) calls to the OpenAI Batch API as one
+                 job. 24h SLA, ~50% cheaper per call than real-time. Status
+                 list below auto-refreshes every 30s while any batch is
+                 in-flight. Interactive single-call evaluation is unaffected. -->
+            <div id="batch-evaluation-panel" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                <button type="button" data-on-click="toggleBatchEvalPanel" class="w-full px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition" aria-expanded="false" aria-controls="batch-eval-body" id="batch-eval-toggle">
+                    <div class="flex items-center gap-3 text-left">
+                        <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        </span>
+                        <div>
+                            <div class="text-sm font-semibold text-gray-900">Batch Evaluation <span class="text-xs font-normal text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 ml-2">50% off</span></div>
+                            <div class="text-xs text-gray-600" id="batch-eval-summary">Bundle pending calls into one OpenAI Batch job (24h SLA).</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500" id="batch-eval-action-hint">Click to expand</span>
+                        <svg class="w-4 h-4 text-gray-400 transition-transform" id="batch-eval-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </div>
+                </button>
+                <div id="batch-eval-body" class="hidden border-t border-gray-100 px-6 py-5 bg-gray-50">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div class="bg-white rounded-lg border border-gray-100 p-3">
+                            <div class="text-xs text-gray-500">Eligible calls</div>
+                            <div class="text-2xl font-semibold text-gray-900" id="batch-eligible-count">—</div>
+                        </div>
+                        <div class="bg-white rounded-lg border border-gray-100 p-3">
+                            <div class="text-xs text-gray-500">Est. cost (USD)</div>
+                            <div class="text-2xl font-semibold text-gray-900" id="batch-cost-estimate">—</div>
+                        </div>
+                        <div class="bg-white rounded-lg border border-gray-100 p-3 flex flex-col justify-center">
+                            <button type="button" data-on-click="submitBatchEvaluation" id="batch-submit-btn" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition flex items-center justify-center gap-1.5" disabled>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Submit for Batch Evaluation
+                            </button>
+                            <button type="button" data-on-click="refreshBatchPanel" class="mt-2 text-xs text-gray-500 hover:text-gray-700">↻ Refresh</button>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h5 class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Recent Batch Jobs</h5>
+                            <span class="text-[10px] text-gray-400">Auto-refresh every 30s when any batch is in-flight · Poller runs every 15min</span>
+                        </div>
+                        <div id="batch-jobs-list" class="bg-white rounded-lg border border-gray-100 divide-y text-sm">
+                            <div class="p-3 text-gray-400 text-xs">Loading…</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Embedded Scorecard Management panel — merged in from the
                  standalone Scorecards tab so evaluators can see, edit, swap,
                  or create scorecards without leaving this view. Collapsed by
@@ -3129,6 +3181,174 @@
                            data-criteria-id="${c.id}" data-on-input="updateCriteriaSlider" data-pass-event="true">
                 </div>
             `).join('')}</div>`;
+        }
+
+        // ===================================================================
+        // Medium #9 — Batch Evaluation panel handlers.
+        //
+        // Eligibility + job list load lazily the first time the panel opens
+        // so the SDR Evaluation tab pays nothing for batch infra until the
+        // user actually expands it. While any batch is in-flight (status =
+        // validating / in_progress / finalizing) the UI auto-refreshes every
+        // 30 s; once everything settles it stops polling.
+        // ===================================================================
+        let _batchPollHandle = null;
+        function toggleBatchEvalPanel() {
+            const panel = document.getElementById('batch-eval-body');
+            const chevron = document.getElementById('batch-eval-chevron');
+            const toggle = document.getElementById('batch-eval-toggle');
+            const hint = document.getElementById('batch-eval-action-hint');
+            if (!panel) return;
+            const willOpen = panel.classList.contains('hidden');
+            if (willOpen) {
+                panel.classList.remove('hidden');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+                if (toggle) toggle.setAttribute('aria-expanded', 'true');
+                if (hint) hint.textContent = 'Click to collapse';
+                refreshBatchPanel();
+            } else {
+                panel.classList.add('hidden');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+                if (toggle) toggle.setAttribute('aria-expanded', 'false');
+                if (hint) hint.textContent = 'Click to expand';
+                if (_batchPollHandle) { clearInterval(_batchPollHandle); _batchPollHandle = null; }
+            }
+        }
+
+        async function refreshBatchPanel() {
+            await Promise.all([loadBatchEligibility(), loadBatchJobs()]);
+        }
+
+        async function loadBatchEligibility() {
+            const countEl = document.getElementById('batch-eligible-count');
+            const costEl = document.getElementById('batch-cost-estimate');
+            const btn = document.getElementById('batch-submit-btn');
+            if (!countEl) return;
+            try {
+                const res = await fetch('/api/calls/batch/eligibility');
+                const data = await res.json();
+                if (data.success) {
+                    countEl.textContent = data.eligible_count;
+                    costEl.textContent = '$' + (data.estimated_cost_usd || 0).toFixed(4);
+                    if (btn) btn.disabled = !(data.eligible_count > 0);
+                } else {
+                    countEl.textContent = '?';
+                    costEl.textContent = '—';
+                }
+            } catch (e) {
+                console.warn('loadBatchEligibility failed:', e);
+            }
+        }
+
+        async function loadBatchJobs() {
+            const list = document.getElementById('batch-jobs-list');
+            if (!list) return;
+            try {
+                const res = await fetch('/api/calls/batch/jobs');
+                const data = await res.json();
+                if (!data.success) {
+                    list.innerHTML = `<div class="p-3 text-xs text-red-600">Failed to load: ${escapeHtml(data.error || '')}</div>`;
+                    return;
+                }
+                const jobs = data.jobs || [];
+                if (jobs.length === 0) {
+                    list.innerHTML = `<div class="p-3 text-xs text-gray-400">No batch jobs yet. Click "Submit for Batch Evaluation" above to start one.</div>`;
+                    if (_batchPollHandle) { clearInterval(_batchPollHandle); _batchPollHandle = null; }
+                    return;
+                }
+                list.innerHTML = jobs.map(j => renderBatchJobRow(j)).join('');
+
+                // Auto-refresh every 30s while any batch is in-flight.
+                const anyOpen = jobs.some(j => ['validating','in_progress','finalizing'].includes(j.status));
+                if (anyOpen && !_batchPollHandle) {
+                    _batchPollHandle = setInterval(refreshBatchPanel, 30000);
+                } else if (!anyOpen && _batchPollHandle) {
+                    clearInterval(_batchPollHandle);
+                    _batchPollHandle = null;
+                }
+            } catch (e) {
+                console.warn('loadBatchJobs failed:', e);
+            }
+        }
+
+        function renderBatchJobRow(j) {
+            const statusClass = {
+                validating: 'bg-blue-100 text-blue-700',
+                in_progress: 'bg-blue-100 text-blue-700',
+                finalizing: 'bg-indigo-100 text-indigo-700',
+                completed: 'bg-green-100 text-green-700',
+                failed: 'bg-red-100 text-red-700',
+                cancelled: 'bg-gray-100 text-gray-600',
+                expired: 'bg-gray-100 text-gray-600',
+                submission_failed: 'bg-red-100 text-red-700',
+            }[j.status] || 'bg-gray-100 text-gray-600';
+            const isOpen = ['validating','in_progress','finalizing'].includes(j.status);
+            const progress = j.call_count > 0
+                ? `${j.processed_count}/${j.call_count} processed${j.failed_count > 0 ? `, ${j.failed_count} failed` : ''}`
+                : '';
+            return `
+                <div class="p-3 flex items-center justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="px-1.5 py-0.5 text-[10px] rounded font-medium uppercase ${statusClass}">${escapeHtml(j.status)}</span>
+                            <span class="text-xs text-gray-700">Job #${j.id}</span>
+                            ${j.openai_batch_id ? `<span class="text-[10px] text-gray-400 font-mono truncate">${escapeHtml(j.openai_batch_id)}</span>` : ''}
+                        </div>
+                        <div class="text-xs text-gray-500 mt-0.5">
+                            ${j.call_count} call${j.call_count === 1 ? '' : 's'} · ${escapeHtml(j.scorecard_name || 'no scorecard')}
+                            ${progress ? ' · ' + escapeHtml(progress) : ''}
+                        </div>
+                        ${j.error_message ? `<div class="text-xs text-red-600 mt-0.5 truncate" title="${escapeHtml(j.error_message)}">${escapeHtml(j.error_message)}</div>` : ''}
+                    </div>
+                    ${isOpen ? `
+                        <button type="button" data-on-click="syncBatchJob" data-args="[${j.id}]" class="px-2 py-1 text-xs bg-white border border-gray-300 hover:bg-gray-50 rounded">↻ Sync now</button>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        async function submitBatchEvaluation() {
+            const btn = document.getElementById('batch-submit-btn');
+            if (!btn) return;
+            if (!confirm('Submit all eligible pending calls to the OpenAI Batch API? Results land in up to 24h.')) return;
+            btn.disabled = true;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Submitting…`;
+            try {
+                const res = await fetch('/api/calls/batch/submit-pending', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`Batch submitted: ${data.callCount} call(s) queued. OpenAI batch id: ${data.openaiBatchId}.\n\nResults will land in this panel within 24h (poller checks every 15min).`);
+                    await refreshBatchPanel();
+                } else {
+                    alert(`Batch submit failed: ${data.error || 'unknown error'}`);
+                }
+            } catch (e) {
+                console.error('submitBatchEvaluation error:', e);
+                alert(`Batch submit failed: ${e.message || e}`);
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        }
+
+        async function syncBatchJob(jobId) {
+            try {
+                const res = await fetch(`/api/calls/batch/jobs/${jobId}/sync`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    await refreshBatchPanel();
+                } else {
+                    alert(`Sync failed: ${data.error || 'unknown error'}`);
+                }
+            } catch (e) {
+                console.error('syncBatchJob error:', e);
+                alert(`Sync failed: ${e.message || e}`);
+            }
         }
 
         // Toggle the embedded scorecard-management panel inside SDR Evaluation.
