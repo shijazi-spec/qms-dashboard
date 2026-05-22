@@ -153,13 +153,13 @@ async function extractFindingsFromText(text: string): Promise<any[]> {
   // workflow rarely needs more than first ~100k chars = ~25k tokens).
   const safeText = text.length > 100_000 ? text.slice(0, 100_000) : text;
 
-  const { text: raw } = await generateText({
-    // `.chat(...)` selects the Chat Completions adapter. Under
-    // `@ai-sdk/openai` v3.x the bare `openai("gpt-4o")` call returns the
-    // Responses-API model (provider: "openai.responses"), which AI SDK v5
-    // rejects with "Unsupported model version v3". `.responses(...)` is
-    // reserved for gpt-5 class models (see exampleAgent.ts:73).
-    model: openai.chat("gpt-4o"),
+  // Raw-fetch /chat/completions — bypasses the @ai-sdk/openai v3 spec
+  // regression that broke `.chat(...)` in production (the Chat
+  // Completions adapter now also emits v3 spec, incompatible with ai@5
+  // which requires v2).
+  const { generateChatText } = await import("../../utils/openaiChatHelper");
+  const { text: raw } = await generateChatText({
+    model: "gpt-4o",
     system: EXTRACTION_SYSTEM_PROMPT,
     prompt: `Extract audit findings from the following report.\n\nReport:\n"""\n${safeText}\n"""\n\nReturn ONLY valid JSON as specified.`,
   });

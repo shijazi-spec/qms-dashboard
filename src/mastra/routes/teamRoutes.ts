@@ -948,11 +948,14 @@ Generate a JSON response with the following structure:
 
 Respond ONLY with valid JSON, no additional text.`;
 
-          const { text } = await generateText({
-            // `.chat(...)` → Chat Completions; bare `openai(...)` returns
-            // the Responses-API model under `@ai-sdk/openai` v3.x which
-            // AI SDK v5 rejects ("Unsupported model version v3").
-            model: openai.chat("gpt-4o"),
+          // Raw-fetch /chat/completions — `.chat()` adapter now also
+          // emits v3 spec under @ai-sdk/openai 3.x, breaking ai@5
+          // (needs v2). Helper avoids the SDK entirely.
+          const { generateChatText } = await import(
+            "../../utils/openaiChatHelper"
+          );
+          const { text } = await generateChatText({
+            model: "gpt-4o",
             prompt,
             maxTokens: 2000,
           });

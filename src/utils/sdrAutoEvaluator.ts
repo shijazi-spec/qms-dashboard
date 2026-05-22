@@ -33,28 +33,42 @@ const MAX_RETRIES = 2;
 const BACKOFF_MS = [1500, 4000];
 
 async function generateWithRetry(
-  aiSdk: any,
+  _unusedSdk: any,
   prompt: string,
   callId: number,
 ): Promise<{ text: string }> {
-  const { generateText } = await import("ai");
+  // Raw-fetch chat completions via generateChatText — bypasses the
+  // `@ai-sdk/openai` v3-spec regression that broke `aiSdk.chat(...)`
+  // calls in production. Same retry + backoff behaviour, same return
+  // shape, zero SDK dependency. The `_unusedSdk` parameter is kept for
+  // signature stability with existing callers; remove on the next
+  // refactor pass.
+  const { generateChatText } = await import("./openaiChatHelper");
   let lastErr: any = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await generateText({
-        // `.chat(...)` selects the Chat Completions adapter — bare
-        // `aiSdk("gpt-4o-mini")` in `@ai-sdk/openai` v3.x returns the
-        // Responses-API model, which AI SDK v5 rejects with
-        // "Unsupported model version v3 for provider openai.responses".
-        // `.responses(...)` is reserved for gpt-5 class only.
-        model: aiSdk.chat("gpt-4o-mini"),
+      return await generateChatText({
+        model: "gpt-4o-mini",
         prompt,
         maxTokens: 8000,
       });
     } catch (err: any) {
       lastErr = err;
-      const status = err?.statusCode || err?.status || err?.response?.status;
-      const isRetryable = RETRYABLE_STATUS_CODES.has(status);
+      // Status may come back embedded in the error message string
+      // (helper throws `OpenAI /chat/completions <STATUS>: ...`). Pull
+      // it back out for the retry decision so 429/5xx still get the
+      // exponential-backoff path that kept the original implementation
+      // resilient to OpenAI hiccups.
+      const fromMsg = /OpenAI \/chat\/completions (\d+):/.exec(
+        err?.message || "",
+      );
+      const status =
+        err?.statusCode ||
+        err?.status ||
+        err?.response?.status ||
+        (fromMsg ? parseInt(fromMsg[1], 10) : null);
+      const isRetryable =
+        status != null && RETRYABLE_STATUS_CODES.has(status);
       if (!isRetryable || attempt === MAX_RETRIES) {
         throw err;
       }

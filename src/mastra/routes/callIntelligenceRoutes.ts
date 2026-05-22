@@ -404,11 +404,13 @@ Respond with JSON only:
   "ai_insights": "<recommendations>"
 }`;
 
-          const aiResult = await generateText({
-            // `.chat(...)` → Chat Completions adapter; bare `openai(...)` in
-            // `@ai-sdk/openai` v3.x returns the Responses-API model which
-            // AI SDK v5 rejects (v3 spec vs v2 required).
-            model: openai.chat("gpt-4o"),
+          // Raw-fetch /chat/completions — bypasses the @ai-sdk/openai v3
+          // spec regression that even `.chat()` now triggers.
+          const { generateChatText } = await import(
+            "../../utils/openaiChatHelper"
+          );
+          const aiResult = await generateChatText({
+            model: "gpt-4o",
             prompt: analysisPrompt,
             maxTokens: 2000,
           });
@@ -964,9 +966,13 @@ Respond with JSON only:
   "notes": "<additional notes>"
 }`;
 
-          const aiResult = await generateText({
-            // See note above re: `.chat(...)` vs bare `openai(...)`.
-            model: openai.chat("gpt-4o"),
+          // Raw-fetch /chat/completions (bypasses the @ai-sdk/openai v3
+          // spec regression — same reason as the analyze path above).
+          const { generateChatText: _gctMom } = await import(
+            "../../utils/openaiChatHelper"
+          );
+          const aiResult = await _gctMom({
+            model: "gpt-4o",
             prompt: momPrompt,
             maxTokens: 2000,
           });
@@ -1454,10 +1460,13 @@ ${transcriptText}
               // gpt-4o-mini: ~75% cheaper than gpt-4o with comparable quality
               // on structured-output tasks like this JSON-extracting prompt.
               // Per-call analysis cost drops from ~$0.005 to ~$0.001.
-              const aiResult = await generateText({
-                // `.chat(...)` → Chat Completions; bare call returns
-                // Responses-API which AI SDK v5 rejects.
-                model: aiSdk.chat("gpt-4o-mini"),
+              // Raw-fetch helper bypasses the @ai-sdk/openai v3 spec
+              // regression that broke `aiSdk.chat(...)` in production.
+              const { generateChatText: _gctInline } = await import(
+                "../../utils/openaiChatHelper"
+              );
+              const aiResult = await _gctInline({
+                model: "gpt-4o-mini",
                 prompt: analysisPrompt,
                 maxTokens: 4000,
               });
@@ -2068,16 +2077,16 @@ ${transcriptText}
 
           logger?.info("🔬 [API] Sending evaluation to AI");
 
-          // gpt-4o-mini for SDR scorecard evaluation — same cost reduction
-          // logic as the analysis step above. The 18-attribute structured
-          // JSON output is well within mini's quality range.
-          // `.chat(...)` selects the Chat Completions adapter; the bare
-          // `aiSdk(...)` call returns the Responses-API model in
-          // `@ai-sdk/openai` v3.x, which emits a v3 model spec that AI SDK
-          // v5 rejects with "Unsupported model version v3 for provider
-          // openai.responses". Reserve `.responses(...)` for gpt-5 class.
-          const aiResult = await generateText({
-            model: aiSdk.chat("gpt-4o-mini"),
+          // gpt-4o-mini for SDR scorecard evaluation — same cost-reduction
+          // logic as the analysis step above. Raw-fetch helper bypasses the
+          // @ai-sdk/openai v3 spec regression that took down the bulk
+          // analyze path in production (.chat() adapter started emitting
+          // v3 spec, incompatible with ai@5 which requires v2).
+          const { generateChatText: _gctEval } = await import(
+            "../../utils/openaiChatHelper"
+          );
+          const aiResult = await _gctEval({
+            model: "gpt-4o-mini",
             prompt: evaluationPrompt,
             maxTokens: 8000,
           });
