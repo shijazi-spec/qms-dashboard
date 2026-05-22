@@ -1518,6 +1518,12 @@ export const duplicateRadarRoutes = [
           const { escapeCSVValue } = await import("../../utils/inputSanitizer");
           const { streamCsv, cursorQuery, stageStreamingExportFromHono } =
             await import("../../utils/excelExport");
+          const {
+            PLAYBOOK_HEADERS,
+            emptyPlaybookState,
+            startCluster,
+            rowPlaybook,
+          } = await import("../../utils/duplicateRadarPlaybook");
 
           // Build WHERE clause matching getExportRecords filter logic
           const filterParams: unknown[] = ["active"];
@@ -1569,20 +1575,37 @@ export const duplicateRadarRoutes = [
             "Created Date",
             "Confidence",
             "Recommendation",
+            // R1 (quick wins): remediation-playbook columns appended after
+            // the raw record data. Stakeholders skim the right side of the
+            // sheet for what to do, due dates, and who to contact.
+            ...PLAYBOOK_HEADERS,
           ];
           const source = cursorQuery(
             drCsvPool,
-            `SELECT dr.zoho_record_id, dr.id, dr.record_type, dr.record_name, dr.company_name, dr.domain,
-                    dr.owner_name, dr.status, dr.stage, dr.deal_value, dr.source, dr.created_date,
-                    dr.confidence_score, dr.ai_recommendation
+            `SELECT dr.cluster_id, dr.zoho_record_id, dr.id, dr.record_type, dr.record_name, dr.company_name, dr.domain,
+                    dr.owner_name, dr.owner_email, dr.status, dr.stage, dr.deal_value, dr.source, dr.created_date,
+                    dr.confidence_score, dr.ai_recommendation, dr.is_primary,
+                    dc.confidence_score AS cluster_confidence_score,
+                    dc.total_records AS cluster_total_records
              FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
              ${whereClause}
              ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC`,
             filterParams,
           );
           const rows = (async function* () {
+            // Cluster-scoped state: ORDER BY puts is_primary=true first
+            // within each cluster, so the first row we see for a cluster
+            // carries the primary record's name. Subsequent rows in the
+            // same cluster reuse that primary name in the "Merge into …"
+            // recommendation.
+            const playbookState = emptyPlaybookState();
             for await (const r of source) {
               const rec = r as Record<string, unknown>;
+              const cid = Number(rec["cluster_id"] ?? -1);
+              if (cid !== playbookState.cluster_id) {
+                startCluster(playbookState, rec);
+              }
+              const pb = rowPlaybook(rec, playbookState);
               yield [
                 rec["zoho_record_id"] ?? rec["id"],
                 rec["record_type"],
@@ -1598,6 +1621,11 @@ export const duplicateRadarRoutes = [
                   ? ""
                   : `${rec["confidence_score"]}%`,
                 rec["ai_recommendation"] ?? "Review manually",
+                pb.recommended_action,
+                pb.survivorship_rule,
+                pb.owner_to_consult,
+                pb.why_verdict,
+                pb.due_date,
               ].map((v) => escapeCSVValue(String(v ?? "")));
             }
             // No pool.end() — shared pool is reused across requests.
@@ -1634,6 +1662,12 @@ export const duplicateRadarRoutes = [
 
           const { streamXlsx, cursorQuery, stageStreamingExportFromHono } =
             await import("../../utils/excelExport");
+          const {
+            PLAYBOOK_XLSX_COLUMNS,
+            emptyPlaybookState,
+            startCluster,
+            rowPlaybook,
+          } = await import("../../utils/duplicateRadarPlaybook");
 
           // Build WHERE clause for date filters (no status filter — XLSX exports all active)
           const xlsxFilterParams: unknown[] = [];
@@ -1703,28 +1737,52 @@ export const duplicateRadarRoutes = [
               { header: "Confidence", key: "confidence_score", width: 12 },
               { header: "Recommendation", key: "ai_recommendation", width: 40 },
               { header: "Created", key: "created_str", width: 14 },
+              // R1 (quick wins): remediation playbook columns appended to
+              // every type sheet so stakeholders see action / owner / due
+              // alongside the raw record data.
+              ...PLAYBOOK_XLSX_COLUMNS,
             ];
 
-            // SQL template for per-type cursor queries — avoids raw_data JSONB blob
+            // SQL template for per-type cursor queries — avoids raw_data JSONB blob.
+            // Pulls is_primary + owner_email + cluster_confidence_score so
+            // the playbook helpers can compute Merge-into-X / due-date /
+            // owner-to-consult / survivorship-rule for each row.
             const typeIdx = xlsxFilterParams.length + 1;
             const recSql = `
               SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.company_name, dr.email,
-                     dr.domain, dr.phone, dr.owner_name,
+                     dr.domain, dr.phone, dr.owner_name, dr.owner_email, dr.is_primary,
                      COALESCE(dr.status, dr.stage, '') AS status_or_stage,
                      dr.deal_value, dr.source, dr.confidence_score, dr.ai_recommendation,
-                     TO_CHAR(dr.created_date::date, 'YYYY-MM-DD') AS created_str
+                     TO_CHAR(dr.created_date::date, 'YYYY-MM-DD') AS created_str,
+                     dc.confidence_score AS cluster_confidence_score,
+                     dc.total_records AS cluster_total_records
               FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
               ${xlsxWhere} AND dr.record_type = $${typeIdx}
               ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC`;
+
+            // Async generator that enriches each row with the five playbook
+            // fields. Cluster state is per-generator-instance so the four
+            // type sheets (lead/deal/contact/account) don't share state.
+            const enrichRows = (src: AsyncIterable<unknown>) =>
+              (async function* () {
+                const state = emptyPlaybookState();
+                for await (const r of src) {
+                  const rec = r as Record<string, unknown>;
+                  const cid = Number(rec["cluster_id"] ?? -1);
+                  if (cid !== state.cluster_id) {
+                    startCluster(state, rec);
+                  }
+                  const pb = rowPlaybook(rec, state);
+                  yield { ...rec, ...pb } as Record<string, unknown>;
+                }
+              })();
 
             const makeTypeRows = (rtype: string) => {
               const src = cursorQuery(drXlsxPool, recSql, [
                 ...xlsxFilterParams,
                 rtype,
               ]);
-              return (async function* () {
-                for await (const r of src) yield r as Record<string, unknown>;
-              })();
+              return enrichRows(src);
             };
 
             const sheets: Array<{
@@ -1799,35 +1857,30 @@ export const duplicateRadarRoutes = [
               ...xlsxFilterParams,
               "account",
             ]);
-            const accountsRows = (async function* () {
-              for await (const r of accountsSrc)
-                yield r as Record<string, unknown>;
-            })();
             sheets.push({
               name: "Accounts",
               columns: recordColumns,
-              rows: accountsRows,
+              rows: enrichRows(accountsSrc),
             });
 
             if (includeRaw) {
               const allSrc = cursorQuery(
                 drXlsxPool,
                 `SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.company_name, dr.email, dr.domain,
-                        dr.phone, dr.owner_name, COALESCE(dr.status, dr.stage, '') AS status_or_stage,
+                        dr.phone, dr.owner_name, dr.owner_email, dr.is_primary,
+                        COALESCE(dr.status, dr.stage, '') AS status_or_stage,
                         dr.deal_value, dr.source, dr.confidence_score, dr.ai_recommendation,
-                        TO_CHAR(dr.created_date::date, 'YYYY-MM-DD') AS created_str
+                        TO_CHAR(dr.created_date::date, 'YYYY-MM-DD') AS created_str,
+                        dc.confidence_score AS cluster_confidence_score,
+                        dc.total_records AS cluster_total_records
                  FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
                  ${xlsxWhere} ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC`,
                 xlsxFilterParams,
               );
-              const allRows = (async function* () {
-                for await (const r of allSrc)
-                  yield r as Record<string, unknown>;
-              })();
               sheets.push({
                 name: "All Records",
                 columns: recordColumns,
-                rows: allRows,
+                rows: enrichRows(allSrc),
               });
             }
 
