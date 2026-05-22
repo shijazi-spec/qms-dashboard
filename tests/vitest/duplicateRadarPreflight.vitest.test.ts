@@ -12,6 +12,7 @@ import { describe, expect, test } from "vitest";
 import {
   classifyPreflightRows,
   resolveDomain,
+  shouldCreateForVerdict,
   type PreflightClusterRow,
 } from "../../src/utils/duplicateRadarPreflight";
 
@@ -240,5 +241,40 @@ describe("classifyPreflightRows verdict ladder", () => {
     });
     expect(res.rows[0]!.owners).toHaveLength(5);
     expect(res.rows[0]!.owners[0]).toBe("alice@walaplus.com");
+  });
+});
+
+describe("shouldCreateForVerdict (R5 — webhook decision policy)", () => {
+  // BLOCK and REVIEW are stop-the-create verdicts. The webhook should
+  // return should_create=false so a Zoho-side workflow can refuse the
+  // insert and route the record to the existing owner / CS instead.
+  test("block → false", () => {
+    expect(shouldCreateForVerdict("block")).toBe(false);
+  });
+  test("review → false", () => {
+    expect(shouldCreateForVerdict("review")).toBe(false);
+  });
+
+  // WARN / DUPLICATE / PASS are allow verdicts. The caller may still
+  // tag the record for operator follow-up, but the create itself goes
+  // through — these aren't active CS customers, just historical context.
+  test("warn → true (past cool-off, sales may re-engage)", () => {
+    expect(shouldCreateForVerdict("warn")).toBe(true);
+  });
+  test("duplicate → true (existing records but no active CS overlap)", () => {
+    expect(shouldCreateForVerdict("duplicate")).toBe(true);
+  });
+  test("pass → true (genuinely new)", () => {
+    expect(shouldCreateForVerdict("pass")).toBe(true);
+  });
+
+  // Defensive defaults: any verdict the policy doesn't know about must
+  // fall to the conservative "do not create" answer rather than silently
+  // greenlighting an unknown state.
+  test("unknown verdict → false (conservative default)", () => {
+    expect(shouldCreateForVerdict("hold" as any)).toBe(false);
+    expect(shouldCreateForVerdict("" as any)).toBe(false);
+    expect(shouldCreateForVerdict(null)).toBe(false);
+    expect(shouldCreateForVerdict(undefined)).toBe(false);
   });
 });
