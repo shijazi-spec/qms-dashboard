@@ -3348,7 +3348,140 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Pre-import duplicate check for marketing batches.
+    // R5 — Single-record Preflight Webhook for inbound integrations.
+    //
+    // The existing /api/duplicates/preflight endpoint is built for
+    // dashboard operators running batches. This one is the machine-to-
+    // machine variant: one record in, one verdict + a should_create
+    // boolean back. Zoho workflows, web-form backends, and marketing
+    // tools call this BEFORE creating a record so genuine duplicates
+    // never enter CRM in the first place (Plauti benchmark: real-time
+    // prevention cuts duplicate creation 60% within 90 days).
+    //
+    // Auth: requireAdminOrKey — accepts an `x-admin-key` header so
+    // external systems can call it without a session cookie.
+    //
+    // Body shape (at least one of domain / email / company_name / phone required):
+    //   {
+    //     "domain": "acme.com",                     // optional
+    //     "email":  "buyer@acme.com",                // optional (domain extracted)
+    //     "company_name": "ACME Co",                 // optional
+    //     "phone": "+966500000000",                  // optional
+    //     "ref":   "web-form-submission-12345"       // optional, echoed back
+    //   }
+    //
+    // Response shape:
+    //   {
+    //     "success": true,
+    //     "verdict": "block" | "review" | "warn" | "duplicate" | "pass",
+    //     "should_create": true | false,            // simple yes/no for callers
+    //     "ref": "web-form-submission-12345",
+    //     "reason": "active_cs_customer",
+    //     "suggested_action": "...",
+    //     "cluster_id": 42 | null,
+    //     "lifecycle_state": "adoption" | null,
+    //     "sector": "private" | "government" | null,
+    //     "owners": ["Ali Alhumoud"],
+    //     "arr_exposure": 50000 | null
+    //   }
+    //
+    // Reuses runPreflight() under the hood so the verdict logic stays
+    // identical to the dashboard's Preflight tab — operators and
+    // webhook callers always see the same answer for the same input.
+    path: "/api/duplicates/preflight/check",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireAdminOrKey(c);
+          if (!user) return unauthorizedResponse(c);
+
+          let body: any = {};
+          try {
+            body = (await c.req.json()) ?? {};
+          } catch {
+            return c.json(
+              {
+                success: false,
+                error:
+                  "Body must be JSON: { domain?, email?, company_name?, phone?, ref? }",
+              },
+              400,
+            );
+          }
+
+          // At least one identifying signal must be present — otherwise
+          // we'd return PASS for an effectively-empty payload, which
+          // would be misleading to the caller.
+          const hasIdentity =
+            !!(body.domain && String(body.domain).trim()) ||
+            !!(body.email && String(body.email).trim()) ||
+            !!(body.company_name && String(body.company_name).trim()) ||
+            !!(body.phone && String(body.phone).trim());
+          if (!hasIdentity) {
+            return c.json(
+              {
+                success: false,
+                error:
+                  "At least one of domain / email / company_name / phone must be provided",
+              },
+              400,
+            );
+          }
+
+          const { runPreflight, shouldCreateForVerdict } = await import(
+            "../../utils/duplicateRadarPreflight"
+          );
+          const result = await runPreflight({
+            rows: [
+              {
+                domain: body.domain ?? null,
+                email: body.email ?? null,
+                company_name: body.company_name ?? null,
+                phone: body.phone ?? null,
+                ref: body.ref ?? null,
+              },
+            ],
+          });
+
+          const row = result.rows[0];
+          if (!row) {
+            return c.json(
+              {
+                success: false,
+                error: "Preflight returned no verdict (unexpected)",
+              },
+              500,
+            );
+          }
+
+          return c.json({
+            success: true,
+            verdict: row.verdict,
+            should_create: shouldCreateForVerdict(row.verdict),
+            ref: row.ref ?? body.ref ?? null,
+            reason: row.reason,
+            suggested_action: row.suggested_action,
+            cluster_id: row.cluster_id,
+            lifecycle_state: row.lifecycle_state,
+            sector: row.sector,
+            owners: row.owners,
+            arr_exposure: row.arr_exposure,
+          });
+        } catch (error: any) {
+          logger.error("Error in preflight webhook:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    // Pre-import duplicate check for marketing batches (dashboard-facing).
     // Body: { rows: [{ domain?, email?, company_name?, phone?, ref? }, ...], max_check? }
     // Returns per-row verdict (block | review | warn | duplicate | pass) plus summary.
     path: "/api/duplicates/preflight",

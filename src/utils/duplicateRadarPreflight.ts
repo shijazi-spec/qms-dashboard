@@ -235,6 +235,29 @@ export function classifyPreflightRows(input: {
  * @param input.rows      Up to `input.max_check` rows (defaults 5000).
  * @param input.max_check Hard cap on examined rows; extras reported as `skipped`.
  */
+/**
+ * R5 — Decision policy for the inbound preflight webhook.
+ *
+ * Verdict → `should_create` mapping used by external integrations
+ * (Zoho workflows, web forms, marketing tools) that want a simple
+ * yes/no answer for "should I create this record in CRM?":
+ *
+ *   BLOCK     → false  (domain is an active Customer Success customer)
+ *   REVIEW    → false  (within sector cool-off — CS must confirm first)
+ *   WARN      → true   (past cool-off; sales may re-engage)
+ *   DUPLICATE → true   (existing records but no active CS overlap)
+ *   PASS      → true   (genuinely new)
+ *
+ * Conservative default for any unrecognised verdict: false. The webhook
+ * caller can always override based on its own policy (e.g. a marketing
+ * tool may want to log REVIEW and DUPLICATE alongside; that's its choice).
+ */
+export function shouldCreateForVerdict(
+  verdict: PreflightVerdict | string | null | undefined,
+): boolean {
+  return verdict === "warn" || verdict === "duplicate" || verdict === "pass";
+}
+
 export async function runPreflight(input: {
   rows: PreflightInputRow[];
   max_check?: number;
