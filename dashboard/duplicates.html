@@ -127,7 +127,11 @@
             <button data-on-click="showTab" data-args="[&quot;deals&quot;]" id="tab-deals" data-testid="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
             <button data-on-click="showTab" data-args="[&quot;contacts&quot;]" id="tab-contacts" data-testid="tab-contacts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Contact Duplicates</button>
             <button data-on-click="showTab" data-args="[&quot;accounts&quot;]" id="tab-accounts" data-testid="tab-accounts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Account Duplicates</button>
-            <button data-on-click="showTab" data-args="[&quot;cs-overlap&quot;]" id="tab-cs-overlap" data-testid="tab-cs-overlap" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Clusters where a new lead/deal overlaps with an active Customer Success deal on the same domain">
+            <button data-on-click="showTab" data-args="[&quot;cross-module&quot;]" id="tab-cross-module" data-testid="tab-cross-module" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Clusters where the same company is represented across multiple Zoho modules (e.g. a Lead + an existing Contact under an Account). Fix is CONVERT or LINK — never merge across modules.">
+                <span class="inline-block w-2 h-2 rounded-full bg-indigo-500"></span>
+                Cross-Module
+                <span id="crossModulePendingBadge" class="hidden inline-block min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-indigo-500 text-white text-center">0</span>
+            </button>
                 <span class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
                 CS Pipeline Overlap
             </button>
@@ -611,6 +615,75 @@
             <div id="accountsPagination" class="flex justify-center gap-3 mt-4"></div>
         </div>
 
+        <!-- ═══ R6 — CROSS-MODULE OVERLAPS TAB ═══
+             Clusters where the same company is represented across multiple
+             Zoho modules (e.g. a Lead exists for a domain that also has an
+             Account + Contact). Zoho doesn't support cross-module merges —
+             the fix is CONVERT (lead → contact) or LINK (set Account_Name
+             on the deal/contact). The verdict per record is already produced
+             by generateSmartRecommendations and surfaced in the cluster
+             detail modal; this tab gives operators a dedicated triage queue
+             grouped by pairing type. -->
+        <div id="content-cross-module" class="tab-content hidden">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-900">
+                <div class="font-semibold mb-1">Cross-module overlaps</div>
+                <p>Clusters where the same company appears across multiple Zoho modules (Leads, Contacts, Accounts, Deals). Zoho does NOT allow merging across modules — the recommendation is to <strong>CONVERT</strong> the Lead to a Contact under the existing Account, or <strong>LINK</strong> the Deal/Contact by setting its Account_Name field. Open any cluster below to see the per-record recommendation.</p>
+            </div>
+
+            <!-- KPI summary -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500">Total open</div>
+                    <div id="cmoTotal" class="text-2xl font-bold text-gray-900 mt-1" data-testid="text-cmo-total">—</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500">Lead ↔ Contact</div>
+                    <div id="cmoLeadContact" class="text-2xl font-bold text-indigo-700 mt-1" data-testid="text-cmo-lead-contact">—</div>
+                    <div class="text-[10px] text-gray-400">Convert Lead to Contact</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500">Lead ↔ Account</div>
+                    <div id="cmoLeadAccount" class="text-2xl font-bold text-indigo-700 mt-1" data-testid="text-cmo-lead-account">—</div>
+                    <div class="text-[10px] text-gray-400">Close Lead, link to Account</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500">ARR exposure</div>
+                    <div id="cmoArr" class="text-2xl font-bold text-gray-900 mt-1" data-testid="text-cmo-arr">—</div>
+                    <div class="text-[10px] text-gray-400">Sum of pipeline value</div>
+                </div>
+            </div>
+
+            <!-- Filter chips per pairing type -->
+            <div class="flex flex-wrap gap-2 mb-4" id="cmoChips">
+                <button data-on-click="filterCrossModule" data-args="[&quot;all&quot;]" id="cmoChip-all" data-testid="cmo-chip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;lead_contact&quot;]" id="cmoChip-lead_contact" data-testid="cmo-chip-lead-contact" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Lead ↔ Contact</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;lead_account&quot;]" id="cmoChip-lead_account" data-testid="cmo-chip-lead-account" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Lead ↔ Account</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;lead_deal&quot;]" id="cmoChip-lead_deal" data-testid="cmo-chip-lead-deal" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Lead ↔ Deal</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;contact_account&quot;]" id="cmoChip-contact_account" data-testid="cmo-chip-contact-account" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Contact ↔ Account</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;contact_deal&quot;]" id="cmoChip-contact_deal" data-testid="cmo-chip-contact-deal" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Contact ↔ Deal</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;deal_account&quot;]" id="cmoChip-deal_account" data-testid="cmo-chip-deal-account" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Deal ↔ Account</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;mixed&quot;]" id="cmoChip-mixed" data-testid="cmo-chip-mixed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">3+ modules</button>
+            </div>
+
+            <div class="bg-white rounded-lg shadow overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Pairing</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Modules present</th>
+                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Records</th>
+                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                            <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Pipeline value</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Recommended action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="crossModuleTable" class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- ═══ CS PIPELINE OVERLAP TAB ═══ -->
         <div id="content-cs-overlap" class="tab-content hidden">
             <!-- Summary widget -->
@@ -1054,6 +1127,11 @@
         // render so it can be destroyed + rebuilt when the window selector
         // changes without leaking canvases).
         let creationTrendChart = null;
+        // R6: cross-module triage state. crossModuleClusters caches the
+        // full server response so chip-filter clicks don't refetch.
+        let crossModuleClusters = [];
+        let crossModuleByPairing = {};
+        let crossModuleFilter = 'all';
         let clusterPage = 0;
         // R7 (quick-wins): SSE replaces 2s polling for scan progress.
         // scanProgressSse holds the active EventSource; scanRunning tracks
@@ -1100,6 +1178,115 @@
             // R4: load creation-rate trend chart (independent of the rest;
             // a transient failure here shouldn't blank the dashboard).
             loadCreationTrend();
+            // R6: load cross-module overlap counts so the tab badge + KPI
+            // cards reflect current state on every refresh.
+            loadCrossModule();
+        }
+
+        // R6: pairing labels and per-pairing recommended action — kept in
+        // one place so the badge / chip / table all stay consistent.
+        const CROSS_MODULE_PAIRING_LABELS = {
+            lead_contact:   { label: 'Lead ↔ Contact',   chip: 'cmoChip-lead_contact',   action: 'Convert the Lead to a Contact under the existing Account' },
+            lead_account:   { label: 'Lead ↔ Account',   chip: 'cmoChip-lead_account',   action: 'Close the Lead — set Account_Name on related Deals / Contacts' },
+            lead_deal:      { label: 'Lead ↔ Deal',      chip: 'cmoChip-lead_deal',      action: 'Close the Lead — the Deal is the canonical record' },
+            contact_account:{ label: 'Contact ↔ Account', chip: 'cmoChip-contact_account', action: 'Link Contact: set Account_Name to the existing Account' },
+            contact_deal:   { label: 'Contact ↔ Deal',   chip: 'cmoChip-contact_deal',   action: 'Link Deal: set Contact_Name to the existing Contact' },
+            deal_account:   { label: 'Deal ↔ Account',   chip: 'cmoChip-deal_account',   action: 'Link Deal: set Account_Name to the existing Account' },
+            mixed:          { label: '3+ modules',       chip: 'cmoChip-mixed',          action: 'Compound case — open the cluster to see per-record recommendations' },
+        };
+
+        async function loadCrossModule() {
+            try {
+                const res = await fetch('/api/duplicates/cross-module-overlaps');
+                if (!res.ok) return;
+                const data = await res.json();
+                crossModuleClusters = Array.isArray(data && data.clusters) ? data.clusters : [];
+                crossModuleByPairing = (data && data.by_pairing) || {};
+                updateCrossModuleKpis(data || {});
+                updateCrossModuleBadge();
+                renderCrossModuleTable();
+            } catch (e) {
+                console.error('cross-module load failed:', e);
+            }
+        }
+
+        function updateCrossModuleBadge() {
+            const total = (crossModuleClusters || []).length;
+            const badge = document.getElementById('crossModulePendingBadge');
+            if (!badge) return;
+            if (total > 0) {
+                badge.textContent = total > 99 ? '99+' : String(total);
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function updateCrossModuleKpis(data) {
+            const by = data.by_pairing || {};
+            const totalEl = document.getElementById('cmoTotal');
+            const lcEl    = document.getElementById('cmoLeadContact');
+            const laEl    = document.getElementById('cmoLeadAccount');
+            const arrEl   = document.getElementById('cmoArr');
+            if (totalEl) totalEl.textContent = _fn(Array.isArray(data.clusters) ? data.clusters.length : 0);
+            if (lcEl)    lcEl.textContent    = _fn(by.lead_contact || 0);
+            if (laEl)    laEl.textContent    = _fn(by.lead_account || 0);
+            if (arrEl)   arrEl.textContent   = formatCurrency(Number(data.arr_exposure_total || 0));
+        }
+
+        function filterCrossModule(pairing) {
+            crossModuleFilter = pairing || 'all';
+            // Repaint chip styles
+            const allChips = document.querySelectorAll('#cmoChips button');
+            allChips.forEach(btn => {
+                const isAll = btn.id === 'cmoChip-all';
+                const isMatch = (crossModuleFilter === 'all' && isAll) ||
+                                btn.id === 'cmoChip-' + crossModuleFilter;
+                if (isMatch) {
+                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white';
+                } else if (isAll) {
+                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300';
+                } else if (btn.id === 'cmoChip-mixed') {
+                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200';
+                } else {
+                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200';
+                }
+            });
+            renderCrossModuleTable();
+        }
+
+        function renderCrossModuleTable() {
+            const tbody = document.getElementById('crossModuleTable');
+            if (!tbody) return;
+            const list = (crossModuleClusters || []).filter(c => {
+                if (crossModuleFilter === 'all') return true;
+                return c.pairing === crossModuleFilter;
+            });
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No cross-module overlaps in this view.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = list.map(c => {
+                const meta = CROSS_MODULE_PAIRING_LABELS[c.pairing] || { label: c.pairing || '—', action: 'Open cluster for per-record recommendations' };
+                const modules = [];
+                if (c.total_leads    > 0) modules.push('Leads(' + c.total_leads + ')');
+                if (c.total_contacts > 0) modules.push('Contacts(' + c.total_contacts + ')');
+                if (c.total_accounts > 0) modules.push('Accounts(' + c.total_accounts + ')');
+                if (c.total_deals    > 0) modules.push('Deals(' + c.total_deals + ')');
+                const pairingChip = c.pairing === 'mixed'
+                    ? '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">' + escapeHtml(meta.label) + '</span>'
+                    : '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700">' + escapeHtml(meta.label) + '</span>';
+                return '<tr class="hover:bg-gray-50 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']" data-testid="row-cmo-' + c.id + '">'
+                    + '<td class="px-4 py-2 text-xs">' + pairingChip + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-mono text-gray-700">' + escapeHtml(c.domain || '—') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-gray-800">' + escapeHtml(c.company_name || '—') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-gray-600">' + escapeHtml(modules.join(' · ')) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-end font-medium">' + _fn(c.total_records || 0) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-end"><span class="confidence-' + getConfidenceLevel(c.confidence_score || 0) + ' px-2 py-1 rounded">' + _fn(c.confidence_score || 0) + '%</span></td>'
+                    + '<td class="px-4 py-2 text-xs text-end font-medium">' + formatCurrency(Number(c.estimated_pipeline_value || 0)) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-gray-700">' + escapeHtml(meta.action) + '</td>'
+                    + '</tr>';
+            }).join('');
         }
 
         // R4: fetch + render the duplicate creation-rate trend.
