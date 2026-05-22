@@ -889,6 +889,8 @@ export async function getCallAnalyticsSummary(
   callsBySource: any[];
   callsByAgent: any[];
   complianceBreakdown: any;
+  sentimentDistribution: Array<{ label: string; count: number }>;
+  qaScoreTrend: Array<{ week_start: string; avg_score: number; sample_size: number }>;
 }> {
   const { startDate, endDate, agent_email } = options;
 
@@ -1015,9 +1017,65 @@ export async function getCallAnalyticsSummary(
     );
   }
 
+  // Sentiment distribution + weekly QA trend power the Analytics charts.
+  // Until now the charts rendered hardcoded mock data (60/30/10 sentiment,
+  // 75/78/82/85 trend); managers couldn't tell whether the dashboard
+  // reflected reality. Wrapped in try/catch so a missing table never
+  // takes down the whole analytics response.
+  let sentimentDistribution: Array<{ label: string; count: number }> = [];
+  try {
+    const r = await pool.query(
+      `SELECT COALESCE(ca.sentiment_label, 'unknown') AS label, COUNT(*)::int AS count
+         FROM call_records cr
+         JOIN call_analysis ca ON ca.call_record_id = cr.id
+         ${whereClause}
+         GROUP BY ca.sentiment_label`,
+      params,
+    );
+    sentimentDistribution = r.rows.map((row: any) => ({
+      label: row.label,
+      count: row.count,
+    }));
+  } catch (e) {
+    logger.warn("Sentiment distribution query failed:", e);
+  }
+
+  let qaScoreTrend: Array<{ week_start: string; avg_score: number; sample_size: number }> = [];
+  try {
+    const r = await pool.query(
+      `SELECT
+         to_char(date_trunc('week', cr.call_date), 'YYYY-MM-DD') AS week_start,
+         AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS avg_score,
+         COUNT(*)::int AS sample_size
+       FROM call_records cr
+       JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+       LEFT JOIN LATERAL (
+         SELECT adjusted_overall_score FROM sdr_evaluation_reviews sr
+          WHERE sr.evaluation_id = se.id AND sr.adjusted_overall_score IS NOT NULL
+          ORDER BY sr.reviewed_at DESC LIMIT 1
+       ) latest_review ON TRUE
+       ${whereClause}
+       AND cr.call_date IS NOT NULL
+       GROUP BY date_trunc('week', cr.call_date)
+       ORDER BY date_trunc('week', cr.call_date) DESC
+       LIMIT 8`,
+      params,
+    );
+    // Oldest → newest for the chart x-axis.
+    qaScoreTrend = r.rows
+      .map((row: any) => ({
+        week_start: row.week_start,
+        avg_score: row.avg_score != null ? Math.round(parseFloat(row.avg_score) * 10) / 10 : 0,
+        sample_size: row.sample_size,
+      }))
+      .reverse();
+  } catch (e) {
+    logger.warn("Weekly QA trend query failed:", e);
+  }
+
   const complianceResult = await pool.query(
     `
-    SELECT 
+    SELECT
       COUNT(*) as total,
       SUM(CASE WHEN notes_updated THEN 1 ELSE 0 END) as notes_updated,
       SUM(CASE WHEN call_logged THEN 1 ELSE 0 END) as call_logged,
@@ -1042,6 +1100,8 @@ export async function getCallAnalyticsSummary(
     callsBySource: bySourceResult.rows,
     callsByAgent: byAgentResult.rows,
     complianceBreakdown: complianceResult.rows[0] || {},
+    sentimentDistribution,
+    qaScoreTrend,
   };
 }
 
