@@ -2270,6 +2270,68 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // R10 — List pre-merge snapshots for a cluster. Returned in
+    // descending snapshot_at order; payload is a summary (no full JSONB)
+    // so the dashboard can render a quick list without pulling MB of
+    // records_snapshot data over the wire. Use /snapshots/:id to fetch
+    // the full frozen state.
+    path: "/api/duplicates/clusters/:id/snapshots",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          const { listClusterSnapshots } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const snapshots = await listClusterSnapshots(id);
+          return c.json({ success: true, snapshots });
+        } catch (error: any) {
+          logger.error("Error listing cluster snapshots:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // R10 — Fetch a single snapshot's frozen cluster + records state.
+    // Returned as JSONB so the dashboard can render the full record set
+    // including raw_data. 404 when the snapshot id doesn't exist or
+    // belongs to a cluster the user isn't authorised to see.
+    path: "/api/duplicates/snapshots/:snapshotId",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const sid = parseInt(c.req.param("snapshotId"));
+          if (isNaN(sid)) {
+            return c.json({ error: "Invalid snapshot ID" }, 400);
+          }
+
+          const { getClusterSnapshot } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const snapshot = await getClusterSnapshot(sid);
+          if (!snapshot) {
+            return c.json({ error: "Snapshot not found" }, 404);
+          }
+          return c.json({ success: true, snapshot });
+        } catch (error: any) {
+          logger.error("Error fetching cluster snapshot:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // R3 (quick-wins): Mark cluster Resolved AND verify the non-primary
     // records were actually deleted in Zoho. The operator's "Mark
     // Resolved" click asserts a manual Zoho merge happened — this
