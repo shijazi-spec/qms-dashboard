@@ -1159,6 +1159,87 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Follow-up 3 — Bulk-close lead records in selected cross-module
+    // clusters. For each cluster_id, the helper PUTs Lead_Status='Lost Lead'
+    // on every Lead record's Zoho id, then marks the cluster resolved if
+    // every Zoho write succeeded. Body:
+    //   { cluster_ids: number[], dry_run?: boolean, max_clusters?: number }
+    //
+    // Auth: requireAdminOrKey — this is a destructive write to Zoho.
+    //
+    // Response: per-cluster summary so the operator can see exactly what
+    // closed, what was skipped (already-Lost), what failed and why.
+    path: "/api/duplicates/cross-module-overlaps/bulk-close-leads",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          let body: any = {};
+          try {
+            body = (await c.req.json()) ?? {};
+          } catch {
+            return c.json(
+              {
+                success: false,
+                error:
+                  "Body must be JSON: { cluster_ids: number[], dry_run?, max_clusters? }",
+              },
+              400,
+            );
+          }
+
+          if (!Array.isArray(body.cluster_ids) || body.cluster_ids.length === 0) {
+            return c.json(
+              {
+                success: false,
+                error: "cluster_ids must be a non-empty array of cluster IDs",
+              },
+              400,
+            );
+          }
+
+          const ids: number[] = body.cluster_ids
+            .map((x: any) => Number(x))
+            .filter((n: number) => Number.isFinite(n) && n > 0);
+          if (ids.length === 0) {
+            return c.json(
+              {
+                success: false,
+                error: "cluster_ids contained no valid positive integers",
+              },
+              400,
+            );
+          }
+
+          const { bulkCloseLeadsInClusters } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const result = await bulkCloseLeadsInClusters({
+            clusterIds: ids,
+            performedBy: sessionUser.email || "admin",
+            dryRun: !!body.dry_run,
+            maxClusters:
+              typeof body.max_clusters === "number"
+                ? body.max_clusters
+                : undefined,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error in bulk-close-leads:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/kpis",
     method: "GET" as const,
     createHandler: async () => {
