@@ -1004,7 +1004,10 @@ Please generate a complete project charter in JSON format with the following sec
 Ensure all content is practical, actionable, and follows PMP best practices.`;
 
           const { text } = await generateText({
-            model: openai("gpt-4o"),
+            // `.chat(...)` → Chat Completions; bare `openai(...)` returns
+            // the Responses-API model under `@ai-sdk/openai` v3.x which
+            // AI SDK v5 rejects ("Unsupported model version v3").
+            model: openai.chat("gpt-4o"),
             prompt,
           });
 

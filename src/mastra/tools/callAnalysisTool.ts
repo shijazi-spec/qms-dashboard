@@ -145,7 +145,10 @@ Respond ONLY with the JSON.` : '';
       });
 
       const analysisResult = await generateText({
-        model: openai("gpt-4o"),
+        // `.chat(...)` selects Chat Completions adapter; bare `openai(...)`
+        // in `@ai-sdk/openai` v3.x returns the Responses-API model which
+        // AI SDK v5 rejects ("Unsupported model version v3").
+        model: openai.chat("gpt-4o"),
         prompt: analysisPrompt,
         maxTokens: 2000
       });
@@ -187,7 +190,8 @@ Respond ONLY with the JSON.` : '';
       let qaScoreData = null;
       if (context.include_qa_scoring && qaPrompt) {
         const qaResult = await generateText({
-          model: openai("gpt-4o"),
+          // See note above — `.chat(...)` required under AI SDK v5.
+          model: openai.chat("gpt-4o"),
           prompt: qaPrompt,
           maxTokens: 1000
         });
