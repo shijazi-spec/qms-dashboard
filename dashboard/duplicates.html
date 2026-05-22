@@ -1311,11 +1311,25 @@
             </td>`;
         }
 
+        // R8 (quick wins): turn each record-table row's Domain cell into a
+        // clickable "open this cluster" link. Operators previously had to
+        // copy the company name and search in the Clusters tab. Reuses the
+        // existing showClusterDetails modal so context (current tab, filters)
+        // is preserved.
+        function clusterDomainCell(r) {
+            const label = escapeHtml(r.cluster_domain || r.domain || '-');
+            const cid = r && r.cluster_id;
+            if (!cid) {
+                return `<td class="px-4 py-3 text-sm font-medium text-blue-600">${label}</td>`;
+            }
+            return `<td class="px-4 py-3 text-sm font-medium"><a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[${cid}]" class="text-blue-600 hover:text-blue-800 hover:underline" title="View this cluster's full record set + recommendations" data-testid="link-record-cluster-${cid}">${label}</a></td>`;
+        }
+
         function renderLeadRows(groups) {
             const tbody = document.getElementById('leadsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.leads || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td>${clusterDomainCell(r)}<td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
             }
             tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_leads'))}</td></tr>`;
         }
@@ -1324,7 +1338,7 @@
             const tbody = document.getElementById('dealsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.deals || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Deals')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${escapeHtml(r.stage||'-')}</span></td><td class="px-4 py-3 text-sm font-medium">${formatCurrency(r.deal_value||0)}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Deals')}</td>${clusterDomainCell(r)}<td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${escapeHtml(r.stage||'-')}</span></td><td class="px-4 py-3 text-sm font-medium">${formatCurrency(r.deal_value||0)}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
             }
             tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_deals'))}</td></tr>`;
         }
@@ -1333,7 +1347,7 @@
             const tbody = document.getElementById('contactsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.contacts || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Contacts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Contacts')}</td>${clusterDomainCell(r)}<td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
             }
             tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_contacts'))}</td></tr>`;
         }
@@ -1342,7 +1356,7 @@
             const tbody = document.getElementById('accountsTable');
             let rows = '';
             for (const g of groups) for (const r of (g.accounts || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Accounts')}</td><td class="px-4 py-3 text-sm font-medium text-blue-600">${escapeHtml(r.cluster_domain||r.domain||'-')}</td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.source||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Accounts')}</td>${clusterDomainCell(r)}<td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.source||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
             }
             tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_accounts'))}</td></tr>`;
         }
@@ -2351,7 +2365,7 @@
             return rows;
         }
 
-        function preflightVerdictBadge(v) {
+        function preflightVerdictBadge(v, reason) {
             const map = {
                 block:     { bg: 'bg-red-100',     fg: 'text-red-700',    label: 'BLOCK'     },
                 review:    { bg: 'bg-amber-100',   fg: 'text-amber-700',  label: 'REVIEW'    },
@@ -2360,7 +2374,40 @@
                 pass:      { bg: 'bg-green-100',   fg: 'text-green-700',  label: 'PASS'      },
             };
             const m = map[v] || { bg: 'bg-gray-100', fg: 'text-gray-600', label: (v || '—').toUpperCase() };
-            return '<span class="px-2 py-1 text-xs font-bold rounded ' + m.bg + ' ' + m.fg + '">' + m.label + '</span>';
+            // R9 (quick wins): hover tooltip explains the verdict in plain
+            // English so operators don't have to guess what `active_phase:adoption`
+            // or `termination_within_cooloff:60d<180d` means.
+            const human = reason ? humanizePreflightReason(reason) : '';
+            const titleAttr = human ? ' title="' + escAttr(human) + '"' : '';
+            const cursor = human ? ' cursor-help' : '';
+            return '<span class="px-2 py-1 text-xs font-bold rounded ' + m.bg + ' ' + m.fg + cursor + '"' + titleAttr + '>' + m.label + '</span>';
+        }
+
+        // Translate the classifier's machine-style reason codes into plain
+        // English. Reasons are produced by classifyCsOverlap / duplicate
+        // preflight; keep this map in sync with the codes there.
+        function humanizePreflightReason(reason) {
+            if (!reason) return '';
+            const r = String(reason);
+            // active_phase:<phase>
+            const ap = r.match(/^active_phase:(.+)$/);
+            if (ap) return 'Active CS customer (phase: ' + ap[1] + '). Marketing must not push as new lead.';
+            // re_engaged_renewal_after_churn
+            if (r === 're_engaged_renewal_after_churn') return 'Re-engaged customer (Renewal Date set after Churn Date). Treat as active.';
+            // termination_no_churn_date
+            if (r === 'termination_no_churn_date') return 'Terminated but Churn Date missing — CS to confirm before sales can re-engage.';
+            // termination_within_cooloff:<d>d<<cool>d
+            const tw = r.match(/^termination_within_cooloff:(\d+)d<(\d+)d$/);
+            if (tw) return 'Within sector cool-off (' + tw[1] + ' days since churn, threshold ' + tw[2] + 'd). CS to confirm before re-engagement.';
+            // termination_past_cooloff:<d>d>=<cool>d
+            const tp = r.match(/^termination_past_cooloff:(\d+)d>=(\d+)d$/);
+            if (tp) return 'Past sector cool-off (' + tp[1] + ' days since churn, threshold ' + tp[2] + 'd). Sales may re-engage.';
+            // no_cs_phase / unknown_phase / duplicate-specific codes
+            if (r === 'no_cs_phase') return 'No CS pipeline overlap.';
+            const up = r.match(/^unknown_phase:(.+)$/);
+            if (up) return 'Phase "' + up[1] + '" is not configured — verdict held.';
+            // Fallback: tidy up the raw code (underscores → spaces, sentence-case).
+            return r.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
         }
 
         function loadPreflightSample() {
@@ -2775,12 +2822,19 @@
                 return;
             }
             body.innerHTML = rows.map(r => {
+                // R9: show the human reason in the Reason column (with the
+                // raw code preserved as a hover tooltip so the classifier's
+                // diagnostic key is still discoverable for debugging).
+                const humanReason = humanizePreflightReason(r.reason);
+                const reasonCell = humanReason
+                    ? '<span title="' + escAttr(r.reason || '') + '">' + escapeHtml(humanReason) + '</span>'
+                    : escapeHtml(r.reason || '');
                 return '<tr class="hover:bg-gray-50">'
                     + '<td class="px-3 py-2 text-xs text-gray-500">' + (r.row_index + 1) + '</td>'
-                    + '<td class="px-3 py-2 whitespace-nowrap">' + preflightVerdictBadge(r.verdict) + '</td>'
+                    + '<td class="px-3 py-2 whitespace-nowrap">' + preflightVerdictBadge(r.verdict, r.reason) + '</td>'
                     + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(r.input.domain || '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(r.input.company_name || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.reason || '') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-600">' + reasonCell + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.lifecycle_state)) + '</td>'
                     + '<td class="px-3 py-2 text-xs text-end font-medium">' + (r.arr_exposure ? formatCurrency(r.arr_exposure) : '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(r.suggested_action || '') + '</td>'
