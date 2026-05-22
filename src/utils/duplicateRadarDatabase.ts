@@ -41,6 +41,10 @@ export interface DuplicateCluster {
     | null;
   /** Client sector derived from gov_type field or domain heuristic ("private" | "government"). */
   client_sector?: "private" | "government" | null;
+  /** R3: post-merge Zoho verification outcome — 'verified' (records confirmed gone), 'failed' (records still in Zoho), or null (never verified). */
+  verification_state?: "verified" | "failed" | "pending" | null;
+  verification_at?: Date | null;
+  verification_notes?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -470,6 +474,22 @@ export async function initDuplicateRadarTables(): Promise<void> {
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_cs_overlap ON duplicate_clusters(cs_overlap_verdict) WHERE cs_overlap_verdict IS NOT NULL`,
+  );
+  // R3 (quick-wins): post-merge verification state. When an operator clicks
+  // "Mark Resolved + Verify" we check that the cluster's non-primary records
+  // were actually deleted in Zoho and persist the outcome here so the
+  // dashboard can surface a Verified / Failed badge.
+  //   verification_state: NULL / 'verified' / 'failed' / 'pending'
+  //   verification_at:    when we ran the check
+  //   verification_notes: human-readable summary (X confirmed deleted, Y still present)
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS verification_state VARCHAR(16)`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS verification_at TIMESTAMP`,
+  );
+  await pool.query(
+    `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS verification_notes TEXT`,
   );
 
   await pool.query(`
@@ -2288,6 +2308,192 @@ export async function bulkResolve(
     count++;
   }
   return count;
+}
+
+/**
+ * R3 — Post-merge verification.
+ *
+ * After an operator marks a cluster resolved (asserting they merged the
+ * duplicates in Zoho), check whether Zoho actually has the non-primary
+ * records gone. We do per-record `searchZohoRecords(module, id:equals:RID)`
+ * lookups — returning 0 rows means the record no longer exists in Zoho
+ * (it was merged, deleted, or moved).
+ *
+ * Returns a structured result. The caller decides what to do with it
+ * (write back verification_state, flip status, notify operator).
+ *
+ * Why per-record search and not the /deleted feed: the deleted feed has
+ * an indeterminate lag (Zoho documents "up to a few minutes") so it's
+ * unreliable in the seconds immediately after a merge. A search-by-id
+ * returns 204/empty within the same request as the operator's action.
+ *
+ * Concurrency: at most 4 records are checked in parallel to stay polite
+ * with Zoho's rate limiter. Most clusters have 2–5 records so we don't
+ * fan out further.
+ */
+export interface ClusterVerificationResult {
+  verified: boolean;
+  confirmed_deleted: number;
+  still_present: number;
+  errors: number;
+  notes: string;
+  per_record: Array<{
+    record_id: number;
+    zoho_record_id: string | null;
+    module: string;
+    status: "deleted" | "still_present" | "error" | "skipped";
+    detail?: string;
+  }>;
+}
+
+export async function verifyClusterMergedInZoho(
+  clusterId: number,
+): Promise<ClusterVerificationResult> {
+  const { searchZohoRecords } = await import("./zohoCRM");
+
+  const rowsR = await pool.query<{
+    id: number;
+    zoho_record_id: string | null;
+    zoho_module: string | null;
+    record_type: string | null;
+    is_primary: boolean;
+  }>(
+    `SELECT id, zoho_record_id, zoho_module, record_type, is_primary
+       FROM duplicate_records
+      WHERE cluster_id = $1`,
+    [clusterId],
+  );
+
+  // Only the non-primary records are expected to be gone in Zoho.
+  const nonPrimary = rowsR.rows.filter((r) => !r.is_primary);
+
+  if (nonPrimary.length === 0) {
+    return {
+      verified: true,
+      confirmed_deleted: 0,
+      still_present: 0,
+      errors: 0,
+      notes:
+        "No non-primary records in this cluster; nothing to verify against Zoho.",
+      per_record: [],
+    };
+  }
+
+  // Map record_type → Zoho module name. Records carry zoho_module directly
+  // when ingested via the scanner; fall back to type-based mapping for
+  // older rows that don't have it.
+  const moduleFor = (
+    r: (typeof nonPrimary)[number],
+  ): string | null => {
+    if (r.zoho_module && r.zoho_module.trim()) return r.zoho_module.trim();
+    const t = (r.record_type ?? "").trim().toLowerCase();
+    if (t === "lead") return "Leads";
+    if (t === "deal") return "Deals";
+    if (t === "contact") return "Contacts";
+    if (t === "account") return "Accounts";
+    return null;
+  };
+
+  const concurrency = 4;
+  const perRecord: ClusterVerificationResult["per_record"] = [];
+
+  // Run lookups in batches to bound Zoho API pressure.
+  for (let i = 0; i < nonPrimary.length; i += concurrency) {
+    const batch = nonPrimary.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map(async (r) => {
+        if (!r.zoho_record_id) {
+          return {
+            record_id: r.id,
+            zoho_record_id: null,
+            module: r.record_type ?? "unknown",
+            status: "skipped" as const,
+            detail: "Record has no zoho_record_id (synthetic / pre-sync row)",
+          };
+        }
+        const mod = moduleFor(r);
+        if (!mod) {
+          return {
+            record_id: r.id,
+            zoho_record_id: r.zoho_record_id,
+            module: r.record_type ?? "unknown",
+            status: "skipped" as const,
+            detail: `Unknown Zoho module for record_type=${r.record_type}`,
+          };
+        }
+        try {
+          const found = await searchZohoRecords(
+            mod,
+            `(id:equals:${r.zoho_record_id})`,
+          );
+          if (!found || found.length === 0) {
+            return {
+              record_id: r.id,
+              zoho_record_id: r.zoho_record_id,
+              module: mod,
+              status: "deleted" as const,
+            };
+          }
+          return {
+            record_id: r.id,
+            zoho_record_id: r.zoho_record_id,
+            module: mod,
+            status: "still_present" as const,
+            detail: `Zoho still has this ${mod.slice(0, -1)} record`,
+          };
+        } catch (err: any) {
+          return {
+            record_id: r.id,
+            zoho_record_id: r.zoho_record_id,
+            module: mod,
+            status: "error" as const,
+            detail: String(err?.message ?? err),
+          };
+        }
+      }),
+    );
+    perRecord.push(...results);
+  }
+
+  const confirmed = perRecord.filter((p) => p.status === "deleted").length;
+  const stillPresent = perRecord.filter(
+    (p) => p.status === "still_present",
+  ).length;
+  const errors = perRecord.filter((p) => p.status === "error").length;
+  const skipped = perRecord.filter((p) => p.status === "skipped").length;
+
+  // "Verified" = every non-primary record we could check is gone, AND no
+  // errors. Skipped records (no zoho id) don't fail verification but they
+  // do mean we couldn't fully confirm.
+  const verified = stillPresent === 0 && errors === 0;
+  const noteParts: string[] = [];
+  if (confirmed > 0) noteParts.push(`${confirmed} confirmed deleted in Zoho`);
+  if (stillPresent > 0)
+    noteParts.push(`${stillPresent} still present in Zoho`);
+  if (errors > 0) noteParts.push(`${errors} lookup error(s)`);
+  if (skipped > 0) noteParts.push(`${skipped} skipped (no zoho id)`);
+  const notes =
+    noteParts.length > 0 ? noteParts.join("; ") : "No records to verify.";
+
+  const newState = verified ? "verified" : "failed";
+  await pool.query(
+    `UPDATE duplicate_clusters
+        SET verification_state = $1,
+            verification_at    = CURRENT_TIMESTAMP,
+            verification_notes = $2,
+            updated_at         = CURRENT_TIMESTAMP
+      WHERE id = $3`,
+    [newState, notes, clusterId],
+  );
+
+  return {
+    verified,
+    confirmed_deleted: confirmed,
+    still_present: stillPresent,
+    errors,
+    notes,
+    per_record: perRecord,
+  };
 }
 
 export async function getMergeHistory(

@@ -1585,12 +1585,29 @@
                     : WalaPlusI18n.t('dyn.duplicates.resolve_label_simple');
                 html += `<div class="border-t pt-4">
                     <div class="flex flex-wrap gap-3 mb-2">
-                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;resolve&quot;]" data-testid="button-resolve-${cluster.id}" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">${resolveLabel}</button>
+                        <button data-on-click="resolveClusterAndVerify" data-args="[${cluster.id}]" data-testid="button-resolve-verify-${cluster.id}" title="Mark this cluster resolved AND verify with Zoho that the non-primary records were actually deleted. If Zoho still shows the duplicates, the cluster is automatically re-opened." class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-semibold">${resolveLabel} + Verify</button>
+                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;resolve&quot;]" data-testid="button-resolve-${cluster.id}" title="Mark resolved without verifying against Zoho (skip the Zoho check)" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">${resolveLabel}</button>
                         <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;ignore&quot;]" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">${WalaPlusI18n.t('dyn.duplicates.ignore_label')}</button>
                     </div>
                     <p data-testid="text-post-merge-hint" class="text-xs text-gray-500 italic">
                         ${WalaPlusI18n.t('dyn.duplicates.post_merge_hint')}
                     </p>
+                </div>`;
+            } else if (cluster.verification_state) {
+                // R3: surface verification outcome on already-resolved clusters
+                // so operators can audit whether previous Mark-Resolved actions
+                // actually landed in Zoho.
+                const v = cluster.verification_state;
+                const badgeCls = v === 'verified'
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    : v === 'failed'
+                        ? 'bg-red-100 text-red-800 border-red-300'
+                        : 'bg-gray-100 text-gray-700 border-gray-300';
+                html += `<div class="border-t pt-4">
+                    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded border ${badgeCls} text-xs font-medium" data-testid="badge-verification-${cluster.id}">
+                        <span class="font-semibold uppercase">${escapeHtml(v)}</span>
+                        ${cluster.verification_notes ? '<span class="opacity-80">' + escapeHtml(cluster.verification_notes) + '</span>' : ''}
+                    </div>
                 </div>`;
             }
 
@@ -1657,6 +1674,56 @@
                 refreshData();
             } else {
                 alert(data.error || WalaPlusI18n.t('dyn.duplicates.failed_action'));
+            }
+        }
+
+        // R3: Mark resolved AND verify against Zoho. The operator's click is
+        // an assertion that they merged in Zoho — this endpoint checks the
+        // assertion by searching Zoho for each non-primary record's id. If
+        // Zoho still has them, the cluster is automatically re-opened so the
+        // operator doesn't lose visibility on a failed merge.
+        async function resolveClusterAndVerify(clusterId) {
+            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+            if (!adminKey) return;
+
+            // Visual feedback: replace the modal action area with a "Verifying"
+            // indicator since the Zoho searches can take a few seconds.
+            const verifyBtn = document.querySelector(`[data-testid="button-resolve-verify-${clusterId}"]`);
+            const originalLabel = verifyBtn ? verifyBtn.innerHTML : null;
+            if (verifyBtn) {
+                verifyBtn.disabled = true;
+                verifyBtn.innerHTML = '<svg class="w-4 h-4 inline animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Verifying with Zoho…';
+            }
+
+            try {
+                const res = await fetch(`/api/duplicates/clusters/${clusterId}/resolve-and-verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ action: 'resolve' }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    alert(data.error || 'Failed to resolve + verify.');
+                    if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.innerHTML = originalLabel; }
+                    return;
+                }
+
+                const v = data.verification || {};
+                if (v.verified) {
+                    alert(`✓ Verified — ${v.confirmed_deleted} record(s) confirmed deleted in Zoho.\n\n${v.notes}`);
+                } else {
+                    alert(
+                        `⚠ Verification failed — Zoho still shows ${v.still_present} non-primary record(s).\n\n` +
+                        `${v.notes}\n\n` +
+                        `The cluster has been re-opened so it stays in your queue. ` +
+                        `Confirm the merge in Zoho, then try Mark Resolved + Verify again.`
+                    );
+                }
+                closeModal();
+                refreshData();
+            } catch (e) {
+                alert('Network error during resolve + verify: ' + (e && e.message || e));
+                if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.innerHTML = originalLabel; }
             }
         }
 
