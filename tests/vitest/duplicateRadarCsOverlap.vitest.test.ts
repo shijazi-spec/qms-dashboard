@@ -21,6 +21,7 @@ import { existsSync, readFileSync } from "node:fs";
 import {
   classifyCsOverlap,
   detectSector,
+  extractCsFieldsFromRawData,
   resetCsOverlapConfigCache,
   type CsOverlapInput,
 } from "../../src/utils/duplicateRadarCsOverlap";
@@ -194,6 +195,51 @@ describe("classifyCsOverlap — verdict ladder", () => {
     expect(
       classifyCsOverlap({ phase: "Negotiation", gov_type: "Private" }).verdict,
     ).toBeNull();
+  });
+});
+
+describe("extractCsFieldsFromRawData — normalised key fallback", () => {
+  test("matches Company_Domain via exact key", () => {
+    const out = extractCsFieldsFromRawData({
+      Phase: "Adoption",
+      Company_Domain: "emdadnajed.com",
+    });
+    expect(out.company_domain).toBe("emdadnajed.com");
+  });
+
+  test("matches a casing/separator variant via normalisation", () => {
+    // Tenant uses an unexpected casing/separator that none of the explicit
+    // defaults match — normalised lookup should still find it.
+    const out = extractCsFieldsFromRawData({
+      Phase: "Adoption",
+      "COMPANYDOMAIN": "thenizerksa.com",
+    });
+    expect(out.company_domain).toBe("thenizerksa.com");
+  });
+
+  test("matches a hyphenated/space-separated variant via normalisation", () => {
+    const out = extractCsFieldsFromRawData({
+      Phase: "Adoption",
+      "company-domain": "unitedinv.co",
+    });
+    expect(out.company_domain).toBe("unitedinv.co");
+  });
+
+  test("extracts Renewal_Date alongside Churn_Date", () => {
+    const out = extractCsFieldsFromRawData({
+      Phase: "Adoption",
+      Churn_Date: "2026-03-15",
+      Renewal_Date: "2026-03-16",
+    });
+    expect(out.renewal_date).toBe("2026-03-16");
+    expect(out.churn_date).toBe("2026-03-15");
+  });
+
+  test("returns null company_domain when raw_data has no domain-like key", () => {
+    const out = extractCsFieldsFromRawData({
+      Phase: "Adoption",
+    });
+    expect(out.company_domain).toBeNull();
   });
 });
 

@@ -41,7 +41,6 @@ import {
   addRecordToCluster,
   upsertRecord,
   findOrCreateClusterByDomain,
-  updateClusterStats,
   searchDuplicates,
   createCluster,
   clearAllDuplicateData,
@@ -1610,7 +1609,9 @@ export const duplicateRadarRoutes = [
                     rec["deal_value"] ?? "",
                     rec["source"],
                     rec["created_date"],
-                    `${rec["confidence_score"]}%`,
+                    rec["confidence_score"] == null
+                      ? ""
+                      : `${rec["confidence_score"]}%`,
                     rec["ai_recommendation"] ?? "Review manually",
                   ].map((v) => escapeCSVValue(String(v ?? "")));
                 }

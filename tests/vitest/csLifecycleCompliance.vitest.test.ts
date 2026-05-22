@@ -126,6 +126,38 @@ describe("phase_churn_desync (critical)", () => {
       "phase_churn_desync",
     );
   });
+
+  test("does NOT fire when Renewal Date is AFTER Churn Date (re-engaged)", () => {
+    // Customer churned but came back — Renewal Date set after Churn Date.
+    // Phase legitimately moved back to Adoption; the stale Churn Date is
+    // historical, not a desync.
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Adoption",
+        Churn_Date: "2026-03-15",
+        Renewal_Date: "2026-03-16",
+      },
+      modified_date: daysAgo(2),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "phase_churn_desync",
+    );
+  });
+
+  test("STILL fires when Renewal Date is BEFORE Churn Date", () => {
+    // Renewal is historical, Churn is the more-recent event — genuine desync.
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Adoption",
+        Churn_Date: "2026-04-01",
+        Renewal_Date: "2026-03-01",
+      },
+      modified_date: daysAgo(2),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "phase_churn_desync",
+    );
+  });
 });
 
 describe("termination_missing_churn_date", () => {

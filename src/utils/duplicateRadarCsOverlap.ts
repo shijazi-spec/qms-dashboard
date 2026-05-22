@@ -255,6 +255,7 @@ export function extractCsFieldsFromRawData(
   trial_end_date?: string | Date | null;
   company_domain?: string | null;
   churn_reason?: string | null;
+  renewal_date?: string | Date | null;
 } {
   if (!rawData || typeof rawData !== "object") {
     return { domain: context.domain ?? null };
@@ -269,6 +270,30 @@ export function extractCsFieldsFromRawData(
   const tryKeys = (keys: string[]): unknown => {
     for (const k of keys) {
       if (r[k] !== undefined && r[k] !== null && r[k] !== "") return r[k];
+    }
+    return null;
+  };
+
+  // Normalized lookup: matches any raw_data key whose lower-cased,
+  // separator-stripped form equals one of the candidates. Catches Zoho
+  // tenants where the API name uses a different casing or separator than
+  // the documented defaults (e.g. "CompanyDomain1" matching "company_domain"
+  // after normalisation). Skipped when the explicit tryKeys path already
+  // found a value.
+  const norm = (s: string): string =>
+    s.toLowerCase().replace(/[\s_\-./]+/g, "");
+  const normalizedKeyIndex: Map<string, unknown> = new Map();
+  for (const k of Object.keys(r)) {
+    const v = r[k];
+    if (v === undefined || v === null || v === "") continue;
+    normalizedKeyIndex.set(norm(k), v);
+  }
+  const tryKeysOrNormalized = (keys: string[]): unknown => {
+    const direct = tryKeys(keys);
+    if (direct !== null) return direct;
+    for (const k of keys) {
+      const hit = normalizedKeyIndex.get(norm(k));
+      if (hit !== undefined) return hit;
     }
     return null;
   };
@@ -306,7 +331,7 @@ export function extractCsFieldsFromRawData(
       "ARR",
     ]),
   );
-  const customerSinceRaw = tryKeys(
+  const customerSinceRaw = tryKeysOrNormalized(
     envOr("DUPLICATE_RADAR_FIELD_CUSTOMER_SINCE", [
       "Customer_Since",
       "customer_since",
@@ -314,7 +339,7 @@ export function extractCsFieldsFromRawData(
       "Customer Since",
     ]),
   );
-  const trialEndRaw = tryKeys(
+  const trialEndRaw = tryKeysOrNormalized(
     envOr("DUPLICATE_RADAR_FIELD_TRIAL_END", [
       "Trial_End_Date",
       "trial_end_date",
@@ -324,9 +349,10 @@ export function extractCsFieldsFromRawData(
     ]),
   );
   // CS team's curated authoritative domain — populated at Onboarding handoff.
-  // Tolerant of the common Zoho key variations; pin via env if your field has
-  // a different API name (DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN=Company_Domain).
-  const companyDomainRaw = tryKeys(
+  // Tolerant of the common Zoho key variations AND case/separator variants
+  // (via normalised lookup); pin via env if your field name doesn't normalise
+  // to "companydomain" (DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN=<api_name>).
+  const companyDomainRaw = tryKeysOrNormalized(
     envOr("DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN", [
       "Company_Domain",
       "company_domain",
@@ -336,10 +362,21 @@ export function extractCsFieldsFromRawData(
       "domain",
     ]),
   );
+  // Renewal Date — when set AFTER Churn Date, indicates the customer
+  // re-engaged after churning. Such records should not be flagged as
+  // phase_churn_desync (a stale Churn Date is expected on re-engaged deals).
+  const renewalDateRaw = tryKeysOrNormalized(
+    envOr("DUPLICATE_RADAR_FIELD_RENEWAL_DATE", [
+      "Renewal_Date",
+      "renewal_date",
+      "RenewalDate",
+      "Renewal Date",
+    ]),
+  );
   // Churn reason — required alongside Churn_Date when a deal moves to
   // Termination phase. Without it the CS team can't run reason-level
   // analytics ("why are private clients churning at month 6?").
-  const churnReasonRaw = tryKeys(
+  const churnReasonRaw = tryKeysOrNormalized(
     envOr("DUPLICATE_RADAR_FIELD_CHURN_REASON", [
       "Churn_Reason",
       "churn_reason",
@@ -375,6 +412,8 @@ export function extractCsFieldsFromRawData(
       churnReasonRaw == null
         ? null
         : String(churnReasonRaw).trim() || null,
+    renewal_date:
+      renewalDateRaw == null ? null : (renewalDateRaw as string | Date),
   };
 }
 
