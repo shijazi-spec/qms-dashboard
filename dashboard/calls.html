@@ -1800,31 +1800,74 @@
             if (sentimentChart) sentimentChart.destroy();
             if (qaTrendChart) qaTrendChart.destroy();
 
+            // Real sentiment distribution from call_analysis.sentiment_label.
+            // Backend returns one row per label present in the data; we
+            // normalise into positive/neutral/negative slots so the chart
+            // always renders the same three segments even when one is zero.
+            // Anything outside these three (e.g. 'unknown' for old rows)
+            // folds into Neutral.
+            const sentimentBuckets = { positive: 0, neutral: 0, negative: 0 };
+            for (const row of (analytics.sentimentDistribution || [])) {
+                const label = (row && row.label) ? String(row.label).toLowerCase() : 'neutral';
+                if (label === 'positive') sentimentBuckets.positive += row.count || 0;
+                else if (label === 'negative') sentimentBuckets.negative += row.count || 0;
+                else sentimentBuckets.neutral += row.count || 0;
+            }
+            const sentimentTotal = sentimentBuckets.positive + sentimentBuckets.neutral + sentimentBuckets.negative;
             const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');
             sentimentChart = new Chart(sentimentCtx, {
                 type: 'pie',
                 data: {
                     labels: [WalaPlusI18n.t('dyn.calls.sentiment_positive'), WalaPlusI18n.t('dyn.calls.sentiment_neutral'), WalaPlusI18n.t('dyn.calls.sentiment_negative')],
                     datasets: [{
-                        data: [60, 30, 10],
+                        data: sentimentTotal > 0
+                            ? [sentimentBuckets.positive, sentimentBuckets.neutral, sentimentBuckets.negative]
+                            : [0, 0, 0],
                         backgroundColor: ['#10b981', '#6366f1', '#ef4444']
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom' } }
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    const v = ctx.parsed || 0;
+                                    const pct = sentimentTotal > 0 ? Math.round((v / sentimentTotal) * 100) : 0;
+                                    return `${ctx.label}: ${v} call${v === 1 ? '' : 's'} (${pct}%)`;
+                                }
+                            }
+                        }
+                    }
                 }
             });
 
+            // Real weekly QA-score trend (last 8 weeks of analysed calls,
+            // canonical-score COALESCEd so manager adjustments count).
+            // Backend returns 0–8 weeks oldest-first. With zero data we
+            // still render an empty axis instead of leaving the canvas
+            // blank, so the user sees the placeholder until evaluations
+            // accrue.
+            const trend = analytics.qaScoreTrend || [];
+            const trendLabels = trend.length > 0
+                ? trend.map(t => {
+                    const d = new Date(t.week_start);
+                    return Number.isFinite(d.getTime())
+                        ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                        : t.week_start;
+                })
+                : [WalaPlusI18n.t('dyn.calls.week_n', { n: _fn(1) })];
+            const trendData = trend.length > 0 ? trend.map(t => t.avg_score) : [0];
             const qaTrendCtx = document.getElementById('qaTrendChart').getContext('2d');
             qaTrendChart = new Chart(qaTrendCtx, {
                 type: 'line',
                 data: {
-                    labels: [WalaPlusI18n.t('dyn.calls.week_n', { n: _fn(1) }), WalaPlusI18n.t('dyn.calls.week_n', { n: _fn(2) }), WalaPlusI18n.t('dyn.calls.week_n', { n: _fn(3) }), WalaPlusI18n.t('dyn.calls.week_n', { n: _fn(4) })],
+                    labels: trendLabels,
                     datasets: [{
                         label: WalaPlusI18n.t('dyn.calls.avg_qa_score'),
-                        data: [75, 78, 82, 85],
+                        data: trendData,
                         borderColor: '#6366f1',
                         backgroundColor: 'rgba(99, 102, 241, 0.1)',
                         fill: true,
@@ -1834,8 +1877,18 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: false, min: 50, max: 100 } }
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: (ctx) => {
+                                    const t = trend[ctx.dataIndex];
+                                    return t ? `n=${t.sample_size}` : '';
+                                }
+                            }
+                        }
+                    },
+                    scales: { y: { beginAtZero: false, min: 0, max: 100 } }
                 }
             });
 
@@ -4821,13 +4874,21 @@
         let currentTranscriptText = '';
 
         async function loadScorecards() {
+            const summaryEl = document.getElementById('embedded-scorecard-summary');
             try {
                 const res = await fetch('/api/quality-scorecards');
                 const data = await res.json();
                 scorecards = data.scorecards || [];
                 renderScorecardsList();
+                // updateEmbeddedScorecardSummary populates the "Active
+                // Scorecard" line at the top of the SDR Evaluation tab.
+                // Without this call the line was stuck on "Loading active
+                // scorecard…" forever — the helper was defined but never
+                // invoked.
+                updateEmbeddedScorecardSummary(scorecards);
             } catch (error) {
                 console.error('Error loading scorecards:', error);
+                if (summaryEl) summaryEl.textContent = 'Could not load scorecards — check connection.';
             }
         }
 

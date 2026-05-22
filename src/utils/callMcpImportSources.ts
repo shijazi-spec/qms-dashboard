@@ -25,10 +25,10 @@ export interface ImportChannelInfo {
 }
 
 export const CRM_PHONE_MATCH_SCOPE =
-  "zoho_leads_only" as const;
+  "zoho_leads_deals_with_activity_fallback" as const;
 
 export const CRM_PHONE_MATCH_SCOPE_DESCRIPTION =
-  "Phone-based SDR ↔ CRM alignment uses the Zoho **Leads** module only. `findLeadsByPhoneMatch` scans fetched Leads (bounded by max_records) and matches Phone/Mobile. Contacts, Deals, and Activities are out of scope.";
+  "SDR ↔ CRM linkage runs in two phases. **Phase 1** — phone-digit match against Zoho **Leads + Deals** modules (Deals win when both contain a unique match, since a converted Deal supersedes its source Lead). **Phase 2 fallback** — when the phone digits don't pull up a unique record, the linker scans Notes / Calls / Tasks / Events created by the same agent on the same day as the call and links to the parent Lead/Deal when there is exactly one candidate. The result is tagged in `call_records.linked_via` so the UI can flag phone vs activity matches at different confidence levels. Contacts and Accounts remain out of scope.";
 
 export function getCallImportSourcesCatalog(): {
   crm_phone_match_scope: typeof CRM_PHONE_MATCH_SCOPE;
