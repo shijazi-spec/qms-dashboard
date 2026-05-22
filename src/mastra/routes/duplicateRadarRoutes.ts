@@ -2484,7 +2484,7 @@ export const duplicateRadarRoutes = [
             body.notes,
           );
 
-          const { verifyClusterMergedInZoho } = await import(
+          const { verifyClusterMergedInZoho, listClusterSnapshots } = await import(
             "../../utils/duplicateRadarDatabase"
           );
           const verification = await verifyClusterMergedInZoho(id);
@@ -2499,11 +2499,31 @@ export const duplicateRadarRoutes = [
             );
           }
 
+          // Follow-up 2: surface the just-captured pre-resolve snapshot
+          // id so the UI can one-click open the viewer on verification
+          // failure. resolveCluster (called above) invokes
+          // captureClusterSnapshot internally as its first step (R10),
+          // so the most-recent snapshot for this cluster IS the one we
+          // just captured. Pulling the latest is cheap (indexed query)
+          // and avoids a second client round-trip.
+          let latestSnapshotId: number | null = null;
+          try {
+            const snaps = await listClusterSnapshots(id);
+            latestSnapshotId = snaps[0]?.id ?? null;
+          } catch (snapErr) {
+            // Best-effort — a snapshot-lookup failure must NOT mask the
+            // verification result the operator is waiting on.
+            logger.warn(
+              `[DuplicateRadar] Could not fetch latest snapshot for cluster ${id} after resolve-and-verify: ${(snapErr as Error).message}`,
+            );
+          }
+
           return c.json({
             success: true,
             merge_action: mergeAction,
             verification,
             cluster_status: verification.verified ? "resolved" : "active",
+            latest_snapshot_id: latestSnapshotId,
           });
         } catch (error: any) {
           logger.error("Error in resolve-and-verify:", error);
