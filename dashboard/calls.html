@@ -3967,6 +3967,28 @@
                         </div>
                     </div>
 
+                    <!-- Inline audio player + transcript browser.
+                         Streams from /api/calls/:id/audio (Range-supported)
+                         so managers don't need to download .wav files to
+                         listen. When the AI evaluation populated
+                         evidence_timestamps or the transcript has
+                         speaker_segments, those become click-to-seek
+                         shortcuts via audioPlayer.currentTime. -->
+                    <div class="bg-white border rounded-xl p-4" id="eval-audio-panel">
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="font-semibold">🔊 Listen to call</h4>
+                            <span class="text-xs text-gray-400" id="eval-audio-status">Loading audio…</span>
+                        </div>
+                        <audio id="eval-audio-player" controls preload="metadata" class="w-full" style="display:none;"></audio>
+                        <div id="eval-audio-fallback" class="text-xs text-gray-500"></div>
+                        ${transcript?.transcript_text ? `
+                            <details class="mt-3" id="eval-transcript-details">
+                                <summary class="cursor-pointer text-xs font-medium text-blue-700 hover:text-blue-900 select-none">Show full transcript${transcript.speaker_segments ? ' (click any line to seek)' : ''}</summary>
+                                <div class="mt-2 max-h-64 overflow-y-auto bg-gray-50 border border-gray-100 rounded p-3 text-sm leading-relaxed" id="eval-transcript-body" dir="auto"></div>
+                            </details>
+                        ` : ''}
+                    </div>
+
                     <!-- Key Moments -->
                     <div class="bg-white border rounded-xl p-4">
                         <h4 class="font-semibold mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.key_moments'))}</h4>
@@ -4013,7 +4035,11 @@
                                                 <span class="coaching-priority-slot"></span>
                                             </div>
                                             ${attr.comment ? `<p class="text-sm text-gray-600 mt-1">${escapeHtml(attr.comment)}</p>` : ''}
-                                            ${attr.evidence_quotes?.length ? `<p class="text-xs text-gray-400 mt-1 italic">"${escapeHtml(attr.evidence_quotes[0])}"</p>` : ''}
+                                            ${attr.evidence_quotes?.length ? `<p class="text-xs text-gray-400 mt-1 italic">${
+                                                attr.evidence_timestamps && attr.evidence_timestamps[0]
+                                                    ? `<button type="button" data-on-click="seekEvalAudio" data-args="[&quot;${escapeForJs(String(attr.evidence_timestamps[0]))}&quot;]" class="text-indigo-600 hover:text-indigo-800 underline decoration-dotted" title="Jump to ${escapeHtml(String(attr.evidence_timestamps[0]))} in the audio">🔊 ${escapeHtml(String(attr.evidence_timestamps[0]))}</button> `
+                                                    : ''
+                                            }"${escapeHtml(attr.evidence_quotes[0])}"</p>` : ''}
                                         </div>
                                         ${attr.score !== null ? `<div class="text-end"><span class="text-lg font-bold ${attr.score >= 7 ? 'text-green-600' : attr.score >= 5 ? 'text-amber-600' : 'text-red-600'}">${_fn(attr.score)}</span><span class="text-gray-400">/${_fn(10)}</span></div>` : ''}
                                     </div>
@@ -4158,6 +4184,7 @@
             if (selectedEvalCall?.id) {
                 loadManagerReviewHistory(selectedEvalCall.id);
                 loadCoachingPlan(selectedEvalCall.id);
+                initEvalAudioPlayer(selectedEvalCall.id, transcript);
             }
         }
 
@@ -4482,6 +4509,129 @@
         // each below-threshold attribute, (b) populate the roll-up plan
         // panel so managers can see the full coaching agenda at a glance.
         // ===================================================================
+        // ===================================================================
+        // Inline audio playback — listen to the call directly in the eval
+        // panel, no need to download the .wav. Plays via the backend
+        // stream route (Range-supported so the browser can seek). When
+        // the AI evaluation has `evidence_timestamps` on an attribute,
+        // clicking the timestamp link calls seekEvalAudio() and jumps
+        // the player to that moment. Transcript browser renders below
+        // the player: speaker_segments (when present) become clickable
+        // seek shortcuts; otherwise plain text.
+        // ===================================================================
+        function initEvalAudioPlayer(callId, transcript) {
+            const audio = document.getElementById('eval-audio-player');
+            const status = document.getElementById('eval-audio-status');
+            const fallback = document.getElementById('eval-audio-fallback');
+            if (!audio || !callId) return;
+            // Probe HEAD so we can distinguish "no audio on this call"
+            // (404) from "audio file gone missing" (also 404 but rarer).
+            // Falling back to a quick fetch instead of a HEAD because the
+            // backend's audio route doesn't define HEAD — GET with a tiny
+            // Range avoids streaming the whole file just to probe.
+            fetch(`/api/calls/${callId}/audio`, {
+                method: 'GET',
+                headers: { Range: 'bytes=0-0' },
+            }).then(res => {
+                if (res.status === 206 || res.status === 200) {
+                    audio.src = `/api/calls/${callId}/audio?t=${Date.now()}`;
+                    audio.style.display = '';
+                    if (status) status.textContent = '';
+                    if (fallback) fallback.innerHTML = '';
+                    if (transcript) renderEvalTranscript(transcript);
+                } else if (res.status === 404) {
+                    audio.style.display = 'none';
+                    if (status) status.textContent = '';
+                    if (fallback) fallback.textContent = 'No audio file for this call — recording was not uploaded.';
+                    if (transcript) renderEvalTranscript(transcript);
+                } else {
+                    audio.style.display = 'none';
+                    if (status) status.textContent = '';
+                    if (fallback) fallback.textContent = `Audio unavailable (HTTP ${res.status}).`;
+                }
+            }).catch(err => {
+                audio.style.display = 'none';
+                if (status) status.textContent = '';
+                if (fallback) fallback.textContent = 'Audio probe failed: ' + (err.message || err);
+            });
+        }
+
+        // Parse an evidence timestamp into seconds. Accepts:
+        //   • "01:23" / "1:23"           → minutes:seconds
+        //   • "01:23:45"                 → hours:minutes:seconds
+        //   • "00:01:23.456"             → with ms
+        //   • bare number ("83")         → seconds
+        function parseTimestampToSeconds(ts) {
+            if (ts == null) return null;
+            const s = String(ts).trim();
+            if (!s) return null;
+            const bareNum = Number(s);
+            if (Number.isFinite(bareNum)) return bareNum;
+            const parts = s.split(':').map(p => parseFloat(p));
+            if (parts.some(p => !Number.isFinite(p))) return null;
+            if (parts.length === 2) return parts[0] * 60 + parts[1];
+            if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            return null;
+        }
+
+        function seekEvalAudio(timestamp) {
+            const audio = document.getElementById('eval-audio-player');
+            if (!audio || audio.style.display === 'none') {
+                alert('No audio loaded for this call.');
+                return;
+            }
+            const secs = parseTimestampToSeconds(timestamp);
+            if (secs == null) {
+                console.warn('Could not parse timestamp:', timestamp);
+                return;
+            }
+            audio.currentTime = Math.max(0, secs);
+            // Auto-play on click so the manager hears the moment they
+            // wanted to verify without an extra Play press.
+            audio.play().catch(() => { /* autoplay may be blocked; user can press Play */ });
+            // Scroll the player into view if the manager clicked from a
+            // long attribute table that pushed the player off-screen.
+            audio.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function renderEvalTranscript(transcript) {
+            const body = document.getElementById('eval-transcript-body');
+            if (!body || !transcript) return;
+            const segments = Array.isArray(transcript.speaker_segments) ? transcript.speaker_segments : null;
+            if (segments && segments.length > 0) {
+                // Each segment may carry {start, end, speaker, text} (Whisper
+                // verbose_json shape) or similar. We render any segment that
+                // has a numeric `start` as clickable.
+                body.innerHTML = segments.map(seg => {
+                    const start = typeof seg.start === 'number' ? seg.start : parseFloat(seg.start);
+                    const text = seg.text || seg.content || '';
+                    const speaker = seg.speaker || seg.role || '';
+                    const tsLabel = Number.isFinite(start) ? formatSeconds(start) : '';
+                    const speakerBadge = speaker
+                        ? `<span class="px-1 py-0.5 text-[10px] rounded bg-gray-200 text-gray-700 mr-1">${escapeHtml(String(speaker))}</span>`
+                        : '';
+                    if (Number.isFinite(start)) {
+                        return `<div class="mb-1 hover:bg-blue-50 rounded p-1 cursor-pointer" data-on-click="seekEvalAudio" data-args="[&quot;${escapeForJs(String(start))}&quot;]"><span class="text-[10px] text-indigo-600 font-mono mr-2">${tsLabel}</span>${speakerBadge}${escapeHtml(String(text))}</div>`;
+                    }
+                    return `<div class="mb-1 p-1">${speakerBadge}${escapeHtml(String(text))}</div>`;
+                }).join('');
+            } else {
+                // No segments — plain text. Still wrap in dir="auto" so
+                // Arabic renders correctly when the source is mixed.
+                body.textContent = transcript.transcript_text || '';
+            }
+        }
+
+        function formatSeconds(s) {
+            if (!Number.isFinite(s) || s < 0) return '0:00';
+            const total = Math.floor(s);
+            const h = Math.floor(total / 3600);
+            const m = Math.floor((total % 3600) / 60);
+            const sec = total % 60;
+            const pad = (n) => String(n).padStart(2, '0');
+            return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+        }
+
         async function loadCoachingPlan(callId) {
             const panel = document.getElementById('coaching-plan-panel');
             const list = document.getElementById('coaching-plan-list');
