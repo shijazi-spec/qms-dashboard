@@ -3388,6 +3388,172 @@ export function getClusterRecordTypeMeta(records: DuplicateRecord[]): {
   };
 }
 
+/**
+ * R6 — Classify a cross-module cluster by which pair of record types
+ * co-exist. Pure helper, exported for vitest.
+ *
+ * Industry context: a Lead at `acme.com` representing the same person /
+ * company as a Contact under the existing ACME Account is the most common
+ * cross-module duplicate. The fix is NOT "merge" (Zoho doesn't support
+ * cross-module merges) — it's CONVERT (the Lead becomes the Contact) or
+ * LINK (set Account_Name on the deal/contact). The generateSmartRecommendations
+ * helper already emits the right per-record action; this classifier groups
+ * clusters by pairing type so the Cross-Module tab can filter / KPI them.
+ *
+ * Returns one of:
+ *   lead_contact   — Lead + Contact (most common — convert lead to contact)
+ *   lead_account   — Lead + Account (close the lead, link to account)
+ *   lead_deal      — Lead + Deal (close the lead, deal is canonical)
+ *   contact_account — Contact + Account (link Contact's Account_Name)
+ *   contact_deal   — Contact + Deal (link Deal's Contact_Name)
+ *   deal_account   — Deal + Account (link Deal's Account_Name)
+ *   mixed          — 3 or more distinct record types (compound case)
+ *   null           — same-module / not actually cross-module
+ *
+ * Two-module pairings use an explicit canonical ordering (Lead first, then
+ * Contact, then Deal, then Account) so the same pair always maps to the
+ * same key. Lead-first ordering follows operational priority: Leads are
+ * net-new pipeline that need disposition, so a "Lead + something" pair is
+ * always read as "what do we do with the Lead?".
+ */
+export type CrossModulePairing =
+  | "lead_contact"
+  | "lead_account"
+  | "lead_deal"
+  | "contact_account"
+  | "contact_deal"
+  | "deal_account"
+  | "mixed";
+
+// Explicit lookup: hasLead × hasContact × hasAccount × hasDeal → key.
+// Keeps the type union in lock-step with what the classifier returns.
+const CROSS_MODULE_PAIRING_LOOKUP: Record<string, CrossModulePairing> = {
+  "lead+contact": "lead_contact",
+  "lead+account": "lead_account",
+  "lead+deal": "lead_deal",
+  "contact+account": "contact_account",
+  "contact+deal": "contact_deal",
+  "deal+account": "deal_account",
+};
+
+export function classifyCrossModulePairing(input: {
+  total_leads: number;
+  total_contacts: number;
+  total_accounts: number;
+  total_deals: number;
+}): CrossModulePairing | null {
+  const present: string[] = [];
+  if ((input.total_leads ?? 0) > 0) present.push("lead");
+  if ((input.total_contacts ?? 0) > 0) present.push("contact");
+  if ((input.total_deals ?? 0) > 0) present.push("deal");
+  if ((input.total_accounts ?? 0) > 0) present.push("account");
+  if (present.length <= 1) return null;
+  if (present.length >= 3) return "mixed";
+  // Exactly two — the priority push order above (lead, contact, deal,
+  // account) guarantees they're already in canonical order when joined.
+  const key = present.join("+");
+  return CROSS_MODULE_PAIRING_LOOKUP[key] ?? "mixed";
+}
+
+export interface CrossModuleClusterRow {
+  id: number;
+  domain: string | null;
+  company_name: string | null;
+  confidence_score: number;
+  confidence_level: "high" | "medium" | "low";
+  total_records: number;
+  total_leads: number;
+  total_contacts: number;
+  total_accounts: number;
+  total_deals: number;
+  pairing: CrossModulePairing | null;
+  estimated_pipeline_value: number;
+  status: string;
+  created_at: Date | null;
+  updated_at: Date | null;
+}
+
+export interface CrossModuleOverlapsResponse {
+  total: number;
+  by_pairing: Record<string, number>;
+  arr_exposure_total: number;
+  clusters: CrossModuleClusterRow[];
+}
+
+/**
+ * R6 — Fetch active clusters that span 2+ record types ("cross-module
+ * overlaps") with per-pairing counts.
+ *
+ * Definition: at least two of total_leads/contacts/accounts/deals are > 0.
+ * Filtering: status='active' so resolved/ignored clusters drop off the
+ * triage queue. Optional `pairing` filter applies a post-query JS filter
+ * (the SQL aggregates produce all pairings; trimming after is cheap given
+ * the result set is bounded by `limit`).
+ *
+ * Limit defaults to 200, clamped [1, 1000]. Most tenants will have <200
+ * cross-module clusters open at any time — this is a triage view, not a
+ * pagination view.
+ */
+export async function getCrossModuleOverlaps(opts: {
+  limit?: number;
+  pairing?: CrossModulePairing | null;
+} = {}): Promise<CrossModuleOverlapsResponse> {
+  const limit = Math.min(1000, Math.max(1, Math.floor(opts.limit ?? 200) || 200));
+  const r = await pool.query<CrossModuleClusterRow>(
+    `
+    SELECT
+      id, domain, company_name,
+      confidence_score, confidence_level,
+      total_records,
+      total_leads, total_contacts, total_accounts, total_deals,
+      COALESCE(estimated_pipeline_value, 0)::numeric AS estimated_pipeline_value,
+      status, created_at, updated_at
+    FROM duplicate_clusters
+    WHERE status = 'active'
+      AND (
+        (CASE WHEN total_leads > 0 THEN 1 ELSE 0 END +
+         CASE WHEN total_contacts > 0 THEN 1 ELSE 0 END +
+         CASE WHEN total_accounts > 0 THEN 1 ELSE 0 END +
+         CASE WHEN total_deals > 0 THEN 1 ELSE 0 END
+        ) >= 2
+      )
+    ORDER BY total_records DESC, confidence_score DESC
+    LIMIT $1
+    `,
+    [limit],
+  );
+
+  const all = r.rows.map((row) => ({
+    ...row,
+    estimated_pipeline_value: Number(row.estimated_pipeline_value ?? 0),
+    pairing: classifyCrossModulePairing({
+      total_leads: Number(row.total_leads ?? 0),
+      total_contacts: Number(row.total_contacts ?? 0),
+      total_accounts: Number(row.total_accounts ?? 0),
+      total_deals: Number(row.total_deals ?? 0),
+    }),
+  }));
+
+  const filtered = opts.pairing
+    ? all.filter((c) => c.pairing === opts.pairing)
+    : all;
+
+  const byPairing: Record<string, number> = {};
+  let arrTotal = 0;
+  for (const c of all) {
+    const key = c.pairing ?? "unknown";
+    byPairing[key] = (byPairing[key] ?? 0) + 1;
+    arrTotal += Number(c.estimated_pipeline_value ?? 0);
+  }
+
+  return {
+    total: filtered.length,
+    by_pairing: byPairing,
+    arr_exposure_total: arrTotal,
+    clusters: filtered,
+  };
+}
+
 export async function getSyncState(
   module: string,
 ): Promise<ZohoSyncState | null> {

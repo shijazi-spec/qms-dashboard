@@ -1098,6 +1098,67 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // R6 — Cross-module overlaps. Returns the active clusters that
+    // span 2+ record types (Lead+Contact, Lead+Account, etc.), each
+    // classified by pairing type so the dashboard can KPI / filter
+    // them. Default limit 200 (most tenants run well under that for
+    // open cross-module clusters); use ?limit=N to override.
+    //
+    // Query params:
+    //   limit=N        cap result list, default 200, clamped [1, 1000]
+    //   pairing=key    filter to one pairing
+    //                  (lead_contact / lead_account / lead_deal /
+    //                   contact_account / contact_deal /
+    //                   deal_account / mixed)
+    path: "/api/duplicates/cross-module-overlaps",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const admin = await requireDuplicateRadarAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const limitRaw = url.searchParams.get("limit");
+          const limit = limitRaw ? parseInt(limitRaw, 10) : 200;
+          const pairingRaw = url.searchParams.get("pairing");
+          const allowedPairings = new Set([
+            "lead_contact",
+            "lead_account",
+            "lead_deal",
+            "contact_account",
+            "contact_deal",
+            "deal_account",
+            "mixed",
+          ]);
+          const pairing =
+            pairingRaw && allowedPairings.has(pairingRaw)
+              ? (pairingRaw as
+                  | "lead_contact"
+                  | "lead_account"
+                  | "lead_deal"
+                  | "contact_account"
+                  | "contact_deal"
+                  | "deal_account"
+                  | "mixed")
+              : null;
+
+          const { getCrossModuleOverlaps } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const result = await getCrossModuleOverlaps({
+            limit: Number.isFinite(limit) ? limit : 200,
+            pairing,
+          });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error fetching cross-module overlaps:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/kpis",
     method: "GET" as const,
     createHandler: async () => {
