@@ -215,6 +215,47 @@ describe("classifyCsOverlap — verdict ladder", () => {
     expect(c.verdict).toBe("review");
   });
 
+  test("Phase=Termination but Renewal_Date > Churn_Date → block (re-engaged)", () => {
+    // Customer churned, then came back: Renewal Date is after Churn Date.
+    // The deal's Phase is stale (CS Lifecycle Compliance also catches this).
+    // The overlap detector should treat the domain as active and block any
+    // new lead — matching the renewal-after-churn rule applied in CS
+    // Lifecycle Compliance (PR #37).
+    const c = classifyCsOverlap({
+      phase: "Termination",
+      gov_type: "Private",
+      churn_date: "2026-03-15",
+      renewal_date: "2026-03-16",
+    });
+    expect(c.verdict).toBe("block");
+    expect(c.reason).toBe("re_engaged_renewal_after_churn");
+    expect(c.lifecycle_state).toBe("active_other");
+  });
+
+  test("Phase=Termination + Renewal_Date BEFORE Churn_Date → falls through to cool-off path", () => {
+    // Renewal is historical; churn is the more recent event. Not re-engaged.
+    const churnDate = new Date(Date.now() - 60 * 86400 * 1000);
+    const renewalDate = new Date(Date.now() - 90 * 86400 * 1000);
+    const c = classifyCsOverlap({
+      phase: "Termination",
+      gov_type: "Private",
+      churn_date: churnDate,
+      renewal_date: renewalDate,
+    });
+    expect(c.verdict).toBe("review");
+  });
+
+  test("Phase=Termination + Renewal_Date present but no Churn_Date → still review (conservative)", () => {
+    // Without a churn date we can't compare; fall through to the
+    // termination_no_churn_date path.
+    const c = classifyCsOverlap({
+      phase: "Termination",
+      gov_type: "Private",
+      renewal_date: "2026-03-16",
+    });
+    expect(c.verdict).toBe("review");
+  });
+
   test("Unknown phase → no verdict", () => {
     expect(
       classifyCsOverlap({ phase: "Negotiation", gov_type: "Private" }).verdict,

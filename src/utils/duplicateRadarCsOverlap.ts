@@ -41,6 +41,13 @@ export interface CsOverlapInput {
   gov_type?: string | null;
   /** Domain — fallback signal when gov_type is empty. */
   domain?: string | null;
+  /**
+   * Renewal Date — when set AFTER Churn Date on a Termination-phase deal,
+   * the customer effectively re-engaged. The overlap detector treats such
+   * deals as ACTIVE (BLOCK), matching the CS Lifecycle Compliance check's
+   * phase_churn_desync suppression for re-engaged customers.
+   */
+  renewal_date?: string | Date | null;
 }
 
 export interface CsOverlapClassification {
@@ -156,9 +163,16 @@ function daysSince(d: Date, now: Date = new Date()): number {
  *
  * Verdict ladder:
  *   - Phase ∈ {Onboarding, Adoption, Renewal}                  → BLOCK
+ *   - Phase = Termination + Renewal_Date > Churn_Date           → BLOCK (re-engaged)
  *   - Phase = Termination + within sector cool-off              → REVIEW
  *   - Phase = Termination + past sector cool-off                → WARN
  *   - No phase / non-CS-pipeline                                → null
+ *
+ * Re-engagement rule (matches CS Lifecycle Compliance):
+ *   When a Termination-phase deal also carries a Renewal_Date that's later
+ *   than its Churn_Date, the customer churned and came back. The Churn_Date
+ *   is historical; the customer is effectively active again. Marketing must
+ *   not be allowed to push a new lead on that domain.
  */
 export function classifyCsOverlap(
   input: CsOverlapInput,
@@ -200,6 +214,21 @@ export function classifyCsOverlap(
   // Termination — sector-aware cool-off
   if (phase.toLowerCase() === cfg.phaseTermination.toLowerCase()) {
     const churned = parseChurnDate(input.churn_date);
+    const renewed = parseChurnDate(input.renewal_date);
+
+    // Re-engagement: Renewal Date set AFTER Churn Date means the customer
+    // came back. The Churn Date is historical, the customer is effectively
+    // active. Block any new lead/deal that overlaps on this domain.
+    if (churned && renewed && renewed.getTime() > churned.getTime()) {
+      return {
+        lifecycle_state: "active_other",
+        sector,
+        churn_days: null,
+        verdict: "block",
+        reason: "re_engaged_renewal_after_churn",
+      };
+    }
+
     const cooloffDays =
       sector === "government" ? cfg.cooloffGovernmentDays : cfg.cooloffPrivateDays;
 
