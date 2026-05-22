@@ -2065,6 +2065,11 @@ ${transcriptText}
       };
     },
   },
+ feat/medium-10-evaluation-xlsx-export
+ Updated upstream
+
+
+ main
   // ===================================================================
   // Manager Review Workflow (#6) — POST a review + GET review history
   // for an SDR evaluation. AI-generated scores stay informational until
@@ -2208,6 +2213,178 @@ ${transcriptText}
       };
     },
   },
+ feat/medium-10-evaluation-xlsx-export
+  // ===================================================================
+  // Medium #10 — Excel export of one call's SDR evaluation.
+  // Multi-sheet workbook (Summary, Attribute Evaluations, Coaching,
+  // Review History) so Quality team can email a shareable .xlsx to
+  // sales managers. Built on streamXlsx per SOP §25.
+  // ===================================================================
+  {
+    path: "/api/calls/:id/sdr-evaluation/export.xlsx",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const callId = parseInt(c.req.param("id"));
+          const logger = mastra?.getLogger();
+
+          const {
+            getCallRecordById,
+            getSDREvaluation,
+            getSDRReviewsForCall,
+            initCallIntelligenceTables,
+          } = await import("../../utils/callIntelligenceDb");
+          const { streamXlsx } = await import("../../utils/excelExport");
+          await initCallIntelligenceTables();
+
+          const callRecord: any = await getCallRecordById(callId);
+          if (!callRecord) return c.json({ error: "Call not found" }, 404);
+
+          const evaluation = await getSDREvaluation(callId);
+          if (!evaluation) {
+            return c.json(
+              { error: "No SDR evaluation exists for this call yet" },
+              404,
+            );
+          }
+          const reviews = await getSDRReviewsForCall(callId);
+
+          const fmtDate = (d: unknown) =>
+            d
+              ? new Date(String(d)).toISOString().substring(0, 19).replace("T", " ")
+              : "";
+          const fmtNum = (n: unknown) =>
+            n === null || n === undefined || n === "" ? "" : String(n);
+
+          const latestReview = reviews[0] || null;
+          const canonicalScore =
+            latestReview?.adjusted_overall_score ?? evaluation.overall_score;
+          const dim: any = evaluation.dimension_scores || {
+            people: 0,
+            process: 0,
+            governance: 0,
+          };
+
+          const sheets = [
+            {
+              name: "Summary",
+              columns: [
+                { header: "Field", key: "field", width: 32 },
+                { header: "Value", key: "value", width: 70 },
+              ],
+              rows: [
+                { field: "Call ID", value: callRecord.call_id || String(callId) },
+                { field: "Agent Email", value: callRecord.agent_email || "" },
+                { field: "Agent Name", value: callRecord.agent_name || "" },
+                { field: "Contact Name", value: callRecord.contact_name || "" },
+                { field: "Contact Phone", value: callRecord.contact_phone || "" },
+                { field: "Call Date", value: fmtDate(callRecord.call_date) },
+                { field: "Source", value: callRecord.source || "" },
+                { field: "", value: "" },
+                { field: "Scorecard", value: evaluation.scorecard_name || "" },
+                { field: "AI Overall Score", value: fmtNum(evaluation.overall_score) + " / 100" },
+                { field: "People Dimension", value: fmtNum(dim.people) + " / 100" },
+                { field: "Process Dimension", value: fmtNum(dim.process) + " / 100" },
+                { field: "Governance Dimension", value: fmtNum(dim.governance) + " / 100" },
+                { field: "AI Evaluated At", value: fmtDate((evaluation as any).evaluated_at) },
+                { field: "", value: "" },
+                { field: "Latest Review Status", value: latestReview?.review_status || "(not reviewed)" },
+                { field: "Latest Reviewer", value: latestReview ? (latestReview.reviewer_name || latestReview.reviewer_email) : "" },
+                { field: "Latest Reviewed At", value: latestReview ? fmtDate(latestReview.reviewed_at) : "" },
+                { field: "Canonical Score (review-adjusted)", value: fmtNum(canonicalScore) + " / 100" },
+                { field: "Total Reviews", value: String(reviews.length) },
+              ],
+            },
+            {
+              name: "Attribute Evaluations",
+              columns: [
+                { header: "Attribute", key: "attribute_name", width: 35 },
+                { header: "Dimension", key: "dimension", width: 14 },
+                { header: "Status", key: "status", width: 10 },
+                { header: "Score", key: "score", width: 8 },
+                { header: "Comment", key: "comment", width: 60 },
+                { header: "Evidence Quote", key: "evidence", width: 60 },
+                { header: "Improvement Tip", key: "improvement_tip", width: 50 },
+              ],
+              rows: ((evaluation.attribute_evaluations as any[]) || []).map((a: any) => ({
+                attribute_name: a.attribute_name || "",
+                dimension: a.dimension || "",
+                status: a.status || "",
+                score: fmtNum(a.score),
+                comment: a.comment || "",
+                evidence: Array.isArray(a.evidence_quotes) && a.evidence_quotes.length
+                  ? a.evidence_quotes.join(" | ")
+                  : "",
+                improvement_tip: a.improvement_tip || "",
+              })),
+            },
+            {
+              name: "Coaching",
+              columns: [
+                { header: "Type", key: "type", width: 22 },
+                { header: "Item", key: "item", width: 90 },
+              ],
+              rows: [
+                ...(((evaluation.top_strengths as string[]) || []).map((s: string) => ({ type: "Strength", item: s }))),
+                ...(((evaluation.top_gaps as string[]) || []).map((g: string) => ({ type: "Gap", item: g }))),
+                ...(((evaluation.coaching_actions as string[]) || []).map((a: string) => ({ type: "Coaching Action", item: a }))),
+                ...(((evaluation.micro_training_topics as string[]) || []).map((t: string) => ({ type: "Training Topic", item: t }))),
+                ...(((evaluation.critical_risks as string[]) || []).map((r: string) => ({ type: "Critical Risk", item: r }))),
+                ...(evaluation.coaching_message_ar
+                  ? [{ type: "Coaching Message (AR)", item: evaluation.coaching_message_ar }]
+                  : []),
+                ...(evaluation.coaching_message_en
+                  ? [{ type: "Coaching Message (EN)", item: evaluation.coaching_message_en }]
+                  : []),
+              ],
+            },
+            {
+              name: "Review History",
+              columns: [
+                { header: "Reviewed At", key: "reviewed_at", width: 22 },
+                { header: "Reviewer", key: "reviewer", width: 35 },
+                { header: "Status", key: "status", width: 12 },
+                { header: "Adjusted Overall Score", key: "adjusted_score", width: 18 },
+                { header: "Notes", key: "notes", width: 80 },
+              ],
+              rows: reviews.map((r: any) => ({
+                reviewed_at: fmtDate(r.reviewed_at),
+                reviewer: r.reviewer_name || r.reviewer_email || "",
+                status: r.review_status || "",
+                adjusted_score: fmtNum(r.adjusted_overall_score),
+                notes: r.review_notes || "",
+              })),
+            },
+          ];
+
+          const safeCallId = String(callRecord.call_id || callId).replace(/[^a-zA-Z0-9_-]/g, "_");
+          const filename = `sdr_evaluation_${safeCallId}_${Date.now()}.xlsx`;
+          logger?.info("📤 [API] Exporting SDR evaluation to xlsx", { callId, filename });
+          return await streamXlsx(sheets, filename, {
+            creator: "WalaPlus QMS",
+            title: `SDR Evaluation — ${callRecord.agent_email || callId}`,
+          });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Error exporting SDR evaluation xlsx:", {
+            message: errAny?.message,
+            stack: errAny?.stack,
+          });
+          return c.json(
+            { error: errAny?.message || "Failed to export evaluation" },
+            500,
+          );
+        }
+      };
+    },
+  },
+ Stashed changes
+
+ main
   {
     path: "/api/sdr-scorecards/active",
     method: "GET" as const,

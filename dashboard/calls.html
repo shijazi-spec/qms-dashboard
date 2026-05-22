@@ -3193,8 +3193,16 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
                             ${escapeHtml(WalaPlusI18n.t('dyn.calls.sync_to_zoho'))}
                         </button>
-                        <button type="button" data-on-click="exportEvaluation" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium">
-                            ${escapeHtml(WalaPlusI18n.t('dyn.calls.export_pdf'))}
+                        <!-- Medium #10 — multi-sheet Excel export of full
+                             evaluation + review history. Native PDF export
+                             queued as a future improvement; "Export JSON"
+                             stays as a debug/raw-data fallback. -->
+                        <button type="button" data-on-click="exportEvaluationExcel" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition font-medium flex items-center gap-1.5" title="Download the full evaluation as a multi-sheet Excel workbook">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            Export Excel
+                        </button>
+                        <button type="button" data-on-click="exportEvaluation" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium" title="Download raw evaluation data as JSON">
+                            Export JSON
                         </button>
                     </div>
                 </div>
@@ -3287,6 +3295,23 @@
                 console.warn('loadManagerReviewHistory failed:', e);
                 if (summary) summary.textContent = '';
             }
+        }
+
+        // Medium #10 — trigger the multi-sheet Excel download from the
+        // backend endpoint. Uses a temporary anchor so the browser handles
+        // the file save dialog natively; the server sets Content-Disposition.
+        function exportEvaluationExcel() {
+            if (!selectedEvalCall) {
+                alert('Open a call evaluation first.');
+                return;
+            }
+            const url = `/api/calls/${selectedEvalCall.id}/sdr-evaluation/export.xlsx`;
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sdr_evaluation_${selectedEvalCall.call_id || selectedEvalCall.id}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         }
 
         async function syncToZoho() {
