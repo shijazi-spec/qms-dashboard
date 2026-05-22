@@ -2394,18 +2394,22 @@ export async function resolveCluster(
   primaryRecordId?: number,
   notes?: string,
 ): Promise<MergeAction | null> {
-  if (primaryRecordId) {
-    await markPrimaryRecord(clusterId, primaryRecordId);
-  }
-
-  // R10: freeze the cluster + records BEFORE we mutate state. Best-effort —
-  // a snapshot failure must not block the operator's primary action.
+  // R10: freeze the cluster + records BEFORE any mutation, including the
+  // markPrimaryRecord call below. If the operator changes the primary as
+  // part of this resolve action, the forensic snapshot must reflect the
+  // PRE-decision state ("here's what we had before they chose X as
+  // primary") not the post-mutation state. Best-effort — a snapshot
+  // failure must not block the operator's primary action.
   await captureClusterSnapshot(clusterId, performedBy, "pre_resolve", {
     notes:
       action === "resolve"
         ? "Pre-resolve snapshot taken when operator clicked Mark Resolved"
         : "Pre-ignore snapshot taken when operator clicked Ignore",
   });
+
+  if (primaryRecordId) {
+    await markPrimaryRecord(clusterId, primaryRecordId);
+  }
 
   const nonPrimary = await pool.query(
     "SELECT id FROM duplicate_records WHERE cluster_id = $1 AND is_primary = false",

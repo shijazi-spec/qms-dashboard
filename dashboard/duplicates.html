@@ -2048,11 +2048,14 @@
                 listEl.innerHTML = '<ul class="divide-y divide-gray-100 border border-gray-100 rounded">' + snaps.map(s => {
                     const when = formatDate(s.snapshot_at);
                     const who = escapeHtml(s.taken_by || 'system');
+                    // `trig` is already HTML-escaped — interpolate it directly
+                    // rather than re-escape, which would turn `&` into
+                    // `&amp;amp;` on triggers that contain special chars.
                     const trig = escapeHtml(s.trigger || 'unknown');
                     const cnt = Number(s.record_count || 0);
                     return `<li class="px-3 py-2 flex items-center justify-between gap-3">
                         <div class="flex-1 min-w-0">
-                            <div class="text-xs text-gray-700"><span class="font-medium">${escapeHtml(trig)}</span> · ${when} · by ${who}</div>
+                            <div class="text-xs text-gray-700"><span class="font-medium">${trig}</span> · ${when} · by ${who}</div>
                             <div class="text-[11px] text-gray-500">${cnt} record${cnt === 1 ? '' : 's'} frozen${s.notes ? ' · ' + escapeHtml(s.notes) : ''}</div>
                         </div>
                         <button data-on-click="openSnapshotViewer" data-args="[${s.id}]" data-testid="button-view-snapshot-${s.id}" class="px-2 py-1 text-xs font-medium rounded bg-gray-100 hover:bg-gray-200 text-gray-700 whitespace-nowrap">View</button>
