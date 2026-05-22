@@ -263,6 +263,45 @@ export async function initCallIntelligenceTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_call_compliance_lead ON call_compliance(lead_id);
     CREATE INDEX IF NOT EXISTS idx_meeting_mom_event ON meeting_mom(calendar_event_id);
     CREATE INDEX IF NOT EXISTS idx_ai_feedback_type ON ai_training_feedback(feedback_type);
+
+    CREATE TABLE IF NOT EXISTS sdr_call_evaluations (
+      id SERIAL PRIMARY KEY,
+      call_record_id INTEGER REFERENCES call_records(id) ON DELETE CASCADE,
+      scorecard_id INTEGER,
+      scorecard_name VARCHAR(255),
+      overall_score DECIMAL(5,2),
+      dimension_scores JSONB,
+      attribute_evaluations JSONB,
+      top_strengths JSONB,
+      top_gaps JSONB,
+      coaching_actions JSONB,
+      critical_risks JSONB,
+      coaching_message_ar TEXT,
+      coaching_message_en TEXT,
+      micro_training_topics JSONB,
+      key_moments JSONB,
+      evaluated_at TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_call ON sdr_call_evaluations(call_record_id);
+
+    CREATE TABLE IF NOT EXISTS sdr_evaluation_reviews (
+      id SERIAL PRIMARY KEY,
+      evaluation_id INTEGER NOT NULL REFERENCES sdr_call_evaluations(id) ON DELETE CASCADE,
+      call_record_id INTEGER NOT NULL REFERENCES call_records(id) ON DELETE CASCADE,
+      reviewer_email VARCHAR(255) NOT NULL,
+      reviewer_name VARCHAR(255),
+      review_status VARCHAR(20) NOT NULL CHECK (review_status IN ('approved','adjusted','disagreed')),
+      adjusted_overall_score DECIMAL(5,2),
+      adjusted_dimension_scores JSONB,
+      adjusted_attribute_evaluations JSONB,
+      review_notes TEXT,
+      reviewed_at TIMESTAMPTZ DEFAULT NOW(),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_eval ON sdr_evaluation_reviews(evaluation_id);
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_call ON sdr_evaluation_reviews(call_record_id);
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_reviewer ON sdr_evaluation_reviews(reviewer_email);
   `);
 }
 
