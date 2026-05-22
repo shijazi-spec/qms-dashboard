@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-label="WalaPlus">
+  <!-- Rounded green tile, matches login-page badge shape but in the WalaPlus brand emerald. -->
+  <rect width="32" height="32" rx="7" fill="#10b981"/>
+  <!-- Heroicons shield-check (white stroke) — same shape used on the login page. -->
+  <g fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 5.5 8.5 8v6c0 4 3 7.5 7.5 8.5 4.5-1 7.5-4.5 7.5-8.5V8L16 5.5z"/>
+    <path d="m12.5 15.5 2.5 2.5 4-4"/>
+  </g>
+</svg>
