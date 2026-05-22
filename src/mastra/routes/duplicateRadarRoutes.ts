@@ -1116,6 +1116,44 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // R4 — Creation-rate trend. Returns weekly (or daily) buckets of
+    // new duplicate records vs new total records, plus the percentage
+    // duplicate-rate per bucket. Stakeholders use the slope as the
+    // leading indicator of whether prevention work is paying off.
+    // Query params:
+    //   weeks=N        window size, default 12, clamped 1-52
+    //   granularity=week|day  default 'week'
+    path: "/api/duplicates/creation-trend",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const admin = await requireDuplicateRadarAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const weeksRaw = url.searchParams.get("weeks");
+          const granRaw = url.searchParams.get("granularity");
+          const weeks = weeksRaw ? parseInt(weeksRaw, 10) : 12;
+          const granularity: "week" | "day" =
+            granRaw === "day" ? "day" : "week";
+
+          const { getDuplicateCreationTrend } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const trend = await getDuplicateCreationTrend({
+            weeks: Number.isFinite(weeks) ? weeks : 12,
+            granularity,
+          });
+          return c.json({ success: true, ...trend });
+        } catch (error: any) {
+          logger.error("Error fetching creation trend:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/logs",
     method: "GET" as const,
     createHandler: async () => {
