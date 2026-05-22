@@ -335,6 +335,53 @@
                 </div>
             </div>
 
+            <!-- R4: Duplicate creation-rate trend.
+                 Leading indicator: are new bad-data inputs flowing into
+                 Zoho at the same rate, or is prevention work moving the
+                 needle? Industry benchmark target is <2% duplicate rate;
+                 the headline cards on the right surface the latest week's
+                 number and the delta vs. the previous week so a stakeholder
+                 can answer "are we getting better or worse?" at a glance. -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-semibold">Duplicate Creation Trend</h3>
+                        <p class="text-xs text-gray-500">New duplicate records created per week — leading indicator of prevention effectiveness.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs text-gray-500" for="trendWeeks">Window</label>
+                        <select id="trendWeeks" data-on-change="reloadCreationTrend" class="text-xs border rounded px-2 py-1" data-testid="select-trend-weeks">
+                            <option value="4">4 weeks</option>
+                            <option value="12" selected>12 weeks</option>
+                            <option value="26">26 weeks</option>
+                            <option value="52">52 weeks</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <div class="lg:col-span-3">
+                        <div class="chart-container"><canvas id="creationTrendChart" role="img" aria-label="Duplicate creation trend: line chart showing new duplicate records per week" aria-describedby="creationTrendChart-summary"></canvas><table id="creationTrendChart-summary" class="sr-only"><caption>Duplicate Creation Trend</caption><thead><tr><th scope="col">Week</th><th scope="col">New duplicates</th><th scope="col">Duplicate rate</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="lg:col-span-1 space-y-3">
+                        <div class="bg-gray-50 rounded p-3">
+                            <div class="text-xs text-gray-500">Latest bucket</div>
+                            <div id="trendLatestCount" class="text-2xl font-bold text-gray-900" data-testid="text-trend-latest-count">—</div>
+                            <div id="trendLatestDelta" class="text-xs font-medium text-gray-500" data-testid="text-trend-delta">vs previous: —</div>
+                        </div>
+                        <div class="bg-gray-50 rounded p-3">
+                            <div class="text-xs text-gray-500">Latest dup rate</div>
+                            <div id="trendLatestRate" class="text-2xl font-bold text-gray-900" data-testid="text-trend-latest-rate">—</div>
+                            <div class="text-[11px] text-gray-400">Industry target ≤ 2%</div>
+                        </div>
+                        <div class="bg-gray-50 rounded p-3">
+                            <div class="text-xs text-gray-500">Window total</div>
+                            <div id="trendWindowTotal" class="text-2xl font-bold text-gray-900" data-testid="text-trend-window-total">—</div>
+                            <div class="text-[11px] text-gray-400">New duplicates in window</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- D4: Top signals + Top clusters by inflation -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-lg shadow p-6">
@@ -1003,6 +1050,10 @@
         let summary = {};
         let sourceChart = null;
         let confidenceChart = null;
+        // R4: creation-rate trend chart instance (lazily created on first
+        // render so it can be destroyed + rebuilt when the window selector
+        // changes without leaking canvases).
+        let creationTrendChart = null;
         let clusterPage = 0;
         // R7 (quick-wins): SSE replaces 2s polling for scan progress.
         // scanProgressSse holds the active EventSource; scanRunning tracks
@@ -1046,6 +1097,137 @@
             }
             // Load sparkline outside the try so it still renders even if summary calls fail
             loadClustersTrendSparkline();
+            // R4: load creation-rate trend chart (independent of the rest;
+            // a transient failure here shouldn't blank the dashboard).
+            loadCreationTrend();
+        }
+
+        // R4: fetch + render the duplicate creation-rate trend.
+        // Reuses Chart.js (already loaded for the other dashboard charts).
+        async function loadCreationTrend() {
+            const weeksSel = document.getElementById('trendWeeks');
+            const weeks = weeksSel ? Number(weeksSel.value) || 12 : 12;
+            try {
+                const res = await fetch(`/api/duplicates/creation-trend?weeks=${weeks}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                renderCreationTrend(data || {});
+            } catch (e) {
+                console.error('creation-trend load failed:', e);
+            }
+        }
+
+        function reloadCreationTrend() { loadCreationTrend(); }
+
+        function renderCreationTrend(data) {
+            const buckets = Array.isArray(data && data.buckets) ? data.buckets : [];
+            const labels = buckets.map(b => b.bucket_start);
+            const dupCounts = buckets.map(b => Number(b.new_duplicates || 0));
+            const totalCounts = buckets.map(b => Number(b.new_records || 0));
+            const rates = buckets.map(b => Number(b.duplicate_rate_pct || 0));
+
+            // KPI cards on the right
+            const latest = buckets[buckets.length - 1];
+            const prev = buckets[buckets.length - 2];
+            const latestEl = document.getElementById('trendLatestCount');
+            const deltaEl = document.getElementById('trendLatestDelta');
+            const rateEl = document.getElementById('trendLatestRate');
+            const totalEl = document.getElementById('trendWindowTotal');
+            if (latestEl) latestEl.textContent = latest ? _fn(latest.new_duplicates) : '—';
+            if (rateEl) rateEl.textContent = latest ? (_fn(latest.duplicate_rate_pct) + '%') : '—';
+            const windowTotal = dupCounts.reduce((a, b) => a + b, 0);
+            if (totalEl) totalEl.textContent = _fn(windowTotal);
+
+            // Delta vs previous bucket — improvement (down) is green.
+            if (deltaEl) {
+                if (!latest || !prev) {
+                    deltaEl.textContent = 'vs previous: —';
+                    deltaEl.className = 'text-xs font-medium text-gray-500';
+                } else {
+                    const diff = latest.new_duplicates - prev.new_duplicates;
+                    const sign = diff > 0 ? '+' : '';
+                    deltaEl.textContent = 'vs previous: ' + sign + _fn(diff);
+                    deltaEl.className = 'text-xs font-medium ' + (diff > 0 ? 'text-red-600' : diff < 0 ? 'text-emerald-600' : 'text-gray-500');
+                }
+            }
+
+            // Chart
+            const canvas = document.getElementById('creationTrendChart');
+            if (!canvas) return;
+            if (creationTrendChart) creationTrendChart.destroy();
+            creationTrendChart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'New duplicates',
+                            data: dupCounts,
+                            borderColor: '#DC2626',
+                            backgroundColor: 'rgba(220, 38, 38, 0.12)',
+                            fill: true,
+                            tension: 0.25,
+                            pointRadius: 3,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'New records (total)',
+                            data: totalCounts,
+                            borderColor: '#94A3B8',
+                            backgroundColor: 'rgba(148, 163, 184, 0.08)',
+                            borderDash: [4, 4],
+                            fill: false,
+                            tension: 0.25,
+                            pointRadius: 2,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'Duplicate rate %',
+                            data: rates,
+                            borderColor: '#2563EB',
+                            backgroundColor: 'transparent',
+                            fill: false,
+                            tension: 0.25,
+                            pointRadius: 2,
+                            yAxisID: 'y1',
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                label(ctx) {
+                                    const v = ctx.parsed.y;
+                                    if (ctx.dataset.yAxisID === 'y1') return `${ctx.dataset.label}: ${_fn(v)}%`;
+                                    return `${ctx.dataset.label}: ${_fn(v)}`;
+                                },
+                            },
+                        },
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Records' },
+                            ticks: { precision: 0 },
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: 'Dup rate %' },
+                            ticks: {
+                                callback: (v) => v + '%',
+                            },
+                        },
+                    },
+                },
+            });
+            if (window.WalaPlusA11y) window.WalaPlusA11y.makeChartAccessible('creationTrendChart', creationTrendChart, 'Duplicate Creation Trend');
         }
 
         // ── Inline SVG sparkline + delta for True Duplicates trend (additive) ──

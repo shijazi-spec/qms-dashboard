@@ -2797,6 +2797,92 @@ export async function checkForDuplicates(params: {
 }
 
 // A2: Fixed low_confidence count — only clusters with total_records > 1, added singletonCount
+/**
+ * R4 — Duplicate creation-rate trend.
+ *
+ * Industry-standard leading indicator: count NEW DUPLICATE records created
+ * per bucket (week or day) — "are bad-data inputs still flowing into Zoho
+ * at the same rate, or is prevention work moving the needle?" Stakeholders
+ * care about the slope, not the absolute count.
+ *
+ * Definition of "new duplicate":
+ *   - A record (lead / deal / contact / account) whose created_date falls
+ *     in the bucket AND whose cluster has total_records > 1 (so the record
+ *     is actually a duplicate, not a singleton).
+ *   - Both primary AND non-primary records count — both are "new records
+ *     that ended up in a duplicate cluster", which is the input rate we
+ *     want to track regardless of which one survives the merge.
+ *
+ * Also returns the per-bucket TOTAL record creation count so the UI can
+ * render a duplicate-rate ratio (new_duplicates / new_records) — the
+ * percentage that is the headline number for prevention effectiveness.
+ *
+ * Bucket size: 'week' (default) uses DATE_TRUNC('week', …) which Postgres
+ * anchors on Monday. 'day' uses DATE_TRUNC('day', …). Anything else falls
+ * back to 'week' silently.
+ *
+ * `weeks` caps the window. Default 12 weeks. Clamped to [1, 52] to keep
+ * the query bounded.
+ */
+export interface DuplicateCreationTrendBucket {
+  bucket_start: string; // ISO date 'YYYY-MM-DD'
+  new_records: number;
+  new_duplicates: number;
+  duplicate_rate_pct: number; // 0-100, rounded to 1 decimal
+}
+
+export async function getDuplicateCreationTrend(opts: {
+  weeks?: number;
+  granularity?: "week" | "day";
+} = {}): Promise<{
+  granularity: "week" | "day";
+  window_weeks: number;
+  buckets: DuplicateCreationTrendBucket[];
+}> {
+  const weeks = Math.min(
+    52,
+    Math.max(1, Math.floor(Number(opts.weeks ?? 12) || 12)),
+  );
+  const granularity: "week" | "day" =
+    opts.granularity === "day" ? "day" : "week";
+  const trunc = granularity === "day" ? "day" : "week";
+
+  // Single query with FILTER for the duplicate subset. DATE_TRUNC handles
+  // the bucketing in Postgres so the result set is tiny (≤ 52 rows).
+  const sql = `
+    SELECT
+      TO_CHAR(DATE_TRUNC('${trunc}', dr.created_date)::date, 'YYYY-MM-DD') AS bucket_start,
+      COUNT(*)::int AS new_records,
+      COUNT(*) FILTER (WHERE dc.total_records > 1)::int AS new_duplicates
+    FROM duplicate_records dr
+    JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+    WHERE dr.created_date >= NOW() - INTERVAL '${weeks} weeks'
+      AND dr.created_date <= NOW()
+    GROUP BY DATE_TRUNC('${trunc}', dr.created_date)
+    ORDER BY bucket_start ASC
+  `;
+  const r = await pool.query<{
+    bucket_start: string;
+    new_records: number;
+    new_duplicates: number;
+  }>(sql);
+
+  const buckets: DuplicateCreationTrendBucket[] = r.rows.map((row) => {
+    const total = Number(row.new_records ?? 0);
+    const dup = Number(row.new_duplicates ?? 0);
+    const ratePct =
+      total > 0 ? Math.round((dup / total) * 1000) / 10 : 0;
+    return {
+      bucket_start: row.bucket_start,
+      new_records: total,
+      new_duplicates: dup,
+      duplicate_rate_pct: ratePct,
+    };
+  });
+
+  return { granularity, window_weeks: weeks, buckets };
+}
+
 export async function getEnhancedSummary(): Promise<{
   totalClusters: number;
   trueDuplicateClusters: number;
