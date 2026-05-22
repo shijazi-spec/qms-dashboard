@@ -185,6 +185,63 @@ describe("termination_missing_churn_date", () => {
   });
 });
 
+describe("termination_missing_churn_reason", () => {
+  test("fires when Phase is Termination but no Churn Reason", () => {
+    // Set Churn_Date so termination_missing_churn_date does NOT fire — the
+    // missing-reason rule is independent and should be evaluable on its own.
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Termination",
+        Churn_Date: "2026-05-01",
+      },
+      modified_date: daysAgo(10),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "termination_missing_churn_reason",
+    );
+  });
+
+  test("does NOT fire when Churn Reason is populated", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Termination",
+        Churn_Date: "2026-05-01",
+        Churn_Reason: "Cost",
+      },
+      modified_date: daysAgo(10),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "termination_missing_churn_reason",
+    );
+  });
+
+  test("does NOT fire for non-Termination phases", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: { Phase: "Adoption" },
+      modified_date: daysAgo(5),
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "termination_missing_churn_reason",
+    );
+  });
+
+  test("treats a whitespace-only Churn Reason as missing", () => {
+    // A reason field filled with just spaces is the same as empty for CS
+    // analytics purposes — the .trim() in the rule must catch this.
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Termination",
+        Churn_Date: "2026-05-01",
+        Churn_Reason: "   ",
+      },
+      modified_date: daysAgo(10),
+    });
+    expect(result.violations.map((v) => v.code)).toContain(
+      "termination_missing_churn_reason",
+    );
+  });
+});
+
 describe("phase_transition_stalled (info)", () => {
   test("Adoption is steady-state — does not fire even at 60 days", () => {
     const result = evaluateCsLifecycle({
