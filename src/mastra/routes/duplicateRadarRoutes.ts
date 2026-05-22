@@ -2270,6 +2270,91 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // R3 (quick-wins): Mark cluster Resolved AND verify the non-primary
+    // records were actually deleted in Zoho. The operator's "Mark
+    // Resolved" click asserts a manual Zoho merge happened — this
+    // endpoint checks that assertion against Zoho's current state so
+    // the dashboard can show Verified / Failed badges instead of just
+    // trusting the operator's word.
+    //
+    // Behaviour:
+    //   1. Resolve the cluster (existing resolveCluster flow)
+    //   2. For each non-primary record, search Zoho by exact id
+    //   3. Persist verification_state = 'verified' | 'failed' + notes
+    //   4. If verification failed (records still in Zoho), flip cluster
+    //      status back to 'active' so it doesn't silently disappear
+    //      from operator queues.
+    path: "/api/duplicates/clusters/:id/resolve-and-verify",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          let body: {
+            action?: string;
+            primary_record_id?: number;
+            notes?: string;
+          } = {};
+          try {
+            body = await c.req.json();
+          } catch {
+            body = {};
+          }
+          const action = body.action ?? "resolve";
+          if (!["resolve", "ignore"].includes(action)) {
+            return c.json(
+              { error: 'action must be "resolve" or "ignore"' },
+              400,
+            );
+          }
+
+          const mergeAction = await resolveCluster(
+            id,
+            action as "resolve" | "ignore",
+            sessionUser.email || "admin",
+            body.primary_record_id,
+            body.notes,
+          );
+
+          const { verifyClusterMergedInZoho } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const verification = await verifyClusterMergedInZoho(id);
+
+          // Verification failed → flip the cluster back to active so it
+          // reappears in operator queues. The verification_state stays
+          // 'failed' with the notes attached so they can see why.
+          if (!verification.verified) {
+            await updateClusterStatus(id, "active");
+            logger.info(
+              `[DuplicateRadar] Cluster ${id} verification failed; status reverted to active. ${verification.notes}`,
+            );
+          }
+
+          return c.json({
+            success: true,
+            merge_action: mergeAction,
+            verification,
+            cluster_status: verification.verified ? "resolved" : "active",
+          });
+        } catch (error: any) {
+          logger.error("Error in resolve-and-verify:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/clusters/:id/primary",
     method: "POST" as const,
     createHandler: async () => {
