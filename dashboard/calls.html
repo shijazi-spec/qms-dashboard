@@ -3749,7 +3749,13 @@
         // reason is captured in the audit trail. After save, refresh the
         // history list so the new review appears at the top.
         // ===================================================================
+        // Tracks in-flight submission so a double-click can't insert two
+        // review rows. The schema accepts multiple reviews per call (latest
+        // wins) but duplicates pollute "Reviews on file" counts and the
+        // AI Training Feedback rollup, so block at the UI layer.
+        let _managerReviewInFlight = false;
         async function submitManagerReview(status) {
+            if (_managerReviewInFlight) return;
             if (!selectedEvalCall || !currentSDREvaluation) {
                 alert('Open a call evaluation first.');
                 return;
@@ -3763,6 +3769,9 @@
                     return;
                 }
             }
+            _managerReviewInFlight = true;
+            const reviewButtons = document.querySelectorAll('#manager-review-panel button[data-on-click="submitManagerReview"], #manager-review-panel button[data-on-click="openAdjustReviewModal"]');
+            reviewButtons.forEach(b => b.disabled = true);
             try {
                 const res = await fetch(`/api/calls/${selectedEvalCall.id}/sdr-evaluation/review`, {
                     method: 'POST',
@@ -3785,6 +3794,9 @@
             } catch (e) {
                 console.error('submitManagerReview error:', e);
                 alert(`Review failed: ${e.message || e}`);
+            } finally {
+                _managerReviewInFlight = false;
+                reviewButtons.forEach(b => b.disabled = false);
             }
         }
 
@@ -3871,6 +3883,11 @@
         function recomputeAdjustedTotals() {
             const rows = document.querySelectorAll('#adjust-attributes-list [data-attr-row]');
             if (!rows.length) return;
+            // Bucket per dimension. People/Process/Governance are the three
+            // canonical dimensions surfaced in the headline cards; anything
+            // else (e.g. a fourth dimension introduced by a custom scorecard)
+            // still contributes to the overall via `allScores` so it can't
+            // silently disappear from the canonical-score calculation.
             const dimBuckets = { people: [], process: [], governance: [] };
             const allScores = [];
             rows.forEach(row => {
@@ -3883,14 +3900,24 @@
                 const pct = Math.max(0, Math.min(100, Math.round(raw * 10)));
                 allScores.push(pct);
                 const dim = row.dataset.dimension;
-                if (dim && dimBuckets[dim]) dimBuckets[dim].push(pct);
+                if (dim && Object.prototype.hasOwnProperty.call(dimBuckets, dim)) {
+                    dimBuckets[dim].push(pct);
+                }
             });
             const mean = arr => arr.length === 0 ? null : Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
             const peopleAvg = mean(dimBuckets.people);
             const processAvg = mean(dimBuckets.process);
             const govAvg = mean(dimBuckets.governance);
-            const presentDims = [peopleAvg, processAvg, govAvg].filter(v => v !== null);
-            const overall = presentDims.length ? Math.round(presentDims.reduce((a, b) => a + b, 0) / presentDims.length) : mean(allScores);
+            // Overall is the mean of all non-NA attribute scores so custom-
+            // dimension attributes pull their weight; the dimension-mean
+            // approach (used previously) silently dropped them. Falls back
+            // to dimension means when no attributes survived the filters.
+            const overall = allScores.length
+                ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length)
+                : (() => {
+                    const presentDims = [peopleAvg, processAvg, govAvg].filter(v => v !== null);
+                    return presentDims.length ? Math.round(presentDims.reduce((a, b) => a + b, 0) / presentDims.length) : null;
+                })();
 
             const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val == null ? '--' : val; };
             set('adjust-overall', overall);
