@@ -383,7 +383,10 @@ Respond with JSON only:
 }`;
 
           const aiResult = await generateText({
-            model: openai("gpt-4o"),
+            // `.chat(...)` → Chat Completions adapter; bare `openai(...)` in
+            // `@ai-sdk/openai` v3.x returns the Responses-API model which
+            // AI SDK v5 rejects (v3 spec vs v2 required).
+            model: openai.chat("gpt-4o"),
             prompt: analysisPrompt,
             maxTokens: 2000,
           });
@@ -817,7 +820,8 @@ Respond with JSON only:
 }`;
 
           const aiResult = await generateText({
-            model: openai("gpt-4o"),
+            // See note above re: `.chat(...)` vs bare `openai(...)`.
+            model: openai.chat("gpt-4o"),
             prompt: momPrompt,
             maxTokens: 2000,
           });
@@ -1306,7 +1310,9 @@ ${transcriptText}
               // on structured-output tasks like this JSON-extracting prompt.
               // Per-call analysis cost drops from ~$0.005 to ~$0.001.
               const aiResult = await generateText({
-                model: aiSdk("gpt-4o-mini"),
+                // `.chat(...)` → Chat Completions; bare call returns
+                // Responses-API which AI SDK v5 rejects.
+                model: aiSdk.chat("gpt-4o-mini"),
                 prompt: analysisPrompt,
                 maxTokens: 4000,
               });
@@ -1920,8 +1926,13 @@ ${transcriptText}
           // gpt-4o-mini for SDR scorecard evaluation — same cost reduction
           // logic as the analysis step above. The 18-attribute structured
           // JSON output is well within mini's quality range.
+          // `.chat(...)` selects the Chat Completions adapter; the bare
+          // `aiSdk(...)` call returns the Responses-API model in
+          // `@ai-sdk/openai` v3.x, which emits a v3 model spec that AI SDK
+          // v5 rejects with "Unsupported model version v3 for provider
+          // openai.responses". Reserve `.responses(...)` for gpt-5 class.
           const aiResult = await generateText({
-            model: aiSdk("gpt-4o-mini"),
+            model: aiSdk.chat("gpt-4o-mini"),
             prompt: evaluationPrompt,
             maxTokens: 8000,
           });

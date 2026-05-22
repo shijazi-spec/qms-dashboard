@@ -154,11 +154,12 @@ async function extractFindingsFromText(text: string): Promise<any[]> {
   const safeText = text.length > 100_000 ? text.slice(0, 100_000) : text;
 
   const { text: raw } = await generateText({
-    // Use the Chat Completions adapter (`openai(...)`) — the Responses API
-    // adapter `openai.responses(...)` is incompatible with stream() under
-    // AI SDK v4 and is conventionally reserved for gpt-5 class models
-    // (see exampleAgent.ts:73). Same fix as the QMS consultant agent.
-    model: openai("gpt-4o"),
+    // `.chat(...)` selects the Chat Completions adapter. Under
+    // `@ai-sdk/openai` v3.x the bare `openai("gpt-4o")` call returns the
+    // Responses-API model (provider: "openai.responses"), which AI SDK v5
+    // rejects with "Unsupported model version v3". `.responses(...)` is
+    // reserved for gpt-5 class models (see exampleAgent.ts:73).
+    model: openai.chat("gpt-4o"),
     system: EXTRACTION_SYSTEM_PROMPT,
     prompt: `Extract audit findings from the following report.\n\nReport:\n"""\n${safeText}\n"""\n\nReturn ONLY valid JSON as specified.`,
   });

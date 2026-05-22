@@ -42,7 +42,12 @@ async function generateWithRetry(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       return await generateText({
-        model: aiSdk("gpt-4o-mini"),
+        // `.chat(...)` selects the Chat Completions adapter — bare
+        // `aiSdk("gpt-4o-mini")` in `@ai-sdk/openai` v3.x returns the
+        // Responses-API model, which AI SDK v5 rejects with
+        // "Unsupported model version v3 for provider openai.responses".
+        // `.responses(...)` is reserved for gpt-5 class only.
+        model: aiSdk.chat("gpt-4o-mini"),
         prompt,
         maxTokens: 8000,
       });
