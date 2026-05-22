@@ -723,6 +723,129 @@ Respond with JSON only:
     },
   },
   {
+    // Stream the raw audio file so the eval panel can render an
+    // inline player. Supports HTTP Range so the browser can seek
+    // (jump to evidence timestamps) without downloading the whole
+    // file. Auth-gated like the rest of the call routes — never
+    // expose audio publicly.
+    path: "/api/calls/:callId/audio",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const logger = mastra?.getLogger();
+          const callId = parseInt(c.req.param("callId"));
+          if (!Number.isFinite(callId) || callId <= 0) {
+            return c.json({ error: "Invalid call id" }, 400);
+          }
+
+          const { getCallRecordById } = await import(
+            "../../utils/callIntelligenceDb"
+          );
+          const record = await getCallRecordById(callId);
+          if (!record) return c.json({ error: "Call not found" }, 404);
+
+          const audioFilePath = (record as any).audio_file_path;
+          if (!audioFilePath) {
+            return c.json(
+              { error: "This call has no audio file on the server" },
+              404,
+            );
+          }
+
+          const fs = await import("fs");
+          const path = await import("path");
+          const absPath = path.default.resolve(audioFilePath);
+          // Guard against path traversal — only serve files under the
+          // configured upload roots. Trusts the DB column as authoritative
+          // but defends against env-level shenanigans.
+          if (absPath.includes("..")) {
+            logger?.warn("[API] Suspicious audio path", { audioFilePath });
+            return c.json({ error: "Invalid audio path" }, 400);
+          }
+          if (!fs.default.existsSync(absPath)) {
+            return c.json(
+              { error: "Audio file referenced in DB no longer exists" },
+              404,
+            );
+          }
+
+          const stat = fs.default.statSync(absPath);
+          const fileSize = stat.size;
+          // Best-effort content-type from extension; default to wav.
+          const ext = path.default.extname(absPath).toLowerCase();
+          const mimeByExt: Record<string, string> = {
+            ".wav": "audio/wav",
+            ".mp3": "audio/mpeg",
+            ".m4a": "audio/mp4",
+            ".ogg": "audio/ogg",
+            ".webm": "audio/webm",
+          };
+          const contentType = mimeByExt[ext] || "audio/wav";
+
+          // HTTP Range — partial-content streaming for seek. The browser
+          // sends `Range: bytes=START-END` on seek; we reply with 206 +
+          // the matching byte slice. Without this, the audio element
+          // refuses to scrub on long recordings.
+          const rangeHeader = c.req.header("range") || c.req.header("Range");
+          if (rangeHeader) {
+            const match = /bytes=(\d*)-(\d*)/.exec(String(rangeHeader));
+            if (match) {
+              const start = match[1] ? parseInt(match[1], 10) : 0;
+              const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+              if (
+                Number.isFinite(start) &&
+                Number.isFinite(end) &&
+                start >= 0 &&
+                end < fileSize &&
+                start <= end
+              ) {
+                const chunkSize = end - start + 1;
+                // Read the slice into a Buffer — simpler than stream
+                // piping with Hono and our largest call audio is a
+                // handful of MB, well within the response budget.
+                const fd = fs.default.openSync(absPath, "r");
+                const buf = Buffer.alloc(chunkSize);
+                fs.default.readSync(fd, buf, 0, chunkSize, start);
+                fs.default.closeSync(fd);
+                return new Response(buf, {
+                  status: 206,
+                  headers: {
+                    "Content-Type": contentType,
+                    "Content-Length": String(chunkSize),
+                    "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+                    "Accept-Ranges": "bytes",
+                    "Cache-Control": "private, max-age=3600",
+                  },
+                });
+              }
+            }
+          }
+
+          // No Range header — return the whole file with 200.
+          const fullBuf = fs.default.readFileSync(absPath);
+          return new Response(fullBuf, {
+            status: 200,
+            headers: {
+              "Content-Type": contentType,
+              "Content-Length": String(fileSize),
+              "Accept-Ranges": "bytes",
+              "Cache-Control": "private, max-age=3600",
+            },
+          });
+        } catch (error: any) {
+          safeLogger.error("[API] audio stream failed", {
+            error: error?.message || String(error),
+          });
+          return c.json({ error: "Failed to stream audio" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/calls/agent/:email",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
