@@ -491,10 +491,29 @@ export async function getCallRecords(
     params,
   );
 
+  // Medium #6 v1.1 — surface the canonical (adjusted-or-AI) SDR score
+  // on each row so the SDR Evaluation tab's score badge reflects what
+  // the manager review settled on. COALESCE picks the manager's
+  // adjusted_overall_score when a review exists, else the raw AI score.
+  // LATERAL subquery picks the most recent review per evaluation.
   const result = await pool.query(
-    `SELECT * FROM call_records ${whereClause} 
-     ORDER BY call_date DESC 
-     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+    `SELECT cr.*,
+            COALESCE(latest_review.adjusted_overall_score, se.overall_score) AS sdr_overall_score,
+            se.overall_score AS sdr_ai_overall_score,
+            latest_review.adjusted_overall_score AS sdr_adjusted_overall_score,
+            latest_review.review_status AS sdr_latest_review_status
+       FROM call_records cr
+       LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+       LEFT JOIN LATERAL (
+         SELECT adjusted_overall_score, review_status
+         FROM sdr_evaluation_reviews sr
+         WHERE sr.evaluation_id = se.id
+         ORDER BY sr.reviewed_at DESC
+         LIMIT 1
+       ) latest_review ON TRUE
+       ${whereClause.replace(/\b(source|agent_email|status|lead_id|call_date)\b/g, "cr.$1")}
+       ORDER BY cr.call_date DESC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...params, limit, offset],
   );
 
@@ -898,6 +917,12 @@ export async function getCallAnalyticsSummary(
   // to NULL → "--" in the UI). Wrapped in try/catch so a bad schema
   // or missing table never 500s the whole analytics endpoint —
   // falls back to a count-only query that always works.
+  //
+  // Medium #6 v1.1 — Canonical-score rule: when a manager review row
+  // exists with an adjusted_overall_score, that value wins over the
+  // raw AI score. Use a lateral subquery to pick the most recent
+  // review per evaluation; COALESCE makes the change transparent to
+  // every downstream consumer (eval list, Analytics, Excel export).
   let byAgentResult: any;
   try {
     byAgentResult = await pool.query(
@@ -907,11 +932,19 @@ export async function getCallAnalyticsSummary(
         cr.agent_name,
         COUNT(*) AS count,
         AVG(ca.sentiment_score) AS avg_sentiment,
-        AVG(se.overall_score) AS avg_qa_score,
+        AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS avg_qa_score,
         AVG(cc.compliance_score) AS avg_compliance
       FROM call_records cr
       LEFT JOIN call_analysis ca ON ca.call_record_id = cr.id
       LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+      LEFT JOIN LATERAL (
+        SELECT adjusted_overall_score
+        FROM sdr_evaluation_reviews sr
+        WHERE sr.evaluation_id = se.id
+          AND sr.adjusted_overall_score IS NOT NULL
+        ORDER BY sr.reviewed_at DESC
+        LIMIT 1
+      ) latest_review ON TRUE
       LEFT JOIN call_compliance cc ON cc.call_record_id = cr.id
       ${whereClause}
       GROUP BY cr.agent_email, cr.agent_name
