@@ -1086,6 +1086,76 @@
         </div>
     </div>
 
+    <!-- Medium #6 v1.1 — Adjust Review modal.
+         Per-attribute score editor for the Manager Review workflow. The
+         AI evaluation is pre-loaded into the inputs; the manager edits
+         only what they want to change, optionally tweaks status / severity,
+         adds a note, and saves. We recompute overall + dimension scores
+         from the per-attribute scores on the client so what the manager
+         sees is exactly what gets persisted as the canonical score. -->
+    <div id="adjustReviewModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black bg-opacity-50" data-on-click="closeAdjustReviewModal"></div>
+        <div class="absolute inset-4 md:inset-10 lg:inset-20 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div class="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-bold text-white">Adjust AI Evaluation</h2>
+                    <p class="text-sm text-white/90" id="adjustReviewSubtitle">Edit per-attribute scores; the overall and per-dimension averages recompute automatically.</p>
+                </div>
+                <button data-on-click="closeAdjustReviewModal" class="text-white/90 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="bg-white rounded-lg border border-gray-200 p-3 text-center">
+                        <div class="text-xs text-gray-500">New Overall</div>
+                        <div class="text-2xl font-bold text-amber-600"><span id="adjust-overall">--</span><span class="text-xs text-gray-400">/100</span></div>
+                    </div>
+                    <div class="bg-white rounded-lg border border-gray-200 p-3 text-center">
+                        <div class="text-xs text-gray-500">AI Overall</div>
+                        <div class="text-2xl font-bold text-gray-500"><span id="adjust-ai-overall">--</span><span class="text-xs text-gray-400">/100</span></div>
+                    </div>
+                    <div class="bg-white rounded-lg border border-gray-200 p-3 text-center">
+                        <div class="text-xs text-gray-500">Delta</div>
+                        <div class="text-2xl font-bold" id="adjust-delta">--</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="bg-white rounded-lg border border-gray-200 p-2 text-center">
+                        <div class="text-xs text-gray-500">People</div>
+                        <div class="text-lg font-semibold"><span id="adjust-dim-people">--</span></div>
+                    </div>
+                    <div class="bg-white rounded-lg border border-gray-200 p-2 text-center">
+                        <div class="text-xs text-gray-500">Process</div>
+                        <div class="text-lg font-semibold"><span id="adjust-dim-process">--</span></div>
+                    </div>
+                    <div class="bg-white rounded-lg border border-gray-200 p-2 text-center">
+                        <div class="text-xs text-gray-500">Governance</div>
+                        <div class="text-lg font-semibold"><span id="adjust-dim-governance">--</span></div>
+                    </div>
+                </div>
+
+                <div id="adjust-attributes-list" class="bg-white rounded-lg border border-gray-200 divide-y">
+                    <div class="p-4 text-gray-400 text-sm">Open from the SDR Evaluation tab to populate attributes…</div>
+                </div>
+
+                <div class="mt-4">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Reviewer note (logged for audit + AI training)</label>
+                    <textarea id="adjust-notes" rows="2" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500" placeholder="Why are you adjusting? e.g. 'discovery was deeper than AI gave credit for — caught two pain points the model missed'"></textarea>
+                </div>
+            </div>
+            <div class="bg-white border-t border-gray-200 px-6 py-3 flex gap-3 justify-end">
+                <button type="button" data-on-click="closeAdjustReviewModal" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
+                <button type="button" data-on-click="saveAdjustedReview" id="adjust-save-btn" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Save Adjusted Review
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function _momentLabel(key) {
             switch (key) {
@@ -3572,7 +3642,7 @@
                         <div class="flex items-center justify-between mb-3">
                             <div>
                                 <h4 class="font-semibold text-blue-900">📋 Manager Review</h4>
-                                <p class="text-xs text-gray-500 mt-0.5">Approve to make the AI score canonical, or disagree to flag it for re-evaluation.</p>
+                                <p class="text-xs text-gray-500 mt-0.5">Approve the AI score, adjust per-attribute scores, or disagree entirely. The canonical score uses your adjusted total when present.</p>
                             </div>
                             <span class="text-xs text-gray-400" id="manager-review-history-summary">Loading…</span>
                         </div>
@@ -3580,6 +3650,10 @@
                             <button type="button" data-on-click="submitManagerReview" data-args="[&quot;approved&quot;]" class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-1.5">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                 Approve AI Score
+                            </button>
+                            <button type="button" data-on-click="openAdjustReviewModal" class="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-1.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                Adjust Scores
                             </button>
                             <button type="button" data-on-click="submitManagerReview" data-args="[&quot;disagreed&quot;]" class="flex-1 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1.5">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -3684,6 +3758,192 @@
             }
         }
 
+        // ===================================================================
+        // Medium #6 v1.1 — Adjust mode.
+        //
+        // Open the modal pre-populated with the current AI evaluation;
+        // recompute the overall + per-dimension averages live as the
+        // manager edits per-attribute scores; persist on Save with
+        // review_status='adjusted'. The canonical score downstream
+        // (Analytics, eval list, Excel export) uses COALESCE(
+        // adjusted_overall_score, ai_overall_score) so an adjusted
+        // review wins automatically.
+        // ===================================================================
+        function openAdjustReviewModal() {
+            if (!selectedEvalCall || !currentSDREvaluation) {
+                alert('Open a call evaluation first.');
+                return;
+            }
+            const modal = document.getElementById('adjustReviewModal');
+            if (!modal) return;
+            renderAdjustAttributes(currentSDREvaluation);
+            document.getElementById('adjust-ai-overall').textContent =
+                Math.round(currentSDREvaluation.overall_score || 0);
+            document.getElementById('adjust-notes').value = '';
+            recomputeAdjustedTotals();
+            modal.classList.remove('hidden');
+        }
+
+        function closeAdjustReviewModal() {
+            const modal = document.getElementById('adjustReviewModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        // Build the per-attribute editor. Each row exposes a numeric
+        // score input (0-10 — same scale the AI emits) plus a status
+        // dropdown so the manager can flip a PASS to FAIL (or vice versa)
+        // alongside the numeric tweak. AI evidence + comment stay visible
+        // as a readonly reference so the reviewer doesn't have to bounce
+        // between panels.
+        function renderAdjustAttributes(evaluation) {
+            const list = document.getElementById('adjust-attributes-list');
+            if (!list) return;
+            const attrs = evaluation.attribute_evaluations || [];
+            if (attrs.length === 0) {
+                list.innerHTML = `<div class="p-4 text-gray-400 text-sm">No attributes in the AI evaluation — nothing to adjust.</div>`;
+                return;
+            }
+            list.innerHTML = attrs.map((attr, idx) => {
+                const score = attr.score != null ? attr.score : (attr.status === 'PASS' ? 10 : attr.status === 'FAIL' ? 0 : 5);
+                return `
+                    <div class="p-3" data-attr-row="${idx}" data-attribute-id="${escapeHtml(attr.attribute_id || '')}" data-dimension="${escapeHtml(attr.dimension || '')}">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="text-xs font-mono text-gray-400">${escapeHtml(attr.attribute_id || '')}</span>
+                                    <span class="font-medium text-sm">${escapeHtml(attr.attribute_name)}</span>
+                                    <span class="text-xs text-gray-400 capitalize">(${escapeHtml(attr.dimension || '')})</span>
+                                </div>
+                                ${attr.comment ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(attr.comment)}</p>` : ''}
+                                ${attr.evidence_quotes?.length ? `<p class="text-xs text-gray-400 mt-1 italic truncate">"${escapeHtml(attr.evidence_quotes[0])}"</p>` : ''}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <select data-adjust-status class="text-xs border border-gray-300 rounded px-1.5 py-1">
+                                    <option value="PASS" ${attr.status === 'PASS' ? 'selected' : ''}>PASS</option>
+                                    <option value="FAIL" ${attr.status === 'FAIL' ? 'selected' : ''}>FAIL</option>
+                                    <option value="NA"   ${attr.status === 'NA'   ? 'selected' : ''}>NA</option>
+                                </select>
+                                <input type="number" data-adjust-score min="0" max="10" step="0.5" value="${score}" class="w-16 text-sm border border-gray-300 rounded px-2 py-1" data-on-input="recomputeAdjustedTotals" />
+                                <span class="text-xs text-gray-400">/10</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Recompute the headline overall + per-dimension scores from the
+        // currently edited per-attribute inputs. Same scaling logic the AI
+        // uses: attribute score (0-10) × 10 → 0-100. Dimension = mean of
+        // its attributes. Overall = mean of dimensions when all three
+        // present, else mean of attributes. This stays in sync with the
+        // backend prompt's overall_summary math.
+        function recomputeAdjustedTotals() {
+            const rows = document.querySelectorAll('#adjust-attributes-list [data-attr-row]');
+            if (!rows.length) return;
+            const dimBuckets = { people: [], process: [], governance: [] };
+            const allScores = [];
+            rows.forEach(row => {
+                const status = row.querySelector('[data-adjust-status]')?.value;
+                const scoreEl = row.querySelector('[data-adjust-score]');
+                if (!scoreEl) return;
+                const raw = parseFloat(scoreEl.value);
+                if (!Number.isFinite(raw)) return;
+                if (status === 'NA') return; // NA attributes don't contribute
+                const pct = Math.max(0, Math.min(100, Math.round(raw * 10)));
+                allScores.push(pct);
+                const dim = row.dataset.dimension;
+                if (dim && dimBuckets[dim]) dimBuckets[dim].push(pct);
+            });
+            const mean = arr => arr.length === 0 ? null : Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+            const peopleAvg = mean(dimBuckets.people);
+            const processAvg = mean(dimBuckets.process);
+            const govAvg = mean(dimBuckets.governance);
+            const presentDims = [peopleAvg, processAvg, govAvg].filter(v => v !== null);
+            const overall = presentDims.length ? Math.round(presentDims.reduce((a, b) => a + b, 0) / presentDims.length) : mean(allScores);
+
+            const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val == null ? '--' : val; };
+            set('adjust-overall', overall);
+            set('adjust-dim-people', peopleAvg);
+            set('adjust-dim-process', processAvg);
+            set('adjust-dim-governance', govAvg);
+
+            const aiOverall = Math.round(currentSDREvaluation?.overall_score || 0);
+            const deltaEl = document.getElementById('adjust-delta');
+            if (deltaEl) {
+                if (overall == null) {
+                    deltaEl.textContent = '--';
+                    deltaEl.className = 'text-2xl font-bold text-gray-400';
+                } else {
+                    const d = overall - aiOverall;
+                    const sign = d > 0 ? '+' : '';
+                    deltaEl.textContent = `${sign}${d}`;
+                    deltaEl.className = `text-2xl font-bold ${d > 0 ? 'text-green-600' : d < 0 ? 'text-red-600' : 'text-gray-500'}`;
+                }
+            }
+        }
+
+        async function saveAdjustedReview() {
+            if (!selectedEvalCall || !currentSDREvaluation) return;
+            const btn = document.getElementById('adjust-save-btn');
+            const rows = document.querySelectorAll('#adjust-attributes-list [data-attr-row]');
+            if (!rows.length) { alert('No attributes to save.'); return; }
+
+            const adjustedAttrs = Array.from(rows).map((row, idx) => {
+                const original = currentSDREvaluation.attribute_evaluations[idx] || {};
+                const status = row.querySelector('[data-adjust-status]')?.value || original.status;
+                const score = parseFloat(row.querySelector('[data-adjust-score]')?.value);
+                return {
+                    ...original,
+                    status,
+                    score: Number.isFinite(score) ? score : original.score,
+                };
+            });
+
+            const overall = parseInt(document.getElementById('adjust-overall')?.textContent || '', 10);
+            const peopleAvg = parseInt(document.getElementById('adjust-dim-people')?.textContent || '', 10);
+            const processAvg = parseInt(document.getElementById('adjust-dim-process')?.textContent || '', 10);
+            const govAvg = parseInt(document.getElementById('adjust-dim-governance')?.textContent || '', 10);
+            const notes = (document.getElementById('adjust-notes')?.value || '').trim();
+
+            if (!Number.isFinite(overall)) { alert('Adjusted overall score is invalid.'); return; }
+            if (!notes) { alert('A short note is required when adjusting (logged for audit + AI training).'); return; }
+
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Saving…'; }
+            try {
+                const res = await fetch(`/api/calls/${selectedEvalCall.id}/sdr-evaluation/review`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        review_status: 'adjusted',
+                        adjusted_overall_score: overall,
+                        adjusted_dimension_scores: {
+                            people: Number.isFinite(peopleAvg) ? peopleAvg : null,
+                            process: Number.isFinite(processAvg) ? processAvg : null,
+                            governance: Number.isFinite(govAvg) ? govAvg : null,
+                        },
+                        adjusted_attribute_evaluations: adjustedAttrs,
+                        review_notes: notes,
+                    }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    alert(`Adjusted review failed: ${data.error || 'unknown error'}`);
+                    return;
+                }
+                closeAdjustReviewModal();
+                await loadManagerReviewHistory(selectedEvalCall.id);
+            } catch (e) {
+                console.error('saveAdjustedReview error:', e);
+                alert(`Adjusted review failed: ${e.message || e}`);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Save Adjusted Review';
+                }
+            }
+        }
+
         async function loadManagerReviewHistory(callId) {
             const list = document.getElementById('manager-review-history');
             const summary = document.getElementById('manager-review-history-summary');
@@ -3707,16 +3967,28 @@
                     if (s === 'adjusted') return '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-700 font-medium">ADJUSTED</span>';
                     return `<span class="px-1.5 py-0.5 text-[10px] rounded bg-gray-100 text-gray-700">${escapeHtml(s)}</span>`;
                 };
-                list.innerHTML = reviews.map(r => `
+                const aiOverall = Math.round(currentSDREvaluation?.overall_score || 0);
+                list.innerHTML = reviews.map(r => {
+                    let adjustedBlock = '';
+                    if (r.review_status === 'adjusted' && r.adjusted_overall_score != null) {
+                        const adj = Math.round(Number(r.adjusted_overall_score));
+                        const delta = adj - aiOverall;
+                        const sign = delta > 0 ? '+' : '';
+                        const deltaCls = delta > 0 ? 'text-green-600' : delta < 0 ? 'text-red-600' : 'text-gray-500';
+                        adjustedBlock = `<div class="text-gray-700 mt-0.5">AI <span class="text-gray-400">${aiOverall}</span> → Adjusted <span class="font-semibold">${adj}</span> <span class="${deltaCls}">(${sign}${delta})</span></div>`;
+                    }
+                    return `
                     <div class="text-xs border-l-2 ${r.review_status === 'approved' ? 'border-green-400' : r.review_status === 'disagreed' ? 'border-red-400' : 'border-amber-400'} pl-2 py-1">
                         <div class="flex items-center gap-2">
                             ${statusBadge(r.review_status)}
                             <span class="text-gray-700 font-medium">${escapeHtml(r.reviewer_name || r.reviewer_email)}</span>
                             <span class="text-gray-400">${escapeHtml(_fd(r.reviewed_at))}</span>
                         </div>
+                        ${adjustedBlock}
                         ${r.review_notes ? `<p class="text-gray-600 mt-0.5">${escapeHtml(r.review_notes)}</p>` : ''}
                     </div>
-                `).join('');
+                    `;
+                }).join('');
             } catch (e) {
                 console.warn('loadManagerReviewHistory failed:', e);
                 if (summary) summary.textContent = '';
