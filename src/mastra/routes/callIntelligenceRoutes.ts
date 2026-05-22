@@ -2270,6 +2270,253 @@ ${transcriptText}
     },
   },
   // ===================================================================
+  // Coaching loop closure — track manager-delivered coaching sessions.
+  // The "Mark coaching delivered" button on the Coaching Plan panel
+  // POSTs here; the session captures who coached whom, on which
+  // attributes, with what training, and the SDR's commitment. Outcome
+  // call linking measures whether coaching moved the needle.
+  // ===================================================================
+  {
+    path: "/api/coaching-sessions",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          if (!body.call_record_id || !body.agent_email) {
+            return c.json(
+              { success: false, error: "call_record_id and agent_email are required" },
+              400,
+            );
+          }
+          const { createCoachingSession } = await import(
+            "../../utils/coachingSessions"
+          );
+          const session = await createCoachingSession({
+            call_record_id: parseInt(body.call_record_id, 10),
+            evaluation_id: body.evaluation_id ?? null,
+            agent_email: body.agent_email,
+            agent_name: body.agent_name ?? null,
+            manager_email: (admin as any).email || body.manager_email || "unknown",
+            manager_name: (admin as any).name || body.manager_name || null,
+            status: body.status || "delivered",
+            scheduled_for: body.scheduled_for ? new Date(body.scheduled_for) : null,
+            delivered_at: body.delivered_at ? new Date(body.delivered_at) : undefined,
+            duration_minutes:
+              typeof body.duration_minutes === "number" ? body.duration_minutes : null,
+            assigned_course_ids: Array.isArray(body.assigned_course_ids)
+              ? body.assigned_course_ids
+              : [],
+            attribute_focus_ids: Array.isArray(body.attribute_focus_ids)
+              ? body.attribute_focus_ids
+              : [],
+            commitment_notes: body.commitment_notes ?? null,
+            followup_due_date: body.followup_due_date ?? null,
+          });
+          return c.json({ success: true, session });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Create coaching session failed:", {
+            message: errAny?.message,
+          });
+          return c.json(
+            { success: false, error: errAny?.message || "Create failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/coaching-sessions",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const { listCoachingSessions } = await import(
+            "../../utils/coachingSessions"
+          );
+          const statusParam = url.searchParams.get("status");
+          const result = await listCoachingSessions({
+            agent_email: url.searchParams.get("agent_email") || undefined,
+            manager_email: url.searchParams.get("manager_email") || undefined,
+            call_record_id: url.searchParams.get("call_record_id")
+              ? parseInt(url.searchParams.get("call_record_id")!, 10)
+              : undefined,
+            status: statusParam
+              ? (statusParam.split(",") as any)
+              : undefined,
+            limit: parseInt(url.searchParams.get("limit") || "50", 10),
+            offset: parseInt(url.searchParams.get("offset") || "0", 10),
+          });
+          return c.json({ success: true, ...result });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("List coaching sessions failed:", {
+            message: errAny?.message,
+          });
+          return c.json(
+            { success: false, error: errAny?.message || "List failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/coaching-sessions/kpis",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const { getCoachingKPIs } = await import(
+            "../../utils/coachingSessions"
+          );
+          const kpis = await getCoachingKPIs({
+            startDate: url.searchParams.get("start_date")
+              ? new Date(url.searchParams.get("start_date")!)
+              : undefined,
+            endDate: url.searchParams.get("end_date")
+              ? new Date(url.searchParams.get("end_date")!)
+              : undefined,
+            manager_email: url.searchParams.get("manager_email") || undefined,
+            agent_email: url.searchParams.get("agent_email") || undefined,
+          });
+          return c.json({ success: true, kpis });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Coaching KPIs failed:", { message: errAny?.message });
+          return c.json(
+            { success: false, error: errAny?.message || "KPIs failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/coaching-sessions/:id",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"), 10);
+          const { getCoachingSession } = await import(
+            "../../utils/coachingSessions"
+          );
+          const session = await getCoachingSession(id);
+          if (!session)
+            return c.json(
+              { success: false, error: "Coaching session not found" },
+              404,
+            );
+          return c.json({ success: true, session });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Get coaching session failed:", {
+            message: errAny?.message,
+          });
+          return c.json(
+            { success: false, error: errAny?.message || "Get failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/coaching-sessions/:id",
+    method: "PATCH" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"), 10);
+          const body = await c.req.json().catch(() => ({}));
+          const { updateCoachingSession } = await import(
+            "../../utils/coachingSessions"
+          );
+          // Convert ISO date strings to Date instances for fields the
+          // helper expects as Date. Leave string-typed columns alone.
+          const patch: any = { ...body };
+          if (patch.scheduled_for)
+            patch.scheduled_for = new Date(patch.scheduled_for);
+          if (patch.delivered_at)
+            patch.delivered_at = new Date(patch.delivered_at);
+          const session = await updateCoachingSession(id, patch);
+          if (!session)
+            return c.json(
+              { success: false, error: "Coaching session not found" },
+              404,
+            );
+          return c.json({ success: true, session });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Update coaching session failed:", {
+            message: errAny?.message,
+          });
+          return c.json(
+            { success: false, error: errAny?.message || "Update failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/coaching-sessions/:id/link-outcome",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"), 10);
+          const body = await c.req.json().catch(() => ({}));
+          if (!body.outcome_call_id) {
+            return c.json(
+              { success: false, error: "outcome_call_id is required" },
+              400,
+            );
+          }
+          const { linkOutcomeCall } = await import(
+            "../../utils/coachingSessions"
+          );
+          const session = await linkOutcomeCall(
+            id,
+            parseInt(body.outcome_call_id, 10),
+          );
+          if (!session)
+            return c.json(
+              { success: false, error: "Coaching session not found" },
+              404,
+            );
+          return c.json({ success: true, session });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Link outcome call failed:", {
+            message: errAny?.message,
+          });
+          return c.json(
+            { success: false, error: errAny?.message || "Link failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  // ===================================================================
   // Medium #9 — OpenAI Batch API for bulk SDR evaluation.
   //   POST   /api/calls/batch/submit-pending  → bundle all eligible calls
   //   GET    /api/calls/batch/jobs            → list recent batches
