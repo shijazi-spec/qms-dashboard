@@ -144,6 +144,30 @@ describe("classifyCsOverlap — verdict ladder", () => {
     ).toBe("block");
   });
 
+  test("Custom active phase → block, lifecycle_state=active_other (no silent renewal-fallback)", () => {
+    // If Quality renames the active phase list (e.g. adds "Re-engagement"),
+    // the verdict stays BLOCK but lifecycle_state must not be silently
+    // misreported as "renewal". A distinct discriminator keeps dashboards
+    // and analytics honest.
+    const prev = process.env.DUPLICATE_RADAR_CS_ACTIVE_PHASES;
+    process.env.DUPLICATE_RADAR_CS_ACTIVE_PHASES =
+      "Onboarding,Adoption,Renewal,Re-engagement";
+    resetCsOverlapConfigCache();
+    try {
+      const c = classifyCsOverlap({
+        phase: "Re-engagement",
+        gov_type: "Private",
+      });
+      expect(c.verdict).toBe("block");
+      expect(c.lifecycle_state).toBe("active_other");
+      expect(c.reason).toBe("active_phase:re-engagement");
+    } finally {
+      if (prev === undefined) delete process.env.DUPLICATE_RADAR_CS_ACTIVE_PHASES;
+      else process.env.DUPLICATE_RADAR_CS_ACTIVE_PHASES = prev;
+      resetCsOverlapConfigCache();
+    }
+  });
+
   test("Phase=Termination, private, churn 60 days ago → review", () => {
     const churnDate = new Date(Date.now() - 60 * 86400 * 1000);
     const c = classifyCsOverlap({

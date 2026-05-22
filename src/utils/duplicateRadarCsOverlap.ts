@@ -19,6 +19,11 @@ export type CsLifecycleState =
   | "onboarding"
   | "adoption"
   | "renewal"
+  // Quality may configure DUPLICATE_RADAR_CS_ACTIVE_PHASES with values that
+  // don't lower-case to one of the three standard names (e.g. "Re-engagement").
+  // We still flag those as BLOCK, but tag the state so dashboards don't lie
+  // by labelling them as "Renewal".
+  | "active_other"
   | "termination_recent"
   | "termination_old"
   | null;
@@ -178,15 +183,17 @@ export function classifyCsOverlap(
     (p) => p.toLowerCase() === phase.toLowerCase(),
   );
   if (isActive) {
-    const state = phase.toLowerCase() as CsLifecycleState;
+    const lower = phase.toLowerCase();
+    const standardActive =
+      lower === "onboarding" || lower === "adoption" || lower === "renewal";
     return {
-      lifecycle_state: (state === "onboarding" || state === "adoption" || state === "renewal")
-        ? state
-        : "renewal",
+      lifecycle_state: standardActive
+        ? (lower as CsLifecycleState)
+        : "active_other",
       sector,
       churn_days: null,
       verdict: "block",
-      reason: `active_phase:${phase.toLowerCase()}`,
+      reason: `active_phase:${lower}`,
     };
   }
 
