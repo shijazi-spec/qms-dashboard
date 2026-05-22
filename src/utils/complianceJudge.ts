@@ -240,19 +240,22 @@ export async function judgeEvidence(
   let tokensUsed: number | null = null;
   let llmError: string | null = null;
   try {
-    const { createOpenAI } = await import("@ai-sdk/openai");
-    const { generateText } = await import("ai");
-    const openai = createOpenAI({
-      baseURL: getOpenAIBaseUrl(),
-      apiKey: getOpenAIApiKey(),
-    });
-    const result = await generateText({
-      model: openai(JUDGE_MODEL),
+    // Raw-fetch /chat/completions via the helper introduced in PR #67.
+    // The previous bare `openai(JUDGE_MODEL)` call produced exactly the
+    // "Unsupported model version v3 for provider openai.chat and model
+    // gpt-4o-mini" error that took down the bulk-analyze flow tonight
+    // — same @ai-sdk/openai v3-spec regression that broke the rest of
+    // the analysis paths in PR #67. Compliance judge sits inside the
+    // post-analysis hot path, so one bare call here breaks every call's
+    // full pipeline.
+    const { generateChatText } = await import("./openaiChatHelper");
+    const result = await generateChatText({
+      model: JUDGE_MODEL,
       prompt,
       maxTokens: 600,
     });
     verdict = parseJudgeResponse(result.text);
-    const usage: any = (result as any).usage || {};
+    const usage: any = (result.raw as any)?.usage || {};
     tokensUsed =
       Number(usage.totalTokens || usage.total_tokens) ||
       (Number(usage.promptTokens || usage.prompt_tokens) || 0) +
