@@ -2065,11 +2065,6 @@ ${transcriptText}
       };
     },
   },
- feat/medium-10-evaluation-xlsx-export
- Updated upstream
-
-
- main
   // ===================================================================
   // Manager Review Workflow (#6) — POST a review + GET review history
   // for an SDR evaluation. AI-generated scores stay informational until
@@ -2213,7 +2208,6 @@ ${transcriptText}
       };
     },
   },
- feat/medium-10-evaluation-xlsx-export
   // ===================================================================
   // Medium #10 — Excel export of one call's SDR evaluation.
   // Multi-sheet workbook (Summary, Attribute Evaluations, Coaching,
@@ -2382,9 +2376,6 @@ ${transcriptText}
       };
     },
   },
- Stashed changes
-
- main
   {
     path: "/api/sdr-scorecards/active",
     method: "GET" as const,
