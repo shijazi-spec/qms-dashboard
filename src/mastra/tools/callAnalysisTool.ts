@@ -144,13 +144,14 @@ Respond ONLY with the JSON.` : '';
         apiKey: getOpenAIApiKey()
       });
 
-      const analysisResult = await generateText({
-        // `.chat(...)` selects Chat Completions adapter; bare `openai(...)`
-        // in `@ai-sdk/openai` v3.x returns the Responses-API model which
-        // AI SDK v5 rejects ("Unsupported model version v3").
-        model: openai.chat("gpt-4o"),
+      // Raw-fetch /chat/completions — `.chat()` now also returns v3-spec
+      // models under @ai-sdk/openai 3.x, broken under ai@5 (needs v2).
+      // Helper drops the SDK dependency for this hot path entirely.
+      const { generateChatText } = await import("../../utils/openaiChatHelper");
+      const analysisResult = await generateChatText({
+        model: "gpt-4o",
         prompt: analysisPrompt,
-        maxTokens: 2000
+        maxTokens: 2000,
       });
 
       let analysisData;
@@ -189,11 +190,11 @@ Respond ONLY with the JSON.` : '';
 
       let qaScoreData = null;
       if (context.include_qa_scoring && qaPrompt) {
-        const qaResult = await generateText({
-          // See note above — `.chat(...)` required under AI SDK v5.
-          model: openai.chat("gpt-4o"),
+        // Reuse the same helper imported above for the QA scoring call.
+        const qaResult = await generateChatText({
+          model: "gpt-4o",
           prompt: qaPrompt,
-          maxTokens: 1000
+          maxTokens: 1000,
         });
 
         try {
