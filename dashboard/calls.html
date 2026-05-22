@@ -3139,6 +3139,31 @@
                     </div>
                     ` : ''}
 
+                    <!-- Manager Review (Quick Win #6) — Approve / Disagree
+                         flow that determines the canonical score for this
+                         call. AI score stays informational until reviewed.
+                         Review history loads from /api/calls/:id/sdr-evaluation/reviews. -->
+                    <div class="bg-white border-2 border-blue-200 rounded-xl p-4" id="manager-review-panel">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <h4 class="font-semibold text-blue-900">📋 Manager Review</h4>
+                                <p class="text-xs text-gray-500 mt-0.5">Approve to make the AI score canonical, or disagree to flag it for re-evaluation.</p>
+                            </div>
+                            <span class="text-xs text-gray-400" id="manager-review-history-summary">Loading…</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" data-on-click="submitManagerReview" data-args="[&quot;approved&quot;]" class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-1.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Approve AI Score
+                            </button>
+                            <button type="button" data-on-click="submitManagerReview" data-args="[&quot;disagreed&quot;]" class="flex-1 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                Disagree
+                            </button>
+                        </div>
+                        <div id="manager-review-history" class="mt-3 space-y-2 max-h-40 overflow-y-auto"></div>
+                    </div>
+
                     <!-- AI Training Feedback -->
                     <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-4">
                         <p class="text-sm font-medium text-purple-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.rate_ai_acc'))}</p>
@@ -3174,6 +3199,94 @@
                     </div>
                 </div>
             `;
+
+            // Quick Win #6 — load the manager review history for this call so
+            // the panel shows any prior approvals / disagreements at the top.
+            // Fires once per evaluation render so re-eval refreshes it too.
+            if (selectedEvalCall?.id) {
+                loadManagerReviewHistory(selectedEvalCall.id);
+            }
+        }
+
+        // ===================================================================
+        // Manager Review Workflow (#6 v1)
+        // POST /api/calls/:id/sdr-evaluation/review to Approve or Disagree
+        // with the AI evaluation. "Disagreed" prompts for a note so the
+        // reason is captured in the audit trail. After save, refresh the
+        // history list so the new review appears at the top.
+        // ===================================================================
+        async function submitManagerReview(status) {
+            if (!selectedEvalCall || !currentSDREvaluation) {
+                alert('Open a call evaluation first.');
+                return;
+            }
+            let notes = null;
+            if (status === 'disagreed') {
+                notes = prompt('Why do you disagree with the AI score? (this is logged for audit + AI training)');
+                if (notes === null) return; // user cancelled
+                if (!notes.trim()) {
+                    alert('A short reason is required when disagreeing.');
+                    return;
+                }
+            }
+            try {
+                const res = await fetch(`/api/calls/${selectedEvalCall.id}/sdr-evaluation/review`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        review_status: status,
+                        review_notes: notes,
+                    }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    await loadManagerReviewHistory(selectedEvalCall.id);
+                } else {
+                    alert(`Review failed: ${data.error || 'unknown error'}`);
+                }
+            } catch (e) {
+                console.error('submitManagerReview error:', e);
+                alert(`Review failed: ${e.message || e}`);
+            }
+        }
+
+        async function loadManagerReviewHistory(callId) {
+            const list = document.getElementById('manager-review-history');
+            const summary = document.getElementById('manager-review-history-summary');
+            if (!list) return;
+            try {
+                const res = await fetch(`/api/calls/${callId}/sdr-evaluation/reviews`);
+                const data = await res.json();
+                const reviews = data.reviews || [];
+                if (summary) {
+                    summary.textContent = reviews.length === 0
+                        ? 'Awaiting first review'
+                        : `${reviews.length} review${reviews.length === 1 ? '' : 's'} on file`;
+                }
+                if (reviews.length === 0) {
+                    list.innerHTML = '';
+                    return;
+                }
+                const statusBadge = (s) => {
+                    if (s === 'approved') return '<span class="px-1.5 py-0.5 text-[10px] rounded bg-green-100 text-green-700 font-medium">APPROVED</span>';
+                    if (s === 'disagreed') return '<span class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 text-red-700 font-medium">DISAGREED</span>';
+                    if (s === 'adjusted') return '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-700 font-medium">ADJUSTED</span>';
+                    return `<span class="px-1.5 py-0.5 text-[10px] rounded bg-gray-100 text-gray-700">${escapeHtml(s)}</span>`;
+                };
+                list.innerHTML = reviews.map(r => `
+                    <div class="text-xs border-l-2 ${r.review_status === 'approved' ? 'border-green-400' : r.review_status === 'disagreed' ? 'border-red-400' : 'border-amber-400'} pl-2 py-1">
+                        <div class="flex items-center gap-2">
+                            ${statusBadge(r.review_status)}
+                            <span class="text-gray-700 font-medium">${escapeHtml(r.reviewer_name || r.reviewer_email)}</span>
+                            <span class="text-gray-400">${escapeHtml(_fd(r.reviewed_at))}</span>
+                        </div>
+                        ${r.review_notes ? `<p class="text-gray-600 mt-0.5">${escapeHtml(r.review_notes)}</p>` : ''}
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.warn('loadManagerReviewHistory failed:', e);
+                if (summary) summary.textContent = '';
+            }
         }
 
         async function syncToZoho() {

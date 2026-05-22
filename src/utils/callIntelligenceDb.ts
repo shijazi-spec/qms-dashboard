@@ -1328,6 +1328,138 @@ export async function getSDREvaluation(
   };
 }
 
+// =======================================================================
+// Manager Review Workflow (Quick Win #6 → Medium Improvement #1)
+//
+// AI-generated SDR evaluations become real coaching tools only when a
+// human manager approves or disagrees with the score. This table stores
+// those review actions per evaluation so the canonical "true" score for
+// each call becomes COALESCE(adjusted_overall_score, ai_overall_score)
+// once a review exists. Multiple reviews per evaluation are allowed
+// (most recent wins) — supports re-review after coaching cycles.
+// =======================================================================
+
+export type SDREvaluationReviewStatus =
+  | "approved"
+  | "adjusted"
+  | "disagreed";
+
+export interface SDREvaluationReview {
+  id?: number;
+  evaluation_id: number;
+  call_record_id: number;
+  reviewer_email: string;
+  reviewer_name?: string | null;
+  review_status: SDREvaluationReviewStatus;
+  adjusted_overall_score?: number | null;
+  adjusted_dimension_scores?: any;
+  adjusted_attribute_evaluations?: any;
+  review_notes?: string | null;
+  reviewed_at?: Date;
+  created_at?: Date;
+}
+
+async function ensureSDRReviewsTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sdr_evaluation_reviews (
+      id SERIAL PRIMARY KEY,
+      evaluation_id INTEGER NOT NULL REFERENCES sdr_call_evaluations(id) ON DELETE CASCADE,
+      call_record_id INTEGER NOT NULL REFERENCES call_records(id) ON DELETE CASCADE,
+      reviewer_email VARCHAR(255) NOT NULL,
+      reviewer_name VARCHAR(255),
+      review_status VARCHAR(20) NOT NULL CHECK (review_status IN ('approved','adjusted','disagreed')),
+      adjusted_overall_score DECIMAL(5,2),
+      adjusted_dimension_scores JSONB,
+      adjusted_attribute_evaluations JSONB,
+      review_notes TEXT,
+      reviewed_at TIMESTAMPTZ DEFAULT NOW(),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_eval ON sdr_evaluation_reviews(evaluation_id);
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_call ON sdr_evaluation_reviews(call_record_id);
+    CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_reviewer ON sdr_evaluation_reviews(reviewer_email);
+  `);
+}
+
+export async function saveSDREvaluationReview(
+  review: SDREvaluationReview,
+): Promise<number> {
+  await ensureSDRReviewsTable();
+  logger.info("📝 [CallDB] Saving SDR evaluation review", {
+    evaluationId: review.evaluation_id,
+    callRecordId: review.call_record_id,
+    reviewStatus: review.review_status,
+    reviewer: review.reviewer_email,
+  });
+
+  const result = await pool.query(
+    `
+    INSERT INTO sdr_evaluation_reviews (
+      evaluation_id,
+      call_record_id,
+      reviewer_email,
+      reviewer_name,
+      review_status,
+      adjusted_overall_score,
+      adjusted_dimension_scores,
+      adjusted_attribute_evaluations,
+      review_notes
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING id
+  `,
+    [
+      review.evaluation_id,
+      review.call_record_id,
+      review.reviewer_email,
+      review.reviewer_name || null,
+      review.review_status,
+      review.adjusted_overall_score ?? null,
+      review.adjusted_dimension_scores
+        ? JSON.stringify(review.adjusted_dimension_scores)
+        : null,
+      review.adjusted_attribute_evaluations
+        ? JSON.stringify(review.adjusted_attribute_evaluations)
+        : null,
+      review.review_notes || null,
+    ],
+  );
+
+  logger.info("✅ [CallDB] SDR review saved", { id: result.rows[0].id });
+  return result.rows[0].id;
+}
+
+export async function getSDRReviewsForCall(
+  callRecordId: number,
+): Promise<SDREvaluationReview[]> {
+  await ensureSDRReviewsTable();
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM sdr_evaluation_reviews
+    WHERE call_record_id = $1
+    ORDER BY reviewed_at DESC, id DESC
+  `,
+    [callRecordId],
+  );
+  return result.rows.map((row: any) => ({
+    id: row.id,
+    evaluation_id: row.evaluation_id,
+    call_record_id: row.call_record_id,
+    reviewer_email: row.reviewer_email,
+    reviewer_name: row.reviewer_name,
+    review_status: row.review_status as SDREvaluationReviewStatus,
+    adjusted_overall_score:
+      row.adjusted_overall_score !== null
+        ? parseFloat(row.adjusted_overall_score)
+        : null,
+    adjusted_dimension_scores: row.adjusted_dimension_scores,
+    adjusted_attribute_evaluations: row.adjusted_attribute_evaluations,
+    review_notes: row.review_notes,
+    reviewed_at: row.reviewed_at,
+    created_at: row.created_at,
+  }));
+}
+
 export function buildSDREvaluationPrompt(
   transcript: string,
   scorecard: SDRScorecardConfig,

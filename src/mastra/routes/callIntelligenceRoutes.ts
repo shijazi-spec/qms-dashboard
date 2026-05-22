@@ -2065,6 +2065,149 @@ ${transcriptText}
       };
     },
   },
+  // ===================================================================
+  // Manager Review Workflow (#6) — POST a review + GET review history
+  // for an SDR evaluation. AI-generated scores stay informational until
+  // a manager approves or disagrees with them, at which point the
+  // canonical "true" score becomes COALESCE(adjusted, ai) per call.
+  // ===================================================================
+  {
+    path: "/api/calls/:id/sdr-evaluation/review",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const logger = mastra?.getLogger();
+          const callId = parseInt(c.req.param("id"));
+          const body = await c.req.json().catch(() => ({}));
+          const session = getSessionFromCookie(c.req.header("Cookie"));
+          const reviewerEmail = session?.email || body.reviewer_email || "unknown";
+          const reviewerName = session?.name || body.reviewer_name || null;
+          const reviewStatus = body.review_status;
+
+          if (!["approved", "adjusted", "disagreed"].includes(reviewStatus)) {
+            return c.json(
+              {
+                success: false,
+                error:
+                  "review_status must be one of: approved, adjusted, disagreed",
+              },
+              400,
+            );
+          }
+
+          const {
+            getSDREvaluation,
+            saveSDREvaluationReview,
+            initCallIntelligenceTables,
+          } = await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          const evaluation = await getSDREvaluation(callId);
+          if (!evaluation) {
+            return c.json(
+              {
+                success: false,
+                error:
+                  "No SDR evaluation exists for this call — cannot review.",
+              },
+              404,
+            );
+          }
+          // sdr_call_evaluations.id is needed as FK — re-fetch it because
+          // getSDREvaluation returns the typed result without the row id.
+          const { callIntelligencePool } = await import(
+            "../../utils/callIntelligenceDb"
+          );
+          const evalIdResult = await callIntelligencePool.query(
+            `SELECT id FROM sdr_call_evaluations WHERE call_record_id = $1`,
+            [callId],
+          );
+          const evaluationId = evalIdResult.rows[0]?.id;
+          if (!evaluationId) {
+            return c.json(
+              { success: false, error: "Evaluation id lookup failed" },
+              500,
+            );
+          }
+
+          const reviewId = await saveSDREvaluationReview({
+            evaluation_id: evaluationId,
+            call_record_id: callId,
+            reviewer_email: reviewerEmail,
+            reviewer_name: reviewerName,
+            review_status: reviewStatus,
+            adjusted_overall_score:
+              typeof body.adjusted_overall_score === "number"
+                ? body.adjusted_overall_score
+                : null,
+            adjusted_dimension_scores: body.adjusted_dimension_scores,
+            adjusted_attribute_evaluations:
+              body.adjusted_attribute_evaluations,
+            review_notes: body.review_notes,
+          });
+
+          logger?.info("📝 [API] SDR evaluation review saved", {
+            callId,
+            evaluationId,
+            reviewId,
+            reviewStatus,
+            reviewer: reviewerEmail,
+          });
+
+          return c.json({
+            success: true,
+            review_id: reviewId,
+            evaluation_id: evaluationId,
+            review_status: reviewStatus,
+          });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Error saving SDR evaluation review:", {
+            message: errAny?.message,
+            code: errAny?.code,
+            stack: errAny?.stack,
+          });
+          return c.json(
+            { success: false, error: errAny?.message || "Failed to save review" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    path: "/api/calls/:id/sdr-evaluation/reviews",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const callId = parseInt(c.req.param("id"));
+          const { getSDRReviewsForCall, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          const reviews = await getSDRReviewsForCall(callId);
+          return c.json({ success: true, reviews });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Error fetching SDR evaluation reviews:", {
+            message: errAny?.message,
+          });
+          return c.json(
+            { success: false, error: errAny?.message || "Failed to fetch reviews" },
+            500,
+          );
+        }
+      };
+    },
+  },
   {
     path: "/api/sdr-scorecards/active",
     method: "GET" as const,
