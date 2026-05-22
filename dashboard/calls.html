@@ -1391,6 +1391,13 @@
             wireDropzone('upload-dropzone', 'call-file-input', false);
             wireDropzone('bulk-audio-dropzone', 'bulk-audio-input', true);
             preventWindowFileDropNav();
+            // Fire-and-forget — populate the Active Scorecard summary
+            // line in the SDR Evaluation tab header from the dedicated
+            // SDR endpoint so it's ready the moment the user navigates
+            // there, instead of stuck on the "Loading…" placeholder.
+            if (typeof loadActiveSDRScorecardSummary === 'function') {
+                loadActiveSDRScorecardSummary().catch(() => { /* logged inside */ });
+            }
             await refreshData();
         }
 
@@ -1450,13 +1457,15 @@
                 refreshMcpImportCatalog();
             }
             if (tab === 'scorecards') loadScorecards();
-            // The SDR Evaluation tab now embeds the scorecards panel at
-            // the top. Trigger loadScorecards so the "Active Scorecard"
-            // summary line (#embedded-scorecard-summary) populates with
-            // the active scorecard name + attribute count without the
-            // user having to click "Manage" first.
-            if (tab === 'evaluate' && typeof loadScorecards === 'function') {
-                try { loadScorecards(); } catch (e) { console.error('loadScorecards on evaluate tab failed:', e); }
+            // The SDR Evaluation tab embeds an Active Scorecard summary
+            // line that needs to populate even before the user expands
+            // the scorecard-management panel. Use the dedicated SDR
+            // endpoint (cheap, one-row lookup) for the summary; the
+            // heavier loadScorecards() runs only when the panel actually
+            // opens (handled by toggleScorecardPanel).
+            if (tab === 'evaluate' && typeof loadActiveSDRScorecardSummary === 'function') {
+                try { loadActiveSDRScorecardSummary(); }
+                catch (e) { console.error('loadActiveSDRScorecardSummary failed:', e); }
             }
         }
 
@@ -3907,6 +3916,46 @@
             }
         }
 
+        // Dedicated SDR-scorecard summary loader. Hits the lightweight
+        // /api/sdr-scorecards/active endpoint (returns just the active
+        // SDR call scorecard with its attributes flat) instead of
+        // /api/quality-scorecards, which returns the *employee KPI*
+        // scorecards (Mohammed-style) — a different domain. Without
+        // this distinction the summary line was stuck on "Loading active
+        // scorecard…" because the employee list either has no is_active
+        // row or matches the wrong domain.
+        async function loadActiveSDRScorecardSummary() {
+            const el = document.getElementById('embedded-scorecard-summary');
+            if (!el) return;
+            try {
+                const res = await fetch('/api/sdr-scorecards/active?team=SDR');
+                if (res.status === 404) {
+                    el.textContent = 'No active SDR scorecard — open the panel to create one.';
+                    return;
+                }
+                if (!res.ok) {
+                    el.textContent = `Could not load active scorecard (HTTP ${res.status}).`;
+                    return;
+                }
+                const data = await res.json();
+                if (!data?.success || !data.scorecard) {
+                    el.textContent = data?.error || 'No active SDR scorecard.';
+                    return;
+                }
+                const sc = data.scorecard;
+                const attrCount = Array.isArray(sc.attributes) ? sc.attributes.length : 0;
+                const dimSet = new Set();
+                for (const a of (sc.attributes || [])) {
+                    if (a && a.dimension) dimSet.add(a.dimension);
+                }
+                const team = sc.team_name ? ` · ${sc.team_name}` : '';
+                el.textContent = `${sc.name} v${sc.version || '1.0'}${team} · ${attrCount} attributes · ${dimSet.size || '?'} dimensions`;
+            } catch (e) {
+                console.warn('loadActiveSDRScorecardSummary failed:', e);
+                el.textContent = 'Could not load active scorecard — check connection.';
+            }
+        }
+
         async function runAIEvaluation() {
             if (!selectedEvalCall) {
                 alert(WalaPlusI18n.t('dyn.calls.select_call_first'));
@@ -5030,12 +5079,15 @@
                 const data = await res.json();
                 scorecards = data.scorecards || [];
                 renderScorecardsList();
-                // updateEmbeddedScorecardSummary populates the "Active
-                // Scorecard" line at the top of the SDR Evaluation tab.
-                // Without this call the line was stuck on "Loading active
-                // scorecard…" forever — the helper was defined but never
-                // invoked.
-                updateEmbeddedScorecardSummary(scorecards);
+                // /api/quality-scorecards returns *employee KPI* scorecards
+                // (Mohammed-style), not SDR call scorecards — the embedded
+                // summary line needs the SDR domain. Refresh via the
+                // dedicated SDR endpoint so the line is correct even when
+                // the user creates/activates a new SDR scorecard from
+                // inside this panel.
+                if (typeof loadActiveSDRScorecardSummary === 'function') {
+                    loadActiveSDRScorecardSummary().catch(() => { /* logged inside */ });
+                }
             } catch (error) {
                 console.error('Error loading scorecards:', error);
                 if (summaryEl) summaryEl.textContent = 'Could not load scorecards — check connection.';
