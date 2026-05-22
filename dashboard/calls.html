@@ -977,6 +977,57 @@
                     </table>
                 </div>
             </div>
+
+            <!-- Coaching loop closure — Sessions analytics. Pending queue
+                 (managers' to-do list of evaluations awaiting coaching),
+                 KPI cards (delivery rate, avg time-to-delivery, outcome
+                 score delta), and a top-coached-attributes list mirroring
+                 AI Training Feedback's "top corrected" but operational. -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mt-6" id="coaching-sessions-panel">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-semibold">Coaching Sessions</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">From the Coaching Plan → coaching delivered → outcome measured loop.</p>
+                    </div>
+                    <button type="button" data-on-click="loadCoachingSessionsAnalytics" class="text-xs text-gray-500 hover:text-gray-700">↻ Refresh</button>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                    <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border border-amber-200 p-3">
+                        <div class="text-xs text-amber-700">Total sessions</div>
+                        <div class="text-xl font-semibold text-amber-900" id="coach-kpi-total">0</div>
+                    </div>
+                    <div class="bg-white rounded-lg border border-gray-200 p-3">
+                        <div class="text-xs text-gray-500">Delivered</div>
+                        <div class="text-xl font-semibold text-green-700" id="coach-kpi-delivered">0</div>
+                    </div>
+                    <div class="bg-white rounded-lg border border-gray-200 p-3">
+                        <div class="text-xs text-gray-500">Delivery rate</div>
+                        <div class="text-xl font-semibold" id="coach-kpi-rate">--</div>
+                    </div>
+                    <div class="bg-white rounded-lg border border-gray-200 p-3">
+                        <div class="text-xs text-gray-500">Avg hours to deliver</div>
+                        <div class="text-xl font-semibold" id="coach-kpi-hours">--</div>
+                    </div>
+                    <div class="bg-white rounded-lg border border-gray-200 p-3">
+                        <div class="text-xs text-gray-500">Avg outcome Δ</div>
+                        <div class="text-xl font-semibold" id="coach-kpi-delta">--</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="lg:col-span-2">
+                        <h4 class="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Recent sessions</h4>
+                        <div id="coaching-sessions-list" class="bg-white border border-gray-200 rounded-lg divide-y text-sm max-h-72 overflow-y-auto">
+                            <div class="p-3 text-xs text-gray-400">No sessions yet.</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Most-coached attributes</h4>
+                        <ol id="coaching-by-attribute" class="bg-white border border-gray-200 rounded-lg p-3 text-xs text-gray-700 space-y-1 list-decimal list-inside">
+                            <li class="text-gray-400 italic list-none">No coaching focus data yet.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="noData" class="hidden text-center py-20">
@@ -1177,6 +1228,63 @@
                 <button type="button" data-on-click="saveAdjustedReview" id="adjust-save-btn" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     Save Adjusted Review
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coaching delivery modal — closes the AI-suggested → manager-
+         actioned loop. Pre-populated from the active Coaching Plan
+         (matched courses + focus attributes) so the manager only fills
+         in the human bits: SDR commitment + follow-up due date. The
+         resulting coaching_sessions row anchors outcome tracking. -->
+    <div id="coachingDeliveryModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black bg-opacity-50" data-on-click="closeCoachingDeliveryModal"></div>
+        <div class="absolute inset-4 md:inset-x-auto md:inset-y-12 md:left-1/2 md:-translate-x-1/2 md:w-[640px] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col" style="max-height: 90vh;">
+            <div class="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-bold text-white">Mark Coaching Delivered</h2>
+                    <p class="text-sm text-white/90" id="coachingDeliverySubtitle">Capture the coaching conversation so we can track outcomes on the next call.</p>
+                </div>
+                <button data-on-click="closeCoachingDeliveryModal" class="text-white/90 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-4">
+                <div class="bg-white border border-gray-200 rounded-lg p-3">
+                    <div class="text-xs text-gray-500">SDR</div>
+                    <div class="text-sm font-medium" id="coachingDeliverySdr">—</div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Attributes covered</label>
+                    <div id="coachingDeliveryAttrs" class="flex flex-wrap gap-1.5 min-h-[28px] p-2 bg-white border border-gray-200 rounded-lg text-xs"></div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Training courses assigned</label>
+                    <div id="coachingDeliveryCourses" class="flex flex-wrap gap-1.5 min-h-[28px] p-2 bg-white border border-gray-200 rounded-lg text-xs"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Duration (minutes)</label>
+                        <input type="number" id="coachingDeliveryDuration" min="0" step="5" placeholder="e.g. 30" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"/>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Follow-up due date</label>
+                        <input type="date" id="coachingDeliveryFollowup" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"/>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">SDR's commitment <span class="text-red-500">*</span></label>
+                    <textarea id="coachingDeliveryCommitment" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm" placeholder="What did the SDR commit to do differently? e.g. 'Open every call with 3 discovery questions before pitching pricing.'"></textarea>
+                </div>
+            </div>
+            <div class="bg-white border-t border-gray-200 px-6 py-3 flex gap-3 justify-end">
+                <button type="button" data-on-click="closeCoachingDeliveryModal" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
+                <button type="button" data-on-click="saveCoachingDelivery" id="coachingDeliverySaveBtn" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Save Coaching Session
                 </button>
             </div>
         </div>
@@ -1721,6 +1829,105 @@
                     <td class="px-4 py-3 text-center text-sm ${scoreClass(agent.avg_compliance, { green: 80, amber: 60 })}" title="Average CRM compliance score across this agent's calls">${fmtScore(agent.avg_compliance, '%')}</td>
                 </tr>
             `).join('') || `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_agent_data'))}</td></tr>`;
+
+            // Coaching loop closure — also refresh the Coaching Sessions
+            // panel whenever Analytics renders so KPIs stay current.
+            loadCoachingSessionsAnalytics();
+        }
+
+        // ===================================================================
+        // Coaching Sessions analytics — pending queue + KPIs + by-attribute.
+        // Pulls from /api/coaching-sessions and /api/coaching-sessions/kpis.
+        // Same lazy-render pattern as the rest of Analytics: failures are
+        // logged and rendered as "--", never block the surrounding charts.
+        // ===================================================================
+        async function loadCoachingSessionsAnalytics() {
+            try {
+                const [listRes, kpisRes] = await Promise.all([
+                    fetch('/api/coaching-sessions?limit=20'),
+                    fetch('/api/coaching-sessions/kpis'),
+                ]);
+                const listData = await listRes.json().catch(() => ({}));
+                const kpisData = await kpisRes.json().catch(() => ({}));
+
+                if (kpisData && kpisData.success) {
+                    const k = kpisData.kpis || {};
+                    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+                    set('coach-kpi-total', _fn(k.total_sessions || 0));
+                    set('coach-kpi-delivered', _fn(k.delivered || 0));
+                    set('coach-kpi-rate', k.total_sessions > 0 ? `${_fn(k.delivery_rate_pct || 0)}%` : '--');
+                    set('coach-kpi-hours', k.avg_hours_to_delivery != null ? `${_fn(k.avg_hours_to_delivery)}h` : '--');
+                    if (k.avg_outcome_score_delta != null) {
+                        const d = k.avg_outcome_score_delta;
+                        const sign = d > 0 ? '+' : '';
+                        const cls = d > 0 ? 'text-green-700' : d < 0 ? 'text-red-700' : 'text-gray-700';
+                        const el = document.getElementById('coach-kpi-delta');
+                        if (el) {
+                            el.innerHTML = `<span class="${cls}">${sign}${_fn(d)} pts</span>`;
+                        }
+                    } else {
+                        set('coach-kpi-delta', '--');
+                    }
+                    const attrList = document.getElementById('coaching-by-attribute');
+                    if (attrList) {
+                        const top = Array.isArray(k.by_attribute) ? k.by_attribute : [];
+                        if (top.length === 0) {
+                            attrList.innerHTML = `<li class="text-gray-400 italic list-none">No coaching focus data yet.</li>`;
+                        } else {
+                            attrList.innerHTML = top.map(a => `
+                                <li><span class="font-mono text-gray-500">${escapeHtml(a.attribute_id)}</span>
+                                    <span class="text-amber-700 font-medium ml-1">×${_fn(a.coaching_count)}</span>
+                                </li>
+                            `).join('');
+                        }
+                    }
+                }
+
+                const listEl = document.getElementById('coaching-sessions-list');
+                if (!listEl) return;
+                const sessions = (listData && listData.sessions) || [];
+                if (sessions.length === 0) {
+                    listEl.innerHTML = `<div class="p-3 text-xs text-gray-400">No coaching sessions yet — log one from the Coaching Plan panel on the SDR Evaluation tab.</div>`;
+                    return;
+                }
+                const statusBadge = (s) => {
+                    const cls = ({
+                        delivered: 'bg-green-100 text-green-700',
+                        pending: 'bg-blue-100 text-blue-700',
+                        in_progress: 'bg-indigo-100 text-indigo-700',
+                        cancelled: 'bg-gray-100 text-gray-600',
+                    })[s] || 'bg-gray-100 text-gray-600';
+                    return `<span class="px-1.5 py-0.5 text-[10px] rounded font-medium uppercase ${cls}">${escapeHtml(s)}</span>`;
+                };
+                listEl.innerHTML = sessions.map(s => {
+                    const when = s.delivered_at || s.created_at;
+                    const courses = (s.assigned_course_ids || []).length;
+                    const attrs = (s.attribute_focus_ids || []).length;
+                    const deltaTxt = s.outcome_score_delta != null
+                        ? `<span class="${s.outcome_score_delta > 0 ? 'text-green-700' : s.outcome_score_delta < 0 ? 'text-red-700' : 'text-gray-600'} font-medium">Δ ${s.outcome_score_delta > 0 ? '+' : ''}${_fn(s.outcome_score_delta)}</span>`
+                        : (s.status === 'delivered' ? '<span class="text-gray-400">outcome pending</span>' : '');
+                    return `
+                        <div class="p-3 flex items-start gap-3">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    ${statusBadge(s.status)}
+                                    <span class="text-sm font-medium text-gray-900">${escapeHtml(s.agent_email)}</span>
+                                    <span class="text-[10px] text-gray-400">${escapeHtml(_fd(when))}</span>
+                                </div>
+                                <div class="text-xs text-gray-500 mt-0.5">
+                                    by ${escapeHtml(s.manager_email)}
+                                    · ${attrs} attribute${attrs === 1 ? '' : 's'}
+                                    · ${courses} course${courses === 1 ? '' : 's'}
+                                    ${deltaTxt ? ' · ' + deltaTxt : ''}
+                                </div>
+                                ${s.commitment_notes ? `<div class="text-xs text-gray-600 mt-1 italic line-clamp-2">"${escapeHtml(s.commitment_notes)}"</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.warn('loadCoachingSessionsAnalytics failed:', e);
+            }
         }
 
         function renderCheckmark(value) {
@@ -3654,10 +3861,19 @@
                                 <h4 class="font-semibold text-amber-900">🎓 Coaching Plan</h4>
                                 <p class="text-xs text-gray-500 mt-0.5">Attributes below 80% with matched training courses, prioritised Urgent → Medium.</p>
                             </div>
-                            <span id="coaching-plan-highest" class="text-xs"></span>
+                            <div class="flex items-center gap-2">
+                                <span id="coaching-plan-highest" class="text-xs"></span>
+                                <span id="coaching-session-status" class="text-xs"></span>
+                            </div>
                         </div>
                         <div id="coaching-plan-rollup" class="text-xs text-gray-500 mb-2"></div>
                         <div id="coaching-plan-list" class="space-y-3"></div>
+                        <div class="mt-3 pt-3 border-t border-amber-100 flex flex-wrap items-center gap-2 justify-end">
+                            <button type="button" data-on-click="openCoachingDeliveryModal" id="coaching-deliver-btn" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded-lg transition flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Mark coaching delivered
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Manager Review (Quick Win #6) — Approve / Disagree
@@ -4147,6 +4363,169 @@
                 `).join('');
             } catch (e) {
                 console.warn('loadCoachingPlan failed:', e);
+            }
+            // After rendering suggestions, check whether a coaching session
+            // already exists for this call so the panel can show "Coaching
+            // delivered ✓" and disable the Deliver button.
+            await refreshCoachingSessionBadge(callId);
+        }
+
+        // ===================================================================
+        // Coaching loop closure — Mark coaching delivered.
+        //
+        // Pre-populates the modal from the active Coaching Plan suggestions
+        // (matched courses + focus attributes) so the manager only fills in
+        // the SDR commitment + follow-up date. Persists to coaching_sessions
+        // for downstream outcome tracking + the Coaching Sessions Analytics
+        // panel.
+        // ===================================================================
+        let _coachingPlanCache = null;
+
+        async function refreshCoachingSessionBadge(callId) {
+            const badge = document.getElementById('coaching-session-status');
+            const btn = document.getElementById('coaching-deliver-btn');
+            if (!badge) return;
+            try {
+                const res = await fetch(`/api/coaching-sessions?call_record_id=${callId}&limit=5`);
+                const data = await res.json();
+                const sessions = (data && data.sessions) || [];
+                const delivered = sessions.find(s => s.status === 'delivered');
+                if (delivered) {
+                    const when = delivered.delivered_at ? new Date(delivered.delivered_at).toLocaleDateString() : '';
+                    badge.innerHTML = `<span class="px-1.5 py-0.5 text-[10px] rounded bg-green-100 text-green-700 font-medium">COACHED ${escapeHtml(when)}</span>`;
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                        btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Coaching already logged`;
+                    }
+                } else {
+                    badge.innerHTML = '';
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Mark coaching delivered`;
+                    }
+                }
+            } catch (e) {
+                console.warn('refreshCoachingSessionBadge failed:', e);
+            }
+        }
+
+        async function openCoachingDeliveryModal() {
+            if (!selectedEvalCall || !currentSDREvaluation) {
+                alert('Open a call evaluation first.');
+                return;
+            }
+            // Re-fetch the current coaching plan so the modal pre-fill
+            // stays in sync if managers re-evaluated or adjusted scores
+            // since the plan was first loaded.
+            try {
+                const res = await fetch(`/api/calls/${selectedEvalCall.id}/coaching-suggestions`);
+                const data = await res.json();
+                _coachingPlanCache = data && data.success ? data.plan : null;
+            } catch {
+                _coachingPlanCache = null;
+            }
+            const suggestions = (_coachingPlanCache && _coachingPlanCache.suggestions) || [];
+            // Dedupe course_ids across suggestions; preserve order.
+            const seenCourse = new Set();
+            const courses = [];
+            const attrPills = [];
+            for (const s of suggestions) {
+                attrPills.push({ id: s.attribute_id, name: s.attribute_name, priority: s.priority });
+                for (const c of (s.matched_courses || [])) {
+                    if (!seenCourse.has(c.course_id)) {
+                        seenCourse.add(c.course_id);
+                        courses.push(c);
+                    }
+                }
+            }
+
+            document.getElementById('coachingDeliverySdr').textContent =
+                `${selectedEvalCall.agent_name || ''} <${selectedEvalCall.agent_email || ''}>`;
+            const attrsEl = document.getElementById('coachingDeliveryAttrs');
+            if (attrsEl) {
+                attrsEl.innerHTML = attrPills.length === 0
+                    ? `<span class="text-gray-400">No below-threshold attributes — coaching is optional.</span>`
+                    : attrPills.map(a => `<span class="px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700" data-attribute-id="${escapeHtml(a.id)}">${escapeHtml(a.id)} · ${escapeHtml(a.name)}</span>`).join('');
+            }
+            const coursesEl = document.getElementById('coachingDeliveryCourses');
+            if (coursesEl) {
+                coursesEl.innerHTML = courses.length === 0
+                    ? `<span class="text-gray-400">No catalog course matched — assign manually if needed.</span>`
+                    : courses.map(c => `<span class="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700" data-course-id="${escapeHtml(c.course_id)}">${escapeHtml(c.name)} · ${c.duration_hours}h</span>`).join('');
+            }
+            // Sensible follow-up default: 7 days from today.
+            const followup = new Date();
+            followup.setDate(followup.getDate() + 7);
+            const f = document.getElementById('coachingDeliveryFollowup');
+            if (f) f.value = followup.toISOString().slice(0, 10);
+            const dur = document.getElementById('coachingDeliveryDuration');
+            if (dur) dur.value = '';
+            const commit = document.getElementById('coachingDeliveryCommitment');
+            if (commit) commit.value = '';
+
+            document.getElementById('coachingDeliveryModal').classList.remove('hidden');
+        }
+
+        function closeCoachingDeliveryModal() {
+            const m = document.getElementById('coachingDeliveryModal');
+            if (m) m.classList.add('hidden');
+        }
+
+        async function saveCoachingDelivery() {
+            if (!selectedEvalCall) return;
+            const commitment = (document.getElementById('coachingDeliveryCommitment')?.value || '').trim();
+            if (!commitment) {
+                alert("Please capture the SDR's commitment — even one sentence is enough for outcome tracking.");
+                return;
+            }
+            const followupRaw = document.getElementById('coachingDeliveryFollowup')?.value || null;
+            const durationRaw = document.getElementById('coachingDeliveryDuration')?.value || '';
+            const attrIds = Array.from(document.querySelectorAll('#coachingDeliveryAttrs [data-attribute-id]'))
+                .map(el => el.dataset.attributeId)
+                .filter(Boolean);
+            const courseIds = Array.from(document.querySelectorAll('#coachingDeliveryCourses [data-course-id]'))
+                .map(el => el.dataset.courseId)
+                .filter(Boolean);
+
+            const btn = document.getElementById('coachingDeliverySaveBtn');
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Saving…'; }
+            try {
+                const res = await fetch('/api/coaching-sessions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        call_record_id: selectedEvalCall.id,
+                        evaluation_id: currentSDREvaluation?.id ?? null,
+                        agent_email: selectedEvalCall.agent_email,
+                        agent_name: selectedEvalCall.agent_name || null,
+                        status: 'delivered',
+                        duration_minutes: durationRaw ? parseInt(durationRaw, 10) : null,
+                        assigned_course_ids: courseIds,
+                        attribute_focus_ids: attrIds,
+                        commitment_notes: commitment,
+                        followup_due_date: followupRaw || null,
+                    }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    alert(`Save failed: ${data.error || 'unknown error'}`);
+                    return;
+                }
+                closeCoachingDeliveryModal();
+                refreshCoachingSessionBadge(selectedEvalCall.id);
+                // If the Coaching Sessions analytics panel is rendered,
+                // refresh it so the new row appears immediately.
+                if (typeof loadCoachingSessionsAnalytics === 'function') loadCoachingSessionsAnalytics();
+            } catch (e) {
+                console.error('saveCoachingDelivery error:', e);
+                alert(`Save failed: ${e.message || e}`);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Save Coaching Session';
+                }
             }
         }
 
