@@ -89,6 +89,16 @@ export const callIntelligenceRoutes = [
                 candidates,
                 updateCallRecordLeadId,
                 updateCallRecordDealId,
+                {
+                  // Activity-based fallback: if phone matching draws a
+                  // blank, look for CRM activities the same agent did
+                  // on the same day so the link still lands.
+                  agentEmail: callRecord.agent_email || undefined,
+                  agentName: callRecord.agent_name || null,
+                  callDate: callRecord.call_date
+                    ? new Date(callRecord.call_date)
+                    : new Date(),
+                },
               );
               if (autoLinkResult.linked) {
                 logger?.info("🔗 [API] Auto-linked call to Zoho", {
@@ -96,7 +106,19 @@ export const callIntelligenceRoutes = [
                   module: autoLinkResult.picked_module,
                   recordId:
                     autoLinkResult.lead_id || autoLinkResult.deal_id,
+                  linked_via: autoLinkResult.linked_via,
                 });
+                if (autoLinkResult.linked_via) {
+                  try {
+                    const { updateCallRecordLinkedVia } = await import(
+                      "../../utils/callIntelligenceDb"
+                    );
+                    await updateCallRecordLinkedVia(
+                      callRecord.id!,
+                      autoLinkResult.linked_via,
+                    );
+                  } catch { /* diagnostic field only */ }
+                }
               } else {
                 logger?.info("ℹ️ [API] Auto-link skipped/failed", {
                   callId: callRecord.id,
@@ -3272,12 +3294,37 @@ ${transcriptText}
           const { extractCallPhoneCandidates } = await import(
             "../../utils/callLeadPhoneMatch"
           );
+          // Activity-based fallback: when the phone digits don't pull
+          // up a unique lead/deal, look for CRM activities the same
+          // agent created on the same day and link to the parent. This
+          // recovers calls where the SDR called from a number not on
+          // file but still logged a follow-up note/task in Zoho.
           const result = await autoLinkCallToCrm(
             callId,
             extractCallPhoneCandidates(record),
             updateCallRecordLeadId,
             updateCallRecordDealId,
+            {
+              agentEmail: (record as any).agent_email || undefined,
+              agentName: (record as any).agent_name || null,
+              callDate: (record as any).call_date
+                ? new Date((record as any).call_date)
+                : new Date((record as any).created_at || Date.now()),
+            },
           );
+          // Persist the match source so the UI can show a confidence
+          // badge ("matched via activity" vs the higher-confidence
+          // phone match). Best-effort — never block the response.
+          if (result.linked && result.linked_via) {
+            try {
+              const { updateCallRecordLinkedVia } = await import(
+                "../../utils/callIntelligenceDb"
+              );
+              await updateCallRecordLinkedVia(callId, result.linked_via);
+            } catch {
+              /* ignore — diagnostic column only */
+            }
+          }
           return c.json(result);
         } catch (error: any) {
           safeLogger.error("[API] auto-link failed", {
