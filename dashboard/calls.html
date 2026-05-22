@@ -2703,33 +2703,61 @@
         // fires inside each /analyze success so scorecards get applied too.
         async function analyzeAllPending() {
             const btn = document.getElementById('btn-analyze-all');
-            const pending = (currentCalls || []).filter(c => c.status === 'pending' || c.status === 'processing');
-            if (!pending.length) {
-                alert('No pending or processing calls to analyze.');
-                return;
-            }
-            if (!confirm(`Analyze ${pending.length} pending call(s)? This will take roughly ${Math.ceil(pending.length * 6 / 60)} minute(s). Each call costs about $0.0025 in OpenAI usage.`)) {
-                return;
-            }
+            // Pull a fresh list (high limit) so this isn't bounded by
+            // whatever subset the Call Records grid is currently
+            // showing. Earlier code referenced an undefined
+            // `currentCalls`, so the filter always produced an empty
+            // array and the button bailed with "No pending calls". Also
+            // include `failed` so a one-off rate-limit hiccup doesn't
+            // leave calls permanently un-analysed.
+            let pending = [];
             const originalLabel = btn.innerHTML;
+            try {
+                btn.disabled = true;
+                btn.innerHTML = `<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Loading…`;
+                const r = await fetch('/api/calls?limit=500');
+                const data = await r.json();
+                const all = (data && data.records) || [];
+                pending = all.filter(c => c.status === 'pending' || c.status === 'processing' || c.status === 'failed');
+            } catch (e) {
+                btn.disabled = false;
+                btn.innerHTML = originalLabel;
+                alert('Could not fetch the call list: ' + (e.message || e));
+                return;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalLabel;
+            }
+            if (!pending.length) {
+                alert('No pending, processing, or failed calls to analyze.');
+                return;
+            }
+            const eta = Math.max(1, Math.ceil(pending.length * 8 / 60));
+            const cost = (pending.length * 0.0025).toFixed(2);
+            if (!confirm(`Analyze ${pending.length} call(s)? This will take roughly ${eta} minute(s) (~$${cost} in OpenAI usage). Skip with Cancel.`)) {
+                return;
+            }
             btn.disabled = true;
             let ok = 0, fail = 0;
             for (const [i, c] of pending.entries()) {
                 btn.innerHTML = `<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> ${i + 1} / ${pending.length}`;
                 try {
                     const r = await fetch(`/api/calls/${c.id}/analyze`, { method: 'POST' });
-                    const d = await r.json();
-                    if (d.success) {
+                    const d = await r.json().catch(() => ({}));
+                    if (d && d.success) {
                         ok++;
                     } else {
                         fail++;
-                        console.warn(`Analyze ${c.id} failed:`, d.error);
+                        console.warn(`Analyze ${c.id} failed:`, (d && d.error) || `HTTP ${r.status}`);
                     }
                 } catch (e) {
                     fail++;
                     console.error(`Analyze ${c.id} network error:`, e);
                 }
                 if (i < pending.length - 1) {
+                    // 1.5s spacing keeps us under OpenAI's RPM ceiling
+                    // for gpt-4o-mini even when the backend chains
+                    // transcribe → analyze → auto-SDR-eval.
                     await new Promise(r => setTimeout(r, 1500));
                 }
             }
