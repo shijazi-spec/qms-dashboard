@@ -665,10 +665,23 @@
                 <button data-on-click="filterCrossModule" data-args="[&quot;mixed&quot;]" id="cmoChip-mixed" data-testid="cmo-chip-mixed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">3+ modules</button>
             </div>
 
+            <!-- Follow-up 3: bulk-close action bar. Visible only when 1+
+                 lead-bearing rows are checked. -->
+            <div id="cmoBulkActionBar" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-center justify-between gap-3">
+                <div class="text-xs text-amber-900">
+                    <span id="cmoSelectedCount" class="font-semibold">0</span> cluster<span id="cmoSelectedPlural">s</span> selected. Bulk action will set <code class="bg-amber-100 px-1 rounded">Lead_Status = "Lost Lead"</code> in Zoho for every Lead record in these clusters, then mark each cluster Resolved.
+                </div>
+                <div class="flex items-center gap-2">
+                    <button data-on-click="bulkCloseLeadsDryRun" data-testid="button-cmo-bulk-dry-run" class="px-3 py-1.5 text-xs font-medium rounded bg-white border border-amber-300 text-amber-800 hover:bg-amber-100">Dry run</button>
+                    <button data-on-click="bulkCloseLeadsExecute" data-testid="button-cmo-bulk-execute" class="px-3 py-1.5 text-xs font-semibold rounded bg-amber-600 text-white hover:bg-amber-700">Close lead records in Zoho</button>
+                </div>
+            </div>
+
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
+                            <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase w-10"><input type="checkbox" id="cmoSelectAll" data-on-change="toggleCrossModuleSelectAll" aria-label="Select all visible cross-module clusters" /></th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Pairing</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
@@ -681,6 +694,24 @@
                     </thead>
                     <tbody id="crossModuleTable" class="bg-white divide-y divide-gray-200"></tbody>
                 </table>
+            </div>
+
+            <!-- Follow-up 3: result modal for bulk-close-leads runs. -->
+            <div id="cmoBulkResultModal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center" style="z-index: 60;" data-testid="modal-cmo-bulk-result">
+                <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900">Bulk-close result</h3>
+                                <p id="cmoBulkResultSubtitle" class="text-xs text-gray-500"></p>
+                            </div>
+                            <button data-on-click="closeCmoBulkResult" data-testid="button-close-cmo-bulk-result" class="text-gray-400 hover:text-gray-600" aria-label="Close result modal">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div id="cmoBulkResultBody" class="text-sm"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1132,6 +1163,10 @@
         let crossModuleClusters = [];
         let crossModuleByPairing = {};
         let crossModuleFilter = 'all';
+        // Follow-up 3: selection state for the bulk-close-leads action.
+        // Stored as a Set so add/remove is O(1) and we can do quick
+        // membership checks during render.
+        const crossModuleSelected = new Set();
         let clusterPage = 0;
         // R7 (quick-wins): SSE replaces 2s polling for scan progress.
         // scanProgressSse holds the active EventSource; scanRunning tracks
@@ -1263,7 +1298,8 @@
                 return c.pairing === crossModuleFilter;
             });
             if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No cross-module overlaps in this view.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">No cross-module overlaps in this view.</td></tr>';
+                updateCrossModuleBulkBar();
                 return;
             }
             tbody.innerHTML = list.map(c => {
@@ -1276,17 +1312,164 @@
                 const pairingChip = c.pairing === 'mixed'
                     ? '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">' + escapeHtml(meta.label) + '</span>'
                     : '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700">' + escapeHtml(meta.label) + '</span>';
-                return '<tr class="hover:bg-gray-50 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']" data-testid="row-cmo-' + c.id + '">'
-                    + '<td class="px-4 py-2 text-xs">' + pairingChip + '</td>'
-                    + '<td class="px-4 py-2 text-xs font-mono text-gray-700">' + escapeHtml(c.domain || '—') + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-gray-800">' + escapeHtml(c.company_name || '—') + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-gray-600">' + escapeHtml(modules.join(' · ')) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-end font-medium">' + _fn(c.total_records || 0) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-end"><span class="confidence-' + getConfidenceLevel(c.confidence_score || 0) + ' px-2 py-1 rounded">' + _fn(c.confidence_score || 0) + '%</span></td>'
-                    + '<td class="px-4 py-2 text-xs text-end font-medium">' + formatCurrency(Number(c.estimated_pipeline_value || 0)) + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-gray-700">' + escapeHtml(meta.action) + '</td>'
+                // Follow-up 3: checkbox cell only when the cluster has a
+                // Lead — leads are what the bulk action closes; a row with
+                // no lead has nothing for the action to do.
+                const hasLead = (c.total_leads || 0) > 0;
+                const checked = crossModuleSelected.has(c.id) ? 'checked' : '';
+                const checkboxCell = hasLead
+                    ? `<td class="px-3 py-2 text-xs text-center"><input type="checkbox" data-on-change="toggleCrossModuleRowSelection" data-args="[${c.id}]" data-cmo-row="${c.id}" ${checked} aria-label="Select cluster ${c.id} for bulk-close" /></td>`
+                    : '<td class="px-3 py-2 text-xs text-center text-gray-300" title="No Lead records — nothing to bulk-close">—</td>';
+                // The row stays clickable to open the cluster modal, but
+                // the checkbox uses stopPropagation in toggleCrossModuleRowSelection
+                // so clicking it doesn't also open the modal.
+                return '<tr class="hover:bg-gray-50" data-testid="row-cmo-' + c.id + '">'
+                    + checkboxCell
+                    + '<td class="px-4 py-2 text-xs cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + pairingChip + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-mono text-gray-700 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(c.domain || '—') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-gray-800 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(c.company_name || '—') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-gray-600 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(modules.join(' · ')) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-end font-medium cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + _fn(c.total_records || 0) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-end cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']"><span class="confidence-' + getConfidenceLevel(c.confidence_score || 0) + ' px-2 py-1 rounded">' + _fn(c.confidence_score || 0) + '%</span></td>'
+                    + '<td class="px-4 py-2 text-xs text-end font-medium cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + formatCurrency(Number(c.estimated_pipeline_value || 0)) + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-gray-700 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(meta.action) + '</td>'
                     + '</tr>';
             }).join('');
+            updateCrossModuleBulkBar();
+        }
+
+        // Follow-up 3: bulk-close selection state + action.
+        function toggleCrossModuleRowSelection(clusterId, event) {
+            // Prevent the row-level click handler from also firing
+            // (which would open the cluster details modal).
+            if (event && typeof event.stopPropagation === 'function') {
+                event.stopPropagation();
+            }
+            const cid = Number(clusterId);
+            if (crossModuleSelected.has(cid)) {
+                crossModuleSelected.delete(cid);
+            } else {
+                crossModuleSelected.add(cid);
+            }
+            updateCrossModuleBulkBar();
+        }
+
+        function toggleCrossModuleSelectAll(event) {
+            const cb = (event && event.target) || document.getElementById('cmoSelectAll');
+            const checked = !!(cb && cb.checked);
+            // Apply only to currently-visible (post-filter) rows that have a Lead.
+            const visible = (crossModuleClusters || []).filter(c => {
+                if (crossModuleFilter !== 'all' && c.pairing !== crossModuleFilter) return false;
+                return (c.total_leads || 0) > 0;
+            });
+            for (const c of visible) {
+                if (checked) crossModuleSelected.add(c.id);
+                else crossModuleSelected.delete(c.id);
+            }
+            renderCrossModuleTable();
+        }
+
+        function updateCrossModuleBulkBar() {
+            const bar = document.getElementById('cmoBulkActionBar');
+            const cnt = document.getElementById('cmoSelectedCount');
+            const plural = document.getElementById('cmoSelectedPlural');
+            if (!bar || !cnt) return;
+            const n = crossModuleSelected.size;
+            cnt.textContent = String(n);
+            if (plural) plural.textContent = n === 1 ? '' : 's';
+            if (n > 0) bar.classList.remove('hidden');
+            else bar.classList.add('hidden');
+        }
+
+        async function bulkCloseLeadsDryRun() {
+            await runBulkCloseLeads({ dryRun: true });
+        }
+
+        async function bulkCloseLeadsExecute() {
+            const n = crossModuleSelected.size;
+            if (n === 0) return;
+            const ok = confirm(
+                `Close lead records in Zoho for ${n} cluster${n === 1 ? '' : 's'}?\n\n` +
+                `This will set Lead_Status = "Lost Lead" on every Lead in these clusters and mark each cluster Resolved.\n\n` +
+                `Already-Lost / already-Junk leads will be skipped silently.\n\n` +
+                `Cancel and run "Dry run" first if you want to preview the impact.`
+            );
+            if (!ok) return;
+            await runBulkCloseLeads({ dryRun: false });
+        }
+
+        async function runBulkCloseLeads(opts) {
+            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+            if (!adminKey) return;
+            const ids = Array.from(crossModuleSelected);
+            if (ids.length === 0) return;
+            try {
+                const res = await fetch('/api/duplicates/cross-module-overlaps/bulk-close-leads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ cluster_ids: ids, dry_run: !!opts.dryRun }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    alert(data.error || 'Bulk-close failed.');
+                    return;
+                }
+                showCmoBulkResult(data);
+                // On real execute, clear selection + reload so resolved
+                // clusters disappear from the active view.
+                if (!opts.dryRun) {
+                    crossModuleSelected.clear();
+                    loadCrossModule();
+                }
+            } catch (e) {
+                alert('Network error during bulk-close: ' + (e && e.message || e));
+            }
+        }
+
+        function showCmoBulkResult(data) {
+            const modal = document.getElementById('cmoBulkResultModal');
+            const body = document.getElementById('cmoBulkResultBody');
+            const subtitle = document.getElementById('cmoBulkResultSubtitle');
+            if (!modal || !body) return;
+            const dry = !!data.dry_run;
+            if (subtitle) subtitle.textContent = dry
+                ? `Dry run — examined ${data.examined} cluster${data.examined === 1 ? '' : 's'}`
+                : `Real run — examined ${data.examined} cluster${data.examined === 1 ? '' : 's'}`;
+            const summary = `<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-xs">
+                ${[
+                    ['Leads closed', _fn(data.total_leads_closed || 0)],
+                    ['Leads skipped', _fn(data.total_leads_skipped || 0)],
+                    ['Leads failed', _fn(data.total_leads_failed || 0)],
+                    ['Clusters resolved', _fn(data.clusters_resolved || 0)],
+                ].map(([k, v]) => `<div class="bg-gray-50 rounded p-2"><div class="text-gray-500">${escapeHtml(k)}</div><div class="text-lg font-semibold text-gray-900">${escapeHtml(String(v))}</div></div>`).join('')}
+            </div>`;
+            const per = Array.isArray(data.per_cluster) ? data.per_cluster : [];
+            const rows = per.length === 0
+                ? '<div class="text-xs text-gray-400 italic">No per-cluster details returned.</div>'
+                : '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>'
+                    + ['Cluster','Closed','Skipped','Failed','Resolved','Notes'].map(h => `<th class="px-2 py-1 text-start font-medium text-gray-600">${escapeHtml(h)}</th>`).join('')
+                    + '</tr></thead><tbody>'
+                    + per.map(c => {
+                        const errPart = c.errors && c.errors.length > 0
+                            ? '<div class="text-[10px] text-red-600 mt-1">' + escapeHtml(c.errors.map(e => `${e.zoho_lead_id || '—'}: ${e.message}`).join(' · ')) + '</div>'
+                            : '';
+                        return `<tr class="border-t border-gray-100">
+                            <td class="px-2 py-1 font-mono">${escapeHtml(String(c.cluster_id))}</td>
+                            <td class="px-2 py-1">${_fn(c.leads_closed || 0)}</td>
+                            <td class="px-2 py-1">${_fn(c.leads_skipped || 0)}</td>
+                            <td class="px-2 py-1 ${c.leads_failed ? 'text-red-700 font-semibold' : 'text-gray-500'}">${_fn(c.leads_failed || 0)}</td>
+                            <td class="px-2 py-1">${c.cluster_resolved ? '<span class="text-emerald-700 font-medium">Yes</span>' : '<span class="text-gray-400">No</span>'}</td>
+                            <td class="px-2 py-1 text-gray-600">${escapeHtml(c.notes || '')}${errPart}</td>
+                        </tr>`;
+                    }).join('')
+                    + '</tbody></table></div>';
+            body.innerHTML = summary + rows;
+            modal.classList.remove('hidden');
+        }
+
+        function closeCmoBulkResult() {
+            const m = document.getElementById('cmoBulkResultModal');
+            if (m) m.classList.add('hidden');
         }
 
         // R4: fetch + render the duplicate creation-rate trend.

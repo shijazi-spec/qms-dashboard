@@ -3558,6 +3558,216 @@ export async function getCrossModuleOverlaps(opts: {
   };
 }
 
+/**
+ * Follow-up 3 — Bulk-close lead records in cross-module clusters.
+ *
+ * Context: cross-module clusters (R6) have a Lead alongside a Contact /
+ * Account / Deal for the same domain. Zoho doesn't support cross-module
+ * merges, so the recommended action is to CLOSE the lead — the company
+ * is already represented by the canonical Account / Contact / Deal.
+ * Operators were doing this one-by-one in Zoho; this helper does it in
+ * bulk via the Zoho update-record API.
+ *
+ * Per cluster:
+ *   1. Fetch the cluster's lead records (record_type='lead', has zoho_record_id)
+ *   2. For each lead, call Zoho `PUT /Leads/:id` with
+ *      Lead_Status='Lost Lead' + a Description note explaining why.
+ *      Already-Lost / already-Junk leads are skipped silently (idempotent).
+ *   3. If every lead update succeeded, mark the cluster resolved via
+ *      resolveCluster — this also captures a pre-resolve snapshot (R10)
+ *      and logs the action in duplicate_merge_actions.
+ *   4. If any lead update failed, the cluster is NOT marked resolved —
+ *      partial-failure state is reported back so the operator can retry.
+ *
+ * Safety:
+ *   - clusterIds is REQUIRED — callers explicitly enumerate which
+ *     clusters to act on (no "close everything matching this filter").
+ *   - maxClusters hard-clamps the batch size at 25 (default).
+ *   - dryRun=true returns the per-cluster plan without writing.
+ *   - Concurrency 3 — Zoho rate limits are real.
+ */
+export interface BulkCloseLeadResult {
+  cluster_id: number;
+  leads_closed: number;
+  leads_skipped: number;
+  leads_failed: number;
+  cluster_resolved: boolean;
+  errors: Array<{ zoho_lead_id: string; message: string }>;
+  notes: string;
+}
+
+export async function bulkCloseLeadsInClusters(opts: {
+  clusterIds: number[];
+  performedBy: string;
+  dryRun?: boolean;
+  maxClusters?: number;
+}): Promise<{
+  dry_run: boolean;
+  examined: number;
+  total_leads_closed: number;
+  total_leads_skipped: number;
+  total_leads_failed: number;
+  clusters_resolved: number;
+  per_cluster: BulkCloseLeadResult[];
+}> {
+  const dryRun = !!opts.dryRun;
+  const cap = Math.min(25, Math.max(1, opts.maxClusters ?? 25));
+  const ids = Array.isArray(opts.clusterIds)
+    ? opts.clusterIds.slice(0, cap)
+    : [];
+
+  if (ids.length === 0) {
+    return {
+      dry_run: dryRun,
+      examined: 0,
+      total_leads_closed: 0,
+      total_leads_skipped: 0,
+      total_leads_failed: 0,
+      clusters_resolved: 0,
+      per_cluster: [],
+    };
+  }
+
+  const { updateZohoRecord } = await import("./zohoCRM");
+
+  const closeOneLead = async (
+    zohoLeadId: string,
+    clusterId: number,
+    currentStatus: string | null,
+  ): Promise<{ status: "closed" | "skipped" | "failed"; message?: string }> => {
+    // Idempotency: skip leads already in a Lost / Junk terminal state so
+    // re-running the batch doesn't spam Zoho with no-op updates.
+    const lower = (currentStatus ?? "").trim().toLowerCase();
+    if (lower === "lost lead" || lower === "junk lead") {
+      return { status: "skipped", message: `Already ${currentStatus}` };
+    }
+    if (dryRun) return { status: "closed" }; // count as "would-close" in dry run
+    try {
+      await updateZohoRecord("Leads", zohoLeadId, {
+        Lead_Status: "Lost Lead",
+        Description: `Closed by Duplicate Radar bulk-close on cross-module cluster #${clusterId}. The company is represented in another module (Account / Contact / Deal) and a duplicate Lead is no longer needed.`,
+      });
+      return { status: "closed" };
+    } catch (err) {
+      return {
+        status: "failed",
+        message: (err as Error)?.message ?? String(err),
+      };
+    }
+  };
+
+  const perCluster: BulkCloseLeadResult[] = [];
+
+  for (const clusterId of ids) {
+    const leadsR = await pool.query<{
+      id: number;
+      zoho_record_id: string | null;
+      status: string | null;
+    }>(
+      `SELECT id, zoho_record_id, status
+         FROM duplicate_records
+        WHERE cluster_id = $1
+          AND record_type = 'lead'
+          AND zoho_record_id IS NOT NULL
+          AND zoho_record_id <> ''`,
+      [clusterId],
+    );
+
+    const leads = leadsR.rows;
+    if (leads.length === 0) {
+      perCluster.push({
+        cluster_id: clusterId,
+        leads_closed: 0,
+        leads_skipped: 0,
+        leads_failed: 0,
+        cluster_resolved: false,
+        errors: [],
+        notes: "No lead records with zoho_record_id in this cluster",
+      });
+      continue;
+    }
+
+    const concurrency = 3;
+    let closed = 0;
+    let skipped = 0;
+    let failed = 0;
+    const errors: BulkCloseLeadResult["errors"] = [];
+
+    for (let i = 0; i < leads.length; i += concurrency) {
+      const batch = leads.slice(i, i + concurrency);
+      const results = await Promise.all(
+        batch.map((l) => closeOneLead(l.zoho_record_id!, clusterId, l.status)),
+      );
+      for (let j = 0; j < results.length; j++) {
+        const r = results[j]!;
+        const lead = batch[j]!;
+        if (r.status === "closed") closed++;
+        else if (r.status === "skipped") skipped++;
+        else {
+          failed++;
+          errors.push({
+            zoho_lead_id: lead.zoho_record_id ?? "",
+            message: r.message ?? "Unknown error",
+          });
+        }
+      }
+    }
+
+    // Mark cluster resolved only when every lead either closed cleanly
+    // or was already-skipped. A single failure leaves the cluster active
+    // so the operator can investigate / retry without losing visibility.
+    let clusterResolved = false;
+    const allClean = failed === 0;
+    if (allClean && !dryRun) {
+      try {
+        await resolveCluster(
+          clusterId,
+          "resolve",
+          opts.performedBy,
+          undefined,
+          `Bulk-close: closed ${closed} lead${closed === 1 ? "" : "s"} in Zoho (cross-module cluster — company represented in another module)`,
+        );
+        clusterResolved = true;
+      } catch (err) {
+        // resolveCluster failing after the Zoho writes succeeded is a
+        // partial state; surface the error but the leads ARE closed in
+        // Zoho already. Operator can mark the cluster resolved manually.
+        errors.push({
+          zoho_lead_id: "",
+          message: `Cluster mark-resolved failed after Zoho updates: ${(err as Error).message}`,
+        });
+      }
+    }
+
+    perCluster.push({
+      cluster_id: clusterId,
+      leads_closed: closed,
+      leads_skipped: skipped,
+      leads_failed: failed,
+      cluster_resolved: clusterResolved,
+      errors,
+      notes: dryRun
+        ? `Dry run — would close ${closed} lead${closed === 1 ? "" : "s"} (${skipped} already-closed skipped)`
+        : `Closed ${closed} lead${closed === 1 ? "" : "s"}, skipped ${skipped}, failed ${failed}`,
+    });
+  }
+
+  const totalClosed = perCluster.reduce((a, c) => a + c.leads_closed, 0);
+  const totalSkipped = perCluster.reduce((a, c) => a + c.leads_skipped, 0);
+  const totalFailed = perCluster.reduce((a, c) => a + c.leads_failed, 0);
+  const clustersResolved = perCluster.filter((c) => c.cluster_resolved).length;
+
+  return {
+    dry_run: dryRun,
+    examined: ids.length,
+    total_leads_closed: totalClosed,
+    total_leads_skipped: totalSkipped,
+    total_leads_failed: totalFailed,
+    clusters_resolved: clustersResolved,
+    per_cluster: perCluster,
+  };
+}
+
 export async function getSyncState(
   module: string,
 ): Promise<ZohoSyncState | null> {
