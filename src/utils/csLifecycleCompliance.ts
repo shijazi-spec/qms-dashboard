@@ -112,6 +112,25 @@ function parseDate(d: string | Date | null | undefined): Date | null {
   return isNaN(p.getTime()) ? null : p;
 }
 
+const COMPANY_DOMAIN_DEFAULT_KEYS = new Set([
+  "Company_Domain",
+  "company_domain",
+  "CompanyDomain",
+  "Company Domain",
+  "Domain",
+  "domain",
+]);
+
+function collectDomainLikeKeys(rawData: unknown): string[] {
+  if (!rawData || typeof rawData !== "object") return [];
+  const out: string[] = [];
+  for (const k of Object.keys(rawData as Record<string, unknown>)) {
+    if (COMPANY_DOMAIN_DEFAULT_KEYS.has(k)) continue;
+    if (/domain/i.test(k)) out.push(k);
+  }
+  return out.slice(0, 5);
+}
+
 function daysBetween(a: Date, b: Date): number {
   return Math.floor((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
 }
@@ -160,8 +179,16 @@ export function evaluateCsLifecycle(
 
   const modified = parseDate(input.modified_date);
   const churn = parseDate(fields.churn_date ?? null);
+  const renewal = parseDate(fields.renewal_date ?? null);
   const daysSinceModified = modified ? daysBetween(modified, now) : null;
   const violations: CsViolation[] = [];
+
+  // Re-engagement signal: a Renewal Date set AFTER the Churn Date means the
+  // customer churned and then came back. The Churn Date becomes historical
+  // and should not trigger phase_churn_desync — the deal is legitimately
+  // back in an active phase (typically Adoption).
+  const renewedAfterChurn =
+    churn !== null && renewal !== null && renewal.getTime() > churn.getTime();
 
   // 1. Onboarding overdue (uses modified_date as proxy for phase entry time)
   if (phase.toLowerCase() === "onboarding" && daysSinceModified !== null) {
@@ -180,7 +207,8 @@ export function evaluateCsLifecycle(
   // 2. Phase / Churn-Date desync
   if (
     churn &&
-    phase.toLowerCase() !== cfg.terminationPhase.toLowerCase()
+    phase.toLowerCase() !== cfg.terminationPhase.toLowerCase() &&
+    !renewedAfterChurn
   ) {
     violations.push({
       code: "phase_churn_desync",
@@ -300,10 +328,19 @@ export function evaluateCsLifecycle(
   if (isActiveCsPhase) {
     const cd = (fields.company_domain ?? "").trim();
     if (!cd) {
+      // Diagnostic: if raw_data contains domain-like keys none of the extractor's
+      // variants matched, surface them so an operator can pin the correct Zoho
+      // API name via DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN. Without this hint,
+      // a populated-in-CRM-but-missing-in-radar bug is invisible.
+      const domainKeys = collectDomainLikeKeys(input.raw_data);
+      const hint =
+        domainKeys.length > 0
+          ? ` (raw_data contains domain-like keys not matched by the extractor: ${domainKeys.join(", ")}; set DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN to the correct Zoho API name)`
+          : "";
       violations.push({
         code: "missing_company_domain",
         severity: "warning",
-        message: `Active CS deal in phase "${phase}" has no Company_Domain populated. Without it, Marketing/Sales preflight cannot recognise this as an existing customer.`,
+        message: `Active CS deal in phase "${phase}" has no Company_Domain populated. Without it, Marketing/Sales preflight cannot recognise this as an existing customer.${hint}`,
         days_in_phase: daysSinceModified,
         current_phase: phase,
         suggested_action: SUGGESTED_ACTIONS.missing_company_domain,

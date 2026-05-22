@@ -2143,8 +2143,16 @@ export async function findOrCreateClusterByCompany(
         return candidate;
       }
     } catch {
+      const fallbackLimit = Math.max(
+        1,
+        Number.parseInt(
+          process.env.DUPLICATE_RADAR_FALLBACK_SCAN_LIMIT ?? "2000",
+          10,
+        ) || 2000,
+      );
       const recentClusters = await pool.query(
-        "SELECT * FROM duplicate_clusters ORDER BY updated_at DESC LIMIT 2000",
+        "SELECT * FROM duplicate_clusters ORDER BY updated_at DESC LIMIT $1",
+        [fallbackLimit],
       );
       for (const cluster of recentClusters.rows) {
         const clusterNormalized = normalizeCompanyName(
