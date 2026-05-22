@@ -80,6 +80,7 @@ import {
   upsertTask,
   getTasksForRecords,
   getTaskCountForCluster,
+  pool as sharedDuplicateRadarPool,
 } from "../../utils/duplicateRadarDatabase";
 
 import type { DuplicateFilters } from "../../utils/duplicateRadarDatabase";
@@ -1400,9 +1401,6 @@ export const duplicateRadarRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
-        let pool: InstanceType<
-          (typeof import("pg"))["default"]["Pool"]
-        > | null = null;
         try {
           const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
@@ -1427,11 +1425,13 @@ export const duplicateRadarRoutes = [
             whereClause += ` AND dr.created_date <= $${filterParams.length}`;
           }
 
-          const pg = await import("pg");
-          pool = new pg.default.Pool({
-            connectionString: process.env.DATABASE_URL,
-          });
-          const r = await pool.query(
+          // Use the module-level shared pool. Creating a fresh pg.Pool per
+          // request was opening TCP connections that never recycled; under
+          // concurrent owner-export traffic (operator clicks several rows
+          // in a row) the host's connection limit was being hit and the
+          // streams stalled, which the client's abort logic surfaced as
+          // "Cancelled" in the download history.
+          const r = await sharedDuplicateRadarPool.query(
             `SELECT COUNT(*)::int AS total FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id ${whereClause}`,
             filterParams,
           );
@@ -1443,8 +1443,6 @@ export const duplicateRadarRoutes = [
         } catch (error: any) {
           logger.error("Error estimating duplicates CSV export:", error);
           return c.json({ error: "Failed to estimate export size" }, 500);
-        } finally {
-          if (pool) await pool.end();
         }
       };
     },
@@ -1454,9 +1452,6 @@ export const duplicateRadarRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
-        let pool: InstanceType<
-          (typeof import("pg"))["default"]["Pool"]
-        > | null = null;
         try {
           const admin = await requireDuplicateRadarAccess(c);
           if (!admin) return unauthorizedResponse(c);
@@ -1477,11 +1472,7 @@ export const duplicateRadarRoutes = [
             whereClause += ` AND dr.created_date <= $${filterParams.length}`;
           }
 
-          const pg = await import("pg");
-          pool = new pg.default.Pool({
-            connectionString: process.env.DATABASE_URL,
-          });
-          const r = await pool.query(
+          const r = await sharedDuplicateRadarPool.query(
             `SELECT COUNT(*)::int AS total FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id ${whereClause}`,
             filterParams,
           );
@@ -1504,8 +1495,6 @@ export const duplicateRadarRoutes = [
         } catch (error: any) {
           logger.error("Error estimating duplicates XLSX export:", error);
           return c.json({ error: "Failed to estimate export size" }, 500);
-        } finally {
-          if (pool) await pool.end();
         }
       };
     },
@@ -1526,7 +1515,6 @@ export const duplicateRadarRoutes = [
           const startDate = url.searchParams.get("start_date") || undefined;
           const endDate = url.searchParams.get("end_date") || undefined;
 
-          const pg = await import("pg");
           const { escapeCSVValue } = await import("../../utils/inputSanitizer");
           const { streamCsv, cursorQuery, stageStreamingExportFromHono } =
             await import("../../utils/excelExport");
@@ -1547,90 +1535,82 @@ export const duplicateRadarRoutes = [
             whereClause += ` AND dr.created_date <= $${filterParams.length}`;
           }
 
-          let drCsvPool: InstanceType<(typeof pg.default)["Pool"]> | null =
-            null;
-          let streaming = false;
-          try {
-            drCsvPool = new pg.default.Pool({
-              connectionString: process.env.DATABASE_URL,
-            });
+          // Use the module-level shared pool. The cursor stream releases
+          // its own client when complete or on error, so we don't manage
+          // pool lifetime here. Fresh-pool-per-request was causing
+          // connection exhaustion under concurrent owner-export traffic.
+          const drCsvPool = sharedDuplicateRadarPool;
 
-            // Count query for the export log (fast aggregate, not a full materialisation)
-            const countRes = await drCsvPool.query(
-              `SELECT COUNT(*)::int AS total FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id ${whereClause}`,
-              filterParams,
-            );
-            const totalCount: number = countRes.rows[0]?.total ?? 0;
+          // Count query for the export log (fast aggregate, not a full materialisation)
+          const countRes = await drCsvPool.query(
+            `SELECT COUNT(*)::int AS total FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id ${whereClause}`,
+            filterParams,
+          );
+          const totalCount: number = countRes.rows[0]?.total ?? 0;
 
-            await createExportLog({
-              export_type: exportType as any,
-              filter_criteria: { owner, startDate, endDate },
-              total_records_exported: totalCount,
-              file_format: "csv",
-              exported_by: "User",
-            });
+          await createExportLog({
+            export_type: exportType as any,
+            filter_criteria: { owner, startDate, endDate },
+            total_records_exported: totalCount,
+            file_format: "csv",
+            exported_by: "User",
+          });
 
-            const csvHeaders = [
-              "Record ID",
-              "Type",
-              "Name",
-              "Company",
-              "Domain",
-              "Owner",
-              "Status/Stage",
-              "Value",
-              "Source",
-              "Created Date",
-              "Confidence",
-              "Recommendation",
-            ];
-            const source = cursorQuery(
-              drCsvPool!,
-              `SELECT dr.zoho_record_id, dr.id, dr.record_type, dr.record_name, dr.company_name, dr.domain,
-                      dr.owner_name, dr.status, dr.stage, dr.deal_value, dr.source, dr.created_date,
-                      dr.confidence_score, dr.ai_recommendation
-               FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-               ${whereClause}
-               ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC`,
-              filterParams,
-            );
-            const rows = (async function* () {
-              try {
-                for await (const r of source) {
-                  const rec = r as Record<string, unknown>;
-                  yield [
-                    rec["zoho_record_id"] ?? rec["id"],
-                    rec["record_type"],
-                    rec["record_name"],
-                    rec["company_name"],
-                    rec["domain"],
-                    rec["owner_name"],
-                    rec["status"] ?? rec["stage"],
-                    rec["deal_value"] ?? "",
-                    rec["source"],
-                    rec["created_date"],
-                    rec["confidence_score"] == null
-                      ? ""
-                      : `${rec["confidence_score"]}%`,
-                    rec["ai_recommendation"] ?? "Review manually",
-                  ].map((v) => escapeCSVValue(String(v ?? "")));
-                }
-              } finally {
-                drCsvPool && (await drCsvPool.end());
-              }
-            })();
-            streaming = true;
-            return await stageStreamingExportFromHono(c, () =>
-              streamCsv(
-                `duplicate_radar_export_${Date.now()}.csv`,
-                csvHeaders,
-                rows,
-              ),
-            );
-          } catch (innerErr) {
-            if (!streaming && drCsvPool) await drCsvPool.end();
-            throw innerErr;
-          }
+          const csvHeaders = [
+            "Record ID",
+            "Type",
+            "Name",
+            "Company",
+            "Domain",
+            "Owner",
+            "Status/Stage",
+            "Value",
+            "Source",
+            "Created Date",
+            "Confidence",
+            "Recommendation",
+          ];
+          const source = cursorQuery(
+            drCsvPool,
+            `SELECT dr.zoho_record_id, dr.id, dr.record_type, dr.record_name, dr.company_name, dr.domain,
+                    dr.owner_name, dr.status, dr.stage, dr.deal_value, dr.source, dr.created_date,
+                    dr.confidence_score, dr.ai_recommendation
+             FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+             ${whereClause}
+             ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC`,
+            filterParams,
+          );
+          const rows = (async function* () {
+            for await (const r of source) {
+              const rec = r as Record<string, unknown>;
+              yield [
+                rec["zoho_record_id"] ?? rec["id"],
+                rec["record_type"],
+                rec["record_name"],
+                rec["company_name"],
+                rec["domain"],
+                rec["owner_name"],
+                rec["status"] ?? rec["stage"],
+                rec["deal_value"] ?? "",
+                rec["source"],
+                rec["created_date"],
+                rec["confidence_score"] == null
+                  ? ""
+                  : `${rec["confidence_score"]}%`,
+                rec["ai_recommendation"] ?? "Review manually",
+              ].map((v) => escapeCSVValue(String(v ?? "")));
+            }
+            // No pool.end() — shared pool is reused across requests.
+            // cursorQuery() releases the per-stream client in its own
+            // finally block.
+          })();
+          return await stageStreamingExportFromHono(c, () =>
+            streamCsv(
+              `duplicate_radar_export_${Date.now()}.csv`,
+              csvHeaders,
+              rows,
+            ),
+          );
         } catch (error: any) {
           logger.error("Error exporting data:", error);
           return c.json({ error: "An internal error occurred" }, 500);
@@ -1654,7 +1634,6 @@ export const duplicateRadarRoutes = [
 
           const { streamXlsx, cursorQuery, stageStreamingExportFromHono } =
             await import("../../utils/excelExport");
-          const pg2 = await import("pg");
 
           // Build WHERE clause for date filters (no status filter — XLSX exports all active)
           const xlsxFilterParams: unknown[] = [];
@@ -1668,16 +1647,11 @@ export const duplicateRadarRoutes = [
             xlsxWhere += ` AND dr.created_date <= $${xlsxFilterParams.length}`;
           }
 
-          let drXlsxPool: InstanceType<(typeof pg2.default)["Pool"]> | null =
-            null;
-          let streaming = false;
-          try {
-            drXlsxPool = new pg2.default.Pool({
-              connectionString: process.env.DATABASE_URL,
-            });
+          // Shared module-level pool (see /export rationale).
+          const drXlsxPool = sharedDuplicateRadarPool;
 
-            // Aggregate summary counts and enhanced summary — small results
-            const [typeCntRes, summary] = await Promise.all([
+          // Aggregate summary counts and enhanced summary — small results
+          const [typeCntRes, summary] = await Promise.all([
               drXlsxPool.query(
                 `SELECT COALESCE(dr.record_type, 'other') AS rtype, COUNT(*)::int AS cnt
                  FROM duplicate_records dr JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
@@ -1744,7 +1718,7 @@ export const duplicateRadarRoutes = [
               ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC`;
 
             const makeTypeRows = (rtype: string) => {
-              const src = cursorQuery(drXlsxPool!, recSql, [
+              const src = cursorQuery(drXlsxPool, recSql, [
                 ...xlsxFilterParams,
                 rtype,
               ]);
@@ -1821,24 +1795,14 @@ export const duplicateRadarRoutes = [
               },
             ];
 
-            // Accounts is the last type sheet — used as the pool-close anchor when !includeRaw
-            const accountsSrc = cursorQuery(drXlsxPool!, recSql, [
+            const accountsSrc = cursorQuery(drXlsxPool, recSql, [
               ...xlsxFilterParams,
               "account",
             ]);
-            const accountsRows = includeRaw
-              ? (async function* () {
-                  for await (const r of accountsSrc)
-                    yield r as Record<string, unknown>;
-                })()
-              : (async function* () {
-                  try {
-                    for await (const r of accountsSrc)
-                      yield r as Record<string, unknown>;
-                  } finally {
-                    drXlsxPool && (await drXlsxPool.end());
-                  }
-                })();
+            const accountsRows = (async function* () {
+              for await (const r of accountsSrc)
+                yield r as Record<string, unknown>;
+            })();
             sheets.push({
               name: "Accounts",
               columns: recordColumns,
@@ -1847,7 +1811,7 @@ export const duplicateRadarRoutes = [
 
             if (includeRaw) {
               const allSrc = cursorQuery(
-                drXlsxPool!,
+                drXlsxPool,
                 `SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.company_name, dr.email, dr.domain,
                         dr.phone, dr.owner_name, COALESCE(dr.status, dr.stage, '') AS status_or_stage,
                         dr.deal_value, dr.source, dr.confidence_score, dr.ai_recommendation,
@@ -1857,12 +1821,8 @@ export const duplicateRadarRoutes = [
                 xlsxFilterParams,
               );
               const allRows = (async function* () {
-                try {
-                  for await (const r of allSrc)
-                    yield r as Record<string, unknown>;
-                } finally {
-                  drXlsxPool && (await drXlsxPool.end());
-                }
+                for await (const r of allSrc)
+                  yield r as Record<string, unknown>;
               })();
               sheets.push({
                 name: "All Records",
@@ -1871,16 +1831,11 @@ export const duplicateRadarRoutes = [
               });
             }
 
-            streaming = true;
-            return await stageStreamingExportFromHono(c, async () =>
-              streamXlsx(sheets, `duplicate_radar_${Date.now()}.xlsx`, {
-                title: "Duplicate Radar Export",
-              }),
-            );
-          } catch (innerErr) {
-            if (!streaming && drXlsxPool) await drXlsxPool.end();
-            throw innerErr;
-          }
+          return await stageStreamingExportFromHono(c, async () =>
+            streamXlsx(sheets, `duplicate_radar_${Date.now()}.xlsx`, {
+              title: "Duplicate Radar Export",
+            }),
+          );
         } catch (error: any) {
           logger.error("Error exporting duplicates XLSX:", error);
           return c.json({ error: "An internal error occurred" }, 500);
