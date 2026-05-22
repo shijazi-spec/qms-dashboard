@@ -57,9 +57,15 @@
         });
     </script>
 
-    <!-- D1: Non-blocking animated progress bar -->
-    <div id="scanProgressBar" class="hidden">
-        <div class="bg-white border-b shadow-sm px-4 py-2">
+    <!-- D1 (R7 quick-wins): sticky animated scan-progress bar.
+         Was inline at the top of the document — disappeared as soon as the
+         operator scrolled the table. Sticky positioning keeps it pinned
+         while a scan is in flight so the operator never wonders "is it
+         still running?". sticky/top-0/z-50 keeps it above tabs + modals
+         that don't use the modal z-stack. Border-bottom + shadow-md
+         distinguish it from page chrome. -->
+    <div id="scanProgressBar" class="hidden sticky top-0 z-40">
+        <div class="bg-white border-b border-blue-200 shadow-md px-4 py-2">
             <div class="max-w-7xl mx-auto flex items-center gap-4">
                 <div class="flex-1">
                     <div class="flex items-center justify-between mb-1">
@@ -978,7 +984,14 @@
         let sourceChart = null;
         let confidenceChart = null;
         let clusterPage = 0;
-        let scanPollInterval = null;
+        // R7 (quick-wins): SSE replaces 2s polling for scan progress.
+        // scanProgressSse holds the active EventSource; scanRunning tracks
+        // whether we're tracking a scan so the page can resume the UI on
+        // refresh-mid-scan via attachScanProgressIfRunning().
+        let scanProgressSse = null;
+        let scanRunning = false;
+        let scanStartedAt = null;
+        let scanElapsedTicker = null;
 
         function getDateRange() {
             const from = document.getElementById('filterDateFrom').value;
@@ -1854,43 +1867,165 @@
             }
         }
 
+        // R7: real-time scan progress via SSE. Function name kept ("startScanPolling")
+        // so existing callers (scanZohoCRM, rebuildClusters, syncNowZohoCRM) don't
+        // need to change. Internally it now opens an EventSource on
+        // /api/duplicates/scan-stream, which the server already emits to.
+        //
+        // Events handled:
+        //   connected   — initial state snapshot when EventSource attaches
+        //   progress    — { percentage, message } during scan
+        //   module      — { module, status, count? } per-module updates
+        //   scan        — { status: 'started' | 'completed' | 'failed', timestamp }
+        //
+        // The elapsed-time ticker runs locally at 1 Hz so the seconds counter
+        // ticks smoothly between server events instead of jumping every 2s.
         function startScanPolling() {
-            if (scanPollInterval) clearInterval(scanPollInterval);
-            scanPollInterval = setInterval(async () => {
+            closeScanProgressSse();
+            scanRunning = true;
+            scanStartedAt = Date.now();
+            startElapsedTicker();
+
+            const updateProgressFromSnapshot = (data) => {
+                if (!data || typeof data !== 'object') return;
+                if (typeof data.progress === 'string') {
+                    document.getElementById('scanProgressText').textContent = data.progress;
+                }
+                if (typeof data.percentage === 'number') {
+                    document.getElementById('scanPct').textContent = _fn(data.percentage) + '%';
+                    document.getElementById('scanProgressFill').style.width = data.percentage + '%';
+                }
+                if (typeof data.elapsedMs === 'number' && data.elapsedMs > 0) {
+                    // Server-reported elapsed beats local ticker on refresh-mid-scan
+                    // (we may have just attached SSE and don't know scanStartedAt).
+                    scanStartedAt = Date.now() - data.elapsedMs;
+                    document.getElementById('scanElapsed').textContent =
+                        _fn(Math.round(data.elapsedMs / 1000)) + 's';
+                }
+                if (data.moduleStatuses) {
+                    renderModuleChips(data.moduleStatuses, data.recordCounts || {});
+                }
+            };
+
+            const updateModule = (moduleName, status, count) => {
+                const chips = document.getElementById('moduleChips');
+                if (!chips) return;
+                const existing = chips.querySelector('[data-module="' + escAttr(moduleName) + '"]');
+                const label = escapeHtml(moduleName) + ': ' + escapeHtml(status) +
+                    (typeof count === 'number' ? ' (' + _fn(count) + ')' : '');
+                const html = '<span class="module-chip module-' + escAttr(status) +
+                    '" data-module="' + escAttr(moduleName) + '">' + label + '</span>';
+                if (existing) {
+                    existing.outerHTML = html;
+                } else {
+                    chips.insertAdjacentHTML('beforeend', html);
+                }
+            };
+
+            const finishScan = (status) => {
+                closeScanProgressSse();
+                stopElapsedTicker();
+                scanRunning = false;
+                setTimeout(() => {
+                    document.getElementById('scanProgressBar').classList.add('hidden');
+                }, 3000);
+                const btn = document.getElementById('scanZohoBtn');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.scan_zoho_btn'));
+                }
+                if (status === 'completed') refreshData();
+            };
+
+            const sse = new EventSource('/api/duplicates/scan-stream');
+            scanProgressSse = sse;
+
+            sse.addEventListener('connected', (e) => {
+                try { updateProgressFromSnapshot(JSON.parse(e.data)); } catch {}
+            });
+            sse.addEventListener('progress', (e) => {
                 try {
-                    const res = await fetch('/api/duplicates/scan-status');
-                    const data = await res.json();
-
-                    document.getElementById('scanProgressText').textContent = data.progress || WalaPlusI18n.t('dyn.duplicates.processing');
-                    document.getElementById('scanPct').textContent = _fn(data.percentage || 0) + '%';
-                    document.getElementById('scanProgressFill').style.width = (data.percentage || 0) + '%';
-
-                    if (data.elapsedMs) {
-                        document.getElementById('scanElapsed').textContent = _fn(Math.round(data.elapsedMs / 1000)) + 's';
+                    const d = JSON.parse(e.data);
+                    if (typeof d.percentage === 'number') {
+                        document.getElementById('scanPct').textContent = _fn(d.percentage) + '%';
+                        document.getElementById('scanProgressFill').style.width = d.percentage + '%';
                     }
-
-                    // Module chips
-                    const modules = data.moduleStatuses || {};
-                    document.getElementById('moduleChips').innerHTML = Object.entries(modules).map(([m, s]) =>
-                        `<span class="module-chip module-${s}">${escapeHtml(m)}: ${escapeHtml(s)}${data.recordCounts?.[m] ? ' ('+_fn(data.recordCounts[m])+')' : ''}</span>`
-                    ).join('');
-
-                    if (data.status === 'completed' || data.status === 'failed') {
-                        clearInterval(scanPollInterval);
-                        scanPollInterval = null;
-
-                        setTimeout(() => {
-                            document.getElementById('scanProgressBar').classList.add('hidden');
-                        }, 3000);
-
-                        const btn = document.getElementById('scanZohoBtn');
-                        btn.disabled = false;
-                        btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.scan_zoho_btn'));
-
-                        if (data.status === 'completed') refreshData();
+                    if (typeof d.message === 'string') {
+                        document.getElementById('scanProgressText').textContent = d.message;
                     }
-                } catch { }
-            }, 2000);
+                } catch {}
+            });
+            sse.addEventListener('module', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (d && d.module) updateModule(d.module, d.status, d.count);
+                } catch {}
+            });
+            sse.addEventListener('scan', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (d && (d.status === 'completed' || d.status === 'failed')) {
+                        finishScan(d.status);
+                    }
+                } catch {}
+            });
+            sse.onerror = () => {
+                // Browser will auto-reconnect on transient errors; only fall
+                // back to a one-shot status poll if the stream stays down
+                // long enough that we suspect the server actually finished.
+                fetch('/api/duplicates/scan-status').then(r => r.json()).then(d => {
+                    if (d && (d.status === 'completed' || d.status === 'failed')) {
+                        finishScan(d.status);
+                    }
+                }).catch(() => {});
+            };
+        }
+
+        function renderModuleChips(modules, recordCounts) {
+            const chips = document.getElementById('moduleChips');
+            if (!chips) return;
+            chips.innerHTML = Object.entries(modules || {}).map(([m, s]) =>
+                `<span class="module-chip module-${escAttr(s)}" data-module="${escAttr(m)}">${escapeHtml(m)}: ${escapeHtml(s)}${recordCounts?.[m] ? ' (' + _fn(recordCounts[m]) + ')' : ''}</span>`
+            ).join('');
+        }
+
+        function closeScanProgressSse() {
+            if (scanProgressSse) {
+                try { scanProgressSse.close(); } catch {}
+                scanProgressSse = null;
+            }
+        }
+
+        function startElapsedTicker() {
+            stopElapsedTicker();
+            scanElapsedTicker = setInterval(() => {
+                if (!scanRunning || !scanStartedAt) return;
+                const secs = Math.round((Date.now() - scanStartedAt) / 1000);
+                const el = document.getElementById('scanElapsed');
+                if (el) el.textContent = _fn(secs) + 's';
+            }, 1000);
+        }
+
+        function stopElapsedTicker() {
+            if (scanElapsedTicker) {
+                clearInterval(scanElapsedTicker);
+                scanElapsedTicker = null;
+            }
+        }
+
+        // R7: if the page is loaded mid-scan (operator refreshed, switched
+        // tabs and came back, etc.) silently attach the SSE stream so the
+        // progress bar resumes instead of leaving the operator wondering
+        // whether a scan is still running.
+        async function attachScanProgressIfRunning() {
+            try {
+                const res = await fetch('/api/duplicates/scan-status');
+                const d = await res.json();
+                if (d && d.status === 'scanning') {
+                    document.getElementById('scanProgressBar')?.classList.remove('hidden');
+                    startScanPolling();
+                }
+            } catch {}
         }
 
         function exportDataXLSX(event) {
@@ -3115,7 +3250,15 @@
             checkScanStatus();
             loadSyncStatus();
             setInterval(loadSyncStatus, 60000);
+            // R7: if the operator landed mid-scan (refreshed the tab while a
+            // scan was in flight), attach SSE silently so the sticky progress
+            // bar resumes instead of leaving them guessing.
+            attachScanProgressIfRunning();
         });
+
+        // R7: tear down the SSE connection when the tab navigates away,
+        // so we don't leak EventSource clients on the server.
+        window.addEventListener('beforeunload', closeScanProgressSse);
     </script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
