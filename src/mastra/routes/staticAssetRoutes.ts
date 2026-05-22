@@ -89,6 +89,22 @@ export const staticAssetRoutes = [
       };
     },
   },
+  // Favicon — green-shield SVG matching the login-page badge in the
+  // WalaPlus brand emerald. Serves both /favicon.svg (modern browsers,
+  // referenced from each page head) and /favicon.ico (safety net for
+  // browsers that probe the legacy path before reading the head tags).
+  {
+    path: "/favicon.svg",
+    method: "GET" as const,
+    createHandler: async () =>
+      serveStaticText("favicon.svg", "image/svg+xml"),
+  },
+  {
+    path: "/favicon.ico",
+    method: "GET" as const,
+    createHandler: async () =>
+      serveStaticText("favicon.svg", "image/svg+xml"),
+  },
   {
     path: "/js/navigation.js",
     method: "GET" as const,
