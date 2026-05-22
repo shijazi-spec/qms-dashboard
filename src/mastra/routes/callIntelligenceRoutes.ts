@@ -744,14 +744,61 @@ Respond with JSON only:
             return c.json({ error: "Invalid call id" }, 400);
           }
 
-          const { getCallRecordById } = await import(
+          const { getCallRecordById, getCallRecordAudioBlob } = await import(
             "../../utils/callIntelligenceDb"
           );
           const record = await getCallRecordById(callId);
           if (!record) return c.json({ error: "Call not found" }, 404);
 
+          // DB-first fallback: when the FS audio file is missing (typical
+          // after a Replit redeploy wipes uploads/) OR was never written
+          // (the bulk-upload path until this PR), stream the bytes
+          // straight from the audio_blob column. Range support preserved.
+          async function serveFromBlob(): Promise<Response | null> {
+            const blob = await getCallRecordAudioBlob(callId);
+            if (!blob) return null;
+            const totalSize = blob.size;
+            const rangeHdr = c.req.header("range") || c.req.header("Range");
+            if (rangeHdr) {
+              const m = /bytes=(\d*)-(\d*)/.exec(String(rangeHdr));
+              if (m) {
+                const start = m[1] ? parseInt(m[1], 10) : 0;
+                const end = m[2] ? parseInt(m[2], 10) : totalSize - 1;
+                if (
+                  Number.isFinite(start) &&
+                  Number.isFinite(end) &&
+                  start >= 0 && end < totalSize && start <= end
+                ) {
+                  const chunk = blob.buffer.slice(start, end + 1);
+                  return new Response(chunk, {
+                    status: 206,
+                    headers: {
+                      "Content-Type": blob.mime,
+                      "Content-Length": String(chunk.length),
+                      "Content-Range": `bytes ${start}-${end}/${totalSize}`,
+                      "Accept-Ranges": "bytes",
+                      "Cache-Control": "private, max-age=3600",
+                    },
+                  });
+                }
+              }
+            }
+            return new Response(blob.buffer, {
+              status: 200,
+              headers: {
+                "Content-Type": blob.mime,
+                "Content-Length": String(totalSize),
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "private, max-age=3600",
+              },
+            });
+          }
+
           const audioFilePath = (record as any).audio_file_path;
           if (!audioFilePath) {
+            // No FS path on file — go straight to DB blob.
+            const blobRes = await serveFromBlob();
+            if (blobRes) return blobRes;
             return c.json(
               { error: "This call has no audio file on the server" },
               404,
@@ -769,8 +816,11 @@ Respond with JSON only:
             return c.json({ error: "Invalid audio path" }, 400);
           }
           if (!fs.default.existsSync(absPath)) {
+            // FS file gone (redeploy wiped uploads/) → fall back to blob.
+            const blobRes = await serveFromBlob();
+            if (blobRes) return blobRes;
             return c.json(
-              { error: "Audio file referenced in DB no longer exists" },
+              { error: "Audio file referenced in DB no longer exists and no blob copy is stored" },
               404,
             );
           }
@@ -1228,10 +1278,28 @@ Respond with JSON only:
           // callIntelligenceDb.updateCallRecordAudioPath so all call_records
           // writes live in one module (Task #746).
           if (audioFilePath && callRecord.id) {
-            const { updateCallRecordAudioPath } = await import(
-              "../../utils/callIntelligenceDb"
-            );
+            const { updateCallRecordAudioPath, setCallRecordAudioBlob } =
+              await import("../../utils/callIntelligenceDb");
             await updateCallRecordAudioPath(callRecord.id, audioFilePath);
+            // ALSO persist the bytes to Postgres so the recording survives
+            // a Replit redeploy that wipes the local uploads/ directory.
+            // Best-effort — if the blob write fails we still have the FS
+            // copy for this deploy and the row stays usable.
+            try {
+              const fs2 = await import("fs");
+              const buf = fs2.default.readFileSync(audioFilePath);
+              const mime = (file?.type as string) || "audio/wav";
+              await setCallRecordAudioBlob(callRecord.id, buf, mime);
+              logger?.info("📦 [API] Audio blob persisted to DB", {
+                id: callRecord.id,
+                size: buf.length,
+              });
+            } catch (blobErr: any) {
+              logger?.warn(
+                "[API] Audio blob persist failed (FS copy still present):",
+                { id: callRecord.id, error: blobErr?.message || String(blobErr) },
+              );
+            }
           }
 
           logger?.info("✅ [API] Manual call record created", {
@@ -1373,6 +1441,33 @@ Respond with JSON only:
           const callId = callRecord.id!;
           logger?.info("✅ [API] Call record created", { id: callId });
 
+          // Persist audio bytes to Postgres so the recording survives a
+          // Replit redeploy (the bulk upload path historically never wrote
+          // to the FS — only transcribed and discarded the bytes, so the
+          // audio was already gone after the upload finished). Best-effort:
+          // a blob persist failure doesn't block analysis.
+          const audioArrayBuffer = await file.arrayBuffer();
+          const audioBuffer = Buffer.from(audioArrayBuffer);
+          try {
+            const { setCallRecordAudioBlob } = await import(
+              "../../utils/callIntelligenceDb"
+            );
+            await setCallRecordAudioBlob(
+              callId,
+              audioBuffer,
+              file.type || "audio/wav",
+            );
+            logger?.info("📦 [API] Audio blob persisted to DB", {
+              id: callId,
+              size: audioBuffer.length,
+            });
+          } catch (blobErr: any) {
+            logger?.warn("[API] Bulk audio blob persist failed:", {
+              id: callId,
+              error: blobErr?.message || String(blobErr),
+            });
+          }
+
           let analysisStatus = "uploaded";
 
           if (autoAnalyze) {
@@ -1390,8 +1485,9 @@ Respond with JSON only:
                 "🎙️ [API] Starting audio transcription (Arabic supported)",
               );
 
-              const arrayBuffer = await file.arrayBuffer();
-              const audioFile = new File([arrayBuffer], file.name, {
+              // Reuse the buffer we already pulled above for blob persist
+              // so we don't re-read the file stream a second time.
+              const audioFile = new File([audioBuffer], file.name, {
                 type: file.type,
               });
 
@@ -1961,16 +2057,41 @@ ${transcriptText}
               const path = await import("path");
               const { createOpenAI } = await import("@ai-sdk/openai");
 
+              // Audio source resolution: prefer the FS file (cheaper, no DB
+              // round-trip), fall back to the audio_blob column when the
+              // FS file is missing because of a Replit redeploy that wiped
+              // uploads/. Without this fallback, re-evaluating after a
+              // redeploy would always 404.
+              let audioBuffer: Buffer | null = null;
+              let audioMime = "audio/wav";
               const audioPath = path.default.resolve(audioFilePath);
-              if (!fs.default.existsSync(audioPath)) {
+              if (fs.default.existsSync(audioPath)) {
+                audioBuffer = fs.default.readFileSync(audioPath);
+              } else {
+                const { getCallRecordAudioBlob } = await import(
+                  "../../utils/callIntelligenceDb"
+                );
+                const blob = await getCallRecordAudioBlob(callId);
+                if (blob) {
+                  audioBuffer = blob.buffer;
+                  audioMime = blob.mime || audioMime;
+                  logger?.info(
+                    "📦 [API] Audio loaded from DB blob (FS copy missing)",
+                    { callId, size: audioBuffer.length },
+                  );
+                }
+              }
+              if (!audioBuffer) {
                 return c.json(
-                  { success: false, error: "Audio file not found on server" },
+                  {
+                    success: false,
+                    error:
+                      "Audio file not found on server and no blob copy stored",
+                  },
                   404,
                 );
               }
-
-              const audioBuffer = fs.default.readFileSync(audioPath);
-              const audioBlob = new Blob([audioBuffer], { type: "audio/wav" });
+              const audioBlob = new Blob([audioBuffer], { type: audioMime });
 
               const formData = new FormData();
               formData.append("file", audioBlob, "audio.wav");
