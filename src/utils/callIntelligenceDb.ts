@@ -1865,6 +1865,79 @@ export async function updateCallRecordAudioPath(
   );
 }
 
+// Audio persistence across redeploys.
+// Replit (and most container hosts) wipe the local filesystem on each
+// redeploy — `uploads/calls/*.wav` files are gone, leaving call_records
+// rows pointing at paths that no longer exist. Storing the audio bytes
+// in Postgres (BYTEA) makes the recording survive container restarts so
+// managers can still play / re-transcribe / re-evaluate after a deploy.
+// Idempotent ALTER so existing deploys don't need a migration step.
+let _audioBlobColumnReady: Promise<void> | null = null;
+async function ensureAudioBlobColumns(): Promise<void> {
+  if (_audioBlobColumnReady) return _audioBlobColumnReady;
+  _audioBlobColumnReady = pool
+    .query(`
+      ALTER TABLE call_records ADD COLUMN IF NOT EXISTS audio_blob BYTEA;
+      ALTER TABLE call_records ADD COLUMN IF NOT EXISTS audio_blob_mime VARCHAR(64);
+      ALTER TABLE call_records ADD COLUMN IF NOT EXISTS audio_blob_size INTEGER;
+    `)
+    .then(() => undefined)
+    .catch((err) => {
+      logger.warn("[CallDB] audio_blob column add failed (will retry):", err);
+      _audioBlobColumnReady = null;
+    });
+  return _audioBlobColumnReady;
+}
+
+export async function setCallRecordAudioBlob(
+  callRecordId: number,
+  buffer: Buffer,
+  mime: string,
+): Promise<void> {
+  await ensureAudioBlobColumns();
+  await pool.query(
+    `UPDATE call_records
+     SET audio_blob = $1, audio_blob_mime = $2, audio_blob_size = $3,
+         updated_at = NOW()
+     WHERE id = $4`,
+    [buffer, mime, buffer.length, callRecordId],
+  );
+}
+
+export async function getCallRecordAudioBlob(
+  callRecordId: number,
+): Promise<{ buffer: Buffer; mime: string; size: number } | null> {
+  await ensureAudioBlobColumns();
+  const result = await pool.query(
+    `SELECT audio_blob, audio_blob_mime, audio_blob_size
+       FROM call_records WHERE id = $1`,
+    [callRecordId],
+  );
+  const row = result.rows[0];
+  if (!row || !row.audio_blob) return null;
+  // pg returns BYTEA as a Buffer already; defensive coerce just in case.
+  const buf = Buffer.isBuffer(row.audio_blob)
+    ? row.audio_blob
+    : Buffer.from(row.audio_blob);
+  return {
+    buffer: buf,
+    mime: row.audio_blob_mime || "audio/wav",
+    size: row.audio_blob_size || buf.length,
+  };
+}
+
+export async function hasCallRecordAudioBlob(
+  callRecordId: number,
+): Promise<boolean> {
+  await ensureAudioBlobColumns();
+  const result = await pool.query(
+    `SELECT 1 FROM call_records
+      WHERE id = $1 AND audio_blob IS NOT NULL LIMIT 1`,
+    [callRecordId],
+  );
+  return result.rows.length > 0;
+}
+
 let integrationConfigTableReady: Promise<void> | null = null;
 async function ensureIntegrationConfigTable(): Promise<void> {
   if (integrationConfigTableReady) return integrationConfigTableReady;
