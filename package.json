@@ -14,7 +14,7 @@
     "postinstall": "node scripts/patch-lazystream.mjs"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^1.3.24",
+    "@ai-sdk/openai": "^3.0.65",
     "@inngest/realtime": "^0.4.6",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@mastra/core": "^0.24.9",
@@ -53,7 +53,6 @@
     "mammoth": "^1.8.0",
     "mastra": "^0.18.9",
     "memoizee": "^0.4.17",
-    "openai": "^6.22.0",
     "openid-client": "^6.8.2",
     "p-limit": "^7.3.0",
     "passport": "^0.7.0",
