@@ -200,6 +200,63 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // Diagnostic: returns the absolute row count of call_records + the
+    // 5 most-recently-inserted rows. Use to confirm whether uploads are
+    // actually persisting to Postgres when the UI shows zero records.
+    // Auth-gated (same as the other call routes) so it never leaks data.
+    //   curl https://qms-dashboard.replit.app/api/calls/_debug/count \
+    //        -H "Cookie: <your session cookie>"
+    path: "/api/calls/_debug/count",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+          const countRes = await callIntelligencePool.query(
+            `SELECT COUNT(*)::int AS n FROM call_records`,
+          );
+          const recentRes = await callIntelligencePool.query(
+            `SELECT id, call_id, source, agent_email, status, call_date,
+                    created_at, updated_at,
+                    (audio_blob IS NOT NULL) AS has_audio_blob
+               FROM call_records
+              ORDER BY id DESC
+              LIMIT 5`,
+          );
+          // Also confirm which DB we're connected to so DATABASE_URL
+          // drift between deploys is easy to spot — leak only the host,
+          // never user/password.
+          let dbHost = "unknown";
+          try {
+            const url = new URL(process.env.DATABASE_URL || "");
+            dbHost = `${url.hostname}:${url.port || ""}/${url.pathname.replace(/^\//, "")}`;
+          } catch {
+            /* ignore */
+          }
+          return c.json({
+            success: true,
+            total_call_records: countRes.rows[0]?.n ?? 0,
+            recent_5: recentRes.rows,
+            db_host: dbHost,
+            checked_at: new Date().toISOString(),
+          });
+        } catch (error: any) {
+          safeLogger.error("[API] debug count failed", {
+            message: error?.message,
+          });
+          return c.json(
+            { success: false, error: error?.message || "Debug count failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/calls/analytics",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
@@ -1420,8 +1477,14 @@ Respond with JSON only:
 
           const fileName = `call_${Date.now()}_${file.name}`;
 
+          // Use a high-entropy call_id (timestamp + random) to avoid
+          // millisecond collisions when multiple files upload in a tight
+          // loop. ON CONFLICT (call_id) would have UPSERT-collapsed them
+          // into a single row before, hiding the fact that the rest of
+          // the batch supposedly "succeeded".
+          const uniqueCallId = `audio-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           const callRecord = await createCallRecord({
-            call_id: `audio-${Date.now()}`,
+            call_id: uniqueCallId,
             source: "manual",
             lead_id: leadId,
             contact_name: contactName,
@@ -1439,7 +1502,43 @@ Respond with JSON only:
           });
 
           const callId = callRecord.id!;
-          logger?.info("✅ [API] Call record created", { id: callId });
+          // Verify the row actually landed by reading it back. If the
+          // INSERT silently failed or the connection pool routed to a
+          // different DB, this round-trip will catch it before we burn
+          // OpenAI tokens transcribing audio that has no parent record.
+          try {
+            const { getCallRecordById } = await import(
+              "../../utils/callIntelligenceDb"
+            );
+            const verify = await getCallRecordById(callId);
+            if (!verify) {
+              logger?.error("[API] CRITICAL: createCallRecord returned id but row not readable", {
+                id: callId,
+                call_id: uniqueCallId,
+              });
+              return c.json(
+                {
+                  success: false,
+                  error: "Row creation could not be verified — aborting before OpenAI charge",
+                  diagnostic: { attempted_id: callId, call_id: uniqueCallId },
+                },
+                500,
+              );
+            }
+            logger?.info("✅ [API] Call record created + verified in DB", {
+              id: callId,
+              call_id: uniqueCallId,
+              verified_status: verify.status,
+              verified_agent: verify.agent_email,
+            });
+          } catch (verifyErr: any) {
+            logger?.error("[API] CRITICAL: Row verification failed", {
+              id: callId,
+              error: verifyErr?.message || String(verifyErr),
+            });
+            // Fall through — don't block; the row likely exists, just
+            // couldn't verify. Visible in logs for diagnosis.
+          }
 
           // Persist audio bytes to Postgres so the recording survives a
           // Replit redeploy (the bulk upload path historically never wrote
