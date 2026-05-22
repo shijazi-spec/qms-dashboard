@@ -2025,8 +2025,84 @@
                 <div id="clusterSnapshotsList" data-cluster-id="${cluster.id}" class="text-xs text-gray-500">Loading snapshots…</div>
             </div>`;
 
+            // Follow-up 1: Action timeline (duplicate_merge_actions). Audit
+            // trail of every resolve / ignore / domain_collision_merge
+            // performed on this cluster.
+            html += `<div class="border-t pt-4 mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-sm font-semibold text-gray-700">Action timeline</h4>
+                    <span class="text-xs text-gray-400">Audit trail — who acted, when, and what they did</span>
+                </div>
+                <div id="clusterActionTimeline" data-cluster-id="${cluster.id}" class="text-xs text-gray-500">Loading actions…</div>
+            </div>`;
+
             document.getElementById('modalContent').innerHTML = html;
             loadClusterSnapshots(cluster.id);
+            loadClusterActionTimeline(cluster.id);
+        }
+
+        // Follow-up 1: fetch + render the action timeline for the current
+        // cluster. Pulls /api/duplicates/merge-history?cluster_id=N — the
+        // endpoint and getMergeHistory helper both pre-existed; this is
+        // purely a UI surface so the audit trail is one click away from
+        // the operator's normal workflow. Silent on errors so a network
+        // blip doesn't blank the rest of the modal.
+        async function loadClusterActionTimeline(clusterId) {
+            const listEl = document.getElementById('clusterActionTimeline');
+            if (!listEl || String(listEl.dataset.clusterId) !== String(clusterId)) return;
+            try {
+                const res = await fetch(`/api/duplicates/merge-history?cluster_id=${encodeURIComponent(clusterId)}&limit=50`);
+                if (!res.ok) { listEl.textContent = 'Action timeline unavailable.'; return; }
+                const data = await res.json();
+                const actions = Array.isArray(data && data.history) ? data.history : [];
+                if (actions.length === 0) {
+                    listEl.innerHTML = '<span class="text-gray-400 italic">No actions yet — clicking Mark Resolved, Ignore, or a domain-collision merge will log here.</span>';
+                    return;
+                }
+                listEl.innerHTML = '<ul class="divide-y divide-gray-100 border border-gray-100 rounded">' + actions.map(a => renderActionTimelineRow(a)).join('') + '</ul>';
+            } catch (e) {
+                listEl.textContent = 'Action timeline unavailable.';
+            }
+        }
+
+        // Visually distinguish actions by type. resolve / ignore are the
+        // common operator paths; domain_collision_merge surfaces the
+        // collision-triage workflow. Unknown action_type falls back to a
+        // neutral chip.
+        function actionTimelineChip(actionType) {
+            const map = {
+                resolve: { label: 'Resolved', cls: 'bg-emerald-100 text-emerald-800' },
+                ignore: { label: 'Ignored', cls: 'bg-gray-100 text-gray-700' },
+                domain_collision_merge: { label: 'Collision merge', cls: 'bg-indigo-100 text-indigo-700' },
+            };
+            const m = map[actionType] || { label: String(actionType || '—'), cls: 'bg-gray-100 text-gray-600' };
+            return `<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${m.cls}">${escapeHtml(m.label)}</span>`;
+        }
+
+        function renderActionTimelineRow(a) {
+            const when = formatDate(a.created_at || a.performed_at);
+            const who = escapeHtml(a.performed_by || 'system');
+            const chip = actionTimelineChip(a.action_type);
+            const primaryId = a.primary_record_id != null
+                ? `primary #${escapeHtml(String(a.primary_record_id))}`
+                : 'no primary set';
+            let mergedCount = 0;
+            try {
+                const ids = typeof a.merged_record_ids === 'string' ? JSON.parse(a.merged_record_ids) : a.merged_record_ids;
+                if (Array.isArray(ids)) mergedCount = ids.length;
+            } catch { mergedCount = 0; }
+            const notesPart = a.notes
+                ? `<div class="text-[11px] text-gray-500 mt-1">${escapeHtml(a.notes)}</div>`
+                : '';
+            return `<li class="px-3 py-2">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="text-xs text-gray-700">${chip} · ${when} · by ${who}</div>
+                        <div class="text-[11px] text-gray-500">${primaryId} · ${mergedCount} record${mergedCount === 1 ? '' : 's'} affected</div>
+                    </div>
+                </div>
+                ${notesPart}
+            </li>`;
         }
 
         // R10: fetch + render the snapshot list for the current cluster.
