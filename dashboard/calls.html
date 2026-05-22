@@ -760,18 +760,44 @@
                         <div class="p-6 text-center text-gray-400 text-xs">Loading scorecards…</div>
                     </div>
                     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Quick Win #3: AI Training Feedback panel hidden
-                             until the manager-review workflow + corrections
-                             table are wired. Showing hardcoded "0 / 0 / --"
-                             was misleading — implied a feedback loop that
-                             didn't actually capture anything. Re-enable
-                             when the medium-tier review workflow ships. -->
-                        <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-200 p-4 hidden" data-coming-soon="true">
-                            <h5 class="text-xs font-semibold text-purple-900 mb-2">AI Training Feedback (coming soon)</h5>
-                            <div id="ai-training-stats" class="space-y-1.5 text-xs">
-                                <div class="flex justify-between"><span class="text-gray-600">Evaluations Reviewed</span><span id="stat-reviewed" class="font-medium">0</span></div>
-                                <div class="flex justify-between"><span class="text-gray-600">Accuracy Rating</span><span id="stat-accuracy" class="font-medium text-green-600">--</span></div>
-                                <div class="flex justify-between"><span class="text-gray-600">Corrections Made</span><span id="stat-corrections" class="font-medium">0</span></div>
+                        <!-- Medium #3 — AI Training Feedback panel.
+                             Reads from sdr_evaluation_reviews (the canonical
+                             correction signal added in #6 + #6 v1.1). Shows
+                             reviewed count, manager approval rate, the
+                             Adjusted/Disagreed breakdown, and a top-5 list
+                             of attributes managers most often override —
+                             actionable signal for prompt tuning.
+                             IDs are suffixed -embedded to avoid colliding
+                             with the deprecated #content-scorecards block. -->
+                        <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-200 p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h5 class="text-xs font-semibold text-purple-900">AI Training Feedback</h5>
+                                <span class="text-[10px] text-purple-600" title="Source: sdr_evaluation_reviews from the Manager Review workflow">via manager reviews</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 mb-3">
+                                <div class="bg-white rounded border border-purple-100 p-2 text-center">
+                                    <div class="text-[10px] text-gray-500">Reviewed</div>
+                                    <div class="text-lg font-semibold text-purple-900" id="stat-reviewed-embedded">0</div>
+                                </div>
+                                <div class="bg-white rounded border border-purple-100 p-2 text-center">
+                                    <div class="text-[10px] text-gray-500">Approval rate</div>
+                                    <div class="text-lg font-semibold text-green-600" id="stat-accuracy-embedded">--</div>
+                                </div>
+                                <div class="bg-white rounded border border-purple-100 p-2 text-center">
+                                    <div class="text-[10px] text-gray-500">Corrections</div>
+                                    <div class="text-lg font-semibold text-amber-600" id="stat-corrections-embedded">0</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] text-purple-800 mb-2 px-1">
+                                <span title="Manager accepted AI score as-is">✓ <span id="stat-approved-embedded">0</span> approved</span>
+                                <span title="Manager edited per-attribute scores">✎ <span id="stat-adjusted-embedded">0</span> adjusted</span>
+                                <span title="Manager flagged AI evaluation as wrong">✗ <span id="stat-disagreed-embedded">0</span> disagreed</span>
+                            </div>
+                            <div class="bg-white rounded border border-purple-100 p-2">
+                                <div class="text-[10px] text-gray-500 mb-1">Top attributes managers override</div>
+                                <ol id="stat-top-corrected-embedded" class="text-[11px] text-gray-700 space-y-0.5 list-decimal list-inside">
+                                    <li class="text-gray-400 italic list-none">No corrections yet — managers haven't adjusted any AI evaluations.</li>
+                                </ol>
                             </div>
                         </div>
                         <div class="bg-white rounded-lg border border-gray-100 p-4">
@@ -3749,6 +3775,10 @@
                 const data = await res.json();
                 if (data.success) {
                     await loadManagerReviewHistory(selectedEvalCall.id);
+                    // Medium #3 — keep the AI Training Feedback panel
+                    // in sync after every Approve/Disagree so the
+                    // approval-rate stat updates immediately.
+                    loadAITrainingStats();
                 } else {
                     alert(`Review failed: ${data.error || 'unknown error'}`);
                 }
@@ -3933,6 +3963,10 @@
                 }
                 closeAdjustReviewModal();
                 await loadManagerReviewHistory(selectedEvalCall.id);
+                // Medium #3 — refresh the AI Training Feedback panel so
+                // the corrections counter + top-corrected attributes list
+                // reflect this new Adjusted review immediately.
+                loadAITrainingStats();
             } catch (e) {
                 console.error('saveAdjustedReview error:', e);
                 alert(`Adjusted review failed: ${e.message || e}`);
@@ -4523,20 +4557,47 @@
         }
 
         // ==================== AI TRAINING FEEDBACK ====================
+        // Medium #3 — pulls reviewed / accuracy / corrections plus the
+        // top-corrected attributes list from /api/ai-training/stats. The
+        // embedded panel uses -embedded suffixed IDs to avoid colliding
+        // with the deprecated #content-scorecards block (which still has
+        // the old stat-* IDs but is permanently hidden).
         let aiTrainingStats = { reviewed: 0, accuracy: 0, corrections: 0 };
+
+        function setIfPresent(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        }
 
         async function loadAITrainingStats() {
             try {
                 const res = await fetch('/api/ai-training/stats');
                 const data = await res.json();
-                if (data.success) {
-                    aiTrainingStats = data.stats || aiTrainingStats;
-                    document.getElementById('stat-reviewed').textContent = _fn(aiTrainingStats.reviewed || 0);
-                    document.getElementById('stat-accuracy').textContent = aiTrainingStats.accuracy ? `${_fn(aiTrainingStats.accuracy)}%` : '--';
-                    document.getElementById('stat-corrections').textContent = _fn(aiTrainingStats.corrections || 0);
+                if (!data.success) return;
+                const s = data.stats || {};
+                aiTrainingStats = s;
+                setIfPresent('stat-reviewed-embedded', _fn(s.reviewed || 0));
+                setIfPresent('stat-accuracy-embedded', s.reviewed > 0 ? `${_fn(s.accuracy || 0)}%` : '--');
+                setIfPresent('stat-corrections-embedded', _fn(s.corrections || 0));
+                setIfPresent('stat-approved-embedded',  _fn(s.approved  || 0));
+                setIfPresent('stat-adjusted-embedded',  _fn(s.adjusted  || 0));
+                setIfPresent('stat-disagreed-embedded', _fn(s.disagreed || 0));
+
+                const list = document.getElementById('stat-top-corrected-embedded');
+                if (list) {
+                    const top = Array.isArray(s.top_corrected_attributes) ? s.top_corrected_attributes : [];
+                    if (top.length === 0) {
+                        list.innerHTML = `<li class="text-gray-400 italic list-none">No corrections yet — managers haven't adjusted any AI evaluations.</li>`;
+                    } else {
+                        list.innerHTML = top.map(a => `
+                            <li><span class="text-gray-900">${escapeHtml(a.attribute_name || a.attribute_id || '')}</span>
+                                <span class="text-amber-600 font-medium ml-1">×${_fn(a.adjustment_count || 0)}</span>
+                            </li>
+                        `).join('');
+                    }
                 }
             } catch (error) {
-                console.log('AI training stats not available');
+                console.log('AI training stats not available', error);
             }
         }
 

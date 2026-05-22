@@ -1605,25 +1605,141 @@ export async function getAITrainingStats(): Promise<{
   reviewed: number;
   accuracy: number;
   corrections: number;
+  approved: number;
+  adjusted: number;
+  disagreed: number;
+  top_corrected_attributes: Array<{
+    attribute_id: string;
+    attribute_name: string;
+    adjustment_count: number;
+  }>;
+  legacy_feedback?: {
+    accurate: number;
+    partial: number;
+    inaccurate: number;
+  };
 }> {
-  const result = await pool.query(`
-    SELECT 
-      COUNT(*) as total,
-      SUM(CASE WHEN feedback_type = 'accurate' THEN 1 ELSE 0 END) as accurate,
-      SUM(CASE WHEN feedback_type = 'partially_accurate' THEN 1 ELSE 0 END) as partial,
-      SUM(CASE WHEN feedback_type = 'inaccurate' THEN 1 ELSE 0 END) as inaccurate
-    FROM ai_training_feedback
+  // Medium #3 — the authoritative correction signal is sdr_evaluation_reviews
+  // (Approve / Adjust / Disagree from #6 + #6 v1.1). "Accuracy" = the rate at
+  // which managers Approve the AI score outright; "Corrections" = Adjusted +
+  // Disagreed. The old `ai_training_feedback` thumbs-rating signal is kept
+  // alongside as legacy_feedback so the panel can show both lenses without
+  // breaking the existing submit path. The schema for these tables was
+  // already in place from prior sessions; this is purely a rollup query.
+  await ensureSDRReviewsTable();
+  const reviewsResult = await pool.query(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN review_status = 'approved'  THEN 1 ELSE 0 END) AS approved,
+      SUM(CASE WHEN review_status = 'adjusted'  THEN 1 ELSE 0 END) AS adjusted,
+      SUM(CASE WHEN review_status = 'disagreed' THEN 1 ELSE 0 END) AS disagreed
+    FROM sdr_evaluation_reviews
   `);
+  const r = reviewsResult.rows[0] || {};
+  const reviewed = parseInt(r.total) || 0;
+  const approved = parseInt(r.approved) || 0;
+  const adjusted = parseInt(r.adjusted) || 0;
+  const disagreed = parseInt(r.disagreed) || 0;
+  const corrections = adjusted + disagreed;
+  const accuracy = reviewed > 0 ? Math.round((approved / reviewed) * 100) : 0;
 
-  const row = result.rows[0];
-  const total = parseInt(row.total) || 0;
-  const accurate = parseInt(row.accurate) || 0;
-  const inaccurate = parseInt(row.inaccurate) || 0;
+  // Top corrected attributes — which attribute_ids do managers most often
+  // override on Adjusted reviews? Surfaces real prompt-tuning targets.
+  // Each adjusted_attribute_evaluations JSONB is the manager's final values;
+  // we count an attribute as "corrected" when its status or score differs
+  // from the AI's. Limited to top 5 to keep the panel compact.
+  let topCorrected: Array<{
+    attribute_id: string;
+    attribute_name: string;
+    adjustment_count: number;
+  }> = [];
+  if (adjusted > 0) {
+    try {
+      const correctedResult = await pool.query(`
+        WITH adjusted_pairs AS (
+          SELECT
+            sr.id AS review_id,
+            adj_elem ->> 'attribute_id' AS attribute_id,
+            adj_elem ->> 'attribute_name' AS attribute_name,
+            adj_elem ->> 'status' AS adj_status,
+            (adj_elem ->> 'score')::numeric AS adj_score,
+            se.attribute_evaluations AS ai_attrs
+          FROM sdr_evaluation_reviews sr
+          JOIN sdr_call_evaluations se ON se.id = sr.evaluation_id
+          CROSS JOIN LATERAL jsonb_array_elements(sr.adjusted_attribute_evaluations) AS adj_elem
+          WHERE sr.review_status = 'adjusted'
+            AND sr.adjusted_attribute_evaluations IS NOT NULL
+        ),
+        diffs AS (
+          SELECT
+            ap.attribute_id,
+            ap.attribute_name,
+            ap.review_id,
+            -- Find the matching AI attribute by attribute_id within the
+            -- evaluation's attribute_evaluations JSONB array.
+            (
+              SELECT ai_elem
+              FROM jsonb_array_elements(ap.ai_attrs) AS ai_elem
+              WHERE ai_elem ->> 'attribute_id' = ap.attribute_id
+              LIMIT 1
+            ) AS ai_elem,
+            ap.adj_status,
+            ap.adj_score
+          FROM adjusted_pairs ap
+        )
+        SELECT attribute_id, attribute_name, COUNT(DISTINCT review_id) AS adjustment_count
+        FROM diffs
+        WHERE
+          attribute_id IS NOT NULL
+          AND ai_elem IS NOT NULL
+          AND (
+            (ai_elem ->> 'status') IS DISTINCT FROM adj_status
+            OR (ai_elem ->> 'score')::numeric IS DISTINCT FROM adj_score
+          )
+        GROUP BY attribute_id, attribute_name
+        ORDER BY adjustment_count DESC, attribute_id
+        LIMIT 5
+      `);
+      topCorrected = correctedResult.rows.map((row: any) => ({
+        attribute_id: row.attribute_id,
+        attribute_name: row.attribute_name,
+        adjustment_count: parseInt(row.adjustment_count) || 0,
+      }));
+    } catch (err: any) {
+      logger.warn("[AITrainingStats] top-corrected query failed:", err?.message);
+      topCorrected = [];
+    }
+  }
+
+  // Legacy thumbs-rating signal kept alongside for backwards compat.
+  let legacy: { accurate: number; partial: number; inaccurate: number } | undefined;
+  try {
+    const legacyResult = await pool.query(`
+      SELECT
+        SUM(CASE WHEN feedback_type = 'accurate' THEN 1 ELSE 0 END) AS accurate,
+        SUM(CASE WHEN feedback_type = 'partially_accurate' THEN 1 ELSE 0 END) AS partial,
+        SUM(CASE WHEN feedback_type = 'inaccurate' THEN 1 ELSE 0 END) AS inaccurate
+      FROM ai_training_feedback
+    `);
+    const lr = legacyResult.rows[0] || {};
+    legacy = {
+      accurate: parseInt(lr.accurate) || 0,
+      partial: parseInt(lr.partial) || 0,
+      inaccurate: parseInt(lr.inaccurate) || 0,
+    };
+  } catch {
+    legacy = undefined;
+  }
 
   return {
-    reviewed: total,
-    accuracy: total > 0 ? Math.round((accurate / total) * 100) : 0,
-    corrections: inaccurate,
+    reviewed,
+    accuracy,
+    corrections,
+    approved,
+    adjusted,
+    disagreed,
+    top_corrected_attributes: topCorrected,
+    legacy_feedback: legacy,
   };
 }
 
