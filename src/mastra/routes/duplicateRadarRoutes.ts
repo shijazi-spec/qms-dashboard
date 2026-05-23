@@ -2773,13 +2773,23 @@ export const duplicateRadarRoutes = [
             getOwnerAccountability(),
             getPacketSettings(),
           ]);
-          const owner = owners.find((o) => o.owner_name === ownerName);
+          // Match owner by name OR email, case-insensitive — the dashboard
+          // link passes the display name, but operators sometimes hit the
+          // endpoint directly with the email.
+          const needle = ownerName.toLowerCase();
+          const owner = owners.find(
+            (o) =>
+              (o.owner_name ?? "").trim().toLowerCase() === needle ||
+              (o.owner_email ?? "").trim().toLowerCase() === needle,
+          );
           if (!owner) {
             return c.json({ error: "Owner not found" }, 404);
           }
 
           // Pull every duplicate-cluster record this owner is on, sorted so
-          // the playbook helpers see is_primary first per cluster.
+          // the playbook helpers see is_primary first per cluster. Same
+          // name-or-email match as above so a single owner with mismatched
+          // case in legacy rows still gets a complete packet.
           const recordsRes = await sharedDuplicateRadarPool.query(
             `
               SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.record_type,
@@ -2794,10 +2804,13 @@ export const duplicateRadarRoutes = [
               JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
               WHERE dc.status = 'active'
                 AND dc.total_records > 1
-                AND dr.owner_name = $1
+                AND (
+                  LOWER(TRIM(dr.owner_name))  = $1 OR
+                  LOWER(TRIM(dr.owner_email)) = $1
+                )
               ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC
             `,
-            [ownerName],
+            [needle],
           );
 
           const records = recordsRes.rows as Array<Record<string, unknown>>;
@@ -2825,11 +2838,30 @@ export const duplicateRadarRoutes = [
             records,
             clusterConfidences,
           });
-          const filename = packetFilename(ownerName);
+          const filename = packetFilename(owner.owner_name);
+
+          // Audit trail — same table the CSV / XLSX exports write to. Lets
+          // operators see who pulled a packet and when from the existing
+          // export-log dashboard. Non-blocking: a logging failure must not
+          // stop the owner from receiving their packet.
+          try {
+            await createExportLog({
+              export_type: "owner_packet" as any,
+              filter_criteria: { owner: owner.owner_name, packet: true },
+              total_records_exported: records.length,
+              file_format: "xlsx",
+              exported_by: owner.owner_name,
+            });
+          } catch (logErr) {
+            logger.warn(
+              "[DuplicateRadar] owner-packet export log write failed (non-blocking):",
+              logErr,
+            );
+          }
 
           return await stageStreamingExportFromHono(c, async () =>
             streamXlsx(sheets, filename, {
-              title: `Duplicate Radar — Remediation Packet for ${ownerName}`,
+              title: `Duplicate Radar — Remediation Packet for ${owner.owner_name}`,
             }),
           );
         } catch (error: any) {
