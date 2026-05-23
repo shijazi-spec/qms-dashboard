@@ -26,6 +26,86 @@ async function verifyCallAccess(c: any): Promise<SessionUser | null> {
   return requireRoleOrKey(c, [...CALL_READ_ROLES]);
 }
 
+// Run the Zoho-backed CRM compliance check for a call that was just
+// linked to a Lead/Deal, and persist the result via saveCompliance.
+// Best-effort: any failure (Zoho unreachable, missing fields, etc.)
+// is swallowed so the originating auto-link call still returns
+// success. Mirrors the body of /api/calls/:callId/compliance but
+// without the HTTP wrapper so it can be called from other handlers.
+async function runComplianceAfterLink(
+  callId: number,
+  leadId: string | null | undefined,
+  dealId: string | null | undefined,
+  callDate: any,
+  logger?: any,
+): Promise<void> {
+  try {
+    if (!leadId && !dealId) return;
+    const { saveCompliance } = await import("../../utils/callIntelligenceDb");
+    const { runCrmComplianceCheck } = await import(
+      "../../utils/crmComplianceCheck"
+    );
+    const expectedActions = [
+      "notes_updated",
+      "call_logged",
+      "task_created",
+      "stage_updated",
+    ];
+    const checked = await runCrmComplianceCheck({
+      callRecordId: callId,
+      leadId: leadId ?? undefined,
+      dealId: dealId ?? undefined,
+      callDate,
+      expectedActions,
+    });
+    if (!checked.success || !checked.result) {
+      await saveCompliance({
+        call_record_id: callId,
+        lead_id: leadId ?? null,
+        deal_id: dealId ?? null,
+        notes_updated: false,
+        call_logged: false,
+        task_created: false,
+        stage_updated: false,
+        meeting_outcome_logged: false,
+        overall_compliance: false,
+        compliance_score: 0,
+        missing_actions: [`Not checked: ${checked.reason}`],
+        compliance_details: { mode: "not_checked", reason: checked.reason },
+      });
+      logger?.info("[Compliance] auto-run skipped after link", {
+        callId,
+        reason: checked.reason,
+      });
+      return;
+    }
+    const r = checked.result;
+    await saveCompliance({
+      call_record_id: callId,
+      lead_id: leadId ?? null,
+      deal_id: dealId ?? null,
+      notes_updated: r.notes_updated,
+      call_logged: r.call_logged,
+      task_created: r.task_created,
+      stage_updated: r.stage_updated,
+      meeting_outcome_logged: r.meeting_outcome_logged,
+      overall_compliance: r.overall_compliance,
+      compliance_score: r.compliance_score,
+      missing_actions: r.missing_actions,
+      compliance_details: r.evidence,
+    });
+    logger?.info("[Compliance] auto-ran after link", {
+      callId,
+      score: r.compliance_score,
+    });
+  } catch (err: any) {
+    safeLogger.warn("[Compliance] auto-run after link threw", {
+      callId,
+      error: err?.message || String(err),
+    });
+  }
+}
+
 export const callIntelligenceRoutes = [
   {
     path: "/api/calls/ingest",
@@ -119,6 +199,17 @@ export const callIntelligenceRoutes = [
                     );
                   } catch { /* diagnostic field only */ }
                 }
+                // Auto-trigger the CRM compliance check now that the
+                // call has a Zoho Lead/Deal to score against, so the
+                // top-level Compliance Rate KPI and the modal's CRM
+                // Compliance section populate without manual action.
+                await runComplianceAfterLink(
+                  callRecord.id!,
+                  autoLinkResult.lead_id ?? null,
+                  autoLinkResult.deal_id ?? null,
+                  callRecord.call_date,
+                  logger,
+                );
               } else {
                 logger?.info("ℹ️ [API] Auto-link skipped/failed", {
                   callId: callRecord.id,
@@ -3805,6 +3896,16 @@ ${transcriptText}
               /* ignore — diagnostic column only */
             }
           }
+          // Auto-trigger compliance check on freshly linked calls so
+          // the Compliance Rate KPI updates without a manual run.
+          if (result.linked) {
+            await runComplianceAfterLink(
+              callId,
+              result.lead_id ?? null,
+              result.deal_id ?? null,
+              (record as any).call_date ?? (record as any).created_at,
+            );
+          }
           return c.json(result);
         } catch (error: any) {
           safeLogger.error("[API] auto-link failed", {
@@ -4080,6 +4181,16 @@ ${transcriptText}
             (cid, leadId) => updateCallRecordLeadId(cid, leadId),
             { maxRecords },
           );
+          // Auto-trigger compliance check on freshly linked calls so
+          // the Compliance Rate KPI updates without a manual run.
+          if (result && (result as any).linked) {
+            await runComplianceAfterLink(
+              id,
+              (result as any).lead_id ?? null,
+              (result as any).deal_id ?? null,
+              (record as any).call_date ?? (record as any).created_at,
+            );
+          }
           return c.json(result);
         } catch (error) {
           safeLogger.error("[MCP] auto-link-lead failed", {
