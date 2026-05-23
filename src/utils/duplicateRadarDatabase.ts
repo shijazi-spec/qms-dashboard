@@ -801,11 +801,16 @@ export async function initDuplicateRadarTables(): Promise<void> {
       updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // Seed defaults — ON CONFLICT DO NOTHING so existing installs that
+  // customised these values are not overwritten. To CHANGE a live value:
+  //   UPDATE duplicate_radar_packet_settings
+  //     SET setting_value='<new>'
+  //     WHERE setting_key='<key>';
   await pool.query(
     `INSERT INTO duplicate_radar_packet_settings (setting_key, setting_value) VALUES
-       ('escalation_contact_name',  'Data Quality Lead'),
-       ('escalation_contact_email', 'data-quality@walaplus.com'),
-       ('dispute_path',             'Reply to the email that delivered this packet, or open a CAPA ticket tagged "duplicate-radar-dispute" within the SLA window.')
+       ('escalation_contact_name',  'Ahmad Amashah — Operations Quality'),
+       ('escalation_contact_email', 'a.amashah@walaplus.com'),
+       ('dispute_path',             'If a row should NOT be merged (e.g. intentional parallel deals for compliance reasons), flag it back to GRQ Quality with the Cluster ID and a one-line justification. Do not merge in Zoho until acknowledged.')
      ON CONFLICT (setting_key) DO NOTHING`,
   );
 }
@@ -823,12 +828,13 @@ export async function getPacketSettings(): Promise<PacketSettings> {
   const map: Record<string, string> = {};
   for (const row of r.rows) map[row.setting_key] = row.setting_value;
   return {
-    escalation_contact_name: map.escalation_contact_name || "Data Quality Lead",
+    escalation_contact_name:
+      map.escalation_contact_name || "Ahmad Amashah — Operations Quality",
     escalation_contact_email:
-      map.escalation_contact_email || "data-quality@walaplus.com",
+      map.escalation_contact_email || "a.amashah@walaplus.com",
     dispute_path:
       map.dispute_path ||
-      "Reply to the email that delivered this packet, or open a CAPA ticket within the SLA window.",
+      "If a row should NOT be merged, flag it back to GRQ Quality with the Cluster ID and a one-line justification. Do not merge in Zoho until acknowledged.",
   };
 }
 
