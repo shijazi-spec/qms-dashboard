@@ -1621,7 +1621,12 @@
             // Zoho global search by phone — returns matches across Leads, Deals,
             // Contacts, and Accounts in one view. Tied to the actual phone of
             // THIS call, not a stale lead_id pointer that may not exist anymore.
-            const zohoSearchUrl = `https://crm.zoho.com/crm/org766568398/search?searchword=${encodeURIComponent(phoneForSearch)}&searchWordKeyType=phone`;
+            // NOTE: do NOT append `&searchWordKeyType=phone` — that param is
+            // not part of Zoho's public search URL contract and silently
+            // breaks the page (lands on an empty results screen). Plain
+            // `searchword=` performs a cross-module global search that
+            // matches phone numbers across Leads/Deals/Contacts/Accounts.
+            const zohoSearchUrl = `https://crm.zoho.com/crm/org766568398/search?searchword=${encodeURIComponent(phoneForSearch)}`;
             // Tag with the most-specific match type we already know about, so
             // the operator sees at a glance whether this phone is already in
             // CRM as a Lead, Deal, or neither.

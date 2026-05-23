@@ -330,6 +330,24 @@ export async function initCallIntelligenceTables(): Promise<void> {
   } catch {
     // Best-effort: never block init on a backfill failure.
   }
+
+  // Fire-and-forget: legacy rows are missing phone metadata, audio
+  // duration, and CRM lead/deal links because they were ingested
+  // before the auto-link + whisper-1 fixes. The boot sweep is
+  // idempotent (each pass has a WHERE filter that skips already-
+  // populated rows) and the auto-link pass is per-boot-capped so
+  // a 200-row backlog can't blow through the Zoho daily quota in
+  // one cold start.
+  try {
+    const { backfillUnpopulatedCallData } = await import(
+      "./callIntelligenceBackfill"
+    );
+    void backfillUnpopulatedCallData().catch(() => {
+      /* swallowed inside the sweep itself */
+    });
+  } catch {
+    /* module load failure — never block init */
+  }
 }
 
 /**
