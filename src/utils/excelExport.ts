@@ -86,6 +86,12 @@ export interface SheetSpec {
   /** Plain array or AsyncIterable — the helper consumes with `for await`. */
   rows: Record<string, any>[] | AsyncIterable<Record<string, any>>;
   freezeHeader?: boolean;
+  /**
+   * If true, the worksheet renders right-to-left (Excel `rightToLeft` view
+   * property). Use for Arabic / Hebrew / other RTL locales so the column
+   * order and selection arrows mirror the document direction.
+   */
+  rightToLeft?: boolean;
 }
 
 const HEADER_STYLE: Partial<ExcelJS.Style> = {
@@ -643,11 +649,13 @@ export async function streamXlsx(
     try {
       for (const sheet of sheets) {
         const safeName = uniquify(sheet.name);
+        const baseView: Record<string, unknown> =
+          sheet.freezeHeader === false
+            ? {}
+            : { state: "frozen", ySplit: 1 };
+        if (sheet.rightToLeft) baseView.rightToLeft = true;
         const ws = wb.addWorksheet(safeName, {
-          views:
-            sheet.freezeHeader === false
-              ? []
-              : [{ state: "frozen", ySplit: 1 }],
+          views: Object.keys(baseView).length ? [baseView as any] : [],
         });
 
         ws.columns = sheet.columns.map((c) => ({

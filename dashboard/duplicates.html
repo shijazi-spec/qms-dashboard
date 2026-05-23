@@ -2908,10 +2908,17 @@
         // xlsx and the Content-Disposition filename; we still pass a
         // local fallback name in case the streaming-download helper
         // exposes the file before headers are seen.
+        //
+        // Appends ?lang=ar when the dashboard is in Arabic mode so the
+        // packet body (Cover labels, Yes/No, RAG, FAQ) and RTL views
+        // match the operator's locale. ASCII-only slug matches the
+        // server's packetFilename() so the two agree for non-ASCII names.
         function downloadOwnerPacket(anchor, event) {
             const owner = anchor && anchor.dataset ? (anchor.dataset.owner || 'owner') : 'owner';
             const safe = owner.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'owner';
-            return streamingDownloadFromEvent(event, anchor.href, { filename: `duplicate-radar-packet-${safe}.xlsx` });
+            const lang = (window.WalaPlusI18n && WalaPlusI18n.currentLang && WalaPlusI18n.currentLang()) || 'en';
+            const href = anchor.href + (anchor.href.includes('?') ? '&' : '?') + 'lang=' + encodeURIComponent(lang);
+            return streamingDownloadFromEvent(event, href, { filename: `duplicate-radar-packet-${safe}.xlsx` });
         }
 
         function buildDownloadExportUrl() {

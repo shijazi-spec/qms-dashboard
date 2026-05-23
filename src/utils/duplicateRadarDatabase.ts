@@ -2703,10 +2703,14 @@ export async function getMergeHistory(
   return result.rows;
 }
 
-// C3: Enhanced owner accountability with RAG status against 2% KPI target
+// C3: Enhanced owner accountability with RAG status against 2% KPI target.
+// dc.status = 'active' is REQUIRED for parity with the packet route — without
+// it, owners whose only clusters are archived/dismissed appear in the table
+// with a Packet link but get an empty Action Items sheet (Cover still shows
+// the stale duplicate counts). See pre-publish review MAJOR-1.
 export async function getOwnerAccountability(): Promise<OwnerAccountability[]> {
   const result = await pool.query(`
-    SELECT 
+    SELECT
       dr.owner_name,
       dr.owner_email,
       COUNT(*) as total_records,
@@ -2716,8 +2720,11 @@ export async function getOwnerAccountability(): Promise<OwnerAccountability[]> {
       COALESCE(SUM(dr.deal_value) FILTER (WHERE dc.total_records > 1 AND dr.is_primary = false AND dr.record_type = 'deal'), 0) as estimated_waste_value
     FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-    WHERE dr.owner_name IS NOT NULL AND dr.owner_name != 'Unknown'
+    WHERE dr.owner_name IS NOT NULL
+      AND dr.owner_name != 'Unknown'
+      AND dc.status = 'active'
     GROUP BY dr.owner_name, dr.owner_email
+    HAVING COUNT(*) FILTER (WHERE dc.total_records > 1 AND dr.is_primary = false) > 0
     ORDER BY duplicate_records DESC
   `);
 
