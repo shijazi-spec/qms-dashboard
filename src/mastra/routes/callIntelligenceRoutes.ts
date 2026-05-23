@@ -1504,11 +1504,236 @@ Respond with JSON only:
             id: callRecord.id,
           });
 
+          // Auto-transcribe + analyze + SDR-evaluate inline. Without this,
+          // the call has no call_transcripts row, which makes it invisible
+          // to "Analyze All Pending" (INNER JOIN on call_transcripts drops
+          // it) and prevents SDR evaluation / CRM auto-link downstream.
+          // Mirrors the working /api/calls/upload-audio autoAnalyze path.
+          let analysisStatus: string = "uploaded";
+          if (audioFilePath && callRecord.id) {
+            try {
+              const {
+                updateCallRecord,
+                saveTranscript,
+                saveCallAnalysis,
+              } = await import("../../utils/callIntelligenceDb");
+
+              await updateCallRecord(callRecord.id, { status: "processing" });
+              analysisStatus = "processing";
+
+              const OpenAI = (await import("openai")).default;
+              const openai = new OpenAI({
+                apiKey: getOpenAIApiKey(),
+                baseURL: getOpenAIBaseUrl(),
+              });
+
+              const fsForRead = await import("fs");
+              const audioBytes = fsForRead.default.readFileSync(audioFilePath);
+              const audioFileObj = new File(
+                [audioBytes],
+                file?.name || "upload.wav",
+                { type: (file?.type as string) || "audio/wav" },
+              );
+
+              const transcription: any = await openai.audio.transcriptions.create({
+                model: "whisper-1",
+                file: audioFileObj,
+                response_format: "verbose_json",
+              });
+
+              const transcriptText = transcription.text || "";
+              const transcribedDuration =
+                typeof transcription.duration === "number" && transcription.duration > 0
+                  ? Math.round(transcription.duration)
+                  : null;
+              if (transcribedDuration) {
+                try {
+                  await updateCallRecord(callRecord.id, {
+                    duration_seconds: transcribedDuration,
+                  });
+                } catch (durErr: any) {
+                  logger?.warn("[API] Persist duration_seconds failed:", {
+                    id: callRecord.id,
+                    error: durErr?.message || String(durErr),
+                  });
+                }
+              }
+              logger?.info("📝 [API] Manual upload transcription completed", {
+                id: callRecord.id,
+                length: transcriptText.length,
+                duration_seconds: transcribedDuration,
+              });
+
+              await saveTranscript({
+                call_record_id: callRecord.id,
+                transcript_text: transcriptText,
+                language: "ar",
+                confidence_score: 95,
+              });
+
+              const analysisPrompt = `أنت محلل جودة مكالمات خبير. قم بتحليل هذا النص المكتوب من مكالمة مبيعات وقدم تحليلاً شاملاً.
+
+نص المكالمة:
+${transcriptText}
+
+قدم تحليلك بصيغة JSON التالية (باللغة العربية):
+{
+  "transcript_summary": "ملخص موجز للمكالمة في 3-5 جمل",
+  "sentiment_score": <0-100 حيث 100 إيجابي جداً>,
+  "sentiment_label": "<إيجابي|محايد|سلبي>",
+  "sentiment_analysis": "تحليل مفصل للمشاعر والنبرة في المكالمة",
+  "voice_of_customer": "صوت العميل - ما هي مخاوفه واحتياجاته",
+  "objections_detected": [{"objection": "الاعتراض", "handled_well": true, "handling_notes": "ملاحظات"}],
+  "key_topics": ["المواضيع الرئيسية"],
+  "action_items": ["الإجراءات المطلوبة"],
+  "next_steps": ["الخطوات التالية"],
+  "call_summary": "ملخص شامل للمكالمة",
+  "highlights": ["أبرز النقاط الإيجابية في المكالمة"],
+  "areas_for_improvement": ["مجالات التحسين المقترحة"],
+  "agent_performance": {
+    "opening_greeting": <1-10>,
+    "discovery_questions": <1-10>,
+    "product_knowledge": <1-10>,
+    "objection_handling": <1-10>,
+    "value_proposition": <1-10>,
+    "closing_technique": <1-10>,
+    "communication_skills": <1-10>,
+    "overall_score": <1-100>
+  },
+  "feedback": "ملاحظات وتوصيات شاملة لتحسين أداء الموظف",
+  "compliance_notes": "ملاحظات حول الالتزام بالمعايير والسياسات",
+  "ai_insights": "رؤى وتحليلات إضافية من الذكاء الاصطناعي"
+}`;
+
+              const { generateChatText } = await import(
+                "../../utils/openaiChatHelper"
+              );
+              const aiResult = await generateChatText({
+                model: "gpt-4o-mini",
+                prompt: analysisPrompt,
+                maxTokens: 4000,
+                responseFormat: "json_object",
+              });
+
+              let analysisData: any;
+              try {
+                const cleanedText = aiResult.text
+                  .replace(/```json\n?|\n?```/g, "")
+                  .trim();
+                analysisData = JSON.parse(cleanedText);
+              } catch {
+                logger?.warn(
+                  "⚠️ [API] Manual upload: failed to parse analysis JSON, using defaults",
+                );
+                analysisData = {
+                  transcript_summary: transcriptText.substring(0, 500),
+                  sentiment_score: 50,
+                  sentiment_label: "محايد",
+                  call_summary: "تم تحليل المكالمة",
+                  highlights: [],
+                  areas_for_improvement: [],
+                  feedback: "",
+                  ai_insights: "",
+                };
+              }
+
+              await saveCallAnalysis({
+                call_record_id: callRecord.id,
+                sentiment_score: analysisData.sentiment_score || 50,
+                sentiment_label: analysisData.sentiment_label || "neutral",
+                voice_of_customer: analysisData.voice_of_customer || "",
+                objections_detected: analysisData.objections_detected || [],
+                key_topics: analysisData.key_topics || [],
+                action_items: analysisData.action_items || [],
+                next_steps: analysisData.next_steps || [],
+                call_summary: analysisData.call_summary || "",
+                ai_insights: JSON.stringify({
+                  transcript_summary: analysisData.transcript_summary,
+                  sentiment_analysis: analysisData.sentiment_analysis,
+                  highlights: analysisData.highlights,
+                  areas_for_improvement: analysisData.areas_for_improvement,
+                  agent_performance: analysisData.agent_performance,
+                  feedback: analysisData.feedback,
+                  compliance_notes: analysisData.compliance_notes,
+                  ai_insights: analysisData.ai_insights,
+                }),
+              });
+
+              await updateCallRecord(callRecord.id, { status: "analyzed" });
+              analysisStatus = "analyzed";
+              logger?.info("✅ [API] Manual upload analysis completed", {
+                id: callRecord.id,
+              });
+
+              // Phase B — auto-fire SDR scorecard evaluation so the call
+              // shows up in the SDR Evaluation tab without manager action.
+              try {
+                const { triggerSDREvaluationForCall } = await import(
+                  "../../utils/sdrAutoEvaluator"
+                );
+                const outcome = await triggerSDREvaluationForCall(
+                  callRecord.id,
+                  "SDR",
+                );
+                if (outcome.ran) {
+                  logger?.info("📋 [API] Auto-SDR-eval on manual upload", {
+                    id: callRecord.id,
+                    scorecardId: outcome.scorecardId,
+                    overallScore: outcome.overallScore,
+                  });
+                } else {
+                  logger?.info("📋 [API] Auto-SDR-eval skipped on manual upload", {
+                    id: callRecord.id,
+                    reason: outcome.skipReason,
+                  });
+                }
+              } catch (evalErr: any) {
+                logger?.warn("⚠️ [API] Auto-SDR-eval threw on manual upload", {
+                  id: callRecord.id,
+                  error: evalErr?.message || String(evalErr),
+                });
+              }
+            } catch (analysisError: any) {
+              const errMsg = analysisError?.message || String(analysisError);
+              const errCode =
+                analysisError?.code ||
+                analysisError?.statusCode ||
+                analysisError?.status;
+              logger?.error("❌ [API] Manual upload analysis failed", {
+                id: callRecord.id,
+                error: errMsg,
+                code: errCode,
+              });
+              try {
+                const { updateCallRecord } = await import(
+                  "../../utils/callIntelligenceDb"
+                );
+                await updateCallRecord(callRecord.id, {
+                  status: "pending",
+                  ai_insights: JSON.stringify({
+                    last_analysis_error: errMsg,
+                    last_analysis_error_code: errCode || null,
+                    last_analysis_attempted_at: new Date().toISOString(),
+                  }),
+                });
+              } catch {
+                // status rollback is best-effort
+              }
+              analysisStatus = `analysis_failed: ${errMsg}`;
+            }
+          }
+
           return c.json({
             success: true,
             call_record_id: callRecord.id,
             call_id: callRecord.call_id,
-            message: "Call uploaded successfully. Ready for evaluation.",
+            analysis_status: analysisStatus,
+            message:
+              analysisStatus === "analyzed"
+                ? "Call uploaded, transcribed, and analyzed."
+                : analysisStatus.startsWith("analysis_failed")
+                  ? `Call uploaded; analysis did not complete (${analysisStatus.replace("analysis_failed: ", "")}). You can re-run analysis from the Call Records tab.`
+                  : "Call uploaded (no audio file — analysis skipped).",
           });
         } catch (error) {
           safeLogger.error("Error uploading call:", error);
