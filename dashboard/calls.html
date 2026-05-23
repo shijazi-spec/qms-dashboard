@@ -2280,6 +2280,12 @@
                             </div>
                         </div>
                     ` : ''}
+                    <!-- Stored SDR scorecard summary. Auto-populated below
+                         from /api/calls/:id/sdr-evaluation when the call
+                         already has a saved evaluation in
+                         sdr_call_evaluations — same data the SDR
+                         Evaluation tab renders, just compact. -->
+                    <div id="stored-sdr-eval-summary" class="mb-4"></div>
                     <div class="mt-6 pt-6 border-t">
                         <h4 class="font-semibold text-gray-900 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_combined_title'))}</h4>
                         <p class="text-xs text-gray-500 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_combined_desc'))}</p>
@@ -2308,10 +2314,106 @@
                 `;
 
                 document.getElementById('callDetailModal').classList.remove('hidden');
+
+                // Auto-load the stored SDR scorecard summary if one exists.
+                // Renders nothing when the call has not been evaluated yet,
+                // so the existing "Run SDR Evaluation" button stays as the
+                // call-to-action for fresh calls.
+                loadStoredSdrEvaluationSummary(callId);
             } catch (error) {
                 console.error('Error loading call details:', error);
                 alert(WalaPlusI18n.t('dyn.calls.failed_load_call'));
             }
+        }
+
+        // Fetch the saved SDR evaluation for this call (same row the SDR
+        // Evaluation tab opens) and render a compact summary directly inside
+        // the Call Details modal. Mirrors the data shape used by
+        // renderAIEvalResults but kept short so it fits the modal layout.
+        async function loadStoredSdrEvaluationSummary(callId) {
+            const slot = document.getElementById('stored-sdr-eval-summary');
+            if (!slot) return;
+            try {
+                const res = await fetch(`/api/calls/${callId}/sdr-evaluation`);
+                if (res.status === 404) { slot.innerHTML = ''; return; }
+                if (!res.ok) { slot.innerHTML = ''; return; }
+                const data = await res.json();
+                const evaluation = data && data.evaluation;
+                if (!evaluation) { slot.innerHTML = ''; return; }
+                renderStoredSdrEvaluationSummary(slot, evaluation);
+            } catch (e) {
+                console.warn('stored SDR eval load failed', e);
+                slot.innerHTML = '';
+            }
+        }
+
+        function renderStoredSdrEvaluationSummary(slot, evaluation) {
+            const dim = evaluation.dimension_scores || { people: 0, process: 0, governance: 0 };
+            const attrs = Array.isArray(evaluation.attribute_evaluations) ? evaluation.attribute_evaluations : [];
+            const overall = Math.round(Number(evaluation.overall_score) || 0);
+            const scoreColor = overall >= 80 ? 'from-emerald-500 to-emerald-600' : overall >= 60 ? 'from-amber-500 to-amber-600' : 'from-red-500 to-red-600';
+            const attrRows = attrs.map(a => {
+                const status = a.status || '';
+                const badge = status === 'PASS' ? 'bg-green-100 text-green-700'
+                            : status === 'FAIL' ? 'bg-red-100 text-red-700'
+                            : 'bg-gray-100 text-gray-600';
+                const score = (a.score === null || a.score === undefined) ? '—' : `${a.score}/10`;
+                return `<div class="flex items-start justify-between gap-2 py-1.5 border-b border-gray-100 last:border-0">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="px-1.5 py-0.5 text-[10px] rounded ${badge}" data-testid="stored-attr-status-${escapeHtml(a.attribute_id || '')}">${escapeHtml(status || '—')}</span>
+                            <span class="text-xs font-medium text-gray-800">${escapeHtml(a.attribute_name || a.attribute_id || '')}</span>
+                            <span class="text-[10px] text-gray-400 capitalize">(${escapeHtml(a.dimension || '')})</span>
+                        </div>
+                        ${a.comment ? `<p class="text-[11px] text-gray-500 mt-0.5">${escapeHtml(a.comment)}</p>` : ''}
+                    </div>
+                    <span class="text-xs font-mono text-gray-700 whitespace-nowrap" data-testid="stored-attr-score-${escapeHtml(a.attribute_id || '')}">${escapeHtml(score)}</span>
+                </div>`;
+            }).join('');
+
+            const strengths = (evaluation.top_strengths || []).slice(0, 3);
+            const gaps = (evaluation.top_gaps || []).slice(0, 3);
+
+            slot.innerHTML = `
+                <div class="border-t pt-6 mt-2">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-semibold text-gray-900">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_scorecard') || 'SDR Scorecard')}</h4>
+                        <span class="text-[11px] text-gray-400">${escapeHtml(evaluation.scorecard_name || '')}</span>
+                    </div>
+                    <div class="bg-gradient-to-r ${scoreColor} rounded-xl p-4 text-white mb-3">
+                        <div class="flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                                <p class="text-xs opacity-90">${escapeHtml(WalaPlusI18n.t('dyn.calls.overall_score') || 'Overall score')}</p>
+                                <p class="text-3xl font-bold" data-testid="stored-sdr-overall">${_fn(overall)}%</p>
+                            </div>
+                            <div class="text-end text-xs space-y-1">
+                                <div><span class="inline-block w-2 h-2 rounded-full bg-white/70 me-2"></span>${escapeHtml(WalaPlusI18n.t('dyn.calls.dim_people') || 'People')}: <span data-testid="stored-sdr-people">${_fn(Math.round(dim.people || 0))}%</span></div>
+                                <div><span class="inline-block w-2 h-2 rounded-full bg-white/70 me-2"></span>${escapeHtml(WalaPlusI18n.t('dyn.calls.dim_process') || 'Process')}: <span data-testid="stored-sdr-process">${_fn(Math.round(dim.process || 0))}%</span></div>
+                                <div><span class="inline-block w-2 h-2 rounded-full bg-white/70 me-2"></span>${escapeHtml(WalaPlusI18n.t('dyn.calls.dim_governance') || 'Governance')}: <span data-testid="stored-sdr-governance">${_fn(Math.round(dim.governance || 0))}%</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    ${(strengths.length || gaps.length) ? `
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                                <h5 class="text-xs font-semibold text-green-800 mb-1">💪 ${escapeHtml(WalaPlusI18n.t('dyn.calls.top_strengths') || 'Top strengths')}</h5>
+                                <ul class="text-xs text-green-700 space-y-0.5">${strengths.map(s => `<li>• ${escapeHtml(s)}</li>`).join('') || `<li class="text-gray-400">—</li>`}</ul>
+                            </div>
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                                <h5 class="text-xs font-semibold text-red-800 mb-1">📉 ${escapeHtml(WalaPlusI18n.t('dyn.calls.top_gaps') || 'Top gaps')}</h5>
+                                <ul class="text-xs text-red-700 space-y-0.5">${gaps.map(g => `<li>• ${escapeHtml(g)}</li>`).join('') || `<li class="text-gray-400">—</li>`}</ul>
+                            </div>
+                        </div>
+                    ` : ''}
+                    <div class="bg-white border rounded-lg overflow-hidden">
+                        <div class="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
+                            <h5 class="text-xs font-semibold text-gray-700">${escapeHtml(WalaPlusI18n.t('dyn.calls.detailed_attr_eval') || 'Attribute evaluations')} <span class="text-gray-400 font-normal">(${attrs.length})</span></h5>
+                        </div>
+                        <div class="divide-y px-3 py-1 max-h-72 overflow-y-auto" data-testid="stored-sdr-attributes">
+                            ${attrRows || `<p class="text-xs text-gray-400 py-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_attr_eval') || 'No attribute evaluations')}</p>`}
+                        </div>
+                    </div>
+                </div>`;
         }
 
         function closeCallModal() {
