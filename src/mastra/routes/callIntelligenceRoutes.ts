@@ -1347,10 +1347,25 @@ Respond with JSON only:
             }
           }
 
+          // Same lead_id-vs-phone reroute as the bulk audio path: never
+          // store a phone-shaped string in call_records.lead_id, because
+          // the CRM Link cell would then build an Invalid Zoho URL.
+          const looksLikePhoneSingle = (v: string) =>
+            /^\+?\d[\d\s\-()]{4,}$/.test(v.trim());
+          let leadIdSafe = leadId;
+          let contactPhoneSingle = "";
+          if (leadId && looksLikePhoneSingle(leadId)) {
+            contactPhoneSingle = leadId.trim();
+            leadIdSafe = "";
+          }
+          if (!contactPhoneSingle && contactName && looksLikePhoneSingle(contactName)) {
+            contactPhoneSingle = contactName.trim();
+          }
+
           const callRecord = await createCallRecord({
             call_id: `manual-${Date.now()}`,
             source: "manual",
-            lead_id: leadId,
+            lead_id: leadIdSafe,
             contact_name: contactName,
             agent_email: agentEmail,
             agent_name: agentName,
@@ -1361,6 +1376,7 @@ Respond with JSON only:
             metadata: {
               uploaded_at: new Date().toISOString(),
               original_filename: file?.name || "",
+              ...(contactPhoneSingle ? { contact_phone: contactPhoneSingle } : {}),
             },
           } as any);
 
@@ -1445,11 +1461,33 @@ Respond with JSON only:
           const file = formData.get("file");
           const agentEmail = formData.get("agent_email");
           const agentName = formData.get("agent_name") || "";
-          const leadId = (formData.get("lead_id") as string | null) || "";
+          const leadIdRaw = (formData.get("lead_id") as string | null) || "";
           const contactName =
             (formData.get("contact_name") as string | null) || "";
           const callDateRaw = formData.get("call_date") as string | null;
           const autoAnalyze = formData.get("auto_analyze") === "true";
+
+          // The bulk-upload client extracts a phone number from the
+          // filename and sends it as lead_id because at upload time we
+          // don't know the real Zoho Lead record-id yet. Persisting a
+          // phone-shaped string into call_records.lead_id is harmful:
+          // the frontend would build /crm/.../tab/Leads/+966... which
+          // Zoho rejects as Invalid URL, and the auto-link matcher then
+          // refuses to overwrite an already-set lead_id. Detect that
+          // case here and reroute the phone into metadata.contact_phone
+          // (where the CRM Link cell already knows how to find it), so
+          // lead_id is only ever set by the real Zoho matcher.
+          const looksLikePhone = (v: string) => /^\+?\d[\d\s\-()]{4,}$/.test(v.trim());
+          let leadId = "";
+          let contactPhone = "";
+          if (leadIdRaw && looksLikePhone(leadIdRaw)) {
+            contactPhone = leadIdRaw.trim();
+          } else if (leadIdRaw) {
+            leadId = leadIdRaw;
+          }
+          if (!contactPhone && contactName && looksLikePhone(contactName)) {
+            contactPhone = contactName.trim();
+          }
 
           if (!agentEmail) {
             return c.json(
@@ -1565,6 +1603,7 @@ Respond with JSON only:
               uploaded_at: new Date().toISOString(),
               original_filename: file.name,
               file_size: file.size,
+              ...(contactPhone ? { contact_phone: contactPhone } : {}),
             },
           });
 
@@ -1657,15 +1696,37 @@ Respond with JSON only:
                 type: file.type,
               });
 
-              const transcription = await openai.audio.transcriptions.create({
-                model: "gpt-4o-mini-transcribe",
+              // Use whisper-1 with verbose_json so we get the audio
+              // duration back in the response — gpt-4o-mini-transcribe
+              // does not return duration, which left the Duration
+              // column in Call Records / SDR Evaluation header as "--"
+              // even for fully analyzed calls.
+              const transcription: any = await openai.audio.transcriptions.create({
+                model: "whisper-1",
                 file: audioFile,
-                response_format: "json",
+                response_format: "verbose_json",
               });
 
               const transcriptText = transcription.text || "";
+              const transcribedDuration =
+                typeof transcription.duration === "number" && transcription.duration > 0
+                  ? Math.round(transcription.duration)
+                  : null;
+              if (transcribedDuration) {
+                try {
+                  await updateCallRecord(callId, {
+                    duration_seconds: transcribedDuration,
+                  });
+                } catch (durErr: any) {
+                  logger?.warn("[API] Persist duration_seconds failed:", {
+                    id: callId,
+                    error: durErr?.message || String(durErr),
+                  });
+                }
+              }
               logger?.info("📝 [API] Transcription completed", {
                 length: transcriptText.length,
+                duration_seconds: transcribedDuration,
               });
 
               await saveTranscript({

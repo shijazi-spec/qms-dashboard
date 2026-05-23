@@ -306,6 +306,30 @@ export async function initCallIntelligenceTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_call ON sdr_evaluation_reviews(call_record_id);
     CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_reviewer ON sdr_evaluation_reviews(reviewer_email);
   `);
+
+  // One-shot backfill: earlier versions of the bulk-audio upload
+  // stored the phone number extracted from the filename directly in
+  // call_records.lead_id. That value is not a Zoho Lead record-id, so
+  // the CRM Link cell built /crm/.../tab/Leads/+966... → Invalid URL,
+  // and the auto-link matcher then refused to overwrite the "already
+  // set" lead_id. Move the phone into metadata.contact_phone (where
+  // the renderer already looks for it) and clear lead_id so the
+  // matcher can populate the real id next time it runs.
+  //
+  // Idempotent: the WHERE filter only matches rows still in the bad
+  // state, so running this on every init is a no-op once clean.
+  try {
+    await pool.query(`
+      UPDATE call_records
+         SET metadata = COALESCE(metadata, '{}'::jsonb)
+                        || jsonb_build_object('contact_phone', lead_id),
+             lead_id = NULL
+       WHERE lead_id ~ '^\\+?\\d[\\d\\s\\-()]{4,}$'
+         AND (metadata->>'contact_phone') IS NULL
+    `);
+  } catch {
+    // Best-effort: never block init on a backfill failure.
+  }
 }
 
 /**
