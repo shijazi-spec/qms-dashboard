@@ -89,9 +89,14 @@
             <button data-on-click="showTab" data-args="[&quot;sources&quot;]" id="tab-sources" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_sources">
                 Data Sources
             </button>
-            <button data-on-click="showTab" data-args="[&quot;reconcile&quot;]" id="tab-reconcile" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_mcp_bridge">
-                QMS Bridge
-            </button>
+            <!-- "QMS Bridge" tab retired. It mixed engineering status
+                 (CRM scope wording, Five9/Drive readiness, raw POST
+                 endpoint URLs) with two genuinely useful operator
+                 tools — *Match phone to Zoho Lead* and *Reconciliation
+                 by record ID* — which now live inside the CRM
+                 Compliance tab next to the data they help debug. The
+                 backend bridge concept (sdrCallLinking + /api/calls/mcp/*)
+                 is untouched. -->
             <button data-on-click="showTab" data-args="[&quot;evaluate&quot;]" id="tab-evaluate" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_sdr">
                 SDR Evaluation
             </button>
@@ -629,47 +634,10 @@
             </div>
         </div>
 
-        <div id="content-reconcile" class="tab-content hidden fade-in">
-            <div class="bg-gradient-to-r from-violet-700 to-indigo-800 rounded-xl shadow-lg p-6 mb-6 text-white">
-                <h2 class="text-xl font-bold mb-2" data-i18n="calls.tab_mcp_bridge">QMS Bridge</h2>
-                <p class="text-sm text-violet-100 max-w-3xl" data-i18n="dyn.calls.mcp_reconcile_desc">Programmatic checks: heuristics plus governance JSON vs transcript and QA.</p>
-            </div>
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-gray-900" data-i18n="dyn.calls.mcp_import_catalog_title">Import channels &amp; SDR scope</h3>
-                        <button type="button" data-on-click="refreshMcpImportCatalog" class="px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg hover:bg-violet-700" data-i18n="dyn.calls.mcp_refresh_catalog">Refresh import catalog</button>
-                    </div>
-                    <div id="mcp-catalog-placeholder" class="text-sm text-gray-500">—</div>
-                    <div id="mcp-catalog-body" class="hidden mt-4 space-y-4 max-h-[480px] overflow-y-auto"></div>
-                </div>
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="dyn.calls.mcp_phone_match_title">Match phone to Zoho Lead</h3>
-                    <div class="space-y-3">
-                        <input type="text" id="mcp-phone-input" class="w-full px-3 py-2 border border-gray-200 rounded-lg" data-i18n-placeholder="dyn.calls.mcp_phone_ph" placeholder="Phone or mobile">
-                        <div class="flex gap-3 items-end">
-                            <div class="flex-1">
-                                <label class="block text-xs text-gray-500 mb-1" data-i18n="dyn.calls.mcp_max_records">Max Leads to scan</label>
-                                <input type="number" id="mcp-max-records" value="2500" min="100" max="10000" class="w-full px-3 py-2 border border-gray-200 rounded-lg">
-                            </div>
-                            <button type="button" data-on-click="runMcpPhoneMatch" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shrink-0" data-i18n="dyn.calls.mcp_run_match">Find matching Leads</button>
-                        </div>
-                    </div>
-                    <div id="mcp-phone-result" class="mt-4 hidden text-sm"></div>
-                </div>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="dyn.calls.mcp_reconcile_id_title">Reconciliation by record ID</h3>
-                <div class="flex flex-wrap gap-3 items-end">
-                    <div class="flex-1 min-w-[200px]">
-                        <label class="block text-xs text-gray-500 mb-1" data-i18n="dyn.calls.mcp_record_id_ph">Numeric call record ID</label>
-                        <input type="number" id="mcp-reconcile-record-id" min="1" class="w-full px-3 py-2 border border-gray-200 rounded-lg" placeholder="e.g. 42">
-                    </div>
-                    <button type="button" data-on-click="runMcpReconciliationById" class="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700" data-i18n="dyn.calls.mcp_run_reconcile">Run reconciliation</button>
-                </div>
-                <div id="mcp-reconcile-full-result" class="mt-4 hidden border-t pt-4"></div>
-            </div>
-        </div>
+        <!-- The former "QMS Bridge" tab body lived here. Its engineering-
+             docs blocks (Import catalog, Five9/Drive readiness) were
+             dropped; the two operator tools moved to the CRM Compliance
+             tab below. -->
 
         <div id="content-evaluate" class="tab-content hidden fade-in">
             <!-- Medium #9 — Batch Evaluation panel.
@@ -952,6 +920,45 @@
                         </thead>
                         <tbody id="complianceTable" class="divide-y divide-gray-100"></tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- Operator tools relocated from the retired "QMS Bridge"
+                 tab. They live next to the Compliance Records table
+                 because both workflows answer the same question:
+                 "why didn't this call's compliance check pass?"
+                 - Match phone to Zoho Lead → sanity-check why the
+                   auto-link matcher didn't find a Lead.
+                 - Re-run compliance for a call id → re-score a single
+                   call after fixing missing CRM activities.
+                 Wired to the same /api/calls/mcp/* handlers as before. -->
+            <div class="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-1" data-i18n="dyn.calls.mcp_phone_match_title">Match phone to Zoho Lead</h3>
+                    <p class="text-xs text-gray-500 mb-4">Sanity-check why a call didn't auto-link. Paste the customer's phone (any format) to find the Zoho Lead it should attach to.</p>
+                    <div class="space-y-3">
+                        <input type="text" id="mcp-phone-input" class="w-full px-3 py-2 border border-gray-200 rounded-lg" data-i18n-placeholder="dyn.calls.mcp_phone_ph" placeholder="Phone or mobile" data-testid="input-compliance-phone-match">
+                        <div class="flex gap-3 items-end">
+                            <div class="flex-1">
+                                <label class="block text-xs text-gray-500 mb-1" data-i18n="dyn.calls.mcp_max_records">Max Leads to scan</label>
+                                <input type="number" id="mcp-max-records" value="2500" min="100" max="10000" class="w-full px-3 py-2 border border-gray-200 rounded-lg">
+                            </div>
+                            <button type="button" data-on-click="runMcpPhoneMatch" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shrink-0" data-i18n="dyn.calls.mcp_run_match" data-testid="button-compliance-phone-match">Find matching Leads</button>
+                        </div>
+                    </div>
+                    <div id="mcp-phone-result" class="mt-4 hidden text-sm"></div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-1" data-i18n="dyn.calls.mcp_reconcile_id_title">Re-run compliance for call id</h3>
+                    <p class="text-xs text-gray-500 mb-4">Re-score a single call after fixing missing CRM activities (notes, task, stage move). Updates the Compliance Rate KPI on next refresh.</p>
+                    <div class="flex flex-wrap gap-3 items-end">
+                        <div class="flex-1 min-w-[200px]">
+                            <label class="block text-xs text-gray-500 mb-1" data-i18n="dyn.calls.mcp_record_id_ph">Numeric call record ID</label>
+                            <input type="number" id="mcp-reconcile-record-id" min="1" class="w-full px-3 py-2 border border-gray-200 rounded-lg" placeholder="e.g. 42" data-testid="input-compliance-reconcile-id">
+                        </div>
+                        <button type="button" data-on-click="runMcpReconciliationById" class="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700" data-i18n="dyn.calls.mcp_run_reconcile" data-testid="button-compliance-reconcile">Run reconciliation</button>
+                    </div>
+                    <div id="mcp-reconcile-full-result" class="mt-4 hidden border-t pt-4"></div>
                 </div>
             </div>
         </div>
@@ -1453,10 +1460,9 @@
             if (tab === 'calls') renderCallsTable();
             if (tab === 'compliance') renderComplianceTable();
             if (tab === 'analytics') renderAnalytics();
-            if (tab === 'reconcile' && !mcpCatalogBootstrapped) {
-                mcpCatalogBootstrapped = true;
-                refreshMcpImportCatalog();
-            }
+            // 'reconcile' (QMS Bridge) tab retired — its two operator
+            // tools moved into the CRM Compliance tab. The
+            // refreshMcpImportCatalog() bootstrap is gone with it.
             if (tab === 'scorecards') loadScorecards();
             // The SDR Evaluation tab embeds an Active Scorecard summary
             // line that needs to populate even before the user expands
