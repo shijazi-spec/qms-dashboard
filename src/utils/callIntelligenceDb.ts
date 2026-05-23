@@ -260,6 +260,9 @@ export async function initCallIntelligenceTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_call_records_lead ON call_records(lead_id);
     CREATE INDEX IF NOT EXISTS idx_call_records_deal ON call_records(deal_id);
     CREATE INDEX IF NOT EXISTS idx_call_records_date ON call_records(call_date);
+    CREATE INDEX IF NOT EXISTS idx_call_records_original_filename
+      ON call_records ((metadata->>'original_filename'))
+      WHERE metadata->>'original_filename' IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_call_compliance_lead ON call_compliance(lead_id);
     CREATE INDEX IF NOT EXISTS idx_meeting_mom_event ON meeting_mom(calendar_event_id);
     CREATE INDEX IF NOT EXISTS idx_ai_feedback_type ON ai_training_feedback(feedback_type);
@@ -303,6 +306,32 @@ export async function initCallIntelligenceTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_call ON sdr_evaluation_reviews(call_record_id);
     CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_reviewer ON sdr_evaluation_reviews(reviewer_email);
   `);
+}
+
+/**
+ * Look up an existing call_record by the original filename captured in
+ * metadata at upload time. Used by the upload routes to reject duplicate
+ * uploads of the same audio file (same source filename) so analytics,
+ * SDR scores, and compliance trends are not skewed by re-ingesting the
+ * same call multiple times.
+ *
+ * Returns the first matching row (by ascending id) or null. Comparison
+ * is case-sensitive and exact — matches what the browser File API
+ * reports as `file.name`.
+ */
+export async function findCallRecordByOriginalFilename(
+  filename: string,
+): Promise<{ id: number; call_id: string; agent_email: string; call_date: Date | null; status: string } | null> {
+  if (!filename) return null;
+  const result = await pool.query(
+    `SELECT id, call_id, agent_email, call_date, status
+       FROM call_records
+      WHERE metadata->>'original_filename' = $1
+      ORDER BY id ASC
+      LIMIT 1`,
+    [filename],
+  );
+  return result.rows[0] || null;
 }
 
 export async function createCallRecord(

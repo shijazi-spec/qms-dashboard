@@ -1314,6 +1314,39 @@ Respond with JSON only:
             });
           }
 
+          // Reject duplicate uploads of the same source filename (same
+          // policy as the bulk audio upload route) so re-imports do not
+          // skew analytics / SDR / compliance metrics with the same call
+          // counted twice.
+          if (file?.name) {
+            try {
+              const { findCallRecordByOriginalFilename } = await import(
+                "../../utils/callIntelligenceDb"
+              );
+              const existingDup = await findCallRecordByOriginalFilename(file.name);
+              if (existingDup) {
+                logger?.info("⏭️ [API] Duplicate manual upload rejected", {
+                  filename: file.name,
+                  existing_id: existingDup.id,
+                });
+                return c.json(
+                  {
+                    success: false,
+                    error: `Duplicate file: "${file.name}" was already uploaded (call record #${existingDup.id}, agent ${existingDup.agent_email}). Rename the file or delete the existing record if you intend to re-upload.`,
+                    duplicate: true,
+                    existing_call_record_id: existingDup.id,
+                  },
+                  409,
+                );
+              }
+            } catch (dupErr: any) {
+              logger?.warn("[API] Duplicate-filename check failed (proceeding):", {
+                filename: file.name,
+                error: dupErr?.message || String(dupErr),
+              });
+            }
+          }
+
           const callRecord = await createCallRecord({
             call_id: `manual-${Date.now()}`,
             source: "manual",
@@ -1476,6 +1509,40 @@ Respond with JSON only:
           await initCallIntelligenceTables();
 
           const fileName = `call_${Date.now()}_${file.name}`;
+
+          // Reject duplicate uploads of the same source filename so
+          // bulk re-imports of an agent's historical calls do not skew
+          // analytics / SDR scores / compliance trends by ingesting the
+          // same call twice. Done BEFORE the OpenAI transcription call
+          // so a duplicate never costs tokens.
+          try {
+            const { findCallRecordByOriginalFilename } = await import(
+              "../../utils/callIntelligenceDb"
+            );
+            const existingDup = await findCallRecordByOriginalFilename(file.name);
+            if (existingDup) {
+              logger?.info("⏭️ [API] Duplicate audio upload rejected", {
+                filename: file.name,
+                existing_id: existingDup.id,
+                existing_call_id: existingDup.call_id,
+                existing_agent: existingDup.agent_email,
+              });
+              return c.json(
+                {
+                  success: false,
+                  error: `Duplicate file: "${file.name}" was already uploaded (call record #${existingDup.id}, agent ${existingDup.agent_email}). Rename the file or delete the existing record if you intend to re-upload.`,
+                  duplicate: true,
+                  existing_call_record_id: existingDup.id,
+                },
+                409,
+              );
+            }
+          } catch (dupErr: any) {
+            logger?.warn("[API] Duplicate-filename check failed (proceeding):", {
+              filename: file.name,
+              error: dupErr?.message || String(dupErr),
+            });
+          }
 
           // Use a high-entropy call_id (timestamp + random) to avoid
           // millisecond collisions when multiple files upload in a tight
