@@ -1693,6 +1693,81 @@ ${transcriptText}
                   error: evalErr?.message || String(evalErr),
                 });
               }
+
+              // Auto-link to Zoho Lead/Deal (mirrors /api/calls/ingest
+              // path). Without this, uploaded calls stay with lead_id /
+              // deal_id NULL forever, so the CRM Link badge never
+              // appears and the "Link" button is the only way to
+              // associate the call with a Zoho record.
+              if (!leadIdSafe && !callRecord.deal_id) {
+                try {
+                  const { autoLinkCallToCrm } = await import(
+                    "../../utils/sdrCallLinking"
+                  );
+                  const { extractCallPhoneCandidates } = await import(
+                    "../../utils/callLeadPhoneMatch"
+                  );
+                  const {
+                    updateCallRecordLeadId,
+                    updateCallRecordDealId,
+                    updateCallRecordLinkedVia,
+                  } = await import("../../utils/callIntelligenceDb");
+                  const candidates = extractCallPhoneCandidates(callRecord);
+                  const linkResult = await autoLinkCallToCrm(
+                    callRecord.id!,
+                    candidates,
+                    updateCallRecordLeadId,
+                    updateCallRecordDealId,
+                    {
+                      agentEmail: callRecord.agent_email || undefined,
+                      agentName: callRecord.agent_name || null,
+                      callDate: callRecord.call_date
+                        ? new Date(callRecord.call_date)
+                        : new Date(),
+                    },
+                  );
+                  if (linkResult.linked) {
+                    logger?.info("🔗 [API] Auto-linked uploaded call to Zoho", {
+                      callId: callRecord.id,
+                      module: linkResult.picked_module,
+                      recordId: linkResult.lead_id || linkResult.deal_id,
+                      linked_via: linkResult.linked_via,
+                    });
+                    if (linkResult.linked_via) {
+                      try {
+                        await updateCallRecordLinkedVia(
+                          callRecord.id!,
+                          linkResult.linked_via,
+                        );
+                      } catch {
+                        // diagnostic field only
+                      }
+                    }
+                    // Trigger CRM compliance check now that the call has
+                    // a Zoho Lead/Deal to score against, so the Compliance
+                    // Rate KPI populates without manual action.
+                    await runComplianceAfterLink(
+                      callRecord.id!,
+                      linkResult.lead_id ?? null,
+                      linkResult.deal_id ?? null,
+                      callRecord.call_date,
+                      logger,
+                    );
+                  } else {
+                    logger?.info("ℹ️ [API] Auto-link skipped on manual upload", {
+                      callId: callRecord.id,
+                      reason: linkResult.reason,
+                    });
+                  }
+                } catch (linkErr: any) {
+                  // Auto-link is best-effort — never fail the upload
+                  // because of a CRM lookup hiccup.
+                  logger?.warn("[API] Auto-link threw on manual upload", {
+                    callId: callRecord.id,
+                    error: linkErr?.message || String(linkErr),
+                  });
+                }
+              }
             } catch (analysisError: any) {
               const errMsg = analysisError?.message || String(analysisError);
               const errCode =
