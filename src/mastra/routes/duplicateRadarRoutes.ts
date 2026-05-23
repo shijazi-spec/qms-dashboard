@@ -2768,6 +2768,12 @@ export const duplicateRadarRoutes = [
           if (!ownerName) {
             return c.json({ error: "owner query param is required" }, 400);
           }
+          // Locale for the packet body. Defaults to English; clamp anything
+          // unrecognised so a typo can't break the build (XLSX still ships
+          // in English rather than 500ing). Frontend passes "ar" when the
+          // dashboard is in Arabic mode (WalaPlusI18n.currentLang()).
+          const langParam = (url.searchParams.get("lang") || "en").toLowerCase();
+          const lang: "en" | "ar" = langParam === "ar" ? "ar" : "en";
 
           const [owners, settings] = await Promise.all([
             getOwnerAccountability(),
@@ -2783,7 +2789,10 @@ export const duplicateRadarRoutes = [
               (o.owner_email ?? "").trim().toLowerCase() === needle,
           );
           if (!owner) {
-            return c.json({ error: "Owner not found" }, 404);
+            return c.json(
+              { error: "Owner not found", owner: ownerName },
+              404,
+            );
           }
 
           // Pull every duplicate-cluster record this owner is on, sorted so
@@ -2837,6 +2846,7 @@ export const duplicateRadarRoutes = [
             settings,
             records,
             clusterConfidences,
+            lang,
           });
           const filename = packetFilename(owner.owner_name);
 
@@ -2844,13 +2854,26 @@ export const duplicateRadarRoutes = [
           // operators see who pulled a packet and when from the existing
           // export-log dashboard. Non-blocking: a logging failure must not
           // stop the owner from receiving their packet.
+          //
+          // `exported_by` is the ACTOR (the admin / ops user that ran the
+          // download), not the target owner. The target owner is in
+          // filter_criteria. This is the audit invariant: "who pulled
+          // sensitive data about whom".
+          const actor =
+            (admin as any).email ||
+            (admin as any).name ||
+            `user:${(admin as any).userId ?? "unknown"}`;
           try {
             await createExportLog({
               export_type: "owner_packet" as any,
-              filter_criteria: { owner: owner.owner_name, packet: true },
+              filter_criteria: {
+                owner: owner.owner_name,
+                packet: true,
+                lang,
+              },
               total_records_exported: records.length,
               file_format: "xlsx",
-              exported_by: owner.owner_name,
+              exported_by: actor,
             });
           } catch (logErr) {
             logger.warn(

@@ -11,7 +11,10 @@ import {
   packetFilename,
   buildPacketSheets,
 } from "../../src/utils/duplicateRadarPacket";
-import type { OwnerAccountability, PacketSettings } from "../../src/utils/duplicateRadarDatabase";
+import type {
+  OwnerAccountability,
+  PacketSettings,
+} from "../../src/utils/duplicateRadarDatabase";
 
 const owner: OwnerAccountability = {
   owner_name: "Lina Khaled",
@@ -35,37 +38,45 @@ const fixedNow = new Date("2026-05-01T00:00:00.000Z");
 
 describe("packetDueDate", () => {
   test("any high-confidence cluster → +7 days", () => {
-    const due = packetDueDate([95, 70, 50], fixedNow);
-    expect(due).toBe("2026-05-08");
+    expect(packetDueDate([95, 70, 50], fixedNow)).toBe("2026-05-08");
   });
   test("medium but no high → +14 days", () => {
-    const due = packetDueDate([75, 60, 30], fixedNow);
-    expect(due).toBe("2026-05-15");
+    expect(packetDueDate([75, 60, 30], fixedNow)).toBe("2026-05-15");
   });
   test("all low → +30 days", () => {
-    const due = packetDueDate([10, 30, 55], fixedNow);
-    expect(due).toBe("2026-05-31");
+    expect(packetDueDate([10, 30, 55], fixedNow)).toBe("2026-05-31");
   });
   test("empty list falls back to low-tier SLA", () => {
-    const due = packetDueDate([], fixedNow);
-    expect(due).toBe("2026-05-31");
+    expect(packetDueDate([], fixedNow)).toBe("2026-05-31");
   });
 });
 
 describe("packetFilename", () => {
   test("ascii name", () => {
-    expect(packetFilename("Lina Khaled")).toBe("duplicate-radar-packet-Lina_Khaled.xlsx");
+    expect(packetFilename("Lina Khaled")).toBe(
+      "duplicate-radar-packet-Lina_Khaled.xlsx",
+    );
   });
   test("strips filesystem-hostile chars", () => {
-    expect(packetFilename("a/b:c*?d")).toBe("duplicate-radar-packet-a_b_c_d.xlsx");
+    expect(packetFilename("a/b:c*?d")).toBe(
+      "duplicate-radar-packet-a_b_c_d.xlsx",
+    );
   });
   test("empty / whitespace falls back to 'owner'", () => {
     expect(packetFilename("")).toBe("duplicate-radar-packet-owner.xlsx");
     expect(packetFilename("   ")).toBe("duplicate-radar-packet-owner.xlsx");
   });
+  // Server slug must agree with the dashboard fallback (ASCII-only). If we
+  // emitted Arabic chars from the server but the client stripped them, the
+  // streaming-download tray would show a different name than what landed
+  // on disk — confusing for the operator.
+  test("non-ASCII (Arabic) name produces ASCII slug matching the client", () => {
+    const slug = packetFilename("أحمد امشاه");
+    expect(slug).toMatch(/^duplicate-radar-packet-[a-zA-Z0-9_-]+\.xlsx$/);
+  });
 });
 
-describe("buildPacketSheets", () => {
+describe("buildPacketSheets — English (default)", () => {
   test("returns exactly 4 sheets in the documented order", () => {
     const sheets = buildPacketSheets({
       owner,
@@ -82,7 +93,7 @@ describe("buildPacketSheets", () => {
     ]);
   });
 
-  test("Cover sheet exposes owner metrics, packet SLA, dispute path, escalation contact", () => {
+  test("Cover sheet exposes owner metrics, packet SLA, dispute path, escalation contact + email rows", () => {
     const sheets = buildPacketSheets({
       owner,
       settings,
@@ -101,9 +112,10 @@ describe("buildPacketSheets", () => {
     expect(byField["Duplicate rate"]).toBe("15%");
     expect(byField["RAG status"]).toMatch(/Red/);
     expect(byField["Packet due by"]).toBe("2026-05-08");
-    expect(String(byField["Escalation contact"])).toContain(
-      "data-quality@walaplus.com",
-    );
+    // Escalation is now two separate rows so Excel doesn't auto-linkify
+    // a `Name <email>` pattern.
+    expect(byField["Escalation contact"]).toBe(settings.escalation_contact_name);
+    expect(byField["Escalation email"]).toBe(settings.escalation_contact_email);
     expect(byField["Dispute path"]).toBe(settings.dispute_path);
   });
 
@@ -169,5 +181,152 @@ describe("buildPacketSheets", () => {
     expect(action[0].recommended_action).toBe("Keep — primary record");
     expect(action[1].is_primary_label).toBe("No");
     expect(action[1].recommended_action).toBe('Merge into "ACME Co"');
+  });
+
+  test("empty-owner contract: no records, no cluster confidences — packet still builds and Action Items / Raw Records are empty arrays", () => {
+    const sheets = buildPacketSheets({
+      owner,
+      settings,
+      records: [],
+      clusterConfidences: [],
+      now: fixedNow,
+    });
+    expect(sheets).toHaveLength(4);
+    expect(sheets[1].rows).toEqual([]); // Action Items
+    expect(sheets[2].rows).toEqual([]); // Raw Records
+    // Packet due-by falls back to low-tier SLA when no clusters are known.
+    const cover = sheets[0];
+    const byField = Object.fromEntries(
+      (cover.rows as Array<{ field: string; value: unknown }>).map((r) => [
+        r.field,
+        r.value,
+      ]),
+    );
+    expect(byField["Packet due by"]).toBe("2026-05-31");
+  });
+
+  test("English sheets are NOT marked right-to-left", () => {
+    const sheets = buildPacketSheets({
+      owner,
+      settings,
+      records: [],
+      clusterConfidences: [95],
+      now: fixedNow,
+      lang: "en",
+    });
+    for (const s of sheets) {
+      expect((s as any).rightToLeft).toBeFalsy();
+    }
+  });
+});
+
+describe("buildPacketSheets — Arabic", () => {
+  test("sheet names are Arabic", () => {
+    const sheets = buildPacketSheets({
+      owner,
+      settings,
+      records: [],
+      clusterConfidences: [95],
+      now: fixedNow,
+      lang: "ar",
+    });
+    expect(sheets.map((s) => s.name)).toEqual([
+      "الغلاف",
+      "خطوات المعالجة",
+      "السجلات الأصلية",
+      "الأسئلة الشائعة",
+    ]);
+  });
+
+  test("every Arabic sheet is marked rightToLeft so Excel mirrors column order", () => {
+    const sheets = buildPacketSheets({
+      owner,
+      settings,
+      records: [],
+      clusterConfidences: [95],
+      now: fixedNow,
+      lang: "ar",
+    });
+    for (const s of sheets) {
+      expect((s as any).rightToLeft).toBe(true);
+    }
+  });
+
+  test("Cover sheet uses Arabic field labels + RAG descriptor", () => {
+    const sheets = buildPacketSheets({
+      owner,
+      settings,
+      records: [],
+      clusterConfidences: [95],
+      now: fixedNow,
+      lang: "ar",
+    });
+    const cover = sheets[0];
+    const byField = Object.fromEntries(
+      (cover.rows as Array<{ field: string; value: unknown }>).map((r) => [
+        r.field,
+        r.value,
+      ]),
+    );
+    expect(byField["المالك"]).toBe(owner.owner_name);
+    expect(byField["نسبة التكرار"]).toBe("15%");
+    expect(String(byField["الحالة (RAG)"])).toMatch(/أحمر/);
+    expect(byField["تاريخ استحقاق الحزمة"]).toBe("2026-05-08");
+  });
+
+  test("FAQ in Arabic has 7 entries and no English residue", () => {
+    const sheets = buildPacketSheets({
+      owner,
+      settings,
+      records: [],
+      clusterConfidences: [95],
+      now: fixedNow,
+      lang: "ar",
+    });
+    const faq = sheets[3];
+    expect(faq.rows.length).toBe(7);
+    for (const r of faq.rows as Array<{ q: string; a: string }>) {
+      // Sanity: question + answer should contain Arabic codepoints
+      // (U+0600..U+06FF). Catches a future PR that forgets to add an
+      // AR FAQ row and silently falls back to English.
+      expect(r.q).toMatch(/[؀-ۿ]/);
+      expect(r.a).toMatch(/[؀-ۿ]/);
+    }
+  });
+
+  test("Action Items in Arabic shows is_primary label as نعم / لا", () => {
+    const records = [
+      {
+        cluster_id: 1,
+        is_primary: true,
+        record_name: "ACME Co",
+        record_type: "account",
+        zoho_record_id: "Z1",
+        cluster_confidence_score: 95,
+        cluster_total_records: 1,
+      },
+    ];
+    const sheets = buildPacketSheets({
+      owner,
+      settings,
+      records,
+      clusterConfidences: [95],
+      now: fixedNow,
+      lang: "ar",
+    });
+    const action = sheets[1].rows as Array<{ is_primary_label: string }>;
+    expect(action[0].is_primary_label).toBe("نعم");
+  });
+
+  test("unknown lang falls back to English (defensive)", () => {
+    const sheets = buildPacketSheets({
+      owner,
+      settings,
+      records: [],
+      clusterConfidences: [95],
+      now: fixedNow,
+      lang: "xx" as any,
+    });
+    expect(sheets[0].name).toBe("Cover");
   });
 });
