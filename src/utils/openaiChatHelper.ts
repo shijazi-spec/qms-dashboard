@@ -32,6 +32,15 @@ export interface GenerateChatTextOptions {
   temperature?: number;
   /** Per-call timeout in ms — defaults to 60s. */
   timeoutMs?: number;
+  /**
+   * When set to "json_object", instructs OpenAI to guarantee the
+   * assistant message is a valid JSON object. The prompt MUST contain
+   * the substring "JSON" or the OpenAI API rejects the request. Use
+   * this for structured-extraction prompts where downstream code does
+   * `JSON.parse(text)` — eliminates the "model returned prose / fenced
+   * code" parse-failure branch that produces "Analysis parsing failed".
+   */
+  responseFormat?: "json_object";
 }
 
 export interface GenerateChatTextResult {
@@ -81,6 +90,9 @@ export async function generateChatText(
   };
   if (typeof opts.maxTokens === "number") body.max_tokens = opts.maxTokens;
   if (typeof opts.temperature === "number") body.temperature = opts.temperature;
+  if (opts.responseFormat === "json_object") {
+    body.response_format = { type: "json_object" };
+  }
 
   const url = `${chatBaseUrl()}/chat/completions`;
   const headers = {

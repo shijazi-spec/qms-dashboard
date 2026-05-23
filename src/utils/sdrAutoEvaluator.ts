@@ -51,6 +51,12 @@ async function generateWithRetry(
         model: "gpt-4o-mini",
         prompt,
         maxTokens: 8000,
+        // Force structured JSON output so the downstream JSON.parse can't
+        // trip on fenced code blocks or stray prose — the failure mode
+        // that left every attribute showing "NA" with skipReason
+        // "ai_parse_failed". The SDR prompt already contains the literal
+        // word "JSON" (required by OpenAI when response_format is set).
+        responseFormat: "json_object",
       });
     } catch (err: any) {
       lastErr = err;

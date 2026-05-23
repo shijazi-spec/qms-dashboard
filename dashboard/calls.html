@@ -2254,7 +2254,7 @@
                             <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.analysis'))}</h4>
                             ${data.analysis ? `
                                 <dl class="space-y-2">
-                                    <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.sentiment_label'))}</dt><dd class="font-medium">${escapeHtml(data.analysis.sentiment || '--')} (${_fn(((data.analysis.sentiment_score || 0) * 100).toFixed(0))}%)</dd></div>
+                                    <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.sentiment_label'))}</dt><dd class="font-medium">${escapeHtml(data.analysis.sentiment_label || '--')} (${_fn(Math.round(Number(data.analysis.sentiment_score) || 0))}%)</dd></div>
                                     <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.topics_label'))}</dt><dd class="font-medium">${(data.analysis.key_topics || []).map(t => escapeHtml(t)).join(', ') || '--'}</dd></div>
                                 </dl>
                                 <div class="mt-4">

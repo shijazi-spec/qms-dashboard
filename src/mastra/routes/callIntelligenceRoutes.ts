@@ -561,6 +561,7 @@ Respond with JSON only:
             model: "gpt-4o",
             prompt: analysisPrompt,
             maxTokens: 2000,
+            responseFormat: "json_object",
           });
 
           let analysisData;
@@ -1883,6 +1884,7 @@ ${transcriptText}
                 model: "gpt-4o-mini",
                 prompt: analysisPrompt,
                 maxTokens: 4000,
+                responseFormat: "json_object",
               });
 
               let analysisData;
@@ -4214,11 +4216,17 @@ ${transcriptText}
           if (!Number.isFinite(id) || id <= 0) {
             return c.json({ error: "invalid id" }, 400);
           }
-          const { getCallRecordById } = await import(
+          // Pull transcript + analysis alongside the record. `getCallRecordById`
+          // alone returns only the `call_records` row (no `transcript_text`,
+          // no `sentiment_label`), which made every checkpoint fail to source
+          // and produced "Coverage 0% / Sourced 0/19" in the COPC scorecard
+          // panel for every call regardless of whether transcription and
+          // analysis had completed.
+          const { getCallWithFullAnalysis } = await import(
             "../../utils/callIntelligenceDb"
           );
-          const record = await getCallRecordById(id);
-          if (!record) {
+          const bundle = await getCallWithFullAnalysis(id);
+          if (!bundle.record) {
             return c.json({ error: "call record not found" }, 404);
           }
           const { evaluateLoadedCopcScorecard } = await import(
@@ -4227,12 +4235,12 @@ ${transcriptText}
           const scorecard = evaluateLoadedCopcScorecard({
             call_record_id: id,
             transcript_text:
-              typeof (record as any).transcript_text === "string"
-                ? (record as any).transcript_text
+              typeof bundle.transcript?.transcript_text === "string"
+                ? bundle.transcript.transcript_text
                 : null,
             sentiment_label:
-              typeof (record as any).sentiment_label === "string"
-                ? (record as any).sentiment_label
+              typeof bundle.analysis?.sentiment_label === "string"
+                ? bundle.analysis.sentiment_label
                 : null,
           });
           return c.json({ scorecard });
