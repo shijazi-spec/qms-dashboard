@@ -949,6 +949,7 @@
       "conf_moderate": "Moderate (60-89%)",
       "conf_weak": "Weak (<60%)",
       "export": "Export",
+      "packet": "Packet",
       "no_scan_logs": "No scan logs",
       "domain_kw": "Domain:",
       "score_kw": "Score:",

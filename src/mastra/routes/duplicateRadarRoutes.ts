@@ -60,6 +60,7 @@ import {
   getMergeHistory,
   markPrimaryRecord,
   getOwnerAccountability,
+  getPacketSettings,
   checkForDuplicates,
   getEnhancedSummary,
   getLastScanDate,
@@ -2744,6 +2745,95 @@ export const duplicateRadarRoutes = [
           return c.json({ owners: data });
         } catch (error: any) {
           logger.error("Error fetching owner accountability:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  // R2: per-owner Remediation Packet — 4-sheet xlsx (Cover, Action Items,
+  // Raw Records, FAQ). Owner name passes through the querystring rather
+  // than the path so existing owner-name characters (spaces, dots,
+  // Arabic) don't have to be URL-pre-encoded by the link generator.
+  {
+    path: "/api/duplicates/owner-packet",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const admin = await requireDuplicateRadarAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const ownerName = (url.searchParams.get("owner") || "").trim();
+          if (!ownerName) {
+            return c.json({ error: "owner query param is required" }, 400);
+          }
+
+          const [owners, settings] = await Promise.all([
+            getOwnerAccountability(),
+            getPacketSettings(),
+          ]);
+          const owner = owners.find((o) => o.owner_name === ownerName);
+          if (!owner) {
+            return c.json({ error: "Owner not found" }, 404);
+          }
+
+          // Pull every duplicate-cluster record this owner is on, sorted so
+          // the playbook helpers see is_primary first per cluster.
+          const recordsRes = await sharedDuplicateRadarPool.query(
+            `
+              SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.record_type,
+                     dr.company_name, dr.email, dr.domain, dr.phone,
+                     dr.owner_name, dr.owner_email, dr.is_primary,
+                     COALESCE(dr.status, dr.stage, '') AS status_or_stage,
+                     dr.deal_value, dr.source, dr.confidence_score, dr.ai_recommendation,
+                     TO_CHAR(dr.created_date::date, 'YYYY-MM-DD') AS created_str,
+                     dc.confidence_score AS cluster_confidence_score,
+                     dc.total_records      AS cluster_total_records
+              FROM duplicate_records dr
+              JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+              WHERE dc.status = 'active'
+                AND dc.total_records > 1
+                AND dr.owner_name = $1
+              ORDER BY dc.total_records DESC, dr.cluster_id, dr.is_primary DESC
+            `,
+            [ownerName],
+          );
+
+          const records = recordsRes.rows as Array<Record<string, unknown>>;
+          const seenClusters = new Set<number>();
+          const clusterConfidences: number[] = [];
+          for (const r of records) {
+            const cid = Number(r.cluster_id ?? -1);
+            if (cid > 0 && !seenClusters.has(cid)) {
+              seenClusters.add(cid);
+              const cc = Number(r.cluster_confidence_score ?? 0);
+              if (!Number.isNaN(cc)) clusterConfidences.push(cc);
+            }
+          }
+
+          const { streamXlsx, stageStreamingExportFromHono } = await import(
+            "../../utils/excelExport"
+          );
+          const { buildPacketSheets, packetFilename } = await import(
+            "../../utils/duplicateRadarPacket"
+          );
+
+          const sheets = buildPacketSheets({
+            owner,
+            settings,
+            records,
+            clusterConfidences,
+          });
+          const filename = packetFilename(ownerName);
+
+          return await stageStreamingExportFromHono(c, async () =>
+            streamXlsx(sheets, filename, {
+              title: `Duplicate Radar — Remediation Packet for ${ownerName}`,
+            }),
+          );
+        } catch (error: any) {
+          logger.error("Error generating owner packet:", error);
           return c.json({ error: "An internal error occurred" }, 500);
         }
       };

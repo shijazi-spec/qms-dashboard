@@ -789,6 +789,47 @@ export async function initDuplicateRadarTables(): Promise<void> {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_account_inference_confidence ON account_inference_hints(confidence DESC) WHERE status = 'pending'`,
   );
+
+  // R2 (per-owner Remediation Packet): cover-sheet text the operator
+  // hands to a data-quality owner. Single-row key/value table — keeps the
+  // dispute path + escalation contact editable without a code deploy and
+  // without touching env vars. Seeded with sensible defaults if empty.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS duplicate_radar_packet_settings (
+      setting_key   VARCHAR(64) PRIMARY KEY,
+      setting_value TEXT NOT NULL,
+      updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(
+    `INSERT INTO duplicate_radar_packet_settings (setting_key, setting_value) VALUES
+       ('escalation_contact_name',  'Data Quality Lead'),
+       ('escalation_contact_email', 'data-quality@walaplus.com'),
+       ('dispute_path',             'Reply to the email that delivered this packet, or open a CAPA ticket tagged "duplicate-radar-dispute" within the SLA window.')
+     ON CONFLICT (setting_key) DO NOTHING`,
+  );
+}
+
+export interface PacketSettings {
+  escalation_contact_name: string;
+  escalation_contact_email: string;
+  dispute_path: string;
+}
+
+export async function getPacketSettings(): Promise<PacketSettings> {
+  const r = await pool.query(
+    `SELECT setting_key, setting_value FROM duplicate_radar_packet_settings`,
+  );
+  const map: Record<string, string> = {};
+  for (const row of r.rows) map[row.setting_key] = row.setting_value;
+  return {
+    escalation_contact_name: map.escalation_contact_name || "Data Quality Lead",
+    escalation_contact_email:
+      map.escalation_contact_email || "data-quality@walaplus.com",
+    dispute_path:
+      map.dispute_path ||
+      "Reply to the email that delivered this packet, or open a CAPA ticket within the SLA window.",
+  };
 }
 
 export async function createCluster(
