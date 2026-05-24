@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Call Evaluation — Pipeline Health</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!--
+      DMAIC Solution #8 — operational visibility for the Call Evaluation
+      pipeline. Renders the metrics that the Measure phase identified as
+      "no dashboard exists today": process yield, CRM linkage rate,
+      manager-review rate, ingest mix, coaching flow, cost spend snapshot,
+      recent failures.
+      Flag-gated on CALLS_HEALTH_DASHBOARD; the API returns 404 when
+      disabled and this page renders an unlock message.
+    -->
+    <div class="max-w-7xl mx-auto px-6 py-8">
+        <header class="mb-6 flex items-baseline justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Call Evaluation — Pipeline Health</h1>
+                <p class="text-sm text-gray-500 mt-1">
+                    Live operational metrics across the ingest → analyze → evaluate → review → coach pipeline.
+                </p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="generated-at" class="text-xs text-gray-500"></span>
+                <button id="reload-btn" type="button"
+                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg px-3 py-1.5 text-xs font-medium">
+                    Refresh
+                </button>
+            </div>
+        </header>
+
+        <p id="error-banner" class="hidden mb-6 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3"></p>
+
+        <!-- TOP ROW: 4 headline metrics -->
+        <section id="headline" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Process yield</div>
+                <div class="mt-1 flex items-baseline gap-2">
+                    <span id="m-yield-pct" class="text-3xl font-bold text-gray-900">—</span>
+                    <span class="text-sm text-gray-500">%</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                    <span id="m-yield-analyzed">—</span> / <span id="m-yield-total">—</span> calls reached <code>status='analyzed'</code>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">CRM linkage</div>
+                <div class="mt-1 flex items-baseline gap-2">
+                    <span id="m-linkage-pct" class="text-3xl font-bold text-gray-900">—</span>
+                    <span class="text-sm text-gray-500">%</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                    <span id="m-linked">—</span> linked / <span id="m-unlinked">—</span> unlinked
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Manager review</div>
+                <div class="mt-1 flex items-baseline gap-2">
+                    <span id="m-review-pct" class="text-3xl font-bold text-gray-900">—</span>
+                    <span class="text-sm text-gray-500">%</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                    <span id="m-reviewed">—</span> / <span id="m-evaluations">—</span> evaluations reviewed
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Today's AI spend</div>
+                <div class="mt-1 flex items-baseline gap-2">
+                    <span class="text-3xl font-bold text-gray-900">$<span id="m-cost-usd">—</span></span>
+                    <span class="text-sm text-gray-500">of $<span id="m-cap-usd">—</span></span>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                    <span id="m-cost-pct">—</span>% of daily cap · breaker
+                    <span id="m-cost-enforced" class="font-medium">—</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- MIDDLE: ingest mix + linkage breakdown + coaching -->
+        <section id="breakdowns" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <h2 class="text-sm font-semibold text-gray-900">Ingest mix — last <span id="m-mix-window">7</span>d</h2>
+                <table class="w-full mt-3 text-sm">
+                    <tbody id="m-mix-body" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <h2 class="text-sm font-semibold text-gray-900">CRM linked_via breakdown</h2>
+                <table class="w-full mt-3 text-sm">
+                    <tbody id="m-via-body" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <h2 class="text-sm font-semibold text-gray-900">Coaching loop — 30d</h2>
+                <table class="w-full mt-3 text-sm">
+                    <tbody class="divide-y divide-gray-100">
+                        <tr><td class="py-2 text-gray-600">Delivered</td><td id="m-coach-delivered" class="py-2 text-right font-medium">—</td></tr>
+                        <tr><td class="py-2 text-gray-600">Pending</td><td id="m-coach-pending" class="py-2 text-right font-medium">—</td></tr>
+                        <tr><td class="py-2 text-gray-600">Created in window</td><td id="m-coach-total" class="py-2 text-right font-medium">—</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- BOTTOM: recent failures -->
+        <section id="failures-section" class="hidden bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-6 py-3 border-b border-gray-100">
+                <h2 class="font-semibold text-gray-900">Recent analysis failures</h2>
+                <p class="text-xs text-gray-500 mt-0.5">Last 10 calls where Whisper or gpt-4o-mini threw and status was rolled back to <code>pending</code>.</p>
+            </div>
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-xs text-gray-600 uppercase tracking-wide">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Call ID</th>
+                        <th class="px-4 py-2 text-left">When</th>
+                        <th class="px-4 py-2 text-left">Error</th>
+                        <th class="px-4 py-2 text-left">Code</th>
+                    </tr>
+                </thead>
+                <tbody id="failures-body" class="divide-y divide-gray-100"></tbody>
+            </table>
+        </section>
+    </div>
+
+    <script>
+        (function () {
+            const errBox = document.getElementById('error-banner');
+            const reloadBtn = document.getElementById('reload-btn');
+
+            function showError(msg) {
+                errBox.textContent = msg;
+                errBox.classList.remove('hidden');
+                document.getElementById('headline').classList.add('hidden');
+                document.getElementById('breakdowns').classList.add('hidden');
+                document.getElementById('failures-section').classList.add('hidden');
+            }
+            function fmtDate(d) {
+                if (!d) return '—';
+                try { return new Date(d).toLocaleString(); } catch { return String(d); }
+            }
+            function escapeHtml(v) {
+                return String(v == null ? '' : v)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
+
+            async function load() {
+                errBox.classList.add('hidden');
+                reloadBtn.disabled = true;
+                reloadBtn.textContent = 'Loading…';
+                try {
+                    const r = await fetch('/api/calls/health-metrics', { credentials: 'include' });
+                    if (r.status === 404) {
+                        showError('Health dashboard is not enabled. Set CALLS_HEALTH_DASHBOARD=true in Replit Secrets (or CALLS_HEALTH_DASHBOARD_USERS=your_email).');
+                        return;
+                    }
+                    if (!r.ok) {
+                        const body = await r.json().catch(() => ({}));
+                        showError(body.error || ('HTTP ' + r.status));
+                        return;
+                    }
+                    const m = await r.json();
+
+                    document.getElementById('generated-at').textContent = 'Updated ' + fmtDate(m.generated_at);
+
+                    // Headlines
+                    document.getElementById('m-yield-pct').textContent = m.pipeline_yield.yield_pct;
+                    document.getElementById('m-yield-analyzed').textContent = m.pipeline_yield.analyzed;
+                    document.getElementById('m-yield-total').textContent = m.pipeline_yield.total_calls;
+                    document.getElementById('m-linkage-pct').textContent = m.crm_linkage.linkage_pct;
+                    document.getElementById('m-linked').textContent = m.crm_linkage.linked;
+                    document.getElementById('m-unlinked').textContent = m.crm_linkage.unlinked;
+                    document.getElementById('m-review-pct').textContent = m.manager_review.review_pct;
+                    document.getElementById('m-reviewed').textContent = m.manager_review.reviewed;
+                    document.getElementById('m-evaluations').textContent = m.manager_review.evaluations;
+                    document.getElementById('m-cost-usd').textContent = m.cost.total_usd;
+                    document.getElementById('m-cap-usd').textContent = m.cost.cap_usd;
+                    document.getElementById('m-cost-pct').textContent = m.cost.pct_of_cap;
+                    document.getElementById('m-cost-enforced').textContent = m.cost.cap_enforced ? 'ENFORCED' : 'dry-run';
+                    document.getElementById('m-cost-enforced').className =
+                        'font-medium ' + (m.cost.cap_enforced ? 'text-red-700' : 'text-gray-500');
+
+                    // Breakdowns
+                    document.getElementById('m-mix-window').textContent = m.ingest_mix.window_days;
+                    const mixBody = document.getElementById('m-mix-body');
+                    const mixEntries = Object.entries(m.ingest_mix.by_source).sort((a, b) => b[1] - a[1]);
+                    mixBody.innerHTML = mixEntries.length === 0
+                        ? '<tr><td class="py-2 text-gray-400">No calls in window</td></tr>'
+                        : mixEntries.map(([src, n]) => `
+                            <tr><td class="py-2 text-gray-600">${escapeHtml(src)}</td>
+                                <td class="py-2 text-right font-medium">${escapeHtml(n)}</td></tr>
+                          `).join('');
+
+                    const viaBody = document.getElementById('m-via-body');
+                    const viaEntries = Object.entries(m.crm_linkage.by_linked_via).sort((a, b) => b[1] - a[1]);
+                    viaBody.innerHTML = viaEntries.length === 0
+                        ? '<tr><td class="py-2 text-gray-400">No linked calls</td></tr>'
+                        : viaEntries.map(([via, n]) => `
+                            <tr><td class="py-2 text-gray-600">${escapeHtml(via)}</td>
+                                <td class="py-2 text-right font-medium">${escapeHtml(n)}</td></tr>
+                          `).join('');
+
+                    document.getElementById('m-coach-delivered').textContent = m.coaching.delivered_30d;
+                    document.getElementById('m-coach-pending').textContent = m.coaching.pending;
+                    document.getElementById('m-coach-total').textContent = m.coaching.total_30d;
+
+                    // Failures
+                    const failBody = document.getElementById('failures-body');
+                    failBody.innerHTML = m.recent_failures.length === 0
+                        ? '<tr><td colspan="4" class="py-4 px-4 text-gray-400 text-center">No recent failures.</td></tr>'
+                        : m.recent_failures.map((f) => `
+                            <tr>
+                                <td class="px-4 py-2 text-gray-700">${escapeHtml(f.call_id || '—')}</td>
+                                <td class="px-4 py-2 text-gray-700">${escapeHtml(fmtDate(f.attempted_at))}</td>
+                                <td class="px-4 py-2 text-red-700">${escapeHtml(f.error_msg || '—')}</td>
+                                <td class="px-4 py-2 text-gray-500">${escapeHtml(f.error_code || '—')}</td>
+                            </tr>
+                          `).join('');
+
+                    document.getElementById('headline').classList.remove('hidden');
+                    document.getElementById('breakdowns').classList.remove('hidden');
+                    document.getElementById('failures-section').classList.remove('hidden');
+                } catch (e) {
+                    showError((e && e.message) || 'Request failed.');
+                } finally {
+                    reloadBtn.disabled = false;
+                    reloadBtn.textContent = 'Refresh';
+                }
+            }
+
+            reloadBtn.addEventListener('click', load);
+            load();
+        })();
+    </script>
+</body>
+</html>

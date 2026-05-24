@@ -206,6 +206,47 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // Calls pipeline health metrics. DMAIC Solution #8 (Measure phase
+    // dashboard). Flag-gated on CALLS_HEALTH_DASHBOARD; ships dark.
+    //   GET /api/calls/health-metrics
+    // Returns process yield, CRM linkage, manager-review rate, ingest
+    // mix (last 7d), coaching flow, in-memory cost snapshot, and the
+    // 10 most recent analysis failures.
+    path: "/api/calls/health-metrics",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const { isFlagEnabled } = await import("../../utils/featureFlags");
+          const identity = (admin as any).email || `user:${(admin as any).userId}`;
+          if (!isFlagEnabled("calls_health_dashboard", identity)) {
+            return c.json({ error: "Not found" }, 404);
+          }
+          const logger = mastra?.getLogger();
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+          const { fetchAllCallsHealthMetrics } = await import(
+            "../../utils/callsHealthMetrics"
+          );
+          const metrics = await fetchAllCallsHealthMetrics(callIntelligencePool);
+          logger?.info("📊 [API] Calls health metrics", {
+            total_calls: metrics.pipeline_yield.total_calls,
+            yield_pct: metrics.pipeline_yield.yield_pct,
+          });
+          return c.json(metrics);
+        } catch (error: any) {
+          safeLogger.error("[API] calls health-metrics failed", {
+            message: error?.message,
+          });
+          return c.json({ error: "Failed to fetch health metrics" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Per-lead / per-phone call history. DMAIC Solution #2 (scope #4
     // in the strategic report). Feature-flagged on LEAD_HISTORY_VIEW;
     // returns 404 when the flag is off so the existence of the endpoint
