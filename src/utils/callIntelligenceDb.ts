@@ -1384,7 +1384,17 @@ export async function getActiveSDRScorecard(
             scoring_type:
               attr.scoringType === "pass_fail" ? "pass_fail" : "numeric",
             target: attr.target || 100,
-          });
+            // Fix tonight — preserve section_id + metric + data_dependency
+            // so buildSDREvaluationPrompt's router check
+            // (attributes.some(a => a.section_id != null)) fires and
+            // dispatches to buildCopcSDREvaluationPrompt. Without this the
+            // parser strips fields the COPC seed put on each attribute and
+            // the legacy Arabic prompt runs against COPC scorecards — which
+            // is why tonight's efficiency report had section_scores: [].
+            ...(attr.section_id ? { section_id: attr.section_id } : {}),
+            ...(attr.metric ? { metric: attr.metric } : {}),
+            ...(attr.data_dependency ? { data_dependency: attr.data_dependency } : {}),
+          } as any);
         }
       }
     }

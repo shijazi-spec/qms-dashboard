@@ -97,6 +97,18 @@
             </div>
         </section>
 
+        <!-- STEP 2b: BACKFILL -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+            <h2 class="font-semibold text-gray-900">Step 2b — Backfill historical evaluations to COPC</h2>
+            <p class="text-xs text-gray-500 mt-1 mb-3">
+                Re-scores every existing evaluation whose scorecard_name doesn't match the active COPC scorecard. Preserves the original score in <code>legacy_score_v1</code>. ~3 sec/call, ~$0.0006/call. For 181 historical calls: ~10 min, ~$0.11.
+            </p>
+            <div class="flex flex-wrap gap-2">
+                <button data-action="backfill-dry" type="button" class="bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg px-4 py-2 text-sm font-medium">Dry-run</button>
+                <button data-action="backfill-apply" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">Apply backfill (all historical)</button>
+            </div>
+        </section>
+
         <!-- STEP 3: REPORT -->
         <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
             <h2 class="font-semibold text-gray-900">Step 3 — Efficiency report</h2>
@@ -244,6 +256,12 @@
                     await refreshStatus();
                 },
                 'report':            () => call('GET',  '/api/admin/scorecard/efficiency-report', 'Efficiency report'),
+                'backfill-dry':      () => call('POST', '/api/admin/scorecard/backfill?dry_run=1', 'Backfill dry-run'),
+                'backfill-apply':    async () => {
+                    if (!confirm('Backfill ALL historical (non-COPC) evaluations against COPC?\n\nThis preserves the original score in legacy_score_v1 column. ~$0.0006/call, ~3 sec/call. For 181 historical calls: ~10 min, ~$0.11. Idempotent.')) return;
+                    await call('POST', '/api/admin/scorecard/backfill', 'Backfill applied');
+                    await refreshStatus();
+                },
                 'apply-all':         async () => {
                     if (!confirm(
                         'APPLY ALL\n\n' +

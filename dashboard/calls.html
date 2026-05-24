@@ -1479,7 +1479,16 @@
         function renderOverview() {
             document.getElementById('totalCalls').textContent = _fn(analytics.totalCalls || 0);
             document.getElementById('analyzedCalls').textContent = _fn(analytics.analyzedCalls || 0);
-            document.getElementById('avgSentiment').textContent = analytics.avgSentimentScore ? `${_fn((analytics.avgSentimentScore * 100).toFixed(0))}%` : '--';
+            document.getElementById('avgSentiment').textContent = (() => {
+                const raw = Number(analytics.avgSentimentScore);
+                if (!Number.isFinite(raw) || raw === 0) return '--';
+                // Defensive scaling: legacy analyzers stored 0-1, current stores
+                // 0-100. The original *100 produced "6,873%" once stored scores
+                // shifted to 0-100. Detect range and rescale only when needed.
+                let pct = raw > 0 && raw <= 1 ? raw * 100 : raw;
+                pct = Math.max(0, Math.min(100, Math.round(pct)));
+                return `${pct}%`;
+            })();
             document.getElementById('avgQAScore').textContent = analytics.avgQAScore ? `${_fn(analytics.avgQAScore.toFixed(0))}%` : '--';
             document.getElementById('complianceRate').textContent = analytics.avgComplianceScore ? `${_fn(analytics.avgComplianceScore.toFixed(0))}%` : '--';
 

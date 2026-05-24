@@ -1635,9 +1635,59 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   { pattern: /^\/api\/calls\/five9\//, methods: ["POST"], roles: ["admin"] },
   {
     pattern:
-      /^\/api\/calls\/[^/]+\/(analyze|compliance|sync-zoho|evaluate|sdr-evaluate)$/,
+      /^\/api\/calls\/[^/]+\/(analyze|compliance|sync-zoho|evaluate|sdr-evaluate|auto-link|link)$/,
     methods: ["POST"],
-    roles: ["admin"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "team_lead",
+      "grc_manager",
+    ],
+  },
+  // SDR evaluation manager-review writes — same allowed-role set as the
+  // CRM Compliance read above; these are operator actions, not admin-only.
+  {
+    pattern:
+      /^\/api\/calls\/[^/]+\/(sdr-evaluation\/review|sdr-evaluation\/review\/adjust)$/,
+    methods: ["POST"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "team_lead",
+      "grc_manager",
+    ],
+  },
+  // New endpoints added in this session — all require an authenticated
+  // call-access role. Without these, the deny-by-default rule at the
+  // bottom of checkAccess returns 'Route not authorised by RBAC policy'.
+  {
+    pattern:
+      /^\/api\/calls\/(health-metrics|lead-history|weekly-digest\/send)$/,
+    methods: ["GET", "POST"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "team_lead",
+      "grc_manager",
+    ],
+  },
+  {
+    pattern: /^\/api\/coaching\/effectiveness$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "team_lead",
+      "grc_manager",
+    ],
   },
   {
     pattern: /^\/api\/calls\/mcp\/leads\/match-phone$/,

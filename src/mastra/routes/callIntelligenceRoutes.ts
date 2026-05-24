@@ -294,6 +294,43 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // Backfill historical (non-COPC) evaluations to COPC
+    //   POST /api/admin/scorecard/backfill                  (apply)
+    //   POST /api/admin/scorecard/backfill?dry_run=1        (preview)
+    //   POST /api/admin/scorecard/backfill?max=N            (cap per run)
+    path: "/api/admin/scorecard/backfill",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+          const dryRun = c.req.query("dry_run") === "1" || c.req.query("dry_run") === "true";
+          const max = c.req.query("max") ? parseInt(c.req.query("max"), 10) : undefined;
+          const { Pool } = await import("pg");
+          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+          try {
+            const { backfillToCopc } = await import("../../utils/scorecardOperations");
+            const result = await backfillToCopc(pool, { dryRun, max });
+            logger?.info("🔁 [API] backfillToCopc", {
+              dryRun,
+              candidates: result.candidates_found,
+              backfilled: result.backfilled,
+              failed: result.failed,
+            });
+            return c.json({ success: true, ...result });
+          } finally {
+            await pool.end();
+          }
+        } catch (error: any) {
+          safeLogger.error("[API] backfill failed", { error: error?.message });
+          return c.json({ success: false, error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
+  {
     // DMAIC Scorecard Consolidation — read-only efficiency report.
     // Mirrors scripts/scorecardEfficiencyReport.ts. Returns the same
     // shape as the script but always as JSON.

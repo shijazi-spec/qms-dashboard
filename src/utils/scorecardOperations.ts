@@ -423,6 +423,192 @@ export async function scoreUnevaluatedCalls(
 }
 
 // ============================================================
+//   Op 2b — Backfill historical evaluations under COPC
+// ============================================================
+
+export interface BackfillResult {
+  dry_run: boolean;
+  active_scorecard: { id: number; name: string; version: string } | null;
+  candidates_found: number;
+  candidates_preview: Array<{ id: number; call_record_id: number; current_overall_score: number | null }>;
+  estimated_cost_usd?: number;
+  estimated_time_minutes?: number;
+  backfilled?: number;
+  failed?: number;
+  cost_capped?: boolean;
+}
+
+export async function backfillToCopc(
+  pool: Pool,
+  options: { dryRun?: boolean; max?: number; onlyNonCopc?: boolean } = {},
+): Promise<BackfillResult> {
+  const dryRun = !!options.dryRun;
+  const max = Math.max(1, Math.min(50000, Math.floor(options.max || 5000)));
+  const onlyNonCopc = options.onlyNonCopc !== false; // default true
+
+  await ensureV2Schema(pool);
+
+  // Confirm active scorecard
+  const scRes = await pool.query(
+    `SELECT id, name, version, dimensions FROM quality_scorecards WHERE is_active = true LIMIT 1`,
+  );
+  const activeScorecard = scRes.rows[0]
+    ? { id: scRes.rows[0].id, name: scRes.rows[0].name, version: scRes.rows[0].version }
+    : null;
+  if (!activeScorecard) {
+    return {
+      dry_run: dryRun,
+      active_scorecard: null,
+      candidates_found: 0,
+      candidates_preview: [],
+    };
+  }
+
+  // Find candidates: rows without backfilled_at, optionally only those
+  // whose scorecard_name doesn't match the active scorecard (so we don't
+  // backfill rows that are already current — pure waste).
+  const filters = ["e.backfilled_at IS NULL"];
+  if (onlyNonCopc) {
+    filters.push("(e.scorecard_name IS NULL OR e.scorecard_name != $1)");
+  }
+  const candidatesQ = onlyNonCopc
+    ? await pool.query(
+        `SELECT e.id, e.call_record_id, e.overall_score AS current_overall_score, t.transcript_text
+           FROM sdr_call_evaluations e
+           JOIN call_records cr ON cr.id = e.call_record_id
+           JOIN LATERAL (
+             SELECT transcript_text FROM call_transcripts WHERE call_record_id = cr.id
+             ORDER BY created_at DESC NULLS LAST LIMIT 1
+           ) t ON true
+          WHERE ${filters.join(" AND ")}
+          ORDER BY e.created_at ASC
+          LIMIT $2`,
+        [activeScorecard.name, max],
+      )
+    : await pool.query(
+        `SELECT e.id, e.call_record_id, e.overall_score AS current_overall_score, t.transcript_text
+           FROM sdr_call_evaluations e
+           JOIN call_records cr ON cr.id = e.call_record_id
+           JOIN LATERAL (
+             SELECT transcript_text FROM call_transcripts WHERE call_record_id = cr.id
+             ORDER BY created_at DESC NULLS LAST LIMIT 1
+           ) t ON true
+          WHERE ${filters.join(" AND ")}
+          ORDER BY e.created_at ASC
+          LIMIT $1`,
+        [max],
+      );
+
+  const candidates = candidatesQ.rows;
+  const preview = candidates.slice(0, 20).map((c) => ({
+    id: c.id,
+    call_record_id: c.call_record_id,
+    current_overall_score: c.current_overall_score == null ? null : Number(c.current_overall_score),
+  }));
+
+  if (dryRun) {
+    return {
+      dry_run: true,
+      active_scorecard: activeScorecard,
+      candidates_found: candidates.length,
+      candidates_preview: preview,
+      estimated_cost_usd: Math.round(candidates.length * 0.0006 * 100) / 100,
+      estimated_time_minutes: Math.ceil((candidates.length * 3) / 60),
+    };
+  }
+
+  // Real backfill — re-score against COPC, preserve v1 score in legacy_*
+  const { getActiveSDRScorecard, buildSDREvaluationPrompt } = await import("./callIntelligenceDb");
+  const { generateChatText } = await import("./openaiChatHelper");
+  const { isCostCapped, recordSpend, COST } = await import("./aiCostGuard");
+  const scorecard = await getActiveSDRScorecard();
+  if (!scorecard) {
+    return {
+      dry_run: false,
+      active_scorecard: activeScorecard,
+      candidates_found: candidates.length,
+      candidates_preview: preview,
+      backfilled: 0,
+      failed: 0,
+    };
+  }
+
+  let backfilled = 0;
+  let failed = 0;
+  let costCapped = false;
+  for (const c of candidates) {
+    if (isCostCapped()) {
+      costCapped = true;
+      break;
+    }
+    try {
+      const prompt = buildSDREvaluationPrompt(c.transcript_text || "", scorecard);
+      const aiResult = await generateChatText({
+        model: "gpt-4o-mini",
+        prompt,
+        maxTokens: 8000,
+        responseFormat: "json_object",
+      });
+      recordSpend(COST.GPT4O_MINI_SDR_EVAL, "backfill_to_copc");
+      const parsed = JSON.parse((aiResult.text || "").replace(/```json\n?|\n?```/g, "").trim());
+      const newOverall = Number(parsed?.overall_summary?.overall_score);
+      if (!Number.isFinite(newOverall)) throw new Error("ai_returned_invalid_overall_score");
+      const newDim = parsed?.overall_summary?.dimension_scores || { people: 0, process: 0, governance: 0 };
+      const newAttrs = parsed?.attribute_evaluations || [];
+      const newStrengths = parsed?.overall_summary?.top_strengths || [];
+      const newGaps = parsed?.overall_summary?.top_gaps || [];
+      const newCoaching = parsed?.overall_summary?.coaching_actions || [];
+
+      if (!pool.connect) throw new Error("pool lacks connect()");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `UPDATE sdr_call_evaluations
+             SET legacy_score_v1 = COALESCE(legacy_score_v1, overall_score),
+                 legacy_dimension_scores_v1 = COALESCE(legacy_dimension_scores_v1, dimension_scores),
+                 legacy_scorecard_name_v1 = COALESCE(legacy_scorecard_name_v1, scorecard_name),
+                 overall_score = $1,
+                 dimension_scores = $2,
+                 attribute_evaluations = $3,
+                 top_strengths = $4,
+                 top_gaps = $5,
+                 coaching_actions = $6,
+                 scorecard_name = $7,
+                 backfilled_at = NOW()
+           WHERE id = $8`,
+          [
+            newOverall, JSON.stringify(newDim), JSON.stringify(newAttrs),
+            JSON.stringify(newStrengths), JSON.stringify(newGaps),
+            JSON.stringify(newCoaching), activeScorecard.name, c.id,
+          ],
+        );
+        await client.query("COMMIT");
+      } catch (txErr) {
+        await client.query("ROLLBACK");
+        throw txErr;
+      } finally {
+        client.release();
+      }
+      backfilled += 1;
+    } catch (err: any) {
+      failed += 1;
+      safeLogger.warn("[backfillToCopc] one row failed", { evalId: c.id, error: err?.message });
+    }
+  }
+
+  return {
+    dry_run: false,
+    active_scorecard: activeScorecard,
+    candidates_found: candidates.length,
+    candidates_preview: preview,
+    backfilled,
+    failed,
+    cost_capped: costCapped,
+  };
+}
+
+// ============================================================
 //   Op 3 — Efficiency report (read-only aggregation)
 // ============================================================
 
