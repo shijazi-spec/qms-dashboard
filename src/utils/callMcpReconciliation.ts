@@ -45,8 +45,18 @@ import { evaluateLoadedGovernanceRules } from "./sdrGovernanceRulesEngine";
 export function normalizePhoneDigits(raw: string | undefined | null): string {
   if (!raw) return "";
   const digits = String(raw).replace(/\D/g, "");
+  if (!digits) return "";
+  // E.164 Saudi: 12+ digits starting with 966 → keep last 9 subscriber digits
   if (digits.length >= 12 && digits.startsWith("966")) return digits.slice(-9);
+  // Local Saudi with leading 0: 10 digits → strip leading 0 to get subscriber
   if (digits.length >= 10 && digits.startsWith("0")) return digits.replace(/^0+/, "");
+  // Salvage: 11-digit starting with "96" — almost always a "+966" that
+  // lost a digit during data entry / dialer export. We have a real case:
+  // Mohammed Alsulami's lead, phone "96050552305" (Screenshot 464,
+  // call-eval bug report 2026-05-24, where auto-link failed despite the
+  // lead being in Zoho). Take the last 9 digits so it matches a Zoho
+  // record stored in any of the canonical formats above.
+  if (digits.length === 11 && digits.startsWith("96")) return digits.slice(-9);
   return digits;
 }
 

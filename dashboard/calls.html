@@ -1697,13 +1697,25 @@
                 } else if (data.reason === 'ambiguous') {
                     alert(`Multiple matches (${data.matches_count}) — needs manual review.\nOpen the call detail to pick the right Lead/Deal.`);
                 } else if (data.reason === 'no_match') {
-                    alert('No Lead/Deal matched the call.\n• Phone digits found no record\n• No same-day CRM activity by this agent\nUse the "CRM" badge to search Zoho manually.');
+                    // Surface the actual phone we tried + how many records we
+                    // scanned, so the operator can verify the call's phone is
+                    // present in Zoho (and report a phone-normalization gap
+                    // when it is and the linker still missed it).
+                    const ap = data.attempted_phone ? `\n• Tried phone: ${data.attempted_phone}` : '';
+                    const sc = (typeof data.scanned === 'number') ? `\n• Scanned ${data.scanned} Zoho record(s)` : '';
+                    alert(`No Lead/Deal matched the call.${ap}${sc}\n• No same-day CRM activity by this agent\nUse the "CRM" badge to search Zoho manually.`);
                 } else if (data.reason === 'no_zoho') {
                     alert('Zoho CRM is not connected.');
                 } else if (data.reason === 'no_phone') {
                     alert('Call has no phone number AND no same-day agent activity in CRM. Nothing to match against.');
+                } else if (data.reason === 'persist_failed') {
+                    alert('Linker found a match but couldn\'t persist the link. Check server logs for the DB error.');
+                } else if (data.reason === 'exception') {
+                    alert(`Link failed with an exception:\n${data.error || 'unknown'}`);
                 } else {
-                    alert(`Link failed: ${data.reason || 'unknown'}`);
+                    // Include the full response so we can diagnose any new
+                    // reason value that doesn't yet have a UI branch.
+                    alert(`Link failed: ${data.reason || 'unknown'}\n\nFull response:\n${JSON.stringify(data, null, 2)}`);
                 }
             } catch (e) {
                 alert('Link failed: ' + (e.message || e));
@@ -2254,7 +2266,17 @@
                             <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.analysis'))}</h4>
                             ${data.analysis ? `
                                 <dl class="space-y-2">
-                                    <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.sentiment_label'))}</dt><dd class="font-medium">${escapeHtml(data.analysis.sentiment_label || '--')} (${_fn(Math.max(0, Math.min(100, Math.round(Number(data.analysis.sentiment_score) || 0))))}%)</dd></div>
+                                    <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.sentiment_label'))}</dt><dd class="font-medium">${escapeHtml(data.analysis.sentiment_label || '--')}${(() => {
+                                        // Sentiment scores arrive as either 0-1 (legacy
+                                        // analyzer) or 0-100 (current). Detect and rescale
+                                        // so we never show "0.500%" or "5,000%".
+                                        const raw = Number(data.analysis.sentiment_score);
+                                        if (!Number.isFinite(raw) || raw === 0 && (data.analysis.sentiment_score === null || data.analysis.sentiment_score === undefined)) return '';
+                                        let pct = raw;
+                                        if (pct > 0 && pct <= 1) pct = pct * 100;
+                                        pct = Math.max(0, Math.min(100, Math.round(pct)));
+                                        return ` (${pct}%)`;
+                                    })()}</dd></div>
                                     <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.topics_label'))}</dt><dd class="font-medium">${(data.analysis.key_topics || []).map(t => escapeHtml(t)).join(', ') || '--'}</dd></div>
                                 </dl>
                                 <div class="mt-4">
