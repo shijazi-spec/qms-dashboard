@@ -86,6 +86,19 @@
             <button data-action="report" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-medium">Generate report</button>
         </section>
 
+        <!-- APPLY ALL — one-click chain -->
+        <section class="bg-amber-50 rounded-xl shadow-sm border-2 border-amber-300 p-4 mb-4">
+            <h2 class="font-semibold text-amber-900">⚡ Apply all (1, 2, 3 in sequence)</h2>
+            <p class="text-xs text-amber-800 mt-1 mb-3">
+                Runs Step 1 → Step 2 → Step 3 back-to-back. ~10 min total for 199 calls. Each step
+                pauses on failure with the full response in the output panel. Confirms once before
+                starting.
+            </p>
+            <button data-action="apply-all" type="button" class="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-6 py-3 text-sm font-semibold">
+                Apply all — activate scorecard, score all unevaluated, generate report
+            </button>
+        </section>
+
         <!-- OUTPUT -->
         <section class="bg-gray-900 rounded-xl shadow-sm p-4 mb-4">
             <div class="flex items-center justify-between mb-2">
@@ -196,6 +209,50 @@
                     await refreshStatus();
                 },
                 'report':            () => call('GET',  '/api/admin/scorecard/efficiency-report', 'Efficiency report'),
+                'apply-all':         async () => {
+                    if (!confirm(
+                        'APPLY ALL\n\n' +
+                        '1) Activate COPC scorecard (archives the current one)\n' +
+                        '2) Score every unevaluated call against COPC v2 (~10 min for 199 calls, ~$0.10 in OpenAI)\n' +
+                        '3) Generate the efficiency report\n\n' +
+                        'Stops if any step fails. Continue?'
+                    )) return;
+
+                    log('=== APPLY ALL — starting ===');
+
+                    log('--- Step 1/3: Activate COPC scorecard ---');
+                    const seedRes = await call('POST', '/api/admin/scorecard/seed-copc', 'Step 1 result');
+                    if (!seedRes || seedRes.success === false || (seedRes.invariant_holds === false)) {
+                        log('✗ Step 1 failed or invariant violated — STOPPING. Review the JSON above and fix before retrying.');
+                        await refreshStatus();
+                        return;
+                    }
+                    log('✓ Step 1 complete — COPC scorecard is active.');
+
+                    log('--- Step 2/3: Score all unevaluated calls (this may take several minutes) ---');
+                    const scoreRes = await call('POST', '/api/admin/scorecard/score-unevaluated', 'Step 2 result');
+                    if (!scoreRes || scoreRes.success === false) {
+                        log('✗ Step 2 failed — STOPPING. Partial scoring may have occurred (idempotent — safe to re-run).');
+                        await refreshStatus();
+                        return;
+                    }
+                    log(`✓ Step 2 complete — scored ${scoreRes.scored || 0}, skipped ${scoreRes.skipped || 0}, failed ${scoreRes.failed || 0}.`);
+                    if (scoreRes.cost_capped) {
+                        log('⚠ Cost cap was reached mid-run — remaining calls were skipped. Re-run "Apply all" or just Step 2 tomorrow to finish.');
+                    }
+
+                    log('--- Step 3/3: Efficiency report ---');
+                    const reportRes = await call('GET', '/api/admin/scorecard/efficiency-report', 'Step 3 result');
+                    if (!reportRes || reportRes.success === false) {
+                        log('✗ Step 3 failed (steps 1 + 2 still applied).');
+                        await refreshStatus();
+                        return;
+                    }
+                    log('✓ Step 3 complete — efficiency report above.');
+
+                    log('=== APPLY ALL — DONE ===');
+                    await refreshStatus();
+                },
             };
 
             document.querySelectorAll('[data-action]').forEach((btn) => {
