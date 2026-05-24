@@ -206,6 +206,60 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // Coaching Effectiveness Index — DMAIC Solution #5. Returns, for
+    // each delivered coaching session (where delivered_at is at least
+    // 30d in the past so the after-window has closed), the agent's
+    // avg overall_score 30d before vs 30d after, plus per-coach and
+    // per-agent rollups. Flag-gated on COACHING_EFFECTIVENESS_INDEX.
+    //   GET /api/coaching/effectiveness
+    //       ?manager_email=...   (optional filter)
+    //       &agent_email=...     (optional filter)
+    //       &limit=...           (1..500, default 200)
+    path: "/api/coaching/effectiveness",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const { isFlagEnabled } = await import("../../utils/featureFlags");
+          const identity = (admin as any).email || `user:${(admin as any).userId}`;
+          if (!isFlagEnabled("coaching_effectiveness_index", identity)) {
+            return c.json({ error: "Not found" }, 404);
+          }
+          const logger = mastra?.getLogger();
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          const { ensureCoachingSessionsTable } = await import(
+            "../../utils/coachingSessions"
+          );
+          await initCallIntelligenceTables();
+          await ensureCoachingSessionsTable();
+          const { fetchCoachingEffectiveness } = await import(
+            "../../utils/coachingEffectivenessIndex"
+          );
+          const report = await fetchCoachingEffectiveness(callIntelligencePool, {
+            managerEmail: c.req.query("manager_email") || undefined,
+            agentEmail: c.req.query("agent_email") || undefined,
+            limit: c.req.query("limit")
+              ? parseInt(c.req.query("limit"), 10)
+              : undefined,
+          });
+          logger?.info("📈 [API] CEfx report", {
+            sessions: report.sessions.length,
+            coaches: report.by_coach.length,
+          });
+          return c.json(report);
+        } catch (error: any) {
+          safeLogger.error("[API] CEfx failed", {
+            message: error?.message,
+          });
+          return c.json({ error: "Failed to compute CEfx" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Calls pipeline health metrics. DMAIC Solution #8 (Measure phase
     // dashboard). Flag-gated on CALLS_HEALTH_DASHBOARD; ships dark.
     //   GET /api/calls/health-metrics
