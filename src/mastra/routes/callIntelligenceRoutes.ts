@@ -2056,6 +2056,17 @@ ${transcriptText}
                   error: e?.message || String(e),
                 });
               }
+
+              // Auto-link + compliance: shared with /ingest and /upload
+              // via callPostIngestPipeline. Closes the gap noted in
+              // commit 759e1ae (Solution #6) — /upload-audio's autoAnalyze
+              // block was missing this step, so auto-uploaded audio calls
+              // never got CRM-linked, the badge never appeared, and the
+              // Compliance Rate KPI couldn't populate.
+              await autoLinkCallAndCompliance(callRecord, {
+                logger,
+                logTag: "upload-audio",
+              });
             } catch (analysisError) {
               const errAny: any = analysisError;
               const errMsg =
