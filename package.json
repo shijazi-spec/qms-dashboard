@@ -11,6 +11,8 @@
     "format": "prettier --write '**/*.ts'",
     "qc": "npx tsx tests/qc/run-platform-qc.ts",
     "mcp-eval": "npx tsx tests/mcp-eval/runMcpEval.ts",
+    "new-feature": "bash scripts/new-feature.sh",
+    "ship": "bash scripts/ship-feature.sh",
     "postinstall": "node scripts/patch-lazystream.mjs"
   },
   "dependencies": {
