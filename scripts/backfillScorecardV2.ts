@@ -36,7 +36,7 @@
  *   3 = no active COPC scorecard (run scripts/seedScorecardV2Copc.ts first)
  */
 
-import * as pg from "pg";
+import pg from "pg";
 
 const DRY_RUN = process.env.DRY_RUN === "1";
 

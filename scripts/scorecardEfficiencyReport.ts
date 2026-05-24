@@ -23,7 +23,7 @@
  *   npx tsx scripts/scorecardEfficiencyReport.ts --json    # machine-readable
  */
 
-import * as pg from "pg";
+import pg from "pg";
 
 interface Args {
   jsonOutput: boolean;

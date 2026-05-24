@@ -29,7 +29,14 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import * as pg from "pg";
+import { fileURLToPath } from "url";
+import pg from "pg";
+
+// ESM equivalent of CommonJS __dirname — required because package.json is
+// "type": "module" so the CJS-only __dirname global isn't defined here.
+// (Matches the pattern already used by scripts/a11y-check.js.)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const DRY_RUN = process.env.DRY_RUN === "1";
 
