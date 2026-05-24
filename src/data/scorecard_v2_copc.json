@@ -1,0 +1,266 @@
+{
+  "scorecard": {
+    "id": "walaplus_copc_v2",
+    "name": "WalaPlus SDR QA Scorecard — COPC-aligned",
+    "version": "2.0.0",
+    "version_date": "2026-05-24",
+    "based_on": "Five9_SDR_QA_Scorecard_COPC_Template.xlsx",
+    "supersedes": [
+      "WalaaPlus Sales Quality Scorecard v1.5",
+      "Legacy GA 3.x audit checklist",
+      "GEN 2.x process compliance flags"
+    ],
+    "scoring_scale": {
+      "0": "Not Met",
+      "1": "Partially Met",
+      "2": "Fully Met"
+    },
+    "overall_formula": "weighted_avg(section.score) where section.score = avg(checkpoint.score_normalised) and checkpoint.score_normalised = checkpoint.score / 2 * 100",
+    "rubric_targets": {
+      "soft_skills_avg": "≥ 1.5/2",
+      "overall_score": "≥ 75/100 (good), ≥ 90/100 (excellent), < 60 (critical)"
+    },
+    "sections": [
+      {
+        "id": "activity_and_process",
+        "order": 1,
+        "name": "Call Activity & Process Adherence",
+        "weight_pct": 30,
+        "checkpoints": [
+          {
+            "id": "login_to_call_gap",
+            "name": "Login to Call Gap",
+            "description": "Measures punctual start of productive calling after login.",
+            "metric": "Minutes from agent login to first outbound/answered call (Five9 login & first-call timestamps).",
+            "target": "≤ 10 minutes",
+            "data_source": "five9",
+            "data_dependency": "five9_real_ingest"
+          },
+          {
+            "id": "post_call_logout_gap",
+            "name": "Post-Call Logout Gap",
+            "description": "Ensures agents do not remain idle long after last call.",
+            "metric": "Minutes from last call end to agent logout (Five9 call-end & logout timestamps).",
+            "target": "≤ 15 minutes",
+            "data_source": "five9",
+            "data_dependency": "five9_real_ingest"
+          },
+          {
+            "id": "calls_made_vs_target",
+            "name": "Calls Made vs Target",
+            "description": "Checks productivity against planned daily/weekly call targets.",
+            "metric": "Calls placed ÷ daily target × 100 (Five9 attempts vs target table).",
+            "target": "≥ 100% of target",
+            "data_source": "five9",
+            "data_dependency": "five9_real_ingest + targets_table_seeded"
+          },
+          {
+            "id": "calls_answered_pct",
+            "name": "Calls Answered %",
+            "description": "Assesses list quality / dialing effectiveness via answer rate.",
+            "metric": "Answered calls ÷ attempted calls × 100 (Five9 disposition summary).",
+            "target": "≥ campaign target (e.g. 20–30%)",
+            "data_source": "five9",
+            "data_dependency": "five9_real_ingest"
+          },
+          {
+            "id": "idle_time_ratio",
+            "name": "Idle Time Ratio",
+            "description": "Controls non-productive time while logged in.",
+            "metric": "Total idle time ÷ login time × 100 (Five9 agent state logs).",
+            "target": "≤ 15% of login time",
+            "data_source": "five9",
+            "data_dependency": "five9_real_ingest"
+          },
+          {
+            "id": "calls_logged_realtime",
+            "name": "Calls Logged in Real-Time",
+            "description": "Validates timely CRM logging to maintain data integrity.",
+            "metric": "% calls with matching CRM activity within 15 min of call end (Five9 ↔ CRM cross-check).",
+            "target": "≥ 95% within 15 minutes",
+            "data_source": "five9 + zoho",
+            "data_dependency": "five9_real_ingest + crm_compliance_engine"
+          },
+          {
+            "id": "sla_followup_compliance",
+            "name": "SLA Follow-up Compliance",
+            "description": "Ensures first-contact SLA on new/assigned leads.",
+            "metric": "% new/assigned leads first-contacted within 1 business day (CRM activities vs lead-creation date).",
+            "target": "≥ 95% within 1 business day",
+            "data_source": "zoho",
+            "data_dependency": "lead_creation_date + first_activity_timestamp"
+          },
+          {
+            "id": "process_stage_accuracy",
+            "name": "Process Stage Accuracy",
+            "description": "Prevents stage skipping/misuse that breaks governance.",
+            "metric": "% records following allowed next-stage transitions; no skips/misuse (CRM stage audit).",
+            "target": "≥ 98% valid transitions",
+            "data_source": "zoho",
+            "data_dependency": "stage_transition_rules_seeded"
+          }
+        ]
+      },
+      {
+        "id": "quality_and_soft_skills",
+        "order": 2,
+        "name": "Call Quality & Soft Skills",
+        "weight_pct": 30,
+        "checkpoints": [
+          {
+            "id": "communication_skills",
+            "name": "Communication Skills",
+            "description": "Evaluates professionalism, clarity, and active listening.",
+            "metric": "Rubric 0–2 assessing clarity, professionalism, active listening (gpt-4o-mini judge on transcript).",
+            "target": "Rubric avg ≥ 1.5/2",
+            "data_source": "ai",
+            "data_dependency": "call_transcripts + ai_judge_prompt"
+          },
+          {
+            "id": "objection_handling",
+            "name": "Objection Handling",
+            "description": "Measures ability to probe and resolve objections.",
+            "metric": "Rubric 0–2 on probing, reframing, and resolving/parking objections (ai_judge on transcript).",
+            "target": "Rubric avg ≥ 1.5/2",
+            "data_source": "ai",
+            "data_dependency": "call_transcripts + ai_judge_prompt"
+          },
+          {
+            "id": "call_flow_structure",
+            "name": "Call Flow & Structure",
+            "description": "Evaluates adherence to recommended call flow.",
+            "metric": "Rubric 0–2 on following intro → discovery → next-steps (ai_judge on transcript).",
+            "target": "Rubric avg ≥ 1.5/2",
+            "data_source": "ai",
+            "data_dependency": "call_transcripts + ai_judge_prompt"
+          },
+          {
+            "id": "tone_and_sentiment",
+            "name": "Tone & Sentiment",
+            "description": "Checks positive, empathetic engagement throughout.",
+            "metric": "Rubric 0–2 on positive, empathetic, confident tone (ai_judge + sentiment_score from call_analysis).",
+            "target": "Rubric avg ≥ 1.5/2",
+            "data_source": "ai",
+            "data_dependency": "call_transcripts + sentiment_score"
+          }
+        ]
+      },
+      {
+        "id": "coaching_and_improvement",
+        "order": 3,
+        "name": "Coaching & Continuous Improvement",
+        "weight_pct": 20,
+        "checkpoints": [
+          {
+            "id": "coaching_participation",
+            "name": "Coaching Participation",
+            "description": "Confirms participation in scheduled coaching.",
+            "metric": "% scheduled coaching/shadowing sessions attended (coaching_sessions.status='delivered').",
+            "target": "≥ 95% sessions attended",
+            "data_source": "platform",
+            "data_dependency": "coaching_sessions table (already exists)"
+          },
+          {
+            "id": "action_plan_followup",
+            "name": "Action Plan Follow-up",
+            "description": "Tracks completion of coaching action items.",
+            "metric": "% coaching action items completed by due date (coaching_sessions.followup_due_date + completion flag).",
+            "target": "≥ 90% actions completed",
+            "data_source": "platform",
+            "data_dependency": "coaching_sessions + followup_status (NEW FIELD)"
+          },
+          {
+            "id": "performance_improvement",
+            "name": "Performance Improvement",
+            "description": "Measures improvement trend after coaching.",
+            "metric": "Δ total score vs 4-week rolling baseline (Coaching Effectiveness Index from Solution #5).",
+            "target": "≥ +5 pts vs 4-week baseline",
+            "data_source": "platform",
+            "data_dependency": "CEfx endpoint (already shipped as Solution #5)"
+          }
+        ]
+      },
+      {
+        "id": "kpi_and_correlation",
+        "order": 4,
+        "name": "KPI & Correlation Analysis",
+        "weight_pct": 20,
+        "checkpoints": [
+          {
+            "id": "conversion_ratio",
+            "name": "Conversion Ratio",
+            "description": "Measures movement of leads to the next stage / meeting.",
+            "metric": "% of leads moved to next stage / meeting (Zoho funnel).",
+            "target": "≥ 10–20% (campaign-specific)",
+            "data_source": "zoho",
+            "data_dependency": "lead_stage_history"
+          },
+          {
+            "id": "answer_rate",
+            "name": "Answer Rate",
+            "description": "Measures call-list reachability and dialer effectiveness.",
+            "metric": "Answered ÷ attempted × 100 (Five9).",
+            "target": "Campaign-specific threshold",
+            "data_source": "five9",
+            "data_dependency": "five9_real_ingest"
+          },
+          {
+            "id": "utilization_ratio",
+            "name": "Utilization Ratio",
+            "description": "Measures % of login time spent in talk state.",
+            "metric": "Talk time ÷ login time × 100 (Five9 agent states).",
+            "target": "45–65% (campaign-specific band)",
+            "data_source": "five9",
+            "data_dependency": "five9_real_ingest"
+          },
+          {
+            "id": "lead_volume_correlation",
+            "name": "Lead Volume Correlation",
+            "description": "Validates alignment of activity with incoming lead volume.",
+            "metric": "Pearson r between marketing lead volume and SDR activities, or qualitative pass.",
+            "target": "r ≥ +0.5 or qualitative pass",
+            "data_source": "platform",
+            "data_dependency": "marketing_lead_intake (NEW TABLE OR SOURCE)"
+          }
+        ]
+      }
+    ]
+  },
+  "_dependencies_summary": {
+    "ready_now": [
+      "ai_judge_prompt (gpt-4o-mini already wired)",
+      "call_transcripts (Whisper pipeline)",
+      "sentiment_score (call_analysis)",
+      "coaching_sessions table",
+      "CEfx endpoint (Solution #5)"
+    ],
+    "blocked_on_five9": [
+      "login_to_call_gap",
+      "post_call_logout_gap",
+      "calls_made_vs_target",
+      "calls_answered_pct",
+      "idle_time_ratio",
+      "calls_logged_realtime",
+      "answer_rate",
+      "utilization_ratio"
+    ],
+    "needs_new_data": [
+      "sla_followup_compliance (need lead-creation timestamp)",
+      "process_stage_accuracy (need stage-transition rules seeded)",
+      "action_plan_followup (need followup_status field on coaching_sessions)",
+      "lead_volume_correlation (need marketing lead intake source)"
+    ]
+  },
+  "_migration_notes": {
+    "deprecation_targets": [
+      "scorecards row where name='WalaaPlus Sales Quality Scorecard v1.5' → set is_active=false, status='archived'",
+      "quality_audits checkpoints in GA 3.x series → mark as superseded; keep historical rows for audit trail",
+      "call_intelligence GEN 2.x process compliance → either fold into Section 1 (Activity & Process Adherence) or keep as a separate compliance audit, clearly labelled"
+    ],
+    "ui_changes_required": [
+      "Call Details modal: remove the 'Call quality scorecard' panel (legacy quality_audits) — SDR Evaluation Form becomes the single source",
+      "SDR Evaluation Form: render 4 sections + 19 checkpoints with 0/1/2 chips and evidence quotes",
+      "Active Scorecard line should read 'WalaPlus SDR QA Scorecard — COPC-aligned v2.0' instead of 'WalaaPlus Sales Quality Scorecard v1.5'"
+    ]
+  }
+}
