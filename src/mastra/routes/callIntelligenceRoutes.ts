@@ -1770,7 +1770,6 @@ ${transcriptText}
                   logTag: "manual upload",
                 },
               );
-              }
             } catch (analysisError: any) {
               const errMsg = analysisError?.message || String(analysisError);
               const errCode =
