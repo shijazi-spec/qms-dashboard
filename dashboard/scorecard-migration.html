@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>COPC Scorecard Migration — WalaPlus QMS</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!--
+      Admin migration console for the DMAIC Scorecard Consolidation
+      operations. Reaches the /api/admin/scorecard/* endpoints WITH
+      the browser's session cookies, so it works through Replit Shield
+      AND through the platform's own admin-role check without any
+      X-Admin-Key handling in JS.
+
+      How to use:
+        1. Sign into Replit (if Shield is on, you'll be prompted)
+        2. Sign into the platform with an admin-role account
+        3. Open this page
+        4. Click "Refresh status" first to see current state
+        5. Click "Activate COPC scorecard (dry-run)" → review the JSON
+        6. Click "Activate COPC scorecard (apply)" when ready
+        7. Click "Score unevaluated (dry-run)" → confirm candidate count
+        8. Click "Score unevaluated (apply)" — takes ~10 min for 199 calls
+        9. Click "Generate efficiency report" to see the result
+
+      Cost: ~$0.10 in gpt-4o-mini for 199 calls. Each step is
+      idempotent — safe to re-run.
+    -->
+    <div class="max-w-6xl mx-auto px-6 py-8">
+        <header class="mb-6">
+            <h1 class="text-2xl font-bold text-gray-900">COPC Scorecard Migration</h1>
+            <p class="text-sm text-gray-500 mt-1">
+                DMAIC Scorecard Consolidation — admin console. Each step is read-only first (dry-run), then apply when ready.
+            </p>
+        </header>
+
+        <!-- STATUS CARD -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+            <div class="flex items-center justify-between">
+                <h2 class="font-semibold text-gray-900">Current state</h2>
+                <button id="refresh-btn" type="button"
+                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg px-3 py-1.5 text-xs font-medium">
+                    Refresh status
+                </button>
+            </div>
+            <div id="status-grid" class="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="bg-gray-50 rounded-lg p-3"><div class="text-xs text-gray-500 uppercase">Active scorecard</div><div id="s-active" class="text-sm font-medium text-gray-900 mt-1">—</div></div>
+                <div class="bg-gray-50 rounded-lg p-3"><div class="text-xs text-gray-500 uppercase">Call records</div><div id="s-calls" class="text-sm font-medium text-gray-900 mt-1">—</div></div>
+                <div class="bg-gray-50 rounded-lg p-3"><div class="text-xs text-gray-500 uppercase">SDR evaluations</div><div id="s-evals" class="text-sm font-medium text-gray-900 mt-1">—</div></div>
+                <div class="bg-gray-50 rounded-lg p-3"><div class="text-xs text-gray-500 uppercase">Unevaluated calls</div><div id="s-pending" class="text-sm font-medium text-gray-900 mt-1">—</div></div>
+            </div>
+        </section>
+
+        <!-- STEP 1: SEED -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+            <h2 class="font-semibold text-gray-900">Step 1 — Activate the COPC scorecard</h2>
+            <p class="text-xs text-gray-500 mt-1 mb-3">Archives the currently-active scorecard, inserts (or updates) the COPC v2.0.0 row as the only active one. Idempotent.</p>
+            <div class="flex flex-wrap gap-2">
+                <button data-action="seed-dry" type="button" class="bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg px-4 py-2 text-sm font-medium">Dry-run (no writes)</button>
+                <button data-action="seed-apply" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">Apply</button>
+            </div>
+        </section>
+
+        <!-- STEP 2: SCORE -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+            <h2 class="font-semibold text-gray-900">Step 2 — Score all unevaluated calls</h2>
+            <p class="text-xs text-gray-500 mt-1 mb-3">For every call_records row that has a transcript but no sdr_call_evaluations row, runs the SDR evaluator against the active scorecard. ~3 sec/call, ~$0.0005/call.</p>
+            <div class="flex flex-wrap gap-2 items-center">
+                <button data-action="score-dry" type="button" class="bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg px-4 py-2 text-sm font-medium">Dry-run</button>
+                <button data-action="score-apply" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium">Apply (no cap)</button>
+                <label class="text-xs text-gray-500 ms-2">Cap to first
+                    <input id="score-max" type="number" min="1" max="50000" value="5" class="w-20 border border-gray-200 rounded px-2 py-1 text-xs ms-1 me-1">
+                    calls:
+                </label>
+                <button data-action="score-apply-capped" type="button" class="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 text-sm font-medium">Apply with cap</button>
+            </div>
+        </section>
+
+        <!-- STEP 3: REPORT -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+            <h2 class="font-semibold text-gray-900">Step 3 — Efficiency report</h2>
+            <p class="text-xs text-gray-500 mt-1 mb-3">Read-only aggregation: coverage, score drift v1.5→v2, per-section scores, per-agent top 10, outliers. Run any time.</p>
+            <button data-action="report" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-medium">Generate report</button>
+        </section>
+
+        <!-- OUTPUT -->
+        <section class="bg-gray-900 rounded-xl shadow-sm p-4 mb-4">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-sm font-semibold text-gray-100">Output</h2>
+                <span id="busy-indicator" class="text-xs text-amber-300 hidden">running…</span>
+            </div>
+            <pre id="output" class="text-xs text-gray-100 font-mono whitespace-pre-wrap break-words max-h-[60vh] overflow-y-auto">Click "Refresh status" to load the current state.</pre>
+        </section>
+    </div>
+
+    <script>
+        (function () {
+            const out = document.getElementById('output');
+            const busy = document.getElementById('busy-indicator');
+
+            function log(msg) {
+                const ts = new Date().toLocaleTimeString();
+                out.textContent = `[${ts}] ${msg}\n\n${out.textContent}`;
+            }
+            function logJson(label, data) {
+                const ts = new Date().toLocaleTimeString();
+                out.textContent = `[${ts}] ${label}\n${JSON.stringify(data, null, 2)}\n\n${out.textContent}`;
+            }
+
+            async function call(method, url, label) {
+                busy.classList.remove('hidden');
+                log(`→ ${method} ${url}`);
+                try {
+                    const res = await fetch(url, {
+                        method,
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                    let body;
+                    try { body = await res.json(); }
+                    catch { body = { _raw: await res.text() }; }
+
+                    if (res.status === 307 || res.status === 401 || res.status === 403) {
+                        log(`✗ HTTP ${res.status} — auth/redirect issue. Make sure you're signed into Replit AND the platform with an admin account.`);
+                        logJson('Response:', body);
+                        return null;
+                    }
+                    if (!res.ok) {
+                        log(`✗ HTTP ${res.status}`);
+                        logJson('Error:', body);
+                        return null;
+                    }
+                    log(`✓ HTTP ${res.status}`);
+                    logJson(label, body);
+                    return body;
+                } catch (err) {
+                    log(`✗ Network error: ${err && err.message ? err.message : err}`);
+                    return null;
+                } finally {
+                    busy.classList.add('hidden');
+                }
+            }
+
+            function updateStatusGrid(data) {
+                if (!data) return;
+                if (data.active_scorecard) {
+                    document.getElementById('s-active').textContent = data.active_scorecard;
+                }
+                if (data.corpus_snapshot) {
+                    document.getElementById('s-calls').textContent = data.corpus_snapshot.call_records;
+                    document.getElementById('s-evals').textContent = data.corpus_snapshot.sdr_call_evaluations;
+                }
+                if (data.candidates_found != null) {
+                    document.getElementById('s-pending').textContent = data.candidates_found;
+                }
+            }
+
+            async function refreshStatus() {
+                // Cheapest read: dry-run the score endpoint — it returns
+                // active_scorecard + corpus_snapshot + candidates_found
+                // in one shot without doing any writes.
+                const d = await call('POST', '/api/admin/scorecard/score-unevaluated?dry_run=1', 'Status');
+                if (d) {
+                    updateStatusGrid({
+                        active_scorecard: d.active_scorecard
+                            ? `${d.active_scorecard.name} (v${d.active_scorecard.version})`
+                            : '(none active)',
+                        corpus_snapshot: d.corpus_snapshot,
+                        candidates_found: d.candidates_found,
+                    });
+                }
+            }
+
+            document.getElementById('refresh-btn').addEventListener('click', refreshStatus);
+
+            const ACTIONS = {
+                'seed-dry':          () => call('POST', '/api/admin/scorecard/seed-copc?dry_run=1', 'Seed dry-run'),
+                'seed-apply':        async () => {
+                    if (!confirm('Apply the COPC scorecard seed?\n\nThis archives the currently-active scorecard and activates COPC v2.0.0 as the only active one. Reversible by re-activating the old row, but every new call analyzed AFTER this uses COPC v2.')) return;
+                    await call('POST', '/api/admin/scorecard/seed-copc', 'Seed applied');
+                    await refreshStatus();
+                },
+                'score-dry':         () => call('POST', '/api/admin/scorecard/score-unevaluated?dry_run=1', 'Score dry-run'),
+                'score-apply':       async () => {
+                    if (!confirm('Score every unevaluated call against the active scorecard?\n\nThis writes new rows to sdr_call_evaluations, costs ~$0.0005/call in gpt-4o-mini, and takes ~3 seconds per call. Idempotent — re-running skips calls that already have an evaluation.')) return;
+                    await call('POST', '/api/admin/scorecard/score-unevaluated', 'Score applied');
+                    await refreshStatus();
+                },
+                'score-apply-capped': async () => {
+                    const max = parseInt(document.getElementById('score-max').value, 10) || 5;
+                    if (!confirm(`Score the first ${max} unevaluated call(s)?\n\nUseful for a sanity test before doing the full batch.`)) return;
+                    await call('POST', `/api/admin/scorecard/score-unevaluated?max=${max}`, `Score applied (cap=${max})`);
+                    await refreshStatus();
+                },
+                'report':            () => call('GET',  '/api/admin/scorecard/efficiency-report', 'Efficiency report'),
+            };
+
+            document.querySelectorAll('[data-action]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const action = btn.getAttribute('data-action');
+                    if (ACTIONS[action]) ACTIONS[action]();
+                });
+            });
+
+            // Auto-load on first open
+            refreshStatus();
+        })();
+    </script>
+</body>
+</html>
