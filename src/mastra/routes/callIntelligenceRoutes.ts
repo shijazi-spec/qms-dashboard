@@ -9,6 +9,10 @@ import {
 import { logger as safeLogger } from "../../utils/logger";
 import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
 import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import {
+  runComplianceAfterLink,
+  autoLinkCallAndCompliance,
+} from "../../utils/callPostIngestPipeline";
 const CALL_READ_ROLES = [
   "admin",
   "ai_specialist",
@@ -26,85 +30,9 @@ async function verifyCallAccess(c: any): Promise<SessionUser | null> {
   return requireRoleOrKey(c, [...CALL_READ_ROLES]);
 }
 
-// Run the Zoho-backed CRM compliance check for a call that was just
-// linked to a Lead/Deal, and persist the result via saveCompliance.
-// Best-effort: any failure (Zoho unreachable, missing fields, etc.)
-// is swallowed so the originating auto-link call still returns
-// success. Mirrors the body of /api/calls/:callId/compliance but
-// without the HTTP wrapper so it can be called from other handlers.
-async function runComplianceAfterLink(
-  callId: number,
-  leadId: string | null | undefined,
-  dealId: string | null | undefined,
-  callDate: any,
-  logger?: any,
-): Promise<void> {
-  try {
-    if (!leadId && !dealId) return;
-    const { saveCompliance } = await import("../../utils/callIntelligenceDb");
-    const { runCrmComplianceCheck } = await import(
-      "../../utils/crmComplianceCheck"
-    );
-    const expectedActions = [
-      "notes_updated",
-      "call_logged",
-      "task_created",
-      "stage_updated",
-    ];
-    const checked = await runCrmComplianceCheck({
-      callRecordId: callId,
-      leadId: leadId ?? undefined,
-      dealId: dealId ?? undefined,
-      callDate,
-      expectedActions,
-    });
-    if (!checked.success || !checked.result) {
-      await saveCompliance({
-        call_record_id: callId,
-        lead_id: leadId ?? null,
-        deal_id: dealId ?? null,
-        notes_updated: false,
-        call_logged: false,
-        task_created: false,
-        stage_updated: false,
-        meeting_outcome_logged: false,
-        overall_compliance: false,
-        compliance_score: 0,
-        missing_actions: [`Not checked: ${checked.reason}`],
-        compliance_details: { mode: "not_checked", reason: checked.reason },
-      });
-      logger?.info("[Compliance] auto-run skipped after link", {
-        callId,
-        reason: checked.reason,
-      });
-      return;
-    }
-    const r = checked.result;
-    await saveCompliance({
-      call_record_id: callId,
-      lead_id: leadId ?? null,
-      deal_id: dealId ?? null,
-      notes_updated: r.notes_updated,
-      call_logged: r.call_logged,
-      task_created: r.task_created,
-      stage_updated: r.stage_updated,
-      meeting_outcome_logged: r.meeting_outcome_logged,
-      overall_compliance: r.overall_compliance,
-      compliance_score: r.compliance_score,
-      missing_actions: r.missing_actions,
-      compliance_details: r.evidence,
-    });
-    logger?.info("[Compliance] auto-ran after link", {
-      callId,
-      score: r.compliance_score,
-    });
-  } catch (err: any) {
-    safeLogger.warn("[Compliance] auto-run after link threw", {
-      callId,
-      error: err?.message || String(err),
-    });
-  }
-}
+// runComplianceAfterLink + autoLinkCallAndCompliance live in
+// src/utils/callPostIngestPipeline.ts so /ingest and /upload share
+// the same code path. See that file's header for the rationale.
 
 export const callIntelligenceRoutes = [
   {
@@ -147,83 +75,13 @@ export const callIntelligenceRoutes = [
 
           logger?.info("✅ [API] Call record created", { id: callRecord.id });
 
-          // Auto-link to Zoho Lead/Deal by phone — SDR pre-qualification
-          // stage. Skipped if the caller already provided a lead_id or
-          // deal_id on the ingest payload (manual linking wins).
-          let autoLinkResult: any = null;
-          if (!data.lead_id && !data.deal_id) {
-            try {
-              const { autoLinkCallToCrm } = await import(
-                "../../utils/sdrCallLinking"
-              );
-              const {
-                extractCallPhoneCandidates,
-              } = await import("../../utils/callLeadPhoneMatch");
-              const {
-                updateCallRecordLeadId,
-                updateCallRecordDealId,
-              } = await import("../../utils/callIntelligenceDb");
-              const candidates = extractCallPhoneCandidates(callRecord);
-              autoLinkResult = await autoLinkCallToCrm(
-                callRecord.id!,
-                candidates,
-                updateCallRecordLeadId,
-                updateCallRecordDealId,
-                {
-                  // Activity-based fallback: if phone matching draws a
-                  // blank, look for CRM activities the same agent did
-                  // on the same day so the link still lands.
-                  agentEmail: callRecord.agent_email || undefined,
-                  agentName: callRecord.agent_name || null,
-                  callDate: callRecord.call_date
-                    ? new Date(callRecord.call_date)
-                    : new Date(),
-                },
-              );
-              if (autoLinkResult.linked) {
-                logger?.info("🔗 [API] Auto-linked call to Zoho", {
-                  callId: callRecord.id,
-                  module: autoLinkResult.picked_module,
-                  recordId:
-                    autoLinkResult.lead_id || autoLinkResult.deal_id,
-                  linked_via: autoLinkResult.linked_via,
-                });
-                if (autoLinkResult.linked_via) {
-                  try {
-                    const { updateCallRecordLinkedVia } = await import(
-                      "../../utils/callIntelligenceDb"
-                    );
-                    await updateCallRecordLinkedVia(
-                      callRecord.id!,
-                      autoLinkResult.linked_via,
-                    );
-                  } catch { /* diagnostic field only */ }
-                }
-                // Auto-trigger the CRM compliance check now that the
-                // call has a Zoho Lead/Deal to score against, so the
-                // top-level Compliance Rate KPI and the modal's CRM
-                // Compliance section populate without manual action.
-                await runComplianceAfterLink(
-                  callRecord.id!,
-                  autoLinkResult.lead_id ?? null,
-                  autoLinkResult.deal_id ?? null,
-                  callRecord.call_date,
-                  logger,
-                );
-              } else {
-                logger?.info("ℹ️ [API] Auto-link skipped/failed", {
-                  callId: callRecord.id,
-                  reason: autoLinkResult.reason,
-                });
-              }
-            } catch (err: any) {
-              // Auto-link is best-effort — never fail the ingest because
-              // of a CRM lookup hiccup.
-              logger?.warn("[API] Auto-link threw, continuing", {
-                error: err?.message || String(err),
-              });
-            }
-          }
+          // Auto-link + compliance: shared with /upload via
+          // callPostIngestPipeline. Skip-if-already-linked semantics are
+          // enforced inside the helper.
+          const autoLinkResult = await autoLinkCallAndCompliance(callRecord, {
+            logger,
+            logTag: "ingest",
+          });
 
           return c.json({
             success: true,
@@ -1694,79 +1552,16 @@ ${transcriptText}
                 });
               }
 
-              // Auto-link to Zoho Lead/Deal (mirrors /api/calls/ingest
-              // path). Without this, uploaded calls stay with lead_id /
-              // deal_id NULL forever, so the CRM Link badge never
-              // appears and the "Link" button is the only way to
-              // associate the call with a Zoho record.
-              if (!leadIdSafe && !callRecord.deal_id) {
-                try {
-                  const { autoLinkCallToCrm } = await import(
-                    "../../utils/sdrCallLinking"
-                  );
-                  const { extractCallPhoneCandidates } = await import(
-                    "../../utils/callLeadPhoneMatch"
-                  );
-                  const {
-                    updateCallRecordLeadId,
-                    updateCallRecordDealId,
-                    updateCallRecordLinkedVia,
-                  } = await import("../../utils/callIntelligenceDb");
-                  const candidates = extractCallPhoneCandidates(callRecord);
-                  const linkResult = await autoLinkCallToCrm(
-                    callRecord.id!,
-                    candidates,
-                    updateCallRecordLeadId,
-                    updateCallRecordDealId,
-                    {
-                      agentEmail: callRecord.agent_email || undefined,
-                      agentName: callRecord.agent_name || null,
-                      callDate: callRecord.call_date
-                        ? new Date(callRecord.call_date)
-                        : new Date(),
-                    },
-                  );
-                  if (linkResult.linked) {
-                    logger?.info("🔗 [API] Auto-linked uploaded call to Zoho", {
-                      callId: callRecord.id,
-                      module: linkResult.picked_module,
-                      recordId: linkResult.lead_id || linkResult.deal_id,
-                      linked_via: linkResult.linked_via,
-                    });
-                    if (linkResult.linked_via) {
-                      try {
-                        await updateCallRecordLinkedVia(
-                          callRecord.id!,
-                          linkResult.linked_via,
-                        );
-                      } catch {
-                        // diagnostic field only
-                      }
-                    }
-                    // Trigger CRM compliance check now that the call has
-                    // a Zoho Lead/Deal to score against, so the Compliance
-                    // Rate KPI populates without manual action.
-                    await runComplianceAfterLink(
-                      callRecord.id!,
-                      linkResult.lead_id ?? null,
-                      linkResult.deal_id ?? null,
-                      callRecord.call_date,
-                      logger,
-                    );
-                  } else {
-                    logger?.info("ℹ️ [API] Auto-link skipped on manual upload", {
-                      callId: callRecord.id,
-                      reason: linkResult.reason,
-                    });
-                  }
-                } catch (linkErr: any) {
-                  // Auto-link is best-effort — never fail the upload
-                  // because of a CRM lookup hiccup.
-                  logger?.warn("[API] Auto-link threw on manual upload", {
-                    callId: callRecord.id,
-                    error: linkErr?.message || String(linkErr),
-                  });
-                }
+              // Auto-link + compliance: shared with /ingest via
+              // callPostIngestPipeline. Pass the lead_id we may have just
+              // set so the helper's skip-if-already-linked check sees it.
+              await autoLinkCallAndCompliance(
+                { ...callRecord, lead_id: leadIdSafe ?? callRecord.lead_id },
+                {
+                  logger,
+                  logTag: "manual upload",
+                },
+              );
               }
             } catch (analysisError: any) {
               const errMsg = analysisError?.message || String(analysisError);
