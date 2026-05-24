@@ -13,6 +13,11 @@ import {
   runComplianceAfterLink,
   autoLinkCallAndCompliance,
 } from "../../utils/callPostIngestPipeline";
+import {
+  COST as AI_COST,
+  isCostCapped,
+  recordSpend as recordAiSpend,
+} from "../../utils/aiCostGuard";
 const CALL_READ_ROLES = [
   "admin",
   "ai_specialist",
@@ -1601,11 +1606,20 @@ Respond with JSON only:
                 { type: (file?.type as string) || "audio/wav" },
               );
 
+              // Cost guard (DMAIC Solution #9): short-circuit before
+              // any paid OpenAI call when today's estimated spend has
+              // hit the cap. The existing analysis-failed catch below
+              // will surface "AI daily cost cap reached" in ai_insights
+              // .last_analysis_error so it's visible in /calls-health.
+              if (isCostCapped()) {
+                throw new Error("AI daily cost cap reached — analysis paused");
+              }
               const transcription: any = await openai.audio.transcriptions.create({
                 model: "whisper-1",
                 file: audioFileObj,
                 response_format: "verbose_json",
               });
+              recordAiSpend(AI_COST.WHISPER_TRANSCRIBE, "whisper_transcribe");
 
               const transcriptText = transcription.text || "";
               const transcribedDuration =
@@ -1674,12 +1688,16 @@ ${transcriptText}
               const { generateChatText } = await import(
                 "../../utils/openaiChatHelper"
               );
+              if (isCostCapped()) {
+                throw new Error("AI daily cost cap reached — analysis paused");
+              }
               const aiResult = await generateChatText({
                 model: "gpt-4o-mini",
                 prompt: analysisPrompt,
                 maxTokens: 4000,
                 responseFormat: "json_object",
               });
+              recordAiSpend(AI_COST.GPT4O_MINI_ANALYZE, "gpt4o_mini_analyze");
 
               let analysisData: any;
               try {
@@ -2095,11 +2113,15 @@ ${transcriptText}
               // does not return duration, which left the Duration
               // column in Call Records / SDR Evaluation header as "--"
               // even for fully analyzed calls.
+              if (isCostCapped()) {
+                throw new Error("AI daily cost cap reached — analysis paused");
+              }
               const transcription: any = await openai.audio.transcriptions.create({
                 model: "whisper-1",
                 file: audioFile,
                 response_format: "verbose_json",
               });
+              recordAiSpend(AI_COST.WHISPER_TRANSCRIBE, "whisper_transcribe");
 
               const transcriptText = transcription.text || "";
               const transcribedDuration =
@@ -2182,12 +2204,16 @@ ${transcriptText}
               const { generateChatText: _gctInline } = await import(
                 "../../utils/openaiChatHelper"
               );
+              if (isCostCapped()) {
+                throw new Error("AI daily cost cap reached — analysis paused");
+              }
               const aiResult = await _gctInline({
                 model: "gpt-4o-mini",
                 prompt: analysisPrompt,
                 maxTokens: 4000,
                 responseFormat: "json_object",
               });
+              recordAiSpend(AI_COST.GPT4O_MINI_ANALYZE, "gpt4o_mini_analyze");
 
               let analysisData;
               try {

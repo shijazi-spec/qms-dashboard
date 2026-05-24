@@ -405,6 +405,25 @@ const duplicateSyncFunction = inngest.createFunction(
 );
 inngestFunctions.push(duplicateSyncFunction);
 
+// Weekly Call Evaluation Digest — DMAIC Solution #3.
+// Fires every Sunday 06:00 Asia/Riyadh (= 03:00 UTC). Flag-gated on
+// WEEKLY_DIGEST inside sendWeeklyDigest, so the cron wakes up but
+// does nothing until the flag is flipped — that's the deploy-free
+// toggle for go-live. Override the schedule with WEEKLY_DIGEST_CRON.
+const weeklyDigestFunction = inngest.createFunction(
+  { id: "calls-weekly-digest" },
+  { cron: process.env.WEEKLY_DIGEST_CRON || "0 3 * * 0" },
+  async ({ step }) => {
+    return await step.run("send-weekly-digest", async () => {
+      const { weeklyDigestCronWorkflow } = await import(
+        "../workflows/weeklyDigestCron"
+      );
+      return await weeklyDigestCronWorkflow();
+    });
+  },
+);
+inngestFunctions.push(weeklyDigestFunction);
+
 // CS-pipeline overlap nightly refresh.
 // Re-classifies every duplicate cluster that contains a Deal record, so the
 // BLOCK / REVIEW / WARN verdicts surfaced on the Duplicates dashboard stay
