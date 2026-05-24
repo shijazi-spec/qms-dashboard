@@ -2515,12 +2515,26 @@
             const strengths = (evaluation.top_strengths || []).slice(0, 3);
             const gaps = (evaluation.top_gaps || []).slice(0, 3);
 
+            // DMAIC Step 5 — if this row was backfilled from v1.5,
+            // surface a "Previously: X (v1.5)" footnote so the audit
+            // record stays visible alongside the new COPC score.
+            const legacyV1Score = evaluation.legacy_score_v1;
+            const legacyV1Name = evaluation.legacy_scorecard_name_v1;
+            const legacyFootnote = (legacyV1Score != null)
+                ? `<div class="mt-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800">
+                       <strong>Audit:</strong> backfilled from v1 score
+                       <span class="font-mono">${escapeHtml(Math.round(Number(legacyV1Score)))}%</span>
+                       (originally scored against ${escapeHtml(legacyV1Name || 'WalaaPlus Sales Quality Scorecard v1.5')})
+                   </div>`
+                : '';
+
             slot.innerHTML = `
                 <div class="border-t pt-6 mt-2">
                     <div class="flex items-center justify-between mb-3">
                         <h4 class="font-semibold text-gray-900">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_scorecard') || 'SDR Scorecard')}</h4>
                         <span class="text-[11px] text-gray-400">${escapeHtml(evaluation.scorecard_name || '')}</span>
                     </div>
+                    ${legacyFootnote}
                     <div class="bg-gradient-to-r ${scoreColor} rounded-xl p-4 text-white mb-3">
                         <div class="flex items-center justify-between flex-wrap gap-3">
                             <div>

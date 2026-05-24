@@ -284,9 +284,25 @@ export async function initCallIntelligenceTables(): Promise<void> {
       micro_training_topics JSONB,
       key_moments JSONB,
       evaluated_at TIMESTAMP DEFAULT NOW(),
-      created_at TIMESTAMP DEFAULT NOW()
+      created_at TIMESTAMP DEFAULT NOW(),
+      -- DMAIC Scorecard Consolidation Step 5 — preserve v1.5 scores
+      -- when a row is backfilled against the COPC v2 scorecard so the
+      -- original (pre-consolidation) audit number stays visible
+      -- forever. Set by scripts/backfillScorecardV2.ts before the
+      -- COPC re-score writes the new overall_score / dimension_scores.
+      legacy_score_v1 DECIMAL(5,2),
+      legacy_dimension_scores_v1 JSONB,
+      legacy_scorecard_name_v1 VARCHAR(255),
+      backfilled_at TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_sdr_eval_call ON sdr_call_evaluations(call_record_id);
+    -- Idempotent column adds for existing deployments where the
+    -- CREATE TABLE ran before the v2 legacy columns existed.
+    ALTER TABLE sdr_call_evaluations
+      ADD COLUMN IF NOT EXISTS legacy_score_v1 DECIMAL(5,2),
+      ADD COLUMN IF NOT EXISTS legacy_dimension_scores_v1 JSONB,
+      ADD COLUMN IF NOT EXISTS legacy_scorecard_name_v1 VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS backfilled_at TIMESTAMP;
 
     CREATE TABLE IF NOT EXISTS sdr_evaluation_reviews (
       id SERIAL PRIMARY KEY,
@@ -1572,7 +1588,15 @@ export async function getSDREvaluation(
     micro_training_topics: row.micro_training_topics,
     key_moments: row.key_moments,
     evaluated_at: row.evaluated_at,
-  };
+    // DMAIC Step 5 — surface the backfilled-from-v1.5 audit trail so the
+    // UI can show "Previously: X (v1.5)" alongside the new COPC score.
+    // Nullable: only populated for evaluations that have been backfilled.
+    legacy_score_v1:
+      row.legacy_score_v1 != null ? parseFloat(row.legacy_score_v1) : null,
+    legacy_dimension_scores_v1: row.legacy_dimension_scores_v1 ?? null,
+    legacy_scorecard_name_v1: row.legacy_scorecard_name_v1 ?? null,
+    backfilled_at: row.backfilled_at ?? null,
+  } as any;
 }
 
 // =======================================================================
