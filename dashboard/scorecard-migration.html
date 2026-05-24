@@ -37,6 +37,24 @@
             </p>
         </header>
 
+        <!-- ADMIN KEY PROMPT — platform middleware requires X-Admin-Key
+             for all /api/admin/* endpoints regardless of session. Paste
+             once; stored in sessionStorage only (cleared on tab close). -->
+        <section id="key-card" class="bg-amber-50 rounded-xl shadow-sm border-2 border-amber-300 p-4 mb-4">
+            <h2 class="font-semibold text-amber-900">🔑 Step 0 — Paste your admin API key</h2>
+            <p class="text-xs text-amber-800 mt-1 mb-3">
+                Get the value of <code>ADMIN_API_KEY</code> from Replit Secrets (Tools → Secrets) and paste below.
+                The page stores it in this tab's sessionStorage only — never in localStorage, never sent anywhere except as the X-Admin-Key header on this page's API calls.
+            </p>
+            <div class="flex gap-2 items-center">
+                <input id="admin-key-input" type="password" placeholder="paste ADMIN_API_KEY here"
+                       class="flex-1 border border-amber-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                <button id="save-key-btn" type="button" class="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 text-sm font-medium">Save + test</button>
+                <button id="clear-key-btn" type="button" class="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg px-3 py-2 text-xs">Clear</button>
+            </div>
+            <p id="key-status" class="text-xs mt-2"></p>
+        </section>
+
         <!-- STATUS CARD -->
         <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
             <div class="flex items-center justify-between">
@@ -123,14 +141,31 @@
                 out.textContent = `[${ts}] ${label}\n${JSON.stringify(data, null, 2)}\n\n${out.textContent}`;
             }
 
+            function getAdminKey() {
+                return sessionStorage.getItem('walaplus_admin_api_key') || '';
+            }
+            function setAdminKey(k) {
+                if (k) sessionStorage.setItem('walaplus_admin_api_key', k);
+                else sessionStorage.removeItem('walaplus_admin_api_key');
+            }
+
             async function call(method, url, label) {
                 busy.classList.remove('hidden');
                 log(`→ ${method} ${url}`);
+                const key = getAdminKey();
+                if (!key) {
+                    log('✗ No admin key stored — paste it in "Step 0" above first.');
+                    busy.classList.add('hidden');
+                    return null;
+                }
                 try {
                     const res = await fetch(url, {
                         method,
                         credentials: 'include',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Admin-Key': key,
+                        },
                     });
                     let body;
                     try { body = await res.json(); }
@@ -262,8 +297,50 @@
                 });
             });
 
-            // Auto-load on first open
-            refreshStatus();
+            // ============== Admin-key UI wiring ==============
+            const keyInput = document.getElementById('admin-key-input');
+            const keyStatus = document.getElementById('key-status');
+            const saveBtn = document.getElementById('save-key-btn');
+            const clearBtn = document.getElementById('clear-key-btn');
+
+            function renderKeyStatus() {
+                const k = getAdminKey();
+                if (k) {
+                    keyStatus.textContent = `✓ Key saved (${k.length} chars). Used for all API calls below.`;
+                    keyStatus.className = 'text-xs mt-2 text-green-700';
+                    keyInput.placeholder = '(key saved — type new one to replace)';
+                } else {
+                    keyStatus.textContent = 'No key saved. API calls will fail with 403 until you save one.';
+                    keyStatus.className = 'text-xs mt-2 text-amber-800';
+                }
+            }
+            saveBtn.addEventListener('click', async () => {
+                const val = keyInput.value.trim();
+                if (!val) {
+                    keyStatus.textContent = '✗ Empty value — paste the key first.';
+                    keyStatus.className = 'text-xs mt-2 text-red-700';
+                    return;
+                }
+                setAdminKey(val);
+                keyInput.value = '';
+                renderKeyStatus();
+                // Auto-validate by hitting refresh status
+                await refreshStatus();
+            });
+            clearBtn.addEventListener('click', () => {
+                setAdminKey('');
+                keyInput.value = '';
+                renderKeyStatus();
+            });
+            keyInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') saveBtn.click();
+            });
+
+            renderKeyStatus();
+            // Auto-load on first open ONLY if key already in storage
+            if (getAdminKey()) {
+                refreshStatus();
+            }
         })();
     </script>
 </body>
