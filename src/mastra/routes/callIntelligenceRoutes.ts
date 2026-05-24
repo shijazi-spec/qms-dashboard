@@ -1452,6 +1452,62 @@ Respond with JSON only:
       };
     },
   },
+  // Generic HTML page server — registered for each new dashboard page
+  // added this session. Without these routes, the static .html files
+  // exist on disk but Mastra doesn't know to serve them (returns the
+  // default "Welcome to Mastra" page instead). The pattern matches /calls
+  // below: try a few possible paths, return the first one that exists.
+  ...(["lead-history", "calls-health", "scorecard-migration"].map((slug) => ({
+    path: `/${slug}.html`,
+    method: "GET" as const,
+    createHandler: async () => {
+      const { readFileSync, existsSync } = await import("fs");
+      const { join } = await import("path");
+      return async (c: any) => {
+        const candidatePaths = [
+          join(process.cwd(), "dashboard", `${slug}.html`),
+          join(process.cwd(), "..", "dashboard", `${slug}.html`),
+          `/home/runner/workspace/dashboard/${slug}.html`,
+        ];
+        for (const p of candidatePaths) {
+          if (existsSync(p)) {
+            return c.html(readFileSync(p, "utf-8"));
+          }
+        }
+        return c.html(
+          `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:2rem">` +
+            `<h1>Page not found on disk</h1>` +
+            `<p>${slug}.html exists in the repo but couldn't be found at any of:</p>` +
+            `<ul>${candidatePaths.map((p) => `<li><code>${p}</code></li>`).join("")}</ul>` +
+            `</body></html>`,
+          404,
+        );
+      };
+    },
+  }))),
+  // Also expose them without the .html extension, matching the convention
+  // for /calls and /duplicates (the older pages drop the extension).
+  ...(["lead-history", "calls-health", "scorecard-migration"].map((slug) => ({
+    path: `/${slug}`,
+    method: "GET" as const,
+    createHandler: async () => {
+      const { readFileSync, existsSync } = await import("fs");
+      const { join } = await import("path");
+      return async (c: any) => {
+        const candidatePaths = [
+          join(process.cwd(), "dashboard", `${slug}.html`),
+          join(process.cwd(), "..", "dashboard", `${slug}.html`),
+          `/home/runner/workspace/dashboard/${slug}.html`,
+        ];
+        for (const p of candidatePaths) {
+          if (existsSync(p)) {
+            return c.html(readFileSync(p, "utf-8"));
+          }
+        }
+        return c.html(`<h1>Page not found</h1>`, 404);
+      };
+    },
+  }))),
   {
     path: "/calls",
     method: "GET" as const,
