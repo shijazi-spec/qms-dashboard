@@ -75,6 +75,23 @@ interface BackfillCandidate {
   transcript_text: string;
 }
 
+/**
+ * Self-bootstrap the v2 schema additions so the backfill works even
+ * if the deployed app hasn't called initCallIntelligenceTables() yet
+ * (e.g. just-pushed code where no /calls request has hit yet). All
+ * IF NOT EXISTS — idempotent, no-op on a deployment that already has
+ * the columns.
+ */
+async function ensureBackfillSchema(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    ALTER TABLE sdr_call_evaluations
+      ADD COLUMN IF NOT EXISTS legacy_score_v1 DECIMAL(5,2),
+      ADD COLUMN IF NOT EXISTS legacy_dimension_scores_v1 JSONB,
+      ADD COLUMN IF NOT EXISTS legacy_scorecard_name_v1 VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS backfilled_at TIMESTAMP
+  `);
+}
+
 async function run(): Promise<void> {
   const { days, max } = parseArgs();
   console.log(
@@ -86,6 +103,12 @@ async function run(): Promise<void> {
   const pool = new pg.Pool({ connectionString: databaseUrl });
 
   try {
+    // Self-bootstrap: ensure the v2 columns exist regardless of whether
+    // the deployed app has invoked initCallIntelligenceTables() yet.
+    await ensureBackfillSchema(pool);
+    console.log("[backfill] schema ready (v2 columns confirmed present)");
+
+
     // 1. Confirm the active scorecard is v2 (has section_id on attributes)
     const activeRes = await pool.query(
       `SELECT id, name, version, dimensions

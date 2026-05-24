@@ -45,6 +45,18 @@ function rule(): string {
   return "─".repeat(72);
 }
 
+/** Self-bootstrap the v2 columns so the report runs even before the
+ *  deployed app has invoked initCallIntelligenceTables(). Idempotent. */
+async function ensureSchema(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    ALTER TABLE sdr_call_evaluations
+      ADD COLUMN IF NOT EXISTS legacy_score_v1 DECIMAL(5,2),
+      ADD COLUMN IF NOT EXISTS legacy_dimension_scores_v1 JSONB,
+      ADD COLUMN IF NOT EXISTS legacy_scorecard_name_v1 VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS backfilled_at TIMESTAMP
+  `);
+}
+
 async function run(): Promise<void> {
   const { jsonOutput } = parseArgs();
   const databaseUrl = process.env.DATABASE_URL;
@@ -53,6 +65,8 @@ async function run(): Promise<void> {
   const report: any = { generated_at: new Date().toISOString() };
 
   try {
+    await ensureSchema(pool);
+
     // 1. Active scorecard
     const activeRes = await pool.query(
       `SELECT name, version FROM quality_scorecards WHERE is_active=true LIMIT 1`,
