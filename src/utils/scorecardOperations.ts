@@ -10,13 +10,8 @@
  * caller (endpoint) decides how to surface results. No process.exit.
  */
 
-import * as fs from "fs";
-import * as path from "path";
-import { fileURLToPath } from "url";
 import { logger as safeLogger } from "./logger";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { CANONICAL_COPC_V2 } from "../data/scorecardV2CopcCanonical";
 
 type Pool = {
   query: (text: string, values?: any[]) => Promise<{ rows: any[] }>;
@@ -162,9 +157,12 @@ export async function seedCopcScorecard(
 ): Promise<SeedCopcResult> {
   const dryRun = !!options.dryRun;
 
-  // Load canonical JSON from the bundled seed file.
-  const JSON_PATH = path.resolve(__dirname, "../data/scorecard_v2_copc.json");
-  const canonical = JSON.parse(fs.readFileSync(JSON_PATH, "utf8")) as CopcCanonical;
+  // Read canonical scorecard from the bundled TS module. We can't use
+  // fs.readFileSync on src/data/scorecard_v2_copc.json in production
+  // because the bundler doesn't copy non-imported assets into
+  // .mastra/output — the file isn't there at runtime. Inlining as a
+  // TS module survives the build.
+  const canonical = { scorecard: CANONICAL_COPC_V2.scorecard } as CopcCanonical;
   const s = canonical.scorecard;
 
   const before = (
