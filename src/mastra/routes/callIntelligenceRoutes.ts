@@ -206,6 +206,52 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // Weekly digest manual trigger — DMAIC Solution #3. Admin-only;
+    // bypasses the WEEKLY_DIGEST flag so admins can fire on demand
+    // (e.g. before flipping the cron live, or to backfill a missed
+    // Sunday run). The cron at src/mastra/workflows/weeklyDigestCron.ts
+    // checks the flag itself — this endpoint passes forceSend=true.
+    //   POST /api/calls/weekly-digest/send
+    //     { slackChannel?, emailRecipients? }  (both optional;
+    //       defaults from SLACK_DIGEST_CHANNEL_ID and
+    //       WEEKLY_DIGEST_RECIPIENTS env vars)
+    path: "/api/calls/weekly-digest/send",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+          const body = await c.req.json().catch(() => ({}));
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+          const { sendWeeklyDigest } = await import("../../utils/weeklyDigest");
+          const result = await sendWeeklyDigest(callIntelligencePool, {
+            slackChannel: body.slackChannel || undefined,
+            emailRecipients: Array.isArray(body.emailRecipients)
+              ? body.emailRecipients
+              : undefined,
+            identity: (admin as any).email,
+            forceSend: true,
+          });
+          logger?.info("📨 [API] Weekly digest manual trigger", {
+            sent: result.sent,
+            slack_ok: result.slack.ok,
+            email_ok: result.email.ok,
+          });
+          return c.json(result);
+        } catch (error: any) {
+          safeLogger.error("[API] weekly digest manual trigger failed", {
+            message: error?.message,
+          });
+          return c.json({ error: "Failed to send digest" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Coaching Effectiveness Index — DMAIC Solution #5. Returns, for
     // each delivered coaching session (where delivered_at is at least
     // 30d in the past so the after-window has closed), the agent's
