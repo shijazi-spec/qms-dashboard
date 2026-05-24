@@ -218,16 +218,32 @@ Also wired as:
 
 ---
 
-## When to add a feature flag instead of branching
+## When to use a feature flag instead of branching
 
-If you find yourself reaching for Pattern C more than once a month, build
-a tiny feature-flag helper (~50 lines, env-var-backed) and start shipping
-hidden code via Pattern B instead. A flag lets you:
+The flag helper lives at `src/utils/featureFlags.ts`. Use it when you
+want to:
 
-- Push code to `QMS` (deployed) hidden behind `if (flags.x)`
-- Test by enabling for your own user
-- Flip on for everyone when ready
-- Flip off instantly if it breaks — no revert, no redeploy
+- Push code to `QMS` (deployed) hidden behind `if (isFlagEnabled('x', user.email))`
+- Test by enabling for your own user only (set `<FLAG>_USERS=you@walaplus.com` in Replit Secrets)
+- Flip on globally when ready (`<FLAG>=true`)
+- Flip off instantly if it breaks — no revert, no redeploy (`<FLAG>=false`)
 
-For a platform with auto-deploy and no staging, this is the single
-highest-leverage piece of infrastructure you don't have yet.
+### Adding a new flag
+
+1. Add it to the `FLAGS` map in `src/utils/featureFlags.ts`
+2. Gate the code at the call site:
+   ```ts
+   import { isFlagEnabled } from "../utils/featureFlags";
+
+   if (isFlagEnabled("my_new_thing", currentUser?.email)) {
+     // new path
+   } else {
+     // old path
+   }
+   ```
+3. Set the env var in **Replit Secrets** (NOT in `.replit` or committed env files)
+4. Test with `<FLAG>_USERS=your_email` first, then flip global when confident
+
+For a platform with auto-deploy and no staging, the flag helper is the
+single highest-leverage piece of safety infrastructure you have. Reach
+for it before reaching for Pattern C (epic branches).
