@@ -2319,7 +2319,15 @@
                          sdr_call_evaluations — same data the SDR
                          Evaluation tab renders, just compact. -->
                     <div id="stored-sdr-eval-summary" class="mb-4"></div>
-                    <div class="mt-6 pt-6 border-t">
+                    <!-- Legacy combined panel — hidden automatically once the
+                         COPC v2 scorecard is the active one. The stored
+                         summary above is now the single source of truth for
+                         the call's score; this section stays available as
+                         "Run SDR Evaluation" for calls that have not been
+                         evaluated yet, and the side-by-side process / quality
+                         panels stay for historical v1.5 evaluations that
+                         pre-date the COPC migration. -->
+                    <div id="sdr-eval-legacy-section" class="mt-6 pt-6 border-t">
                         <h4 class="font-semibold text-gray-900 mb-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_combined_title'))}</h4>
                         <p class="text-xs text-gray-500 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_eval_combined_desc'))}</p>
                         <div class="flex flex-wrap gap-2">
@@ -2374,6 +2382,19 @@
                 const evaluation = data && data.evaluation;
                 if (!evaluation) { slot.innerHTML = ''; return; }
                 renderStoredSdrEvaluationSummary(slot, evaluation);
+
+                // COPC v2 consolidation (DMAIC Step 4): once a call has a
+                // COPC-scored evaluation (section_id on any attribute, or a
+                // section_scores object), the stored summary above IS the
+                // single source of truth. Hide the legacy side-by-side
+                // process-vs-quality panel so the modal stops showing two
+                // different "Overall Score" numbers for the same call.
+                const attrs = Array.isArray(evaluation.attribute_evaluations) ? evaluation.attribute_evaluations : [];
+                const isCopcV2 = attrs.some(a => a && a.section_id) || !!evaluation.section_scores;
+                const legacySection = document.getElementById('sdr-eval-legacy-section');
+                if (legacySection && isCopcV2) {
+                    legacySection.classList.add('hidden');
+                }
             } catch (e) {
                 console.warn('stored SDR eval load failed', e);
                 slot.innerHTML = '';
@@ -2385,7 +2406,55 @@
             const attrs = Array.isArray(evaluation.attribute_evaluations) ? evaluation.attribute_evaluations : [];
             const overall = Math.round(Number(evaluation.overall_score) || 0);
             const scoreColor = overall >= 80 ? 'from-emerald-500 to-emerald-600' : overall >= 60 ? 'from-amber-500 to-amber-600' : 'from-red-500 to-red-600';
-            const attrRows = attrs.map(a => {
+
+            // COPC v2 detection: section_id present on any attribute, OR
+            // section_scores present on the evaluation. When v2 → render
+            // grouped by section with the 0/1/2 rubric. When v1 → legacy
+            // flat list with 0-10 scores (kept for historical evaluations).
+            const isCopcV2 = attrs.some(a => a && a.section_id) || !!evaluation.section_scores;
+
+            // Friendly section names — fallback to the raw id if missing.
+            const SECTION_NAME = {
+                activity_and_process: 'Section 1 — Call Activity & Process Adherence',
+                quality_and_soft_skills: 'Section 2 — Call Quality & Soft Skills',
+                coaching_and_improvement: 'Section 3 — Coaching & Continuous Improvement',
+                kpi_and_correlation: 'Section 4 — KPI & Correlation Analysis',
+            };
+            const SECTION_ORDER = [
+                'activity_and_process',
+                'quality_and_soft_skills',
+                'coaching_and_improvement',
+                'kpi_and_correlation',
+            ];
+
+            function renderAttrRowV2(a) {
+                const status = a.status || '';
+                const badge = status === 'PASS' ? 'bg-green-100 text-green-700'
+                            : status === 'FAIL' ? 'bg-red-100 text-red-700'
+                            : 'bg-gray-100 text-gray-600';
+                const isDeferred = (a.score === null || a.score === undefined);
+                // 0/1/2 rubric on COPC; "—" for deferred (data not yet sourceable)
+                const scoreDisplay = isDeferred ? '—' : `${a.score}/2`;
+                const scoreColor = isDeferred ? 'text-gray-400'
+                                : a.score === 2 ? 'text-green-700'
+                                : a.score === 1 ? 'text-amber-700'
+                                : 'text-red-700';
+                const evidence = Array.isArray(a.evidence_quotes) && a.evidence_quotes.length
+                    ? `<p class="text-[11px] text-gray-500 italic mt-0.5">"${escapeHtml(a.evidence_quotes[0])}"</p>` : '';
+                return `<div class="flex items-start justify-between gap-2 py-1.5 border-b border-gray-100 last:border-0">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="px-1.5 py-0.5 text-[10px] rounded ${badge}" data-testid="stored-attr-status-${escapeHtml(a.attribute_id || '')}">${escapeHtml(isDeferred ? 'deferred' : (status || '—'))}</span>
+                            <span class="text-xs font-medium text-gray-800">${escapeHtml(a.attribute_name || a.attribute_id || '')}</span>
+                        </div>
+                        ${a.comment ? `<p class="text-[11px] text-gray-500 mt-0.5">${escapeHtml(a.comment)}</p>` : ''}
+                        ${evidence}
+                    </div>
+                    <span class="text-xs font-mono ${scoreColor} whitespace-nowrap" data-testid="stored-attr-score-${escapeHtml(a.attribute_id || '')}">${escapeHtml(scoreDisplay)}</span>
+                </div>`;
+            }
+
+            function renderAttrRowLegacy(a) {
                 const status = a.status || '';
                 const badge = status === 'PASS' ? 'bg-green-100 text-green-700'
                             : status === 'FAIL' ? 'bg-red-100 text-red-700'
@@ -2402,7 +2471,46 @@
                     </div>
                     <span class="text-xs font-mono text-gray-700 whitespace-nowrap" data-testid="stored-attr-score-${escapeHtml(a.attribute_id || '')}">${escapeHtml(score)}</span>
                 </div>`;
-            }).join('');
+            }
+
+            let attrRows;
+            if (isCopcV2) {
+                // Group by section_id, preserving the canonical COPC order.
+                const grouped = {};
+                for (const a of attrs) {
+                    const sid = (a && a.section_id) || 'ungrouped';
+                    if (!grouped[sid]) grouped[sid] = [];
+                    grouped[sid].push(a);
+                }
+                const orderedKeys = SECTION_ORDER.filter(k => grouped[k]);
+                for (const k of Object.keys(grouped)) {
+                    if (!SECTION_ORDER.includes(k)) orderedKeys.push(k);
+                }
+                attrRows = orderedKeys.map(sid => {
+                    const group = grouped[sid];
+                    const ss = (evaluation.section_scores || {})[sid] || {};
+                    const sectionScore = (ss.score_0_100 != null) ? Math.round(ss.score_0_100) : null;
+                    const scoredCount = ss.scored_count != null ? ss.scored_count : group.filter(a => a && a.score !== null && a.score !== undefined).length;
+                    const deferredCount = ss.deferred_count != null ? ss.deferred_count : group.filter(a => !a || a.score === null || a.score === undefined).length;
+                    const sectionBadge = sectionScore === null ? 'bg-gray-100 text-gray-500'
+                                      : sectionScore >= 80 ? 'bg-green-100 text-green-700'
+                                      : sectionScore >= 60 ? 'bg-amber-100 text-amber-700'
+                                      : 'bg-red-100 text-red-700';
+                    const sectionScoreText = sectionScore === null ? '— (no checkpoints scoreable)' : `${sectionScore}%`;
+                    return `<div class="mb-3">
+                        <div class="flex items-center justify-between gap-2 px-1 py-1.5 bg-gray-50 rounded-md mb-1">
+                            <h6 class="text-[11px] font-semibold text-gray-700">${escapeHtml(SECTION_NAME[sid] || sid)}</h6>
+                            <div class="flex items-center gap-2 text-[10px] text-gray-500">
+                                <span>${scoredCount} scored · ${deferredCount} deferred</span>
+                                <span class="px-1.5 py-0.5 rounded font-mono ${sectionBadge}">${escapeHtml(sectionScoreText)}</span>
+                            </div>
+                        </div>
+                        ${group.map(renderAttrRowV2).join('')}
+                    </div>`;
+                }).join('');
+            } else {
+                attrRows = attrs.map(renderAttrRowLegacy).join('');
+            }
 
             const strengths = (evaluation.top_strengths || []).slice(0, 3);
             const gaps = (evaluation.top_gaps || []).slice(0, 3);
