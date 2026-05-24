@@ -211,6 +211,125 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // DMAIC Scorecard Consolidation — admin endpoint to seed COPC v2
+    // and archive previously-active scorecards. Mirrors
+    // scripts/seedScorecardV2Copc.ts but runs INSIDE the deployed app
+    // so it can reach the production DB (the dev workspace Shell
+    // can't — prod DB is firewalled to internal IPs).
+    //   POST /api/admin/scorecard/seed-copc                    (apply)
+    //   POST /api/admin/scorecard/seed-copc?dry_run=1          (preview)
+    path: "/api/admin/scorecard/seed-copc",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+          const dryRun = c.req.query("dry_run") === "1" || c.req.query("dry_run") === "true";
+          const { Pool } = await import("pg");
+          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+          try {
+            const { seedCopcScorecard } = await import(
+              "../../utils/scorecardOperations"
+            );
+            const result = await seedCopcScorecard(pool, { dryRun });
+            logger?.info("📝 [API] seedCopcScorecard", {
+              dryRun,
+              invariant: result.invariant_holds,
+              archived: result.archived.length,
+              action: result.inserted_or_updated?.action,
+            });
+            return c.json({ success: true, ...result });
+          } finally {
+            await pool.end();
+          }
+        } catch (error: any) {
+          safeLogger.error("[API] seed-copc failed", { error: error?.message });
+          return c.json({ success: false, error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // DMAIC Scorecard Consolidation — admin endpoint to score every
+    // call_records row that has a transcript but no sdr_call_evaluations
+    // row, using the active scorecard (COPC v2 after seed-copc has run).
+    // Mirrors scripts/scoreAllUnevaluatedCalls.ts.
+    //   POST /api/admin/scorecard/score-unevaluated                 (apply)
+    //   POST /api/admin/scorecard/score-unevaluated?dry_run=1       (preview)
+    //   POST /api/admin/scorecard/score-unevaluated?max=50          (cap per run)
+    path: "/api/admin/scorecard/score-unevaluated",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+          const dryRun = c.req.query("dry_run") === "1" || c.req.query("dry_run") === "true";
+          const max = c.req.query("max") ? parseInt(c.req.query("max"), 10) : undefined;
+          const { Pool } = await import("pg");
+          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+          try {
+            const { scoreUnevaluatedCalls } = await import(
+              "../../utils/scorecardOperations"
+            );
+            const result = await scoreUnevaluatedCalls(pool, { dryRun, max });
+            logger?.info("📊 [API] scoreUnevaluatedCalls", {
+              dryRun,
+              candidates: result.candidates_found,
+              scored: result.scored,
+              failed: result.failed,
+            });
+            return c.json({ success: true, ...result });
+          } finally {
+            await pool.end();
+          }
+        } catch (error: any) {
+          safeLogger.error("[API] score-unevaluated failed", { error: error?.message });
+          return c.json({ success: false, error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // DMAIC Scorecard Consolidation — read-only efficiency report.
+    // Mirrors scripts/scorecardEfficiencyReport.ts. Returns the same
+    // shape as the script but always as JSON.
+    //   GET /api/admin/scorecard/efficiency-report
+    path: "/api/admin/scorecard/efficiency-report",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+          const { Pool } = await import("pg");
+          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+          try {
+            const { buildEfficiencyReport } = await import(
+              "../../utils/scorecardOperations"
+            );
+            const report = await buildEfficiencyReport(pool);
+            logger?.info("📈 [API] efficiency report generated", {
+              active: report.active_scorecard,
+              total: report.coverage?.total,
+              backfilled: report.coverage?.backfilled,
+            });
+            return c.json({ success: true, ...report });
+          } finally {
+            await pool.end();
+          }
+        } catch (error: any) {
+          safeLogger.error("[API] efficiency-report failed", { error: error?.message });
+          return c.json({ success: false, error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Weekly digest manual trigger — DMAIC Solution #3. Admin-only;
     // bypasses the WEEKLY_DIGEST flag so admins can fire on demand
     // (e.g. before flipping the cron live, or to backfill a missed
