@@ -206,6 +206,73 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // Per-lead / per-phone call history. DMAIC Solution #2 (scope #4
+    // in the strategic report). Feature-flagged on LEAD_HISTORY_VIEW;
+    // returns 404 when the flag is off so the existence of the endpoint
+    // doesn't leak before the UI is ready.
+    //
+    //   GET /api/calls/lead-history?lead_id=ZOHO_LEAD_ID
+    //   GET /api/calls/lead-history?deal_id=ZOHO_DEAL_ID
+    //   GET /api/calls/lead-history?phone=+966501234567
+    //
+    // All three return the same shape — newest-first calls + summary
+    // aggregates. See src/utils/leadHistoryQuery.ts.
+    path: "/api/calls/lead-history",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          // Flag-gated so the endpoint can ship dark until the page is
+          // wired up and tested. Listed users in LEAD_HISTORY_VIEW_USERS
+          // get access for dogfooding before the global flip.
+          const { isFlagEnabled } = await import("../../utils/featureFlags");
+          const identity = (admin as any).email || `user:${(admin as any).userId}`;
+          if (!isFlagEnabled("lead_history_view", identity)) {
+            return c.json({ error: "Not found" }, 404);
+          }
+
+          const logger = mastra?.getLogger();
+          const { fetchLeadHistory } = await import(
+            "../../utils/leadHistoryQuery"
+          );
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          const q = {
+            lead_id: c.req.query("lead_id") || undefined,
+            deal_id: c.req.query("deal_id") || undefined,
+            phone: c.req.query("phone") || undefined,
+            limit: c.req.query("limit")
+              ? parseInt(c.req.query("limit"), 10)
+              : undefined,
+          };
+
+          logger?.info("🔎 [API] Lead history lookup", {
+            lookup: q.lead_id ? "lead_id" : q.deal_id ? "deal_id" : "phone",
+          });
+
+          const result = await fetchLeadHistory(callIntelligencePool, q);
+          if ("error" in result) {
+            return c.json({ error: result.error }, result.status as any);
+          }
+          return c.json(result);
+        } catch (error: any) {
+          safeLogger.error("[API] lead-history failed", {
+            message: error?.message,
+          });
+          return c.json(
+            { error: "Failed to fetch lead history" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/calls/analytics",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
