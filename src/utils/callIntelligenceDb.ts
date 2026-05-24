@@ -1707,10 +1707,143 @@ export async function getSDRReviewsForCall(
   }));
 }
 
+/**
+ * COPC-aligned prompt — used when the active scorecard has the v2
+ * structure (every attribute carries a `section_id`). Scores each
+ * checkpoint on the 0/1/2 rubric (Not Met / Partially Met / Fully Met)
+ * with `null` for checkpoints whose data dependency is outside the
+ * transcript (Five9 timestamps, conversion ratios, etc.) — those are
+ * explicitly excluded from the weighted overall so a transcript-only
+ * evaluation doesn't get penalised for data the analyzer can't see.
+ *
+ * Result shape stays compatible with the legacy parser
+ * (attribute_evaluations[].status PASS/FAIL/NA) so the same downstream
+ * saveSDREvaluation path keeps working: score=2 → PASS, score 0|1 →
+ * FAIL, score=null → NA.
+ */
+export function buildCopcSDREvaluationPrompt(
+  transcript: string,
+  scorecard: SDRScorecardConfig,
+): string {
+  // Group attributes by their section_id so the prompt mirrors the
+  // scorecard's section structure exactly.
+  const bySection: Record<string, SDREvaluationAttribute[]> = {};
+  const sectionOrder: string[] = [];
+  for (const a of scorecard.attributes) {
+    const sid = (a as any).section_id || "ungrouped";
+    if (!bySection[sid]) {
+      bySection[sid] = [];
+      sectionOrder.push(sid);
+    }
+    bySection[sid].push(a);
+  }
+  const sectionsBlock = sectionOrder
+    .map((sid) => {
+      const attrs = bySection[sid];
+      const items = attrs
+        .map((a, i) => {
+          const target = (a as any).target || "-";
+          const metric = (a as any).metric || a.evaluation_logic || "";
+          const dep = (a as any).data_dependency || "";
+          const deferTag = dep.includes("five9_real_ingest")
+            ? " [DATA: deferred — score null]"
+            : dep.includes("NEW")
+              ? " [DATA: not yet available — score null if no evidence]"
+              : "";
+          return `  ${i + 1}. ${a.name} (${a.id})${deferTag}
+     Metric: ${metric}
+     Target: ${target}`;
+        })
+        .join("\n\n");
+      return `### Section: ${sid}\n${items}`;
+    })
+    .join("\n\n");
+
+  return `You are a Quality Assurance evaluator for SDR (Sales Development Representative) calls, applying the COPC-aligned WalaPlus SDR QA Scorecard v2.
+
+Scoring rubric (per checkpoint):
+  0 = Not Met       (clear evidence the SDR missed or violated the standard)
+  1 = Partially Met (some evidence but inconsistent / incomplete)
+  2 = Fully Met     (clear, consistent evidence the SDR met the standard)
+  null = Cannot Score (no evidence in the transcript — do NOT penalise)
+
+Rules:
+  • Use \`null\` for checkpoints tagged [DATA: deferred] or [DATA: not yet available] — you cannot score Five9 login gaps, idle ratios, conversion funnels, etc. from a transcript alone.
+  • Provide a one-sentence evidence quote from the transcript when scoring 0 or 1, so the operator sees WHY.
+  • Treat Arabic / Saudi-dialect transcripts as first-class input. Polite phrasing and indirect requests count as evidence — do not over-penalise.
+  • Be consistent: the same behavior gets the same score across calls.
+
+## Transcript
+${transcript}
+
+## Scorecard
+${sectionsBlock}
+
+## Return JSON (exact shape — required for parsing)
+
+{
+  "attribute_evaluations": [
+    {
+      "attribute_id": "checkpoint_id_from_above",
+      "attribute_name": "Checkpoint Name",
+      "section_id": "section_id_from_above",
+      "score": 0 | 1 | 2 | null,
+      "status": "PASS" | "FAIL" | "NA",
+      "severity": "minor" | "major" | "critical",
+      "evidence_quotes": ["one sentence from transcript, in original language"],
+      "comment": "one professional sentence summarising the evidence",
+      "improvement_tip": "one actionable sentence the SDR can apply on the next call"
+    }
+  ],
+  "overall_summary": {
+    "overall_score": <integer 0..100>,
+    "section_scores": {
+      "<section_id>": { "avg_score_0_2": <number>, "scored_count": <int>, "deferred_count": <int>, "score_0_100": <number 0..100> }
+    },
+    "dimension_scores": {
+      "people": <0..100>, "process": <0..100>, "governance": <0..100>
+    },
+    "top_strengths": ["string", "string", "string"],
+    "top_gaps": ["string", "string", "string"],
+    "coaching_actions": ["string", "string", "string"],
+    "critical_risks": []
+  },
+  "coaching_recommendation": {
+    "message_ar": "Arabic coaching message for the agent (professional, constructive)",
+    "message_en": "Optional English version",
+    "micro_training_topics": ["topic", "topic", "topic"]
+  },
+  "key_moments": {
+    "greeting":            { "detected": true|false, "description": "" },
+    "consent":             { "detected": true|false, "description": "" },
+    "discovery":           { "detected": true|false, "description": "" },
+    "objection_handling":  { "detected": true|false, "description": "" },
+    "closing":             { "detected": true|false, "description": "" },
+    "next_steps":          { "detected": true|false, "description": "" }
+  },
+  "compliance_notes": "any explicit compliance or PDPL observations",
+  "ai_confidence": <0..100>
+}
+
+Status mapping rule: score=2 → "PASS"; score 0 or 1 → "FAIL"; score=null → "NA". Do not deviate.
+
+Overall score formula: for each section, compute mean(scored checkpoints, 0..2) ÷ 2 × 100 = section's score_0_100. Then overall_score = weighted average across sections using the section weights from the scorecard. Sections whose checkpoints are ALL null get weight=0 (re-normalize across remaining sections) — never assume the agent's score on a section we can't observe.`;
+}
+
 export function buildSDREvaluationPrompt(
   transcript: string,
   scorecard: SDRScorecardConfig,
 ): string {
+  // Route based on scorecard shape: v2 (COPC) scorecards tag every
+  // attribute with a section_id (added by scripts/seedScorecardV2Copc.ts).
+  // Legacy v1.5 scorecards have no section_id → fall through to the
+  // existing Arabic pass/fail prompt.
+  const hasSectionIds = scorecard.attributes.some(
+    (a) => (a as any).section_id != null,
+  );
+  if (hasSectionIds) {
+    return buildCopcSDREvaluationPrompt(transcript, scorecard);
+  }
   const attributesList = scorecard.attributes
     .map(
       (attr, idx) =>
