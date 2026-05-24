@@ -40,13 +40,23 @@ import * as pg from "pg";
 
 const DRY_RUN = process.env.DRY_RUN === "1";
 
-function parseArgs(): { days: number; max: number } {
+function parseArgs(): { days: number | "all"; max: number } {
   const args = process.argv.slice(2);
-  let days = 30;
+  let days: number | "all" = 30;
   let max = 5000;
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--days" && args[i + 1]) {
-      days = Math.max(1, Math.min(365, parseInt(args[i + 1], 10) || 30));
+    if (args[i] === "--all") {
+      days = "all";
+    } else if (args[i] === "--days" && args[i + 1]) {
+      const v = args[i + 1].toLowerCase();
+      if (v === "all" || v === "0") {
+        days = "all";
+      } else {
+        // Bumped cap from 365 → 3650 (10y) so a tenant with old historical
+        // data can still re-score everything in one pass. Use --all when
+        // you want no time filter at all.
+        days = Math.max(1, Math.min(3650, parseInt(args[i + 1], 10) || 30));
+      }
       i++;
     } else if (args[i] === "--max" && args[i + 1]) {
       max = Math.max(1, Math.min(50000, parseInt(args[i + 1], 10) || 5000));
@@ -68,7 +78,7 @@ interface BackfillCandidate {
 async function run(): Promise<void> {
   const { days, max } = parseArgs();
   console.log(
-    `[backfill] starting (DRY_RUN=${DRY_RUN}, window=${days}d, max=${max} rows)`,
+    `[backfill] starting (DRY_RUN=${DRY_RUN}, window=${days === "all" ? "ALL historical" : days + "d"}, max=${max} rows)`,
   );
 
   const databaseUrl = process.env.DATABASE_URL;
@@ -101,9 +111,10 @@ async function run(): Promise<void> {
 
     // 2. Build the candidate list — evaluations in window that haven't been
     //    backfilled yet. Order by oldest-first so a partial run still makes
-    //    forward progress.
-    const candidatesRes = await pool.query(
-      `SELECT
+    //    forward progress. --all (or --days 0) drops the time filter
+    //    entirely so the full historical corpus is in scope.
+    const baseSelect = `
+       SELECT
          e.id AS evaluation_id,
          e.call_record_id,
          e.overall_score AS current_overall_score,
@@ -119,12 +130,22 @@ async function run(): Promise<void> {
          ORDER BY created_at DESC NULLS LAST
          LIMIT 1
        ) t ON true
-       WHERE e.created_at >= NOW() - ($1 || ' days')::interval
-         AND e.backfilled_at IS NULL
-       ORDER BY e.created_at ASC
-       LIMIT $2`,
-      [String(days), max],
-    );
+       WHERE e.backfilled_at IS NULL`;
+    const candidatesRes =
+      days === "all"
+        ? await pool.query(
+            `${baseSelect}
+             ORDER BY e.created_at ASC
+             LIMIT $1`,
+            [max],
+          )
+        : await pool.query(
+            `${baseSelect}
+               AND e.created_at >= NOW() - ($1 || ' days')::interval
+             ORDER BY e.created_at ASC
+             LIMIT $2`,
+            [String(days), max],
+          );
     const candidates = candidatesRes.rows as BackfillCandidate[];
     console.log(`[backfill] found ${candidates.length} candidate row(s)`);
 
