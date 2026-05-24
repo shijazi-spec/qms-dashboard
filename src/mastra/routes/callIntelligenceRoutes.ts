@@ -3928,15 +3928,52 @@ ${transcriptText}
             );
           }
 
+          // DMAIC Solution #4: also promote the evaluation into
+          // structured Zoho fields (QA_Score / Compliance_Pass /
+          // Last_Evaluation_Date) so the result is filterable in
+          // Zoho's native reports. Feature-flagged on
+          // ZOHO_STRUCTURED_FIELDS — ships dark until the Zoho admin
+          // creates the custom fields. Best-effort: the Note write
+          // above already succeeded; we never fail the sync because
+          // of a structured-fields hiccup.
+          let structuredResult: any = null;
+          try {
+            const { syncEvaluationToZohoStructuredFields } = await import(
+              "../../utils/zohoStructuredFieldsSync"
+            );
+            structuredResult = await syncEvaluationToZohoStructuredFields(
+              {
+                overall_score: (evaluation as any).overall_score,
+                compliance_pass: (evaluation as any).compliance_pass,
+                evaluated_at:
+                  (evaluation as any).evaluated_at ||
+                  (evaluation as any).created_at ||
+                  null,
+              },
+              callRecord,
+              {
+                logger,
+                identity: (admin as any).email || `user:${(admin as any).userId}`,
+              },
+            );
+          } catch (err: any) {
+            logger?.warn("[API] structured-fields sync threw, continuing", {
+              callId,
+              error: err?.message || String(err),
+            });
+          }
+
           logger?.info("✅ [API] Call evaluation synced to Zoho", {
             callId,
             syncTarget,
+            structured_fields_synced: structuredResult?.synced || false,
           });
 
           return c.json({
             success: true,
             message: `Evaluation synced to ${syncTarget}`,
             syncTarget,
+            structured_fields: structuredResult,
           });
         } catch (error) {
           safeLogger.error("Error syncing to Zoho:", error);
