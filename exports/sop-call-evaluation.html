@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SOP — Call Evaluation Tab</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #1f2937; font-size: 11pt; line-height: 1.45; }
+  h1 { font-size: 22pt; color: #4f46e5; margin: 0 0 4pt; }
+  h2 { font-size: 14pt; color: #4338ca; border-bottom: 1.5px solid #e0e7ff; padding-bottom: 4pt; margin-top: 18pt; }
+  h3 { font-size: 12pt; color: #1e3a8a; margin-top: 12pt; margin-bottom: 4pt; }
+  .meta { color: #6b7280; font-size: 9.5pt; margin-bottom: 18pt; padding-bottom: 8pt; border-bottom: 1px solid #e5e7eb; }
+  .meta strong { color: #374151; }
+  table { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt; font-size: 10pt; }
+  th, td { border: 1px solid #d1d5db; padding: 6pt 8pt; text-align: left; vertical-align: top; }
+  th { background: #eef2ff; color: #1e3a8a; font-weight: 600; }
+  tr:nth-child(even) td { background: #f9fafb; }
+  ol, ul { margin: 4pt 0 8pt 18pt; padding: 0; }
+  li { margin-bottom: 3pt; }
+  code { background: #f3f4f6; padding: 1pt 4pt; border-radius: 3pt; font-size: 9.5pt; color: #be185d; }
+  .tag { display: inline-block; background: #ecfdf5; color: #047857; padding: 1pt 6pt; border-radius: 3pt; font-size: 9pt; font-weight: 600; }
+  .footer { margin-top: 24pt; padding-top: 8pt; border-top: 1px solid #e5e7eb; color: #9ca3af; font-size: 8.5pt; text-align: center; }
+  hr { border: 0; border-top: 1px solid #e5e7eb; margin: 14pt 0; }
+</style>
+</head>
+<body>
+
+<h1>SOP — Call Evaluation Tab</h1>
+<div class="meta">
+  <strong>Platform:</strong> WalaPlus Enterprise GRC &amp; Quality &nbsp;•&nbsp;
+  <strong>Page:</strong> <code>qms-dashboard.replit.app/calls</code><br>
+  <strong>Owner:</strong> Quality Management &nbsp;•&nbsp;
+  <strong>Audience:</strong> Quality Managers, Team Leads, SDRs, Admins &nbsp;•&nbsp;
+  <strong>Version:</strong> 1.0 &nbsp;•&nbsp;
+  <strong>Effective:</strong> 25 May 2026
+</div>
+
+<h2>1. Purpose</h2>
+<p>Evaluate SDR call performance using the AI-powered COPC v2 scorecard, capture coaching actions, and ensure CRM hygiene and PDPL compliance.</p>
+
+<h2>2. Access &amp; Roles</h2>
+<table>
+  <thead><tr><th style="width:38%">Role</th><th>Capability</th></tr></thead>
+  <tbody>
+    <tr><td>Admin, Head of Ops &amp; Quality</td><td>Full access + seed/edit scorecards, bulk delete, approve evaluations</td></tr>
+    <tr><td>Quality Manager, Team Lead, AI Specialist, GRC Manager</td><td>View calls, run analysis &amp; evaluation, create coaching plans</td></tr>
+    <tr><td>SDR (agent)</td><td>View own evaluations and coaching plans only</td></tr>
+  </tbody>
+</table>
+<p>Open the platform &rarr; sidebar <strong>Quality &rarr; Call Evaluation</strong>.</p>
+
+<h2>3. Daily Workflow</h2>
+
+<h3>Step 1 — Confirm pipeline health</h3>
+<ol>
+  <li>At the top of the page, check the <strong>Health Metrics</strong> strip:
+    <ul>
+      <li>Pipeline yield &ge; 95%</li>
+      <li>CRM linkage rate &ge; 90%</li>
+      <li>Failed analyses = 0</li>
+    </ul>
+  </li>
+  <li>If any value is red, open the <strong>Logs</strong> tab and escalate to Admin before evaluating.</li>
+</ol>
+
+<h3>Step 2 — Ingest calls</h3>
+<p>Calls arrive automatically from <strong>Zoho CRM</strong> and <strong>Google Drive</strong>. For ad-hoc evaluation:</p>
+<ol>
+  <li>Click <strong>Bulk Upload</strong> &rarr; select MP3/WAV files (&le; 25 MB each).</li>
+  <li>Or click <strong>Ingest from Zoho</strong> to pull the latest call logs.</li>
+  <li>New rows appear with <span class="tag">Status: Pending</span>.</li>
+</ol>
+
+<h3>Step 3 — Filter the queue</h3>
+<ul>
+  <li><strong>Source:</strong> Five9 / Twilio / Mobile / Upload</li>
+  <li><strong>Agent Email</strong></li>
+  <li><strong>Status:</strong> Pending &rarr; Processing &rarr; Analyzed &rarr; Failed</li>
+  <li><strong>Lead ID</strong> (to evaluate calls for a specific deal)</li>
+</ul>
+
+<h3>Step 4 — Analyze a call</h3>
+<ol>
+  <li>Select the row(s).</li>
+  <li>Click <strong>Analyze</strong> (single) or <strong>Bulk Rescore Selected</strong> (multiple).</li>
+  <li>Status moves Processing &rarr; Analyzed (~1–3 min per call).</li>
+</ol>
+
+<h3>Step 5 — Evaluate against the scorecard</h3>
+<ol>
+  <li>Click the call row to open the <strong>split workspace</strong>.</li>
+  <li><strong>Right pane:</strong> review the AI transcript (speaker-segmented), call summary, sentiment, and AI insights.</li>
+  <li><strong>Left pane:</strong> COPC v2 runs automatically. Confirm:
+    <ul>
+      <li><strong>Overall Score</strong> (0–100)</li>
+      <li><strong>People (25%)</strong> — communication, tone, active listening</li>
+      <li><strong>Process (35%)</strong> — objection handling, discovery, script adherence</li>
+      <li><strong>Governance (40%)</strong> — CRM hygiene, mandatory disclosures, PDPL/data accuracy</li>
+    </ul>
+  </li>
+  <li>Read <strong>Top Strengths</strong>, <strong>Top Gaps</strong>, <strong>Critical Risks</strong>, and <strong>CRM linkage</strong>.</li>
+</ol>
+
+<h3>Step 6 — Manager approval</h3>
+<ol>
+  <li>Adjust any attribute pass/fail if the AI is wrong (justification required — saved to <code>sdr_evaluation_reviews</code>).</li>
+  <li>Click <strong>Approve Evaluation</strong>. The score becomes the official record.</li>
+</ol>
+
+<h3>Step 7 — Coaching plan</h3>
+<p>A plan opens automatically when an agent fails the <strong>same attribute 3+ times in 14 days</strong>. To open it manually:</p>
+<ol>
+  <li>Click <strong>Create Coaching Plan</strong> on any evaluated call.</li>
+  <li>Fill in:
+    <ul>
+      <li>Manager observation note</li>
+      <li>SDR commitment</li>
+      <li>Micro-training topic(s) — from the suggested list</li>
+      <li>Follow-up date (default +7 days)</li>
+    </ul>
+  </li>
+  <li>Save. Status = <span class="tag">pending_delivery</span>. The SDR is notified by email.</li>
+  <li>On the follow-up date, return and mark the plan <strong>delivered</strong> / <strong>closed</strong>.</li>
+</ol>
+
+<h3>Step 8 — Export &amp; reporting</h3>
+<ul>
+  <li><strong>CSV/Excel:</strong> click <strong>Export</strong> (top-right) for the filtered list.</li>
+  <li><strong>Infographic:</strong> click <strong>Generate Infographic</strong> for a shareable PNG/PDF (weekly QA packs).</li>
+</ul>
+
+<h2>4. Scorecard Administration <em>(Admin / Head of Ops only)</em></h2>
+<ol>
+  <li>Expand the <strong>Scorecard Management</strong> panel (collapsed by default).</li>
+  <li>Click <strong>Create Scorecard</strong> or <strong>Toggle Active Scorecard</strong> to switch which rubric is applied to new evaluations.</li>
+  <li>To restore defaults, run <strong>Seed COPC v2</strong> (admin route — confirms before overwriting).</li>
+  <li>Weight changes apply to <em>future</em> evaluations only. Past scores are immutable unless <strong>Bulk Rescore</strong> is run.</li>
+</ol>
+
+<h2>5. Service Levels</h2>
+<table>
+  <thead><tr><th style="width:55%">Activity</th><th>Target</th></tr></thead>
+  <tbody>
+    <tr><td>Ingest &rarr; Analyzed</td><td>&le; 15 min</td></tr>
+    <tr><td>Manager approval after AI analysis</td><td>&le; 1 working day</td></tr>
+    <tr><td>Coaching plan delivery after creation</td><td>&le; 7 days</td></tr>
+    <tr><td>Critical Risk findings (PDPL leak, mis-selling)</td><td>Same day — escalate to Quality Manager</td></tr>
+  </tbody>
+</table>
+
+<h2>6. Troubleshooting</h2>
+<table>
+  <thead><tr><th style="width:45%">Symptom</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td>Status stuck on <strong>Processing</strong> &gt; 10 min</td><td>Click <strong>Analyze</strong> again; if it fails twice, check <strong>Logs</strong>.</td></tr>
+    <tr><td>Status = <strong>Failed</strong></td><td>Open call &rarr; read reason. <code>transcription_failed</code>: re-upload audio. <code>openai_quota</code>: notify Admin.</td></tr>
+    <tr><td>Score looks wrong vs transcript</td><td>Open evaluation &rarr; override the attribute &rarr; write justification &rarr; re-approve.</td></tr>
+    <tr><td>CRM linkage shows "Unmatched"</td><td>Verify the call's Lead/Deal ID in Zoho exists and is not merged.</td></tr>
+    <tr><td>No new calls appearing</td><td>Check Zoho sync status on Duplicate Radar page (shared auth).</td></tr>
+  </tbody>
+</table>
+
+<h2>7. Compliance Notes</h2>
+<ul>
+  <li>All transcripts are <strong>PII-redacted</strong> before storage (PDPL/GDPR).</li>
+  <li>Evaluation overrides are audit-logged with reviewer email + timestamp.</li>
+  <li>Coaching plans count toward the agent's quarterly performance file.</li>
+</ul>
+
+<div class="footer">WalaPlus Enterprise GRC &amp; Quality — Internal SOP — Page generated 25 May 2026</div>
+
+</body>
+</html>

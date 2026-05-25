@@ -96,3 +96,9 @@ id = "pNCe7Uis44rTTUmJwDTxv"
 uri = "file://docs/PLATFORM_ROADMAP.md"
 type = "text"
 title = "Platform Roadmap (RICE backlog + Now/Next/Later)"
+
+[[outputs]]
+id = "8NWlNJydHXRgUg6GY7VhQ"
+uri = "file://exports/sop-call-evaluation.pdf"
+type = "pdf"
+title = "SOP — Call Evaluation Tab"
