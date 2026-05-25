@@ -634,19 +634,20 @@
                         </div>
                         <div id="bulk-audio-files" class="space-y-2 max-h-48 overflow-y-auto"></div>
                     </div>
-                    <div class="mt-4 grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="calls.f_default_agent">Fallback Agent Email</label>
-                            <input type="email" id="bulk-agent-email" placeholder="agent@walaplus.com"
-                                   class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">Used only for files where the agent email can't be detected from the filename.</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Fallback Agent Name</label>
-                            <input type="text" id="bulk-agent-name" placeholder="Agent Name"
-                                   class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">Optional. Otherwise the local-part of the parsed email is used.</p>
-                        </div>
+                    <!-- DMAIC Improve: filename is the canonical source of
+                         truth. Every required field (phone, agent email,
+                         date, time) is parsed from the filename, so the
+                         old "Fallback Agent Email / Name" inputs were
+                         removed. Files that don't match the canonical
+                         format are rejected before upload — the parse
+                         preview chips above each file show what was
+                         (and wasn't) extracted.
+                         Canonical: "+966XXXXXXXXX by <email> on M_D_YYYY @ H_M_S AM/PM.ext"
+                    -->
+                    <div class="mt-4 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-900">
+                        <strong>Filename format:</strong>
+                        <code class="font-mono">+966XXXXXXXXX by &lt;agent&gt;@walaplus.com on M_D_YYYY @ H_M_S AM/PM.wav</code>
+                        — every selected file is parsed for phone, agent, date and time. Files missing any field are flagged below and won't upload.
                     </div>
                     <div class="mt-4 flex items-center gap-3">
                         <input type="checkbox" id="bulk-auto-analyze" checked class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
@@ -3983,20 +3984,103 @@
             updateBulkAudioList();
         }
 
-        // Parse "<phone> by <agent_email> @ <H_M_S> AM/PM[.ext]" filenames.
-        // Returns { phone, agentEmail } with empty strings when not found.
+        // Parse the WalaPlus canonical call-recording filename format:
+        //   "+966XXXXXXXXX by <email> on M_D_YYYY @ H_M_S AM/PM[.ext]"
+        // Returns every field the upload path needs so the caller no
+        // longer has to fall back to file.lastModified (which was wrong
+        // for the 199 historical bulk uploads — it stamped every record
+        // with the upload date, not the actual call date).
+        //
+        // Returns {
+        //   phone:         "+966597716061"  // raw phone with country code
+        //   phone_suffix:  "597716061"      // last 9 digits, for CRM search
+        //   agentEmail:    "b.alwahabi@walaplus.com"
+        //   agentName:     "b.alwahabi"     // local-part of email
+        //   date_iso:      "2025-08-10T11:53:28"  // assembled ISO local
+        //   date_human:    "Aug 10, 2025"
+        //   time_human:    "11:53:28 AM"
+        //   complete:      true             // all required fields present
+        //   missing:       []               // names of any missing fields
+        // }
+        //
+        // Date format is MM_DD_YYYY (US-style — confirmed by the team's
+        // file-naming convention, e.g. 8_10_2025 = 10 August 2025, NOT
+        // 8 October 2025).
         function parseCallFilename(name) {
-            const out = { phone: '', agentEmail: '' };
+            const out = {
+                phone: '', phone_suffix: '',
+                agentEmail: '', agentName: '',
+                date_iso: '', date_human: '', time_human: '',
+                complete: false, missing: [],
+            };
             if (!name) return out;
             const stem = String(name).replace(/\.[^./\\]+$/, '');
+
+            // Phone — first digit cluster long enough to be a phone number.
+            // Tolerates "+966...", "00966...", or bare digits with spaces/dashes.
             const phoneMatch = stem.match(/(\+?\d[\d\s\-]{5,}\d)/);
             if (phoneMatch) {
                 out.phone = phoneMatch[1].replace(/[\s\-]/g, '');
+                const digits = out.phone.replace(/\D/g, '');
+                out.phone_suffix = digits.length >= 9 ? digits.slice(-9) : digits;
+            } else {
+                out.missing.push('phone');
             }
+
+            // Agent email — any RFC-ish email substring.
             const emailMatch = stem.match(/([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})/);
             if (emailMatch) {
                 out.agentEmail = emailMatch[1].toLowerCase();
+                out.agentName = out.agentEmail.split('@')[0];
+            } else {
+                out.missing.push('agent_email');
             }
+
+            // Date — "M_D_YYYY" (or M-D-YYYY / M.D.YYYY) anywhere in the
+            // stem. Constrained to plausible month (1-12) + day (1-31)
+            // + 4-digit year so a 7_53_28 in the time slot can't be
+            // mis-parsed as a date.
+            const dateMatch = stem.match(/\b(0?[1-9]|1[0-2])[_\-.](0?[1-9]|[12]\d|3[01])[_\-.](20\d{2})\b/);
+            let mm, dd, yyyy;
+            if (dateMatch) {
+                mm = parseInt(dateMatch[1], 10);
+                dd = parseInt(dateMatch[2], 10);
+                yyyy = parseInt(dateMatch[3], 10);
+            } else {
+                out.missing.push('date');
+            }
+
+            // Time — "H_M_S AM/PM" (or H_M_S without AM/PM = 24h).
+            // The AM/PM token may have any whitespace before it.
+            const timeMatch = stem.match(/\b(0?\d|1\d|2[0-3])[_\-.:](0?\d|[1-5]\d)[_\-.:](0?\d|[1-5]\d)\s*(AM|PM|am|pm)?\b/);
+            let hh, mi, ss;
+            if (timeMatch) {
+                hh = parseInt(timeMatch[1], 10);
+                mi = parseInt(timeMatch[2], 10);
+                ss = parseInt(timeMatch[3], 10);
+                const ampm = (timeMatch[4] || '').toUpperCase();
+                if (ampm === 'PM' && hh < 12) hh += 12;
+                if (ampm === 'AM' && hh === 12) hh = 0;
+                const twelve = ((hh % 12) || 12);
+                const ampmOut = hh < 12 ? 'AM' : 'PM';
+                out.time_human = `${twelve}:${String(mi).padStart(2, '0')}:${String(ss).padStart(2, '0')} ${ampmOut}`;
+            } else {
+                out.missing.push('time');
+            }
+
+            if (mm && dd && yyyy && hh != null && mi != null && ss != null) {
+                // Build an ISO local string. Saudi Arabia is UTC+3 with
+                // no DST; we send local time and let the backend record
+                // it as the call time. Anchoring to the actual call
+                // moment is what fixes the "every record stamped with
+                // upload date" bug.
+                const pad = (n) => String(n).padStart(2, '0');
+                out.date_iso = `${yyyy}-${pad(mm)}-${pad(dd)}T${pad(hh)}:${pad(mi)}:${pad(ss)}`;
+                const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mm - 1];
+                out.date_human = `${monthName} ${dd}, ${yyyy}`;
+            }
+
+            out.complete = out.missing.length === 0;
             return out;
         }
 
@@ -4011,16 +4095,37 @@
             }
 
             listDiv.classList.remove('hidden');
+            // Parse-preview chips: show every field extracted from the
+            // filename so the user validates the seven case-study outputs
+            // (phone, last-9 suffix for CRM search, agent, date, time)
+            // BEFORE upload. Files missing any required field render with
+            // an amber border + warning chip and the global upload button
+            // is disabled until they're removed.
+            let hasIncomplete = false;
             filesDiv.innerHTML = bulkAudioFiles.map((file, idx) => {
-                const parsed = parseCallFilename(file.name);
-                const agentChip = parsed.agentEmail
-                    ? `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">👤 ${escapeHtml(parsed.agentEmail)}</span>`
-                    : `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">⚠ no agent in filename — fallback used</span>`;
-                const phoneChip = parsed.phone
-                    ? `<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">📞 ${escapeHtml(parsed.phone)}</span>`
+                const p = parseCallFilename(file.name);
+                if (!p.complete) hasIncomplete = true;
+                const chip = (cls, text) => `<span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${cls}">${text}</span>`;
+                const phoneChip = p.phone
+                    ? chip('bg-blue-100 text-blue-800', `📞 ${escapeHtml(p.phone)}`)
+                    : chip('bg-red-100 text-red-800', '⚠ phone missing');
+                const suffixChip = p.phone_suffix
+                    ? chip('bg-blue-50 text-blue-700 font-mono', `…${escapeHtml(p.phone_suffix)}`)
                     : '';
+                const agentChip = p.agentEmail
+                    ? chip('bg-emerald-100 text-emerald-800', `👤 ${escapeHtml(p.agentEmail)}`)
+                    : chip('bg-red-100 text-red-800', '⚠ agent email missing');
+                const dateChip = p.date_human
+                    ? chip('bg-purple-100 text-purple-800', `📅 ${escapeHtml(p.date_human)}`)
+                    : chip('bg-red-100 text-red-800', '⚠ date missing');
+                const timeChip = p.time_human
+                    ? chip('bg-purple-50 text-purple-700', `🕒 ${escapeHtml(p.time_human)}`)
+                    : chip('bg-red-100 text-red-800', '⚠ time missing');
+                const cardClass = p.complete
+                    ? 'p-2 bg-blue-50 rounded-lg'
+                    : 'p-2 bg-red-50 border border-red-200 rounded-lg';
                 return `
-                <div class="p-2 bg-blue-50 rounded-lg">
+                <div class="${cardClass}">
                     <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2 min-w-0">
                             <svg class="w-4 h-4 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4035,12 +4140,20 @@
                             </svg>
                         </button>
                     </div>
-                    <div class="mt-1 flex flex-wrap gap-1">${agentChip}${phoneChip}</div>
+                    <div class="mt-1 flex flex-wrap gap-1">${phoneChip}${suffixChip}${agentChip}${dateChip}${timeChip}</div>
                 </div>
                 `;
             }).join('');
 
-            document.getElementById('bulk-audio-upload-btn').disabled = false;
+            // Disable the upload button if ANY file failed to parse. Forces
+            // the user to either rename or remove malformed files before
+            // they enter the dataset — keeps the table clean and avoids
+            // the historical "Sep 1, 2025" stamped-with-upload-date bug.
+            const btn = document.getElementById('bulk-audio-upload-btn');
+            btn.disabled = hasIncomplete;
+            btn.title = hasIncomplete
+                ? 'One or more filenames are missing a required field. Rename or remove them to enable upload.'
+                : '';
         }
 
         function removeBulkAudioFile(idx) {
@@ -4062,13 +4175,19 @@
                 return;
             }
 
-            const fallbackEmail = (document.getElementById('bulk-agent-email').value || '').trim();
-            const fallbackName = (document.getElementById('bulk-agent-name').value || '').trim();
             const autoAnalyze = document.getElementById('bulk-auto-analyze').checked;
 
-            const unmatched = bulkAudioFiles.filter(f => !parseCallFilename(f.name).agentEmail);
-            if (unmatched.length > 0 && !fallbackEmail) {
-                alert(`${unmatched.length} file(s) have no agent email in the filename. Please provide a Fallback Agent Email or rename the files to include the agent's email (e.g. "+966500000000 by agent@walaplus.com @ 8_58_04 AM.mp3").`);
+            // DMAIC Improve: strict filename enforcement. Every file must
+            // parse to a complete record (phone + agent + date + time)
+            // — no more fallback inputs, no more "Sep 1, 2025"
+            // upload-date stamping. Files that don't comply are blocked
+            // at the UI (button disabled) and again here as a safety net.
+            const incomplete = bulkAudioFiles.filter(f => !parseCallFilename(f.name).complete);
+            if (incomplete.length > 0) {
+                alert(`${incomplete.length} file(s) don't match the canonical filename format.\n\n` +
+                      `Expected: +966XXXXXXXXX by <agent>@walaplus.com on M_D_YYYY @ H_M_S AM/PM.wav\n\n` +
+                      `Rename or remove these files first:\n` +
+                      incomplete.slice(0, 5).map(f => '• ' + f.name).join('\n'));
                 return;
             }
 
@@ -4087,21 +4206,29 @@
             for (let i = 0; i < bulkAudioFiles.length; i++) {
                 const file = bulkAudioFiles[i];
                 const parsed = parseCallFilename(file.name);
-                const fileAgentEmail = parsed.agentEmail || fallbackEmail;
-                const fileAgentName = parsed.agentEmail
-                    ? (fallbackName || parsed.agentEmail.split('@')[0])
-                    : (fallbackName || (fallbackEmail ? fallbackEmail.split('@')[0] : ''));
+                const fileAgentEmail = parsed.agentEmail;
+                const fileAgentName = parsed.agentName;
                 const fileLeadId = parsed.phone || '';
                 const fileContactName = parsed.phone || '';
-                // file.lastModified can be 0 (missing) or 315532800000 (FAT epoch
-                // 1980-01-01) when files were extracted from a ZIP / copied without
-                // preserving mtime. In those cases default to upload-time so we
-                // don't tag every record as "Jan 1, 1980".
-                const lastModMs = Number(file.lastModified) || 0;
-                const minTrustedMs = Date.UTC(2005, 0, 1);
-                const fileCallDate = lastModMs >= minTrustedMs
-                    ? new Date(lastModMs).toISOString()
-                    : new Date().toISOString();
+                // DMAIC Improve: use the date+time parsed FROM THE
+                // FILENAME as the authoritative call_date. The previous
+                // code used file.lastModified which was the moment the
+                // file was last touched on disk — for files extracted
+                // from a ZIP it was the unzip time, which is why every
+                // one of the 199 historical bulk uploads got stamped
+                // with Sep 1-2, 2025 instead of the real call date.
+                // We still fall back to lastModified (filtered against
+                // the 2005-01-01 minimum) only as a defence-in-depth
+                // safety net; the strict-parse gate above should mean
+                // parsed.date_iso is always present at this point.
+                let fileCallDate = parsed.date_iso;
+                if (!fileCallDate) {
+                    const lastModMs = Number(file.lastModified) || 0;
+                    const minTrustedMs = Date.UTC(2005, 0, 1);
+                    fileCallDate = lastModMs >= minTrustedMs
+                        ? new Date(lastModMs).toISOString()
+                        : new Date().toISOString();
+                }
 
                 progressText.textContent = `${_fn(i + 1)}/${_fn(bulkAudioFiles.length)} - ${file.name}`;
                 progressBar.style.width = `${((i + 1) / bulkAudioFiles.length) * 100}%`;
