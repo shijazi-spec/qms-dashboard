@@ -43,30 +43,28 @@ export interface EventLog {
   user_name?: string;
   user_email?: string;
   user_role?: string;
-  action_type:
-    | "CREATE"
-    | "UPDATE"
-    | "DELETE"
-    | "STATUS_CHANGE"
-    | "ASSIGN"
-    | "AI_ACTION"
-    | "LOGIN"
-    | "LOGOUT"
-    | "VIEW"
-    | "EXPORT"
-    | "CALCULATE";
-  entity_type:
-    | "PROJECT"
-    | "TRAINING"
-    | "ROI"
-    | "USER"
-    | "ROLE"
-    | "CALL"
-    | "KPI"
-    | "CAPA"
-    | "DOCUMENT"
-    | "SYSTEM"
-    | "SESSION";
+  // action_type / entity_type are stored as VARCHAR(50) in Postgres (see the
+  // CREATE TABLE below) with NO check constraint. The narrow string-literal
+  // unions that previously lived here documented the *intended* enum at the
+  // time the table was introduced, but the codebase has since added many
+  // new actions (e.g. "scan", "sdr_batch_poll", "sdr_batch_submitted",
+  // "sdr_auto_evaluation") and entities (e.g. "audit_programme",
+  // "duplicate_radar_cs_overlap", "sdr_batch_job", "call_record") that all
+  // land in the same column without any runtime issue. Keeping the union
+  // narrow forced ~140 TS2322 errors across callers that had no recourse
+  // short of `as any`. Widened to `string` to match the DB's actual
+  // contract; new callers should still pick a stable identifier rather
+  // than a free-form string. The set of *historical* canonical values is
+  // preserved below as a non-exhaustive reference for documentation /
+  // grep purposes only — extend it rather than removing entries.
+  //
+  // Canonical actions:   CREATE | UPDATE | DELETE | STATUS_CHANGE | ASSIGN
+  //                     | AI_ACTION | LOGIN | LOGOUT | VIEW | EXPORT
+  //                     | CALCULATE | SCAN | ...
+  // Canonical entities:  PROJECT | TRAINING | ROI | USER | ROLE | CALL
+  //                     | KPI | CAPA | DOCUMENT | SYSTEM | SESSION | ...
+  action_type: string;
+  entity_type: string;
   entity_id?: string;
   entity_name?: string;
   description?: string;

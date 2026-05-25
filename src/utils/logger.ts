@@ -39,14 +39,15 @@ const pinoInstance = pino({
       : undefined,
 });
 
-type LogPayload =
-  | Record<string, unknown>
-  | Error
-  | string
-  | number
-  | boolean
-  | null
-  | undefined;
+// LogPayload accepts `unknown` so callers can pass arbitrary values
+// (caught errors, untyped JSON, arrays, etc.) without first asserting a
+// type. The previous narrower union (Record<string, unknown> | Error |
+// string | number | boolean | null | undefined) was identical at runtime
+// — sanitise() below already handles every shape via type guards — but
+// at compile time it rejected `unknown` callers and forced ~600 TS2345
+// casts across the codebase. The runtime behaviour of sanitise / log /
+// scrubMessage is unchanged; only the parameter type widened.
+type LogPayload = unknown;
 
 function sanitise(value: LogPayload): unknown {
   if (value === null || value === undefined) return value;

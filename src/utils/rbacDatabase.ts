@@ -13,6 +13,13 @@ export type UserRole =
   | "grc_manager"
   | "team_lead"
   | "department_viewer"
+  // `viewer` is a generic read-only role admitted by many GET rules in
+  // ROUTE_PERMISSION_MAP (rbacMiddleware.ts) but was missing from this
+  // canonical union, which caused ~80 TS2322 errors at every site that
+  // listed it. Added so the type matches the runtime contract used by
+  // the middleware and the platform_users table. The other UserRole
+  // definition in userAccessDatabase.ts already includes it.
+  | "viewer"
   | "auditor"
   | "ai_specialist"
   | "bu_owner"
