@@ -3678,7 +3678,7 @@
                             <div class="bg-white rounded-lg border border-gray-200">
                                 <div class="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
                                     <h5 class="text-xs font-semibold text-gray-600 uppercase tracking-wide">${escapeHtml(WalaPlusI18n.t('calls.details_transcript'))}</h5>
-                                    ${trText ? `<button type="button" data-on-click="copyTranscript" data-args="[${callId}]" class="text-[10px] text-indigo-600 hover:text-indigo-800 underline">${escapeHtml(WalaPlusI18n.t('calls.details_copy'))}</button>` : ''}
+                                    ${trText ? `<button type="button" data-on-click="copyCallDetailsTranscript" data-args="[${callId}]" class="text-[10px] text-indigo-600 hover:text-indigo-800 underline">${escapeHtml(WalaPlusI18n.t('calls.details_copy'))}</button>` : ''}
                                 </div>
                                 <div id="callTranscriptBody-${callId}" class="p-3 text-sm text-gray-800 max-h-72 overflow-y-auto" dir="rtl">
                                     ${trText
@@ -4072,10 +4072,13 @@
                 </div>`;
         }
 
-        // Copy the visible transcript to clipboard. Tiny convenience the
-        // user asked for so quality leads can paste evidence into coaching
-        // notes without exporting the whole transcript modal.
-        function copyTranscript(callId) {
+        // Copy the visible transcript to clipboard. Renamed from the
+        // shorter `copyTranscript` to avoid colliding with the legacy
+        // copyTranscript() at the bottom of the file (no-args, uses
+        // window.currentTranscriptText for the older transcriptModal).
+        // JavaScript silently uses the later declaration, which would
+        // copy an empty string when called from the Call Details modal.
+        function copyCallDetailsTranscript(callId) {
             const body = document.getElementById(`callTranscriptBody-${callId}`);
             if (!body) return;
             const text = (body.innerText || body.textContent || '').trim();
