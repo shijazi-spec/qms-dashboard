@@ -1689,6 +1689,92 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
       "grc_manager",
     ],
   },
+  // ─────────────────────────────────────────────────────────────────────────
+  // Call Intelligence enhancements shipped 2026-05-25 — coaching plans,
+  // peer benchmark, topic clusters, backfills, per-call duration, and the
+  // read-only Zoho activities reader. Each needs an explicit RBAC entry
+  // because of the deny-by-default rule at the bottom of checkAccess.
+  // Without these, every new feature returns
+  // "Route not authorised by RBAC policy" at the gateway BEFORE the
+  // handler's own verifyCallAccess / verifyAdminKey runs.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    // Coaching Plans — list, single + evidence (reads)
+    pattern: /^\/api\/coaching-plans(\/\d+)?$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "team_lead",
+      "grc_manager",
+    ],
+  },
+  {
+    // Coaching Plans — deliver + dismiss (writes scoped to managers/admins)
+    pattern: /^\/api\/coaching-plans\/\d+\/(deliver|dismiss)$/,
+    methods: ["POST"],
+    roles: [
+      "admin",
+      "head_of_operations_quality",
+      "quality_manager",
+      "team_lead",
+    ],
+  },
+  {
+    // Coaching Plans — retroactive trigger scan (admin write)
+    pattern: /^\/api\/coaching-plans\/scan$/,
+    methods: ["POST"],
+    roles: ["admin", "head_of_operations_quality", "quality_manager"],
+  },
+  {
+    // Anonymised peer benchmark (read)
+    pattern: /^\/api\/sdr-evaluations\/peer-benchmark$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "team_lead",
+      "grc_manager",
+    ],
+  },
+  {
+    // Per-call audio-derived duration write — same shape as analyze/compliance
+    pattern: /^\/api\/calls\/\d+\/duration$/,
+    methods: ["POST"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "team_lead",
+      "grc_manager",
+    ],
+  },
+  {
+    // Bulk backfills — destructive-ish ops, admin/ops only
+    pattern: /^\/api\/calls\/backfill-(call-dates|compliance)$/,
+    methods: ["POST"],
+    roles: ["admin", "head_of_operations_quality", "quality_manager"],
+  },
+  {
+    // Read-only Zoho activities reader (Replit's contribution) — Lead/Deal scoped
+    pattern: /^\/api\/zoho\/activities\/(Leads|Deals|leads|deals)\/\d+$/,
+    methods: ["GET"],
+    roles: [
+      "admin",
+      "ai_specialist",
+      "head_of_operations_quality",
+      "quality_manager",
+      "team_lead",
+      "grc_manager",
+      "bu_owner",
+      "executive",
+    ],
+  },
   {
     pattern: /^\/api\/calls\/mcp\/leads\/match-phone$/,
     methods: ["POST"],
