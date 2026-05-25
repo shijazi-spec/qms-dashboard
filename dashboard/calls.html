@@ -3192,32 +3192,31 @@
             `).join('');
         }
 
-        // Inline replacement for the standalone Activity Timeline modal —
-        // same payload, rendered into the Call Details right column so
-        // managers don't need to close + reopen modals to see what the
-        // SDR did after the call.
+        // Inline Activity panel — Open / Closed split, matching Zoho's
+        // Lead/Deal UI conventions. Powered by the read-only
+        // /api/zoho/activities/{module}/{recordId} endpoint that lives
+        // in src/utils/zohoActivitiesReader.ts.
         //
-        // DMAIC Improve: aggregates across every call on the same phone.
-        // Many records to the same contact (5+ calls is common in our
-        // dataset) often span multiple Zoho Leads/Deals due to historical
-        // duplicates in CRM, so the activity for a single call_id misses
-        // half the picture. We collect every distinct (lead_id|deal_id)
-        // across calls sharing the last-9-digit phone, fetch one
-        // /api/calls/:id/activity-timeline per distinct pair, then merge
-        // items deduped by their Zoho record id.
+        // Multi-record aggregation: many SDR calls share the same phone
+        // but split across multiple Zoho Lead/Deal records (historical
+        // duplicates, or Lead → Deal conversion). We collect every
+        // distinct (module, recordId) pair across calls sharing the
+        // last-9-digit phone, fetch one /api/zoho/activities call per
+        // pair in parallel, and merge open/closed buckets de-duped
+        // by Zoho activity id.
+        //
+        // Deal-first priority: if a call has both lead_id and deal_id,
+        // we fetch the Deal's activities (more actionable scope per the
+        // 2026-05-25 product decision).
         async function loadInlineActivityTimeline(callId) {
             const body = document.getElementById('inlineActivityBody');
             if (!body) return;
 
-            // Resolve the current call's phone suffix from the in-memory
-            // cache so we don't need another /api/calls/:id round-trip.
             const self = (callRecords || []).find(r => r.id === callId);
             const selfSuffixes = self ? collectCallPhoneSuffixes(self) : new Set();
             const targetSuffix = selfSuffixes.size > 0 ? Array.from(selfSuffixes)[0] : null;
 
-            // Every related call (same phone) plus the current call,
-            // de-duplicated by lead_id|deal_id so we don't pay twice
-            // for two calls already pointing at the same Zoho record.
+            // Every peer call (same phone) plus the current call.
             const peers = (callRecords || []).filter(r => {
                 if (r.id === callId) return true;
                 if (!targetSuffix) return false;
@@ -3226,116 +3225,182 @@
                 }
                 return false;
             });
-            const seenLink = new Set();
+
+            // Distinct (module, recordId) fetch targets. Deal wins when
+            // both are present on the same call. Skip phone-shaped
+            // lead_id values (legacy bulk-upload artefacts).
+            const isPhoneShape = (v) => /^\+?\d[\d\s\-()]{4,}$/.test(String(v || ''));
+            const seen = new Set();
             const fetchTargets = [];
             for (const p of peers) {
-                const link = `${p.lead_id || ''}|${p.deal_id || ''}`;
-                if (seenLink.has(link)) continue;
-                seenLink.add(link);
-                fetchTargets.push(p);
+                let module = null;
+                let recordId = null;
+                if (p.deal_id && !isPhoneShape(p.deal_id)) {
+                    module = 'Deals';
+                    recordId = String(p.deal_id);
+                } else if (p.lead_id && !isPhoneShape(p.lead_id)) {
+                    module = 'Leads';
+                    recordId = String(p.lead_id);
+                }
+                if (!module || !recordId) continue;
+                const key = `${module}|${recordId}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                fetchTargets.push({ module, recordId });
             }
 
+            if (fetchTargets.length === 0) {
+                body.innerHTML = `
+                    <div class="p-4 text-center text-gray-500 text-xs">
+                        No Zoho Lead/Deal linked to this call (or any peer call on the same phone).
+                        Activities can't be loaded without a CRM link.
+                    </div>`;
+                return;
+            }
+
+            body.innerHTML = '<div class="p-4 text-center text-gray-400 text-xs">Loading activities…</div>';
+
             try {
-                const results = await Promise.all(fetchTargets.map(async (p) => {
+                const results = await Promise.all(fetchTargets.map(async (t) => {
                     try {
-                        const res = await fetch(`/api/calls/${p.id}/activity-timeline`);
+                        const res = await fetch(`/api/zoho/activities/${t.module}/${t.recordId}`);
                         if (!res.ok) return null;
-                        const data = await res.json();
-                        if (!data || !data.success) return null;
-                        return data;
+                        return await res.json();
                     } catch { return null; }
                 }));
 
                 const successful = results.filter(Boolean);
                 if (successful.length === 0) {
-                    body.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">No activity data on linked CRM records.</div>`;
+                    body.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">No activity data returned (Zoho unreachable or no permissions).</div>`;
                     return;
                 }
 
-                // Merge counts + items across every fetched timeline. De-
-                // dupe items by Zoho id (or fallback to module+timestamp+
-                // title fingerprint) so the SAME note doesn't render twice
-                // when two calls both point at the same Lead.
-                const mergedCounts = { notes: 0, calls: 0, tasks: 0, events: 0 };
-                const seenItemKey = new Set();
-                const mergedItems = [];
-                const moduleLabels = new Set();
-                let earliestSince = null;
+                // Merge Open + Closed buckets across every response.
+                // De-dupe by activity id so the same Zoho task doesn't
+                // render twice when two calls both link to the same Lead.
+                const merged = {
+                    open: { tasks: [], meetings: [], calls: [] },
+                    closed: { tasks: [], meetings: [], calls: [] },
+                };
+                const seenIds = new Set();
+                const errors = [];
+                const sources = new Set();
                 for (const r of successful) {
-                    if (r.counts) {
-                        mergedCounts.notes += r.counts.notes || 0;
-                        mergedCounts.calls += r.counts.calls || 0;
-                        mergedCounts.tasks += r.counts.tasks || 0;
-                        mergedCounts.events += r.counts.events || 0;
-                    }
-                    if (r.module) moduleLabels.add(r.module);
-                    if (r.since && (!earliestSince || new Date(r.since) < new Date(earliestSince))) {
-                        earliestSince = r.since;
-                    }
-                    for (const it of (r.items || [])) {
-                        const key = it.id
-                            ? `${it.module}|${it.id}`
-                            : `${it.module}|${it.timestamp}|${(it.title || '').slice(0, 40)}`;
-                        if (seenItemKey.has(key)) continue;
-                        seenItemKey.add(key);
-                        mergedItems.push(it);
+                    sources.add(`${r.parentModule}:${r.parentId}`);
+                    if (Array.isArray(r.errors)) errors.push(...r.errors);
+                    for (const bucket of ['open', 'closed']) {
+                        for (const kind of ['tasks', 'meetings', 'calls']) {
+                            for (const item of (r[bucket]?.[kind] || [])) {
+                                const dedupeKey = `${kind}|${item.id}`;
+                                if (seenIds.has(dedupeKey)) continue;
+                                seenIds.add(dedupeKey);
+                                merged[bucket][kind].push(item);
+                            }
+                        }
                     }
                 }
-                mergedItems.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
                 renderInlineActivityTimeline(body, {
-                    success: true,
-                    aggregated: fetchTargets.length > 1,
-                    sources: fetchTargets.length,
-                    module: moduleLabels.size === 1 ? Array.from(moduleLabels)[0] : 'Mixed',
-                    since: earliestSince,
-                    counts: mergedCounts,
-                    items: mergedItems,
+                    sourceCount: sources.size,
+                    open: merged.open,
+                    closed: merged.closed,
+                    errors,
                 });
             } catch (e) {
                 body.innerHTML = `<div class="p-4 text-center text-red-600 text-sm">Failed to load activity: ${escapeHtml(String(e.message || e))}</div>`;
             }
         }
 
+        // Render two collapsible sections: Open + Closed. Each section
+        // shows Tasks / Meetings / Calls. Mirrors how Zoho's Lead/Deal
+        // page lays out the activity related lists.
         function renderInlineActivityTimeline(body, data) {
-            const c = data.counts || {};
-            const items = data.items || [];
-            const moduleBadge = data.module === 'Deals'
-                ? '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800">Deal</span>'
-                : '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">Lead</span>';
-            const countsHtml = `
-                <div class="grid grid-cols-4 gap-2 mb-3">
-                    <div class="bg-amber-50 border border-amber-200 rounded p-2 text-center"><div class="text-[10px] uppercase text-amber-700">Notes</div><div class="text-xl font-bold text-amber-800">${_fn(c.notes || 0)}</div></div>
-                    <div class="bg-blue-50 border border-blue-200 rounded p-2 text-center"><div class="text-[10px] uppercase text-blue-700">Calls</div><div class="text-xl font-bold text-blue-800">${_fn(c.calls || 0)}</div></div>
-                    <div class="bg-purple-50 border border-purple-200 rounded p-2 text-center"><div class="text-[10px] uppercase text-purple-700">Tasks</div><div class="text-xl font-bold text-purple-800">${_fn(c.tasks || 0)}</div></div>
-                    <div class="bg-emerald-50 border border-emerald-200 rounded p-2 text-center"><div class="text-[10px] uppercase text-emerald-700">Events</div><div class="text-xl font-bold text-emerald-800">${_fn(c.events || 0)}</div></div>
-                </div>`;
-            const colorByModule = { Notes: 'amber', Calls: 'blue', Tasks: 'purple', Events: 'emerald' };
-            const itemsHtml = items.length === 0
-                ? '<div class="p-4 text-center text-gray-500 text-xs">No SDR activity logged after this call. CS-team SLA: at least one note within 1 working day.</div>'
-                : items.slice(0, 12).map(it => {
-                    const color = colorByModule[it.module] || 'gray';
-                    return `
-                        <div class="border-l-4 border-${color}-400 bg-${color}-50 px-3 py-2 mb-1.5 rounded">
-                            <div class="flex items-start justify-between gap-2">
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-1.5 mb-0.5">
-                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-${color}-200 text-${color}-900">${escapeHtml(it.module)}</span>
-                                        <span class="text-xs font-medium text-gray-900 truncate">${escapeHtml(it.title || '')}</span>
-                                    </div>
-                                    ${it.body ? `<div class="text-[11px] text-gray-600 line-clamp-2">${escapeHtml(it.body)}</div>` : ''}
-                                </div>
-                                <div class="text-[10px] text-gray-500 whitespace-nowrap">${escapeHtml(_fd(it.timestamp))}</div>
-                            </div>
-                        </div>`;
-                }).join('');
-            const aggBadge = data.aggregated
-                ? `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="Combined timeline across ${data.sources} CRM record(s) linked to this phone number">aggregated × ${data.sources}</span>`
+            const openTotal = (data.open.tasks.length + data.open.meetings.length + data.open.calls.length);
+            const closedTotal = (data.closed.tasks.length + data.closed.meetings.length + data.closed.calls.length);
+            const sourceBadge = data.sourceCount > 1
+                ? `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="Combined across ${data.sourceCount} linked CRM record(s)">aggregated × ${data.sourceCount}</span>`
+                : '';
+            const errorBlock = (data.errors && data.errors.length)
+                ? `<div class="mb-2 px-2 py-1 rounded bg-amber-50 border border-amber-200 text-[10px] text-amber-900">${escapeHtml(data.errors.length + ' partial fetch error(s) — counts may be low')}</div>`
                 : '';
             body.innerHTML = `
-                <div class="mb-2 text-xs text-gray-600">Activity on ${moduleBadge}${aggBadge} since the call (${escapeHtml(_fd(data.since))}).</div>
-                ${countsHtml}
-                <div>${itemsHtml}</div>`;
+                <div class="mb-2 flex items-center justify-between text-xs">
+                    <span class="text-gray-600">Linked CRM activities${sourceBadge}</span>
+                    <span class="text-gray-400">${_fn(openTotal)} open · ${_fn(closedTotal)} closed</span>
+                </div>
+                ${errorBlock}
+                ${renderActivitiesSection('Open Activities', 'amber', data.open, /* defaultOpen */ true)}
+                ${renderActivitiesSection('Closed Activities', 'gray', data.closed, /* defaultOpen */ false)}
+            `;
+        }
+
+        // One <details> per bucket so the user can fold sections. Each
+        // bucket renders three small sub-lists (tasks/meetings/calls)
+        // with the rich per-item detail returned by the new endpoint.
+        function renderActivitiesSection(title, tone, bucket, defaultOpen) {
+            const total = bucket.tasks.length + bucket.meetings.length + bucket.calls.length;
+            const toneCls = tone === 'amber'
+                ? 'bg-amber-50 border-amber-200 text-amber-900'
+                : 'bg-gray-50 border-gray-200 text-gray-700';
+            return `
+                <details class="mb-2 rounded border ${toneCls}" ${defaultOpen && total > 0 ? 'open' : ''}>
+                    <summary class="px-3 py-2 cursor-pointer text-xs font-semibold flex items-center justify-between">
+                        <span>${escapeHtml(title)}</span>
+                        <span class="text-[10px] font-normal opacity-80">
+                            ${_fn(bucket.tasks.length)} task${bucket.tasks.length === 1 ? '' : 's'} ·
+                            ${_fn(bucket.meetings.length)} meeting${bucket.meetings.length === 1 ? '' : 's'} ·
+                            ${_fn(bucket.calls.length)} call${bucket.calls.length === 1 ? '' : 's'}
+                        </span>
+                    </summary>
+                    <div class="px-2 pb-2 bg-white">
+                        ${total === 0
+                            ? `<p class="px-2 py-2 text-[11px] text-gray-400">No items.</p>`
+                            : ['tasks', 'meetings', 'calls'].map(kind => bucket[kind].length === 0
+                                ? ''
+                                : `<div class="mt-2">
+                                    <p class="text-[10px] font-semibold text-gray-500 uppercase mb-1">${escapeHtml(kind)}</p>
+                                    ${bucket[kind].slice(0, 10).map(item => renderActivityItem(item, kind)).join('')}
+                                </div>`
+                            ).join('')
+                        }
+                    </div>
+                </details>
+            `;
+        }
+
+        function renderActivityItem(item, kind) {
+            const subject = item.subject || (kind === 'meetings' ? 'Untitled meeting' : kind === 'calls' ? (item.callType || 'Call') : 'Untitled task');
+            const when = item.dueDate || item.startDateTime || item.modifiedTime || item.createdTime || null;
+            const statusBadge = item.status
+                ? `<span class="px-1 py-0.5 rounded text-[9px] bg-gray-100 text-gray-700 font-medium">${escapeHtml(item.status)}</span>`
+                : '';
+            const ownerBadge = item.owner
+                ? `<span class="text-[10px] text-gray-500">· ${escapeHtml(item.owner)}</span>`
+                : '';
+            const callDuration = kind === 'calls' && item.callDuration
+                ? `<span class="text-[10px] text-gray-500">· ${escapeHtml(String(item.callDuration))} min</span>`
+                : '';
+            const callResult = kind === 'calls' && item.callResult
+                ? `<span class="text-[10px] text-gray-500">· ${escapeHtml(item.callResult)}</span>`
+                : '';
+            return `
+                <div class="px-2 py-1.5 rounded hover:bg-gray-50 border-l-2 border-gray-200">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                <span class="text-[11px] font-medium text-gray-900 truncate">${escapeHtml(subject)}</span>
+                                ${statusBadge}
+                            </div>
+                            <div class="flex items-center gap-1 flex-wrap">
+                                ${ownerBadge}
+                                ${callDuration}
+                                ${callResult}
+                            </div>
+                            ${item.description ? `<div class="text-[10px] text-gray-500 line-clamp-2 mt-0.5">${escapeHtml(item.description)}</div>` : ''}
+                        </div>
+                        ${when ? `<div class="text-[10px] text-gray-400 whitespace-nowrap">${escapeHtml(_fd(when))}</div>` : ''}
+                    </div>
+                </div>`;
         }
 
         // Copy the visible transcript to clipboard. Tiny convenience the
