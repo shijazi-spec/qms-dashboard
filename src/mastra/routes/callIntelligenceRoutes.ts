@@ -1101,6 +1101,73 @@ Respond with JSON only:
     },
   },
   {
+    // DMAIC Improve: persist a client-discovered audio duration.
+    // The Call Details modal mounts an <audio preload="metadata">
+    // tag pointed at /api/calls/:id/audio; once the browser parses
+    // the header it emits loadedmetadata with the real duration.
+    // The frontend POSTs that value here so the next page-load can
+    // render the Duration column without waiting for the audio to
+    // load again. Idempotent — only writes when duration_seconds
+    // is currently NULL so we never overwrite a Whisper-derived
+    // value with a slightly different browser-decoded one.
+    path: "/api/calls/:callId/duration",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const callId = parseInt(c.req.param("callId"));
+          if (!Number.isFinite(callId) || callId <= 0) {
+            return c.json({ error: "Invalid call id" }, 400);
+          }
+
+          let body: any = {};
+          try {
+            const txt = await c.req.text();
+            if (txt && txt.trim()) body = JSON.parse(txt);
+          } catch {
+            body = {};
+          }
+          const incoming = Number(body.duration_seconds);
+          if (!Number.isFinite(incoming) || incoming <= 0 || incoming > 24 * 60 * 60) {
+            return c.json({ error: "duration_seconds must be a positive number under 24h" }, 400);
+          }
+
+          const { getCallRecordById, updateCallRecord } = await import(
+            "../../utils/callIntelligenceDb"
+          );
+          const record = await getCallRecordById(callId);
+          if (!record) return c.json({ error: "Call not found" }, 404);
+
+          // Skip if a duration already exists. Treat the existing value
+          // as authoritative — typically set by Whisper verbose_json
+          // during analysis, which is more accurate than the browser's
+          // decoded-on-the-fly value.
+          if (record.duration_seconds && record.duration_seconds > 0) {
+            return c.json({
+              success: true,
+              updated: false,
+              duration_seconds: record.duration_seconds,
+              reason: "already_set",
+            });
+          }
+
+          await updateCallRecord(callId, { duration_seconds: Math.round(incoming) });
+          return c.json({
+            success: true,
+            updated: true,
+            duration_seconds: Math.round(incoming),
+          });
+        } catch (error: any) {
+          safeLogger.error("[API] persist duration failed", { error: error?.message });
+          return c.json({ success: false, error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Stream the raw audio file so the eval panel can render an
     // inline player. Supports HTTP Range so the browser can seek
     // (jump to evidence timestamps) without downloading the whole

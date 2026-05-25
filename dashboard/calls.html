@@ -244,7 +244,22 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
                     <h3 class="text-lg font-semibold" data-i18n="calls.sec_records">Call Records</h3>
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <!-- DMAIC Improve: phone search. Matches on the last 9
+                             digits of the entered value against contact_phone /
+                             metadata.contact_phone / lead_id, so a manager can
+                             paste "+966502139809", "0502139809", or just
+                             "502139809" and surface every record tied to that
+                             subscriber. Debounced 200ms; clears on empty. -->
+                        <div class="relative">
+                            <input id="phoneSearch" type="search" inputmode="tel"
+                                placeholder="Search phone (last 9 digits)…"
+                                data-i18n-placeholder="calls.search_phone_placeholder"
+                                autocomplete="off"
+                                data-on-input="loadCalls"
+                                class="border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm w-64 focus:ring-2 focus:ring-indigo-500" />
+                            <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        </div>
                         <select id="sourceFilter" data-on-change="loadCalls" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Sources</option>
                             <option value="five9">Five9</option>
@@ -1079,27 +1094,9 @@
         </div>
     </div>
 
-    <!-- SDR Activity Timeline modal — opened from the CRM Link column on
-         the Call Records table. Shows Zoho Notes / Calls / Tasks / Events
-         logged after the call_date on the linked Lead or Deal. -->
-    <div id="activityTimelineModal" class="fixed inset-0 z-50 hidden">
-        <div class="absolute inset-0 bg-black bg-opacity-50" data-on-click="closeActivityTimeline"></div>
-        <div class="absolute inset-4 md:inset-10 lg:inset-20 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div class="bg-gray-50 px-6 py-4 border-b flex items-center justify-between">
-                <div>
-                    <h2 class="text-lg font-bold text-gray-900">SDR Activity Timeline</h2>
-                    <p class="text-sm text-gray-500">What the SDR did with this prospect after the call (Zoho)</p>
-                </div>
-                <button data-on-click="closeActivityTimeline" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-6" id="activityTimelineBody">
-            </div>
-        </div>
-    </div>
+    <!-- (Standalone SDR Activity Timeline modal removed — DMAIC Improve:
+         the timeline is now inlined inside the Call Details modal so
+         managers see scorecard + transcript + activity in one view.) -->
 
     <div id="scorecardModal" class="fixed inset-0 z-50 hidden">
         <div class="absolute inset-0 bg-black bg-opacity-50" data-on-click="closeScorecardModal"></div>
@@ -1417,7 +1414,11 @@
 
                 const [analyticsRes, callsRes, complianceRes] = await Promise.all([
                     fetch('/api/calls/analytics'),
-                    fetch('/api/calls?limit=100'),
+                    // Pull the full set so phone search + Related Calls
+                    // panel see every record, not just the first page. The
+                    // backend Postgres query is paginated server-side and
+                    // 500 rows is well under the page-render budget.
+                    fetch('/api/calls?limit=500'),
                     fetch('/api/calls/compliance?limit=100')
                 ]);
 
@@ -1546,14 +1547,59 @@
             });
         }
 
+        // DMAIC Improve: shared phone normaliser. Strips +, spaces,
+        // dashes, parens and leading country/trunk digits, then returns
+        // the rightmost 9 digits — the subscriber portion of any Saudi
+        // number ("+966502139809", "0502139809", "502139809" all
+        // collapse to "502139809"). Returns "" when the input has fewer
+        // than 9 digits so partial typing still matches via substring
+        // include() instead of equality.
+        function normalizePhoneSuffix(raw) {
+            const digits = String(raw || '').replace(/\D/g, '');
+            if (!digits) return '';
+            return digits.length >= 9 ? digits.slice(-9) : digits;
+        }
+
+        // Pull every phone-shaped field off a call record, normalise each
+        // to its last 9 digits, and return the set. Used by phone search
+        // and the Related Calls panel.
+        function collectCallPhoneSuffixes(call) {
+            const candidates = [
+                call.contact_phone,
+                call.phone,
+                call.contact_number,
+                call.metadata && call.metadata.contact_phone,
+                call.metadata && call.metadata.phone,
+                // lead_id is sometimes a phone string (bulk upload before
+                // the auto-link matcher runs) — match it too.
+                call.lead_id,
+            ];
+            const out = new Set();
+            for (const v of candidates) {
+                const suf = normalizePhoneSuffix(v);
+                if (suf) out.add(suf);
+            }
+            return out;
+        }
+
         function renderCallsTable() {
             const tbody = document.getElementById('callsTable');
             const source = document.getElementById('sourceFilter').value;
             const status = document.getElementById('statusFilter').value;
+            const phoneSearchRaw = (document.getElementById('phoneSearch')?.value || '').trim();
+            const phoneSearch = normalizePhoneSuffix(phoneSearchRaw);
 
             let filtered = callRecords;
             if (source) filtered = filtered.filter(c => c.source === source);
             if (status) filtered = filtered.filter(c => c.status === status);
+            if (phoneSearch) {
+                filtered = filtered.filter(c => {
+                    for (const suf of collectCallPhoneSuffixes(c)) {
+                        if (suf.includes(phoneSearch)) return true;
+                    }
+                    return false;
+                });
+            }
 
             const start = currentPage * pageSize;
             const end = Math.min(start + pageSize, filtered.length);
@@ -1677,10 +1723,7 @@
             return `
                 <div class="inline-flex flex-col items-center gap-1">
                     <a href="${directUrl}" target="_blank" rel="noopener" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${tagClasses}" title="${tagTitle}">${tagLabel}</a>
-                    <div class="flex items-center gap-1.5">
-                        <button data-on-click="showActivityTimeline" data-args="[${call.id}]" class="text-[10px] text-indigo-600 hover:text-indigo-800 underline">Activity</button>
-                        ${relinkBtn}
-                    </div>
+                    ${relinkBtn ? `<div class="flex items-center gap-1.5">${relinkBtn}</div>` : ''}
                 </div>`;
         }
 
@@ -1731,85 +1774,10 @@
             }
         }
 
-        // Show the activity timeline modal for a linked call. Fetches recent
-        // Zoho Notes / Calls / Tasks / Events on the linked Lead/Deal since
-        // the call_date.
-        async function showActivityTimeline(callId) {
-            const modal = document.getElementById('activityTimelineModal');
-            const body = document.getElementById('activityTimelineBody');
-            modal.classList.remove('hidden');
-            body.innerHTML = '<div class="p-8 text-center text-gray-500">Loading activity…</div>';
-            try {
-                const res = await fetch(`/api/calls/${callId}/activity-timeline`);
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const data = await res.json();
-                if (!data.success) {
-                    body.innerHTML = `<div class="p-8 text-center text-gray-500">${escapeHtml(data.message || data.reason || 'No data')}</div>`;
-                    return;
-                }
-                renderActivityTimeline(data);
-            } catch (e) {
-                body.innerHTML = `<div class="p-8 text-center text-red-600">Failed to load: ${escapeHtml(String(e.message || e))}</div>`;
-            }
-        }
-
-        function closeActivityTimeline() {
-            document.getElementById('activityTimelineModal').classList.add('hidden');
-        }
-
-        function renderActivityTimeline(data) {
-            const body = document.getElementById('activityTimelineBody');
-            const c = data.counts || {};
-            const items = data.items || [];
-            const moduleBadge = data.module === 'Deals'
-                ? '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800">Deal</span>'
-                : '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">Lead</span>';
-            const countsHtml = `
-                <div class="grid grid-cols-4 gap-2 mb-4">
-                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
-                        <div class="text-[10px] uppercase text-amber-700">Notes</div>
-                        <div class="text-2xl font-bold text-amber-800">${_fn(c.notes || 0)}</div>
-                    </div>
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-                        <div class="text-[10px] uppercase text-blue-700">Calls</div>
-                        <div class="text-2xl font-bold text-blue-800">${_fn(c.calls || 0)}</div>
-                    </div>
-                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
-                        <div class="text-[10px] uppercase text-purple-700">Tasks</div>
-                        <div class="text-2xl font-bold text-purple-800">${_fn(c.tasks || 0)}</div>
-                    </div>
-                    <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
-                        <div class="text-[10px] uppercase text-emerald-700">Events</div>
-                        <div class="text-2xl font-bold text-emerald-800">${_fn(c.events || 0)}</div>
-                    </div>
-                </div>`;
-            const colorByModule = { Notes: 'amber', Calls: 'blue', Tasks: 'purple', Events: 'emerald' };
-            const itemsHtml = items.length === 0
-                ? '<div class="p-6 text-center text-gray-500 text-sm">No SDR activity logged after this call. CS-team SLA: at least one note within 1 working day.</div>'
-                : items.map(it => {
-                    const color = colorByModule[it.module] || 'gray';
-                    return `
-                        <div class="border-l-4 border-${color}-400 bg-${color}-50 px-4 py-3 mb-2 rounded">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-${color}-200 text-${color}-900">${escapeHtml(it.module)}</span>
-                                        <span class="text-sm font-medium text-gray-900 truncate">${escapeHtml(it.title || '')}</span>
-                                        ${it.status ? `<span class="text-[10px] text-gray-500">${escapeHtml(it.status)}</span>` : ''}
-                                    </div>
-                                    ${it.body ? `<div class="text-xs text-gray-600 line-clamp-2">${escapeHtml(it.body)}</div>` : ''}
-                                </div>
-                                <div class="text-[10px] text-gray-500 whitespace-nowrap">${escapeHtml(_fd(it.timestamp))}</div>
-                            </div>
-                        </div>`;
-                }).join('');
-            body.innerHTML = `
-                <div class="mb-4 pb-3 border-b text-sm text-gray-600">
-                    Activity on ${moduleBadge} since the call (${escapeHtml(_fd(data.since))}).
-                </div>
-                ${countsHtml}
-                <div class="max-h-96 overflow-y-auto">${itemsHtml}</div>`;
-        }
+        // (showActivityTimeline / closeActivityTimeline / renderActivityTimeline
+        //  removed — DMAIC Improve replaced the standalone modal with the
+        //  inline timeline inside Call Details. See loadInlineActivityTimeline
+        //  and renderInlineActivityTimeline near viewCall().)
 
         function renderComplianceTable() {
             const tbody = document.getElementById('complianceTable');
@@ -2259,75 +2227,183 @@
                 document.getElementById('callModalTitle').textContent = WalaPlusI18n.t('dyn.calls.modal_title', { id: data.record?.call_id || callId });
                 document.getElementById('callModalSubtitle').textContent = `${data.record?.agent_email || WalaPlusI18n.t('dyn.calls.unknown_agent')} - ${new Date(data.record?.call_date).toLocaleString()}`;
 
+                // DMAIC Improve — unified Call Details modal:
+                //   • Left column = scorecard, info, gaps/strengths,
+                //     CRM compliance, SDR eval, inlined activity timeline.
+                //   • Right column (sticky) = recording player, transcript
+                //     pane, CRM quick-actions, related calls (same phone).
+                // Managers open one record and see everything they need
+                // to coach on it in a single view — no second modal hops.
+                const rawPhone = data.record?.contact_phone
+                    || data.record?.phone
+                    || data.record?.contact_number
+                    || (data.record?.metadata && (data.record.metadata.contact_phone || data.record.metadata.phone))
+                    || '';
+                const phoneDigits = String(rawPhone).replace(/\D/g, '');
+                const phoneSuffix = phoneDigits.length >= 9 ? phoneDigits.slice(-9) : phoneDigits;
+                const zohoSearchUrl = phoneDigits
+                    ? `https://crm.zoho.com/crm/org766568398/search?searchword=${encodeURIComponent(phoneDigits)}`
+                    : null;
+                const leadDirectUrl = data.record?.lead_id && !/^\+?\d[\d\s\-()]{4,}$/.test(String(data.record.lead_id))
+                    ? `https://crm.zoho.com/crm/org766568398/tab/Leads/${encodeURIComponent(data.record.lead_id)}`
+                    : null;
+                const dealDirectUrl = data.record?.deal_id
+                    ? `https://crm.zoho.com/crm/org766568398/tab/Potentials/${encodeURIComponent(data.record.deal_id)}`
+                    : null;
+
+                // Transcript text up-front so we can render inline.
+                // Speaker_segments support is optional — fall back to a
+                // single block when only the raw text exists.
+                const trText = data.transcript?.transcript_text || '';
+                const trSegs = Array.isArray(data.transcript?.speaker_segments) ? data.transcript.speaker_segments : null;
+
                 document.getElementById('callModalContent').innerHTML = `
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.call_info'))}</h4>
-                            <dl class="space-y-2">
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.source_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.source || '--')}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.direction_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.direction || '--')}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.duration_label'))}</dt><dd class="font-medium">${formatDuration(data.record?.duration_seconds)}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.lead_id_label'))}</dt><dd class="font-medium">${data.record?.lead_id ? `<a href="https://crm.zoho.com/crm/org766568398/tab/Leads/${escapeHtml(data.record.lead_id)}" target="_blank" rel="noopener" class="text-blue-600 hover:underline" data-testid="link-lead-${escapeHtml(data.record.lead_id)}">${escapeHtml(data.record.lead_id)}</a>` : `<span class="text-gray-400">--</span> <button type="button" data-on-click="autoLinkLeadByCall" data-args="[${callId}]" class="ms-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700" data-testid="button-auto-link-lead-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.auto_link_lead'))}</button>`}</dd></div>
-                                <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.status_label'))}</dt><dd><span class="px-2 py-1 rounded-full text-xs font-medium status-${escapeHtml(data.record?.status)}">${escapeHtml(data.record?.status)}</span></dd></div>
-                            </dl>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.analysis'))}</h4>
-                            ${data.analysis ? `
-                                <dl class="space-y-2">
-                                    <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.sentiment_label'))}</dt><dd class="font-medium">${escapeHtml(data.analysis.sentiment_label || '--')}${(() => {
-                                        // Sentiment scores arrive as either 0-1 (legacy
-                                        // analyzer) or 0-100 (current). Detect and rescale
-                                        // so we never show "0.500%" or "5,000%".
-                                        const raw = Number(data.analysis.sentiment_score);
-                                        if (!Number.isFinite(raw) || raw === 0 && (data.analysis.sentiment_score === null || data.analysis.sentiment_score === undefined)) return '';
-                                        let pct = raw;
-                                        if (pct > 0 && pct <= 1) pct = pct * 100;
-                                        pct = Math.max(0, Math.min(100, Math.round(pct)));
-                                        return ` (${pct}%)`;
-                                    })()}</dd></div>
-                                    <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.topics_label'))}</dt><dd class="font-medium">${(data.analysis.key_topics || []).map(t => escapeHtml(t)).join(', ') || '--'}</dd></div>
-                                </dl>
-                                <div class="mt-4">
-                                    <h5 class="text-sm font-medium text-gray-700 mb-2">${escapeHtml(WalaPlusI18n.t('dyn.calls.summary'))}</h5>
-                                    <p class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">${escapeHtml(data.analysis.call_summary || WalaPlusI18n.t('dyn.calls.no_summary'))}</p>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- LEFT (2/3): scorecard + info + compliance + activity -->
+                        <div class="lg:col-span-2 space-y-6">
+                            <!-- Stored SDR scorecard summary, top of left col -->
+                            <div id="stored-sdr-eval-summary"></div>
+
+                            <!-- Call Info + Analysis side-by-side -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.call_info'))}</h4>
+                                    <dl class="space-y-2">
+                                        <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.source_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.source || '--')}</dd></div>
+                                        <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.direction_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.direction || '--')}</dd></div>
+                                        <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.duration_label'))}</dt><dd class="font-medium" id="callDuration-${callId}">${formatDuration(data.record?.duration_seconds)}</dd></div>
+                                        <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('calls.details_phone_label'))}</dt><dd class="font-medium font-mono text-sm">${escapeHtml(rawPhone || '--')}</dd></div>
+                                        <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.lead_id_label'))}</dt><dd class="font-medium">${leadDirectUrl ? `<a href="${leadDirectUrl}" target="_blank" rel="noopener" class="text-blue-600 hover:underline" data-testid="link-lead-${escapeHtml(data.record.lead_id)}">${escapeHtml(data.record.lead_id)}</a>` : `<span class="text-gray-400">--</span> <button type="button" data-on-click="autoLinkLeadByCall" data-args="[${callId}]" class="ms-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700" data-testid="button-auto-link-lead-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.auto_link_lead'))}</button>`}</dd></div>
+                                        <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.status_label'))}</dt><dd><span class="px-2 py-1 rounded-full text-xs font-medium status-${escapeHtml(data.record?.status)}">${escapeHtml(data.record?.status)}</span></dd></div>
+                                    </dl>
                                 </div>
-                            ` : `<p class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.not_analyzed_yet'))}</p>`}
-                        </div>
-                    </div>
-                    ${data.compliance ? `
-                        <div class="mt-6 pt-6 border-t">
-                            <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.crm_compliance'))}</h4>
-                            <div class="grid grid-cols-5 gap-4">
-                                <div class="text-center p-3 bg-gray-50 rounded-lg">
-                                    ${renderCheckmark(data.compliance.notes_updated)}
-                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.notes'))}</div>
+                                <div>
+                                    <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.analysis'))}</h4>
+                                    ${data.analysis ? `
+                                        <dl class="space-y-2">
+                                            <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.sentiment_label'))}</dt><dd class="font-medium">${escapeHtml(data.analysis.sentiment_label || '--')}${(() => {
+                                                const raw = Number(data.analysis.sentiment_score);
+                                                if (!Number.isFinite(raw) || raw === 0 && (data.analysis.sentiment_score === null || data.analysis.sentiment_score === undefined)) return '';
+                                                let pct = raw;
+                                                if (pct > 0 && pct <= 1) pct = pct * 100;
+                                                pct = Math.max(0, Math.min(100, Math.round(pct)));
+                                                return ` (${pct}%)`;
+                                            })()}</dd></div>
+                                            <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.topics_label'))}</dt><dd class="font-medium">${(data.analysis.key_topics || []).map(t => escapeHtml(t)).join(', ') || '--'}</dd></div>
+                                        </dl>
+                                        <div class="mt-4">
+                                            <h5 class="text-sm font-medium text-gray-700 mb-2">${escapeHtml(WalaPlusI18n.t('dyn.calls.summary'))}</h5>
+                                            <p class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">${escapeHtml(data.analysis.call_summary || WalaPlusI18n.t('dyn.calls.no_summary'))}</p>
+                                        </div>
+                                    ` : `<p class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.not_analyzed_yet'))}</p>`}
                                 </div>
-                                <div class="text-center p-3 bg-gray-50 rounded-lg">
-                                    ${renderCheckmark(data.compliance.call_logged)}
-                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.call_logged'))}</div>
+                            </div>
+
+                            ${data.compliance ? `
+                                <div class="pt-6 border-t">
+                                    <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.crm_compliance'))}</h4>
+                                    <div class="grid grid-cols-5 gap-4">
+                                        <div class="text-center p-3 bg-gray-50 rounded-lg">
+                                            ${renderCheckmark(data.compliance.notes_updated)}
+                                            <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.notes'))}</div>
+                                        </div>
+                                        <div class="text-center p-3 bg-gray-50 rounded-lg">
+                                            ${renderCheckmark(data.compliance.call_logged)}
+                                            <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.call_logged'))}</div>
+                                        </div>
+                                        <div class="text-center p-3 bg-gray-50 rounded-lg">
+                                            ${renderCheckmark(data.compliance.task_created)}
+                                            <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.task'))}</div>
+                                        </div>
+                                        <div class="text-center p-3 bg-gray-50 rounded-lg">
+                                            ${renderCheckmark(data.compliance.stage_updated)}
+                                            <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.stage'))}</div>
+                                        </div>
+                                        <div class="text-center p-3 bg-gray-50 rounded-lg">
+                                            <div class="text-lg font-bold ${data.compliance.overall_compliance ? 'text-green-600' : 'text-red-600'}">${_fn(data.compliance.compliance_score || 0)}%</div>
+                                            <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.score'))}</div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="text-center p-3 bg-gray-50 rounded-lg">
-                                    ${renderCheckmark(data.compliance.task_created)}
-                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.task'))}</div>
+                            ` : ''}
+
+                            <!-- Activity Timeline — inlined (was a separate modal).
+                                 Loads async into #inlineActivityBody after the
+                                 outer markup mounts so a slow Zoho fetch doesn't
+                                 block the Call Details modal opening. -->
+                            <div class="pt-6 border-t">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="font-semibold text-gray-900">${escapeHtml(WalaPlusI18n.t('calls.details_activity_title'))}</h4>
+                                    <span class="text-xs text-gray-500">${escapeHtml(WalaPlusI18n.t('calls.details_activity_subtitle'))}</span>
                                 </div>
-                                <div class="text-center p-3 bg-gray-50 rounded-lg">
-                                    ${renderCheckmark(data.compliance.stage_updated)}
-                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.stage'))}</div>
-                                </div>
-                                <div class="text-center p-3 bg-gray-50 rounded-lg">
-                                    <div class="text-lg font-bold ${data.compliance.overall_compliance ? 'text-green-600' : 'text-red-600'}">${_fn(data.compliance.compliance_score || 0)}%</div>
-                                    <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.score'))}</div>
+                                <div id="inlineActivityBody">
+                                    <div class="p-6 text-center text-gray-400 text-sm">${escapeHtml(WalaPlusI18n.t('calls.details_activity_loading'))}</div>
                                 </div>
                             </div>
                         </div>
-                    ` : ''}
-                    <!-- Stored SDR scorecard summary. Auto-populated below
-                         from /api/calls/:id/sdr-evaluation when the call
-                         already has a saved evaluation in
-                         sdr_call_evaluations — same data the SDR
-                         Evaluation tab renders, just compact. -->
-                    <div id="stored-sdr-eval-summary" class="mb-4"></div>
+
+                        <!-- RIGHT (1/3): sticky. Recording, transcript, CRM, related calls -->
+                        <div class="lg:col-span-1 space-y-4 lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-180px)] lg:overflow-y-auto pr-1">
+                            <!-- Recording player. Loads from the existing
+                                 /api/calls/:id/audio route. metadata-only
+                                 preload so the modal doesn't pull the whole
+                                 file unless the manager actually presses
+                                 play, but we DO read .duration on
+                                 loadedmetadata and patch the Duration cell
+                                 in the left column — fixes the "--" display
+                                 for every record that has an audio_blob. -->
+                            <div class="bg-gray-50 rounded-lg border border-gray-200 p-3">
+                                <h5 class="text-xs font-semibold text-gray-600 uppercase mb-2 tracking-wide">${escapeHtml(WalaPlusI18n.t('calls.details_recording'))}</h5>
+                                <audio id="callAudioPlayer-${callId}" controls preload="metadata" class="w-full" src="/api/calls/${callId}/audio"></audio>
+                                <div class="text-[10px] text-gray-400 mt-1">${escapeHtml(WalaPlusI18n.t('calls.details_recording_missing'))}</div>
+                            </div>
+
+                            <!-- Transcript pane — RTL because Whisper outputs
+                                 Arabic. Speaker segments rendered when
+                                 available; otherwise a single text block. -->
+                            <div class="bg-white rounded-lg border border-gray-200">
+                                <div class="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
+                                    <h5 class="text-xs font-semibold text-gray-600 uppercase tracking-wide">${escapeHtml(WalaPlusI18n.t('calls.details_transcript'))}</h5>
+                                    ${trText ? `<button type="button" data-on-click="copyTranscript" data-args="[${callId}]" class="text-[10px] text-indigo-600 hover:text-indigo-800 underline">${escapeHtml(WalaPlusI18n.t('calls.details_copy'))}</button>` : ''}
+                                </div>
+                                <div id="callTranscriptBody-${callId}" class="p-3 text-sm text-gray-800 max-h-72 overflow-y-auto" dir="rtl">
+                                    ${trText
+                                        ? (trSegs && trSegs.length
+                                            ? trSegs.map(seg => `<p class="mb-2"><span class="text-[10px] font-mono text-gray-400">${escapeHtml(seg.speaker || '')}</span> ${escapeHtml(seg.text || '')}</p>`).join('')
+                                            : `<p class="whitespace-pre-wrap leading-relaxed">${escapeHtml(trText)}</p>`)
+                                        : `<p class="text-gray-400 text-xs">${escapeHtml(WalaPlusI18n.t('calls.details_transcript_empty'))}</p>`}
+                                </div>
+                            </div>
+
+                            <!-- CRM quick-actions. Phone-scoped Zoho search +
+                                 direct Lead/Deal links when known. The user
+                                 asked for the CRM link to live inside the
+                                 Call Details view; this is it. -->
+                            <div class="bg-white rounded-lg border border-gray-200 p-3">
+                                <h5 class="text-xs font-semibold text-gray-600 uppercase mb-2 tracking-wide">${escapeHtml(WalaPlusI18n.t('calls.details_crm'))}</h5>
+                                <div class="flex flex-col gap-1.5">
+                                    ${leadDirectUrl ? `<a href="${leadDirectUrl}" target="_blank" rel="noopener" class="inline-flex items-center justify-between gap-2 px-3 py-2 bg-green-50 text-green-800 rounded hover:bg-green-100 text-sm"><span>${escapeHtml(WalaPlusI18n.t('calls.details_crm_open_lead'))}</span><span class="text-xs">↗</span></a>` : ''}
+                                    ${dealDirectUrl ? `<a href="${dealDirectUrl}" target="_blank" rel="noopener" class="inline-flex items-center justify-between gap-2 px-3 py-2 bg-indigo-50 text-indigo-800 rounded hover:bg-indigo-100 text-sm"><span>${escapeHtml(WalaPlusI18n.t('calls.details_crm_open_deal'))}</span><span class="text-xs">↗</span></a>` : ''}
+                                    ${zohoSearchUrl ? `<a href="${zohoSearchUrl}" target="_blank" rel="noopener" class="inline-flex items-center justify-between gap-2 px-3 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 text-sm"><span>${escapeHtml(WalaPlusI18n.t('calls.details_crm_search_phone'))}</span><span class="text-xs">↗</span></a>` : `<p class="text-xs text-gray-400">${escapeHtml(WalaPlusI18n.t('calls.details_crm_no_phone'))}</p>`}
+                                    ${(!leadDirectUrl && !dealDirectUrl) ? `<button type="button" data-on-click="autoLinkCall" data-args="[${callId}]" class="text-xs text-amber-700 hover:text-amber-900 underline self-start mt-1">${escapeHtml(WalaPlusI18n.t('calls.details_crm_relink'))}</button>` : ''}
+                                </div>
+                            </div>
+
+                            <!-- Related calls — every other record whose phone
+                                 ends with the same 9 digits. Computed
+                                 client-side from the already-loaded
+                                 callRecords cache; no extra API call. -->
+                            <div class="bg-white rounded-lg border border-gray-200 p-3">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h5 class="text-xs font-semibold text-gray-600 uppercase tracking-wide">${escapeHtml(WalaPlusI18n.t('calls.details_related_calls'))}</h5>
+                                    ${phoneSuffix ? `<span class="text-[10px] text-gray-400 font-mono">…${escapeHtml(phoneSuffix)}</span>` : ''}
+                                </div>
+                                <div id="callRelatedBody-${callId}" class="space-y-1 max-h-48 overflow-y-auto">
+                                    ${renderRelatedCallsList(callId, phoneSuffix)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <!-- Legacy combined panel — hidden automatically once the
                          COPC v2 scorecard is the active one. The stored
                          summary above is now the single source of truth for
@@ -2370,10 +2446,139 @@
                 // so the existing "Run SDR Evaluation" button stays as the
                 // call-to-action for fresh calls.
                 loadStoredSdrEvaluationSummary(callId);
+
+                // Inline activity timeline — populate #inlineActivityBody.
+                // Independent fetch so the modal opens immediately and the
+                // Zoho roundtrip streams in after.
+                loadInlineActivityTimeline(callId);
+
+                // Patch the Duration cell once the browser parses audio
+                // metadata. Fixes the historical "--" for every record
+                // whose duration_seconds was never persisted by the
+                // older upload path. We also POST the discovered value
+                // back so the next page-load shows it without needing
+                // the audio to load again.
+                const audioEl = document.getElementById(`callAudioPlayer-${callId}`);
+                if (audioEl) {
+                    audioEl.addEventListener('loadedmetadata', () => {
+                        const dur = audioEl.duration;
+                        if (!Number.isFinite(dur) || dur <= 0) return;
+                        const durSec = Math.round(dur);
+                        const cell = document.getElementById(`callDuration-${callId}`);
+                        if (cell && (cell.textContent || '').trim() === '--') {
+                            cell.textContent = formatDuration(durSec);
+                        }
+                        // Persist if backend didn't already have it. Best-
+                        // effort — silent on failure (modal already shows
+                        // the right value to the manager).
+                        if (!data.record?.duration_seconds) {
+                            fetch(`/api/calls/${callId}/duration`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ duration_seconds: durSec }),
+                            }).catch(() => {});
+                            // Patch the in-memory list cache so the table
+                            // row updates without a full reload.
+                            const cached = callRecords.find(r => r.id === callId);
+                            if (cached) cached.duration_seconds = durSec;
+                        }
+                    });
+                }
             } catch (error) {
                 console.error('Error loading call details:', error);
                 alert(WalaPlusI18n.t('dyn.calls.failed_load_call'));
             }
+        }
+
+        // Compact "Related Calls" list — every other record in the
+        // already-loaded callRecords whose phone shares the same last 9
+        // digits. Clicking a row swaps the modal to that call.
+        function renderRelatedCallsList(currentCallId, phoneSuffix) {
+            if (!phoneSuffix) return `<p class="text-xs text-gray-400">${escapeHtml(WalaPlusI18n.t('calls.details_related_none_no_phone'))}</p>`;
+            const related = (callRecords || []).filter(c => {
+                if (c.id === currentCallId) return false;
+                for (const suf of collectCallPhoneSuffixes(c)) {
+                    if (suf === phoneSuffix) return true;
+                }
+                return false;
+            }).slice(0, 25);
+            if (related.length === 0) return `<p class="text-xs text-gray-400">${escapeHtml(WalaPlusI18n.t('calls.details_related_none'))}</p>`;
+            return related.map(c => `
+                <button type="button" data-on-click="viewCall" data-args="[${c.id}]" class="w-full text-left px-2 py-1.5 rounded hover:bg-indigo-50 text-xs flex items-center justify-between gap-2">
+                    <span class="truncate text-indigo-700">${escapeHtml(c.call_id)}</span>
+                    <span class="text-gray-400 whitespace-nowrap">${escapeHtml(_fd(c.call_date))}</span>
+                </button>
+            `).join('');
+        }
+
+        // Inline replacement for the standalone Activity Timeline modal —
+        // same payload, rendered into the Call Details right column so
+        // managers don't need to close + reopen modals to see what the
+        // SDR did after the call.
+        async function loadInlineActivityTimeline(callId) {
+            const body = document.getElementById('inlineActivityBody');
+            if (!body) return;
+            try {
+                const res = await fetch(`/api/calls/${callId}/activity-timeline`);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (!data.success) {
+                    body.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">${escapeHtml(data.message || data.reason || 'No activity data')}</div>`;
+                    return;
+                }
+                renderInlineActivityTimeline(body, data);
+            } catch (e) {
+                body.innerHTML = `<div class="p-4 text-center text-red-600 text-sm">Failed to load activity: ${escapeHtml(String(e.message || e))}</div>`;
+            }
+        }
+
+        function renderInlineActivityTimeline(body, data) {
+            const c = data.counts || {};
+            const items = data.items || [];
+            const moduleBadge = data.module === 'Deals'
+                ? '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800">Deal</span>'
+                : '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">Lead</span>';
+            const countsHtml = `
+                <div class="grid grid-cols-4 gap-2 mb-3">
+                    <div class="bg-amber-50 border border-amber-200 rounded p-2 text-center"><div class="text-[10px] uppercase text-amber-700">Notes</div><div class="text-xl font-bold text-amber-800">${_fn(c.notes || 0)}</div></div>
+                    <div class="bg-blue-50 border border-blue-200 rounded p-2 text-center"><div class="text-[10px] uppercase text-blue-700">Calls</div><div class="text-xl font-bold text-blue-800">${_fn(c.calls || 0)}</div></div>
+                    <div class="bg-purple-50 border border-purple-200 rounded p-2 text-center"><div class="text-[10px] uppercase text-purple-700">Tasks</div><div class="text-xl font-bold text-purple-800">${_fn(c.tasks || 0)}</div></div>
+                    <div class="bg-emerald-50 border border-emerald-200 rounded p-2 text-center"><div class="text-[10px] uppercase text-emerald-700">Events</div><div class="text-xl font-bold text-emerald-800">${_fn(c.events || 0)}</div></div>
+                </div>`;
+            const colorByModule = { Notes: 'amber', Calls: 'blue', Tasks: 'purple', Events: 'emerald' };
+            const itemsHtml = items.length === 0
+                ? '<div class="p-4 text-center text-gray-500 text-xs">No SDR activity logged after this call. CS-team SLA: at least one note within 1 working day.</div>'
+                : items.slice(0, 12).map(it => {
+                    const color = colorByModule[it.module] || 'gray';
+                    return `
+                        <div class="border-l-4 border-${color}-400 bg-${color}-50 px-3 py-2 mb-1.5 rounded">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-1.5 mb-0.5">
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-${color}-200 text-${color}-900">${escapeHtml(it.module)}</span>
+                                        <span class="text-xs font-medium text-gray-900 truncate">${escapeHtml(it.title || '')}</span>
+                                    </div>
+                                    ${it.body ? `<div class="text-[11px] text-gray-600 line-clamp-2">${escapeHtml(it.body)}</div>` : ''}
+                                </div>
+                                <div class="text-[10px] text-gray-500 whitespace-nowrap">${escapeHtml(_fd(it.timestamp))}</div>
+                            </div>
+                        </div>`;
+                }).join('');
+            body.innerHTML = `
+                <div class="mb-2 text-xs text-gray-600">Activity on ${moduleBadge} since the call (${escapeHtml(_fd(data.since))}).</div>
+                ${countsHtml}
+                <div>${itemsHtml}</div>`;
+        }
+
+        // Copy the visible transcript to clipboard. Tiny convenience the
+        // user asked for so quality leads can paste evidence into coaching
+        // notes without exporting the whole transcript modal.
+        function copyTranscript(callId) {
+            const body = document.getElementById(`callTranscriptBody-${callId}`);
+            if (!body) return;
+            const text = (body.innerText || body.textContent || '').trim();
+            if (!text) return;
+            navigator.clipboard?.writeText(text);
         }
 
         // Fetch the saved SDR evaluation for this call (same row the SDR
