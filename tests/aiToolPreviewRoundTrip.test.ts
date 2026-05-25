@@ -180,7 +180,7 @@ async function main(): Promise<void> {
     // ── FAILURE PATH (surfaced by getRecentSlowFailedCalls) ─────────────
     const sadTool = {
       id: 'roundTripSadTool',
-      execute: async () => {
+      execute: async (_args: Record<string, unknown>) => {
         throw new Error('Backend failed: token=sk_live_should_be_redacted');
       },
     };

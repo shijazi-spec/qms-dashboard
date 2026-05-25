@@ -41,15 +41,16 @@ await suite.test("GET /a11y — serves the accessibility statement", async () =>
   let captured: { body: string; status: number } | null = null;
   ctx.html = (body: string, status?: number) => {
     captured = { body, status: status ?? 200 };
-    return captured;
+    return { ...captured, headers: {} };
   };
   await handler(ctx);
   const fileExists = existsSync(join(process.cwd(), "dashboard", "a11y.html"))
     || existsSync("/home/runner/workspace/dashboard/a11y.html");
   if (fileExists) {
     suite.expect(captured !== null, "html response captured");
-    suite.expectEqual(captured?.status, 200, "status");
-    suite.expect((captured?.body?.length ?? 0) > 0, "body non-empty");
+    const c = captured as { body: string; status: number } | null;
+    suite.expectEqual(c?.status, 200, "status");
+    suite.expect((c?.body?.length ?? 0) > 0, "body non-empty");
   } else {
     // Falls through to c.text(..., 404) — no html() call expected.
     suite.expect(captured === null, "no html() call when file missing");

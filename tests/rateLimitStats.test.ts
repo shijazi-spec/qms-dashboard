@@ -148,7 +148,7 @@ async function main(): Promise<void> {
     check('401 / 403 without admin key', noAuth.status === 401 || noAuth.status === 403, noAuth.status);
 
     const withAuth = await fetch(`http://localhost:${PORT}/api/admin/rate-limit-stats`, {
-      headers: { 'X-Admin-Key': ADMIN_KEY },
+      headers: { 'X-Admin-Key': ADMIN_KEY ?? '' },
     });
     check('200 with valid admin key', withAuth.status === 200, withAuth.status);
     if (withAuth.ok) {

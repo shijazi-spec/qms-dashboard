@@ -259,7 +259,7 @@ async function main(): Promise<void> {
 
   const sadTool = {
     id: 'sadTool',
-    execute: async () => { throw new Error('boom'); },
+    execute: async (_args: Record<string, unknown>) => { throw new Error('boom'); },
   };
   const wrappedSad = wrapToolWithTelemetry(sadTool, 'TestAgent');
   let threw = false;

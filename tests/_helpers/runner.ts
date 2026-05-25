@@ -44,15 +44,25 @@ export class TestSuite {
    * Soft assertion — records a failure on the current test but does not throw,
    * so that multiple expectations within one test can all be reported.
    */
-  expect(condition: boolean, message: string): void {
+  expect(condition: unknown, message: string): void {
+    // Accept `unknown` instead of strictly `boolean` so that callers can
+    // pass typical fluent expressions like `arr[0]?.field.includes(x)`,
+    // which TypeScript types as `boolean | undefined` even though the
+    // runtime semantics (falsy → fail) are exactly what this helper
+    // already implemented. Refusing those at the type level forced every
+    // test author to wrap in `!!(...)` for no behavioural benefit.
     if (condition) return;
     if (this.current) this.current.failures.push(message);
     else throw new Error(`expect() called outside of a test: ${message}`);
   }
 
-  expectEqual<T>(actual: T, expected: T, label: string): void {
+  expectEqual<T>(actual: T, expected: T, label?: string): void {
     if (actual === expected) return;
-    const msg = `${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`;
+    // Label is optional — many call sites omit it because the failing line
+    // number plus the actual/expected JSON is enough to localize the bug.
+    // When present we prefix it so the message reads naturally.
+    const tag = label ? `${label}: ` : "";
+    const msg = `${tag}expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`;
     if (this.current) this.current.failures.push(msg);
     else throw new Error(`expectEqual() called outside of a test: ${msg}`);
   }

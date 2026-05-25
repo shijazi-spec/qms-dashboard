@@ -209,7 +209,7 @@ describe("GET /api/qms/dashboard — real data path", () => {
 describe("GET /api/qms/evaluations — real data path", () => {
   test("200 forwards query params to getDealEvaluations and returns its result", async () => {
     const fixture: Awaited<ReturnType<typeof qmsDb.getDealEvaluations>> = {
-      records: [makeDealEvaluation({ id: 1 })],
+      evaluations: [makeDealEvaluation({ id: 1 })],
       total: 1,
     };
     vi.mocked(qmsDb.getDealEvaluations).mockResolvedValueOnce(fixture);
@@ -235,7 +235,7 @@ describe("GET /api/qms/evaluations — real data path", () => {
   });
 
   test("query defaults: limit=50 / offset=0 / minScore=undefined / maxScore=undefined", async () => {
-    vi.mocked(qmsDb.getDealEvaluations).mockResolvedValueOnce({ records: [], total: 0 });
+    vi.mocked(qmsDb.getDealEvaluations).mockResolvedValueOnce({ evaluations: [], total: 0 });
 
     const handler = await buildHandler(qmsApiRoutes, "/api/qms/evaluations", "GET");
     await handler(makeContext({ method: "GET", headers: AUTH_HEADERS }));
@@ -447,7 +447,7 @@ describe("GET /api/qms/training — real data path", () => {
 describe("GET /api/qms/training/assignments — real data path", () => {
   test("200 returns getTrainingAssignments() result", async () => {
     const fixture: Awaited<ReturnType<typeof qmsDb.getTrainingAssignments>> = {
-      records: [makeTrainingAssignment({ id: 1, employee_id: "E-1" })],
+      assignments: [makeTrainingAssignment({ id: 1, employee_id: "E-1" })],
       total: 1,
     };
     vi.mocked(qmsDb.getTrainingAssignments).mockResolvedValueOnce(fixture);

@@ -165,10 +165,11 @@ function makeToolHealthDeps(opts: {
       throttled: false,
       skipped: false,
     }),
-    notifyToolHealthRecovery: async () => ({
+    notifyToolHealthRecovery: async (_n, _d) => ({
       slackSent: true,
       emailSent: false,
       skipped: false,
+      disabled: false,
     }),
     recordNotifyDeadLetter: async () =>
       ({
@@ -265,6 +266,8 @@ function makePromptRegressionRow(
     last_seen_at: "2026-04-20T12:00:00Z",
     min_feedback: 5,
     meets_min_feedback: true,
+    client_surfaces: {},
+    rating_sources: {},
   };
   return { ...base, ...over };
 }

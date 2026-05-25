@@ -132,6 +132,8 @@ function makeRow(over: Partial<PromptVersionAggregate>): PromptVersionAggregate 
     // small-sample path can override these in `over`.
     min_feedback: 5,
     meets_min_feedback: true,
+    client_surfaces: {},
+    rating_sources: {},
   };
   const merged = { ...base, ...over };
   // Keep meets_min_feedback consistent with whatever total_feedback the

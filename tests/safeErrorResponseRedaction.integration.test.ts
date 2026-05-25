@@ -177,13 +177,17 @@ function buildApp(): Hono {
   // Route #6 — uncaught z.ZodError whose message contains a credential.
   // Same outcome as #5: rendered as the static `"Internal Server Error"`
   // body. Pins down the second half of task #576.
-  app.get("/api/health/throw-zod-secret", () => {
+  app.get("/api/health/throw-zod-secret", (): never => {
     const schema = z.object({
       token: z.string().refine(() => false, {
         message: `Bearer ${SECRET} rejected by upstream validator`,
       }),
     });
     schema.parse({ token: "anything" });
+    // schema.parse always throws on the refine failure above, so this line is
+    // unreachable — but the explicit throw lets TS narrow the handler return
+    // type to `never` instead of `void`.
+    throw new Error("unreachable");
   });
 
   // Mirror the production `app.onError` from

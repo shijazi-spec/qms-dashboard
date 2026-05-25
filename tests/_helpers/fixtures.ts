@@ -130,6 +130,7 @@ export function makeFramework(
     dimensions: [],
     createdAt: new Date(0),
     updatedAt: new Date(0),
+    isActive: true,
     ...overrides,
   };
 }

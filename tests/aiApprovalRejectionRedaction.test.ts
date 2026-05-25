@@ -138,6 +138,7 @@ const stubQuery: StubQuery = async <R extends QueryResultRow>(
       result_entity_id: null,
       created_at: new Date(),
       expires_at: new Date(Date.now() + 24 * 3600 * 1000),
+      credential_warnings: [],
     };
     return {
       ...empty,
@@ -436,7 +437,11 @@ async function run(): Promise<void> {
 
   if (storedRow) storedRow.status = 'pending';
 
-  let capturedEventLogDescription: string | null | undefined = undefined;
+  // Cast the initializer to keep TS from narrowing the variable's type to
+  // `undefined` (which would make the `typeof === 'string'` check below
+   // refine to `never` since assignments inside the async closure aren't
+   // tracked by control-flow analysis).
+  let capturedEventLogDescription = undefined as string | null | undefined;
 
   const originalEventLogQuery = eventLogsPool.query.bind(eventLogsPool);
   // Intercept event_logs INSERTs to capture the description that reaches the

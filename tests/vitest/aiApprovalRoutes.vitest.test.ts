@@ -191,7 +191,8 @@ beforeEach(async () => {
   // happy-path tests fall back to the admin-key synth user via the rbac mock.
   setTestUser(null);
   vi.mocked(approvalDb.initAIApprovalTable).mockResolvedValue(undefined);
-  vi.mocked(eventLogs.logEvent).mockResolvedValue({ id: 1 });
+  // Cast: tests only care that logEvent returned something truthy; full EventLog shape irrelevant.
+  vi.mocked(eventLogs.logEvent).mockResolvedValue({ id: 1 } as unknown as Awaited<ReturnType<typeof eventLogs.logEvent>>);
   vi.mocked(eventLogs.getActionViewersBatch).mockResolvedValue({});
   vi.mocked(eventLogs.getActionViewers).mockResolvedValue([]);
   vi.mocked(eventLogs.redactSensitiveDeep).mockImplementation(<T,>(x: T) => x);
@@ -233,7 +234,7 @@ describe("GET /api/ai/approvals", () => {
     expect(body.rows[0].action_code).toBe("ACT-2026-0001");
     expect(body.rows[0].prior_viewers).toHaveLength(1);
     expect(body.rows[1].prior_viewers).toEqual([]);
-    const call = vi.mocked(approvalDb.listPendingActions).mock.calls[0][0];
+    const call = vi.mocked(approvalDb.listPendingActions).mock.calls[0]?.[0]!;
     expect(call.requestedByUserId).toBeUndefined();
     expect(call.status).toEqual(["pending"]);
     expect(call.limit).toBe(50);
@@ -253,7 +254,7 @@ describe("GET /api/ai/approvals", () => {
     );
 
     expect(res.status).toBe(200);
-    const call = vi.mocked(approvalDb.listPendingActions).mock.calls[0][0];
+    const call = vi.mocked(approvalDb.listPendingActions).mock.calls[0]?.[0]!;
     expect(call.status).toEqual(["pending", "approved"]);
     expect(call.riskLevel).toBe("high");
     expect(call.requestedByUserId).toBe(0);
@@ -306,7 +307,7 @@ describe("GET /api/ai/approvals/review-status-counts", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true, unreviewed_by_me: 3, no_reviewers: 1 });
-    const call = vi.mocked(approvalDb.countByReviewStatus).mock.calls[0][0];
+    const call = vi.mocked(approvalDb.countByReviewStatus).mock.calls[0]?.[0]!;
     expect(call.status).toEqual(["pending"]);
     expect(call.riskLevel).toBe("high");
     expect(call.requestedByUserId).toBeUndefined();
@@ -319,6 +320,9 @@ describe("GET /api/ai/approvals/:code", () => {
     const action = makeAction();
     vi.mocked(approvalDb.getPendingActionByCode).mockResolvedValueOnce(action);
     vi.mocked(governance.isAllowedApprover).mockReturnValue(true);
+    // Cast: test only reads .url on the response; fixture includes extra fields
+    // the handler is expected to surface (code/status/url) which aren't in the
+    // production return type.
     vi.mocked(registry.resolveControlledDocuments).mockResolvedValueOnce({
       "WP-SOP-009": {
         code: "WP-SOP-009",
@@ -327,7 +331,7 @@ describe("GET /api/ai/approvals/:code", () => {
         url: "/docs/WP-SOP-009",
         version: "v1",
       },
-    });
+    } as unknown as Awaited<ReturnType<typeof registry.resolveControlledDocuments>>);
     vi.mocked(eventLogs.getActionViewers).mockResolvedValueOnce([
       {
         user_id: 7,
@@ -407,7 +411,6 @@ describe("POST /api/ai/approvals/:code/approve", () => {
       data: { rotated: true, fingerprint: "abc123" },
       entityType: "ApiKey",
       entityId: "key-1",
-      error: null,
     });
 
     const handler = await buildHandler(aiApprovalRoutes, "/api/ai/approvals/:code/approve", "POST");

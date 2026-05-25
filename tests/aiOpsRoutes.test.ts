@@ -145,11 +145,9 @@ if (!HAS_DB) {
         title: `Tool "${TOOL_NAME}" error rate above threshold over last 60 min`,
         description: "Test seed for happy-path route test",
         suggestion: "Investigate the tool",
-        related_record_type: "tool_health",
         related_record_id: RELATED_ID,
-        metadata: { tool_name: TOOL_NAME, reason: REASON },
       });
-      createdId = created.id;
+      createdId = created.id ?? null;
 
       const handler = await buildHandler(
         aiOpsRoutes,
@@ -375,11 +373,10 @@ if (!HAS_DB) {
         title: `History test HIGH ${HIGH_TOOL}`,
         description: "Task #319 history-filter test seed",
         suggestion: "n/a",
-        related_record_type: "tool_health",
         related_record_id: `${HIGH_TOOL}:error_rate`,
-        metadata: { tool_name: HIGH_TOOL, reason: "error_rate" },
       });
-      highId = high.id;
+      highId = high.id ?? null;
+      if (highId == null) throw new Error("createAIAlert returned no id (high)");
       await acknowledgeAlert(highId, "history-filter-test");
 
       const medium = await createAIAlert({
@@ -388,11 +385,10 @@ if (!HAS_DB) {
         title: `History test MEDIUM ${MEDIUM_TOOL}`,
         description: "Task #319 history-filter test seed",
         suggestion: "n/a",
-        related_record_type: "tool_health",
         related_record_id: `${MEDIUM_TOOL}:p95_latency`,
-        metadata: { tool_name: MEDIUM_TOOL, reason: "p95_latency" },
       });
-      mediumId = medium.id;
+      mediumId = medium.id ?? null;
+      if (mediumId == null) throw new Error("createAIAlert returned no id (medium)");
       await acknowledgeAlert(mediumId, "history-filter-test");
 
       const handler = await buildHandler(
@@ -739,9 +735,7 @@ if (!HAS_DB) {
         title: `Task324 manual-resolve note seed ${Date.now()}`,
         description: "Task #324 manual-resolve note persistence test seed",
         suggestion: "n/a",
-        related_record_type: "tool_health",
         related_record_id: `task324_resolve_note_${Date.now()}:error_rate`,
-        metadata: { tool_name: "task324_resolve_note", reason: "error_rate" },
       });
       seedId = seeded.id ?? null;
       suite.expect(seedId != null, "seed alert created with id");
@@ -792,9 +786,7 @@ if (!HAS_DB) {
         title: `Task324 dismissed-history seed ${Date.now()}`,
         description: "Task #324 dismissed-history visibility test seed",
         suggestion: "n/a",
-        related_record_type: "tool_health",
         related_record_id: `task324_dismissed_${Date.now()}:p95_latency`,
-        metadata: { tool_name: "task324_dismissed", reason: "p95_latency" },
       });
       dismissedId = dismissed.id ?? null;
       suite.expect(dismissedId != null, "dismissed seed created");
@@ -874,12 +866,7 @@ if (!HAS_DB) {
         title: `Task324 resolved-endpoint dismissed seed ${Date.now()}`,
         description: "Task #324 resolved-endpoint dismissed visibility seed",
         suggestion: "n/a",
-        related_record_type: "tool_health",
         related_record_id: `task324_resolved_dismissed_${Date.now()}:error_rate`,
-        metadata: {
-          tool_name: "task324_resolved_dismissed",
-          reason: "error_rate",
-        },
       });
       dismissedId = dismissed.id ?? null;
       suite.expect(dismissedId != null, "dismissed seed created");
@@ -1762,9 +1749,13 @@ if (HAS_DB) {
         //    metrics rows. The reaper itself uses the default DB-backed
         //    implementation, so any SQL regression in
         //    `reapExpiredToolHealthOverrides` will surface here.
+        // Match the production signature exactly — both params are
+        // optional there (defaults are applied inside the real impl), so
+        // declaring them as required here is a type-vs-runtime mismatch
+        // even though the stub itself ignores the args.
         const stubAggregates: (
-          windowMinutes: number,
-          minCalls: number,
+          windowMinutes?: number,
+          minCalls?: number,
         ) => Promise<ToolWindowAggregateT[]> = async () => [];
         const stubOpenAlertExists: (
           alertType: AlertTypeT,
@@ -1879,8 +1870,8 @@ if (HAS_DB) {
           "audit before_values records the expiry that triggered the reap",
         );
         suite.expect(
-          reapEntry?.after_values
-            && Object.keys(reapEntry.after_values).length === 0,
+          !!(reapEntry?.after_values
+            && Object.keys(reapEntry.after_values).length === 0),
           "audit after_values is the empty post-clear snapshot",
         );
       } finally {
@@ -2007,9 +1998,11 @@ if (HAS_DB) {
         //    • Everything else no-op'd to prevent side effects
         const MIN_CALLS = TOOL_HEALTH_ENV_BASELINE.minCalls;
 
+        // Production signature has both params optional; match it so the
+        // stub is assignable to the deps shape.
         const stubAggregates = async (
-          _windowMinutes: number,
-          _minCalls: number,
+          _windowMinutes?: number,
+          _minCalls?: number,
         ): Promise<ToolWindowAggregateT[]> => [
           {
             tool_name: RECOVERY_TOOL,
@@ -2048,7 +2041,11 @@ if (HAS_DB) {
           _payload: Parameters<typeof import("../src/utils/toolHealthAlertNotifier").notifyToolHealthRecovery>[0],
         ): Promise<NotifyToolHealthRecoveryResultT> => {
           recoveryNotifyCalled = true;
-          return { slackSent: false, emailSent: false, skipped: true };
+          // `disabled` was added to the result shape to flag the "alert was
+          // open but never paged" case so callers can distinguish a silent
+          // skip from a missing config. We're stubbing the recovery path, so
+          // emit a stable default rather than letting TS fall through.
+          return { slackSent: false, emailSent: false, skipped: true, disabled: false };
         };
 
         const stubReapOverrides = async (): Promise<ReapResultT> => ({
@@ -2059,7 +2056,19 @@ if (HAS_DB) {
           audit_id: null,
         });
 
-        const stubNotifyOverrideExpired = async (): Promise<void> => {};
+        // Accept the production signature even though the stub ignores its
+        // args — declaring `(): Promise<void>` would make the deps payload
+        // unassignable when the real callsite passes a notification object.
+        // Derive the parameter list from the source function via `Parameters<>`
+        // so a future signature change shows up here at compile time.
+        type NotifyOverrideExpired =
+          typeof import("../src/utils/toolHealthAlertNotifier").notifyToolHealthOverrideExpired;
+        type NotifyOverrideExpiredParams = Parameters<NotifyOverrideExpired>;
+        type NotifyOverrideExpiredReturn = Awaited<ReturnType<NotifyOverrideExpired>>;
+        const stubNotifyOverrideExpired = async (
+          ..._args: NotifyOverrideExpiredParams
+        ): Promise<NotifyOverrideExpiredReturn> =>
+          ({ slackSent: false, emailSent: false, skipped: true } as NotifyOverrideExpiredReturn);
 
         const checkResult = await runToolHealthCheck({
           getToolWindowAggregates: stubAggregates,

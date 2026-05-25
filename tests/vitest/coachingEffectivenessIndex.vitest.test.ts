@@ -183,7 +183,7 @@ describe("fetchCoachingEffectiveness — query composition", () => {
         return { rows: [] };
       },
     };
-    await fetchCoachingEffectiveness(pool, { managerEmail: "m@x", limit: 50 });
+    await fetchCoachingEffectiveness(pool as unknown as import("pg").Pool, { managerEmail: "m@x", limit: 50 });
     expect(captured.values).toEqual(["m@x", 50]);
     expect(captured.sql).toContain("cs.manager_email = $1");
     expect(captured.sql).toContain("cs.status = 'delivered'");
@@ -198,7 +198,7 @@ describe("fetchCoachingEffectiveness — query composition", () => {
         return { rows: [] };
       },
     };
-    await fetchCoachingEffectiveness(pool, {
+    await fetchCoachingEffectiveness(pool as unknown as import("pg").Pool, {
       managerEmail: "m@x",
       agentEmail: "a@x",
     });
@@ -256,7 +256,7 @@ describe("fetchCoachingEffectiveness — query composition", () => {
         return { rows: [] };
       },
     };
-    await fetchCoachingEffectiveness(pool, { limit: 99999 });
+    await fetchCoachingEffectiveness(pool as unknown as import("pg").Pool, { limit: 99999 });
     expect(captured.sql).toContain("LIMIT $1");
   });
 });

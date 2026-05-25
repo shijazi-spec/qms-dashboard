@@ -168,16 +168,19 @@ function makeDeps(opts: {
       slackSent: true,
       emailSent: false,
       skipped: false,
+      disabled: false,
     };
 
   const deps: ToolHealthDeps = {
-    getToolWindowAggregates: async (windowMinutes, minCalls) => {
+    getToolWindowAggregates: async (windowMinutes = 60, minCalls = 1) => {
       aggregateCalls.push({ windowMinutes, minCalls });
       // Faithfully apply the same `HAVING COUNT(*) >= $2` filter the real
       // SQL would, so the "ignored if below minCalls" case is testing the
       // cron's contract with the aggregator, not the stub's bookkeeping.
       return opts.aggregates.filter((a) => a.call_count >= minCalls);
     },
+    getOpenAlertsByType: async () => [],
+    getToolsWithCallsInWindow: async () => new Set<string>(),
     openAlertExistsByKey: async (alertType, relatedRecordId) => {
       dedupeChecks.push({ alertType, relatedRecordId });
       return existingDedupeKeys.has(`${alertType}:${relatedRecordId}`);
@@ -2154,7 +2157,7 @@ await suite.test(
           { id: 88, alert_type: "tool_health", severity: "medium", title: "s", description: "s", status: "open" } as any,
         ],
       },
-      recoveryNotifierResult: { slackSent: false, emailSent: false, skipped: true },
+      recoveryNotifierResult: { slackSent: false, emailSent: false, skipped: true, disabled: false },
       pastCooldown: true,
     });
 

@@ -118,7 +118,7 @@ async function buildStaticHandler(
     (r) => r.path === path && r.method === method,
   );
   if (!route) throw new Error(`Route not found: ${method} ${path}`);
-  return route.createHandler(undefined) as Promise<
+  return route.createHandler() as Promise<
     (c: FakeContextWithHtml) => Promise<CapturedResponse>
   >;
 }

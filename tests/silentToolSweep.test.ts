@@ -127,6 +127,7 @@ function makeEmptyResult(): ToolHealthCheckResult {
     notificationsSent: 0,
     notificationsSkipped: 0,
     notificationsThrottled: 0,
+    notificationsDeadLettered: 0,
     breaches: [],
     recoveries: [],
   };

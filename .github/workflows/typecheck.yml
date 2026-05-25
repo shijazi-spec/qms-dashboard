@@ -1,0 +1,75 @@
+name: Typecheck
+
+# Runs `tsc` against the project on every push and PR. Both jobs are
+# advisory-only (continue-on-error) right now because the existing src/
+# code carries ~900 pre-existing type errors that have always been there
+# but were hidden by the lack of a CI typecheck step. The intent is:
+#   1. surface the count on every run so it can't grow silently;
+#   2. drive both counts (src + tests) down over time;
+#   3. flip continue-on-error off once a category hits 0 so a regression
+#      blocks merge.
+# tests/** is already at 0 — see the summary step below. The remaining
+# work to make `check` blocking is incremental cleanup of src/.
+
+on:
+  push:
+    branches: [main, QMS]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: typecheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Advisory: src/** + scripts/**. ~900 pre-existing errors when this
+      # workflow was introduced. Drop continue-on-error and make this a
+      # hard gate once the count is at 0.
+      - name: tsc (src + scripts, advisory)
+        id: check_src
+        continue-on-error: true
+        run: npm run check
+
+      # Advisory: tests/**. Was at 0 when this workflow was introduced —
+      # ready to flip to a hard gate as soon as confidence is high (a
+      # regression here is much rarer than in src/, so doing this first
+      # gives the biggest signal-to-noise win).
+      - name: tsc (tests, advisory)
+        id: check_tests
+        continue-on-error: true
+        run: npm run check:tests
+
+      - name: Summarise advisory results
+        if: always()
+        run: |
+          echo "### Typecheck summary"
+          if [ "${{ steps.check_src.outcome }}" = "success" ]; then
+            echo "✅ src + scripts type-check passed — consider promoting to a hard gate."
+            echo "::notice::src + scripts type-check is now clean. Remove continue-on-error to make it blocking."
+          else
+            echo "⚠️  src + scripts type-check has known pre-existing errors (advisory only)."
+            echo "::warning::Run \`npm run check\` locally to see them."
+          fi
+          if [ "${{ steps.check_tests.outcome }}" = "success" ]; then
+            echo "✅ tests/** type-check passed — consider promoting to a hard gate."
+            echo "::notice::tests/** type-check is at 0. Flip continue-on-error to false to make a regression blocking."
+          else
+            echo "⚠️  tests/** type-check failed (regression?)."
+            echo "::warning::Run \`npm run check:tests\` locally to see new errors."
+          fi

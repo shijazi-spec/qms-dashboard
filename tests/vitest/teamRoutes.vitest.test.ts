@@ -14,7 +14,13 @@ process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { teamRoutes } from "../../src/mastra/routes/teamRoutes";
-import type { AuditLogEntry } from "../../src/utils/teamDatabase";
+import type {
+  AuditLogEntry,
+  TeamPerformanceMetric,
+  TeamProjectAssignment,
+  TrainingAssignment,
+  TrainingCourse,
+} from "../../src/utils/teamDatabase";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
 
 const ADMIN_HEADERS = { "X-Admin-Key": TEST_ADMIN_KEY };
@@ -43,7 +49,7 @@ vi.mock("../../src/utils/teamDatabase", () => ({
   createCourseAssignment: vi.fn(),
   updateCourseAssignment: vi.fn(),
   deleteCourseAssignment: vi.fn(),
-  logAuditEntry: vi.fn(async (entry: AuditLogEntry) => entry),
+  logAuditEntry: vi.fn(async (entry: Omit<AuditLogEntry, "id" | "action_id" | "created_at">) => entry),
   listAuditLogs: vi.fn(),
   getProjectsByKanbanStatus: vi.fn(),
   getCourseTrainingMatrix: vi.fn(),
@@ -56,7 +62,10 @@ beforeEach(async () => {
   team = await import("../../src/utils/teamDatabase");
   vi.clearAllMocks();
   vi.mocked(team.initTeamTables).mockResolvedValue(undefined);
-  vi.mocked(team.logAuditEntry).mockImplementation(async (entry: AuditLogEntry) => entry);
+  vi.mocked(team.logAuditEntry).mockImplementation(
+    async (entry: Omit<AuditLogEntry, "id" | "action_id" | "created_at">) =>
+      ({ ...entry, action_id: "A-test", created_at: new Date() } as AuditLogEntry),
+  );
 });
 
 describe("GET /api/team/members", () => {
@@ -232,7 +241,10 @@ describe("GET /api/team/analytics", () => {
       byStatus: { active: 11 },
       avgPerformance: 87.4,
     };
-    vi.mocked(team.getTeamAnalytics).mockResolvedValueOnce(analytics);
+    // Cast: test only verifies pass-through of mock to res.body, not analytics shape.
+    vi.mocked(team.getTeamAnalytics).mockResolvedValueOnce(
+      analytics as unknown as Awaited<ReturnType<typeof team.getTeamAnalytics>>,
+    );
 
     const handler = await buildHandler(teamRoutes, "/api/team/analytics", "GET");
     const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
@@ -245,7 +257,10 @@ describe("GET /api/team/analytics", () => {
 describe("GET /api/team/performance", () => {
   test("200 forwards memberId / periodType / pagination filters", async () => {
     const fixture = { metrics: [{ id: 1, member_id: "TM-1", overall_score: 91 }], total: 1 };
-    vi.mocked(team.getPerformanceMetrics).mockResolvedValueOnce(fixture);
+    // Cast: test verifies the result is forwarded; individual metric shape is irrelevant.
+    vi.mocked(team.getPerformanceMetrics).mockResolvedValueOnce(
+      fixture as unknown as { metrics: TeamPerformanceMetric[]; total: number },
+    );
 
     const handler = await buildHandler(teamRoutes, "/api/team/performance", "GET");
     const res = await handler(
@@ -270,7 +285,8 @@ describe("GET /api/team/performance", () => {
 describe("POST /api/team/performance", () => {
   test("200 returns { success, metric } from addPerformanceMetric()", async () => {
     const metric = { id: 7, member_id: "TM-1", quality_score: 90 };
-    vi.mocked(team.addPerformanceMetric).mockResolvedValueOnce(metric);
+    // Cast: test verifies res.body echo; full TeamPerformanceMetric shape irrelevant.
+    vi.mocked(team.addPerformanceMetric).mockResolvedValueOnce(metric as unknown as TeamPerformanceMetric);
 
     const handler = await buildHandler(teamRoutes, "/api/team/performance", "POST");
     const res = await handler(
@@ -290,7 +306,10 @@ describe("POST /api/team/performance", () => {
 describe("GET /api/team/projects", () => {
   test("200 forwards project filters and pagination", async () => {
     const fixture = { assignments: [{ assignment_id: "A-1", project_name: "P1" }], total: 1 };
-    vi.mocked(team.listProjectAssignments).mockResolvedValueOnce(fixture);
+    // Cast: test verifies pass-through; individual assignment shape irrelevant.
+    vi.mocked(team.listProjectAssignments).mockResolvedValueOnce(
+      fixture as unknown as { assignments: TeamProjectAssignment[]; total: number },
+    );
 
     const handler = await buildHandler(teamRoutes, "/api/team/projects", "GET");
     const res = await handler(
@@ -317,7 +336,8 @@ describe("GET /api/team/projects", () => {
 describe("POST /api/team/projects", () => {
   test("200 returns { success, assignment } from createProjectAssignment()", async () => {
     const assignment = { assignment_id: "A-9", project_name: "Audit-2026", member_id: "TM-1" };
-    vi.mocked(team.createProjectAssignment).mockResolvedValueOnce(assignment);
+    // Cast: test verifies res.body echo; full TeamProjectAssignment shape irrelevant.
+    vi.mocked(team.createProjectAssignment).mockResolvedValueOnce(assignment as unknown as TeamProjectAssignment);
 
     const handler = await buildHandler(teamRoutes, "/api/team/projects", "POST");
     const res = await handler(
@@ -336,7 +356,8 @@ describe("POST /api/team/projects", () => {
 describe("PUT /api/team/projects/:assignmentId", () => {
   test("200 returns updated assignment", async () => {
     const assignment = { assignment_id: "A-9", project_name: "Audit-2026", status: "completed" };
-    vi.mocked(team.updateProjectAssignment).mockResolvedValueOnce(assignment);
+    // Cast: test verifies res.body echo; full TeamProjectAssignment shape irrelevant.
+    vi.mocked(team.updateProjectAssignment).mockResolvedValueOnce(assignment as unknown as TeamProjectAssignment);
 
     const handler = await buildHandler(teamRoutes, "/api/team/projects/:assignmentId", "PUT");
     const res = await handler(
@@ -395,7 +416,10 @@ describe("DELETE /api/team/projects/:assignmentId", () => {
 describe("GET /api/team/training-matrix", () => {
   test("200 returns getTrainingMatrix() result directly", async () => {
     const matrix = { members: [{ member_id: "TM-1", full_name: "A", trainings: [] }], totalMembers: 1, totalTrainings: 0 };
-    vi.mocked(team.getTrainingMatrix).mockResolvedValueOnce(matrix);
+    // Cast: test verifies pass-through of mock to res.body; full matrix shape irrelevant.
+    vi.mocked(team.getTrainingMatrix).mockResolvedValueOnce(
+      matrix as unknown as Awaited<ReturnType<typeof team.getTrainingMatrix>>,
+    );
 
     const handler = await buildHandler(teamRoutes, "/api/team/training-matrix", "GET");
     const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
@@ -408,7 +432,10 @@ describe("GET /api/team/training-matrix", () => {
 describe("GET /api/team/courses", () => {
   test("200 forwards department / course_type / is_active=true filter", async () => {
     const fixture = { courses: [{ course_id: "C-1", name: "Intro" }], total: 1 };
-    vi.mocked(team.listTrainingCourses).mockResolvedValueOnce(fixture);
+    // Cast: test verifies pass-through; full TrainingCourse shape irrelevant.
+    vi.mocked(team.listTrainingCourses).mockResolvedValueOnce(
+      fixture as unknown as { courses: TrainingCourse[]; total: number },
+    );
 
     const handler = await buildHandler(teamRoutes, "/api/team/courses", "GET");
     const res = await handler(
@@ -598,7 +625,8 @@ describe("GET /api/team/course-assignments", () => {
 describe("POST /api/team/course-assignments", () => {
   test("200 returns { success, assignment } and audits assignment", async () => {
     const assignment = { assignment_id: "TA-9", course_id: "C-1", member_id: "TM-1", status: "assigned" as const };
-    vi.mocked(team.createCourseAssignment).mockResolvedValueOnce(assignment);
+    // Cast: test verifies res.body echo; full TrainingAssignment shape irrelevant.
+    vi.mocked(team.createCourseAssignment).mockResolvedValueOnce(assignment as unknown as TrainingAssignment);
 
     const handler = await buildHandler(teamRoutes, "/api/team/course-assignments", "POST");
     const res = await handler(
@@ -620,7 +648,10 @@ describe("POST /api/team/course-assignments", () => {
 describe("GET /api/team/kanban", () => {
   test("200 returns getProjectsByKanbanStatus() result directly", async () => {
     const board = { backlog: [], in_progress: [], review: [], completed: [] };
-    vi.mocked(team.getProjectsByKanbanStatus).mockResolvedValueOnce(board);
+    // Cast: test verifies pass-through; the waiting_stakeholder bucket is omitted on purpose.
+    vi.mocked(team.getProjectsByKanbanStatus).mockResolvedValueOnce(
+      board as unknown as Awaited<ReturnType<typeof team.getProjectsByKanbanStatus>>,
+    );
 
     const handler = await buildHandler(teamRoutes, "/api/team/kanban", "GET");
     const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
@@ -633,7 +664,10 @@ describe("GET /api/team/kanban", () => {
 describe("GET /api/team/course-training-matrix", () => {
   test("200 returns getCourseTrainingMatrix() result directly", async () => {
     const matrix = { members: [{ member_id: "TM-1", full_name: "A", courses: [] }], totalMembers: 1, totalCourses: 0 };
-    vi.mocked(team.getCourseTrainingMatrix).mockResolvedValueOnce(matrix);
+    // Cast: test verifies pass-through; full course matrix shape irrelevant.
+    vi.mocked(team.getCourseTrainingMatrix).mockResolvedValueOnce(
+      matrix as unknown as Awaited<ReturnType<typeof team.getCourseTrainingMatrix>>,
+    );
 
     const handler = await buildHandler(teamRoutes, "/api/team/course-training-matrix", "GET");
     const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
@@ -646,7 +680,10 @@ describe("GET /api/team/course-training-matrix", () => {
 describe("GET /api/audit-trail", () => {
   test("200 forwards module / entity_type / entity_id / user_id / action_type filters", async () => {
     const fixture = { logs: [{ action_id: "A-1" }], total: 1 };
-    vi.mocked(team.listAuditLogs).mockResolvedValueOnce(fixture);
+    // Cast: test verifies pass-through; full AuditLogEntry shape irrelevant.
+    vi.mocked(team.listAuditLogs).mockResolvedValueOnce(
+      fixture as unknown as { logs: AuditLogEntry[]; total: number },
+    );
 
     const handler = await buildHandler(teamRoutes, "/api/audit-trail", "GET");
     const res = await handler(

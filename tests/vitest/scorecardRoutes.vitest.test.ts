@@ -95,7 +95,7 @@ describe("GET /api/scorecard/mohammed — real data path", () => {
 
 describe("GET /api/scorecard/kpi/:kpiNumber — real data path", () => {
   test("200 calls calculateKPI1_GovernanceDocLifecycle() for KPI 1", async () => {
-    const result = { score: 10, label: "KPI 1" };
+    const result = { value: 10, details: { label: "KPI 1" } };
     vi.mocked(scorecardDb.calculateKPI1_GovernanceDocLifecycle).mockResolvedValueOnce(result);
 
     const routes = await getRoutes();
@@ -108,7 +108,7 @@ describe("GET /api/scorecard/kpi/:kpiNumber — real data path", () => {
   });
 
   test("200 calls calculateKPI3_AuditEvidencePackReadiness() for KPI 3", async () => {
-    const result = { score: 30, label: "KPI 3" };
+    const result = { value: 30, details: { label: "KPI 3" } };
     vi.mocked(scorecardDb.calculateKPI3_AuditEvidencePackReadiness).mockResolvedValueOnce(result);
 
     const routes = await getRoutes();
@@ -121,7 +121,7 @@ describe("GET /api/scorecard/kpi/:kpiNumber — real data path", () => {
   });
 
   test("200 calls calculateKPI6_ExecutiveReportingReadiness() for KPI 6", async () => {
-    const result = { score: 60, label: "KPI 6" };
+    const result = { value: 60, details: { label: "KPI 6" } };
     vi.mocked(scorecardDb.calculateKPI6_ExecutiveReportingReadiness).mockResolvedValueOnce(result);
 
     const routes = await getRoutes();

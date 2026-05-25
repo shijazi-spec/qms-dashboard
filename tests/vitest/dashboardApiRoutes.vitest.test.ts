@@ -186,6 +186,9 @@ describe("error-path coverage — every db-backed dashboard route returns determ
 
 describe("GET /api/dashboard", () => {
   test("200 returns getDashboardData() result directly", async () => {
+    // Partial fixture covering only the fields this assertion needs; cast to
+    // the full return shape since this test asserts handler plumbing rather
+    // than dashboard payload schema fidelity.
     const data = {
       latestAudit: makeAudit(),
       auditHistory: [makeAudit({ id: 2 })],
@@ -193,7 +196,7 @@ describe("GET /api/dashboard", () => {
       governanceDocs: [makeGovernance()],
       scorecard: makeScorecard(),
       trends: { overall: [], people: [], process: [], governance: [] },
-    };
+    } as unknown as Awaited<ReturnType<typeof db.getDashboardData>>;
     vi.mocked(db.getDashboardData).mockResolvedValueOnce(data);
 
     const handler = await buildHandler(dashboardApiRoutes, "/api/dashboard", "GET");

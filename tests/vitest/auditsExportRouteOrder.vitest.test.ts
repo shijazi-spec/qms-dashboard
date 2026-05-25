@@ -15,6 +15,12 @@ import { auditRoutes } from '../../src/mastra/routes/auditRoutes';
 interface RouteEntry {
   path: string;
   method: string;
+  /**
+   * Hono createHandler factory — typed loosely here because route modules
+   * across the project use a mix of dep-injected and zero-arg signatures.
+   * Tests narrow to the concrete return shape they need at the call site.
+   */
+  createHandler?: (...args: unknown[]) => Promise<unknown>;
 }
 
 describe('auditRoutes — literal export segments registered before /:id', () => {

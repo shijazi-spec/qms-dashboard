@@ -115,7 +115,7 @@ async function buildApp(): Promise<Hono> {
     // (the project mirrors Hono's permissive context typing across its
     // route modules). We narrow to Hono's concrete `Handler` here so the
     // registration call is fully typed without resorting to `as any`.
-    const handler = (await route.createHandler({ mastra: null })) as Handler;
+    const handler = (await route.createHandler()) as Handler;
     app.get(path, handler);
   }
 

@@ -87,6 +87,9 @@ function makeStubPool(): StubPoolResult {
         last_seen: "2026-04-01T00:00:00Z",
         min_feedback: floor,
         meets_min_feedback: total_feedback >= floor,
+        last_seen_at: "2026-04-01T00:00:00Z",
+        client_surfaces: {},
+        rating_sources: {},
       });
 
       return {

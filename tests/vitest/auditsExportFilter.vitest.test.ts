@@ -11,13 +11,17 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { JSDOM, DOMWindow } from 'jsdom';
+// jsdom ships without bundled .d.ts; type declarations are provided locally
+// in tests/_helpers/jsdom.d.ts. The runtime API surface used here is small
+// enough that the local declaration keeps the rest of the file fully typed.
+import { JSDOM } from 'jsdom';
 
 const HTML_PATH = resolve(__dirname, '..', '..', 'dashboard', 'audits.html');
 
-interface AuditsDashboardWindow extends DOMWindow {
+type AuditsDashboardWindow = Window & typeof globalThis & {
   syncAuditsExportButton: () => void;
-}
+  eval: (src: string) => unknown;
+};
 
 function loadDashboard(): { win: AuditsDashboardWindow; cleanup: () => void } {
   const html = readFileSync(HTML_PATH, 'utf8');

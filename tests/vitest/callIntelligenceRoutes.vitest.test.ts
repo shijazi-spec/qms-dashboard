@@ -133,7 +133,7 @@ describe("GET /api/calls — real data path", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(fixture);
-    const args = vi.mocked(callDb.getCallRecords).mock.calls[0][0];
+    const args = vi.mocked(callDb.getCallRecords).mock.calls[0]?.[0]!;
     expect(args.limit).toBe(20);
     expect(args.offset).toBe(5);
     expect(args.source).toBe("five9");
@@ -146,7 +146,7 @@ describe("GET /api/calls — real data path", () => {
     const handler = await buildHandler(callIntelligenceRoutes, "/api/calls", "GET");
     await handler(makeContext({ method: "GET", headers: AUTH_HEADERS }));
 
-    const args = vi.mocked(callDb.getCallRecords).mock.calls[0][0];
+    const args = vi.mocked(callDb.getCallRecords).mock.calls[0]?.[0]!;
     expect(args.limit).toBe(50);
     expect(args.offset).toBe(0);
   });
@@ -163,6 +163,16 @@ describe("GET /api/calls/analytics — real data path", () => {
       callsBySource: [],
       callsByAgent: [],
       complianceBreakdown: {},
+      complianceCoverage: {
+        total_analyzed: 0,
+        total_linked_to_crm: 0,
+        total_with_compliance_row: 0,
+        total_with_real_check: 0,
+        total_not_checked_sentinel: 0,
+        total_unlinked: 0,
+      },
+      sentimentDistribution: [],
+      qaScoreTrend: [],
     };
     vi.mocked(callDb.getCallAnalyticsSummary).mockResolvedValueOnce(analytics);
 
@@ -206,7 +216,7 @@ describe("GET /api/calls/compliance — real data path", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(fixture);
-    const args = vi.mocked(callDb.getComplianceRecords).mock.calls[0][0];
+    const args = vi.mocked(callDb.getComplianceRecords).mock.calls[0]?.[0]!;
     expect(args.limit).toBe(10);
     expect(args.lead_id).toBe("L-1");
     expect(args.agent_email).toBe("agent@example.com");

@@ -646,6 +646,11 @@ function makeSampleAuditEntries(count: number = 2): ToolHealthConfigAuditEntry[]
     before_values: { errorRateHighPct: 25 + i },
     after_values: { errorRateHighPct: 20 + i, latencyHighMs: 2000 },
     note: i === 0 ? "Sev-2 incident #4321" : null,
+    // `breach_diff` is added by the breach-context enricher (Task #205);
+    // these fixtures predate that field and don't exercise it, so leaving it
+    // null keeps the test focused on the email/Slack rendering it's meant to
+    // verify without forcing every test author to hand-stub a breach diff.
+    breach_diff: null,
   }));
 }
 
@@ -995,19 +1000,19 @@ await suite.test(
       `subject mentions operator (got: ${emailCalls[0]?.subject})`,
     );
     suite.expect(
-      emailCalls[0]?.html.includes("Error rate HIGH"),
+      emailCalls[0]?.html?.includes("Error rate HIGH"),
       "HTML body lists changed field label",
     );
     suite.expect(
-      emailCalls[0]?.html.includes("https://qms.example.com/dashboard?tab=thresholds"),
+      emailCalls[0]?.html?.includes("https://qms.example.com/dashboard?tab=thresholds"),
       "HTML body includes deep-link to Alert Thresholds tab",
     );
     suite.expect(
-      emailCalls[0]?.text.includes("Alert Thresholds tab"),
+      emailCalls[0]?.text?.includes("Alert Thresholds tab"),
       "plain-text body includes link to Alert Thresholds tab",
     );
     suite.expect(
-      emailCalls[0]?.html.includes("Sev-2 incident #4321"),
+      emailCalls[0]?.html?.includes("Sev-2 incident #4321"),
       "operator note surfaced in email body",
     );
   },
@@ -1075,19 +1080,19 @@ await suite.test(
       deps,
     );
     suite.expect(
-      emailCalls[0]?.html.includes("#42"),
+      emailCalls[0]?.html?.includes("#42"),
       "audit_id in HTML body",
     );
     suite.expect(
-      emailCalls[0]?.text.includes("#42"),
+      emailCalls[0]?.text?.includes("#42"),
       "audit_id in plain-text body",
     );
     suite.expect(
-      emailCalls[0]?.html.includes("emergency freeze"),
+      emailCalls[0]?.html?.includes("emergency freeze"),
       "note in HTML body",
     );
     suite.expect(
-      emailCalls[0]?.text.includes("emergency freeze"),
+      emailCalls[0]?.text?.includes("emergency freeze"),
       "note in plain-text body",
     );
   },

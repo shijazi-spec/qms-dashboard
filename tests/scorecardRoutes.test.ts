@@ -36,7 +36,7 @@ await suite.test("every route exposes path, method and createHandler", async () 
 await suite.test("GET /scorecard — 200 when dashboard html exists, else 404", async () => {
   const handler = await buildHandler(scorecardRoutes, "/scorecard", "GET");
   const ctx = makeContext({ method: "GET" }) as FakeContext & { html?: any };
-  let html: { body: string; status: number } | null = null;
+  let html = null as { body: string; status: number } | null;
   ctx.html = (body: string, status?: number) => {
     html = { body, status: status ?? 200 };
     return html;
@@ -45,7 +45,8 @@ await suite.test("GET /scorecard — 200 when dashboard html exists, else 404", 
   const present = existsSync(join(process.cwd(), "dashboard", "scorecard.html"));
   if (present) {
     suite.expect(html !== null, "html() called");
-    suite.expectEqual(html?.status, 200, "html status");
+    const h = html as { body: string; status: number } | null;
+    suite.expectEqual(h?.status, 200, "html status");
   } else {
     suite.expectEqual(res.status, 404, "404 when dashboard missing");
   }

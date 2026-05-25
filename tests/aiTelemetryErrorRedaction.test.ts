@@ -197,7 +197,7 @@ async function run(): Promise<void> {
   captured.length = 0;
   const sadTool = {
     id: 'sad-tool',
-    execute: async () => {
+    execute: async (_args: Record<string, unknown>) => {
       throw new Error(`Backend rejected request: token=${SK_KEY}`);
     },
   };
@@ -236,7 +236,7 @@ async function run(): Promise<void> {
   captured.length = 0;
   const softFailTool = {
     id: 'softfail-tool',
-    execute: async () => ({
+    execute: async (_args: Record<string, unknown>) => ({
       success: false,
       error: `Connection failed with key ${SK_KEY} and bearer ${GH_PAT}`,
     }),

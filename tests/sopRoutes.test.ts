@@ -99,7 +99,7 @@ await suite.test("GET /api/sop/download — sets attachment headers when SOP fil
 await suite.test("GET /sop — 200 (html) when dashboard page exists, else 404", async () => {
   const handler = await buildHandler(sopRoutes, "/sop", "GET");
   const ctx = makeContext({ method: "GET", headers: ADMIN_HEADERS }) as FakeContext & { html?: any };
-  let html: { body: string; status: number } | null = null;
+  let html = null as { body: string; status: number } | null;
   ctx.html = (body: string, status?: number) => {
     html = { body, status: status ?? 200 };
     return html;
@@ -108,7 +108,8 @@ await suite.test("GET /sop — 200 (html) when dashboard page exists, else 404",
   const present = existsSync(join(process.cwd(), "dashboard", "sop.html"));
   if (present) {
     suite.expect(html !== null, "html() called");
-    suite.expectEqual(html?.status, 200, "html status");
+    const h = html as { body: string; status: number } | null;
+    suite.expectEqual(h?.status, 200, "html status");
   } else {
     suite.expectEqual(res.status, 404, "404 fallback when sop.html missing");
   }

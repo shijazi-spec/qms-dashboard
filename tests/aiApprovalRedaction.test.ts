@@ -92,6 +92,7 @@ const stubQuery: StubQuery = async <R extends QueryResultRow>(
       result_entity_id: null,
       created_at: new Date(),
       expires_at: new Date(Date.now() + 24 * 3600 * 1000),
+      credential_warnings: [],
     };
     return { ...empty, command: "INSERT", rowCount: 1, rows: [row as unknown as R] };
   }

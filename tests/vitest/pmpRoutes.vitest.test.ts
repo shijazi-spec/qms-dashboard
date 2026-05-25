@@ -99,10 +99,10 @@ describe("GET /api/pmp/projects — real data path", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(fixture);
-    const args = vi.mocked(teamDb.listPMPProjects).mock.calls[0][0];
-    expect(args.status).toBe("active");
-    expect(args.limit).toBe(20);
-    expect(args.offset).toBe(5);
+    const args = vi.mocked(teamDb.listPMPProjects).mock.calls[0]?.[0];
+    expect(args?.status).toBe("active");
+    expect(args?.limit).toBe(20);
+    expect(args?.offset).toBe(5);
   });
 
   test("500 with deterministic body when listPMPProjects throws", async () => {
@@ -209,9 +209,9 @@ describe("GET /api/pmp/risks — real data path", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(fixture);
-    const args = vi.mocked(teamDb.listProjectRisks).mock.calls[0][0];
-    expect(args.projectId).toBe("p-1");
-    expect(args.limit).toBe(10);
+    const args = vi.mocked(teamDb.listProjectRisks).mock.calls[0]?.[0];
+    expect(args?.projectId).toBe("p-1");
+    expect(args?.limit).toBe(10);
   });
 });
 

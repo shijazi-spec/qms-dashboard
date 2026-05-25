@@ -1998,7 +1998,7 @@ describe('streamingDownload (browser helper)', () => {
         'content-length': '1000',
       });
 
-      const confirmFn = vi.fn(() => true);
+      const confirmFn = vi.fn((_message?: string) => true);
       env.win.confirm = confirmFn;
 
       const button = env.win.document.createElement('button');
@@ -2147,7 +2147,7 @@ describe('streamingDownload (browser helper)', () => {
 
       const windowConfirm = vi.fn(() => true);
       env.win.confirm = windowConfirm;
-      const customConfirm = vi.fn(() => true);
+      const customConfirm = vi.fn((_message?: string) => true);
 
       const button = env.win.document.createElement('button');
       env.win.document.body.appendChild(button);
@@ -3753,7 +3753,7 @@ describe('streamingDownload (browser helper)', () => {
 
     // The fetch's AbortSignal actually fired — the cancel reached the network.
     expect(capturedSignal).not.toBeNull();
-    expect((capturedSignal as AbortSignal).aborted).toBe(true);
+    expect((capturedSignal as unknown as AbortSignal).aborted).toBe(true);
 
     // The progress card now reflects the cancelled state: gray bar, "Cancelled"
     // status, and disabled cancel button.

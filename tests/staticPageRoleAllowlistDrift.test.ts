@@ -53,6 +53,13 @@
  * Run:  npx tsx tests/staticPageRoleAllowlistDrift.test.ts
  */
 
+// Mark this file as a module so the top-level `await import()` calls below
+// don't trigger TS1375 ("'await' expressions are only allowed at the top
+// level of a file when that file is a module"). The runner executes it
+// via `npx tsx` which already treats it as an ES module — this is purely
+// to satisfy the type-checker.
+export {};
+
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
 

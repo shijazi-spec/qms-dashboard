@@ -57,7 +57,7 @@ describe("buildSDREvaluationPrompt — routing", () => {
       id: 1,
       name: "WalaPlus COPC v2",
       version: "2.0.0",
-      team_name: null,
+      team_name: undefined,
       attributes: [copcAttr()],
     };
     const p = buildSDREvaluationPrompt(SAMPLE_TRANSCRIPT, card);
@@ -71,7 +71,7 @@ describe("buildSDREvaluationPrompt — routing", () => {
       id: 1,
       name: "WalaaPlus Sales Quality v1.5",
       version: "1.5",
-      team_name: null,
+      team_name: undefined,
       attributes: [legacyAttr()],
     };
     const p = buildSDREvaluationPrompt(SAMPLE_TRANSCRIPT, card);
@@ -84,7 +84,7 @@ describe("buildSDREvaluationPrompt — routing", () => {
       id: 1,
       name: "Mixed",
       version: "2.0.0",
-      team_name: null,
+      team_name: undefined,
       attributes: [copcAttr(), legacyAttr()],
     };
     const p = buildSDREvaluationPrompt(SAMPLE_TRANSCRIPT, card);
@@ -98,7 +98,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
       id: 1,
       name: "x",
       version: "x",
-      team_name: null,
+      team_name: undefined,
       attributes: [copcAttr()],
     };
     const p = buildCopcSDREvaluationPrompt(SAMPLE_TRANSCRIPT, card);
@@ -110,7 +110,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
       id: 1,
       name: "x",
       version: "x",
-      team_name: null,
+      team_name: undefined,
       attributes: [copcAttr()],
     };
     const p = buildCopcSDREvaluationPrompt(SAMPLE_TRANSCRIPT, card);
@@ -125,7 +125,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
       id: 1,
       name: "x",
       version: "x",
-      team_name: null,
+      team_name: undefined,
       attributes: [
         copcAttr({ id: "a1", section_id: "quality_and_soft_skills" }),
         copcAttr({ id: "a2", section_id: "quality_and_soft_skills" }),
@@ -142,7 +142,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
       id: 1,
       name: "x",
       version: "x",
-      team_name: null,
+      team_name: undefined,
       attributes: [
         copcAttr({
           id: "login_gap",
@@ -160,7 +160,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
       id: 1,
       name: "x",
       version: "x",
-      team_name: null,
+      team_name: undefined,
       attributes: [copcAttr()],
     };
     const p = buildCopcSDREvaluationPrompt(SAMPLE_TRANSCRIPT, card);
@@ -174,7 +174,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
       id: 1,
       name: "x",
       version: "x",
-      team_name: null,
+      team_name: undefined,
       attributes: [copcAttr()],
     };
     const p = buildCopcSDREvaluationPrompt(SAMPLE_TRANSCRIPT, card);
@@ -188,7 +188,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
       id: 1,
       name: "x",
       version: "x",
-      team_name: null,
+      team_name: undefined,
       attributes: [copcAttr()],
     };
     const p = buildCopcSDREvaluationPrompt(SAMPLE_TRANSCRIPT, card);
@@ -203,7 +203,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
       id: 1,
       name: "x",
       version: "x",
-      team_name: null,
+      team_name: undefined,
       attributes: [copcAttr()],
     };
     const p = buildCopcSDREvaluationPrompt(SAMPLE_TRANSCRIPT, card);

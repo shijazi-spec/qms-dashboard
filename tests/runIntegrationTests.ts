@@ -150,11 +150,27 @@ import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import pLimit from "p-limit";
 
-const TESTS_DIR = path.resolve(new URL(".", import.meta.url).pathname);
+// On POSIX, `new URL(".", import.meta.url).pathname` returns `/home/...`
+// which `path.resolve` accepts as-is. On Windows it returns `/D:/...` and
+// `path.resolve` then prepends the current drive, producing `D:\D:\...`
+// (ENOENT). `fileURLToPath` normalises both cases — see Node docs for
+// "URL string to path" conversion — so the runner works identically on
+// Linux/macOS CI and a Windows contributor's local checkout.
+const TESTS_DIR = path.resolve(fileURLToPath(new URL(".", import.meta.url)));
 const ROOT_DIR = path.resolve(TESTS_DIR, "..");
+
+// On Windows, npm-shipped binaries (npx, npm, vitest) are .cmd shims that
+// `child_process.spawn` cannot exec directly — it needs the actual file
+// extension. Without this, every subprocess we launch fails with
+// "spawn npx ENOENT" and the whole suite reports red on a Windows
+// contributor's machine even though Linux CI is fine. Resolve once at
+// module init so callers can use a single name across platforms.
+const IS_WINDOWS = process.platform === "win32";
+const NPX_CMD = IS_WINDOWS ? "npx.cmd" : "npx";
 
 interface RunResult {
   file: string;
@@ -210,7 +226,7 @@ function runOne(file: string): Promise<RunResult> {
   return new Promise((resolve) => {
     const started = Date.now();
     const rel = path.relative(process.cwd(), file);
-    const child = spawn("npx", ["tsx", file], {
+    const child = spawn(NPX_CMD, ["tsx", file], {
       stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
     });
@@ -251,7 +267,7 @@ function runVitest(): Promise<RunResult> {
   return new Promise((resolve) => {
     const started = Date.now();
     const label = "tests/vitest/** (vitest)";
-    const child = spawn("npx", ["vitest", "run", "--reporter=default"], {
+    const child = spawn(NPX_CMD, ["vitest", "run", "--reporter=default"], {
       stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
     });

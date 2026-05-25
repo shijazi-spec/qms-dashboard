@@ -1103,7 +1103,15 @@ describe("GET /api/admin/rate-limit-stats — real data path", () => {
       failOpenCount: 0,
       recent429Count: 3,
       dbReachable: true,
-      spike24h: { total429: 7, totalSuppressed: 2, topIps: [] },
+      spike24h: {
+        total429: 7,
+        totalSuppressed: 2,
+        topIps: [],
+        topPaths: [],
+        hourlyBuckets: [],
+        alertThreshold: 500,
+        alertActive: false,
+      },
     };
     vi.mocked(rateLimiter.getRateLimitStats).mockResolvedValueOnce(stats);
 

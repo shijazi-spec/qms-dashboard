@@ -89,8 +89,11 @@ await suite.test("slack block payload renders 4 digest sections", async () => {
       thumbs_down: 0,
       thumbs_up_pct: 0,
       trend: {
-        first_half_total: 0,
-        second_half_total: 0,
+        direction: "insufficient_data",
+        peak_negative_day: null,
+        peak_negative_count: 0,
+        total_thumbs_up: 0,
+        total_thumbs_down: 0,
         first_half_down_rate: 0,
         second_half_down_rate: 0,
         days_observed: 0,

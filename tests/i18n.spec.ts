@@ -274,7 +274,12 @@ test.describe('Language preference — offline retry & reconciliation', () => {
             }));
           }
         }
-        return realFetch.call(this, input as any, init);
+        // `realFetch` is the original `window.fetch`; modern `fetch` does
+        // not need a `this` binding to work, and calling `.call(this, ...)`
+        // inside an `addInitScript` callback also produces TS2683 because
+        // the outer `this` resolves to the playwright runner. Just invoke
+        // it directly.
+        return realFetch(input as any, init);
       } as typeof window.fetch;
     });
 
@@ -325,7 +330,12 @@ test.describe('Language preference — offline retry & reconciliation', () => {
           // marker so a later retry can try again.
           return Promise.resolve(new Response('boom', { status: 500 }));
         }
-        return realFetch.call(this, input as any, init);
+        // `realFetch` is the original `window.fetch`; modern `fetch` does
+        // not need a `this` binding to work, and calling `.call(this, ...)`
+        // inside an `addInitScript` callback also produces TS2683 because
+        // the outer `this` resolves to the playwright runner. Just invoke
+        // it directly.
+        return realFetch(input as any, init);
       } as typeof window.fetch;
     });
 

@@ -168,12 +168,15 @@ async function run(): Promise<void> {
     model: 'tool',
     latency_ms: 42,
     success: true,
+    // The metadata type only declares known scalar fields; we intentionally
+    // smuggle extra unknown keys here to verify the persistence layer scrubs
+    // them. Cast through `unknown` to allow the broader shape.
     metadata: {
       prompt_version: 'v1.2.3',
       note: `caller leaked credential ${SK_KEY} into metadata`,
       diag: { bearer: `Bearer ${GH_PAT}` },
       samples: [`jwt=${JWT}`, 'safe'],
-    },
+    } as unknown as Parameters<typeof insertAiCallMetric>[0]['metadata'],
   });
 
   const insertCall = findLast(c =>
