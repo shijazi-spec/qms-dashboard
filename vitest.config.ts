@@ -15,5 +15,10 @@ export default defineConfig({
     pool: "forks",
     isolate: true,
     reporters: ["default"],
+    // Auth shim for `X-Admin-Key` route tests — see file header for
+    // the security-hardening regression it patches around. Per-file
+    // `vi.mock("../../src/utils/rbacMiddleware", ...)` calls win over
+    // the shim, so suites with their own bespoke rbac mock are unaffected.
+    setupFiles: ["./tests/vitest/_setup/rbacAuthShim.ts"],
   },
 });
