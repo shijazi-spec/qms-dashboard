@@ -1896,8 +1896,11 @@ Respond with JSON only:
             return c.html(readFileSync(p, "utf-8"));
           }
         }
+        // 404 fallback page. Plain text-only — no inline style so the
+        // CSP guardrail stays clean. Operators rarely see this; if they
+        // do, readability matters less than not violating policy.
         return c.html(
-          `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:2rem">` +
+          `<!DOCTYPE html><html><body>` +
             `<h1>Page not found on disk</h1>` +
             `<p>${slug}.html exists in the repo but couldn't be found at any of:</p>` +
             `<ul>${candidatePaths.map((p) => `<li><code>${p}</code></li>`).join("")}</ul>` +
