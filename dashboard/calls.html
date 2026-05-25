@@ -212,29 +212,49 @@
             </div>
 
             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
                     <h3 class="text-lg font-semibold" data-i18n="calls.sec_crm_compliance">CRM Compliance Breakdown</h3>
+                    <!-- DMAIC Improve: bulk backfill action. Walks every
+                         analysed call missing a compliance row, runs
+                         auto-link (if needed) then the Zoho-backed
+                         compliance check. Serial with 200ms gap so Zoho
+                         rate limits hold. Streams progress into the
+                         banner below. -->
+                    <button id="btn-backfill-compliance" data-on-click="backfillCompliance" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span id="backfillBtnLabel">Backfill CRM Compliance</span>
+                    </button>
                 </div>
+                <!-- Diagnostic banner: explains the gap between "analyzed"
+                     count and "actually compliance-checked" count, so a
+                     manager looking at "0 Notes Updated" knows whether
+                     that's a coverage problem or a real KPI failure. -->
+                <div id="complianceCoverageBanner" class="hidden mb-4 px-4 py-3 rounded-lg border text-sm"></div>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-4" id="complianceBreakdown">
                     <div class="bg-gray-50 rounded-lg p-4 text-center">
                         <div class="text-2xl font-bold text-gray-900" id="comp-notes">--</div>
                         <div class="text-sm text-gray-500" data-i18n="calls.col_notes_updated">Notes Updated</div>
+                        <div class="text-[10px] text-gray-400 mt-1" id="comp-notes-of">of --</div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4 text-center">
                         <div class="text-2xl font-bold text-gray-900" id="comp-logged">--</div>
                         <div class="text-sm text-gray-500" data-i18n="calls.col_call_logged">Call Logged</div>
+                        <div class="text-[10px] text-gray-400 mt-1" id="comp-logged-of">of --</div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4 text-center">
                         <div class="text-2xl font-bold text-gray-900" id="comp-task">--</div>
                         <div class="text-sm text-gray-500" data-i18n="calls.col_task_created">Task Created</div>
+                        <div class="text-[10px] text-gray-400 mt-1" id="comp-task-of">of --</div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4 text-center">
                         <div class="text-2xl font-bold text-gray-900" id="comp-stage">--</div>
                         <div class="text-sm text-gray-500" data-i18n="calls.col_stage_updated">Stage Updated</div>
+                        <div class="text-[10px] text-gray-400 mt-1" id="comp-stage-of">of --</div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4 text-center">
                         <div class="text-2xl font-bold text-green-600" id="comp-full">--</div>
                         <div class="text-sm text-gray-500" data-i18n="calls.col_fully_compliant">Fully Compliant</div>
+                        <div class="text-[10px] text-gray-400 mt-1" id="comp-full-of">of --</div>
                     </div>
                 </div>
             </div>
@@ -1509,13 +1529,194 @@
             document.getElementById('complianceRate').textContent = analytics.avgComplianceScore ? `${_fn(analytics.avgComplianceScore.toFixed(0))}%` : '--';
 
             const cb = analytics.complianceBreakdown || {};
+            const cov = analytics.complianceCoverage || {};
             document.getElementById('comp-notes').textContent = _fn(cb.notes_updated || 0);
             document.getElementById('comp-logged').textContent = _fn(cb.call_logged || 0);
             document.getElementById('comp-task').textContent = _fn(cb.task_created || 0);
             document.getElementById('comp-stage').textContent = _fn(cb.stage_updated || 0);
             document.getElementById('comp-full').textContent = _fn(cb.fully_compliant || 0);
+            // DMAIC Improve: denominator under every breakdown number so
+            // managers can tell a 0/0 ("nothing checked yet") apart from
+            // a 0/199 ("checks ran but nobody updated Notes"). Denominator
+            // is the count of calls whose check actually ran — sentinel
+            // "not_checked" rows are excluded.
+            const realCheck = cov.total_with_real_check || 0;
+            ['notes', 'logged', 'task', 'stage', 'full'].forEach(k => {
+                const el = document.getElementById(`comp-${k}-of`);
+                if (el) el.textContent = `of ${_fn(realCheck)}`;
+            });
+            renderComplianceCoverageBanner(cov);
 
             renderCharts();
+        }
+
+        // Diagnostic banner that explains the gap between "analyzed" and
+        // "actually compliance-checked" so an all-zeros breakdown is
+        // never silently misleading. Colour-graded:
+        //   green  - 90%+ coverage (healthy)
+        //   amber  - 1-89% coverage (backfill in progress)
+        //   red    - 0 calls checked (no link or no compliance run yet)
+        //   hidden - no analyzed calls at all
+        function renderComplianceCoverageBanner(cov) {
+            const banner = document.getElementById('complianceCoverageBanner');
+            if (!banner) return;
+            const total = cov.total_analyzed || 0;
+            if (total === 0) {
+                banner.classList.add('hidden');
+                return;
+            }
+            const real = cov.total_with_real_check || 0;
+            const unlinked = cov.total_unlinked || 0;
+            const linkedNoCheck = (cov.total_linked_to_crm || 0) - real;
+            const sentinel = cov.total_not_checked_sentinel || 0;
+            const pct = Math.round((real / total) * 100);
+            let tone, label;
+            if (real === 0) {
+                tone = 'bg-red-50 border-red-200 text-red-900';
+                label = 'No compliance data yet';
+            } else if (pct >= 90) {
+                tone = 'bg-green-50 border-green-200 text-green-900';
+                label = 'Coverage healthy';
+            } else {
+                tone = 'bg-amber-50 border-amber-200 text-amber-900';
+                label = 'Partial coverage';
+            }
+            banner.className = `mb-4 px-4 py-3 rounded-lg border text-sm ${tone}`;
+            const parts = [
+                `<strong>${_fn(real)} of ${_fn(total)}</strong> analyzed calls have a CRM compliance check (${pct}%).`,
+            ];
+            if (unlinked > 0) {
+                parts.push(`<strong>${_fn(unlinked)}</strong> not linked to any Zoho Lead/Deal — these cannot be checked until linked.`);
+            }
+            if (linkedNoCheck > 0) {
+                parts.push(`<strong>${_fn(linkedNoCheck)}</strong> linked but compliance never ran.`);
+            }
+            if (sentinel > 0) {
+                parts.push(`<strong>${_fn(sentinel)}</strong> previously failed (Zoho unreachable, etc.) — retry with backfill.`);
+            }
+            if (real < total) {
+                parts.push('Press <strong>Backfill CRM Compliance</strong> above to attempt auto-link + check on every uncovered call.');
+            }
+            banner.innerHTML = parts.join(' ');
+            banner.classList.remove('hidden');
+        }
+
+        // Per-call compliance run. Used by the "Run compliance now" /
+        // "Re-run" button inside the Call Details modal. When the call
+        // has no Zoho link yet we attempt the auto-link first (phone
+        // match + activity fallback); on success the link-side handler
+        // already triggers the compliance check. When the call IS
+        // linked we hit POST /api/calls/:id/compliance directly. Either
+        // way we re-open the modal at the end so the freshly-written
+        // compliance grid replaces the amber "not yet checked" banner.
+        async function runComplianceForCall(callId) {
+            const section = document.getElementById(`callComplianceSection-${callId}`);
+            if (section) {
+                section.innerHTML = '<div class="p-4 text-center text-gray-500 text-sm">Running compliance check… contacting Zoho.</div>';
+            }
+            try {
+                // Pull the freshest record so we know whether to auto-link
+                // first or jump straight to the compliance endpoint.
+                const detail = await fetch(`/api/calls/${callId}`).then(r => r.json());
+                const rec = detail?.record || {};
+                let linkedNow = !!(rec.lead_id || rec.deal_id);
+                if (!linkedNow) {
+                    const linkRes = await fetch(`/api/calls/${callId}/auto-link`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                    const linkData = await linkRes.json().catch(() => ({}));
+                    linkedNow = !!linkData.linked;
+                    if (!linkedNow) {
+                        alert(`Auto-link could not match this call to any Zoho Lead/Deal (${linkData.reason || 'no match'}). Compliance cannot be checked without a CRM link.`);
+                        await viewCall(callId);
+                        return;
+                    }
+                }
+                // We may or may not have just linked, but either way the
+                // compliance endpoint is the same. Re-fire it so a Zoho
+                // hiccup during the auto-link path doesn't leave us in
+                // a "linked but unchecked" half-state.
+                const compRes = await fetch(`/api/calls/${callId}/compliance`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const compData = await compRes.json().catch(() => ({}));
+                if (!compData.success) {
+                    alert(`Compliance check did not produce a result: ${compData.message || compData.reason || 'unknown'}`);
+                }
+                // Re-render the modal to surface the new compliance
+                // grid (or the diagnostic message when sentinel was
+                // written).
+                await viewCall(callId);
+            } catch (e) {
+                alert('Run compliance failed: ' + (e.message || e));
+                await viewCall(callId);
+            }
+        }
+
+        // Bulk backfill driver. Loops POST /api/calls/backfill-compliance
+        // in chunks of 50 until the server reports no more rows. UI
+        // streams the running totals into the button label so the user
+        // sees forward progress on a Zoho-bottlenecked operation that
+        // can take 5+ minutes for a 200-call backlog.
+        let _backfillInFlight = false;
+        async function backfillCompliance() {
+            if (_backfillInFlight) return;
+            const btn = document.getElementById('btn-backfill-compliance');
+            const lbl = document.getElementById('backfillBtnLabel');
+            if (!btn) return;
+            _backfillInFlight = true;
+            btn.disabled = true;
+            btn.classList.add('opacity-60', 'cursor-not-allowed');
+            const totals = { scanned: 0, linked: 0, checked: 0, skipped: 0, failures: 0 };
+            try {
+                let hasMore = true;
+                let pass = 0;
+                while (hasMore && pass < 20) {  // cap at 20 chunks = 1000 calls
+                    pass++;
+                    if (lbl) lbl.textContent = `Backfilling… ${totals.checked} checked, ${totals.linked} newly linked`;
+                    const res = await fetch('/api/calls/backfill-compliance', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ limit: 50 }),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        alert(`Backfill failed: ${err.error || res.statusText}`);
+                        break;
+                    }
+                    const data = await res.json();
+                    totals.scanned += data.scanned || 0;
+                    totals.linked += data.linked || 0;
+                    totals.checked += data.checked || 0;
+                    totals.skipped += (data.skipped || []).length;
+                    totals.failures += (data.failures || []).length;
+                    hasMore = !!data.has_more;
+                    if (data.scanned === 0) break;
+                }
+                if (lbl) lbl.textContent = 'Backfill CRM Compliance';
+                alert(
+                    `Backfill complete:\n` +
+                    `• ${totals.scanned} calls scanned\n` +
+                    `• ${totals.linked} newly linked to Zoho\n` +
+                    `• ${totals.checked} compliance checks ran\n` +
+                    `• ${totals.skipped} skipped (unlinkable)\n` +
+                    `• ${totals.failures} errors\n\n` +
+                    `Refreshing dashboard…`
+                );
+                // Reload the analytics + records so the breakdown card
+                // reflects the new compliance rows immediately.
+                await refreshData();
+            } catch (e) {
+                alert('Backfill threw: ' + (e.message || e));
+            } finally {
+                _backfillInFlight = false;
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-not-allowed');
+                if (lbl) lbl.textContent = 'Backfill CRM Compliance';
+            }
         }
 
         function renderCharts() {
@@ -2580,9 +2781,15 @@
                                 </div>
                             </div>
 
-                            ${data.compliance ? `
-                                <div class="pt-6 border-t">
-                                    <h4 class="font-semibold text-gray-900 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.crm_compliance'))}</h4>
+                            <div class="pt-6 border-t" id="callComplianceSection-${callId}">
+                                <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                                    <h4 class="font-semibold text-gray-900">${escapeHtml(WalaPlusI18n.t('dyn.calls.crm_compliance'))}</h4>
+                                    <button type="button" data-on-click="runComplianceForCall" data-args="[${callId}]" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded transition flex items-center gap-1" title="Re-run the Zoho-backed compliance check for this call.">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                        ${data.compliance ? 'Re-run' : 'Run compliance now'}
+                                    </button>
+                                </div>
+                                ${data.compliance ? `
                                     <div class="grid grid-cols-5 gap-4">
                                         <div class="text-center p-3 bg-gray-50 rounded-lg">
                                             ${renderCheckmark(data.compliance.notes_updated)}
@@ -2605,8 +2812,15 @@
                                             <div class="text-xs text-gray-500 mt-1">${escapeHtml(WalaPlusI18n.t('dyn.calls.score'))}</div>
                                         </div>
                                     </div>
-                                </div>
-                            ` : ''}
+                                ` : `
+                                    <div class="p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+                                        Compliance has not been checked for this call yet.
+                                        ${(data.record?.lead_id || data.record?.deal_id)
+                                            ? 'A Zoho Lead/Deal is linked — press <strong>Run compliance now</strong> to fetch the Notes / Calls / Tasks / Events evidence.'
+                                            : 'No Zoho Lead/Deal is linked. <strong>Run compliance now</strong> will first attempt to auto-link by phone, then run the check.'}
+                                    </div>
+                                `}
+                            </div>
 
                             <!-- Activity Timeline — inlined (was a separate modal).
                                  Loads async into #inlineActivityBody after the

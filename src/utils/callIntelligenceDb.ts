@@ -1015,6 +1015,14 @@ export async function getCallAnalyticsSummary(
   callsBySource: any[];
   callsByAgent: any[];
   complianceBreakdown: any;
+  complianceCoverage: {
+    total_analyzed: number;
+    total_linked_to_crm: number;
+    total_with_compliance_row: number;
+    total_with_real_check: number;
+    total_not_checked_sentinel: number;
+    total_unlinked: number;
+  };
   sentimentDistribution: Array<{ label: string; count: number }>;
   qaScoreTrend: Array<{ week_start: string; avg_score: number; sample_size: number }>;
 }> {
@@ -1215,6 +1223,68 @@ export async function getCallAnalyticsSummary(
     params,
   );
 
+  // DMAIC Improve: compliance coverage diagnostics. The breakdown SUMs
+  // above are meaningless without a denominator — a manager looking at
+  // "0 Notes Updated" can't tell whether that's because 0 of 199 calls
+  // had a Note logged, or because 0 of 0 checked calls had a Note
+  // logged. We compute three explicit denominators:
+  //   - total_analyzed: every call with status='analyzed'
+  //   - total_with_compliance_row: any row in call_compliance (incl.
+  //     the "not_checked" sentinel rows written when Zoho was
+  //     unreachable / call had no linked Lead/Deal)
+  //   - total_with_real_check: rows where the check actually ran (excludes
+  //     the sentinels). This is the true denominator for "Notes Updated"
+  //     etc., and the difference exposes the backfill backlog so the
+  //     user knows how many calls still need the backfill button pressed.
+  //   - total_linked_to_crm: analyzed calls with a lead_id or deal_id
+  //     set. Calls without a CRM link cannot be compliance-checked at
+  //     all, so this exposes the upstream auto-link gap separately.
+  let complianceCoverage = {
+    total_analyzed: 0,
+    total_with_compliance_row: 0,
+    total_with_real_check: 0,
+    total_not_checked_sentinel: 0,
+    total_linked_to_crm: 0,
+    total_unlinked: 0,
+  };
+  try {
+    const cov = await pool.query(
+      `
+      SELECT
+        SUM(CASE WHEN cr.status = 'analyzed' THEN 1 ELSE 0 END)::int AS total_analyzed,
+        SUM(CASE
+              WHEN cr.status = 'analyzed'
+               AND (NULLIF(cr.lead_id, '') IS NOT NULL OR NULLIF(cr.deal_id, '') IS NOT NULL)
+              THEN 1 ELSE 0 END)::int AS total_linked_to_crm,
+        SUM(CASE WHEN cc.id IS NOT NULL THEN 1 ELSE 0 END)::int AS total_with_compliance_row,
+        SUM(CASE
+              WHEN cc.id IS NOT NULL
+               AND (cc.compliance_details->>'mode' IS DISTINCT FROM 'not_checked')
+              THEN 1 ELSE 0 END)::int AS total_with_real_check,
+        SUM(CASE
+              WHEN cc.id IS NOT NULL
+               AND (cc.compliance_details->>'mode' = 'not_checked')
+              THEN 1 ELSE 0 END)::int AS total_not_checked_sentinel
+      FROM call_records cr
+      LEFT JOIN call_compliance cc ON cc.call_record_id = cr.id
+      ${whereClause}
+      `,
+      params,
+    );
+    const r = cov.rows[0] || {};
+    complianceCoverage = {
+      total_analyzed: r.total_analyzed || 0,
+      total_linked_to_crm: r.total_linked_to_crm || 0,
+      total_with_compliance_row: r.total_with_compliance_row || 0,
+      total_with_real_check: r.total_with_real_check || 0,
+      total_not_checked_sentinel: r.total_not_checked_sentinel || 0,
+      total_unlinked:
+        (r.total_analyzed || 0) - (r.total_linked_to_crm || 0),
+    };
+  } catch (e) {
+    logger.warn("Compliance coverage query failed:", e);
+  }
+
   const summary = summaryResult.rows[0];
 
   return {
@@ -1226,6 +1296,7 @@ export async function getCallAnalyticsSummary(
     callsBySource: bySourceResult.rows,
     callsByAgent: byAgentResult.rows,
     complianceBreakdown: complianceResult.rows[0] || {},
+    complianceCoverage,
     sentimentDistribution,
     qaScoreTrend,
   };

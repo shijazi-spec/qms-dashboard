@@ -619,6 +619,170 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // DMAIC Improve: bulk CRM-compliance backfill. The breakdown card in
+    // the Overview tab was stuck at all-zeros because the 199 historical
+    // calls were never auto-linked to a Zoho Lead/Deal (either Zoho was
+    // unreachable at upload time, the phone wasn't in CRM yet, or the
+    // activity fallback didn't match). No link → no compliance check →
+    // no call_compliance row → SUM() returns 0.
+    //
+    // This endpoint walks every analyzed call missing a real compliance
+    // row, attempts the auto-link (phone match + activity fallback), and
+    // — for newly-linked OR already-linked rows — fires the Zoho-backed
+    // compliance check via runComplianceAfterLink. Serial with a 200ms
+    // gap so Zoho's 10 RPS quota holds even when each call costs 4-5
+    // Zoho API hits.
+    //
+    // Returns a summary the UI uses to render a progress bar:
+    //   { scanned, linked, checked, skipped: [{id, reason}], failures, duration_ms }
+    //
+    // Body (all optional):
+    //   { limit?: number, dry_run?: boolean }
+    // Default limit is 50 per call so a single request fits in a 60s
+    // serverless budget; the UI loops until {scanned < limit} comes
+    // back, surfacing progress to the user as it goes.
+    path: "/api/calls/backfill-compliance",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        const startedAt = Date.now();
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+
+          let body: any = {};
+          try {
+            const txt = await c.req.text();
+            if (txt && txt.trim()) body = JSON.parse(txt);
+          } catch {
+            body = {};
+          }
+          const limit = Math.min(Math.max(parseInt(body.limit) || 50, 1), 200);
+          const dryRun = body.dry_run === true;
+
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          // Candidates: analyzed calls with no real compliance row
+          // (either no call_compliance row at all OR a "not_checked"
+          // sentinel from a previous failed check). LEFT JOIN + IS NULL
+          // catches both.
+          const candidatesRes = await callIntelligencePool.query(
+            `
+            SELECT cr.id, cr.call_id, cr.lead_id, cr.deal_id, cr.call_date,
+                   cr.agent_email, cr.agent_name, cr.contact_phone,
+                   cr.metadata
+            FROM call_records cr
+            LEFT JOIN call_compliance cc
+              ON cc.call_record_id = cr.id
+             AND (cc.compliance_details->>'mode' IS DISTINCT FROM 'not_checked')
+            WHERE cr.status = 'analyzed'
+              AND cc.id IS NULL
+            ORDER BY cr.call_date DESC NULLS LAST
+            LIMIT $1
+            `,
+            [limit],
+          );
+          const candidates = candidatesRes.rows;
+
+          if (dryRun) {
+            return c.json({
+              success: true,
+              dry_run: true,
+              would_scan: candidates.length,
+              sample: candidates.slice(0, 5).map((r: any) => ({
+                id: r.id,
+                call_id: r.call_id,
+                has_lead: !!r.lead_id,
+                has_deal: !!r.deal_id,
+              })),
+              duration_ms: Date.now() - startedAt,
+            });
+          }
+
+          const { autoLinkCallAndCompliance, runComplianceAfterLink } =
+            await import("../../utils/callPostIngestPipeline");
+
+          const skipped: Array<{ id: number; reason: string }> = [];
+          const failures: Array<{ id: number; error: string }> = [];
+          let linked = 0;
+          let checked = 0;
+
+          for (const rec of candidates) {
+            try {
+              const hasLink = !!(rec.lead_id || rec.deal_id);
+              if (!hasLink) {
+                // Try auto-link first (phone match + activity fallback).
+                // autoLinkCallAndCompliance also fires the compliance
+                // check on success, so we can short-circuit when linked.
+                const out = await autoLinkCallAndCompliance(rec, {
+                  logger,
+                  logTag: "backfill",
+                });
+                if (out.linked) {
+                  linked++;
+                  checked++; // compliance check already ran inside
+                } else {
+                  skipped.push({
+                    id: rec.id,
+                    reason: out.reason || "unlinkable",
+                  });
+                }
+              } else {
+                // Already linked from a previous run but never had its
+                // compliance check fire (or it failed before). Run just
+                // the compliance step.
+                await runComplianceAfterLink(
+                  rec.id,
+                  rec.lead_id ?? null,
+                  rec.deal_id ?? null,
+                  rec.call_date,
+                  logger,
+                );
+                checked++;
+              }
+            } catch (err: any) {
+              failures.push({
+                id: rec.id,
+                error: err?.message || String(err),
+              });
+            }
+            // Throttle: ~200ms between calls. Each call costs 4-5 Zoho
+            // hits when fully run; 5 RPS budget holds at this pace.
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+
+          const result = {
+            success: true,
+            scanned: candidates.length,
+            linked,
+            checked,
+            skipped,
+            failures,
+            duration_ms: Date.now() - startedAt,
+            has_more: candidates.length === limit,
+          };
+          logger?.info("📝 [API] backfill-compliance run complete", result);
+          return c.json(result);
+        } catch (error: any) {
+          safeLogger.error("[API] backfill-compliance failed", {
+            error: error?.message,
+          });
+          return c.json(
+            {
+              success: false,
+              error: error?.message || "Backfill failed",
+              duration_ms: Date.now() - startedAt,
+            },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/calls/compliance",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
