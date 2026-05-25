@@ -413,9 +413,20 @@ interface RoutePermissionRule {
 }
 
 const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
-  // Event logs — admin-only read (cross-module audit trail with PII and sensitive diffs)
-  { pattern: /^\/api\/logs/, methods: ["GET"], roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"] },
-  { pattern: /^\/api\/event-logs/, methods: ["GET"], roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"] },
+  // Event logs — admin-only read (cross-module audit trail with PII and
+  // sensitive diffs). Until this change the rule body was the same wide
+  // 13-role allowlist used for ordinary read endpoints, contradicting both
+  // the comment above and the `/logs` dashboard page's ADMIN_ONLY shell.
+  // The handler at src/mastra/routes/eventLogsRoutes.ts only checks
+  // `getSessionUser` (authentication) and has no inner role check, so any
+  // authenticated user with one of those 13 roles could fetch the full
+  // event-log table containing change diffs, AI tool payloads, and PDPL
+  // PII. The dashboard's admin-only gate didn't block direct API access.
+  // Restored to the documented `["admin"]` set so the API matches the
+  // page-shell. /api/event-logs (partitioned-table read) gets the same
+  // treatment for the same reason.
+  { pattern: /^\/api\/logs/, methods: ["GET"], roles: ["admin"] },
+  { pattern: /^\/api\/event-logs/, methods: ["GET"], roles: ["admin"] },
 
   // Executive digest — XLSX export of issues (analytics read-side; mirrors other analytics reads)
   {

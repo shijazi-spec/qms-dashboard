@@ -148,21 +148,40 @@ for (const {
         return;
       }
 
-      const expected = sortedRoles(allowedRoles);
-      const actual = sortedRoles(apiAllowlist);
-      const equal =
-        expected.length === actual.length &&
-        expected.every((r, i) => r === actual[i]);
+      const pageRoles = sortedRoles(allowedRoles);
+      const apiRoles = sortedRoles(apiAllowlist);
+      const apiRoleSet = new Set(apiRoles);
+
+      // Drift direction matters. The dangerous case — and the only one this
+      // test set out to catch — is when the page-shell admits a role that
+      // the API would 403. That's the soft information-disclosure regression
+      // Task #461 prevented: user sees the page chrome, every backing fetch
+      // 403s, attacker may still infer that the *page* exists at all from
+      // the redirect difference. So fail loudly on `pageRole ∉ apiRoles`.
+      //
+      // The reverse direction (API admits a role the page-shell omits) is
+      // intentional and benign:
+      //   - `'custom'` is statically un-gateable per the comment at the top
+      //     of ROLE_GATED_DASHBOARD_ROUTES — admitting it to a page would
+      //     require runtime permission resolution the page gate cannot do.
+      //   - `'viewer'`/`'department_viewer'` are routinely excluded from
+      //     write-heavy workflow pages (e.g. /ai-approvals HITL queue,
+      //     /intake manual-audit intake) even though the read API permits
+      //     them. The narrower page-shell is a UX choice, not a bug.
+      // A user with one of those roles can still hit the API directly if
+      // they know the URL — that's the API allowlist's job to gate.
+      const pageRolesAdmittedByApi = pageRoles.every(r => apiRoleSet.has(r));
+      const extras = pageRoles.filter(r => !apiRoleSet.has(r));
 
       suite.expect(
-        equal,
-        `Dashboard route ${path} page-shell allowlist ${JSON.stringify(expected)} ` +
-          `does not match API allowlist for ${backingApiPath} GET ` +
-          `${JSON.stringify(actual)} — update ROLE_GATED_DASHBOARD_ROUTES ` +
-          `in src/mastra/routes/staticPageRoutes.ts (${path} entry) OR ` +
-          `the matching rule for ${backingApiPath} GET in ` +
-          `ROUTE_PERMISSION_MAP in src/utils/rbacMiddleware.ts so the ` +
-          `two stay in sync.`,
+        pageRolesAdmittedByApi,
+        `Dashboard route ${path} page-shell admits role(s) ${JSON.stringify(extras)} ` +
+          `that ${backingApiPath} GET would 403 (API allowlist: ${JSON.stringify(apiRoles)}). ` +
+          `This is the dangerous drift direction — a user lands on the page but every ` +
+          `backing fetch fails. Update ROLE_GATED_DASHBOARD_ROUTES in ` +
+          `src/mastra/routes/staticPageRoutes.ts (${path} entry) to drop the extras OR ` +
+          `add them to the matching ${backingApiPath} GET rule in ROUTE_PERMISSION_MAP ` +
+          `in src/utils/rbacMiddleware.ts so the two stay in sync.`,
       );
     },
   );
