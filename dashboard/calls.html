@@ -281,6 +281,16 @@
                             Analyze All Pending
                         </button>
                         <button data-on-click="exportCalls" data-args="[&quot;csv&quot;]" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export CSV</button>
+                        <!-- DMAIC Improve: view-mode toggle. "Records" is the
+                             flat row-per-call table; "By Phone" consolidates
+                             every record onto a single expandable card per
+                             unique 9-digit phone suffix so managers see the
+                             whole conversation history with one contact at a
+                             glance. -->
+                        <div class="inline-flex rounded-lg border border-gray-200 overflow-hidden text-sm" role="group" aria-label="View mode">
+                            <button id="viewMode-list" data-on-click="setCallsViewMode" data-args="[&quot;list&quot;]" class="px-3 py-1.5 bg-indigo-600 text-white">Records</button>
+                            <button id="viewMode-grouped" data-on-click="setCallsViewMode" data-args="[&quot;grouped&quot;]" class="px-3 py-1.5 bg-white text-gray-700 hover:bg-gray-100">By Phone</button>
+                        </div>
                     </div>
                 </div>
                 <!-- Medium #8 — Bulk Actions toolbar. Hidden until at least
@@ -307,7 +317,9 @@
                         </button>
                     </div>
                 </div>
-                <div class="overflow-x-auto">
+                <!-- Flat records table (default view). Toggle "By Phone" to
+                     swap with #callsGroupedContainer below. -->
+                <div id="callsListContainer" class="overflow-x-auto">
                     <table class="min-w-full">
                         <thead class="bg-gray-50">
                             <tr>
@@ -329,7 +341,10 @@
                         <tbody id="callsTable" class="divide-y divide-gray-100"></tbody>
                     </table>
                 </div>
-                <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+                <!-- Grouped-by-phone view. One expandable card per unique
+                     last-9-digit phone suffix. Hidden by default. -->
+                <div id="callsGroupedContainer" class="hidden p-4 space-y-3"></div>
+                <div id="callsPaginationFooter" class="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
                     <div class="text-sm text-gray-500">
                         Showing <span id="showingFrom">0</span>-<span id="showingTo">0</span> of <span id="totalRecords">0</span> records
                     </div>
@@ -1630,7 +1645,7 @@
                             ${escapeHtml(call.direction || '--')}
                         </span>
                     </td>
-                    <td class="px-4 py-3 text-sm text-center text-gray-600">${formatDuration(call.duration_seconds)}</td>
+                    <td class="px-4 py-3 text-sm text-center text-gray-600" id="row-dur-${call.id}">${formatDuration(call.duration_seconds)}</td>
                     <td class="px-4 py-3 text-sm text-center text-gray-600">${escapeHtml(_fd(call.call_date))}</td>
                     <td class="px-4 py-3 text-center">${renderCrmLinkCell(call)}</td>
                     <td class="px-4 py-3 text-center">
@@ -1653,6 +1668,67 @@
             // visibility, and the master "select all" checkbox state all
             // recompute after every render (filter change, pagination, etc.)
             refreshBulkActionsBar();
+
+            // DMAIC Improve: eagerly backfill duration_seconds for any visible
+            // analysed row that's still missing it. Mounts hidden
+            // <audio preload="metadata"> per row → on loadedmetadata we patch
+            // the cell, the in-memory cache, and POST /api/calls/:id/duration
+            // so the value sticks. Scoped to the current page (max ~20 rows)
+            // so we never fire 199 simultaneous range requests at the backend.
+            eagerBackfillDurations(pageData);
+        }
+
+        // Per-tab dedupe so paging back to a page we've already visited
+        // doesn't re-mount audio tags for rows we've already healed.
+        const _eagerDurationSeen = new Set();
+
+        function eagerBackfillDurations(rows) {
+            const slot = document.getElementById('eagerAudioBucket') || (() => {
+                const d = document.createElement('div');
+                d.id = 'eagerAudioBucket';
+                d.style.display = 'none';
+                document.body.appendChild(d);
+                return d;
+            })();
+            // Clear previous page's audio tags so we never keep more than
+            // pageSize concurrent metadata fetches alive at once.
+            slot.innerHTML = '';
+            for (const call of rows) {
+                if (!call || _eagerDurationSeen.has(call.id)) continue;
+                if (call.status !== 'analyzed') continue;
+                if (call.duration_seconds && call.duration_seconds > 0) continue;
+                _eagerDurationSeen.add(call.id);
+                const a = document.createElement('audio');
+                a.preload = 'metadata';
+                a.src = `/api/calls/${call.id}/audio`;
+                a.addEventListener('loadedmetadata', () => {
+                    const dur = a.duration;
+                    if (!Number.isFinite(dur) || dur <= 0) return;
+                    const durSec = Math.round(dur);
+                    const cell = document.getElementById(`row-dur-${call.id}`);
+                    if (cell && (cell.textContent || '').trim() === '--') {
+                        cell.textContent = formatDuration(durSec);
+                    }
+                    // Patch the in-memory cache so re-renders show the
+                    // healed value without waiting for the audio again.
+                    const cached = callRecords.find(r => r.id === call.id);
+                    if (cached) cached.duration_seconds = durSec;
+                    // Persist to DB. Idempotent endpoint — backend skips
+                    // write when duration_seconds is already set.
+                    fetch(`/api/calls/${call.id}/duration`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ duration_seconds: durSec }),
+                    }).catch(() => {});
+                });
+                a.addEventListener('error', () => {
+                    // Audio blob missing or unreachable — leave "--" alone,
+                    // don't retry on next render to avoid hammering the
+                    // server. The Recording panel in Call Details already
+                    // explains the "missing recording" case to managers.
+                });
+                slot.appendChild(a);
+            }
         }
 
         // Render the CRM Link cell for a call row. The link always points to
@@ -2046,9 +2122,59 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
+        // DMAIC Improve: 'list' (the flat row-per-call table — historical
+        // behaviour) vs. 'grouped' (one card per unique 9-digit phone
+        // suffix). Toggled by the "Records / By Phone" buttons next to
+        // the filters.
+        let callsViewMode = 'list';
+
         function loadCalls() {
             currentPage = 0;
-            renderCallsTable();
+            if (callsViewMode === 'grouped') {
+                renderGroupedView();
+            } else {
+                renderCallsTable();
+            }
+        }
+
+        function setCallsViewMode(mode) {
+            if (mode !== 'list' && mode !== 'grouped') return;
+            callsViewMode = mode;
+            // Visual state on the segmented toggle buttons.
+            const listBtn = document.getElementById('viewMode-list');
+            const groupBtn = document.getElementById('viewMode-grouped');
+            if (listBtn && groupBtn) {
+                if (mode === 'list') {
+                    listBtn.classList.remove('bg-white', 'text-gray-700', 'hover:bg-gray-100');
+                    listBtn.classList.add('bg-indigo-600', 'text-white');
+                    groupBtn.classList.remove('bg-indigo-600', 'text-white');
+                    groupBtn.classList.add('bg-white', 'text-gray-700', 'hover:bg-gray-100');
+                } else {
+                    groupBtn.classList.remove('bg-white', 'text-gray-700', 'hover:bg-gray-100');
+                    groupBtn.classList.add('bg-indigo-600', 'text-white');
+                    listBtn.classList.remove('bg-indigo-600', 'text-white');
+                    listBtn.classList.add('bg-white', 'text-gray-700', 'hover:bg-gray-100');
+                }
+            }
+            // Swap container visibility — the pagination footer stays on
+            // for list mode and is hidden by renderGroupedView for groups.
+            const listC = document.getElementById('callsListContainer');
+            const groupC = document.getElementById('callsGroupedContainer');
+            const pageFooter = document.getElementById('callsPaginationFooter');
+            if (listC && groupC) {
+                if (mode === 'list') {
+                    listC.classList.remove('hidden');
+                    groupC.classList.add('hidden');
+                    if (pageFooter) pageFooter.classList.remove('hidden');
+                } else {
+                    listC.classList.add('hidden');
+                    groupC.classList.remove('hidden');
+                    // Pagination is meaningless in group mode — every group
+                    // is already shown and expanded on demand.
+                    if (pageFooter) pageFooter.classList.add('hidden');
+                }
+            }
+            loadCalls();
         }
 
         function prevPage() {
@@ -2061,6 +2187,161 @@
         function nextPage() {
             currentPage++;
             renderCallsTable();
+        }
+
+        // Aggregate every loaded call by the last 9 digits of its phone
+        // number, then render one expandable card per group with totals
+        // (call count, total duration, latest call date, distinct agents,
+        // sources) plus a CRM jump link and a collapsed list of every
+        // individual call. Filters (source/status/phone) apply BEFORE the
+        // grouping so a filtered set produces filtered groups.
+        function renderGroupedView() {
+            const container = document.getElementById('callsGroupedContainer');
+            if (!container) return;
+            const source = document.getElementById('sourceFilter').value;
+            const status = document.getElementById('statusFilter').value;
+            const phoneSearchRaw = (document.getElementById('phoneSearch')?.value || '').trim();
+            const phoneSearch = normalizePhoneSuffix(phoneSearchRaw);
+
+            let filtered = callRecords || [];
+            if (source) filtered = filtered.filter(c => c.source === source);
+            if (status) filtered = filtered.filter(c => c.status === status);
+            if (phoneSearch) {
+                filtered = filtered.filter(c => {
+                    for (const suf of collectCallPhoneSuffixes(c)) {
+                        if (suf.includes(phoneSearch)) return true;
+                    }
+                    return false;
+                });
+            }
+
+            // Bucket by the first phone suffix we find. Calls without any
+            // phone-shaped field fall into a single "__no_phone__" group
+            // so they stay visible instead of silently disappearing.
+            const groups = new Map();
+            for (const call of filtered) {
+                const suffixes = collectCallPhoneSuffixes(call);
+                const key = suffixes.size > 0 ? Array.from(suffixes)[0] : '__no_phone__';
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        key,
+                        phone_suffix: key === '__no_phone__' ? '' : key,
+                        sample_raw_phone: '',
+                        calls: [],
+                    });
+                }
+                const g = groups.get(key);
+                g.calls.push(call);
+                if (!g.sample_raw_phone) {
+                    g.sample_raw_phone = call.contact_phone || call.phone || call.contact_number
+                        || (call.metadata && (call.metadata.contact_phone || call.metadata.phone))
+                        || (call.lead_id && /\d/.test(String(call.lead_id)) ? call.lead_id : '')
+                        || '';
+                }
+            }
+
+            // Sort groups by most-recent call date, descending. Within
+            // each group, sort calls newest-first so the timeline reads
+            // top-down like a normal conversation history.
+            const sorted = Array.from(groups.values()).map(g => {
+                g.calls.sort((a, b) => new Date(b.call_date || 0) - new Date(a.call_date || 0));
+                g.latest = g.calls[0]?.call_date || null;
+                g.total_duration = g.calls.reduce((s, c) => s + (Number(c.duration_seconds) || 0), 0);
+                g.agents = Array.from(new Set(g.calls.map(c => c.agent_email).filter(Boolean)));
+                g.sources = Array.from(new Set(g.calls.map(c => c.source).filter(Boolean)));
+                g.has_lead = g.calls.some(c => c.lead_id && !/^\+?\d[\d\s\-()]{4,}$/.test(String(c.lead_id)));
+                g.has_deal = g.calls.some(c => c.deal_id);
+                g.analyzed_count = g.calls.filter(c => c.status === 'analyzed').length;
+                return g;
+            }).sort((a, b) => new Date(b.latest || 0) - new Date(a.latest || 0));
+
+            // Stats header — total contacts, total calls, total minutes.
+            const totalCalls = filtered.length;
+            const totalGroups = sorted.length;
+            const totalSec = sorted.reduce((s, g) => s + g.total_duration, 0);
+
+            if (sorted.length === 0) {
+                container.innerHTML = `<div class="p-12 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_calls'))}</div>`;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="mb-3 px-1 text-sm text-gray-600 flex flex-wrap items-center gap-4">
+                    <span><strong>${_fn(totalGroups)}</strong> contacts</span>
+                    <span class="text-gray-300">·</span>
+                    <span><strong>${_fn(totalCalls)}</strong> calls</span>
+                    <span class="text-gray-300">·</span>
+                    <span><strong>${formatDuration(totalSec)}</strong> total talk time</span>
+                </div>
+                ${sorted.map(g => renderPhoneGroupCard(g)).join('')}
+            `;
+        }
+
+        function renderPhoneGroupCard(g) {
+            const displayPhone = g.sample_raw_phone || (g.phone_suffix ? `…${g.phone_suffix}` : '(no phone)');
+            const zohoSearchUrl = g.phone_suffix
+                ? `https://crm.zoho.com/crm/org766568398/search?searchword=${encodeURIComponent(g.phone_suffix)}`
+                : null;
+            const linkBadge = g.has_lead
+                ? '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">Lead linked</span>'
+                : (g.has_deal
+                    ? '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800">Deal linked</span>'
+                    : '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">Not linked</span>');
+            const id = `group-${g.key}`;
+            return `
+                <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                    <button type="button" data-on-click="togglePhoneGroup" data-args="[&quot;${escapeHtml(g.key)}&quot;]" class="w-full px-4 py-3 flex items-center justify-between gap-4 hover:bg-gray-50 text-start">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-mono text-sm font-semibold text-gray-900">${escapeHtml(displayPhone)}</span>
+                                ${linkBadge}
+                                <span class="text-[10px] text-gray-500">${escapeHtml(g.agents.join(', ') || '--')}</span>
+                            </div>
+                            <div class="mt-1 text-xs text-gray-500 flex items-center gap-3 flex-wrap">
+                                <span><strong class="text-gray-800">${_fn(g.calls.length)}</strong> calls</span>
+                                <span><strong class="text-gray-800">${g.analyzed_count}</strong> analyzed</span>
+                                <span>total <strong class="text-gray-800">${formatDuration(g.total_duration)}</strong></span>
+                                <span>latest <strong class="text-gray-800">${escapeHtml(_fd(g.latest))}</strong></span>
+                                <span>via ${escapeHtml(g.sources.join(', ') || '--')}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${zohoSearchUrl ? `<a href="${zohoSearchUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="text-xs text-indigo-600 hover:text-indigo-800 underline">Open in CRM ↗</a>` : ''}
+                            <svg id="${id}-chev" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                        </div>
+                    </button>
+                    <div id="${id}-body" class="hidden border-t border-gray-100 divide-y divide-gray-100">
+                        ${g.calls.map(c => `
+                            <button type="button" data-on-click="viewCall" data-args="[${c.id}]" class="w-full px-4 py-2 text-start text-xs flex items-center justify-between gap-3 hover:bg-indigo-50">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <span class="font-mono text-indigo-700 truncate">${escapeHtml(c.call_id)}</span>
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${c.direction === 'inbound' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">${escapeHtml(c.direction || '--')}</span>
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-medium status-${escapeHtml(c.status)}">${escapeHtml(c.status)}</span>
+                                </div>
+                                <div class="flex items-center gap-3 text-gray-500 whitespace-nowrap">
+                                    <span>${escapeHtml(c.agent_email || '')}</span>
+                                    <span>${formatDuration(c.duration_seconds)}</span>
+                                    <span>${escapeHtml(_fd(c.call_date))}</span>
+                                </div>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function togglePhoneGroup(key) {
+            const body = document.getElementById(`group-${key}-body`);
+            const chev = document.getElementById(`group-${key}-chev`);
+            if (!body) return;
+            const open = !body.classList.contains('hidden');
+            if (open) {
+                body.classList.add('hidden');
+                if (chev) chev.style.transform = '';
+            } else {
+                body.classList.remove('hidden');
+                if (chev) chev.style.transform = 'rotate(180deg)';
+            }
         }
 
         function mcpSeverityBadgeClass(sev) {
@@ -2515,18 +2796,102 @@
         // same payload, rendered into the Call Details right column so
         // managers don't need to close + reopen modals to see what the
         // SDR did after the call.
+        //
+        // DMAIC Improve: aggregates across every call on the same phone.
+        // Many records to the same contact (5+ calls is common in our
+        // dataset) often span multiple Zoho Leads/Deals due to historical
+        // duplicates in CRM, so the activity for a single call_id misses
+        // half the picture. We collect every distinct (lead_id|deal_id)
+        // across calls sharing the last-9-digit phone, fetch one
+        // /api/calls/:id/activity-timeline per distinct pair, then merge
+        // items deduped by their Zoho record id.
         async function loadInlineActivityTimeline(callId) {
             const body = document.getElementById('inlineActivityBody');
             if (!body) return;
+
+            // Resolve the current call's phone suffix from the in-memory
+            // cache so we don't need another /api/calls/:id round-trip.
+            const self = (callRecords || []).find(r => r.id === callId);
+            const selfSuffixes = self ? collectCallPhoneSuffixes(self) : new Set();
+            const targetSuffix = selfSuffixes.size > 0 ? Array.from(selfSuffixes)[0] : null;
+
+            // Every related call (same phone) plus the current call,
+            // de-duplicated by lead_id|deal_id so we don't pay twice
+            // for two calls already pointing at the same Zoho record.
+            const peers = (callRecords || []).filter(r => {
+                if (r.id === callId) return true;
+                if (!targetSuffix) return false;
+                for (const s of collectCallPhoneSuffixes(r)) {
+                    if (s === targetSuffix) return true;
+                }
+                return false;
+            });
+            const seenLink = new Set();
+            const fetchTargets = [];
+            for (const p of peers) {
+                const link = `${p.lead_id || ''}|${p.deal_id || ''}`;
+                if (seenLink.has(link)) continue;
+                seenLink.add(link);
+                fetchTargets.push(p);
+            }
+
             try {
-                const res = await fetch(`/api/calls/${callId}/activity-timeline`);
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const data = await res.json();
-                if (!data.success) {
-                    body.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">${escapeHtml(data.message || data.reason || 'No activity data')}</div>`;
+                const results = await Promise.all(fetchTargets.map(async (p) => {
+                    try {
+                        const res = await fetch(`/api/calls/${p.id}/activity-timeline`);
+                        if (!res.ok) return null;
+                        const data = await res.json();
+                        if (!data || !data.success) return null;
+                        return data;
+                    } catch { return null; }
+                }));
+
+                const successful = results.filter(Boolean);
+                if (successful.length === 0) {
+                    body.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">No activity data on linked CRM records.</div>`;
                     return;
                 }
-                renderInlineActivityTimeline(body, data);
+
+                // Merge counts + items across every fetched timeline. De-
+                // dupe items by Zoho id (or fallback to module+timestamp+
+                // title fingerprint) so the SAME note doesn't render twice
+                // when two calls both point at the same Lead.
+                const mergedCounts = { notes: 0, calls: 0, tasks: 0, events: 0 };
+                const seenItemKey = new Set();
+                const mergedItems = [];
+                const moduleLabels = new Set();
+                let earliestSince = null;
+                for (const r of successful) {
+                    if (r.counts) {
+                        mergedCounts.notes += r.counts.notes || 0;
+                        mergedCounts.calls += r.counts.calls || 0;
+                        mergedCounts.tasks += r.counts.tasks || 0;
+                        mergedCounts.events += r.counts.events || 0;
+                    }
+                    if (r.module) moduleLabels.add(r.module);
+                    if (r.since && (!earliestSince || new Date(r.since) < new Date(earliestSince))) {
+                        earliestSince = r.since;
+                    }
+                    for (const it of (r.items || [])) {
+                        const key = it.id
+                            ? `${it.module}|${it.id}`
+                            : `${it.module}|${it.timestamp}|${(it.title || '').slice(0, 40)}`;
+                        if (seenItemKey.has(key)) continue;
+                        seenItemKey.add(key);
+                        mergedItems.push(it);
+                    }
+                }
+                mergedItems.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+                renderInlineActivityTimeline(body, {
+                    success: true,
+                    aggregated: fetchTargets.length > 1,
+                    sources: fetchTargets.length,
+                    module: moduleLabels.size === 1 ? Array.from(moduleLabels)[0] : 'Mixed',
+                    since: earliestSince,
+                    counts: mergedCounts,
+                    items: mergedItems,
+                });
             } catch (e) {
                 body.innerHTML = `<div class="p-4 text-center text-red-600 text-sm">Failed to load activity: ${escapeHtml(String(e.message || e))}</div>`;
             }
@@ -2564,8 +2929,11 @@
                             </div>
                         </div>`;
                 }).join('');
+            const aggBadge = data.aggregated
+                ? `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="Combined timeline across ${data.sources} CRM record(s) linked to this phone number">aggregated × ${data.sources}</span>`
+                : '';
             body.innerHTML = `
-                <div class="mb-2 text-xs text-gray-600">Activity on ${moduleBadge} since the call (${escapeHtml(_fd(data.since))}).</div>
+                <div class="mb-2 text-xs text-gray-600">Activity on ${moduleBadge}${aggBadge} since the call (${escapeHtml(_fd(data.since))}).</div>
                 ${countsHtml}
                 <div>${itemsHtml}</div>`;
         }
