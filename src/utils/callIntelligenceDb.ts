@@ -321,6 +321,54 @@ export async function initCallIntelligenceTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_eval ON sdr_evaluation_reviews(evaluation_id);
     CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_call ON sdr_evaluation_reviews(call_record_id);
     CREATE INDEX IF NOT EXISTS idx_sdr_eval_reviews_reviewer ON sdr_evaluation_reviews(reviewer_email);
+
+    -- DMAIC Improve (P1, 2026-05-25): per-agent + per-attribute coaching
+    -- plan rows. Auto-generated when an SDR fails the same scorecard
+    -- attribute on 3+ calls within a rolling 14-day window. Managers
+    -- "deliver" the plan (capture SDR commitment + follow-up due date)
+    -- and the next-call evaluation auto-verifies whether the attribute
+    -- now passes. Granularity is per-attribute (not per-agent) so
+    -- coaching is measurable: "did Objection Handling pass on the next
+    -- call?" — confirmed with product 2026-05-25.
+    CREATE TABLE IF NOT EXISTS coaching_plans (
+      id SERIAL PRIMARY KEY,
+      agent_email VARCHAR(255) NOT NULL,
+      attribute_id VARCHAR(255) NOT NULL,
+      attribute_name VARCHAR(255),
+      dimension VARCHAR(50),
+      fail_count INTEGER NOT NULL DEFAULT 0,
+      failed_call_ids INTEGER[] NOT NULL DEFAULT '{}',
+      trigger_window_start TIMESTAMPTZ NOT NULL,
+      trigger_window_end TIMESTAMPTZ NOT NULL,
+      -- Lifecycle: pending_delivery → awaiting_verification →
+      --             (verified_passing | verified_failing_again | dismissed)
+      status VARCHAR(50) NOT NULL DEFAULT 'pending_delivery',
+      -- Manager delivery
+      delivered_at TIMESTAMPTZ,
+      delivered_by VARCHAR(255),
+      sdr_commitment TEXT,
+      follow_up_due_date DATE,
+      coaching_notes TEXT,
+      -- Verification (auto-set when a later eval passes/fails the attribute)
+      verification_call_id INTEGER REFERENCES call_records(id) ON DELETE SET NULL,
+      verified_at TIMESTAMPTZ,
+      verification_outcome VARCHAR(50), -- 'passing' | 'failing_again'
+      -- Dismissal
+      dismissed_at TIMESTAMPTZ,
+      dismissed_by VARCHAR(255),
+      dismissed_reason TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    -- Only ONE open plan per agent + attribute. Resolved plans don't
+    -- block a new plan from opening if the agent regresses. Achieved
+    -- via a partial unique index on the "open" lifecycle states.
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_coaching_plans_open
+      ON coaching_plans (agent_email, attribute_id)
+      WHERE status IN ('pending_delivery', 'awaiting_verification');
+    CREATE INDEX IF NOT EXISTS idx_coaching_plans_agent ON coaching_plans(agent_email);
+    CREATE INDEX IF NOT EXISTS idx_coaching_plans_status ON coaching_plans(status);
+    CREATE INDEX IF NOT EXISTS idx_coaching_plans_window ON coaching_plans(trigger_window_end DESC);
   `);
 
   // One-shot backfill: earlier versions of the bulk-audio upload

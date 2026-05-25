@@ -5226,6 +5226,227 @@ ${transcriptText}
       };
     },
   },
+  // ===================================================================
+  //  Coaching Plans (DMAIC Improve P1, 2026-05-25)
+  //  Auto-generated when an SDR fails the same attribute on 3+ calls
+  //  in 14 days. Manager workflow: list → deliver / dismiss. Verification
+  //  is automatic on the next evaluation. Detection / verification logic
+  //  lives in src/utils/coachingPlans.ts.
+  // ===================================================================
+  {
+    path: "/api/coaching-plans",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const { listCoachingPlans } = await import(
+            "../../utils/coachingPlans"
+          );
+          const result = await listCoachingPlans({
+            agent_email: c.req.query("agent_email"),
+            status: c.req.query("status"),
+            limit: parseInt(c.req.query("limit") || "100"),
+            offset: parseInt(c.req.query("offset") || "0"),
+          });
+          return c.json(result);
+        } catch (error: any) {
+          safeLogger.error("[API] list coaching plans failed", {
+            error: error?.message,
+          });
+          return c.json({ error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/coaching-plans/:id",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (!Number.isFinite(id) || id <= 0) {
+            return c.json({ error: "Invalid id" }, 400);
+          }
+          const { getCoachingPlanById } = await import(
+            "../../utils/coachingPlans"
+          );
+          const plan = await getCoachingPlanById(id);
+          if (!plan) return c.json({ error: "Not found" }, 404);
+          // Hydrate failed calls with their scorecard summary so the
+          // delivery modal can show the evidence inline.
+          const callIds = plan.failed_call_ids || [];
+          let evidence: any[] = [];
+          if (callIds.length) {
+            const { callIntelligencePool } = await import(
+              "../../utils/callIntelligenceDb"
+            );
+            const r = await callIntelligencePool.query(
+              `
+              SELECT cr.id, cr.call_id, cr.call_date, cr.agent_email,
+                     se.overall_score, se.attribute_evaluations
+                FROM call_records cr
+                LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+               WHERE cr.id = ANY($1::int[])
+               ORDER BY cr.call_date DESC
+              `,
+              [callIds],
+            );
+            evidence = r.rows.map((row: any) => ({
+              id: row.id,
+              call_id: row.call_id,
+              call_date: row.call_date,
+              overall_score: row.overall_score,
+              // Pick out only the attribute we coached on, with its
+              // evidence quotes, so the modal renders compact cards
+              // instead of dumping the full scorecard for each call.
+              attribute_evidence: Array.isArray(row.attribute_evaluations)
+                ? row.attribute_evaluations.find(
+                    (a: any) => a?.attribute_id === plan.attribute_id,
+                  )
+                : null,
+            }));
+          }
+          return c.json({ plan, evidence });
+        } catch (error: any) {
+          safeLogger.error("[API] get coaching plan failed", {
+            error: error?.message,
+          });
+          return c.json({ error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/coaching-plans/:id/deliver",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (!Number.isFinite(id) || id <= 0) {
+            return c.json({ error: "Invalid id" }, 400);
+          }
+          let body: any = {};
+          try {
+            const txt = await c.req.text();
+            if (txt && txt.trim()) body = JSON.parse(txt);
+          } catch {
+            body = {};
+          }
+          const delivered_by =
+            (admin as any).email || (admin as any).username || "unknown";
+          const { deliverCoachingPlan } = await import(
+            "../../utils/coachingPlans"
+          );
+          const updated = await deliverCoachingPlan(id, {
+            delivered_by,
+            sdr_commitment: body.sdr_commitment,
+            follow_up_due_date: body.follow_up_due_date,
+            coaching_notes: body.coaching_notes,
+          });
+          if (!updated) {
+            return c.json(
+              {
+                success: false,
+                error:
+                  "Plan not found or not in pending_delivery state. Refresh and try again.",
+              },
+              409,
+            );
+          }
+          return c.json({ success: true, plan: updated });
+        } catch (error: any) {
+          safeLogger.error("[API] deliver coaching plan failed", {
+            error: error?.message,
+          });
+          return c.json({ error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/coaching-plans/:id/dismiss",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (!Number.isFinite(id) || id <= 0) {
+            return c.json({ error: "Invalid id" }, 400);
+          }
+          let body: any = {};
+          try {
+            const txt = await c.req.text();
+            if (txt && txt.trim()) body = JSON.parse(txt);
+          } catch {
+            body = {};
+          }
+          if (!body.dismissed_reason || typeof body.dismissed_reason !== "string") {
+            return c.json(
+              {
+                error:
+                  "dismissed_reason is required so the audit trail records why this plan was closed without coaching.",
+              },
+              400,
+            );
+          }
+          const dismissed_by =
+            (admin as any).email || (admin as any).username || "unknown";
+          const { dismissCoachingPlan } = await import(
+            "../../utils/coachingPlans"
+          );
+          const updated = await dismissCoachingPlan(id, {
+            dismissed_by,
+            dismissed_reason: body.dismissed_reason,
+          });
+          if (!updated) {
+            return c.json(
+              { success: false, error: "Plan not found or already resolved." },
+              409,
+            );
+          }
+          return c.json({ success: true, plan: updated });
+        } catch (error: any) {
+          safeLogger.error("[API] dismiss coaching plan failed", {
+            error: error?.message,
+          });
+          return c.json({ error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/coaching-plans/scan",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+          const { scanAllCoachingTriggers } = await import(
+            "../../utils/coachingPlans"
+          );
+          const result = await scanAllCoachingTriggers({ logger });
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          safeLogger.error("[API] coaching scan failed", {
+            error: error?.message,
+          });
+          return c.json({ error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
 ];
 
 function formatEvaluationForZoho(evaluation: any, callRecord: any): string {

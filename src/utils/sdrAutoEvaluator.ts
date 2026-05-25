@@ -254,6 +254,30 @@ export async function triggerSDREvaluationForCall(
       );
     }
 
+    // Coaching loop hook (P1, 2026-05-25). Two responsibilities:
+    //   - Detection: re-scan the agent's last-14d evals for attribute
+    //     failures crossing the 3-call threshold → open / refresh
+    //     a coaching plan.
+    //   - Verification: close any awaiting-verification plans where
+    //     the just-saved eval now PASSes (or marks regression).
+    // Best-effort — never blocks the evaluation response on a coaching
+    // plan failure. Lives in its own module so the eval path doesn't
+    // import the coaching API surface.
+    try {
+      const { onSdrEvaluationSaved } = await import("./coachingPlans");
+      const callRow = await (await import("./callIntelligenceDb")).getCallRecordById(callId);
+      await onSdrEvaluationSaved(
+        callId,
+        callRow?.agent_email,
+        evaluation.attribute_evaluations as any,
+        { logger },
+      );
+    } catch (coachErr: any) {
+      logger.warn(
+        `[SDRAutoEval] coaching plan hook threw for call ${callId}: ${coachErr?.message || coachErr}`,
+      );
+    }
+
     return {
       ran: true,
       evaluationId,
