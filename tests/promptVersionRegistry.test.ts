@@ -24,14 +24,14 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { TestSuite } from "./_helpers/runner";
 import { ACTIVE_AGENT_PROMPT_VERSIONS } from "../src/mastra/agents/promptVersionRegistry";
 
 const suite = new TestSuite("promptVersionRegistry");
 const AGENTS_DIR = path.resolve(
-  new URL(".", import.meta.url).pathname,
+  fileURLToPath(new URL(".", import.meta.url)),
   "..",
   "src",
   "mastra",

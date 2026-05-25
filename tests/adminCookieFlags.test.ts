@@ -27,9 +27,10 @@
 
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const SCRIPT = path.resolve(
-  new URL(".", import.meta.url).pathname,
+  fileURLToPath(new URL(".", import.meta.url)),
   "..",
   "scripts",
   "check-admin-cookie-flags.sh",

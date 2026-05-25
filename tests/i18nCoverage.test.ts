@@ -49,9 +49,12 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+// `.pathname` returns `/D:/...` on Windows which `path.resolve` double-drives
+// into `D:\D:\...` (ENOENT). fileURLToPath normalises POSIX + Windows.
 const REPO_ROOT = path.resolve(
-  new URL(".", import.meta.url).pathname,
+  fileURLToPath(new URL(".", import.meta.url)),
   "..",
 );
 const SCRIPT = path.resolve(REPO_ROOT, "scripts", "check-i18n.cjs");
