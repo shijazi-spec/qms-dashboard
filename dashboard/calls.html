@@ -220,10 +220,16 @@
                          compliance check. Serial with 200ms gap so Zoho
                          rate limits hold. Streams progress into the
                          banner below. -->
-                    <button id="btn-backfill-compliance" data-on-click="backfillCompliance" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                        <span id="backfillBtnLabel">Backfill CRM Compliance</span>
-                    </button>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button id="btn-backfill-dates" data-on-click="backfillCallDates" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="One-off: re-parse every record's original filename and write the real call date/time. Fixes the 199 rows stamped with the bulk-upload date.">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            <span id="backfillDatesBtnLabel">Backfill Dates</span>
+                        </button>
+                        <button id="btn-backfill-compliance" data-on-click="backfillCompliance" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span id="backfillBtnLabel">Backfill CRM Compliance</span>
+                        </button>
+                    </div>
                 </div>
                 <!-- Diagnostic banner: explains the gap between "analyzed"
                      count and "actually compliance-checked" count, so a
@@ -1657,6 +1663,57 @@
             }
         }
 
+        // One-shot call_date backfill. Re-parses every record's
+        // metadata.original_filename and writes the real call_date so
+        // the 199 historical rows stop showing "Sep 1-2, 2025" (the
+        // bulk-upload day) and start showing the actual call times.
+        // Idempotent server-side; safe to re-run.
+        let _backfillDatesInFlight = false;
+        async function backfillCallDates() {
+            if (_backfillDatesInFlight) return;
+            const btn = document.getElementById('btn-backfill-dates');
+            const lbl = document.getElementById('backfillDatesBtnLabel');
+            if (!btn) return;
+            // Two-step UX: first run dry-run, show the user what WOULD
+            // change, then ask for confirmation before writing.
+            if (!confirm('Re-parse every call record\'s original filename and update call_date to the real call time?\n\nThis is idempotent — rows already correct are skipped.')) return;
+            _backfillDatesInFlight = true;
+            btn.disabled = true;
+            btn.classList.add('opacity-60', 'cursor-not-allowed');
+            if (lbl) lbl.textContent = 'Backfilling…';
+            try {
+                const res = await fetch('/api/calls/backfill-call-dates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ limit: 1000 }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    alert(`Backfill failed: ${data.error || 'unknown'}`);
+                    return;
+                }
+                const sampleLines = (data.samples || []).map(s =>
+                    `• ${s.filename}\n   old: ${s.old_call_date || '(null)'}\n   new: ${s.new_call_date}`
+                ).join('\n\n');
+                alert(
+                    `Call-date backfill complete:\n\n` +
+                    `• ${data.scanned} records scanned\n` +
+                    `• ${data.updated} updated\n` +
+                    `• ${data.skipped_already_correct} already correct\n` +
+                    `• ${data.skipped_no_match} couldn't parse (no filename match)\n\n` +
+                    (sampleLines ? `Sample updates:\n\n${sampleLines}` : '')
+                );
+                await refreshData();
+            } catch (e) {
+                alert('Backfill threw: ' + (e.message || e));
+            } finally {
+                _backfillDatesInFlight = false;
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-not-allowed');
+                if (lbl) lbl.textContent = 'Backfill Dates';
+            }
+        }
+
         // Bulk backfill driver. Loops POST /api/calls/backfill-compliance
         // in chunks of 50 until the server reports no more rows. UI
         // streams the running totals into the button label so the user
@@ -1963,6 +2020,11 @@
             // Tag with the most-specific match type we already know about, so
             // the operator sees at a glance whether this phone is already in
             // CRM as a Lead, Deal, or neither.
+            //
+            // Priority: Deal wins over Lead when both are present. A Deal
+            // means the prospect has already qualified out of SDR into the
+            // sales pipeline — that's the actionable record for coaching
+            // and compliance scope. (Confirmed with product 2026-05-25.)
             let tagLabel = 'CRM';
             let tagClasses = 'bg-gray-100 text-gray-700 hover:bg-gray-200';
             let tagTitle = `Search CRM for ${rawPhone}`;
@@ -1971,26 +2033,26 @@
             // managers can spot the lower-confidence match at a glance.
             const viaActivity = call.linked_via === 'activity';
             const viaSuffix = viaActivity ? ' (via activity)' : '';
-            if (call.lead_id) {
-                tagLabel = viaActivity ? 'Lead ★' : 'Lead';
-                tagClasses = viaActivity
-                    ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                    : 'bg-green-100 text-green-800 hover:bg-green-200';
-                tagTitle = `Lead match for ${rawPhone}${viaSuffix} — open in Zoho`;
-            } else if (call.deal_id) {
+            if (call.deal_id) {
                 tagLabel = viaActivity ? 'Deal ★' : 'Deal';
                 tagClasses = viaActivity
                     ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
                     : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200';
                 tagTitle = `Deal match for ${rawPhone}${viaSuffix} — open in Zoho`;
+            } else if (call.lead_id) {
+                tagLabel = viaActivity ? 'Lead ★' : 'Lead';
+                tagClasses = viaActivity
+                    ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                    : 'bg-green-100 text-green-800 hover:bg-green-200';
+                tagTitle = `Lead match for ${rawPhone}${viaSuffix} — open in Zoho`;
             }
-            // Direct-link to the Lead/Deal record itself when we have an id
-            // (skips the search step); otherwise fall back to phone search.
+            // Direct-link to the Deal record when known (Deal-first per
+            // product decision); else Lead; else fall back to phone search.
             let directUrl = zohoSearchUrl;
-            if (call.lead_id) {
-                directUrl = `https://crm.zoho.com/crm/org766568398/tab/Leads/${encodeURIComponent(call.lead_id)}`;
-            } else if (call.deal_id) {
+            if (call.deal_id) {
                 directUrl = `https://crm.zoho.com/crm/org766568398/tab/Potentials/${encodeURIComponent(call.deal_id)}`;
+            } else if (call.lead_id) {
+                directUrl = `https://crm.zoho.com/crm/org766568398/tab/Leads/${encodeURIComponent(call.lead_id)}`;
             }
             // When nothing is linked, still expose the manual re-link
             // button — managers can rerun the matcher once the lead/deal
@@ -2484,10 +2546,12 @@
             const zohoSearchUrl = g.phone_suffix
                 ? `https://crm.zoho.com/crm/org766568398/search?searchword=${encodeURIComponent(g.phone_suffix)}`
                 : null;
-            const linkBadge = g.has_lead
-                ? '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">Lead linked</span>'
-                : (g.has_deal
-                    ? '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800">Deal linked</span>'
+            // Deal-first ordering: when both exist for any call in this
+            // group, surface the Deal badge (mature pipeline scope).
+            const linkBadge = g.has_deal
+                ? '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800">Deal linked</span>'
+                : (g.has_lead
+                    ? '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">Lead linked</span>'
                     : '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">Not linked</span>');
             const id = `group-${g.key}`;
             return `
@@ -2878,8 +2942,13 @@
                             <div class="bg-white rounded-lg border border-gray-200 p-3">
                                 <h5 class="text-xs font-semibold text-gray-600 uppercase mb-2 tracking-wide">${escapeHtml(WalaPlusI18n.t('calls.details_crm'))}</h5>
                                 <div class="flex flex-col gap-1.5">
-                                    ${leadDirectUrl ? `<a href="${leadDirectUrl}" target="_blank" rel="noopener" class="inline-flex items-center justify-between gap-2 px-3 py-2 bg-green-50 text-green-800 rounded hover:bg-green-100 text-sm"><span>${escapeHtml(WalaPlusI18n.t('calls.details_crm_open_lead'))}</span><span class="text-xs">↗</span></a>` : ''}
+                                    <!-- Deal-first ordering (product decision 2026-05-25):
+                                         a Deal is the actionable record for coaching
+                                         + compliance scope; Lead is the upstream
+                                         SDR-stage record. When both exist for the
+                                         same phone, the Deal button surfaces first. -->
                                     ${dealDirectUrl ? `<a href="${dealDirectUrl}" target="_blank" rel="noopener" class="inline-flex items-center justify-between gap-2 px-3 py-2 bg-indigo-50 text-indigo-800 rounded hover:bg-indigo-100 text-sm"><span>${escapeHtml(WalaPlusI18n.t('calls.details_crm_open_deal'))}</span><span class="text-xs">↗</span></a>` : ''}
+                                    ${leadDirectUrl ? `<a href="${leadDirectUrl}" target="_blank" rel="noopener" class="inline-flex items-center justify-between gap-2 px-3 py-2 bg-green-50 text-green-800 rounded hover:bg-green-100 text-sm"><span>${escapeHtml(WalaPlusI18n.t('calls.details_crm_open_lead'))}</span><span class="text-xs">↗</span></a>` : ''}
                                     ${zohoSearchUrl ? `<a href="${zohoSearchUrl}" target="_blank" rel="noopener" class="inline-flex items-center justify-between gap-2 px-3 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 text-sm"><span>${escapeHtml(WalaPlusI18n.t('calls.details_crm_search_phone'))}</span><span class="text-xs">↗</span></a>` : `<p class="text-xs text-gray-400">${escapeHtml(WalaPlusI18n.t('calls.details_crm_no_phone'))}</p>`}
                                     ${(!leadDirectUrl && !dealDirectUrl) ? `<button type="button" data-on-click="autoLinkCall" data-args="[${callId}]" class="text-xs text-amber-700 hover:text-amber-900 underline self-start mt-1">${escapeHtml(WalaPlusI18n.t('calls.details_crm_relink'))}</button>` : ''}
                                 </div>

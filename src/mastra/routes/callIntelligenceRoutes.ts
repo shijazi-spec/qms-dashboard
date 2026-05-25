@@ -783,6 +783,160 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // DMAIC Improve: one-off call_date backfill for the 199 historical
+    // records whose call_date was set to file.lastModified (i.e. the
+    // ZIP-unzip moment) instead of the actual call time encoded in the
+    // filename. Walks call_records, parses metadata.original_filename
+    // for "M_D_YYYY @ H_M_S AM/PM", builds an Asia/Riyadh-local
+    // timestamp (UTC+3, no DST), converts to UTC, and writes call_date.
+    //
+    // Idempotent: only updates rows where the parsed date differs from
+    // the current call_date by more than 24h — so a re-run is a no-op
+    // and rows already corrected (e.g. via direct DB edit) stay put.
+    //
+    // Body: { dry_run?: boolean, limit?: number }  (defaults: false, 500)
+    path: "/api/calls/backfill-call-dates",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        const startedAt = Date.now();
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+
+          let body: any = {};
+          try {
+            const txt = await c.req.text();
+            if (txt && txt.trim()) body = JSON.parse(txt);
+          } catch {
+            body = {};
+          }
+          const dryRun = body.dry_run === true;
+          const limit = Math.min(Math.max(parseInt(body.limit) || 500, 1), 1000);
+
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          // Mirror of the frontend parseCallFilename, server-side.
+          // Returns ISO UTC string or null when filename doesn't match.
+          // Date assumed M_D_YYYY (US convention used by the team), time
+          // assumed Asia/Riyadh local (UTC+3, no DST).
+          function parseFilenameToUtc(fname: string): string | null {
+            if (!fname) return null;
+            const stem = String(fname).replace(/\.[^./\\]+$/, "");
+            const dateMatch = stem.match(
+              /\b(0?[1-9]|1[0-2])[_\-.](0?[1-9]|[12]\d|3[01])[_\-.](20\d{2})\b/,
+            );
+            const timeMatch = stem.match(
+              /\b(0?\d|1\d|2[0-3])[_\-.:](0?\d|[1-5]\d)[_\-.:](0?\d|[1-5]\d)\s*(AM|PM|am|pm)?\b/,
+            );
+            if (!dateMatch || !timeMatch) return null;
+            const mm = parseInt(dateMatch[1], 10);
+            const dd = parseInt(dateMatch[2], 10);
+            const yyyy = parseInt(dateMatch[3], 10);
+            let hh = parseInt(timeMatch[1], 10);
+            const mi = parseInt(timeMatch[2], 10);
+            const ss = parseInt(timeMatch[3], 10);
+            const ampm = (timeMatch[4] || "").toUpperCase();
+            if (ampm === "PM" && hh < 12) hh += 12;
+            if (ampm === "AM" && hh === 12) hh = 0;
+            // Local time → UTC: Riyadh is UTC+3, so subtract 3h.
+            const localMs = Date.UTC(yyyy, mm - 1, dd, hh, mi, ss);
+            const utcMs = localMs - 3 * 60 * 60 * 1000;
+            return new Date(utcMs).toISOString();
+          }
+
+          // Candidates: every row with a filename in metadata. We sort
+          // by id ASC so a re-run hits the same order and the limit is
+          // deterministic for paging.
+          const res = await callIntelligencePool.query(
+            `
+            SELECT id, call_id, call_date, metadata
+              FROM call_records
+             WHERE metadata->>'original_filename' IS NOT NULL
+             ORDER BY id ASC
+             LIMIT $1
+            `,
+            [limit],
+          );
+
+          let scanned = 0;
+          let updated = 0;
+          let skipped_no_match = 0;
+          let skipped_already_correct = 0;
+          const samples: any[] = [];
+
+          for (const row of res.rows) {
+            scanned++;
+            const fname = row.metadata?.original_filename || "";
+            const parsedIso = parseFilenameToUtc(fname);
+            if (!parsedIso) {
+              skipped_no_match++;
+              continue;
+            }
+            const oldDate = row.call_date ? new Date(row.call_date) : null;
+            const newDate = new Date(parsedIso);
+            // Idempotency: skip when the existing call_date matches the
+            // parsed value within a 60s tolerance (allows for sub-second
+            // drift between TZ-converted reps).
+            if (
+              oldDate &&
+              Math.abs(oldDate.getTime() - newDate.getTime()) < 60_000
+            ) {
+              skipped_already_correct++;
+              continue;
+            }
+            if (samples.length < 5) {
+              samples.push({
+                id: row.id,
+                call_id: row.call_id,
+                filename: fname,
+                old_call_date: oldDate ? oldDate.toISOString() : null,
+                new_call_date: parsedIso,
+              });
+            }
+            if (!dryRun) {
+              await callIntelligencePool.query(
+                `UPDATE call_records SET call_date = $1, updated_at = NOW() WHERE id = $2`,
+                [parsedIso, row.id],
+              );
+              updated++;
+            } else {
+              updated++; // count what WOULD be updated
+            }
+          }
+
+          const result = {
+            success: true,
+            dry_run: dryRun,
+            scanned,
+            updated,
+            skipped_no_match,
+            skipped_already_correct,
+            samples,
+            duration_ms: Date.now() - startedAt,
+          };
+          logger?.info("📝 [API] backfill-call-dates complete", result);
+          return c.json(result);
+        } catch (error: any) {
+          safeLogger.error("[API] backfill-call-dates failed", {
+            error: error?.message,
+          });
+          return c.json(
+            {
+              success: false,
+              error: error?.message || "Backfill failed",
+              duration_ms: Date.now() - startedAt,
+            },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/calls/compliance",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
