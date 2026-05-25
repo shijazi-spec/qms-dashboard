@@ -296,10 +296,11 @@ export const complianceRoutes = [
             return c.json({ error: "No document uploaded" }, 404);
 
           // Scoped read: refuse to return a blob that isn't under the
-          // compliance namespace. allowLegacy preserves access to rows
-          // written before the namespaced layout existed; once a backfill
-          // moves those files into /data/documents/compliance/, drop the flag.
-          const file = getUploadedFileForModule(reg.document_path, 'compliance', { allowLegacy: true });
+          // compliance namespace. The legacy un-prefixed layout has been
+          // migrated out (any orphan rows whose blobs had already vanished
+          // from disk were deleted as part of the cutover), so allowLegacy
+          // is no longer needed.
+          const file = getUploadedFileForModule(reg.document_path, 'compliance');
           if (!file)
             return c.json(
               { error: "Document file is missing on disk" },

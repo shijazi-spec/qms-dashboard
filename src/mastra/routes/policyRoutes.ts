@@ -1340,9 +1340,9 @@ export const policyRoutes = [
           }
 
           // Scoped read: refuse to return a blob outside /data/documents/policies/.
-          // allowLegacy keeps existing un-namespaced rows readable; once migrated
-          // into the policies subdir, drop the flag to harden cross-module isolation.
-          const file = getUploadedFileForModule(policy.file_path, 'policies', { allowLegacy: true });
+          // The legacy un-prefixed layout has been migrated out, so allowLegacy
+          // is no longer needed.
+          const file = getUploadedFileForModule(policy.file_path, 'policies');
           if (!file) return c.json({ error: "File not found on disk" }, 404);
 
           // Range-aware response so the streaming-download helper can resume

@@ -296,10 +296,9 @@ export const qmsDocsRoutes = [
           if (!doc) return c.json({ error: "Document not found" }, 404);
 
           // Scoped read: refuse to return any blob that isn't stored under
-          // /data/documents/qms-docs/. allowLegacy keeps already-uploaded
-          // rows readable while a backfill migrates them into the qms-docs
-          // subdir; once that's done, remove the flag.
-          const fileBlob = getUploadedFileForModule(doc.file_path, 'qms-docs', { allowLegacy: true });
+          // /data/documents/qms-docs/. Legacy un-prefixed rows have been
+          // migrated/deleted, so allowLegacy is no longer needed.
+          const fileBlob = getUploadedFileForModule(doc.file_path, 'qms-docs');
           if (!fileBlob) return c.json({ error: "File missing on disk" }, 404);
 
           c.header("Content-Type", doc.mime_type || "application/octet-stream");
