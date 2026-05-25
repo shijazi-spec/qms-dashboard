@@ -299,12 +299,17 @@ async function run(): Promise<void> {
         }
 
         processed += 1;
-        const delta =
+        // Keep the numeric delta around for sign formatting — the displayed
+        // value is the rounded string, but `.toFixed()` returns a string so
+        // `delta >= 0` would compare a string to a number (TS2365).
+        const deltaNum =
           c.current_overall_score != null
-            ? (newOverall - Number(c.current_overall_score)).toFixed(1)
-            : "—";
+            ? newOverall - Number(c.current_overall_score)
+            : null;
+        const delta = deltaNum != null ? deltaNum.toFixed(1) : "—";
+        const sign = deltaNum != null && deltaNum >= 0 ? "+" : "";
         console.log(
-          `  ✓ eval #${c.evaluation_id} (call #${c.call_record_id}): ${c.current_overall_score} → ${newOverall.toFixed(1)} (Δ${delta >= 0 ? "+" : ""}${delta}). Sections: ${newSections ? Object.keys(newSections).length : 0}`,
+          `  ✓ eval #${c.evaluation_id} (call #${c.call_record_id}): ${c.current_overall_score} → ${newOverall.toFixed(1)} (Δ${sign}${delta}). Sections: ${newSections ? Object.keys(newSections).length : 0}`,
         );
       } catch (err: any) {
         failed += 1;
