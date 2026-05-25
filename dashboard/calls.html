@@ -107,6 +107,16 @@
                  old #scorecards-list + #ai-training-stats also lived
                  inside the now-deleted content-scorecards div). -->
 
+            <!-- DMAIC Improve P1 (2026-05-25): Coaching tab closes the
+                 SDR evaluation → coaching → verification loop. Plans
+                 are auto-generated when an attribute fails 3+ times in
+                 14 days. Managers deliver or dismiss; the next-call
+                 evaluation auto-verifies. See src/utils/coachingPlans.ts
+                 for the trigger / lifecycle. -->
+            <button data-on-click="showTab" data-args="[&quot;coaching&quot;]" id="tab-coaching" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap">
+                Coaching
+            </button>
+
             <button data-on-click="showTab" data-args="[&quot;compliance&quot;]" id="tab-compliance" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_compliance">
                 CRM Compliance
             </button>
@@ -966,6 +976,122 @@
             </div>
         </div>
 
+        <!-- DMAIC Improve P1 (2026-05-25): Coaching Plans tab. Backend in
+             src/utils/coachingPlans.ts auto-creates plans when an SDR fails
+             the same scorecard attribute on 3+ calls within 14 days. This
+             tab is the manager-facing surface: pending / awaiting / resolved
+             lists, deliver modal, dismiss-with-reason, and an evidence drill-
+             down per plan. Verification is automatic on the next eval. -->
+        <div id="content-coaching" class="tab-content hidden fade-in">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-4">
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Coaching Plans</h3>
+                        <p class="text-xs text-gray-500 mt-1">Auto-generated when an SDR fails the same scorecard attribute on 3+ calls within 14 days. Verification is automatic on the next call's evaluation.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="coachingAgentFilter" data-on-change="reloadCoachingPlans" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                            <option value="">All agents</option>
+                        </select>
+                        <button data-on-click="rescanCoachingPlans" id="btn-rescan-coaching" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="Re-scan the last 14 days of evaluations across every agent and open new coaching plans for any pattern that crossed the threshold. Idempotent.">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span id="rescanBtnLabel">Re-scan</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Three sections, lifecycle-ordered -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-semibold text-amber-900">Pending Delivery</h4>
+                        <span class="text-xs text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full" id="coachingPendingCount">0</span>
+                    </div>
+                    <div id="coachingPendingList" class="space-y-2">
+                        <p class="text-xs text-amber-700">No pending plans.</p>
+                    </div>
+                </div>
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-semibold text-blue-900">Awaiting Verification</h4>
+                        <span class="text-xs text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full" id="coachingAwaitingCount">0</span>
+                    </div>
+                    <div id="coachingAwaitingList" class="space-y-2">
+                        <p class="text-xs text-blue-700">No plans awaiting verification.</p>
+                    </div>
+                </div>
+                <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-semibold text-gray-900">Resolved</h4>
+                        <span class="text-xs text-gray-700 bg-gray-200 px-2 py-0.5 rounded-full" id="coachingResolvedCount">0</span>
+                    </div>
+                    <div id="coachingResolvedList" class="space-y-2">
+                        <p class="text-xs text-gray-600">No resolved plans yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Coaching-plan delivery modal. Scoped to the new
+             /api/coaching-plans/:id/deliver endpoint; intentionally
+             separate from the older #coachingDeliveryModal which is
+             wired to a different (legacy) flow. -->
+        <div id="coachingPlanDeliverModal" class="fixed inset-0 z-50 hidden">
+            <div class="absolute inset-0 bg-black bg-opacity-50" data-on-click="closeCoachingPlanDeliverModal"></div>
+            <div class="absolute inset-4 md:inset-x-auto md:inset-y-12 md:left-1/2 md:-translate-x-1/2 md:w-[640px] md:max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+                <div class="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-bold text-white">Deliver Coaching Plan</h2>
+                        <p class="text-sm text-white/90" id="coachingPlanDeliverSubtitle">Capture the SDR's commitment + follow-up date. The next call's evaluation auto-verifies whether the attribute now passes.</p>
+                    </div>
+                    <button data-on-click="closeCoachingPlanDeliverModal" class="text-white/90 hover:text-white">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-4">
+                    <div class="bg-white border border-gray-200 rounded-lg p-3 grid grid-cols-2 gap-3">
+                        <div>
+                            <div class="text-xs text-gray-500">SDR</div>
+                            <div class="text-sm font-medium" id="coachingPlanDeliverAgent">—</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500">Failing attribute</div>
+                            <div class="text-sm font-medium" id="coachingPlanDeliverAttribute">—</div>
+                        </div>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-lg p-3">
+                        <div class="text-xs text-gray-500 mb-1">Evidence — calls that failed this attribute</div>
+                        <div id="coachingPlanDeliverEvidence" class="text-xs text-gray-700 space-y-1">
+                            <p class="text-gray-400">Loading…</p>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">SDR's commitment <span class="text-red-500">*</span></label>
+                        <textarea id="coachingPlanCommitment" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="What did the SDR commit to do differently? e.g. 'Surface every objection explicitly before quoting a price.'"></textarea>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Follow-up due date</label>
+                            <input type="date" id="coachingPlanFollowup" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"/>
+                            <p class="text-[10px] text-gray-400 mt-1">Optional. When the manager intends to verify.</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Coaching notes</label>
+                            <textarea id="coachingPlanNotes" rows="2" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="Internal notes / context."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white border-t border-gray-200 px-6 py-3 flex gap-3 justify-end">
+                    <button type="button" data-on-click="closeCoachingPlanDeliverModal" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
+                    <button type="button" data-on-click="submitCoachingPlanDelivery" id="coachingPlanDeliverSaveBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Mark Delivered
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div id="content-compliance" class="tab-content hidden fade-in">
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -1595,6 +1721,10 @@
                 try { loadActiveSDRScorecardSummary(); }
                 catch (e) { console.error('loadActiveSDRScorecardSummary failed:', e); }
             }
+            if (tab === 'coaching') {
+                try { reloadCoachingPlans(); }
+                catch (e) { console.error('reloadCoachingPlans failed:', e); }
+            }
         }
 
         function renderOverview() {
@@ -1852,6 +1982,286 @@
                 btn.disabled = false;
                 btn.classList.remove('opacity-60', 'cursor-not-allowed');
                 if (lbl) lbl.textContent = 'Backfill CRM Compliance';
+            }
+        }
+
+        // ===================================================================
+        //   Coaching Plans tab (DMAIC Improve P1)
+        //   Reads from /api/coaching-plans and renders three buckets:
+        //   Pending Delivery | Awaiting Verification | Resolved. Backend
+        //   detection lives in src/utils/coachingPlans.ts.
+        // ===================================================================
+        let _coachingPlanCache = [];
+
+        async function reloadCoachingPlans() {
+            const agentFilter = (document.getElementById('coachingAgentFilter')?.value || '').trim();
+            const qs = agentFilter ? `?agent_email=${encodeURIComponent(agentFilter)}` : '';
+            try {
+                const res = await fetch(`/api/coaching-plans${qs}`);
+                if (!res.ok) {
+                    renderCoachingPlanError(`HTTP ${res.status}`);
+                    return;
+                }
+                const data = await res.json();
+                _coachingPlanCache = data.records || [];
+                renderCoachingPlanLists(_coachingPlanCache);
+                populateCoachingAgentFilter(_coachingPlanCache, agentFilter);
+            } catch (e) {
+                renderCoachingPlanError(e.message || String(e));
+            }
+        }
+
+        function renderCoachingPlanError(msg) {
+            for (const id of ['coachingPendingList', 'coachingAwaitingList', 'coachingResolvedList']) {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = `<p class="text-xs text-red-600">Failed to load: ${escapeHtml(msg)}</p>`;
+            }
+        }
+
+        function populateCoachingAgentFilter(plans, currentValue) {
+            const select = document.getElementById('coachingAgentFilter');
+            if (!select) return;
+            const agents = Array.from(new Set(plans.map(p => p.agent_email).filter(Boolean))).sort();
+            // Preserve the current selection so the filter survives reloads.
+            select.innerHTML = '<option value="">All agents</option>'
+                + agents.map(a => `<option value="${escapeHtml(a)}" ${a === currentValue ? 'selected' : ''}>${escapeHtml(a)}</option>`).join('');
+        }
+
+        function renderCoachingPlanLists(plans) {
+            const buckets = {
+                pending: [],   // pending_delivery
+                awaiting: [],  // awaiting_verification
+                resolved: [],  // verified_* + dismissed
+            };
+            for (const p of plans) {
+                if (p.status === 'pending_delivery') buckets.pending.push(p);
+                else if (p.status === 'awaiting_verification') buckets.awaiting.push(p);
+                else buckets.resolved.push(p);
+            }
+            document.getElementById('coachingPendingCount').textContent = _fn(buckets.pending.length);
+            document.getElementById('coachingAwaitingCount').textContent = _fn(buckets.awaiting.length);
+            document.getElementById('coachingResolvedCount').textContent = _fn(buckets.resolved.length);
+
+            document.getElementById('coachingPendingList').innerHTML =
+                buckets.pending.length === 0
+                    ? '<p class="text-xs text-amber-700">No pending plans.</p>'
+                    : buckets.pending.map(renderCoachingPlanCard).join('');
+            document.getElementById('coachingAwaitingList').innerHTML =
+                buckets.awaiting.length === 0
+                    ? '<p class="text-xs text-blue-700">No plans awaiting verification.</p>'
+                    : buckets.awaiting.map(renderCoachingPlanCard).join('');
+            document.getElementById('coachingResolvedList').innerHTML =
+                buckets.resolved.length === 0
+                    ? '<p class="text-xs text-gray-600">No resolved plans yet.</p>'
+                    : buckets.resolved.map(renderCoachingPlanCard).join('');
+        }
+
+        function renderCoachingPlanCard(p) {
+            const dimColor = p.dimension === 'governance' ? 'bg-blue-100 text-blue-800'
+                : p.dimension === 'process' ? 'bg-violet-100 text-violet-800'
+                : 'bg-emerald-100 text-emerald-800'; // people / default
+            const outcomeBadge = p.verification_outcome === 'passing'
+                ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">Verified passing</span>'
+                : p.verification_outcome === 'failing_again'
+                ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800">Failed again</span>'
+                : p.status === 'dismissed'
+                ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-700">Dismissed</span>'
+                : '';
+
+            const isOpen = p.status === 'pending_delivery' || p.status === 'awaiting_verification';
+            const actions = p.status === 'pending_delivery'
+                ? `<button type="button" data-on-click="openCoachingPlanDeliverModal" data-args="[${p.id}]" class="text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded">Deliver</button>
+                   <button type="button" data-on-click="dismissCoachingPlanPrompt" data-args="[${p.id}]" class="text-[11px] bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded">Dismiss</button>`
+                : p.status === 'awaiting_verification'
+                ? `<span class="text-[10px] text-blue-700">Delivered ${escapeHtml(_fd(p.delivered_at))} — auto-verifies on next eval</span>
+                   <button type="button" data-on-click="dismissCoachingPlanPrompt" data-args="[${p.id}]" class="text-[11px] bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded ml-2">Dismiss</button>`
+                : '';
+
+            const verificationDetail = p.verification_call_id
+                ? `<div class="text-[10px] text-gray-600 mt-1">Verified on call #${_fn(p.verification_call_id)} at ${escapeHtml(_fd(p.verified_at))}</div>`
+                : '';
+            const dismissedDetail = p.status === 'dismissed' && p.dismissed_reason
+                ? `<div class="text-[10px] text-gray-600 mt-1">Dismissed by ${escapeHtml(p.dismissed_by || '?')}: ${escapeHtml(p.dismissed_reason)}</div>`
+                : '';
+
+            return `
+                <div class="bg-white rounded-lg border ${isOpen ? 'border-gray-200' : 'border-gray-100'} p-3">
+                    <div class="flex items-start justify-between gap-2 mb-1">
+                        <div class="min-w-0">
+                            <div class="text-xs font-medium text-gray-900 truncate">${escapeHtml(p.agent_email)}</div>
+                            <div class="text-sm font-semibold text-gray-900 truncate">${escapeHtml(p.attribute_name || p.attribute_id)}</div>
+                        </div>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${dimColor}">${escapeHtml(p.dimension || '—')}</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-[11px] text-gray-600 flex-wrap">
+                        <span><strong class="text-gray-900">${_fn(p.fail_count)}</strong> fails</span>
+                        <span>·</span>
+                        <span>last ${escapeHtml(_fd(p.trigger_window_end))}</span>
+                        ${outcomeBadge}
+                    </div>
+                    ${verificationDetail}
+                    ${dismissedDetail}
+                    ${actions ? `<div class="mt-2 flex items-center gap-2 flex-wrap">${actions}</div>` : ''}
+                </div>`;
+        }
+
+        // ---------------------------------------------------------------
+        // Delivery modal
+        // ---------------------------------------------------------------
+        let _activeCoachingPlanId = null;
+
+        async function openCoachingPlanDeliverModal(planId) {
+            _activeCoachingPlanId = planId;
+            document.getElementById('coachingPlanCommitment').value = '';
+            document.getElementById('coachingPlanFollowup').value = '';
+            document.getElementById('coachingPlanNotes').value = '';
+            document.getElementById('coachingPlanDeliverEvidence').innerHTML = '<p class="text-gray-400">Loading…</p>';
+
+            // Pull cached plan summary for the header chips
+            const cached = _coachingPlanCache.find(p => p.id === planId);
+            if (cached) {
+                document.getElementById('coachingPlanDeliverAgent').textContent = cached.agent_email;
+                document.getElementById('coachingPlanDeliverAttribute').textContent = cached.attribute_name || cached.attribute_id;
+            }
+
+            document.getElementById('coachingPlanDeliverModal').classList.remove('hidden');
+
+            // Fetch evidence calls so the manager has context
+            try {
+                const res = await fetch(`/api/coaching-plans/${planId}`);
+                if (!res.ok) {
+                    document.getElementById('coachingPlanDeliverEvidence').innerHTML =
+                        `<p class="text-red-600">Could not load evidence: HTTP ${res.status}</p>`;
+                    return;
+                }
+                const data = await res.json();
+                const ev = data.evidence || [];
+                if (ev.length === 0) {
+                    document.getElementById('coachingPlanDeliverEvidence').innerHTML =
+                        '<p class="text-gray-500">No evidence calls returned.</p>';
+                    return;
+                }
+                document.getElementById('coachingPlanDeliverEvidence').innerHTML = ev.map(e => `
+                    <button type="button" data-on-click="viewCall" data-args="[${e.id}]"
+                            class="w-full text-left px-2 py-1.5 rounded hover:bg-indigo-50 flex items-center justify-between gap-2">
+                        <span class="font-mono text-indigo-700 truncate">${escapeHtml(e.call_id)}</span>
+                        <span class="text-gray-500 whitespace-nowrap">${escapeHtml(_fd(e.call_date))} · score ${escapeHtml(String(e.overall_score ?? '--'))}</span>
+                    </button>`).join('');
+            } catch (e) {
+                document.getElementById('coachingPlanDeliverEvidence').innerHTML =
+                    `<p class="text-red-600">Evidence load threw: ${escapeHtml(String(e.message || e))}</p>`;
+            }
+        }
+
+        function closeCoachingPlanDeliverModal() {
+            document.getElementById('coachingPlanDeliverModal').classList.add('hidden');
+            _activeCoachingPlanId = null;
+        }
+
+        async function submitCoachingPlanDelivery() {
+            if (!_activeCoachingPlanId) return;
+            const commitment = (document.getElementById('coachingPlanCommitment').value || '').trim();
+            if (!commitment) {
+                alert("The SDR's commitment is required — that's the behaviour we'll verify on the next call.");
+                return;
+            }
+            const followup = (document.getElementById('coachingPlanFollowup').value || '').trim();
+            const notes = (document.getElementById('coachingPlanNotes').value || '').trim();
+            const btn = document.getElementById('coachingPlanDeliverSaveBtn');
+            btn.disabled = true;
+            btn.classList.add('opacity-60', 'cursor-not-allowed');
+            try {
+                const res = await fetch(`/api/coaching-plans/${_activeCoachingPlanId}/deliver`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sdr_commitment: commitment,
+                        follow_up_due_date: followup || undefined,
+                        coaching_notes: notes || undefined,
+                    }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    alert(`Failed: ${data.error || res.statusText}`);
+                    return;
+                }
+                closeCoachingPlanDeliverModal();
+                await reloadCoachingPlans();
+            } catch (e) {
+                alert('Save threw: ' + (e.message || e));
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-not-allowed');
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // Dismiss
+        // ---------------------------------------------------------------
+        async function dismissCoachingPlanPrompt(planId) {
+            const reason = prompt(
+                "Dismiss this coaching plan?\n\nThis closes the plan WITHOUT delivery — the SDR won't be coached on this attribute via this plan. " +
+                "Reason is logged for audit. Examples:\n" +
+                "  • 'Manager coached verbally; no formal session needed'\n" +
+                "  • 'False positive — calls were edge cases'\n" +
+                "  • 'Agent left the team'"
+            );
+            if (reason === null) return;
+            const trimmed = reason.trim();
+            if (!trimmed) {
+                alert('A reason is required to dismiss.');
+                return;
+            }
+            try {
+                const res = await fetch(`/api/coaching-plans/${planId}/dismiss`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dismissed_reason: trimmed }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    alert(`Failed: ${data.error || res.statusText}`);
+                    return;
+                }
+                await reloadCoachingPlans();
+            } catch (e) {
+                alert('Dismiss threw: ' + (e.message || e));
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // Re-scan trigger (manual)
+        // ---------------------------------------------------------------
+        let _rescanInFlight = false;
+        async function rescanCoachingPlans() {
+            if (_rescanInFlight) return;
+            const btn = document.getElementById('btn-rescan-coaching');
+            const lbl = document.getElementById('rescanBtnLabel');
+            _rescanInFlight = true;
+            btn.disabled = true;
+            btn.classList.add('opacity-60', 'cursor-not-allowed');
+            if (lbl) lbl.textContent = 'Scanning…';
+            try {
+                const res = await fetch('/api/coaching-plans/scan', { method: 'POST' });
+                const data = await res.json().catch(() => ({}));
+                if (!data.success) {
+                    alert(`Re-scan failed: ${data.error || res.statusText}`);
+                    return;
+                }
+                alert(
+                    `Re-scan complete:\n` +
+                    `• ${data.agentsScanned} agents scanned\n` +
+                    `• ${data.totalInserted} new plans opened\n` +
+                    `• ${data.totalUpdated} existing plans refreshed (new fails added)`
+                );
+                await reloadCoachingPlans();
+            } catch (e) {
+                alert('Re-scan threw: ' + (e.message || e));
+            } finally {
+                _rescanInFlight = false;
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-not-allowed');
+                if (lbl) lbl.textContent = 'Re-scan';
             }
         }
 
