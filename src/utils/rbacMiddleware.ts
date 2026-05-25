@@ -693,11 +693,16 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
 
-  // PDPL reports — admin-only (privacy inventory, incident history, security posture)
+  // PDPL reports — admin-only (privacy inventory, incident history, security
+  // posture). Handler at src/mastra/routes/reportRoutes.ts:63-83 already calls
+  // `requireAdminOrKey(c)`, so the previous wide 13-role list here was
+  // defense-in-depth gone wrong: it made the middleware look open and
+  // contradicted the comment. Tightened to ["admin"] for single source of
+  // truth — the handler is still the inner gate.
   {
     pattern: /^\/api\/reports\/pdpl-inventory/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin"],
   },
 
   {
@@ -914,10 +919,14 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
 
   // Platform Health Pulse — admin only (operational diagnostics, secret presence,
   // dependency health, latency).  POST /run triggers an actual probe sweep.
+  // Handler at src/mastra/routes/healthPulseRoutes.ts already calls
+  // authorize() which delegates to requireRole(c, ["admin"]). Tightened
+  // middleware to match so the wide 12-role list doesn't suggest the
+  // endpoint is open to non-admins.
   {
     pattern: /^\/api\/health\/pulse(\/(latest|run))?$/,
     methods: ["GET", "POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin"],
   },
 
   // Scorecard — Mohammed-style governance scorecard (raw KPI calculations).
@@ -1159,22 +1168,30 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // ─────────────────────────────────────────────────────────────────────────
 
   // Admin-only operational diagnostics (activity feed/stats, system events,
-  // workflow run history) — `isAdminAuthorized` in `adminApiRoutes.ts`.
-  { pattern: /^\/api\/activity\//, methods: ["GET"], roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"] },
-  { pattern: /^\/api\/system\//, methods: ["GET"], roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"] },
+  // workflow run history). Each handler in `adminApiRoutes.ts` already calls
+  // `isAdminAuthorized(c)` (activity at line 732/751, system at 695, workflow
+  // runs at 640), so the wide middleware lists here were defense-in-depth
+  // gone wrong — they made the rules look open to all 13 roles even though
+  // the handlers would still reject. Tightened to ["admin"] for single
+  // source of truth.
+  { pattern: /^\/api\/activity\//, methods: ["GET"], roles: ["admin"] },
+  { pattern: /^\/api\/system\//, methods: ["GET"], roles: ["admin"] },
   {
     pattern: /^\/api\/workflow\/runs(\/\d+)?$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin"],
   },
 
   // AI Ops — agent observability, prompt versions, tool-health alerts/config.
   // Tool-health-config writes are admin-only (TOOL_HEALTH_CONFIG_WRITE_ROLES).
   // All other endpoints use AI_OPS_ROLES.
+  // Handler at src/mastra/routes/aiOpsRoutes.ts:1459 already enforces
+  // requireRole(c, TOOL_HEALTH_CONFIG_WRITE_ROLES) where that constant
+  // resolves to ["admin"]. Tightened middleware list to match.
   {
     pattern: /^\/api\/ai-ops\/tool-health-config$/,
     methods: ["PUT"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin"],
   },
   {
     pattern: /^\/api\/ai-ops\//,
@@ -1408,7 +1425,13 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   },
 
   // Migration GETs — admin only (writes already admin via existing rule).
-  { pattern: /^\/api\/migration\//, methods: ["GET"], roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"] },
+  // Critical fix: the wide 13-role list here was the *only* line of defence —
+  // the GET handlers in src/mastra/routes/migrationRoutes.ts had no
+  // requireAdmin call at all, so any of those 13 roles could read every
+  // migration job, template, and dedup rule (operational data revealing
+  // platform migration strategy). Same handler-side gate now added via
+  // `gateAdminOrKey()` in migrationRoutes.ts as belt-and-suspenders.
+  { pattern: /^\/api\/migration\//, methods: ["GET"], roles: ["admin"] },
 
   // Notifications — handlers have no inner role check (any auth).
   // Specific /:id/read POST is covered by an existing reviewer-roles rule.
@@ -1437,10 +1460,13 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
 
   // PDPL — `requireAdminOrKey` for every endpoint (admin only).
   // /api/pdpl/export is already covered above for GET; this catches the rest.
+  // Every handler in src/mastra/routes/pdplRoutes.ts already calls
+  // requireAdminOrKey (lines 14, 47, 78, 123, 170), so the wide 12-role
+  // list here was defense-in-depth gone wrong. Tightened to ["admin"].
   {
     pattern: /^\/api\/pdpl\//,
     methods: ["GET", "POST", "PUT", "DELETE"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin"],
   },
 
   // Policies — link & review-cycles writes (governance roles).

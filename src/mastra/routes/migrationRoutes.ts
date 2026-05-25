@@ -1,4 +1,24 @@
 import { logger as safeLogger } from "../../utils/logger";
+
+// Shared admin-gate import used by every GET handler in this file. Migration
+// jobs/templates/dedup-rules reveal the platform's data-modelling decisions
+// and historical migration outcomes — operational data with no business
+// case for non-admin roles to read. Until now the middleware rule was the
+// only line of defence and it admitted 12 roles (TASK-... migration drift
+// against the "admin only" comment in ROUTE_PERMISSION_MAP), so any
+// authenticated user could enumerate jobs by hitting these GETs directly.
+async function gateAdminOrKey(c: any) {
+  const { hasValidAdminApiKey, getSessionUser, unauthorizedResponse, forbiddenResponse } =
+    await import("../../utils/rbacMiddleware");
+  if (hasValidAdminApiKey(c)) return null;
+  const user = getSessionUser(c);
+  if (!user) return unauthorizedResponse(c);
+  if (user.role !== "admin") {
+    return forbiddenResponse(c, "Migration endpoints are admin-only");
+  }
+  return null;
+}
+
 export const migrationRoutes = [
   {
     path: "/api/migration/jobs",
@@ -6,6 +26,8 @@ export const migrationRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const gate = await gateAdminOrKey(c);
+          if (gate) return gate;
           const logger = mastra?.getLogger();
           const { getAllMigrationJobs, initMigrationTables } =
             await import("../../utils/migrationDatabase");
@@ -32,6 +54,8 @@ export const migrationRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const gate = await gateAdminOrKey(c);
+          if (gate) return gate;
           const logger = mastra?.getLogger();
           const { getMigrationSummary, initMigrationTables } =
             await import("../../utils/migrationDatabase");
@@ -53,6 +77,8 @@ export const migrationRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const gate = await gateAdminOrKey(c);
+          if (gate) return gate;
           const logger = mastra?.getLogger();
           const { getTemplates, initMigrationTables } =
             await import("../../utils/migrationDatabase");
@@ -81,6 +107,8 @@ export const migrationRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
+          const gate = await gateAdminOrKey(c);
+          if (gate) return gate;
           const logger = mastra?.getLogger();
           const { getDeduplicationRules, initMigrationTables } =
             await import("../../utils/migrationDatabase");

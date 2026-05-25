@@ -3,10 +3,16 @@
  * Task #461 (extended in Task #471) in
  * `src/mastra/routes/staticPageRoutes.ts`:
  *
- *   /sandbox, /crm, /audits, /compliance, /policies, /reviews, /risks,
+ *   /sandbox, /audits, /compliance, /policies, /reviews, /risks,
  *   /grc, /pdpl, /feedback, /guide, /migration, /logs, /ai-approvals,
  *   /intake, /external-audits, /vendors, /tablef, /infographic,
  *   /executive.html, /grc.html, /consultant.html
+ *
+ *   (/crm was part of the original Task #461 set but the route + page
+ *   were removed on 2026-05-22 — the CRM Data Hub was redundant with
+ *   Duplicate Radar's per-record views and was stuck "Not Connected".
+ *   The underlying /api/crm/data endpoint is preserved for legacy
+ *   callers, but there is no dashboard shell to gate.)
  *
  * Why this file exists
  * ────────────────────
@@ -167,8 +173,11 @@ await suite.test("every gated route is registered as GET in staticPageRoutes", (
 // in Task #461 and the two routes added by Task #471 (/guide, /migration).
 // If someone trims an entry by accident, we want to know.
 await suite.test("matrix includes every route named by Task #461 + Task #471", () => {
+  // /crm was removed on 2026-05-22 alongside its page-shell — see the
+  // file header comment for the rationale. Don't re-add it without
+  // restoring the page and a backing API rule.
   const required = [
-    "/sandbox", "/crm", "/audits", "/compliance", "/policies", "/reviews",
+    "/sandbox", "/audits", "/compliance", "/policies", "/reviews",
     "/risks", "/grc", "/pdpl", "/feedback", "/guide", "/migration",
     "/logs", "/ai-approvals", "/intake", "/external-audits", "/vendors",
     "/tablef", "/infographic", "/executive.html", "/grc.html",
