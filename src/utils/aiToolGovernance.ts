@@ -701,6 +701,68 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       `Call #${p?.call_record_id ?? '—'}`,
   },
 
+  // Read-only Duplicate-Radar lookup that answers "can SDR/Marketing
+  // contact this domain right now?" by enumerating Deal records for the
+  // domain. Returns a verdict (block/review/allow) plus per-deal signals.
+  // No platform write — the verdict is advisory and the operator still
+  // initiates any outreach via existing CRM tooling.
+  'check-communication-eligibility': {
+    toolId: 'check-communication-eligibility',
+    label: 'Check communication eligibility for a domain (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only Duplicate Radar lookup, no platform write',
+      'PDPL Art. 16 — no PII enrichment; verdict only',
+    ],
+    entityType: 'communication_eligibility_check',
+    buildPreview: (p: any) =>
+      `Domain: ${trim(p?.domain, 80) || '—'}`,
+  },
+
+  // Imports Google Drive audio files as call_records. WRITES platform
+  // data (call_records inserts) — gated. Dry-run mode is supported by
+  // the tool itself; the preview surfaces the folder/query so the
+  // approver can sanity-check before the agent flips dry_run to false.
+  'drive-call-import': {
+    toolId: 'drive-call-import',
+    label: 'Import call recordings from Google Drive',
+    riskLevel: 'medium',
+    requiresApproval: true,
+    complianceRefs: [
+      'WP-SOP-011 (Automated Decision and Processing Process) — agent-triggered write to call_records',
+      'WP-DOC-004 (AI Adoption Guidelines)',
+      'PDPL Art. 16 — call recordings may contain PII; ingestion source must be approved',
+    ],
+    entityType: 'call_drive_import',
+    buildPreview: (p: any) =>
+      [
+        p?.folder_id ? `**Folder:** ${trim(p.folder_id, 80)}` : '**Folder:** (env default)',
+        p?.query ? `**Query:** ${trim(p.query, 120)}` : null,
+        typeof p?.page_size === 'number' ? `**Page size:** ${p.page_size}` : null,
+        p?.agent_email ? `**Agent email tag:** ${trim(p.agent_email, 80)}` : null,
+        p?.dry_run ? '**Mode:** dry-run (no writes)' : '**Mode:** WILL CREATE call_records',
+      ].filter(Boolean).join('\n'),
+  },
+
+  // Pure-function evaluator: scores a transcript against the loaded
+  // SDR Governance 2.1 JSON ruleset. No DB or external side-effect —
+  // returns governance issues for the caller to log/display.
+  'evaluate-sdr-governance': {
+    toolId: 'evaluate-sdr-governance',
+    label: 'Evaluate SDR governance rules against a transcript (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only ruleset evaluation, no platform write',
+    ],
+    entityType: 'sdr_governance_evaluation',
+    buildPreview: (p: any) => {
+      const len = typeof p?.transcript_text === 'string' ? p.transcript_text.length : 0;
+      return `Transcript chars: ${len}`;
+    },
+  },
+
   // --- scaffolding / docs ---
   'example-tool': {
     toolId: 'example-tool',

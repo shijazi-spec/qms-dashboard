@@ -42,9 +42,15 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+// `new URL(".", import.meta.url).pathname` returns `/D:/...` on Windows,
+// which `path.resolve` then double-drives into `D:\D:\...` (ENOENT).
+// fileURLToPath normalises both POSIX and Windows. Same fix that was
+// applied to tests/runIntegrationTests.ts.
+const TESTS_DIR_URL = new URL(".", import.meta.url);
 const SCRIPT = path.resolve(
-  new URL(".", import.meta.url).pathname,
+  fileURLToPath(TESTS_DIR_URL),
   "..",
   "scripts",
   "check-rtl-classes.cjs",
@@ -107,7 +113,7 @@ const tmpRoot = mkdtempSync(path.join(tmpdir(), "rtl-guard-"));
 // `node_modules` via NODE_PATH so the copied script behaves like the
 // in-repo one.
 const REPO_NODE_MODULES = path.resolve(
-  new URL(".", import.meta.url).pathname,
+  fileURLToPath(TESTS_DIR_URL),
   "..",
   "node_modules",
 );
