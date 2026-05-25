@@ -5450,6 +5450,268 @@ ${transcriptText}
       };
     },
   },
+  // ===================================================================
+  //  Topic Clustering (DMAIC Improve P3, 2026-05-25)
+  //  Aggregates call_analysis.key_topics across analyzed calls in a
+  //  rolling window. Surfaces systemic gaps: "20 calls mentioned
+  //  pricing objection in last 30 days" → coaching opportunity at
+  //  TEAM level, not just per-call. Reuses the existing AI-generated
+  //  topic list — no new model spend.
+  // ===================================================================
+  {
+    path: "/api/calls/topic-clusters",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const windowDays = Math.min(
+            Math.max(parseInt(c.req.query("window_days") || "30"), 1),
+            365,
+          );
+          const topN = Math.min(
+            Math.max(parseInt(c.req.query("top_n") || "20"), 1),
+            100,
+          );
+
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          // jsonb_array_elements_text expands a JSONB array column into
+          // one row per element. We then COUNT(DISTINCT call_record_id)
+          // per topic so the same call mentioning the same topic twice
+          // doesn't inflate the metric. Window filter on call_date.
+          const res = await callIntelligencePool.query(
+            `
+            WITH topic_rows AS (
+              SELECT
+                cr.id AS call_id,
+                cr.call_date,
+                cr.agent_email,
+                LOWER(TRIM(elem)) AS topic
+              FROM call_records cr
+              JOIN call_analysis ca ON ca.call_record_id = cr.id
+              LEFT JOIN LATERAL jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(ca.key_topics) = 'array'
+                     THEN ca.key_topics
+                     ELSE '[]'::jsonb END
+              ) elem ON TRUE
+              WHERE cr.call_date >= NOW() - ($1 || ' days')::INTERVAL
+                AND cr.status = 'analyzed'
+                AND elem IS NOT NULL
+                AND LENGTH(TRIM(elem)) > 0
+            ),
+            topic_agg AS (
+              SELECT
+                topic,
+                COUNT(DISTINCT call_id)::int AS call_count,
+                COUNT(DISTINCT agent_email)::int AS agent_count,
+                MAX(call_date) AS latest_call_date,
+                ARRAY(
+                  SELECT call_id FROM topic_rows tr2
+                   WHERE tr2.topic = topic_rows.topic
+                   ORDER BY call_date DESC
+                   LIMIT 10
+                ) AS sample_call_ids,
+                ARRAY(
+                  SELECT DISTINCT agent_email FROM topic_rows tr3
+                   WHERE tr3.topic = topic_rows.topic
+                     AND agent_email IS NOT NULL
+                   LIMIT 10
+                ) AS sample_agents
+              FROM topic_rows
+              GROUP BY topic
+            )
+            SELECT * FROM topic_agg
+             WHERE call_count >= 2
+             ORDER BY call_count DESC, latest_call_date DESC
+             LIMIT $2
+            `,
+            [String(windowDays), topN],
+          );
+
+          // Total analyzed calls in window — denominator so the UI can
+          // render "X% of calls in this window mention <topic>".
+          const totalRes = await callIntelligencePool.query(
+            `
+            SELECT COUNT(*)::int AS n
+              FROM call_records
+             WHERE call_date >= NOW() - ($1 || ' days')::INTERVAL
+               AND status = 'analyzed'
+            `,
+            [String(windowDays)],
+          );
+
+          return c.json({
+            window_days: windowDays,
+            total_analyzed_calls: totalRes.rows[0]?.n || 0,
+            topics: res.rows.map((r: any) => ({
+              topic: r.topic,
+              call_count: r.call_count,
+              agent_count: r.agent_count,
+              latest_call_date: r.latest_call_date,
+              sample_call_ids: r.sample_call_ids || [],
+              sample_agents: r.sample_agents || [],
+            })),
+          });
+        } catch (error: any) {
+          safeLogger.error("[API] topic clusters failed", {
+            error: error?.message,
+          });
+          return c.json({ error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
+  // ===================================================================
+  //  Peer Benchmark (DMAIC Improve P2, 2026-05-25)
+  //  Per-attribute: agent's average score vs anonymised team median
+  //  (excluding the agent themselves). Sorted by gap so the worst
+  //  attributes — the natural coaching targets — surface first.
+  //  Anonymised: never names peers, just the median.
+  // ===================================================================
+  {
+    path: "/api/sdr-evaluations/peer-benchmark",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+          const agentEmail = (c.req.query("agent_email") || "").trim();
+          if (!agentEmail) {
+            return c.json(
+              { error: "agent_email query param is required" },
+              400,
+            );
+          }
+          const windowDays = Math.min(
+            Math.max(parseInt(c.req.query("window_days") || "90"), 1),
+            365,
+          );
+
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          // Unnest every attribute_evaluations element across the window,
+          // tag with the call's agent, then aggregate per (agent_email,
+          // attribute_id, attribute_name, dimension). Two passes:
+          // (1) per-agent means in the window
+          // (2) team median computed EXCLUDING the focal agent so the
+          //     comparison is honest (otherwise a strong agent compares
+          //     against themselves and looks artificially average).
+          //
+          // PASS/FAIL/NA → numeric scoring:
+          //   PASS = 100, FAIL = 0, NA → excluded (no signal). When the
+          //   underlying scorecard recorded a numeric `score`, prefer that.
+          const res = await callIntelligencePool.query(
+            `
+            WITH attr_rows AS (
+              SELECT
+                cr.agent_email,
+                elem->>'attribute_id'   AS attribute_id,
+                elem->>'attribute_name' AS attribute_name,
+                elem->>'dimension'      AS dimension,
+                UPPER(COALESCE(elem->>'status', ''))   AS status,
+                NULLIF(elem->>'score', '')::float      AS raw_score
+              FROM call_records cr
+              JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+              LEFT JOIN LATERAL jsonb_array_elements(
+                CASE WHEN jsonb_typeof(se.attribute_evaluations) = 'array'
+                     THEN se.attribute_evaluations
+                     ELSE '[]'::jsonb END
+              ) elem ON TRUE
+              WHERE cr.call_date >= NOW() - ($1 || ' days')::INTERVAL
+                AND cr.agent_email IS NOT NULL
+                AND elem->>'attribute_id' IS NOT NULL
+            ),
+            scored AS (
+              SELECT
+                agent_email,
+                attribute_id,
+                attribute_name,
+                dimension,
+                CASE
+                  WHEN raw_score IS NOT NULL THEN raw_score
+                  WHEN status = 'PASS' THEN 100.0
+                  WHEN status = 'FAIL' THEN 0.0
+                  ELSE NULL
+                END AS effective_score
+              FROM attr_rows
+              WHERE status IN ('PASS', 'FAIL') OR raw_score IS NOT NULL
+            ),
+            agent_means AS (
+              SELECT
+                attribute_id,
+                MAX(attribute_name) AS attribute_name,
+                MAX(dimension)      AS dimension,
+                AVG(effective_score) AS agent_avg,
+                COUNT(*)::int        AS agent_n
+              FROM scored
+              WHERE agent_email = $2
+              GROUP BY attribute_id
+            ),
+            team_stats AS (
+              SELECT
+                attribute_id,
+                COUNT(*)::int AS team_n,
+                COUNT(DISTINCT agent_email)::int AS team_agent_count,
+                PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY effective_score) AS team_median,
+                PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY effective_score) AS team_p25,
+                PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY effective_score) AS team_p75
+              FROM scored
+              WHERE agent_email <> $2
+              GROUP BY attribute_id
+            )
+            SELECT
+              am.attribute_id,
+              am.attribute_name,
+              am.dimension,
+              am.agent_avg,
+              am.agent_n,
+              ts.team_median,
+              ts.team_p25,
+              ts.team_p75,
+              ts.team_n,
+              ts.team_agent_count,
+              (am.agent_avg - ts.team_median) AS gap
+            FROM agent_means am
+            LEFT JOIN team_stats ts ON ts.attribute_id = am.attribute_id
+            ORDER BY (am.agent_avg - ts.team_median) ASC NULLS LAST, am.attribute_id
+            `,
+            [String(windowDays), agentEmail],
+          );
+
+          return c.json({
+            agent_email: agentEmail,
+            window_days: windowDays,
+            attributes: res.rows.map((r: any) => ({
+              attribute_id: r.attribute_id,
+              attribute_name: r.attribute_name,
+              dimension: r.dimension,
+              agent_avg: r.agent_avg != null ? Number(r.agent_avg) : null,
+              agent_sample_size: r.agent_n || 0,
+              team_median: r.team_median != null ? Number(r.team_median) : null,
+              team_p25: r.team_p25 != null ? Number(r.team_p25) : null,
+              team_p75: r.team_p75 != null ? Number(r.team_p75) : null,
+              team_sample_size: r.team_n || 0,
+              team_agent_count: r.team_agent_count || 0,
+              gap: r.gap != null ? Number(r.gap) : null,
+            })),
+          });
+        } catch (error: any) {
+          safeLogger.error("[API] peer benchmark failed", {
+            error: error?.message,
+          });
+          return c.json({ error: error?.message || "Failed" }, 500);
+        }
+      };
+    },
+  },
 ];
 
 function formatEvaluationForZoho(evaluation: any, callRecord: any): string {

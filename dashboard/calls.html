@@ -1001,6 +1001,34 @@
                 </div>
             </div>
 
+            <!-- DMAIC Improve P2 (2026-05-25): Peer Benchmark. Per-attribute
+                 agent average vs anonymised team median (excluding self),
+                 sorted by gap so the worst attributes — the natural
+                 coaching targets — surface first. Never names peers,
+                 just the median. -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-4">
+                <div class="flex items-center justify-between flex-wrap gap-3 mb-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Performance vs Team</h3>
+                        <p class="text-xs text-gray-500 mt-1">Anonymised — names the median, not the peers. Worst gaps first.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="peerBenchAgent" data-on-change="reloadPeerBenchmark" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                            <option value="">Pick an agent…</option>
+                        </select>
+                        <select id="peerBenchWindow" data-on-change="reloadPeerBenchmark" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                            <option value="30">Last 30d</option>
+                            <option value="90" selected>Last 90d</option>
+                            <option value="180">Last 180d</option>
+                            <option value="365">Last 365d</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="peerBenchBody">
+                    <p class="text-xs text-gray-500">Pick an agent above to see their per-attribute performance vs the team median.</p>
+                </div>
+            </div>
+
             <!-- Three sections, lifecycle-ordered -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
@@ -1188,6 +1216,31 @@
                         </thead>
                         <tbody id="agentPerformanceTable" class="divide-y divide-gray-100"></tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- DMAIC Improve P3 (2026-05-25): Topic Clustering. Aggregates
+                 call_analysis.key_topics across analyzed calls in a rolling
+                 window so quality leads see systemic patterns (e.g. "23
+                 calls mentioned pricing objection") instead of one-call-
+                 at-a-time. Click a topic → drill into the calls that
+                 raised it. -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mt-6">
+                <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold">Topic Clusters</h3>
+                        <p class="text-xs text-gray-500 mt-1">Most-mentioned topics across analyzed call transcripts. Click a topic to see the calls that raised it.</p>
+                    </div>
+                    <select id="topicClustersWindow" data-on-change="reloadTopicClusters" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                        <option value="7">Last 7 days</option>
+                        <option value="30" selected>Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                        <option value="365">Last 365 days</option>
+                    </select>
+                </div>
+                <div id="topicClustersSummary" class="text-xs text-gray-500 mb-3"></div>
+                <div id="topicClustersList" class="space-y-2">
+                    <p class="text-xs text-gray-500">Loading topics…</p>
                 </div>
             </div>
 
@@ -2021,10 +2074,23 @@
         function populateCoachingAgentFilter(plans, currentValue) {
             const select = document.getElementById('coachingAgentFilter');
             if (!select) return;
-            const agents = Array.from(new Set(plans.map(p => p.agent_email).filter(Boolean))).sort();
+            // Build the agent set from plans + the callRecords cache so
+            // the dropdown still works when there are zero plans yet
+            // (e.g. before the first Re-scan).
+            const fromPlans = plans.map(p => p.agent_email).filter(Boolean);
+            const fromCalls = (callRecords || []).map(c => c.agent_email).filter(Boolean);
+            const agents = Array.from(new Set([...fromPlans, ...fromCalls])).sort();
             // Preserve the current selection so the filter survives reloads.
             select.innerHTML = '<option value="">All agents</option>'
                 + agents.map(a => `<option value="${escapeHtml(a)}" ${a === currentValue ? 'selected' : ''}>${escapeHtml(a)}</option>`).join('');
+            // Mirror the same agent list into the Peer Benchmark dropdown
+            // so a manager can pivot agent context without context-switching.
+            const peerSel = document.getElementById('peerBenchAgent');
+            if (peerSel) {
+                const prev = peerSel.value;
+                peerSel.innerHTML = '<option value="">Pick an agent…</option>'
+                    + agents.map(a => `<option value="${escapeHtml(a)}" ${a === prev ? 'selected' : ''}>${escapeHtml(a)}</option>`).join('');
+            }
         }
 
         function renderCoachingPlanLists(plans) {
@@ -2262,6 +2328,191 @@
                 btn.disabled = false;
                 btn.classList.remove('opacity-60', 'cursor-not-allowed');
                 if (lbl) lbl.textContent = 'Re-scan';
+            }
+        }
+
+        // ===================================================================
+        //   Peer Benchmark (DMAIC Improve P2)
+        //   Per-attribute agent average vs anonymised team median
+        //   (excluding self). Sorted by gap, worst first.
+        // ===================================================================
+        async function reloadPeerBenchmark() {
+            const body = document.getElementById('peerBenchBody');
+            const agent = (document.getElementById('peerBenchAgent')?.value || '').trim();
+            const days = (document.getElementById('peerBenchWindow')?.value || '90');
+            if (!body) return;
+            if (!agent) {
+                body.innerHTML = '<p class="text-xs text-gray-500">Pick an agent above to see their per-attribute performance vs the team median.</p>';
+                return;
+            }
+            body.innerHTML = '<p class="text-xs text-gray-500">Loading benchmark…</p>';
+            try {
+                const res = await fetch(`/api/sdr-evaluations/peer-benchmark?agent_email=${encodeURIComponent(agent)}&window_days=${encodeURIComponent(days)}`);
+                if (!res.ok) {
+                    body.innerHTML = `<p class="text-xs text-red-600">Failed: HTTP ${res.status}</p>`;
+                    return;
+                }
+                const data = await res.json();
+                const attrs = data.attributes || [];
+                if (attrs.length === 0) {
+                    body.innerHTML = `<p class="text-xs text-gray-500">No scored attributes for <strong>${escapeHtml(agent)}</strong> in the last ${data.window_days}d.</p>`;
+                    return;
+                }
+                // Header strip: window summary + how many peers contributed
+                // to the medians (transparency without naming them).
+                const peerCounts = attrs.map(a => a.team_agent_count || 0).filter(n => n > 0);
+                const minPeers = peerCounts.length ? Math.min(...peerCounts) : 0;
+                const maxPeers = peerCounts.length ? Math.max(...peerCounts) : 0;
+                const peerLine = peerCounts.length
+                    ? `Team median computed from ${minPeers === maxPeers ? minPeers : `${minPeers}–${maxPeers}`} other agent${maxPeers === 1 ? '' : 's'} (anonymised).`
+                    : 'No peer data yet for these attributes.';
+                body.innerHTML = `
+                    <div class="text-xs text-gray-500 mb-3">${escapeHtml(peerLine)} Window: ${data.window_days}d. Sorted by gap, worst first.</div>
+                    <div class="space-y-2">${attrs.map(renderPeerBenchmarkRow).join('')}</div>
+                `;
+            } catch (e) {
+                body.innerHTML = `<p class="text-xs text-red-600">Benchmark threw: ${escapeHtml(String(e.message || e))}</p>`;
+            }
+        }
+
+        // One row per attribute. Bar shows agent score; ticks mark the
+        // team P25, median, P75 so the manager (and agent) sees not
+        // just the median but the spread. Gap badge in the rightmost
+        // column gives an at-a-glance "below / at / above" verdict.
+        function renderPeerBenchmarkRow(a) {
+            const agentScore = a.agent_avg;
+            const median = a.team_median;
+            const p25 = a.team_p25;
+            const p75 = a.team_p75;
+            const gap = a.gap;
+
+            const fmt = (v) => v == null ? '—' : Math.round(v * 10) / 10;
+            const dimCls = a.dimension === 'governance' ? 'bg-blue-100 text-blue-800'
+                : a.dimension === 'process' ? 'bg-violet-100 text-violet-800'
+                : 'bg-emerald-100 text-emerald-800';
+
+            // Gap badge: red if more than 10 below median, amber if 0-10,
+            // green if at or above. Threshold matches the coaching plan
+            // trigger sensitivity (a single FAIL = -100 in the scale, so
+            // a -10 average gap implies systemic underperformance).
+            let gapCls = 'bg-gray-100 text-gray-700';
+            let gapLabel = 'No comparison';
+            if (gap != null) {
+                if (gap >= 0) {
+                    gapCls = 'bg-green-100 text-green-800';
+                    gapLabel = `+${fmt(gap)} vs median`;
+                } else if (gap >= -10) {
+                    gapCls = 'bg-amber-100 text-amber-800';
+                    gapLabel = `${fmt(gap)} vs median`;
+                } else {
+                    gapCls = 'bg-red-100 text-red-800';
+                    gapLabel = `${fmt(gap)} vs median`;
+                }
+            }
+
+            // Bar from 0-100. Agent line + P25/P50/P75 tick marks via
+            // CSP-safe data-style. The tick at the median is darker.
+            const pct = (v) => v == null ? null : Math.max(0, Math.min(100, v));
+            const agentPct = pct(agentScore);
+            const p25Pct = pct(p25);
+            const medPct = pct(median);
+            const p75Pct = pct(p75);
+
+            const tickHtml = (left, color, title) => left == null ? '' : `
+                <div class="absolute top-0 bottom-0 w-px ${color}" data-style="left: ${left}%" title="${escapeHtml(title)}"></div>`;
+
+            return `
+                <div class="border border-gray-200 rounded-lg p-3">
+                    <div class="flex items-start justify-between gap-3 mb-2">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                <span class="text-sm font-medium text-gray-900 truncate">${escapeHtml(a.attribute_name || a.attribute_id)}</span>
+                                <span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${dimCls}">${escapeHtml(a.dimension || '—')}</span>
+                            </div>
+                            <div class="text-[11px] text-gray-500">
+                                Agent: <strong class="text-gray-900">${fmt(agentScore)}</strong>${a.agent_sample_size ? ` (${a.agent_sample_size} call${a.agent_sample_size === 1 ? '' : 's'})` : ''}
+                                · Team median: <strong class="text-gray-900">${fmt(median)}</strong>${a.team_sample_size ? ` (${a.team_sample_size} call${a.team_sample_size === 1 ? '' : 's'} across ${_fn(a.team_agent_count || 0)} peer${a.team_agent_count === 1 ? '' : 's'})` : ''}
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${gapCls} whitespace-nowrap">${escapeHtml(gapLabel)}</span>
+                    </div>
+                    <div class="relative w-full bg-gray-100 rounded h-2.5">
+                        ${agentPct == null ? '' : `<div class="absolute inset-y-0 left-0 bg-indigo-500 rounded" data-style="width: ${agentPct}%"></div>`}
+                        ${tickHtml(p25Pct, 'bg-gray-400', `P25: ${fmt(p25)}`)}
+                        ${tickHtml(medPct, 'bg-gray-900', `Median: ${fmt(median)}`)}
+                        ${tickHtml(p75Pct, 'bg-gray-400', `P75: ${fmt(p75)}`)}
+                    </div>
+                </div>
+            `;
+        }
+
+        // ===================================================================
+        //   Topic Clusters (DMAIC Improve P3)
+        //   Aggregates call_analysis.key_topics across analyzed calls in
+        //   a rolling window so quality leads see systemic patterns.
+        // ===================================================================
+        async function reloadTopicClusters() {
+            const list = document.getElementById('topicClustersList');
+            const summary = document.getElementById('topicClustersSummary');
+            if (!list) return;
+            const days = (document.getElementById('topicClustersWindow')?.value || '30');
+            list.innerHTML = '<p class="text-xs text-gray-500">Loading topics…</p>';
+            if (summary) summary.textContent = '';
+            try {
+                const res = await fetch(`/api/calls/topic-clusters?window_days=${encodeURIComponent(days)}&top_n=30`);
+                if (!res.ok) {
+                    list.innerHTML = `<p class="text-xs text-red-600">Failed: HTTP ${res.status}</p>`;
+                    return;
+                }
+                const data = await res.json();
+                const total = data.total_analyzed_calls || 0;
+                const topics = data.topics || [];
+                if (summary) {
+                    summary.textContent = topics.length === 0
+                        ? `No recurring topics found in the last ${data.window_days} day(s) (${_fn(total)} analyzed calls scanned).`
+                        : `${_fn(topics.length)} topic${topics.length === 1 ? '' : 's'} appearing in 2+ calls — last ${data.window_days} day(s), ${_fn(total)} analyzed calls scanned.`;
+                }
+                if (topics.length === 0) {
+                    list.innerHTML = '<p class="text-xs text-gray-500">No recurring topics yet. As more calls get analyzed, themes will surface here.</p>';
+                    return;
+                }
+                const maxCount = topics[0].call_count || 1;
+                list.innerHTML = topics.map(t => {
+                    const pctOfTotal = total > 0 ? Math.round((t.call_count / total) * 100) : 0;
+                    const barPct = Math.round((t.call_count / maxCount) * 100);
+                    const sampleAgents = (t.sample_agents || []).slice(0, 3).map(a => a.split('@')[0]).join(', ');
+                    return `
+                        <details class="border border-gray-200 rounded-lg">
+                            <summary class="cursor-pointer px-3 py-2 flex items-center justify-between gap-3 hover:bg-gray-50 rounded-lg">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-sm font-medium text-gray-900 truncate">${escapeHtml(t.topic)}</span>
+                                        <span class="text-[11px] text-gray-500">${_fn(t.call_count)} call${t.call_count === 1 ? '' : 's'} · ${pctOfTotal}% of window</span>
+                                    </div>
+                                    <div class="w-full bg-gray-100 rounded-full h-1.5">
+                                        <div class="bg-indigo-500 h-1.5 rounded-full" data-style="width: ${barPct}%"></div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] text-gray-400 whitespace-nowrap">${_fn(t.agent_count)} agent${t.agent_count === 1 ? '' : 's'}${sampleAgents ? ' · ' + escapeHtml(sampleAgents) : ''}</span>
+                            </summary>
+                            <div class="px-3 py-2 border-t border-gray-100 bg-gray-50">
+                                <p class="text-[11px] text-gray-500 mb-2">Recent calls mentioning "${escapeHtml(t.topic)}":</p>
+                                <div class="flex flex-wrap gap-1.5">
+                                    ${(t.sample_call_ids || []).slice(0, 10).map(id => `
+                                        <button type="button" data-on-click="viewCall" data-args="[${id}]" class="text-[11px] px-2 py-1 bg-white border border-gray-200 rounded hover:bg-indigo-50 hover:border-indigo-300">
+                                            call #${_fn(id)}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </details>
+                    `;
+                }).join('');
+                // data-style="width: X%" is auto-applied by csp-styles.js's
+                // MutationObserver as soon as innerHTML mounts. No manual
+                // call needed.
+            } catch (e) {
+                list.innerHTML = `<p class="text-xs text-red-600">Failed to load topics: ${escapeHtml(String(e.message || e))}</p>`;
             }
         }
 
@@ -2637,6 +2888,10 @@
         function renderAnalytics() {
             if (sentimentChart) sentimentChart.destroy();
             if (qaTrendChart) qaTrendChart.destroy();
+            // Topic clusters lazy-load when the Analytics tab is opened.
+            // Re-fired on every showTab('analytics') so the window-day
+            // selector + the underlying data both stay fresh.
+            reloadTopicClusters();
 
             // Real sentiment distribution from call_analysis.sentiment_label.
             // Backend returns one row per label present in the data; we
