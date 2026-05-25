@@ -302,8 +302,8 @@
                                 data-i18n-placeholder="calls.search_phone_placeholder"
                                 autocomplete="off"
                                 data-on-input="loadCalls"
-                                class="border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm w-64 focus:ring-2 focus:ring-indigo-500" />
-                            <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                class="border border-gray-200 rounded-lg ps-8 pe-3 py-2 text-sm w-64 focus:ring-2 focus:ring-indigo-500" />
+                            <svg class="w-4 h-4 text-gray-400 absolute start-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         </div>
                         <select id="sourceFilter" data-on-change="loadCalls" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
                             <option value="">All Sources</option>
@@ -345,7 +345,7 @@
                 <div id="bulk-actions-bar" class="hidden bg-indigo-50 border-y border-indigo-200 px-6 py-2 flex items-center justify-between gap-3">
                     <div class="text-sm text-indigo-900">
                         <span id="bulk-selected-count" class="font-semibold">0</span> selected
-                        <button data-on-click="clearBulkSelection" class="ml-2 text-xs text-indigo-700 underline hover:text-indigo-900">Clear</button>
+                        <button data-on-click="clearBulkSelection" class="ms-2 text-xs text-indigo-700 underline hover:text-indigo-900">Clear</button>
                     </div>
                     <div class="flex items-center gap-2">
                         <button data-on-click="bulkAnalyzeSelected" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="Re-run transcription + analysis on every selected call. Auto-eval fires after each.">
@@ -724,12 +724,12 @@
                  in-flight. Interactive single-call evaluation is unaffected. -->
             <div id="batch-evaluation-panel" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
                 <button type="button" data-on-click="toggleBatchEvalPanel" class="w-full px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition" aria-expanded="false" aria-controls="batch-eval-body" id="batch-eval-toggle">
-                    <div class="flex items-center gap-3 text-left">
+                    <div class="flex items-center gap-3 text-start">
                         <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                         </span>
                         <div>
-                            <div class="text-sm font-semibold text-gray-900">Batch Evaluation <span class="text-xs font-normal text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 ml-2">50% off</span></div>
+                            <div class="text-sm font-semibold text-gray-900">Batch Evaluation <span class="text-xs font-normal text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 ms-2">50% off</span></div>
                             <div class="text-xs text-gray-600" id="batch-eval-summary">Bundle pending calls into one OpenAI Batch job (24h SLA).</div>
                         </div>
                     </div>
@@ -774,7 +774,7 @@
                  default to keep the call-evaluation work area uncluttered. -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
                 <button type="button" data-on-click="toggleScorecardPanel" class="w-full px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition" aria-expanded="false" aria-controls="embedded-scorecard-panel" id="embedded-scorecard-toggle">
-                    <div class="flex items-center gap-3 text-left">
+                    <div class="flex items-center gap-3 text-start">
                         <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-purple-100 text-purple-700">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                         </span>
@@ -1660,7 +1660,7 @@
                 const zoho = data.zoho || {};
                 if (!zoho.connected) {
                     banner.innerHTML = `
-                        <div class="bg-red-50 border-l-4 border-red-500 rounded-lg px-4 py-3 flex items-start gap-3">
+                        <div class="bg-red-50 border-s-4 border-red-500 rounded-lg px-4 py-3 flex items-start gap-3">
                             <svg class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                             <div class="flex-1">
                                 <h4 class="text-sm font-bold text-red-900">Zoho CRM not connected</h4>
@@ -1669,9 +1669,9 @@
                                 </p>
                                 <details class="mt-2 text-xs text-red-900">
                                     <summary class="cursor-pointer font-semibold">How to fix</summary>
-                                    <div class="mt-2 space-y-1 pl-2">
+                                    <div class="mt-2 space-y-1 ps-2">
                                         <p>Add the following Zoho OAuth credentials in <strong>Replit → Tools → Secrets</strong>:</p>
-                                        <ul class="list-disc pl-5">
+                                        <ul class="list-disc ps-5">
                                             <li><code>ZOHO_CLIENT_ID</code> — from <a href="https://api-console.zoho.com" target="_blank" rel="noopener" class="underline">api-console.zoho.com</a> → Self Client</li>
                                             <li><code>ZOHO_CLIENT_SECRET</code> — same place</li>
                                             <li><code>ZOHO_REFRESH_TOKEN</code> — generated by exchanging an auth code against <code>ZohoCRM.modules.ALL,ZohoCRM.users.ALL,ZohoCRM.notifications.ALL</code> scope</li>
@@ -2144,7 +2144,7 @@
                    <button type="button" data-on-click="dismissCoachingPlanPrompt" data-args="[${p.id}]" class="text-[11px] bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded">Dismiss</button>`
                 : p.status === 'awaiting_verification'
                 ? `<span class="text-[10px] text-blue-700">Delivered ${escapeHtml(_fd(p.delivered_at))} — auto-verifies on next eval</span>
-                   <button type="button" data-on-click="dismissCoachingPlanPrompt" data-args="[${p.id}]" class="text-[11px] bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded ml-2">Dismiss</button>`
+                   <button type="button" data-on-click="dismissCoachingPlanPrompt" data-args="[${p.id}]" class="text-[11px] bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded ms-2">Dismiss</button>`
                 : '';
 
             const verificationDetail = p.verification_call_id
@@ -2213,7 +2213,7 @@
                 }
                 document.getElementById('coachingPlanDeliverEvidence').innerHTML = ev.map(e => `
                     <button type="button" data-on-click="viewCall" data-args="[${e.id}]"
-                            class="w-full text-left px-2 py-1.5 rounded hover:bg-indigo-50 flex items-center justify-between gap-2">
+                            class="w-full text-start px-2 py-1.5 rounded hover:bg-indigo-50 flex items-center justify-between gap-2">
                         <span class="font-mono text-indigo-700 truncate">${escapeHtml(e.call_id)}</span>
                         <span class="text-gray-500 whitespace-nowrap">${escapeHtml(_fd(e.call_date))} · score ${escapeHtml(String(e.overall_score ?? '--'))}</span>
                     </button>`).join('');
@@ -2441,7 +2441,7 @@
                         <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${gapCls} whitespace-nowrap">${escapeHtml(gapLabel)}</span>
                     </div>
                     <div class="relative w-full bg-gray-100 rounded h-2.5">
-                        ${agentPct == null ? '' : `<div class="absolute inset-y-0 left-0 bg-indigo-500 rounded" data-style="width: ${agentPct}%"></div>`}
+                        ${agentPct == null ? '' : `<div class="absolute inset-y-0 start-0 bg-indigo-500 rounded" data-style="width: ${agentPct}%"></div>`}
                         ${tickHtml(p25Pct, 'bg-gray-400', `P25: ${fmt(p25)}`)}
                         ${tickHtml(medPct, 'bg-gray-900', `Median: ${fmt(median)}`)}
                         ${tickHtml(p75Pct, 'bg-gray-400', `P75: ${fmt(p75)}`)}
@@ -3065,7 +3065,7 @@
                         } else {
                             attrList.innerHTML = top.map(a => `
                                 <li><span class="font-mono text-gray-500">${escapeHtml(a.attribute_id)}</span>
-                                    <span class="text-amber-700 font-medium ml-1">×${_fn(a.coaching_count)}</span>
+                                    <span class="text-amber-700 font-medium ms-1">×${_fn(a.coaching_count)}</span>
                                 </li>
                             `).join('');
                         }
@@ -3512,7 +3512,7 @@
                         </div>
 
                         <!-- RIGHT (1/3): sticky. Recording, transcript, CRM, related calls -->
-                        <div class="lg:col-span-1 space-y-4 lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-180px)] lg:overflow-y-auto pr-1">
+                        <div class="lg:col-span-1 space-y-4 lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-180px)] lg:overflow-y-auto pe-1">
                             <!-- Recording player. Loads from the existing
                                  /api/calls/:id/audio route. metadata-only
                                  preload so the modal doesn't pull the whole
@@ -3716,7 +3716,7 @@
             }).slice(0, 25);
             if (related.length === 0) return `<p class="text-xs text-gray-400">${escapeHtml(WalaPlusI18n.t('calls.details_related_none'))}</p>`;
             return related.map(c => `
-                <button type="button" data-on-click="viewCall" data-args="[${c.id}]" class="w-full text-left px-2 py-1.5 rounded hover:bg-indigo-50 text-xs flex items-center justify-between gap-2">
+                <button type="button" data-on-click="viewCall" data-args="[${c.id}]" class="w-full text-start px-2 py-1.5 rounded hover:bg-indigo-50 text-xs flex items-center justify-between gap-2">
                     <span class="truncate text-indigo-700">${escapeHtml(c.call_id)}</span>
                     <span class="text-gray-400 whitespace-nowrap">${escapeHtml(_fd(c.call_date))}</span>
                 </button>
@@ -3849,7 +3849,7 @@
             const openTotal = (data.open.tasks.length + data.open.meetings.length + data.open.calls.length);
             const closedTotal = (data.closed.tasks.length + data.closed.meetings.length + data.closed.calls.length);
             const sourceBadge = data.sourceCount > 1
-                ? `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="Combined across ${data.sourceCount} linked CRM record(s)">aggregated × ${data.sourceCount}</span>`
+                ? `<span class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="Combined across ${data.sourceCount} linked CRM record(s)">aggregated × ${data.sourceCount}</span>`
                 : '';
             const errorBlock = (data.errors && data.errors.length)
                 ? `<div class="mb-2 px-2 py-1 rounded bg-amber-50 border border-amber-200 text-[10px] text-amber-900">${escapeHtml(data.errors.length + ' partial fetch error(s) — counts may be low')}</div>`
@@ -3915,7 +3915,7 @@
                 ? `<span class="text-[10px] text-gray-500">· ${escapeHtml(item.callResult)}</span>`
                 : '';
             return `
-                <div class="px-2 py-1.5 rounded hover:bg-gray-50 border-l-2 border-gray-200">
+                <div class="px-2 py-1.5 rounded hover:bg-gray-50 border-s-2 border-gray-200">
                     <div class="flex items-start justify-between gap-2">
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
@@ -4262,7 +4262,7 @@
                 if (out) {
                     out.innerHTML = `
                         <p class="text-xs text-gray-500 mb-2">Scanned: ${escapeHtml(String(data.scanned || 0))} · Normalized: <code>${escapeHtml(data.normalized_query || '')}</code></p>
-                        ${rows.length ? `<table class="w-full text-xs border-collapse"><thead><tr class="bg-gray-50"><th class="p-2 text-start">Lead ID</th><th class="p-2 text-start">Name</th><th class="p-2 text-start">Phone</th><th class="p-2 text-start">Email</th></tr></thead><tbody>
+                        ${rows.length ? `<table class="w-full text-xs border-collapse"><thead><tr class="bg-gray-50"><th scope="col" class="p-2 text-start">Lead ID</th><th scope="col" class="p-2 text-start">Name</th><th scope="col" class="p-2 text-start">Phone</th><th scope="col" class="p-2 text-start">Email</th></tr></thead><tbody>
                             ${rows.map((r) => `<tr class="border-t"><td class="p-2 font-mono">${escapeHtml(r.id)}</td><td class="p-2">${escapeHtml(r.full_name || '')}</td><td class="p-2">${escapeHtml(r.phone || '')}</td><td class="p-2">${escapeHtml(r.email || '')}</td></tr>`).join('')}
                         </tbody></table>` : `<p class="text-amber-700">${escapeHtml(data.note || 'No matches')}</p>`}`;
                 }
@@ -4356,7 +4356,7 @@
                             <div class="text-xs uppercase tracking-wide opacity-80">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_weighted_total'))}</div>
                             <div class="text-2xl font-bold" data-testid="copc-weighted-total">${escapeHtml(totalLabel)}</div>
                         </div>
-                        <div class="text-right text-xs">
+                        <div class="text-end text-xs">
                             <div>${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_coverage'))}: <span class="font-mono" data-testid="copc-coverage">${overall.coverage_pct ?? 0}%</span></div>
                             <div>${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_sourced'))}: <span class="font-mono">${overall.sourced_count ?? 0}/${overall.total_checkpoints ?? 0}</span></div>
                             <div class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.copc_version'))}: <span class="font-mono">${escapeHtml(scorecard.scorecard_version || '?')}</span></div>
@@ -6499,7 +6499,7 @@
                         adjustedBlock = `<div class="text-gray-700 mt-0.5">AI <span class="text-gray-400">${aiOverall}</span> → Adjusted <span class="font-semibold">${adj}</span> <span class="${deltaCls}">(${sign}${delta})</span></div>`;
                     }
                     return `
-                    <div class="text-xs border-l-2 ${r.review_status === 'approved' ? 'border-green-400' : r.review_status === 'disagreed' ? 'border-red-400' : 'border-amber-400'} pl-2 py-1">
+                    <div class="text-xs border-s-2 ${r.review_status === 'approved' ? 'border-green-400' : r.review_status === 'disagreed' ? 'border-red-400' : 'border-amber-400'} ps-2 py-1">
                         <div class="flex items-center gap-2">
                             ${statusBadge(r.review_status)}
                             <span class="text-gray-700 font-medium">${escapeHtml(r.reviewer_name || r.reviewer_email)}</span>
@@ -6622,10 +6622,10 @@
                     const speaker = seg.speaker || seg.role || '';
                     const tsLabel = Number.isFinite(start) ? formatSeconds(start) : '';
                     const speakerBadge = speaker
-                        ? `<span class="px-1 py-0.5 text-[10px] rounded bg-gray-200 text-gray-700 mr-1">${escapeHtml(String(speaker))}</span>`
+                        ? `<span class="px-1 py-0.5 text-[10px] rounded bg-gray-200 text-gray-700 me-1">${escapeHtml(String(speaker))}</span>`
                         : '';
                     if (Number.isFinite(start)) {
-                        return `<div class="mb-1 hover:bg-blue-50 rounded p-1 cursor-pointer" data-on-click="seekEvalAudio" data-args="[&quot;${escapeForJs(String(start))}&quot;]"><span class="text-[10px] text-indigo-600 font-mono mr-2">${tsLabel}</span>${speakerBadge}${escapeHtml(String(text))}</div>`;
+                        return `<div class="mb-1 hover:bg-blue-50 rounded p-1 cursor-pointer" data-on-click="seekEvalAudio" data-args="[&quot;${escapeForJs(String(start))}&quot;]"><span class="text-[10px] text-indigo-600 font-mono me-2">${tsLabel}</span>${speakerBadge}${escapeHtml(String(text))}</div>`;
                     }
                     return `<div class="mb-1 p-1">${speakerBadge}${escapeHtml(String(text))}</div>`;
                 }).join('');
@@ -6709,7 +6709,7 @@
                 }
 
                 list.innerHTML = suggestions.map(s => `
-                    <div class="border-l-4 ${s.priority === 'urgent' ? 'border-red-500' : s.priority === 'high' ? 'border-orange-500' : 'border-amber-400'} pl-3 py-2">
+                    <div class="border-s-4 ${s.priority === 'urgent' ? 'border-red-500' : s.priority === 'high' ? 'border-orange-500' : 'border-amber-400'} ps-3 py-2">
                         <div class="flex items-center gap-2 flex-wrap">
                             <span class="px-2 py-0.5 text-[10px] rounded border ${priorityClass(s.priority)} font-medium uppercase">${escapeHtml(s.priority_label)}</span>
                             <span class="font-medium text-sm">${escapeHtml(s.attribute_name)}</span>
@@ -7375,7 +7375,7 @@
                     } else {
                         list.innerHTML = top.map(a => `
                             <li><span class="text-gray-900">${escapeHtml(a.attribute_name || a.attribute_id || '')}</span>
-                                <span class="text-amber-600 font-medium ml-1">×${_fn(a.adjustment_count || 0)}</span>
+                                <span class="text-amber-600 font-medium ms-1">×${_fn(a.adjustment_count || 0)}</span>
                             </li>
                         `).join('');
                     }

@@ -25,9 +25,13 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+// Same Windows path bug fix as runIntegrationTests.ts /
+// noPhysicalDirectionClasses.test.ts: `.pathname` returns `/D:/...` on
+// Windows which `path.resolve` then double-drives into `D:\D:\...`.
 const SCRIPT = path.resolve(
-  new URL(".", import.meta.url).pathname,
+  fileURLToPath(new URL(".", import.meta.url)),
   "..",
   "scripts",
   "check-th-scope.cjs",

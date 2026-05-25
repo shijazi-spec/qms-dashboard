@@ -76,13 +76,13 @@
             <table class="min-w-full text-sm">
                 <thead class="bg-gray-50 text-xs text-gray-600 uppercase tracking-wide">
                     <tr>
-                        <th class="px-4 py-2 text-left">Date</th>
-                        <th class="px-4 py-2 text-left">Agent</th>
-                        <th class="px-4 py-2 text-left">Direction</th>
-                        <th class="px-4 py-2 text-right">Duration</th>
-                        <th class="px-4 py-2 text-left">Status</th>
-                        <th class="px-4 py-2 text-left">Linked via</th>
-                        <th class="px-4 py-2 text-right">QA score</th>
+                        <th scope="col" class="px-4 py-2 text-start">Date</th>
+                        <th scope="col" class="px-4 py-2 text-start">Agent</th>
+                        <th scope="col" class="px-4 py-2 text-start">Direction</th>
+                        <th scope="col" class="px-4 py-2 text-end">Duration</th>
+                        <th scope="col" class="px-4 py-2 text-start">Status</th>
+                        <th scope="col" class="px-4 py-2 text-start">Linked via</th>
+                        <th scope="col" class="px-4 py-2 text-end">QA score</th>
                     </tr>
                 </thead>
                 <tbody id="calls-body" class="divide-y divide-gray-100">
@@ -171,10 +171,10 @@
                             <td class="px-4 py-2 text-gray-700">${escapeHtml(fmtDate(c.call_date))}</td>
                             <td class="px-4 py-2 text-gray-700">${escapeHtml(c.agent_name || c.agent_email || '—')}</td>
                             <td class="px-4 py-2 text-gray-700">${escapeHtml(c.direction || '—')}</td>
-                            <td class="px-4 py-2 text-right text-gray-700">${escapeHtml(fmtDur(c.duration_seconds))}</td>
+                            <td class="px-4 py-2 text-end text-gray-700">${escapeHtml(fmtDur(c.duration_seconds))}</td>
                             <td class="px-4 py-2 text-gray-700">${escapeHtml(c.status || '—')}</td>
                             <td class="px-4 py-2 text-gray-500">${escapeHtml(c.linked_via || '—')}</td>
-                            <td class="px-4 py-2 text-right font-medium ${c.overall_score == null ? 'text-gray-400' : c.overall_score >= 80 ? 'text-green-700' : c.overall_score >= 60 ? 'text-amber-700' : 'text-red-700'}">${c.overall_score == null ? '—' : escapeHtml(c.overall_score)}</td>
+                            <td class="px-4 py-2 text-end font-medium ${c.overall_score == null ? 'text-gray-400' : c.overall_score >= 80 ? 'text-green-700' : c.overall_score >= 60 ? 'text-amber-700' : 'text-red-700'}">${c.overall_score == null ? '—' : escapeHtml(c.overall_score)}</td>
                         </tr>
                     `).join('');
                     callsCard.classList.remove('hidden');

@@ -99,9 +99,9 @@
                 <h2 class="text-sm font-semibold text-gray-900">Coaching loop — 30d</h2>
                 <table class="w-full mt-3 text-sm">
                     <tbody class="divide-y divide-gray-100">
-                        <tr><td class="py-2 text-gray-600">Delivered</td><td id="m-coach-delivered" class="py-2 text-right font-medium">—</td></tr>
-                        <tr><td class="py-2 text-gray-600">Pending</td><td id="m-coach-pending" class="py-2 text-right font-medium">—</td></tr>
-                        <tr><td class="py-2 text-gray-600">Created in window</td><td id="m-coach-total" class="py-2 text-right font-medium">—</td></tr>
+                        <tr><td class="py-2 text-gray-600">Delivered</td><td id="m-coach-delivered" class="py-2 text-end font-medium">—</td></tr>
+                        <tr><td class="py-2 text-gray-600">Pending</td><td id="m-coach-pending" class="py-2 text-end font-medium">—</td></tr>
+                        <tr><td class="py-2 text-gray-600">Created in window</td><td id="m-coach-total" class="py-2 text-end font-medium">—</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -116,10 +116,10 @@
             <table class="min-w-full text-sm">
                 <thead class="bg-gray-50 text-xs text-gray-600 uppercase tracking-wide">
                     <tr>
-                        <th class="px-4 py-2 text-left">Call ID</th>
-                        <th class="px-4 py-2 text-left">When</th>
-                        <th class="px-4 py-2 text-left">Error</th>
-                        <th class="px-4 py-2 text-left">Code</th>
+                        <th scope="col" class="px-4 py-2 text-start">Call ID</th>
+                        <th scope="col" class="px-4 py-2 text-start">When</th>
+                        <th scope="col" class="px-4 py-2 text-start">Error</th>
+                        <th scope="col" class="px-4 py-2 text-start">Code</th>
                     </tr>
                 </thead>
                 <tbody id="failures-body" class="divide-y divide-gray-100"></tbody>
@@ -193,7 +193,7 @@
                         ? '<tr><td class="py-2 text-gray-400">No calls in window</td></tr>'
                         : mixEntries.map(([src, n]) => `
                             <tr><td class="py-2 text-gray-600">${escapeHtml(src)}</td>
-                                <td class="py-2 text-right font-medium">${escapeHtml(n)}</td></tr>
+                                <td class="py-2 text-end font-medium">${escapeHtml(n)}</td></tr>
                           `).join('');
 
                     const viaBody = document.getElementById('m-via-body');
@@ -202,7 +202,7 @@
                         ? '<tr><td class="py-2 text-gray-400">No linked calls</td></tr>'
                         : viaEntries.map(([via, n]) => `
                             <tr><td class="py-2 text-gray-600">${escapeHtml(via)}</td>
-                                <td class="py-2 text-right font-medium">${escapeHtml(n)}</td></tr>
+                                <td class="py-2 text-end font-medium">${escapeHtml(n)}</td></tr>
                           `).join('');
 
                     document.getElementById('m-coach-delivered').textContent = m.coaching.delivered_30d;
