@@ -1,5 +1,5 @@
 import { fetchAllZohoRecords, type ZohoCRMRecord } from './zohoCRM';
-import logger from './logger';
+import { logger } from './logger';
 
 export type ParentModule = 'Leads' | 'Deals';
 export type ActivityKind = 'task' | 'meeting' | 'call';

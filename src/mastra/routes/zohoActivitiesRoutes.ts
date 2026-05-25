@@ -6,7 +6,7 @@ import {
   getZohoActivitiesForRecord,
   type ParentModule,
 } from '../../utils/zohoActivitiesReader';
-import logger from '../../utils/logger';
+import { logger } from '../../utils/logger';
 
 const ACTIVITIES_READ_ROLES = [
   'admin',
