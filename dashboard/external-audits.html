@@ -33,6 +33,7 @@
   <div id="walaplus-nav"></div>
   <script src="/js/a11y.js" defer></script>
   <script src="/js/safe-actions.js?v=2"></script>
+  <script src="/js/safe-render.js?v=1"></script>
         <script src="/js/navigation.js?v=5.5"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -286,9 +287,15 @@
   </div>
 
   <script>
-    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
-      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-    }[c]));
+    // HTML escape — delegate to the shared SafeRender helper so every page
+    // uses the same escape rules. Fails closed if safe-render.js failed to load.
+    const esc = (s) => {
+      if (!window.SafeRender || typeof window.SafeRender.escape !== 'function') {
+        console.error('[external-audits] SafeRender.escape unavailable — refusing to render unescaped content');
+        return '';
+      }
+      return window.SafeRender.escape(s);
+    };
 
     function switchTab(name) {
       ['calendar','certs','readiness'].forEach(t => {

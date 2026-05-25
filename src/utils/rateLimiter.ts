@@ -33,6 +33,27 @@ const AUTH_PATHS = [
 ];
 const EXPORT_PATHS = ["/export", "/pdf"];
 
+/**
+ * Boot-time guard: refuse to start the server if RATE_LIMIT_DISABLED is left
+ * set to "true" in a production deploy. Without this, a stray dev-only env
+ * var carried into production silently disables every per-IP / per-user limit
+ * (see checkRateLimit() below — the disabled branch returns `{ allowed: true }`
+ * unconditionally), removing DoS and brute-force protection without any
+ * observable signal. Wired into src/mastra/index.ts so the failure happens
+ * before any HTTP route is bound, not on the first abusive request.
+ */
+export function assertRateLimitEnabledInProductionOrThrow(): void {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.RATE_LIMIT_DISABLED === "true"
+  ) {
+    throw new Error(
+      "RATE_LIMIT_DISABLED=true is not permitted in production. " +
+        "Unset the variable or set it to anything other than 'true'.",
+    );
+  }
+}
+
 let tableReady: Promise<void> | null = null;
 
 function ensureTable(): Promise<void> {

@@ -92,6 +92,7 @@
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/safe-render.js?v=1"></script>
         <script src="/js/navigation.js?v=5.5"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -150,12 +151,16 @@
     </main>
 
     <script>
-        function esc(str) {
-            if (str === null || str === undefined) return '';
-            var d = document.createElement('div');
-            d.textContent = String(str);
-            return d.innerHTML;
-        }
+        // HTML escape — delegate to the shared SafeRender helper so every page
+        // uses the same escape rules. Fails closed (empty string) if
+        // safe-render.js failed to load.
+        const esc = (str) => {
+            if (!window.SafeRender || typeof window.SafeRender.escape !== 'function') {
+                console.error('[sop] SafeRender.escape unavailable — refusing to render unescaped content');
+                return '';
+            }
+            return window.SafeRender.escape(str);
+        };
 
         function parseMarkdown(md) {
             md = md.replace(/\r\n/g, '\n');

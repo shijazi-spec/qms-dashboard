@@ -77,6 +77,7 @@ import { i18nRoutes } from "./routes/i18nRoutes";
 import { onBootRedactionSweep } from "../utils/redactHistoricalLogs";
 import { exportDownloadRoutes } from "./routes/exportDownloadRoutes";
 import { assertAdminApiKeyStrengthOrThrow } from "../utils/rbacMiddleware";
+import { assertRateLimitEnabledInProductionOrThrow } from "../utils/rateLimiter";
 import {
   lockDownStagedExportCacheDirAtStartup,
   checkStagedExportCacheLocation,
@@ -91,6 +92,14 @@ import { logger as safeLogger } from "../utils/logger";
 // chars ≥ 10). No-op when ADMIN_API_KEY is unset — the "Setup Required" page
 // flow handles the unconfigured-platform case.
 assertAdminApiKeyStrengthOrThrow();
+
+// ─── Rate-limit kill-switch prod guard ────────────────────────────────────────
+// RATE_LIMIT_DISABLED is a development-only escape hatch (used on Replit dev
+// where typing demo flows trips the per-IP limits). If it survives into a
+// production deploy via a forgotten env var, the entire HTTP rate limiter
+// falls open and the platform has no DoS / brute-force protection. Fail boot
+// loudly instead so the deploy is rolled back rather than running unprotected.
+assertRateLimitEnabledInProductionOrThrow();
 
 // ─── Streaming-export cache directory lockdown ────────────────────────────────
 // Eagerly create / re-chmod the streaming-export cache directory to mode 0o700

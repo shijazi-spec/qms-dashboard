@@ -330,7 +330,7 @@ export const userAccessRoutes = [
                   </div>
                   <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
                     <p>Hello${body.full_name ? " " + body.full_name : ""},</p>
-                    <p>You have been invited to join the WalaPlus QMS Platform as a <strong>${body.role}</strong> in the <strong>${body.team}</strong> team.</p>
+                    <p>You have been invited to join the WalaPlus QMS Platform. Your role and team assignment will be shown after you accept the invitation.</p>
                     <p style="margin: 20px 0;">
                       <a href="${inviteLink}" style="background: #2563EB; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; display: inline-block;">
                         Accept Invitation
@@ -341,7 +341,7 @@ export const userAccessRoutes = [
                   </div>
                 </div>
               `,
-              text: `You have been invited to WalaPlus QMS Platform as a ${body.role}. Accept your invitation here: ${inviteLink}`,
+              text: `You have been invited to WalaPlus QMS Platform. Accept your invitation here: ${inviteLink}`,
             });
 
             if (emailResult.success) {

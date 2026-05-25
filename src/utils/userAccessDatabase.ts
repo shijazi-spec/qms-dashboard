@@ -762,6 +762,11 @@ export async function approveAccessRequest(
   const user = result.rows[0];
   if (!user) return null;
 
+  try {
+    const { invalidatePlatformUserCache } = await import("./rbacMiddleware");
+    invalidatePlatformUserCache(user.email);
+  } catch {}
+
   if (permissionOverrides && permissionOverrides.length > 0) {
     for (const perm of permissionOverrides) {
       if (perm.screen_code) {
@@ -822,6 +827,11 @@ export async function denyAccessRequest(
 
   const user = result.rows[0];
   if (!user) return null;
+
+  try {
+    const { invalidatePlatformUserCache } = await import("./rbacMiddleware");
+    invalidatePlatformUserCache(user.email);
+  } catch {}
 
   await logAccessEvent({
     event_type: "ACCESS_DENIED",

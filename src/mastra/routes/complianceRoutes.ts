@@ -214,6 +214,7 @@ export const complianceRoutes = [
             buffer,
             file.name,
             file.type,
+            'compliance',
           );
 
           const updated = await updateRegulationDocument(id, {
@@ -284,7 +285,7 @@ export const complianceRoutes = [
           const { getRegulationById, initComplianceTables } =
             await import("../../utils/complianceDatabase");
           const { resolveGenericId } = await import("../../utils/riskDatabase");
-          const { getUploadedFile } = await import("../../utils/fileUpload");
+          const { getUploadedFileForModule } = await import("../../utils/fileUpload");
           await initComplianceTables();
 
           const id = await resolveGenericId(c.req.param("id"), "regulations");
@@ -294,7 +295,11 @@ export const complianceRoutes = [
           if (!reg.document_path)
             return c.json({ error: "No document uploaded" }, 404);
 
-          const file = getUploadedFile(reg.document_path);
+          // Scoped read: refuse to return a blob that isn't under the
+          // compliance namespace. allowLegacy preserves access to rows
+          // written before the namespaced layout existed; once a backfill
+          // moves those files into /data/documents/compliance/, drop the flag.
+          const file = getUploadedFileForModule(reg.document_path, 'compliance', { allowLegacy: true });
           if (!file)
             return c.json(
               { error: "Document file is missing on disk" },

@@ -1,9 +1,55 @@
 import { writeFileSync, mkdirSync, existsSync, readFileSync, unlinkSync, statfsSync } from 'fs';
 import { join, extname } from 'path';
 import { randomBytes } from 'crypto';
+import { logger } from './logger';
 
 const UPLOAD_DIR = join(process.cwd(), 'data', 'documents');
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
+
+/**
+ * Per-extension magic-byte signatures. We trust the file *bytes*, not the
+ * client-supplied Content-Type header or the .ext on the filename, because
+ * both are attacker-controlled in multipart uploads. A file whose declared
+ * extension says ".pdf" but whose leading bytes are `MZ` is a Windows
+ * executable being smuggled past the extension allowlist — reject it before
+ * it lands in /data/documents, where some downstream consumer (text
+ * extractor, viewer, antivirus scanner) may parse it under the wrong
+ * assumption and trigger a vuln in that parser.
+ *
+ * Each signature is matched at offset 0. The OOXML formats (docx/xlsx/pptx)
+ * are all ZIP containers and share `PK\x03\x04` — the bytes don't tell us
+ * *which* Office format, so we accept all three under the same prefix and
+ * lean on the extension allowlist to keep the .doc/.xls/.ppt-era binary
+ * formats out.
+ */
+const MAGIC_BYTES: Record<string, Uint8Array[]> = {
+  '.pdf': [new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d])], // %PDF-
+  '.docx': [new Uint8Array([0x50, 0x4b, 0x03, 0x04])],       // PK\x03\x04 (ZIP)
+  '.xlsx': [new Uint8Array([0x50, 0x4b, 0x03, 0x04])],
+  '.pptx': [new Uint8Array([0x50, 0x4b, 0x03, 0x04])],
+  '.png':  [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+  '.jpg':  [new Uint8Array([0xff, 0xd8, 0xff])],
+  '.jpeg': [new Uint8Array([0xff, 0xd8, 0xff])],
+};
+
+function bufferStartsWith(buffer: Buffer, sig: Uint8Array): boolean {
+  if (buffer.length < sig.length) return false;
+  for (let i = 0; i < sig.length; i++) {
+    if (buffer[i] !== sig[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Returns true when `buffer` begins with one of the known magic-byte
+ * signatures for `ext`. Returns false for unknown extensions so callers
+ * fail closed.
+ */
+function magicBytesMatchExtension(buffer: Buffer, ext: string): boolean {
+  const sigs = MAGIC_BYTES[ext];
+  if (!sigs) return false;
+  return sigs.some(sig => bufferStartsWith(buffer, sig));
+}
 
 // Minimum free disk space required before writing any uploaded file (200 MB).
 const MIN_FREE_BYTES = 200 * 1024 * 1024;
@@ -46,13 +92,37 @@ const ALLOWED_MIME_TYPES: Record<string, string[]> = {
   'image/jpeg': ['.jpg', '.jpeg'],
 };
 
-function ensureUploadDir(): void {
-  if (!existsSync(UPLOAD_DIR)) {
-    mkdirSync(UPLOAD_DIR, { recursive: true });
+function ensureUploadDir(subdir?: string): void {
+  const dir = subdir ? join(UPLOAD_DIR, subdir) : UPLOAD_DIR;
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
   }
 }
 
-export function validateFile(fileName: string, fileSize: number, mimeType: string): { valid: boolean; error?: string } {
+/**
+ * Module namespaces recognised by saveUploadedFile / getUploadedFileForModule.
+ * Adding a new one is a deliberate change — every download route that reads
+ * blobs for that module must call getUploadedFileForModule with the matching
+ * namespace, or the cross-module isolation is silently lost.
+ *
+ * Namespace strings end up as a path segment under /data/documents/, so they
+ * must be filesystem-safe (lowercase, no separators, no `..`). Enforced below
+ * in assertValidModuleNamespace().
+ */
+export type UploadModuleNamespace =
+  | 'policies'
+  | 'qms-docs'
+  | 'compliance'
+  | 'call-evidence'
+  | 'audits';
+
+function assertValidModuleNamespace(ns: string): void {
+  if (!/^[a-z][a-z0-9-]{1,32}$/.test(ns)) {
+    throw new Error(`Invalid upload module namespace: ${ns}`);
+  }
+}
+
+export function validateFile(fileName: string, fileSize: number, mimeType: string, buffer?: Buffer): { valid: boolean; error?: string } {
   if (fileSize > MAX_FILE_SIZE) {
     return { valid: false, error: `File size exceeds maximum of 25MB` };
   }
@@ -63,27 +133,73 @@ export function validateFile(fileName: string, fileSize: number, mimeType: strin
     return { valid: false, error: `File type ${ext} is not allowed. Allowed: PDF, DOCX, XLSX, PPTX, PNG, JPG` };
   }
 
+  // When a buffer is supplied (the upload route already read the bytes
+  // into memory), confirm the leading bytes actually match the claimed
+  // extension. Skip when no buffer is available so legacy callers that
+  // pre-validate before reading the body keep working — saveUploadedFile
+  // re-checks unconditionally below.
+  if (buffer && !magicBytesMatchExtension(buffer, ext)) {
+    return { valid: false, error: `File contents do not match declared type ${ext}` };
+  }
+
   return { valid: true };
 }
 
-export async function saveUploadedFile(buffer: Buffer, originalName: string, mimeType: string): Promise<{ filePath: string; fileName: string; fileSize: number; mimeType: string }> {
-  ensureUploadDir();
+export async function saveUploadedFile(
+  buffer: Buffer,
+  originalName: string,
+  mimeType: string,
+  moduleNamespace?: UploadModuleNamespace,
+): Promise<{ filePath: string; fileName: string; fileSize: number; mimeType: string }> {
   assertDiskSpace(buffer.length);
 
   const ext = extname(originalName).toLowerCase();
+  // Hard-fail on bytes/extension mismatch even when the caller did not
+  // pre-validate. saveUploadedFile is the single bottleneck for every
+  // attachment write, so this guard cannot be skipped by a careless route.
+  if (!magicBytesMatchExtension(buffer, ext)) {
+    throw new Error(`Refusing to save: file contents do not match extension ${ext}`);
+  }
   const uniqueName = `${Date.now()}_${randomBytes(8).toString('hex')}${ext}`;
-  const filePath = join(UPLOAD_DIR, uniqueName);
+
+  // When moduleNamespace is supplied, write into /data/documents/{ns}/ so a
+  // download handler can later prove the blob belongs to its module by
+  // checking the path prefix. Callers that pre-date the namespaced layout
+  // (or that don't yet know their module) fall back to the legacy flat
+  // /data/documents/ directory; getUploadedFileForModule still serves those
+  // when `allowLegacy: true` is passed.
+  let filePath: string;
+  let relPath: string;
+  if (moduleNamespace) {
+    assertValidModuleNamespace(moduleNamespace);
+    ensureUploadDir(moduleNamespace);
+    filePath = join(UPLOAD_DIR, moduleNamespace, uniqueName);
+    relPath = `/data/documents/${moduleNamespace}/${uniqueName}`;
+  } else {
+    ensureUploadDir();
+    filePath = join(UPLOAD_DIR, uniqueName);
+    relPath = `/data/documents/${uniqueName}`;
+  }
 
   writeFileSync(filePath, buffer);
 
   return {
-    filePath: `/data/documents/${uniqueName}`,
+    filePath: relPath,
     fileName: originalName,
     fileSize: buffer.length,
     mimeType,
   };
 }
 
+/**
+ * Legacy reader — accepts any path under /data/documents/. Retained so
+ * background scripts (migrations, sweepers) and any handler that hasn't
+ * been namespaced yet keep working. **Do not call from a module-scoped
+ * download route**: it returns a blob no matter which module saved it, so
+ * a download endpoint that takes a caller-controlled `filePath` could be
+ * pivoted into reading another module's attachments. Use
+ * getUploadedFileForModule(...) from download routes instead.
+ */
 export function getUploadedFile(relativePath: string): { buffer: Buffer; fileName: string } | null {
   const normalizedPath = relativePath.replace(/\.\./g, '').replace(/\/\//g, '/');
   if (!normalizedPath.startsWith('/data/documents/')) return null;
@@ -92,17 +208,91 @@ export function getUploadedFile(relativePath: string): { buffer: Buffer; fileNam
   return { buffer: readFileSync(fullPath), fileName: normalizedPath.split('/').pop() || 'file' };
 }
 
+/**
+ * Module-scoped reader for download routes. Returns the blob only if its
+ * stored path is under /data/documents/{moduleNamespace}/. With
+ * `allowLegacy: true`, also accepts the un-namespaced legacy path
+ * /data/documents/{file} for rows written before the namespaced layout
+ * existed; new code should leave `allowLegacy` off so any cross-module path
+ * lookup is rejected outright.
+ *
+ * Pairs with saveUploadedFile(..., moduleNamespace) — the two together
+ * enforce that a download endpoint in module X cannot return module Y's
+ * attachments, even if an attacker manages to write Y's file_path into
+ * one of X's database rows.
+ */
+export function getUploadedFileForModule(
+  relativePath: string,
+  moduleNamespace: UploadModuleNamespace,
+  opts?: { allowLegacy?: boolean },
+): { buffer: Buffer; fileName: string } | null {
+  assertValidModuleNamespace(moduleNamespace);
+  const normalizedPath = relativePath.replace(/\.\./g, '').replace(/\/\//g, '/');
+  const namespacedPrefix = `/data/documents/${moduleNamespace}/`;
+  const legacyPrefix = '/data/documents/';
+
+  const inNamespace = normalizedPath.startsWith(namespacedPrefix);
+  // Legacy match = `/data/documents/<file>` with NO additional `/` between
+  // `documents/` and the filename (otherwise it would be inside *some*
+  // module's namespace, and we must reject if that namespace isn't ours).
+  const tail = inNamespace ? null : normalizedPath.slice(legacyPrefix.length);
+  const isLegacyFlatPath =
+    !inNamespace &&
+    normalizedPath.startsWith(legacyPrefix) &&
+    tail !== null &&
+    tail.length > 0 &&
+    !tail.includes('/');
+
+  if (!inNamespace && !(isLegacyFlatPath && opts?.allowLegacy)) {
+    return null;
+  }
+
+  const fullPath = join(UPLOAD_DIR, normalizedPath.replace(legacyPrefix, ''));
+  if (!existsSync(fullPath)) return null;
+  return { buffer: readFileSync(fullPath), fileName: normalizedPath.split('/').pop() || 'file' };
+}
+
 export function deleteUploadedFile(relativePath: string): boolean {
+  let fullPath: string | null = null;
   try {
     const normalizedPath = relativePath.replace(/\.\./g, '').replace(/\/\//g, '/');
     if (!normalizedPath.startsWith('/data/documents/')) return false;
-    const fullPath = join(UPLOAD_DIR, normalizedPath.replace('/data/documents/', ''));
+    fullPath = join(UPLOAD_DIR, normalizedPath.replace('/data/documents/', ''));
     if (existsSync(fullPath)) {
       unlinkSync(fullPath);
       return true;
     }
     return false;
-  } catch {
+  } catch (err) {
+    // Surface the failure so an orphaned blob in /data/documents is visible
+    // to ops instead of silently filling the volume over time. Callers that
+    // checked the return value will still see `false`; callers that ignored
+    // it (the common case — see policyRoutes replacement flow) now leave
+    // a trail in the structured log + system_events for a sweeper to act on.
+    logger.error('[fileUpload] failed to delete uploaded blob', {
+      relativePath,
+      fullPath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    // Best-effort: fire-and-forget a system_event so the orphan shows up in
+    // the security/observability dashboards alongside other infra warnings.
+    // Loaded lazily to avoid a top-level cycle with the database module.
+    import('./database')
+      .then(({ logSystemEvent }) =>
+        logSystemEvent({
+          event_type: 'upload_blob_delete_failed',
+          event_category: 'security',
+          description: `Failed to delete uploaded blob ${relativePath}`,
+          severity: 'warning',
+          source: 'fileUpload',
+          metadata: {
+            relative_path: relativePath,
+            full_path: fullPath,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        }),
+      )
+      .catch(() => { /* swallow — never let observability break the caller */ });
     return false;
   }
 }

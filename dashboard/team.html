@@ -53,6 +53,7 @@
     <div id="walaplus-nav"></div>
     <script src="/js/a11y.js" defer></script>
     <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/safe-render.js?v=1"></script>
         <script src="/js/navigation.js?v=5.5"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -568,14 +569,17 @@
         let allMembers = [];
         let currentProjectView = 'table';
 
-        function esc(s) {
-            return String(s == null ? '' : s)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
+        // HTML escape — delegate to the shared SafeRender helper so every page
+        // uses the same escape rules. Fails closed (empty string) if
+        // safe-render.js failed to load, so a load error can't cause raw DB
+        // content to slip into innerHTML.
+        const esc = (s) => {
+            if (!window.SafeRender || typeof window.SafeRender.escape !== 'function') {
+                console.error('[team] SafeRender.escape unavailable — refusing to render unescaped content');
+                return '';
+            }
+            return window.SafeRender.escape(s);
+        };
 
         document.addEventListener('DOMContentLoaded', () => {
             loadAnalytics();

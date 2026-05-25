@@ -89,6 +89,7 @@
         <div id="walaplus-nav"></div>
         <script src="/js/a11y.js" defer></script>
         <script src="/js/safe-actions.js?v=2"></script>
+        <script src="/js/safe-render.js?v=1"></script>
         <script src="/js/navigation.js?v=5.5"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -765,15 +766,17 @@
                     ? (window.WalaPlusI18n.tDynamic(prefix, value) || value)
                     : value;
             }
-            function esc(str) {
-                if (str == null) return '';
-                return String(str)
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#39;');
-            }
+            // HTML escape — delegate to the shared SafeRender helper so every
+            // page uses the same escape rules. Fail closed if safe-render.js
+            // failed to load (rendering empty strings is preferable to silently
+            // emitting unescaped DB content into innerHTML).
+            const esc = (str) => {
+                if (!window.SafeRender || typeof window.SafeRender.escape !== 'function') {
+                    console.error('[qms] SafeRender.escape unavailable — refusing to render unescaped content');
+                    return '';
+                }
+                return window.SafeRender.escape(str);
+            };
             let useSessionAuth = false;
 
             async function checkAuth() {

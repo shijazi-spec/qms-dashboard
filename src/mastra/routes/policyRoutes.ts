@@ -1286,7 +1286,7 @@ export const policyRoutes = [
           const oldFilePath = policy.file_path || null;
 
           const buffer = Buffer.from(await file.arrayBuffer());
-          const fileInfo = await saveUploadedFile(buffer, file.name, file.type);
+          const fileInfo = await saveUploadedFile(buffer, file.name, file.type, 'policies');
 
           await updatePolicy(
             id,
@@ -1324,7 +1324,7 @@ export const policyRoutes = [
 
           const { getPolicyById, initPolicyTables } =
             await import("../../utils/policyDatabase");
-          const { getUploadedFile } = await import("../../utils/fileUpload");
+          const { getUploadedFileForModule } = await import("../../utils/fileUpload");
           await initPolicyTables();
 
           const id = parseInt(c.req.param("id"));
@@ -1339,7 +1339,10 @@ export const policyRoutes = [
             );
           }
 
-          const file = getUploadedFile(policy.file_path);
+          // Scoped read: refuse to return a blob outside /data/documents/policies/.
+          // allowLegacy keeps existing un-namespaced rows readable; once migrated
+          // into the policies subdir, drop the flag to harden cross-module isolation.
+          const file = getUploadedFileForModule(policy.file_path, 'policies', { allowLegacy: true });
           if (!file) return c.json({ error: "File not found on disk" }, 404);
 
           // Range-aware response so the streaming-download helper can resume

@@ -181,21 +181,16 @@ export const callIntelligenceRoutes = [
               ORDER BY id DESC
               LIMIT 5`,
           );
-          // Also confirm which DB we're connected to so DATABASE_URL
-          // drift between deploys is easy to spot — leak only the host,
-          // never user/password.
-          let dbHost = "unknown";
-          try {
-            const url = new URL(process.env.DATABASE_URL || "");
-            dbHost = `${url.hostname}:${url.port || ""}/${url.pathname.replace(/^\//, "")}`;
-          } catch {
-            /* ignore */
-          }
+          // Intentionally omit any DB connection metadata from the response:
+          // exposing the Postgres hostname/database name (even without
+          // credentials) gives an attacker who reaches this endpoint a free
+          // reconnaissance step toward the data store. DATABASE_URL drift
+          // between deploys is visible from server logs and the platform's
+          // own ops dashboard — there is no need to ship it to API callers.
           return c.json({
             success: true,
             total_call_records: countRes.rows[0]?.n ?? 0,
             recent_5: recentRes.rows,
-            db_host: dbHost,
             checked_at: new Date().toISOString(),
           });
         } catch (error: any) {

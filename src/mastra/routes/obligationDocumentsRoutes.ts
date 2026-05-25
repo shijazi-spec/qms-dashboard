@@ -318,6 +318,7 @@ export const obligationDocumentsRoutes = [
                 buffer,
                 file.name,
                 file.type,
+                'qms-docs',
               );
               const doc = await createDocument({
                 category,

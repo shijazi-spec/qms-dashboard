@@ -129,7 +129,7 @@ export const qmsDocsRoutes = [
             return c.json({ error: validation.error }, 400);
 
           const buffer = Buffer.from(await file.arrayBuffer());
-          const fileInfo = await saveUploadedFile(buffer, file.name, file.type);
+          const fileInfo = await saveUploadedFile(buffer, file.name, file.type, 'qms-docs');
 
           const row = await createDocument({
             category: category as any,
@@ -243,6 +243,7 @@ export const qmsDocsRoutes = [
                 buffer,
                 file.name,
                 file.type,
+                'qms-docs',
               );
               const row = await createDocument({
                 category: category as any,
@@ -287,14 +288,18 @@ export const qmsDocsRoutes = [
           const { getDocumentById } = await import(
             "../../utils/qmsDocsDatabase"
           );
-          const { getUploadedFile } = await import("../../utils/fileUpload");
+          const { getUploadedFileForModule } = await import("../../utils/fileUpload");
 
           const id = parseInt(c.req.param("id"), 10);
           if (!Number.isFinite(id)) return c.json({ error: "Invalid id" }, 400);
           const doc = await getDocumentById(id);
           if (!doc) return c.json({ error: "Document not found" }, 404);
 
-          const fileBlob = getUploadedFile(doc.file_path);
+          // Scoped read: refuse to return any blob that isn't stored under
+          // /data/documents/qms-docs/. allowLegacy keeps already-uploaded
+          // rows readable while a backfill migrates them into the qms-docs
+          // subdir; once that's done, remove the flag.
+          const fileBlob = getUploadedFileForModule(doc.file_path, 'qms-docs', { allowLegacy: true });
           if (!fileBlob) return c.json({ error: "File missing on disk" }, 404);
 
           c.header("Content-Type", doc.mime_type || "application/octet-stream");
