@@ -2043,8 +2043,12 @@
         //   Reads from /api/coaching-plans and renders three buckets:
         //   Pending Delivery | Awaiting Verification | Resolved. Backend
         //   detection lives in src/utils/coachingPlans.ts.
+        //   NOTE: variable named _coachingPlansListCache (plural) so it
+        //   doesn't collide with the pre-existing _coachingPlanCache
+        //   (singular) used by the older suggestions/legacy panel
+        //   further down in this file.
         // ===================================================================
-        let _coachingPlanCache = [];
+        let _coachingPlansListCache = [];
 
         async function reloadCoachingPlans() {
             const agentFilter = (document.getElementById('coachingAgentFilter')?.value || '').trim();
@@ -2056,9 +2060,9 @@
                     return;
                 }
                 const data = await res.json();
-                _coachingPlanCache = data.records || [];
-                renderCoachingPlanLists(_coachingPlanCache);
-                populateCoachingAgentFilter(_coachingPlanCache, agentFilter);
+                _coachingPlansListCache = data.records || [];
+                renderCoachingPlanLists(_coachingPlansListCache);
+                populateCoachingAgentFilter(_coachingPlansListCache, agentFilter);
             } catch (e) {
                 renderCoachingPlanError(e.message || String(e));
             }
@@ -2184,7 +2188,7 @@
             document.getElementById('coachingPlanDeliverEvidence').innerHTML = '<p class="text-gray-400">Loading…</p>';
 
             // Pull cached plan summary for the header chips
-            const cached = _coachingPlanCache.find(p => p.id === planId);
+            const cached = _coachingPlansListCache.find(p => p.id === planId);
             if (cached) {
                 document.getElementById('coachingPlanDeliverAgent').textContent = cached.agent_email;
                 document.getElementById('coachingPlanDeliverAttribute').textContent = cached.attribute_name || cached.attribute_id;
