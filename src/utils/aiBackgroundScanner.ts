@@ -32,6 +32,55 @@ async function safeQuery(
   }
 }
 
+// Cache of schema-object existence checks within a single scanner run.  The
+// scanner queries several tables/columns that belong to GRC modules which may
+// not be built in every environment (e.g. risks, kpi_entries, pdpl_*).  Rather
+// than letting each check fail at query time and emit a noisy warn, we probe
+// information_schema once and skip the dependent check entirely if its
+// required objects are missing.  If those modules are later added, the checks
+// re-activate on the next scanner run with no code change required.
+const schemaSupportCache = new Map<string, Promise<boolean>>();
+
+async function schemaSupports(
+  table: string,
+  column?: string,
+): Promise<boolean> {
+  const key = column ? `${table}.${column}` : table;
+  const existing = schemaSupportCache.get(key);
+  if (existing) return existing;
+
+  const probe = (async () => {
+    try {
+      if (column) {
+        const r = await pool.query(
+          `SELECT 1 FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = $1
+             AND column_name = $2
+           LIMIT 1`,
+          [table, column],
+        );
+        return (r.rowCount ?? 0) > 0;
+      }
+      const r = await pool.query(
+        `SELECT 1 FROM information_schema.tables
+         WHERE table_schema = 'public'
+           AND table_name = $1
+         LIMIT 1`,
+        [table],
+      );
+      return (r.rowCount ?? 0) > 0;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(`[AI Scanner] schemaSupports(${key}) probe failed:`, msg);
+      return false;
+    }
+  })();
+
+  schemaSupportCache.set(key, probe);
+  return probe;
+}
+
 async function createAlertIfNew(
   alertType: AlertType,
   severity: AlertSeverity,
@@ -97,6 +146,7 @@ async function checkOpenNCsWithoutCAPA(result: ScanResult): Promise<void> {
 }
 
 async function checkHighRisks(result: ScanResult): Promise<void> {
+  if (!(await schemaSupports("risks"))) return;
   const rows = await safeQuery(
     `
     SELECT id, title, risk_level, likelihood, impact, status
@@ -130,6 +180,8 @@ async function checkHighRisks(result: ScanResult): Promise<void> {
 }
 
 async function checkOverdueTreatments(result: ScanResult): Promise<void> {
+  if (!(await schemaSupports("risks"))) return;
+  if (!(await schemaSupports("risk_treatment_actions"))) return;
   const rows = await safeQuery(
     `
     SELECT rta.id, rta.action_description, rta.due_date, rta.status, r.title as risk_title
@@ -166,6 +218,8 @@ async function checkOverdueTreatments(result: ScanResult): Promise<void> {
 }
 
 async function checkMissedKPIs(result: ScanResult): Promise<void> {
+  if (!(await schemaSupports("kpi_definitions"))) return;
+  if (!(await schemaSupports("kpi_entries"))) return;
   const rows = await safeQuery(
     `
     SELECT kd.id, kd.name, kd.target, ke.value, ke.period_end
@@ -199,6 +253,8 @@ async function checkMissedKPIs(result: ScanResult): Promise<void> {
 }
 
 async function checkExpiringPolicies(result: ScanResult): Promise<void> {
+  if (!(await schemaSupports("governance_documents", "title"))) return;
+  if (!(await schemaSupports("governance_documents", "review_date"))) return;
   const rows = await safeQuery(
     `
     SELECT id, title, review_date, status
@@ -235,28 +291,43 @@ async function checkExpiringPolicies(result: ScanResult): Promise<void> {
 }
 
 async function checkPDPLGaps(result: ScanResult): Promise<void> {
-  const inventoryCount = await safeQuery(
-    `SELECT COUNT(*) as cnt FROM pdpl_data_inventory`,
-    [],
-    "pdplInventory",
-  );
-  const guardrailCount = await safeQuery(
-    `SELECT COUNT(*) as cnt FROM pdpl_ai_guardrails WHERE is_active = true`,
-    [],
-    "pdplGuardrails",
-  );
-  const openIncidents = await safeQuery(
-    `SELECT COUNT(*) as cnt FROM data_incidents WHERE status NOT IN ('closed', 'resolved')`,
-    [],
-    "pdplIncidents",
-  );
+  // Each PDPL sub-check is independently gated — the three PDPL tables were
+  // built at different points in the platform's history, so any subset may
+  // exist in a given environment.
+  const hasInventory = await schemaSupports("pdpl_data_inventory");
+  const hasGuardrails = await schemaSupports("pdpl_ai_guardrails");
+  const hasIncidents = await schemaSupports("data_incidents");
+
+  if (!hasInventory && !hasGuardrails && !hasIncidents) return;
+
+  const inventoryCount = hasInventory
+    ? await safeQuery(
+        `SELECT COUNT(*) as cnt FROM pdpl_data_inventory`,
+        [],
+        "pdplInventory",
+      )
+    : [];
+  const guardrailCount = hasGuardrails
+    ? await safeQuery(
+        `SELECT COUNT(*) as cnt FROM pdpl_ai_guardrails WHERE is_active = true`,
+        [],
+        "pdplGuardrails",
+      )
+    : [];
+  const openIncidents = hasIncidents
+    ? await safeQuery(
+        `SELECT COUNT(*) as cnt FROM data_incidents WHERE status NOT IN ('closed', 'resolved')`,
+        [],
+        "pdplIncidents",
+      )
+    : [];
   result.checksPerformed++;
 
   const invCount = parseInt(inventoryCount[0]?.cnt || "0");
   const grCount = parseInt(guardrailCount[0]?.cnt || "0");
   const incCount = parseInt(openIncidents[0]?.cnt || "0");
 
-  if (invCount === 0) {
+  if (hasInventory && invCount === 0) {
     const created = await createAlertIfNew(
       "regulation_gap",
       "high",
@@ -271,7 +342,7 @@ async function checkPDPLGaps(result: ScanResult): Promise<void> {
     }
   }
 
-  if (grCount === 0) {
+  if (hasGuardrails && grCount === 0) {
     const created = await createAlertIfNew(
       "regulation_gap",
       "medium",
@@ -286,7 +357,7 @@ async function checkPDPLGaps(result: ScanResult): Promise<void> {
     }
   }
 
-  if (incCount > 0) {
+  if (hasIncidents && incCount > 0) {
     const created = await createAlertIfNew(
       "regulation_gap",
       incCount > 3 ? "high" : "medium",
@@ -339,6 +410,8 @@ async function checkAuditScoreDecline(result: ScanResult): Promise<void> {
 }
 
 async function checkTrainingGaps(result: ScanResult): Promise<void> {
+  if (!(await schemaSupports("training_records", "assigned_to"))) return;
+  if (!(await schemaSupports("training_records", "due_date"))) return;
   const rows = await safeQuery(
     `
     SELECT id, title, assigned_to, due_date, status
@@ -373,6 +446,8 @@ async function checkTrainingGaps(result: ScanResult): Promise<void> {
 }
 
 async function checkLowProgressTreatments(result: ScanResult): Promise<void> {
+  if (!(await schemaSupports("risks"))) return;
+  if (!(await schemaSupports("risk_treatment_actions"))) return;
   const rows = await safeQuery(
     `
     SELECT rta.id, rta.action_description, rta.due_date, rta.status,
