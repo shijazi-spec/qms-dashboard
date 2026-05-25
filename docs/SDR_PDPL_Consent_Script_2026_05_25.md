@@ -24,39 +24,72 @@ This document is the minimal-friction insert that closes that gap without making
 
 ## The line — Arabic (primary)
 
-Place this **immediately after** your existing greeting and self-identification, **before** asking any qualifying questions or starting the pitch.
+Match the warm, conversational register of your existing script (the
+one you sent: *SDR Call Script_AR [Updated].pdf*). Two short sentences.
+Goes between self-identification and the qualifying question — does
+not replace anything in your current flow.
 
-> السلام عليكم، معك [الاسم] من شركة وَلَاء بلَس.
-> هل تسمح لي بالاستمرار؟ أنوّه أن المكالمة مسجّلة لأغراض الجودة والتدريب.
+> قبل ما نبدأ أستاذ/ [اسم العميل]، أنوّه أن المكالمة مسجّلة لأغراض الجودة والتدريب فقط.
+> هل تسمح لي بالاستمرار؟
 
-**Pronunciation notes for new agents:**
-- *وَلَاء بلَس* — "Walā Plus" (a slight pause after Walā)
-- *هل تسمح* — softer than "هل توافق"; sounds like asking permission rather than reading legal text
-- *لأغراض الجودة والتدريب* — "for quality and training purposes"
+**Why this wording (vs. the more formal alternatives):**
+- *قبل ما نبدأ* — picks up the same colloquial register as the existing *"قبل ما أشاركك التفاصيل"* line later in your script. Doesn't sound like a legal disclaimer.
+- *أستاذ/ [اسم العميل]* — keeps the respectful address you already use throughout.
+- *أنوّه* — softer than *أعلمك* / *أبلغك*; means "to note" or "to remind."
+- *لأغراض الجودة والتدريب فقط* — the *فقط* matters; it explicitly limits the purpose, which is a PDPL "specific" requirement.
+- *هل تسمح لي بالاستمرار* — asking permission to continue, not asking for "consent." Sounds human, fully PDPL-valid.
+
+**Pronunciation notes:**
+- *وَلَاء بلَس* — "Walā Plus" (a slight pause after Walā) — this line itself stays as you say it today; no change.
+- The whole insert is one breath, ~5–6 seconds.
 
 ## The line — English (for English-speaking prospects)
 
-> "Hi, this is [name] from WalaPlus.
-> Before we continue — just to let you know, this call is recorded for quality and training purposes. Is that okay?"
+> "Before we get started [Mr./Ms. <name>] — just so you know, this call is being recorded for quality and training purposes only. Is that okay to continue?"
 
 ---
 
-## Where it goes in your existing script
+## Exactly where it goes in your script — mapped to your current PDF
+
+Pulling from *SDR Call Script_AR [Updated].pdf* (the script you shared):
 
 ```
-EXISTING                                NEW
-─────────────────────────────────────   ─────────────────────────────────
-1. Greeting (السلام عليكم)
-2. Self-introduction (name + company)
-                                        3. PDPL CONSENT LINE  ← INSERT HERE
-                                        4. Wait for affirmative response
-4. Reason for call / value prop
-5. Qualifying questions
-6. Next step (book demo / send info)
-7. Close
+السلام عليكم ورحمة الله وبركاته،
+معي الأستاذ/ [اسم العميل]؟
+معك (اسم الموظف) من شركة ولاء بلس (من قسم تطوير المبيعات / الأعمال).
+       │
+       ▼  ← INSERT THE CONSENT LINE HERE
+قبل ما نبدأ أستاذ/ [اسم العميل]، أنوّه أن المكالمة مسجّلة لأغراض الجودة والتدريب فقط.
+هل تسمح لي بالاستمرار؟
+       │
+       ▼  ← WAIT FOR AFFIRMATIVE
+سؤال تمهيدي:
+ممكن أعرف أستاذ/ [الاسم]، هل عندك فكرة عن ولاء بلس والخدمات التي نقدمها؟
+...rest of existing script unchanged...
 ```
 
-The whole insert adds **~6 seconds** to the opening. It does NOT replace any existing content; it sits between identification and pitch.
+### Second insertion point — the "مين معاي؟" branch
+
+When the customer asks *"مين معاي؟"* the script triggers the fuller
+self-introduction ending with *"...بعد ما اطلعت على إعلاننا..."*.
+The consent line slots in **after that fuller introduction**, before
+*"قبل ما أشاركك التفاصيل، هل حضرتك المسؤول..."*:
+
+```
+أنا [الاسم] من شركة ولاء بلس... وصلنا طلب اهتمامك ببرامج ولاء بلس...
+بعد ما اطلعت على إعلاننا عبر LinkedIn/Google/Webinar.
+       │
+       ▼  ← INSERT THE CONSENT LINE HERE TOO
+قبل ما نبدأ، أنوّه أن المكالمة مسجّلة لأغراض الجودة والتدريب فقط.
+هل تسمح لي بالاستمرار؟
+       │
+       ▼  ← WAIT FOR AFFIRMATIVE
+قبل ما أشاركك التفاصيل، هل حضرتك المسؤول عن برامج الموارد البشرية...
+```
+
+The rule is simple: **the consent line ALWAYS goes between the agent's self-identification and ANY qualifying / discovery question.** No matter which branch of the script the call enters, that's the placement.
+
+The whole insert adds **~5–6 seconds** to the opening. It does NOT replace any existing content from the agreed-with-SDR-team script.
 
 ---
 
@@ -120,10 +153,11 @@ Until the QMS dashboard's automatic consent-detection feature ships, this is the
 
 | Week | Action |
 |---|---|
-| W1 — Brief | Team meeting (30 min). Walk through this document. Practice the line out loud as a group. Address questions. |
-| W2 — Pilot | 1–2 agents adopt the line on every outbound call. Manager reviews 5 calls per agent end of week. Refine wording if needed. |
-| W3 — Full rollout | All SDRs use the line. Manager spot-checks 3 random calls per agent per day for the first week. |
-| W4 — Dashboard | The Call Evaluation dashboard's auto-detection feature can now be built — by this point most calls in the dataset will have the consent line, so the metric is meaningful rather than universally red. |
+| W0 — Update master script | Open `SDR Call Script_AR [Updated].pdf` (currently in `G:\My Drive\Quality Governance Documents\#SDR Section\SDR Governance Documents\SDR Version #2.1\2. SDR Supporting Documents & Appendices\`) and add the consent line at the two insertion points mapped above. Save as `SDR Call Script_AR v2.2_PDPL.pdf` so the version bump is visible to the team. |
+| W1 — Brief | Team meeting (30 min). Walk through this document + the updated PDF. Practice both insertion points out loud as a group. Address questions and objection-handling responses (see table below). |
+| W2 — Pilot | 1–2 agents adopt the line on every outbound call. Manager reviews 5 calls per agent end of week. Refine wording if needed (track issues here as v2 footnotes). |
+| W3 — Full rollout | All SDRs use the line. Manager spot-checks 3 random calls per agent per day for the first week. Update the QMS to flag any call missing the disclosure (manual review for now). |
+| W4 — Dashboard | The Call Evaluation dashboard's auto-detection feature can now be built — by this point most calls in the dataset will have the consent line, so the metric is meaningful rather than universally red. Wires the existing `key_moments.consent.detected` field (Whisper already populates it) into: a Consent Capture Rate KPI on Overview, a Governance attribute on the COPC scorecard, and a coaching trigger for the agents who skip it 3+ times in 14 days. |
 
 ---
 
