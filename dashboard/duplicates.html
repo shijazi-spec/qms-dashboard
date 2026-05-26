@@ -525,7 +525,8 @@
             </div>
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;lead&quot;]" data-pass-event="true" id="leadsExportBtn" data-testid="button-export-leads" title="Download a CSV of every Lead duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;leads&quot;]" id="leadsZohoRefreshBtn" title="Pull live values from Zoho for every lead currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;leads&quot;]" id="leadsZohoRefreshBtn" title="Pull live values from Zoho for every lead currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -554,7 +555,8 @@
             </div>
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;deal&quot;]" data-pass-event="true" id="dealsExportBtn" data-testid="button-export-deals" title="Download a CSV of every Deal duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;deals&quot;]" id="dealsZohoRefreshBtn" title="Pull live values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;deals&quot;]" id="dealsZohoRefreshBtn" title="Pull live values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -582,7 +584,8 @@
             </div>
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;contact&quot;]" data-pass-event="true" id="contactsExportBtn" data-testid="button-export-contacts" title="Download a CSV of every Contact duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -610,7 +613,8 @@
             </div>
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;account&quot;]" data-pass-event="true" id="accountsExportBtn" data-testid="button-export-accounts" title="Download a CSV of every Account duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;accounts&quot;]" id="accountsZohoRefreshBtn" title="Pull live values from Zoho for every account currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;accounts&quot;]" id="accountsZohoRefreshBtn" title="Pull live values from Zoho for every account currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -714,7 +718,7 @@
             </div>
             <div class="flex justify-end mt-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of the full radar (cross-module clusters are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
             </div>
 
@@ -776,7 +780,7 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="csOverlapExportBtn" data-testid="button-export-cs-overlap" title="Download a CSV of the full radar (CS pipeline overlaps are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshCsOverlapFromZoho" id="csOverlapZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this CS Overlap view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshCsOverlapFromZoho" id="csOverlapZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this CS Overlap view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="rescanCsOverlap" id="csOverlapScanBtn" data-testid="button-cs-overlap-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">
                     Run scan
                 </button>
@@ -906,7 +910,7 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of the full radar (Account-Hint candidates are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
             </div>
 
@@ -971,7 +975,8 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportTab" data-args="[&quot;deal&quot;]" data-pass-event="true" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of every Deal duplicate currently in the radar (CS Lifecycle pivots on Deals)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
             </div>
 
             <!-- Table -->
@@ -1072,7 +1077,8 @@
             </div>
             <div class="flex justify-end mb-3">
                 <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="ownersExportBtn" data-testid="button-export-owners" title="Download a CSV of the full radar (every owner's duplicates included). For a single-owner packet, use the per-row Export / Packet links in the table below." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshOwnersFromZoho" id="ownersZohoRefreshBtn" title="Reload the per-owner scorecard from the most recent CRM sync. For a full live re-pull of every record from Zoho, use the top-header Sync Now button." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshOwnersFromZoho" id="ownersZohoRefreshBtn" title="Reload the per-owner scorecard from the most recent CRM sync. For a full live re-pull of every record from Zoho, use the top-header Sync Now button." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-gray-200">
