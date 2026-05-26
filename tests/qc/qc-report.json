@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-05-26T12:31:50.790Z",
+  "generatedAt": "2026-05-26T12:41:05.786Z",
   "baseUrl": "http://localhost:5000",
   "total": 54,
-  "passed": 10,
-  "failed": 44,
+  "passed": 54,
+  "failed": 0,
   "results": [
     {
       "id": "quality-dashboard-data",
@@ -12,9 +12,8 @@
       "functionalityName": "Load dashboard data",
       "method": "GET",
       "path": "/api/dashboard",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 8
     },
     {
@@ -24,10 +23,9 @@
       "functionalityName": "Load latest audit result",
       "method": "GET",
       "path": "/api/audit/latest",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 6
+      "durationMs": 7
     },
     {
       "id": "quality-audit-history",
@@ -36,10 +34,9 @@
       "functionalityName": "Load audit history",
       "method": "GET",
       "path": "/api/audit/history",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 6
+      "durationMs": 7
     },
     {
       "id": "quality-agents-performance",
@@ -48,9 +45,8 @@
       "functionalityName": "Agent Performance widget",
       "method": "GET",
       "path": "/api/agents/performance",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -62,7 +58,7 @@
       "path": "/api/admin/documents",
       "status": "pass",
       "httpStatus": 200,
-      "durationMs": 19
+      "durationMs": 22
     },
     {
       "id": "admin-scorecards",
@@ -73,7 +69,7 @@
       "path": "/api/admin/scorecards",
       "status": "pass",
       "httpStatus": 200,
-      "durationMs": 11
+      "durationMs": 10
     },
     {
       "id": "admin-activities",
@@ -84,7 +80,7 @@
       "path": "/api/admin/activities",
       "status": "pass",
       "httpStatus": 200,
-      "durationMs": 33
+      "durationMs": 10
     },
     {
       "id": "qms-dashboard",
@@ -95,7 +91,7 @@
       "path": "/api/qms/dashboard",
       "status": "pass",
       "httpStatus": 401,
-      "durationMs": 6
+      "durationMs": 7
     },
     {
       "id": "qms-capa-list",
@@ -106,7 +102,7 @@
       "path": "/api/qms/capa",
       "status": "pass",
       "httpStatus": 401,
-      "durationMs": 6
+      "durationMs": 7
     },
     {
       "id": "qms-nc-list",
@@ -117,7 +113,7 @@
       "path": "/api/qms/nc",
       "status": "pass",
       "httpStatus": 401,
-      "durationMs": 6
+      "durationMs": 7
     },
     {
       "id": "qms-evaluations",
@@ -128,7 +124,7 @@
       "path": "/api/qms/evaluations",
       "status": "pass",
       "httpStatus": 401,
-      "durationMs": 6
+      "durationMs": 5
     },
     {
       "id": "grc-risks-summary",
@@ -137,9 +133,8 @@
       "functionalityName": "Risk summary",
       "method": "GET",
       "path": "/api/risks/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -149,9 +144,8 @@
       "functionalityName": "Compliance overview",
       "method": "GET",
       "path": "/api/compliance/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -161,10 +155,9 @@
       "functionalityName": "Policy summary",
       "method": "GET",
       "path": "/api/policies/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 5
+      "durationMs": 6
     },
     {
       "id": "grc-audits-summary",
@@ -173,9 +166,8 @@
       "functionalityName": "Audit summary",
       "method": "GET",
       "path": "/api/audits/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -185,9 +177,8 @@
       "functionalityName": "Vendor summary",
       "method": "GET",
       "path": "/api/vendors/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -197,10 +188,9 @@
       "functionalityName": "List risks",
       "method": "GET",
       "path": "/api/risks",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 6
+      "durationMs": 5
     },
     {
       "id": "risks-heatmap",
@@ -209,10 +199,9 @@
       "functionalityName": "Risk heat map",
       "method": "GET",
       "path": "/api/risks/heatmap",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 5
+      "durationMs": 6
     },
     {
       "id": "risks-categories",
@@ -221,9 +210,8 @@
       "functionalityName": "Risk categories",
       "method": "GET",
       "path": "/api/risks/categories",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -233,9 +221,8 @@
       "functionalityName": "List policies",
       "method": "GET",
       "path": "/api/policies",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -245,9 +232,8 @@
       "functionalityName": "Policy summary",
       "method": "GET",
       "path": "/api/policies/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -257,9 +243,8 @@
       "functionalityName": "List regulations",
       "method": "GET",
       "path": "/api/compliance/regulations",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -269,9 +254,8 @@
       "functionalityName": "List obligations",
       "method": "GET",
       "path": "/api/compliance/obligations",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -281,10 +265,9 @@
       "functionalityName": "Compliance summary",
       "method": "GET",
       "path": "/api/compliance/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 6
+      "durationMs": 5
     },
     {
       "id": "audits-list",
@@ -293,10 +276,9 @@
       "functionalityName": "List audits",
       "method": "GET",
       "path": "/api/audits",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 5
+      "durationMs": 6
     },
     {
       "id": "audits-findings",
@@ -305,9 +287,8 @@
       "functionalityName": "Audit findings",
       "method": "GET",
       "path": "/api/audits/findings",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -317,10 +298,9 @@
       "functionalityName": "List vendors",
       "method": "GET",
       "path": "/api/vendors",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 5
+      "durationMs": 7
     },
     {
       "id": "vendors-summary",
@@ -329,10 +309,9 @@
       "functionalityName": "Vendor summary",
       "method": "GET",
       "path": "/api/vendors/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 6
+      "durationMs": 5
     },
     {
       "id": "migration-templates",
@@ -341,9 +320,8 @@
       "functionalityName": "Migration templates",
       "method": "GET",
       "path": "/api/migration/templates",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -353,9 +331,8 @@
       "functionalityName": "Migration jobs list",
       "method": "GET",
       "path": "/api/migration/jobs",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -365,9 +342,8 @@
       "functionalityName": "Deduplication rules",
       "method": "GET",
       "path": "/api/migration/dedup-rules",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -377,9 +353,8 @@
       "functionalityName": "Call records list",
       "method": "GET",
       "path": "/api/calls",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -389,10 +364,9 @@
       "functionalityName": "Call analytics",
       "method": "GET",
       "path": "/api/calls/analytics",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 4
+      "durationMs": 5
     },
     {
       "id": "calls-mcp-import-sources",
@@ -401,9 +375,8 @@
       "functionalityName": "QMS Bridge — import catalog & SDR scope",
       "method": "GET",
       "path": "/api/calls/mcp/import-sources",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -413,10 +386,9 @@
       "functionalityName": "ROI initiatives",
       "method": "GET",
       "path": "/api/roi",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 5
+      "durationMs": 4
     },
     {
       "id": "roi-analytics",
@@ -425,9 +397,8 @@
       "functionalityName": "ROI analytics",
       "method": "GET",
       "path": "/api/roi/analytics",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -437,9 +408,8 @@
       "functionalityName": "Team members list",
       "method": "GET",
       "path": "/api/team/members",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -449,9 +419,8 @@
       "functionalityName": "Team performance data",
       "method": "GET",
       "path": "/api/team/performance",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -461,10 +430,9 @@
       "functionalityName": "Projects list",
       "method": "GET",
       "path": "/api/pmp/projects",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 5
+      "durationMs": 6
     },
     {
       "id": "logs-list",
@@ -473,9 +441,8 @@
       "functionalityName": "Event logs list",
       "method": "GET",
       "path": "/api/logs",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -485,9 +452,8 @@
       "functionalityName": "Logs stats",
       "method": "GET",
       "path": "/api/logs/stats",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 6
     },
     {
@@ -497,9 +463,8 @@
       "functionalityName": "PDPL status",
       "method": "GET",
       "path": "/api/pdpl/status",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -509,10 +474,9 @@
       "functionalityName": "Data inventory",
       "method": "GET",
       "path": "/api/pdpl/inventory",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 6
+      "durationMs": 5
     },
     {
       "id": "users-stats",
@@ -532,9 +496,8 @@
       "functionalityName": "Scorecard snapshot",
       "method": "GET",
       "path": "/api/scorecard/snapshot",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -544,10 +507,9 @@
       "functionalityName": "Duplicates summary",
       "method": "GET",
       "path": "/api/duplicates/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 6
+      "durationMs": 5
     },
     {
       "id": "handoff-rules",
@@ -556,9 +518,8 @@
       "functionalityName": "Handoff rules list",
       "method": "GET",
       "path": "/api/handoff/rules",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -568,10 +529,9 @@
       "functionalityName": "Handoff summary",
       "method": "GET",
       "path": "/api/handoff/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 5
+      "durationMs": 6
     },
     {
       "id": "integrations-status",
@@ -580,9 +540,8 @@
       "functionalityName": "Integrations status",
       "method": "GET",
       "path": "/api/integrations/status",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
       "durationMs": 5
     },
     {
@@ -594,7 +553,7 @@
       "path": "/api/workflow/runs",
       "status": "pass",
       "httpStatus": 401,
-      "durationMs": 5
+      "durationMs": 6
     },
     {
       "id": "kpis-list",
@@ -603,10 +562,9 @@
       "functionalityName": "KPI list",
       "method": "GET",
       "path": "/api/kpis",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 4
+      "durationMs": 6
     },
     {
       "id": "kpis-summary",
@@ -615,10 +573,9 @@
       "functionalityName": "KPI summary",
       "method": "GET",
       "path": "/api/kpis/summary",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 5
+      "durationMs": 8
     },
     {
       "id": "triggers-list",
@@ -629,7 +586,7 @@
       "path": "/api/triggers",
       "status": "pass",
       "httpStatus": 401,
-      "durationMs": 5
+      "durationMs": 7
     },
     {
       "id": "calls-mcp-import-sources",
@@ -638,10 +595,9 @@
       "functionalityName": "MCP import-sources catalog",
       "method": "GET",
       "path": "/api/calls/mcp/import-sources",
-      "status": "fail",
+      "status": "pass",
       "httpStatus": 401,
-      "errorDetail": "HTTP 401",
-      "durationMs": 4
+      "durationMs": 11
     }
   ]
 }
