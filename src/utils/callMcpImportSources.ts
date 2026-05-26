@@ -91,7 +91,7 @@ export function getCallImportSourcesCatalog(): {
         endpoints: [
           {
             method: "POST",
-            path: "/api/calls/mcp/drive-import",
+            path: "/api/calls/evaluation/drive-import",
             notes: "Returns 501 with env hints until implemented.",
           },
           {

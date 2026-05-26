@@ -3,14 +3,14 @@
  *
  * Exercises routes added to src/mastra/routes/callIntelligenceRoutes.ts:
  *
- *   GET  /api/calls/mcp/import-sources
- *   POST /api/calls/mcp/leads/match-phone
- *   GET  /api/calls/mcp/reconciliation/:id
- *   GET  /api/calls/mcp/scorecard/:id
+ *   GET  /api/calls/evaluation/import-sources
+ *   POST /api/calls/evaluation/leads/match-phone
+ *   GET  /api/calls/evaluation/reconciliation/:id
+ *   GET  /api/calls/evaluation/scorecard/:id
  *   POST /api/calls/:id/auto-link-lead
  *
  * Security model (post-fix):
- *   X-Admin-Key is scoped to /api/admin/* routes ONLY.  All /api/calls/mcp/*
+ *   X-Admin-Key is scoped to /api/admin/* routes ONLY.  All /api/calls/evaluation/*
  *   routes are authenticated-user routes that require a real OIDC session.
  *   An X-Admin-Key header on these routes is rejected with 401 by the global
  *   middleware before the handler runs.
@@ -40,12 +40,12 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
   // ── Unauthenticated (no credentials at all) ─────────────────────────────
 
   test('unauthenticated GET /import-sources returns 401', async ({ request }) => {
-    const res = await request.get(`${BASE_URL}/api/calls/mcp/import-sources`);
+    const res = await request.get(`${BASE_URL}/api/calls/evaluation/import-sources`);
     expect(res.status()).toBe(401);
   });
 
   test('POST /leads/match-phone unauthenticated returns 401', async ({ request }) => {
-    const res = await request.post(`${BASE_URL}/api/calls/mcp/leads/match-phone`, {
+    const res = await request.post(`${BASE_URL}/api/calls/evaluation/leads/match-phone`, {
       headers: { 'Content-Type': 'application/json' },
       data: { phone: '+966500000000' },
     });
@@ -54,7 +54,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
   });
 
   test('GET /mcp/scorecard/:id unauthenticated returns 401', async ({ request }) => {
-    const res = await request.get(`${BASE_URL}/api/calls/mcp/scorecard/1`);
+    const res = await request.get(`${BASE_URL}/api/calls/evaluation/scorecard/1`);
     expect(res.status()).toBe(401);
   });
 
@@ -78,7 +78,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
     const key = resolveAdminKey();
     test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
 
-    const res = await request.get(`${BASE_URL}/api/calls/mcp/import-sources`, {
+    const res = await request.get(`${BASE_URL}/api/calls/evaluation/import-sources`, {
       headers: { 'X-Admin-Key': key! },
     });
     expect(res.status(), `expected 401 (key scoped to /api/admin/* only), got ${res.status()}`).toBe(401);
@@ -88,7 +88,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
     const key = resolveAdminKey();
     test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
 
-    const res = await request.get(`${BASE_URL}/api/calls/mcp/reconciliation/99999999`, {
+    const res = await request.get(`${BASE_URL}/api/calls/evaluation/reconciliation/99999999`, {
       headers: { 'X-Admin-Key': key! },
     });
     expect(res.status(), `expected 401, got ${res.status()}`).toBe(401);
@@ -98,7 +98,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
     const key = resolveAdminKey();
     test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
 
-    const res = await request.post(`${BASE_URL}/api/calls/mcp/leads/match-phone`, {
+    const res = await request.post(`${BASE_URL}/api/calls/evaluation/leads/match-phone`, {
       headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key! },
       data: { phone: '+966500000000', max_records: 10 },
     });
@@ -109,7 +109,7 @@ test.describe('MCP Call Evaluation routes — auth enforcement', () => {
     const key = resolveAdminKey();
     test.skip(!key, 'ADMIN_API_KEY/TEST_ADMIN_KEY not set');
 
-    const res = await request.get(`${BASE_URL}/api/calls/mcp/scorecard/abc`, {
+    const res = await request.get(`${BASE_URL}/api/calls/evaluation/scorecard/abc`, {
       headers: { 'X-Admin-Key': key! },
     });
     expect(res.status(), `expected 401, got ${res.status()}`).toBe(401);

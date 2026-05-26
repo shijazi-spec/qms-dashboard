@@ -95,7 +95,7 @@
                  tools — *Match phone to Zoho Lead* and *Reconciliation
                  by record ID* — which now live inside the CRM
                  Compliance tab next to the data they help debug. The
-                 backend bridge concept (sdrCallLinking + /api/calls/mcp/*)
+                 backend bridge concept (sdrCallLinking + /api/calls/evaluation/*)
                  is untouched. -->
             <button data-on-click="showTab" data-args="[&quot;evaluate&quot;]" id="tab-evaluate" class="flex-1 px-4 py-2.5 font-medium rounded-lg transition text-gray-600 hover:bg-gray-200 whitespace-nowrap" data-i18n="calls.tab_sdr">
                 SDR Evaluation
@@ -1154,7 +1154,7 @@
                    auto-link matcher didn't find a Lead.
                  - Re-run compliance for a call id → re-score a single
                    call after fixing missing CRM activities.
-                 Wired to the same /api/calls/mcp/* handlers as before. -->
+                 Wired to the same /api/calls/evaluation/* handlers as before. -->
             <div class="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-1" data-i18n="dyn.calls.mcp_phone_match_title">Match phone to Zoho Lead</h3>
@@ -4204,7 +4204,7 @@
             const body = document.getElementById('mcp-catalog-body');
             if (ph) ph.textContent = '…';
             try {
-                const res = await fetch('/api/calls/mcp/import-sources');
+                const res = await fetch('/api/calls/evaluation/import-sources');
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || res.statusText);
                 if (ph) ph.classList.add('hidden');
@@ -4251,7 +4251,7 @@
                 out.innerHTML = '<p class="text-gray-500">…</p>';
             }
             try {
-                const res = await fetch('/api/calls/mcp/leads/match-phone', {
+                const res = await fetch('/api/calls/evaluation/leads/match-phone', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ phone, max_records: maxRaw ? parseInt(maxRaw, 10) : undefined }),
@@ -4285,7 +4285,7 @@
                 out.innerHTML = '<p class="text-gray-500">…</p>';
             }
             try {
-                const res = await fetch(`/api/calls/mcp/reconciliation/${id}`);
+                const res = await fetch(`/api/calls/evaluation/reconciliation/${id}`);
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || res.statusText);
                 if (out) {
@@ -4313,7 +4313,7 @@
             slot.classList.remove('hidden');
             slot.innerHTML = '<p class="text-sm text-gray-500">…</p>';
             try {
-                const res = await fetch(`/api/calls/mcp/reconciliation/${callId}`);
+                const res = await fetch(`/api/calls/evaluation/reconciliation/${callId}`);
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || res.statusText);
                 slot.innerHTML = renderMcpReportBlock(data.report, data.sdr_process_scope);
@@ -4383,7 +4383,7 @@
             slot.classList.remove('hidden');
             slot.innerHTML = `<p class="text-sm text-gray-500">…</p>`;
             try {
-                const res = await fetch(`/api/calls/mcp/scorecard/${callId}`);
+                const res = await fetch(`/api/calls/evaluation/scorecard/${callId}`);
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || res.statusText);
                 slot.innerHTML = renderCopcScorecardBlock(data.scorecard);

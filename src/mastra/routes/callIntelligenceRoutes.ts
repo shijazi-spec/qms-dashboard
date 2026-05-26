@@ -4926,7 +4926,7 @@ ${transcriptText}
     },
   },
   {
-    path: "/api/calls/mcp/import-sources",
+    path: "/api/calls/evaluation/import-sources",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -4947,7 +4947,7 @@ ${transcriptText}
     },
   },
   {
-    path: "/api/calls/mcp/leads/match-phone",
+    path: "/api/calls/evaluation/leads/match-phone",
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -4987,7 +4987,7 @@ ${transcriptText}
     },
   },
   {
-    path: "/api/calls/mcp/reconciliation/:id",
+    path: "/api/calls/evaluation/reconciliation/:id",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -5160,7 +5160,7 @@ ${transcriptText}
     },
   },
   {
-    path: "/api/calls/mcp/scorecard/:id",
+    path: "/api/calls/evaluation/scorecard/:id",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {

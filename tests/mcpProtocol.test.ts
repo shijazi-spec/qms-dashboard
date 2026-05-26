@@ -84,6 +84,7 @@ import { reconcileCallTool } from "../src/mastra/tools/callReconciliationTool";
 import { matchLeadByPhoneTool } from "../src/mastra/tools/leadPhoneMatchTool";
 import { driveCallImportTool } from "../src/mastra/tools/driveCallImportTool";
 import { checkCommunicationEligibilityTool } from "../src/mastra/tools/checkCommunicationEligibilityTool";
+import { getCallImportSourcesTool } from "../src/mastra/tools/getCallImportSourcesTool";
 
 import { TestSuite } from "./_helpers/runner";
 
@@ -96,6 +97,7 @@ const EXPECTED_TOOL_IDS = [
   "match-lead-by-phone",
   "drive-call-import",
   "check-communication-eligibility",
+  "get-import-sources",
 ] as const;
 
 const SERVER_NAME = "allTools-test";
@@ -115,6 +117,7 @@ async function buildServer(): Promise<MCPServer> {
       "match-lead-by-phone": matchLeadByPhoneTool,
       "drive-call-import": driveCallImportTool,
       "check-communication-eligibility": checkCommunicationEligibilityTool,
+      "get-import-sources": getCallImportSourcesTool,
     },
   });
 }

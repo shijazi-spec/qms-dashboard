@@ -21,7 +21,7 @@ const CALL_READ_ROLES = [
  */
 export const mcpCallEvaluationRoutes = [
   {
-    path: "/api/calls/mcp/import-sources",
+    path: "/api/calls/evaluation/import-sources",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -40,7 +40,7 @@ export const mcpCallEvaluationRoutes = [
     },
   },
   {
-    path: "/api/calls/mcp/reconciliation/:id",
+    path: "/api/calls/evaluation/reconciliation/:id",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -86,7 +86,7 @@ export const mcpCallEvaluationRoutes = [
     },
   },
   {
-    path: "/api/calls/mcp/leads/match-phone",
+    path: "/api/calls/evaluation/leads/match-phone",
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -126,7 +126,7 @@ export const mcpCallEvaluationRoutes = [
     },
   },
   {
-    path: "/api/calls/mcp/drive-import",
+    path: "/api/calls/evaluation/drive-import",
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -190,7 +190,7 @@ export const mcpCallEvaluationRoutes = [
     },
   },
   {
-    path: "/api/calls/mcp/validate/:id",
+    path: "/api/calls/evaluation/validate/:id",
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -215,7 +215,7 @@ export const mcpCallEvaluationRoutes = [
     },
   },
   {
-    path: "/api/calls/mcp/governance/:id",
+    path: "/api/calls/evaluation/governance/:id",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -236,7 +236,7 @@ export const mcpCallEvaluationRoutes = [
             {
               success: true,
               found: false,
-              note: "No governance snapshot yet. POST /api/calls/mcp/validate/:id to create one.",
+              note: "No governance snapshot yet. POST /api/calls/evaluation/validate/:id to create one.",
             },
             200,
           );

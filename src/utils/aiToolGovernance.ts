@@ -745,6 +745,22 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       ].filter(Boolean).join('\n'),
   },
 
+  // Read-only catalog of how calls enter the platform and the CRM
+  // phone-match scope. Pure in-process config read — no DB, no
+  // external API.
+  'get-import-sources': {
+    toolId: 'get-import-sources',
+    label: 'Get call import-source catalog (read-only)',
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only catalog query, no platform write',
+    ],
+    entityType: 'import_source_catalog',
+    buildPreview: () =>
+      'Returns the canonical Five9 / bulk-upload / Google Drive channel catalog plus the SDR↔CRM phone-match scope. No inputs; pure config read.',
+  },
+
   // Pure-function evaluator: scores a transcript against the loaded
   // SDR Governance 2.1 JSON ruleset. No DB or external side-effect —
   // returns governance issues for the caller to log/display.

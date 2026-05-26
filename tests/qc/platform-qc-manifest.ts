@@ -361,7 +361,7 @@ export const PLATFORM_QC_MANIFEST: QCTestCase[] = [
     screenRoute: "/calls",
     functionalityName: "QMS Bridge — import catalog & SDR scope",
     method: "GET",
-    path: "/api/calls/mcp/import-sources",
+    path: "/api/calls/evaluation/import-sources",
     expectedStatus: 200,
   },
   // --- ROI (/roi)
@@ -559,7 +559,7 @@ export const PLATFORM_QC_MANIFEST: QCTestCase[] = [
     screenRoute: "/calls",
     functionalityName: "MCP import-sources catalog",
     method: "GET",
-    path: "/api/calls/mcp/import-sources",
+    path: "/api/calls/evaluation/import-sources",
     expectedStatus: 200,
   },
 ];
