@@ -40,6 +40,46 @@ function isSecureDomain(): boolean {
   return !getDomain().includes("localhost");
 }
 
+/**
+ * Returns true when the request's `Origin` or `Referer` header points at
+ * this app's own host — used by GET `/api/logout` to mitigate a low-grade
+ * CSRF where a cross-origin link could log the victim out.
+ *
+ * Decision matrix:
+ *   - Origin matches host  → same-origin (allow)
+ *   - Referer matches host → same-origin (allow)
+ *   - Neither matches BUT both absent → likely a typed-URL / bookmark
+ *     navigation; treat as same-origin so the legitimate fallback still
+ *     works. The attack vector we're closing (attacker.com link) sets
+ *     Origin/Referer to attacker.com, which never reaches this branch.
+ *   - Either present but not matching → cross-origin (block)
+ *
+ * SameSite=Lax already blocks the subresource-image-tag variant (cookies
+ * aren't attached to cross-site subresource GETs). This guard adds
+ * defence-in-depth for the user-clicked link variant.
+ */
+function isSameOriginNavigation(c: any): boolean {
+  const origin = c.req.header("Origin") || "";
+  const referer = c.req.header("Referer") || "";
+  const expectedHost = getDomain();
+
+  const matches = (headerValue: string): boolean => {
+    if (!headerValue) return false;
+    try {
+      return new URL(headerValue).host === expectedHost;
+    } catch {
+      return false;
+    }
+  };
+
+  if (matches(origin) || matches(referer)) return true;
+  // Both headers absent → typed URL / bookmark / non-browser caller.
+  // Allow to preserve the legitimate fallback. Cross-origin requests
+  // always carry at least one of these headers in modern browsers.
+  if (!origin && !referer) return true;
+  return false;
+}
+
 function signSession(payload: Record<string, any>): string {
   const secret = process.env.SESSION_SECRET!;
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -399,25 +439,40 @@ export const authRoutes = [
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
-        const secure = isSecureDomain();
-        const sessionCookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? "; Secure" : ""}`;
-        // Security: admin cookie flags must always carry HttpOnly + Secure + SameSite=Strict —
-        // all three flags are unconditional regardless of protocol, to prevent XSS and CSRF.
-        const adminKeyCookieFlags = `HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Strict`;
-        // Clear all auth cookies (session + admin_session token + legacy admin_key)
-        // so the unified /api/auth/me endpoint won't keep reporting the caller
-        // as authenticated after they sign out.
-        c.header(
-          "Set-Cookie",
-          `${SESSION_COOKIE_NAME}=; ${sessionCookieFlags}`,
-          { append: true },
-        );
-        c.header("Set-Cookie", `admin_session=; ${adminKeyCookieFlags}`, {
-          append: true,
-        });
-        c.header("Set-Cookie", `admin_key=; ${adminKeyCookieFlags}`, {
-          append: true,
-        });
+        // CSRF defence-in-depth: GET endpoints that clear session cookies
+        // are the textbook annoyance-grade CSRF target — an attacker can
+        // put `<a href="https://app/api/logout">free pizza</a>` on any page
+        // and force-logout any victim who clicks. SameSite=Lax already
+        // blocks the subresource (`<img>`) variant, but does NOT block
+        // user-initiated link clicks. We close that gap by validating
+        // Origin / Referer points back at our own host before clearing
+        // cookies. Cross-origin GETs still get the OIDC end-session
+        // redirect (so the IDP logout still works on legitimate
+        // direct-navigation flows that strip headers), but the app's
+        // session survives a CSRF attempt.
+        const sameOrigin = isSameOriginNavigation(c);
+
+        if (sameOrigin) {
+          const secure = isSecureDomain();
+          const sessionCookieFlags = `HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure ? "; Secure" : ""}`;
+          // Security: admin cookie flags must always carry HttpOnly + Secure + SameSite=Strict —
+          // all three flags are unconditional regardless of protocol, to prevent XSS and CSRF.
+          const adminKeyCookieFlags = `HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Strict`;
+          // Clear all auth cookies (session + admin_session token + legacy admin_key)
+          // so the unified /api/auth/me endpoint won't keep reporting the caller
+          // as authenticated after they sign out.
+          c.header(
+            "Set-Cookie",
+            `${SESSION_COOKIE_NAME}=; ${sessionCookieFlags}`,
+            { append: true },
+          );
+          c.header("Set-Cookie", `admin_session=; ${adminKeyCookieFlags}`, {
+            append: true,
+          });
+          c.header("Set-Cookie", `admin_key=; ${adminKeyCookieFlags}`, {
+            append: true,
+          });
+        }
 
         try {
           const config = await getOidcConfig();
