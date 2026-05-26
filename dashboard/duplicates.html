@@ -1210,7 +1210,16 @@
                 // Hints saw no visible change and assumed the button was broken.
                 const activeTabEl = document.querySelector('[id^="tab-"].tab-active');
                 const activeTab = activeTabEl ? activeTabEl.id.replace(/^tab-/, '') : null;
-                if (activeTab === 'cs-lifecycle')   loadCsLifecycle(window._csLifecycleFilter || 'all');
+                if (activeTab === 'cs-lifecycle') {
+                    // Sync the visible deals live from Zoho the same way the
+                    // green "Refresh from Zoho (live)" button does, so the
+                    // CS Lifecycle radar stays consistent with the other
+                    // radars (which already read from a fresh Zoho scan via
+                    // Sync Now). loadCsLifecycle runs first to populate the
+                    // visible-id list that refreshCsLifecycleFromZoho needs.
+                    await loadCsLifecycle(window._csLifecycleFilter || 'all');
+                    await refreshCsLifecycleFromZoho({ silent: true });
+                }
                 if (activeTab === 'cs-overlap')     loadCsOverlap(window._csOverlapFilter || 'all');
                 if (activeTab === 'auto-capa-kpis') loadAutoCapaKpis();
                 if (activeTab === 'account-hints')  loadAccountHints();
@@ -3526,19 +3535,23 @@
         // table directly from Zoho's single-record API (which bypasses the
         // bulk-read cache that occasionally serves stale Phase / Company_Domain
         // values), upserts each into duplicate_records, then reloads the table.
-        async function refreshCsLifecycleFromZoho() {
+        async function refreshCsLifecycleFromZoho(opts) {
+            const silent = !!(opts && opts.silent);
             const btn = document.getElementById('csLifeZohoRefreshBtn');
             const data = window._csLifecycleData || {};
             const violations = data.violations || [];
             const ids = Array.from(new Set(violations.map(v => v.zoho_record_id).filter(Boolean)));
             if (ids.length === 0) {
-                alert('No violations to refresh.');
-                return;
+                // When chained from the global Refresh button there's nothing
+                // to do and no need to interrupt the user with an alert.
+                if (!silent) alert('No violations to refresh.');
+                return { refreshed: 0, failed: 0, missing: 0, skipped: true };
             }
-            if (!btn) return;
-            const orig = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = 'Refreshing ' + ids.length + ' deal' + (ids.length === 1 ? '' : 's') + '…';
+            const orig = btn ? btn.innerHTML : null;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = 'Refreshing ' + ids.length + ' deal' + (ids.length === 1 ? '' : 's') + '…';
+            }
             try {
                 // Batch in chunks of 50 (server cap) so the UI stays usable
                 // even when the table has more than 50 violations visible.
@@ -3563,13 +3576,26 @@
                 const notes = [];
                 if (totalFailed) notes.push(totalFailed + ' failed');
                 if (totalMissing) notes.push(totalMissing + ' not found in Zoho');
-                btn.innerHTML = '✓ Refreshed ' + totalRefreshed + (notes.length ? ' (' + notes.join(', ') + ')' : '');
+                if (btn) {
+                    btn.innerHTML = '✓ Refreshed ' + totalRefreshed + (notes.length ? ' (' + notes.join(', ') + ')' : '');
+                }
                 await loadCsLifecycle(window._csLifecycleFilter || 'all');
-                setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                if (btn) setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                return { refreshed: totalRefreshed, failed: totalFailed, missing: totalMissing, skipped: false };
             } catch (e) {
-                btn.innerHTML = '✗ Failed';
-                alert('Refresh from Zoho failed: ' + (e.message || e));
-                setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                if (btn) {
+                    btn.innerHTML = '✗ Failed';
+                    setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                }
+                // Only show the alert when the user explicitly clicked the
+                // green button — when chained from the global Refresh the
+                // error is logged and the table just keeps the prior data.
+                if (!silent) {
+                    alert('Refresh from Zoho failed: ' + (e.message || e));
+                } else {
+                    try { console.error('CS Lifecycle live refresh failed:', e); } catch (_) {}
+                }
+                return { refreshed: 0, failed: 0, missing: 0, error: String(e && e.message || e) };
             }
         }
 
