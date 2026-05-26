@@ -3671,6 +3671,308 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Generic per-module live refresh from Zoho. Same pattern as
+    // /api/duplicates/cs-lifecycle/refresh-deals but works for any of the
+    // four duplicate-radar record types (lead / deal / contact / account)
+    // so each per-module tab can offer the same "Refresh from Zoho (live)"
+    // UX. For each id we fetch the live record from Zoho's single-record
+    // API, run the same per-module extractor used by the bulk sync, and
+    // upsert it into the existing cluster so the next /api/duplicates/{type}
+    // call reflects the up-to-date CRM values.
+    path: "/api/duplicates/refresh-records",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const body = await c.req.json().catch(() => ({}));
+          const moduleRaw = String(body?.module || "").toLowerCase();
+          const MODULE_MAP: Record<
+            string,
+            {
+              zohoModule: "Leads" | "Deals" | "Contacts" | "Accounts";
+              recordType: "lead" | "deal" | "contact" | "account";
+            }
+          > = {
+            leads: { zohoModule: "Leads", recordType: "lead" },
+            deals: { zohoModule: "Deals", recordType: "deal" },
+            contacts: { zohoModule: "Contacts", recordType: "contact" },
+            accounts: { zohoModule: "Accounts", recordType: "account" },
+          };
+          const cfg = MODULE_MAP[moduleRaw];
+          if (!cfg) {
+            return c.json(
+              {
+                error:
+                  "module must be one of: leads, deals, contacts, accounts",
+              },
+              400,
+            );
+          }
+          const zohoIds: string[] = Array.isArray(body?.zohoIds)
+            ? body.zohoIds.filter(
+                (x: any) => typeof x === "string" && x.trim(),
+              )
+            : [];
+          if (zohoIds.length === 0) {
+            return c.json({ error: "zohoIds array required" }, 400);
+          }
+          const MAX = 50;
+          if (zohoIds.length > MAX) {
+            return c.json(
+              { error: `Refresh at most ${MAX} records per request` },
+              400,
+            );
+          }
+
+          // Per-module extractor — mirrors the bulk-scan extractors at the
+          // top of this file (processModule callsites). Kept inline so the
+          // refresh endpoint and the bulk scan stay obviously in sync.
+          const extract = (
+            record: any,
+          ): {
+            companyName: string;
+            recordName: string;
+            email: string;
+            phone: string;
+            mobile?: string;
+            domain: string | null;
+            ownerName: string;
+            ownerEmail: string;
+            status: string;
+            stage?: string;
+            dealValue?: number;
+            source: string;
+            createdTime: string;
+            modifiedTime: string;
+            layoutName?: string;
+            layoutId?: string;
+            pipeline?: string;
+            products?: string;
+            contactName?: string;
+            accountName?: string;
+            crNumber?: string;
+            vatNumber?: string;
+            website?: string;
+            country?: string;
+            region?: string;
+            industry?: string;
+            noOfEmployees?: number;
+            title?: string;
+            leadType?: string;
+            accountType?: string;
+          } => {
+            const d = record.data;
+            switch (cfg.recordType) {
+              case "lead":
+                return {
+                  companyName: d.Company || d.Last_Name || "Unknown",
+                  email: d.Email || "",
+                  phone: d.Phone || "",
+                  mobile: d.Mobile || "",
+                  recordName:
+                    d.Full_Name ||
+                    `${d.First_Name || ""} ${d.Last_Name || ""}`.trim(),
+                  domain: extractDomain(d.Email || ""),
+                  ownerName: d.Owner?.name || "Unknown",
+                  ownerEmail: d.Owner?.email || "",
+                  status: d.Lead_Status || "",
+                  source: d.Lead_Source || "",
+                  createdTime: d.Created_Time || "",
+                  modifiedTime: d.Modified_Time || "",
+                  layoutName: d.Layout?.name || d.$layout?.name || "",
+                  layoutId: d.Layout?.id || d.$layout?.id || "",
+                  title: d.Designation || d.Title || "",
+                  leadType: d.Lead_Type || "",
+                  country: d.Country || "",
+                  industry: d.Industry || "",
+                  website: d.Website || "",
+                };
+              case "deal":
+                return {
+                  companyName: d.Account_Name?.name || d.Deal_Name || "Unknown",
+                  email: d.Contact_Email || "",
+                  phone: d.Contact_Phone || "",
+                  recordName: d.Deal_Name || "Unknown Deal",
+                  domain: extractDomain(d.Contact_Email || ""),
+                  ownerName: d.Owner?.name || "Unknown",
+                  ownerEmail: d.Owner?.email || "",
+                  status: "",
+                  stage: d.Stage || "",
+                  dealValue: parseFloat(d.Amount) || 0,
+                  source: d.Lead_Source || "",
+                  createdTime: d.Created_Time || "",
+                  modifiedTime: d.Modified_Time || "",
+                  layoutName: d.Layout?.name || d.$layout?.name || "",
+                  layoutId: d.Layout?.id || d.$layout?.id || "",
+                  pipeline: d.Pipeline || "",
+                  products: d.Product_Details
+                    ? JSON.stringify(d.Product_Details)
+                    : "",
+                  contactName: d.Contact_Name?.name || "",
+                  accountName: d.Account_Name?.name || "",
+                };
+              case "contact":
+                return {
+                  companyName:
+                    d.Account_Name?.name ||
+                    d.Company ||
+                    d.Last_Name ||
+                    "Unknown",
+                  email: d.Email || "",
+                  phone: d.Phone || "",
+                  mobile: d.Mobile || "",
+                  recordName:
+                    d.Full_Name ||
+                    `${d.First_Name || ""} ${d.Last_Name || ""}`.trim(),
+                  domain: extractDomain(d.Email || ""),
+                  ownerName: d.Owner?.name || "Unknown",
+                  ownerEmail: d.Owner?.email || "",
+                  status: "Contact",
+                  source: d.Lead_Source || "",
+                  createdTime: d.Created_Time || "",
+                  modifiedTime: d.Modified_Time || "",
+                  layoutName: d.Layout?.name || d.$layout?.name || "",
+                  layoutId: d.Layout?.id || d.$layout?.id || "",
+                  title: d.Title || "",
+                  accountName: d.Account_Name?.name || "",
+                  country: d.Mailing_Country || d.Other_Country || "",
+                };
+              case "account": {
+                const websiteRaw = d.Website || "";
+                const websiteDomain =
+                  websiteRaw.replace(/^https?:\/\/(www\.)?/, "").split("/")[0] ||
+                  "";
+                return {
+                  companyName: d.Account_Name || "Unknown",
+                  email: d.Email || "",
+                  phone: d.Phone || "",
+                  recordName: d.Account_Name || "Unknown",
+                  domain:
+                    extractDomain(d.Email || "") ||
+                    (websiteDomain && !websiteDomain.includes(" ")
+                      ? websiteDomain
+                      : null),
+                  ownerName: d.Owner?.name || "Unknown",
+                  ownerEmail: d.Owner?.email || "",
+                  status: "Account",
+                  source: "Account",
+                  createdTime: d.Created_Time || "",
+                  modifiedTime: d.Modified_Time || "",
+                  layoutName: d.Layout?.name || d.$layout?.name || "",
+                  layoutId: d.Layout?.id || d.$layout?.id || "",
+                  website: websiteRaw,
+                  crNumber: d.CR_Number || d.Registration_Number || "",
+                  vatNumber: d.VAT_Number || d.Tax_ID || "",
+                  country: d.Billing_Country || d.Shipping_Country || "",
+                  region: d.Billing_State || d.Shipping_State || "",
+                  industry: d.Industry || "",
+                  noOfEmployees: parseInt(d.Employees) || undefined,
+                  accountType: d.Account_Type || "",
+                };
+              }
+            }
+          };
+
+          const { pool } = await import("../../utils/database");
+          const refreshed: string[] = [];
+          const missing: string[] = [];
+          const failed: { id: string; error: string }[] = [];
+
+          for (const zohoId of zohoIds) {
+            try {
+              const live = await fetchZohoRecordById(cfg.zohoModule, zohoId);
+              if (!live) {
+                missing.push(zohoId);
+                continue;
+              }
+              const existing = await pool.query(
+                `SELECT cluster_id FROM duplicate_records WHERE zoho_record_id = $1 AND record_type = $2 LIMIT 1`,
+                [zohoId, cfg.recordType],
+              );
+              const clusterId = existing.rows[0]?.cluster_id;
+              if (!clusterId) {
+                missing.push(zohoId);
+                continue;
+              }
+              const e = extract(live);
+              await upsertRecord({
+                cluster_id: clusterId,
+                record_type: cfg.recordType,
+                zoho_record_id: live.id,
+                record_name: e.recordName,
+                company_name: e.companyName,
+                email: e.email || undefined,
+                domain: e.domain || undefined,
+                phone: e.phone || undefined,
+                mobile: e.mobile || undefined,
+                owner_name: e.ownerName,
+                owner_email: e.ownerEmail,
+                status: e.status,
+                stage: e.stage,
+                deal_value: e.dealValue,
+                source: e.source,
+                created_date: e.createdTime
+                  ? new Date(e.createdTime)
+                  : new Date(),
+                modified_date: e.modifiedTime
+                  ? new Date(e.modifiedTime)
+                  : new Date(),
+                is_primary: false,
+                confidence_score: 0,
+                is_mock_data: false,
+                raw_data: live.data,
+                layout_name: e.layoutName,
+                layout_id: e.layoutId,
+                zoho_module: cfg.zohoModule,
+                pipeline: e.pipeline,
+                products: e.products,
+                contact_name: e.contactName,
+                account_name: e.accountName,
+                cr_number: e.crNumber,
+                vat_number: e.vatNumber,
+                website: e.website,
+                country: e.country,
+                region: e.region,
+                industry: e.industry,
+                no_of_employees: e.noOfEmployees,
+                title: e.title,
+                lead_type: e.leadType,
+                account_type: e.accountType,
+              });
+              refreshed.push(zohoId);
+            } catch (err: any) {
+              logger.warn(
+                `⚠️ [Radar Refresh] Failed to refresh ${cfg.zohoModule} ${zohoId}: ${err?.message || err}`,
+              );
+              failed.push({ id: zohoId, error: String(err?.message || err) });
+            }
+          }
+
+          logger.info(
+            `🔄 [Radar Refresh] User ${user.email} refreshed ${refreshed.length}/${zohoIds.length} ${cfg.zohoModule} live from Zoho`,
+          );
+          return c.json({
+            success: true,
+            module: moduleRaw,
+            requested: zohoIds.length,
+            refreshed_count: refreshed.length,
+            missing_count: missing.length,
+            failed_count: failed.length,
+            refreshed,
+            missing,
+            failed,
+          });
+        } catch (error: any) {
+          logger.error("Error in /api/duplicates/refresh-records:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Account inference scan — walks every deal that lacks a real Account
     // and tries to infer one from its linked contact's email domain. See
     // src/utils/accountInference.ts for the walk + scoring.

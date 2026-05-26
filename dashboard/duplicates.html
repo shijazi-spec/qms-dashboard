@@ -528,6 +528,9 @@
             <div class="bg-cyan-50 border border-cyan-200 rounded-lg p-3 mb-3 text-sm text-cyan-900">
                 <strong>Lead duplicates.</strong> Leads in Zoho that share an email, phone, or company domain with another lead — the highest-volume source of duplicate creation. Resolving these prevents two reps from working the same prospect and stops the same company from appearing twice in pipeline reports.
             </div>
+            <div class="flex justify-end mb-3">
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;leads&quot;]" id="leadsZohoRefreshBtn" title="Pull live values from Zoho for every lead currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+            </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -554,6 +557,9 @@
         <div id="content-deals" class="tab-content hidden">
             <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3 text-sm text-emerald-900">
                 <strong>Deal duplicates.</strong> Deals on the same Account (or same company domain) that look like they describe the same opportunity. Critical to clean up before quarter-end because each duplicate deal inflates pipeline value and skews forecast accuracy.
+            </div>
+            <div class="flex justify-end mb-3">
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;deals&quot;]" id="dealsZohoRefreshBtn" title="Pull live values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -582,6 +588,9 @@
             <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 text-sm text-purple-900">
                 <strong>Contact duplicates.</strong> Contact records that share an email address, phone, or full name within the same Account. Merging these keeps activity history (calls, emails, meetings) attached to a single person instead of scattered across copies, and prevents duplicate outreach.
             </div>
+            <div class="flex justify-end mb-3">
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+            </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -608,6 +617,9 @@
         <div id="content-accounts" class="tab-content hidden">
             <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 text-sm text-amber-900">
                 <strong>Account duplicates.</strong> Account records that appear to describe the same company — same domain, same legal name, or close fuzzy-name match. Resolving these is the foundation of clean reporting: once Accounts are unique, related Contacts and Deals roll up correctly under one customer.
+            </div>
+            <div class="flex justify-end mb-3">
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;accounts&quot;]" id="accountsZohoRefreshBtn" title="Pull live values from Zoho for every account currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -1901,6 +1913,88 @@
 
         // C4: Paginated record tabs (50/page)
         let recordPages = { leads: 0, deals: 0, contacts: 0, accounts: 0 };
+        // Per-module live refresh from Zoho. Same UX as the green
+        // "Refresh from Zoho (live)" button on the CS Lifecycle tab, but
+        // generic so every per-module tab (Leads / Deals / Contacts /
+        // Accounts) gets the same one-click sync. Reads the Zoho IDs of
+        // every row currently rendered in the module's table (via the
+        // data-testid="link-zoho-<id>" anchors that zohoLink() emits),
+        // POSTs them to /api/duplicates/refresh-records, then reloads the
+        // visible page so updated values appear immediately.
+        async function refreshModuleTableFromZoho(module, opts) {
+            const silent = !!(opts && opts.silent);
+            const TABLE_BY_MODULE = {
+                leads: 'leadsTable',
+                deals: 'dealsTable',
+                contacts: 'contactsTable',
+                accounts: 'accountsTable',
+            };
+            const BTN_BY_MODULE = {
+                leads: 'leadsZohoRefreshBtn',
+                deals: 'dealsZohoRefreshBtn',
+                contacts: 'contactsZohoRefreshBtn',
+                accounts: 'accountsZohoRefreshBtn',
+            };
+            const tbody = document.getElementById(TABLE_BY_MODULE[module]);
+            const btn = document.getElementById(BTN_BY_MODULE[module]);
+            if (!tbody) return { refreshed: 0, skipped: true };
+            const ids = Array.from(new Set(
+                Array.from(tbody.querySelectorAll('a[data-testid^="link-zoho-"]'))
+                    .map(a => (a.getAttribute('data-testid') || '').replace(/^link-zoho-/, ''))
+                    .filter(id => id && !id.startsWith('test_') && !id.startsWith('LEAD_') && !id.startsWith('DEAL_'))
+            ));
+            if (ids.length === 0) {
+                if (!silent) alert('No records on this page to refresh.');
+                return { refreshed: 0, skipped: true };
+            }
+            const orig = btn ? btn.innerHTML : null;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = 'Refreshing ' + ids.length + ' record' + (ids.length === 1 ? '' : 's') + '…';
+            }
+            try {
+                // Backend caps each call at 50 records; batch larger pages.
+                const CHUNK = 50;
+                let totalRefreshed = 0, totalFailed = 0, totalMissing = 0;
+                for (let i = 0; i < ids.length; i += CHUNK) {
+                    const slice = ids.slice(i, i + CHUNK);
+                    const res = await fetch('/api/duplicates/refresh-records', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ module: module, zohoIds: slice }),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error || ('HTTP ' + res.status));
+                    }
+                    const json = await res.json();
+                    totalRefreshed += json.refreshed_count || 0;
+                    totalFailed += json.failed_count || 0;
+                    totalMissing += json.missing_count || 0;
+                }
+                const notes = [];
+                if (totalFailed) notes.push(totalFailed + ' failed');
+                if (totalMissing) notes.push(totalMissing + ' not found in Zoho');
+                if (btn) {
+                    btn.innerHTML = '✓ Refreshed ' + totalRefreshed + (notes.length ? ' (' + notes.join(', ') + ')' : '');
+                }
+                await loadRecordTab(module, (typeof recordPages !== 'undefined' && recordPages[module]) || 0);
+                if (btn) setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                return { refreshed: totalRefreshed, failed: totalFailed, missing: totalMissing };
+            } catch (e) {
+                if (btn) {
+                    btn.innerHTML = '✗ Failed';
+                    setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                }
+                if (!silent) {
+                    alert('Refresh from Zoho failed: ' + (e.message || e));
+                } else {
+                    try { console.error('Refresh from Zoho failed:', e); } catch (_) {}
+                }
+                return { refreshed: 0, error: String(e && e.message || e) };
+            }
+        }
+
         async function loadRecordTab(type, page = 0) {
             recordPages[type] = page;
             const range = getDateRange();
