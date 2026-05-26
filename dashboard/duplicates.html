@@ -146,7 +146,6 @@
                 Auto-CAPA KPIs
             </button>
             <button data-on-click="showTab" data-args="[&quot;owners&quot;]" id="tab-owners" data-testid="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
-            <button data-on-click="showTab" data-args="[&quot;export&quot;]" id="tab-export" data-testid="tab-export" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Export Center</button>
             <button data-on-click="showTab" data-args="[&quot;logs&quot;]" id="tab-logs" data-testid="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
             <button data-on-click="showTab" data-args="[&quot;search&quot;]" id="tab-search" data-testid="tab-search" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -536,7 +535,8 @@
             <div class="bg-cyan-50 border border-cyan-200 rounded-lg p-3 mb-3 text-sm text-cyan-900">
                 <strong>Lead duplicates.</strong> Leads in Zoho that share an email, phone, or company domain with another lead — the highest-volume source of duplicate creation. Resolving these prevents two reps from working the same prospect and stops the same company from appearing twice in pipeline reports.
             </div>
-            <div class="flex justify-end mb-3">
+            <div class="flex justify-end mb-3 gap-2">
+                <button data-on-click="exportTab" data-args="[&quot;lead&quot;]" data-pass-event="true" id="leadsExportBtn" data-testid="button-export-leads" title="Download a CSV of every Lead duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;leads&quot;]" id="leadsZohoRefreshBtn" title="Pull live values from Zoho for every lead currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
@@ -564,7 +564,8 @@
             <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3 text-sm text-emerald-900">
                 <strong>Deal duplicates.</strong> Deals on the same Account (or same company domain) that look like they describe the same opportunity. Critical to clean up before quarter-end because each duplicate deal inflates pipeline value and skews forecast accuracy.
             </div>
-            <div class="flex justify-end mb-3">
+            <div class="flex justify-end mb-3 gap-2">
+                <button data-on-click="exportTab" data-args="[&quot;deal&quot;]" data-pass-event="true" id="dealsExportBtn" data-testid="button-export-deals" title="Download a CSV of every Deal duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;deals&quot;]" id="dealsZohoRefreshBtn" title="Pull live values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
@@ -591,7 +592,8 @@
             <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 text-sm text-purple-900">
                 <strong>Contact duplicates.</strong> Contact records that share an email address, phone, or full name within the same Account. Merging these keeps activity history (calls, emails, meetings) attached to a single person instead of scattered across copies, and prevents duplicate outreach.
             </div>
-            <div class="flex justify-end mb-3">
+            <div class="flex justify-end mb-3 gap-2">
+                <button data-on-click="exportTab" data-args="[&quot;contact&quot;]" data-pass-event="true" id="contactsExportBtn" data-testid="button-export-contacts" title="Download a CSV of every Contact duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
@@ -618,7 +620,8 @@
             <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 text-sm text-amber-900">
                 <strong>Account duplicates.</strong> Account records that appear to describe the same company — same domain, same legal name, or close fuzzy-name match. Resolving these is the foundation of clean reporting: once Accounts are unique, related Contacts and Deals roll up correctly under one customer.
             </div>
-            <div class="flex justify-end mb-3">
+            <div class="flex justify-end mb-3 gap-2">
+                <button data-on-click="exportTab" data-args="[&quot;account&quot;]" data-pass-event="true" id="accountsExportBtn" data-testid="button-export-accounts" title="Download a CSV of every Account duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;accounts&quot;]" id="accountsZohoRefreshBtn" title="Pull live values from Zoho for every account currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
@@ -722,6 +725,7 @@
                 </table>
             </div>
             <div class="flex justify-end mt-3 gap-2">
+                <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of the full radar (cross-module clusters are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
             </div>
@@ -783,6 +787,7 @@
                     <button data-on-click="filterCsOverlap" data-args="[&quot;warn&quot;]" id="csOverlapChip-warn" data-testid="cs-overlap-chip-warn" class="px-3 py-1.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200">Warn</button>
                 </div>
                 <div class="flex-1"></div>
+                <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="csOverlapExportBtn" data-testid="button-export-cs-overlap" title="Download a CSV of the full radar (CS pipeline overlaps are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshCsOverlapFromZoho" id="csOverlapZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this CS Overlap view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="rescanCsOverlap" id="csOverlapScanBtn" data-testid="button-cs-overlap-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">
                     Run scan
@@ -912,6 +917,7 @@
                     <button data-on-click="filterAccountHints" data-args="[&quot;dismissed&quot;]" id="accountHintsChip-dismissed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">Dismissed</button>
                 </div>
                 <div class="flex-1"></div>
+                <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of the full radar (Account-Hint candidates are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
             </div>
@@ -976,6 +982,7 @@
                     <button data-on-click="filterCsLifecycle" data-args="[&quot;info&quot;]" id="csLifeChip-info" class="px-3 py-1.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200">Info</button>
                 </div>
                 <div class="flex-1"></div>
+                <button data-on-click="exportTab" data-args="[&quot;deal&quot;]" data-pass-event="true" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of every Deal duplicate currently in the radar (CS Lifecycle pivots on Deals)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
             </div>
 
@@ -1076,6 +1083,7 @@
                 <strong>Owner accountability.</strong> Per-owner RAG scorecard showing how much duplicate debt each rep is carrying — open clusters they own, days since the oldest one was created, and whether the trend is improving. Use this for coaching conversations and to set fair cleanup targets; it's the input to the monthly CRM-hygiene KPI.
             </div>
             <div class="flex justify-end mb-3">
+                <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="ownersExportBtn" data-testid="button-export-owners" title="Download a CSV of the full radar (every owner's duplicates included). For a single-owner packet, use the per-row Export / Packet links in the table below." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshOwnersFromZoho" id="ownersZohoRefreshBtn" title="Reload the per-owner scorecard from the most recent CRM sync. For a full live re-pull of every record from Zoho, use the top-header Sync Now button." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -1098,21 +1106,11 @@
             </div>
         </div>
 
-        <!-- ═══ EXPORT TAB ═══ -->
-        <div id="content-export" class="tab-content hidden">
-            <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3 text-sm text-gray-800">
-                <strong>Export center.</strong> Download the current radar state as CSV or XLSX for offline analysis, audit evidence, or bulk-merge planning in a spreadsheet. Exports respect the currently-applied filters and include cluster IDs so you can map a row back to the in-app view.
-            </div>
-            <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="text-lg font-semibold mb-4">Export Duplicate Data</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div><label class="block text-sm font-medium text-gray-700 mb-2">Export Type</label><select id="exportType" aria-label="Export format type" data-testid="select-export-type" class="w-full border rounded-lg px-3 py-2"><option value="all">All Duplicates</option><option value="cluster">By Domain Cluster</option><option value="owner">By Owner</option><option value="time_period">By Time Period</option></select></div>
-                    <div><label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label><input type="date" id="exportStartDate" aria-label="Export start date" data-testid="input-export-start" class="w-full border rounded-lg px-3 py-2"></div>
-                    <div><label class="block text-sm font-medium text-gray-700 mb-2">End Date</label><input type="date" id="exportEndDate" aria-label="Export end date" data-testid="input-export-end" class="w-full border rounded-lg px-3 py-2"></div>
-                </div>
-                <button id="downloadExportBtn" data-on-click="downloadExport" data-pass-event="true" data-testid="button-download-export" class="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium">Download CSV Export <span data-size-hint class="ms-1 text-xs opacity-90"></span></button>
-            </div>
-        </div>
+        <!-- Export Center tab removed — replaced by per-tab "Export CSV"
+             buttons next to each "Refresh from Zoho" button. The top-header
+             "Download CSV" button (exportData) still exports the whole
+             radar; the per-owner export links on the Owners tab still
+             stream owner-scoped CSVs. -->
 
         <!-- ═══ LOGS TAB ═══ -->
         <div id="content-logs" class="tab-content hidden">
@@ -3603,13 +3601,9 @@
             const lm = document.getElementById('listModal');
             if (lm) lm.addEventListener('click', (e) => { if (e.target === lm) closeListModal(); });
 
-            // Refresh the size hint on the dynamic export form whenever the
-            // user changes type/date filters; also seed it on first load.
-            ['exportType', 'exportStartDate', 'exportEndDate'].forEach((id) => {
-                const el = document.getElementById(id);
-                if (el) el.addEventListener('change', refreshDownloadExportHint);
-            });
-            refreshDownloadExportHint();
+            // (Export Center tab removed — its size-hint listener used to
+            // live here. Per-tab "⬇ Export CSV" buttons stream directly
+            // via exportTab() without a pre-flight estimate.)
         });
 
         // D1: Scan with progress bar
@@ -3862,6 +3856,30 @@
             return streamingDownloadFromEvent(event, url, { filename: 'duplicates-all.csv' });
         }
 
+        // Per-tab CSV export — replaces the standalone Export Center tab.
+        // Each tab's green "⬇ Export CSV" button calls this with the
+        // record type that tab pivots on ('lead' / 'deal' / 'contact' /
+        // 'account' / 'all'). The backend accepts ?record_type=<type>
+        // and scopes the duplicate_records WHERE clause to that module;
+        // 'all' falls through with no extra filter and exports the
+        // full radar. Date filters from the Advanced Filters panel
+        // (getDateRange) still apply so an in-progress audit-evidence
+        // window is honored even when the user clicks Export from a
+        // module tab.
+        function exportTab(recordType, event) {
+            const allowed = ['lead', 'deal', 'contact', 'account'];
+            const safeType = allowed.includes(String(recordType)) ? String(recordType) : 'all';
+            const range = getDateRange();
+            let url = '/api/duplicates/export?type=all';
+            if (safeType !== 'all') url += `&record_type=${safeType}`;
+            if (range.from) url += `&start_date=${range.from}`;
+            if (range.to) url += `&end_date=${range.to}`;
+            const filename = safeType === 'all'
+                ? 'duplicates-all.csv'
+                : `duplicates-${safeType}s.csv`;
+            return streamingDownloadFromEvent(event, url, { filename });
+        }
+
         function exportOwner(anchor, event) {
             const owner = anchor && anchor.dataset ? (anchor.dataset.owner || 'owner') : 'owner';
             const safe = owner.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'owner';
@@ -3885,32 +3903,8 @@
             return streamingDownloadFromEvent(event, href, { filename: `duplicate-radar-packet-${safe}.xlsx` });
         }
 
-        function buildDownloadExportUrl() {
-            const type = (document.getElementById('exportType') || {}).value || 'all';
-            const start = (document.getElementById('exportStartDate') || {}).value || '';
-            const end = (document.getElementById('exportEndDate') || {}).value || '';
-            let url = `/api/duplicates/export?type=${type}`;
-            if (start) url += `&start_date=${start}`;
-            if (end) url += `&end_date=${end}`;
-            return { url, type };
-        }
-
-        function refreshDownloadExportHint() {
-            if (!window.streamingDownload || !streamingDownload.fetchEstimate) return;
-            const btn = document.getElementById('downloadExportBtn');
-            if (!btn) return;
-            const { url } = buildDownloadExportUrl();
-            btn.dataset.estimateUrl = url;
-            streamingDownload.fetchEstimate(url)
-                .then((est) => streamingDownload.applySizeHint(btn, est))
-                .catch(() => { /* hint is best-effort */ });
-        }
-
-        function downloadExport(event) {
-            const { url, type } = buildDownloadExportUrl();
-            const safeType = String(type || 'export').replace(/[^a-zA-Z0-9_-]/g, '_');
-            return streamingDownloadFromEvent(event, url, { filename: `duplicates-${safeType}.csv` });
-        }
+        // (buildDownloadExportUrl / refreshDownloadExportHint / downloadExport
+        // removed alongside the Export Center tab — superseded by exportTab().)
 
         async function performSearch() {
             const params = {

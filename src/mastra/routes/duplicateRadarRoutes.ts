@@ -1696,6 +1696,17 @@ export const duplicateRadarRoutes = [
           const owner = url.searchParams.get("owner") || undefined;
           const startDate = url.searchParams.get("start_date") || undefined;
           const endDate = url.searchParams.get("end_date") || undefined;
+          // Optional per-module filter so the per-tab "Export CSV" buttons
+          // (replacing the standalone Export Center tab) can scope the
+          // download to just the module the user is currently viewing.
+          // Allow only the canonical record types — anything else is
+          // ignored to keep the WHERE clause shape stable.
+          const rawRecordType = url.searchParams.get("record_type") || "";
+          const recordType = ["lead", "deal", "contact", "account"].includes(
+            rawRecordType,
+          )
+            ? rawRecordType
+            : undefined;
 
           const { escapeCSVValue } = await import("../../utils/inputSanitizer");
           const { streamCsv, cursorQuery, stageStreamingExportFromHono } =
@@ -1721,6 +1732,10 @@ export const duplicateRadarRoutes = [
           if (endDate) {
             filterParams.push(endDate + "T23:59:59Z");
             whereClause += ` AND dr.created_date <= $${filterParams.length}`;
+          }
+          if (recordType) {
+            filterParams.push(recordType);
+            whereClause += ` AND dr.record_type = $${filterParams.length}`;
           }
 
           // Use the module-level shared pool. The cursor stream releases
