@@ -431,6 +431,49 @@ export async function fetchDealStageHistory(
   );
 }
 
+// Fetch a single record by ID directly from Zoho. Unlike the bulk
+// /crm/v2/{Module} endpoint, the single-record endpoint is real-time and
+// not subject to Zoho's bulk-read eventual-consistency lag. Use this when
+// a user reports that the cache shows stale field values for a specific
+// record (e.g. Phase, Company_Domain on a CS Lifecycle violation).
+export async function fetchZohoRecordById(
+  module: string,
+  recordId: string,
+): Promise<ZohoCRMRecord | null> {
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/${module}/${encodeURIComponent(recordId)}`;
+      return fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    async (response) => {
+      if (response.status === 204 || response.status === 404) return null;
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(`Zoho ${module} fetch error: ${response.status} - ${error.message || response.statusText}`);
+      }
+      const text = await response.text();
+      if (!text || !text.trim()) return null;
+      const data = JSON.parse(text);
+      const record = (data.data || [])[0];
+      if (!record) return null;
+      return {
+        id: record.id,
+        module,
+        owner: record.Owner?.name || record.Owner?.id,
+        createdTime: record.Created_Time,
+        modifiedTime: record.Modified_Time,
+        data: record,
+      };
+    },
+  );
+}
+
 export interface ZohoChangelogRow {
   audited_time?: string;
   field?: { api_name?: string; display_label?: string };

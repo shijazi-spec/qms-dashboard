@@ -943,6 +943,7 @@
                     <button data-on-click="filterCsLifecycle" data-args="[&quot;info&quot;]" id="csLifeChip-info" class="px-3 py-1.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200">Info</button>
                 </div>
                 <div class="flex-1"></div>
+                <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="loadCsLifecycle" data-args="[&quot;all&quot;]" id="csLifeRefreshBtn" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Refresh</button>
             </div>
 
@@ -3507,6 +3508,57 @@
         }
 
         function filterCsLifecycle(sev) { loadCsLifecycle(sev); }
+
+        // Pulls a live copy of every Deal currently visible in the CS Lifecycle
+        // table directly from Zoho's single-record API (which bypasses the
+        // bulk-read cache that occasionally serves stale Phase / Company_Domain
+        // values), upserts each into duplicate_records, then reloads the table.
+        async function refreshCsLifecycleFromZoho() {
+            const btn = document.getElementById('csLifeZohoRefreshBtn');
+            const data = window._csLifecycleData || {};
+            const violations = data.violations || [];
+            const ids = Array.from(new Set(violations.map(v => v.zoho_record_id).filter(Boolean)));
+            if (ids.length === 0) {
+                alert('No violations to refresh.');
+                return;
+            }
+            if (!btn) return;
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = 'Refreshing ' + ids.length + ' deal' + (ids.length === 1 ? '' : 's') + '…';
+            try {
+                // Batch in chunks of 50 (server cap) so the UI stays usable
+                // even when the table has more than 50 violations visible.
+                const CHUNK = 50;
+                let totalRefreshed = 0, totalFailed = 0, totalMissing = 0;
+                for (let i = 0; i < ids.length; i += CHUNK) {
+                    const slice = ids.slice(i, i + CHUNK);
+                    const res = await fetch('/api/duplicates/cs-lifecycle/refresh-deals', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ zohoIds: slice }),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error || ('HTTP ' + res.status));
+                    }
+                    const json = await res.json();
+                    totalRefreshed += json.refreshed_count || 0;
+                    totalFailed += json.failed_count || 0;
+                    totalMissing += json.missing_count || 0;
+                }
+                const notes = [];
+                if (totalFailed) notes.push(totalFailed + ' failed');
+                if (totalMissing) notes.push(totalMissing + ' not found in Zoho');
+                btn.innerHTML = '✓ Refreshed ' + totalRefreshed + (notes.length ? ' (' + notes.join(', ') + ')' : '');
+                await loadCsLifecycle(window._csLifecycleFilter || 'all');
+                setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+            } catch (e) {
+                btn.innerHTML = '✗ Failed';
+                alert('Refresh from Zoho failed: ' + (e.message || e));
+                setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+            }
+        }
 
         async function loadCsLifecycle(severity) {
             window._csLifecycleFilter = severity || 'all';

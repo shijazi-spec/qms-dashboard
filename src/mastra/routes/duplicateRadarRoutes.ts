@@ -89,6 +89,7 @@ import type { DuplicateFilters } from "../../utils/duplicateRadarDatabase";
 import {
   fetchAllZohoRecords,
   fetchDeletedZohoRecords,
+  fetchZohoRecordById,
 } from "../../utils/zohoCRM";
 
 import { logger } from "../../utils/logger";
@@ -3554,6 +3555,116 @@ export const duplicateRadarRoutes = [
           return c.json({ success: true, ...result });
         } catch (error: any) {
           logger.error("Error fetching CS lifecycle violations:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Force-refresh one or more Deals directly from Zoho's single-record API
+    // (real-time, not subject to the bulk-read eventual-consistency lag that
+    // can cause CS Lifecycle violations to show stale Phase / Company_Domain
+    // values long after the CRM record was updated). For each id we pull the
+    // live record, run it through the same Deal extractor used by the bulk
+    // sync, and upsert it so the next /violations call reflects current CRM
+    // state. Reusing the existing cluster (by zoho_record_id) avoids
+    // re-clustering side-effects.
+    path: "/api/duplicates/cs-lifecycle/refresh-deals",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const body = await c.req.json().catch(() => ({}));
+          const zohoIds: string[] = Array.isArray(body?.zohoIds)
+            ? body.zohoIds.filter((x: any) => typeof x === "string" && x.trim())
+            : [];
+          if (zohoIds.length === 0) {
+            return c.json({ error: "zohoIds array required" }, 400);
+          }
+          const MAX = 50;
+          if (zohoIds.length > MAX) {
+            return c.json({ error: `Refresh at most ${MAX} deals per request` }, 400);
+          }
+
+          const { pool } = await import("../../utils/database");
+
+          const refreshed: string[] = [];
+          const missing: string[] = [];
+          const failed: { id: string; error: string }[] = [];
+
+          for (const zohoId of zohoIds) {
+            try {
+              const live = await fetchZohoRecordById("Deals", zohoId);
+              if (!live) {
+                missing.push(zohoId);
+                continue;
+              }
+              const d: any = live.data;
+              const existing = await pool.query(
+                `SELECT cluster_id FROM duplicate_records WHERE zoho_record_id = $1 LIMIT 1`,
+                [zohoId],
+              );
+              const clusterId = existing.rows[0]?.cluster_id;
+              if (!clusterId) {
+                missing.push(zohoId);
+                continue;
+              }
+              await upsertRecord({
+                cluster_id: clusterId,
+                record_type: "deal",
+                zoho_record_id: live.id,
+                record_name: d.Deal_Name || "Unknown Deal",
+                company_name: d.Account_Name?.name || d.Deal_Name || "Unknown",
+                email: d.Contact_Email || undefined,
+                domain: extractDomain(d.Contact_Email || "") || undefined,
+                phone: d.Contact_Phone || undefined,
+                owner_name: d.Owner?.name || "Unknown",
+                owner_email: d.Owner?.email || "",
+                status: "",
+                stage: d.Stage || "",
+                deal_value: parseFloat(d.Amount) || 0,
+                source: d.Lead_Source || "",
+                created_date: d.Created_Time ? new Date(d.Created_Time) : new Date(),
+                modified_date: d.Modified_Time ? new Date(d.Modified_Time) : new Date(),
+                is_primary: false,
+                confidence_score: 0,
+                is_mock_data: false,
+                raw_data: d,
+                layout_name: d.Layout?.name || d.$layout?.name || "",
+                layout_id: d.Layout?.id || d.$layout?.id || "",
+                zoho_module: "Deals",
+                pipeline: d.Pipeline || "",
+                products: d.Product_Details ? JSON.stringify(d.Product_Details) : "",
+                contact_name: d.Contact_Name?.name || "",
+                account_name: d.Account_Name?.name || "",
+              });
+              refreshed.push(zohoId);
+            } catch (err: any) {
+              logger.warn(
+                `⚠️ [CS-Lifecycle Refresh] Failed to refresh Deal ${zohoId}: ${err?.message || err}`,
+              );
+              failed.push({ id: zohoId, error: String(err?.message || err) });
+            }
+          }
+
+          logger.info(
+            `🔄 [CS-Lifecycle Refresh] User ${user.email} refreshed ${refreshed.length}/${zohoIds.length} deals live from Zoho`,
+          );
+          return c.json({
+            success: true,
+            requested: zohoIds.length,
+            refreshed_count: refreshed.length,
+            missing_count: missing.length,
+            failed_count: failed.length,
+            refreshed,
+            missing,
+            failed,
+          });
+        } catch (error: any) {
+          logger.error("Error in cs-lifecycle/refresh-deals:", error);
           return c.json({ error: "An internal error occurred" }, 500);
         }
       };
