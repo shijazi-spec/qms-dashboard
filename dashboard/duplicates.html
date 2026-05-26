@@ -1186,6 +1186,17 @@
         }
 
         async function refreshData() {
+            // Visual feedback so users know the click registered. Without
+            // this the button looked dead because the function does its work
+            // silently and (previously) didn't even touch the currently-open
+            // tab — clicking it from CS Lifecycle appeared to do nothing.
+            const refreshBtn = document.querySelector('[data-testid="button-refresh"]');
+            let originalBtnHtml = null;
+            if (refreshBtn) {
+                originalBtnHtml = refreshBtn.innerHTML;
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refreshing…';
+            }
             try {
                 await fetch('/api/duplicates/recalculate-stats', { method: 'POST' }).catch(() => {});
                 const [summaryRes, logsRes, ownerAccRes] = await Promise.all([
@@ -1207,8 +1218,27 @@
                 loadRecordTab('deals');
                 loadRecordTab('contacts');
                 loadRecordTab('accounts');
+
+                // Also refresh the currently-active tab — previously the top
+                // Refresh button only touched summary/clusters/per-record tabs,
+                // so users on CS Lifecycle / Auto-CAPA / CS Overlap / Account
+                // Hints saw no visible change and assumed the button was broken.
+                const activeTabEl = document.querySelector('[id^="tab-"].tab-active');
+                const activeTab = activeTabEl ? activeTabEl.id.replace(/^tab-/, '') : null;
+                if (activeTab === 'cs-lifecycle')   loadCsLifecycle(window._csLifecycleFilter || 'all');
+                if (activeTab === 'cs-overlap')     loadCsOverlap(window._csOverlapFilter || 'all');
+                if (activeTab === 'auto-capa-kpis') loadAutoCapaKpis();
+                if (activeTab === 'account-hints')  loadAccountHints();
             } catch (error) {
                 console.error('Error refreshing data:', error);
+            } finally {
+                if (refreshBtn && originalBtnHtml !== null) {
+                    refreshBtn.innerHTML = '✓ Refreshed';
+                    setTimeout(() => {
+                        refreshBtn.innerHTML = originalBtnHtml;
+                        refreshBtn.disabled = false;
+                    }, 1200);
+                }
             }
             // Load sparkline outside the try so it still renders even if summary calls fail
             loadClustersTrendSparkline();
