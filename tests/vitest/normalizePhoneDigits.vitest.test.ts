@@ -11,8 +11,15 @@
  *   "966505522305"      E.164 digits only
  *   "0505522305"        Local with leading zero (Saudi convention)
  *   "505522305"         Already normalized (9 digits)
- *   "96050552305"       Salvage: 11-digit, "+966" with one missing
- *                       digit — real case from Screenshot 464.
+ *
+ * Plus one *partial* salvage case:
+ *   "96050552305"       11-digit, "+966" with one missing digit —
+ *                       real case from Screenshot 464. The function
+ *                       returns the last 9 digits as a best-effort
+ *                       fingerprint, but it CANNOT recover the
+ *                       missing digit (the input genuinely has
+ *                       only one `2` where the canonical has two).
+ *                       See the dedicated test below.
  */
 import { describe, expect, test } from "vitest";
 import { normalizePhoneDigits } from "../../src/utils/callMcpReconciliation";
@@ -32,9 +39,23 @@ describe("normalizePhoneDigits — Saudi number variants", () => {
   test("already-canonical 9 digits → unchanged", () => {
     expect(normalizePhoneDigits("505522305")).toBe(CANONICAL);
   });
-  test("Mohammed Alsulami's number (Screenshot 464) → canonical via salvage branch", () => {
-    expect(normalizePhoneDigits("96050552305")).toBe(CANONICAL);
-  });
+  test(
+    "Mohammed Alsulami's number (Screenshot 464) → salvage returns last 9 digits " +
+      "(cannot recover missing digit — by design)",
+    () => {
+      // Input: 96050552305 (11 digits) — operator typed `96` (2 digits)
+      // instead of `+966` (3 digits) AND dropped one `2` from `5522`.
+      // The salvage branch in normalizePhoneDigits returns the LAST 9
+      // digits as a best-effort fingerprint that downstream fuzzy
+      // matching can compare against the canonical 9-digit subscriber.
+      // It can't reconstruct the canonical because the missing `2` is
+      // genuinely gone — no algorithm can invent a digit the input
+      // never had. Verifying we get the deterministic last-9-digit
+      // slice so a future refactor doesn't silently change the salvage
+      // behaviour without an explicit decision.
+      expect(normalizePhoneDigits("96050552305")).toBe("050552305");
+    },
+  );
 });
 
 describe("normalizePhoneDigits — edge cases", () => {

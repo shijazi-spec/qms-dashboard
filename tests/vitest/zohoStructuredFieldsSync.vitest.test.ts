@@ -135,15 +135,23 @@ describe("syncEvaluationToZohoStructuredFields — flag gating", () => {
   });
   test("proceeds when flag is on globally", async () => {
     process.env[FLAG_KEY] = "true";
-    // No real updateZohoRecord stub yet → expect zoho_error
+    // No real updateZohoRecord stub yet → expect zoho_error (or
+    // no_writable_fields, etc.) — anything other than `flag_disabled`
+    // proves the gate let the code through.
     const r = await syncEvaluationToZohoStructuredFields(
       { overall_score: 80 },
       { id: 1, lead_id: "L1" },
     );
     expect(r.synced).toBe(false);
-    // Either succeeded (unlikely without creds) or hit zoho_error — both prove gating passed
-    expect(["zoho_error", "no_writable_fields"]).not.toContain(r.skipped_reason);
-    expect(r.skipped_reason !== "flag_disabled").toBe(true);
+    // The ONLY thing this test cares about is that the flag gate didn't
+    // short-circuit before reaching the Zoho client call. A previous
+    // version of this test asserted that skipped_reason was NEITHER
+    // "zoho_error" NOR "no_writable_fields" — that contradicted the
+    // comment above (which explicitly lists zoho_error as proof of
+    // passing the gate) and failed in test environments without Zoho
+    // credentials. Pinning the actual contract: gate passed iff the
+    // skip reason isn't `flag_disabled`.
+    expect(r.skipped_reason).not.toBe("flag_disabled");
   });
 });
 

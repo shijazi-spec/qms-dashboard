@@ -115,16 +115,27 @@ export function buildEvaluationPatch(
     }
   }
 
-  // Last evaluation date — accept ISO string or Date, default to now
+  // Last evaluation date — accept ISO string or Date, fall back to "now".
+  //
+  // Three input cases:
+  //   (a) evaluated_at is a valid ISO/Date → use it.
+  //   (b) evaluated_at is set but unparseable (e.g. "not-a-date") → treat
+  //       the same as (c): the caller passed garbage, but if we have
+  //       anything else to write, stamp "now" so Zoho's
+  //       Last_Evaluation_Date field isn't silently left stale.
+  //   (c) evaluated_at is unset → if patch already has content, stamp
+  //       "now"; otherwise leave the date off so we don't write a date
+  //       to an otherwise-empty patch.
   let evalDate: Date | null = null;
   if (ev.evaluated_at) {
     const d = ev.evaluated_at instanceof Date
       ? ev.evaluated_at
       : new Date(ev.evaluated_at);
     if (!Number.isNaN(d.getTime())) evalDate = d;
-  } else if (Object.keys(patch).length > 0) {
-    // Only stamp "now" if we have something else to write — don't
-    // write an evaluation date for an empty patch.
+  }
+  if (!evalDate && Object.keys(patch).length > 0) {
+    // Covers cases (b) and (c). Only stamp "now" if we have something
+    // else to write — never write an evaluation date for an empty patch.
     evalDate = new Date();
   }
   if (evalDate) {

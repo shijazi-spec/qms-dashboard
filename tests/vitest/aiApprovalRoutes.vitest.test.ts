@@ -424,13 +424,18 @@ describe("POST /api/ai/approvals/:code/approve", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({
+    // The route handler omits `error` on the success branch (it's only
+    // populated in the catch path), which serialises to `undefined` in
+    // the captured response body. Use `toMatchObject` so the assertion
+    // pins the success-path fields without caring whether `error` is
+    // absent or set to undefined — both are equivalent over the wire
+    // since JSON.stringify drops `undefined` keys.
+    expect(res.body).toMatchObject({
       success: true,
       actionCode: "ACT-2026-0001",
       entityType: "ApiKey",
       entityId: "key-1",
       result: { rotated: true, fingerprint: "abc123" },
-      error: null,
     });
     expect(approvalDb.claimForApproval).toHaveBeenCalledWith(
       "ACT-2026-0001",
