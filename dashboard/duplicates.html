@@ -571,16 +571,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Deal Name</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Deal</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this deal was flagged. OR rule: 👤 same deal name on the same account · 🆔 same Zoho CRM ID">Dup signal</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Stage</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Value</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created By</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Primary</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Layout</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created</th>
                         </tr>
                     </thead>
                     <tbody id="dealsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -601,16 +598,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Contact Name</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Contact</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this contact was flagged. OR rule: 👤 same name · 📧 same email · 📞 same phone · 🆔 same Zoho CRM ID">Dup signal</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Layout</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created By</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Primary</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created</th>
                         </tr>
                     </thead>
                     <tbody id="contactsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -631,16 +625,14 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Account Name</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Account</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this account was flagged. OR rule: 👤 same name · 📧 same email · 📞 same phone · 🌐 same website · 🆔 same Zoho CRM ID">Dup signal</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Website</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Layout</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Source</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created By</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Primary</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created</th>
                         </tr>
                     </thead>
                     <tbody id="accountsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -2420,15 +2412,128 @@
 
         // Toggle the expanded/collapsed state of one duplicate group on
         // the Leads tab. Wired through SafeActions via data-on-click.
-        function toggleLeadDupGroup(groupId) {
-            const children = document.querySelectorAll('tr[data-dup-group="' + groupId + '"]');
-            const chevron = document.getElementById('lead-dup-chev-' + groupId);
+        // Generic group-toggle handler. data-dup-group ids are prefixed by
+        // module ("leads-0", "deals-3", ...) so the four tabs don't collide.
+        function toggleDupGroup(gid) {
+            const children = document.querySelectorAll('tr[data-dup-group="' + gid + '"]');
+            const chevron = document.getElementById('dup-chev-' + gid);
             let nowOpen = false;
             children.forEach(tr => {
                 tr.classList.toggle('hidden');
                 if (!tr.classList.contains('hidden')) nowOpen = true;
             });
             if (chevron) chevron.textContent = nowOpen ? '▼' : '▶';
+        }
+
+        // Normalize a URL/website value to a bare lowercase hostname so two
+        // accounts on "https://acme.com/path" and "www.acme.com" group together.
+        function _normWebsite(w) {
+            if (!w) return '';
+            try {
+                let s = String(w).trim().toLowerCase();
+                if (!s) return '';
+                if (!/^https?:\/\//.test(s)) s = 'http://' + s;
+                const u = new URL(s);
+                return u.hostname.replace(/^www\./, '');
+            } catch { return String(w).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]; }
+        }
+
+        // Build per-key collision counts {key:{value:count}} for the page.
+        function _dupCounts(items, extractors) {
+            const counts = {};
+            for (const k of Object.keys(extractors)) {
+                counts[k] = {};
+                items.forEach(r => { const v = extractors[k](r); if (v) counts[k][v] = (counts[k][v] || 0) + 1; });
+            }
+            return counts;
+        }
+
+        // Union-find groups: any two items sharing ANY one extractor value
+        // collapse into the same bucket. Returns groups of size >= 2,
+        // sorted by size desc.
+        function _dupBuckets(items, extractors) {
+            const parent = items.map((_, i) => i);
+            const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+            const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+            for (const k of Object.keys(extractors)) {
+                const seen = {};
+                items.forEach((r, i) => {
+                    const v = extractors[k](r);
+                    if (!v) return;
+                    if (seen[v] === undefined) seen[v] = i;
+                    else union(seen[v], i);
+                });
+            }
+            const groups = {};
+            items.forEach((_, i) => { const r = find(i); (groups[r] = groups[r] || []).push(i); });
+            return Object.values(groups).filter(idxs => idxs.length >= 2).sort((a, b) => b.length - a.length);
+        }
+
+        // Group header summary: which key values are *uniformly* shared
+        // across the whole group (badge color/emoji from keyDefs).
+        function _dupGroupSummary(items, idxs, extractors, keyDefs) {
+            const recs = idxs.map(i => items[i]);
+            const sharedKeys = [];
+            for (const k of Object.keys(extractors)) {
+                const vals = new Set(recs.map(r => extractors[k](r)).filter(Boolean));
+                if (vals.size === 1 && (k !== 'id' || recs.length > 1)) {
+                    const def = keyDefs[k] || {};
+                    sharedKeys.push({ k: def.emoji || '•', label: def.label || k, color: def.color || 'bg-gray-100 text-gray-700', value: [...vals][0] });
+                }
+            }
+            const primary = recs.find(r => r.is_primary) || recs[0];
+            return { sharedKeys, primary, count: recs.length };
+        }
+
+        // Yellow collapsible group-header row.
+        function _dupGroupHeaderRow(gid, summary, colspan, moduleLabel) {
+            const chips = summary.sharedKeys.length
+                ? summary.sharedKeys.map(s => `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${s.color}" title="All ${summary.count} ${moduleLabel} in this group share this ${s.label}: ${escapeHtml(String(s.value))}">${s.k} ${escapeHtml(s.label)}</span>`).join(' ')
+                : `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Members of this group are linked through chained matches (e.g. A shares email with B, B shares phone with C)">🔗 chained match</span>`;
+            return `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${gid}"]' data-testid="row-dup-group-${gid}">
+                <td class="px-4 py-3 text-sm" colspan="${colspan}">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span id="dup-chev-${gid}" class="text-gray-600 font-mono" aria-hidden="true">▶</span>
+                        <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
+                        <span class="text-xs text-gray-500">${summary.count} duplicate ${moduleLabel}</span>
+                        <span class="flex flex-wrap gap-1">${chips}</span>
+                        <span class="ms-auto text-xs text-gray-500">Click to expand</span>
+                    </div>
+                </td>
+            </tr>`;
+        }
+
+        // Identity column: ★ primary, bold name, secondary line, tiny ↗ Zoho link.
+        function _dupIdentityCell(r, moduleZoho, secondaryText, nameIsDup) {
+            const star = r.is_primary
+                ? `<span class="text-yellow-500 me-1" title="${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))} — system-chosen master record for this cluster">★</span>`
+                : '';
+            const idStr = String(r.zoho_record_id || '');
+            const isSynthetic = !idStr || idStr.startsWith('test_') || idStr.startsWith('LEAD_') || idStr.startsWith('DEAL_') || idStr.startsWith('CONTACT_') || idStr.startsWith('ACCOUNT_');
+            const zohoIconLink = isSynthetic ? ''
+                : `<a href="https://crm.zoho.com/crm/org766568398/tab/${moduleZoho}/${idStr}" target="_blank" class="text-blue-500 hover:text-blue-700 ms-1 text-xs" title="Open in Zoho CRM (id ${escapeHtml(idStr)})" data-testid="link-zoho-${idStr}">↗</a>`;
+            const nameColorCls = nameIsDup ? 'text-purple-700' : 'text-gray-900';
+            return `<td class="px-4 py-3 text-sm">
+                <div class="flex items-center font-medium ${nameColorCls}">${star}<span>${escapeHtml(r.record_name || '-')}</span>${zohoIconLink}</div>
+                ${secondaryText ? `<div class="text-xs text-gray-500">${escapeHtml(secondaryText)}</div>` : ''}
+            </td>`;
+        }
+
+        function _dupLayoutCell(r) {
+            const raw = r && r.raw_data ? r.raw_data : {};
+            const layoutName = (raw.Layout && (raw.Layout.name || raw.Layout.display_label)) || r.layout || '-';
+            return `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho layout">${escapeHtml(layoutName || '-')}</td>`;
+        }
+
+        function _dupCreatedCell(r) {
+            const raw = r && r.raw_data ? r.raw_data : {};
+            const creator = (raw.Created_By && raw.Created_By.name) || r.created_by_name || '';
+            const ts = raw.Created_Time || r.created_date || r.created_at || null;
+            const rel = _relTime(ts);
+            return `<td class="px-4 py-3 text-sm">
+                <div class="text-gray-700" title="${escapeHtml(rel.full)}">${escapeHtml(rel.short)}</div>
+                ${creator ? `<div class="text-xs text-gray-400">${escapeHtml(creator)}</div>` : ''}
+            </td>`;
         }
 
         function renderLeadRows(groups) {
@@ -2518,10 +2623,11 @@
                     ? summary.sharedKeys.map(s => `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${s.color}" title="All ${summary.count} leads in this group share this ${s.label}: ${escapeHtml(String(s.value))}">${s.k} ${escapeHtml(s.label)}</span>`).join(' ')
                     : '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Members of this group are linked through chained matches (e.g. A shares email with B, B shares phone with C)">🔗 chained match</span>';
 
-                rows += `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleLeadDupGroup" data-args="[${gIdx}]" data-testid="row-lead-dup-group-${gIdx}">
+                const _gid = 'leads-' + gIdx;
+                rows += `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${_gid}"]' data-testid="row-dup-group-${_gid}">
                     <td class="px-4 py-3 text-sm" colspan="8">
                         <div class="flex items-center gap-2 flex-wrap">
-                            <span id="lead-dup-chev-${gIdx}" class="text-gray-600 font-mono" aria-hidden="true">▶</span>
+                            <span id="dup-chev-${_gid}" class="text-gray-600 font-mono" aria-hidden="true">▶</span>
                             <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
                             <span class="text-xs text-gray-500">${summary.count} duplicate leads</span>
                             <span class="flex flex-wrap gap-1">${chips}</span>
@@ -2585,37 +2691,201 @@
 
                     const layoutName = (raw.Layout && (raw.Layout.name || raw.Layout.display_label)) || r.layout || '-';
                     const layoutCell = `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho layout">${escapeHtml(layoutName || '-')}</td>`;
-                    rows += `<tr data-dup-group="${gIdx}" class="hidden bg-white">${leadCell}${signalCell}${emailCell}${phoneCell}${layoutCell}<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td>${createdCell}</tr>`;
+                    rows += `<tr data-dup-group="${_gid}" class="hidden bg-white">${leadCell}${signalCell}${emailCell}${phoneCell}${layoutCell}<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td>${createdCell}</tr>`;
                 });
             });
             tbody.innerHTML = rows || `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No duplicate leads detected on this page — every lead has a unique name, email, phone, and CRM ID.</td></tr>`;
         }
 
+        // ─── DEALS ───
+        // Match keys: name+account (combined — same deal name on the same
+        // account is a strong duplicate signal) and Zoho CRM ID. We do NOT
+        // group by bare deal name alone, because "Renewal 2025" naturally
+        // recurs across many accounts and would balloon the groups.
         function renderDealRows(groups) {
             const tbody = document.getElementById('dealsTable');
+            const items = [];
+            for (const g of groups) for (const r of (g.deals || [])) items.push(r);
+
+            const accountIdOf = r => {
+                const raw = r && r.raw_data ? r.raw_data : {};
+                return (raw.Account_Name && raw.Account_Name.id) || r.account_id || raw.account_id || '';
+            };
+            const extractors = {
+                nameAccount: r => {
+                    const n = _normName(r.record_name);
+                    const a = accountIdOf(r);
+                    return n && a ? (n + '|' + a) : '';
+                },
+                id: r => String(r.zoho_record_id || '').trim(),
+            };
+            const keyDefs = {
+                nameAccount: { emoji: '👤', label: 'name + account', color: 'bg-purple-100 text-purple-800' },
+                id: { emoji: '🆔', label: 'CRM ID', color: 'bg-rose-200 text-rose-900 border border-rose-400' },
+            };
+            const counts = _dupCounts(items, extractors);
+            const groupList = _dupBuckets(items, extractors);
+
             let rows = '';
-            for (const g of groups) for (const r of (g.deals || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Deals')}</td>${clusterDomainCell(r)}<td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${escapeHtml(r.stage||'-')}</span></td><td class="px-4 py-3 text-sm font-medium">${formatCurrency(r.deal_value||0)}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
-            }
-            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_deals'))}</td></tr>`;
+            groupList.forEach((idxs, gIdx) => {
+                const gid = 'deals-' + gIdx;
+                const summary = _dupGroupSummary(items, idxs, extractors, keyDefs);
+                rows += _dupGroupHeaderRow(gid, summary, 7, 'deals');
+
+                idxs.forEach(i => {
+                    const r = items[i];
+                    const naKey = extractors.nameAccount(r);
+                    const idKey = extractors.id(r);
+                    const naDup = naKey && counts.nameAccount[naKey] > 1 ? counts.nameAccount[naKey] : 0;
+                    const idDup = idKey && counts.id[idKey] > 1 ? counts.id[idKey] : 0;
+
+                    const identity = _dupIdentityCell(r, 'Deals', r.company_name || '-', !!naDup);
+                    const signals = [];
+                    if (naDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="${naDup} deals on this page share the same name on the same account">👤 name+account ×${naDup}</span>`);
+                    if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same Zoho CRM ID — usually an indexer/sync bug, not a true CRM duplicate. Investigate before merging.">🆔 dup CRM ID ×${idDup}</span>`);
+                    if (!signals.length) signals.push('<span class="text-gray-400 text-xs">-</span>');
+                    const signalCell = `<td class="px-4 py-3 text-sm"><div class="flex flex-wrap gap-1">${signals.join('')}</div></td>`;
+
+                    const stageCell = `<td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${escapeHtml(r.stage || '-')}</span></td>`;
+                    const valueCell = `<td class="px-4 py-3 text-sm font-medium">${formatCurrency(r.deal_value || 0)}</td>`;
+                    const ownerCell = `<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name || '-')}</td>`;
+
+                    rows += `<tr data-dup-group="${gid}" class="hidden bg-white">${identity}${signalCell}${stageCell}${valueCell}${_dupLayoutCell(r)}${ownerCell}${_dupCreatedCell(r)}</tr>`;
+                });
+            });
+            tbody.innerHTML = rows || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No duplicate deals detected on this page — every deal has a unique name-on-account and CRM ID.</td></tr>`;
         }
 
+        // ─── CONTACTS ───
+        // Match keys: name, email, phone, Zoho CRM ID (same OR rule as leads).
         function renderContactRows(groups) {
             const tbody = document.getElementById('contactsTable');
+            const items = [];
+            for (const g of groups) for (const r of (g.contacts || [])) items.push(r);
+
+            const contactPhone = r => r.phone || (r.raw_data && (r.raw_data.Phone || r.raw_data.Mobile || r.raw_data.Home_Phone)) || '';
+            const extractors = {
+                name:  r => _normName(r.record_name),
+                email: r => _normEmail(r.email),
+                phone: r => _normPhone(contactPhone(r)),
+                id:    r => String(r.zoho_record_id || '').trim(),
+            };
+            const keyDefs = {
+                name:  { emoji: '👤', label: 'name',  color: 'bg-purple-100 text-purple-800' },
+                email: { emoji: '📧', label: 'email', color: 'bg-red-100 text-red-800' },
+                phone: { emoji: '📞', label: 'phone', color: 'bg-orange-100 text-orange-800' },
+                id:    { emoji: '🆔', label: 'CRM ID', color: 'bg-rose-200 text-rose-900 border border-rose-400' },
+            };
+            const counts = _dupCounts(items, extractors);
+            const groupList = _dupBuckets(items, extractors);
+
             let rows = '';
-            for (const g of groups) for (const r of (g.contacts || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Contacts')}</td>${clusterDomainCell(r)}<td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
-            }
-            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_contacts'))}</td></tr>`;
+            groupList.forEach((idxs, gIdx) => {
+                const gid = 'contacts-' + gIdx;
+                const summary = _dupGroupSummary(items, idxs, extractors, keyDefs);
+                rows += _dupGroupHeaderRow(gid, summary, 7, 'contacts');
+
+                idxs.forEach(i => {
+                    const r = items[i];
+                    const phone = contactPhone(r);
+                    const nKey = extractors.name(r), eKey = extractors.email(r), pKey = extractors.phone(r), idKey = extractors.id(r);
+                    const nDup = nKey && counts.name[nKey] > 1 ? counts.name[nKey] : 0;
+                    const eDup = eKey && counts.email[eKey] > 1 ? counts.email[eKey] : 0;
+                    const pDup = pKey && counts.phone[pKey] > 1 ? counts.phone[pKey] : 0;
+                    const idDup = idKey && counts.id[idKey] > 1 ? counts.id[idKey] : 0;
+
+                    const identity = _dupIdentityCell(r, 'Contacts', r.company_name || '-', !!nDup);
+                    const signals = [];
+                    if (nDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="${nDup} contacts on this page share this exact name">👤 name ×${nDup}</span>`);
+                    if (eDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${eDup} contacts on this page share this exact email">📧 email ×${eDup}</span>`);
+                    if (pDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800" title="${pDup} contacts on this page share this exact phone">📞 phone ×${pDup}</span>`);
+                    if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same Zoho CRM ID — usually an indexer/sync bug, not a true CRM duplicate.">🆔 dup CRM ID ×${idDup}</span>`);
+                    if (!signals.length) signals.push('<span class="text-gray-400 text-xs">-</span>');
+                    const signalCell = `<td class="px-4 py-3 text-sm"><div class="flex flex-wrap gap-1">${signals.join('')}</div></td>`;
+
+                    const emailCell = r.email
+                        ? `<td class="px-4 py-3 text-sm ${eDup ? 'text-red-700 font-medium' : 'text-gray-600'}">${escapeHtml(r.email)}</td>`
+                        : '<td class="px-4 py-3 text-sm text-gray-400">-</td>';
+                    const phoneCell = phone
+                        ? `<td class="px-4 py-3 text-sm font-mono text-xs ${pDup ? 'text-orange-700 font-medium' : 'text-gray-600'}">${escapeHtml(phone)}</td>`
+                        : '<td class="px-4 py-3 text-sm text-gray-400">-</td>';
+                    const ownerCell = `<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name || '-')}</td>`;
+
+                    rows += `<tr data-dup-group="${gid}" class="hidden bg-white">${identity}${signalCell}${emailCell}${phoneCell}${_dupLayoutCell(r)}${ownerCell}${_dupCreatedCell(r)}</tr>`;
+                });
+            });
+            tbody.innerHTML = rows || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No duplicate contacts detected on this page — every contact has a unique name, email, phone, and CRM ID.</td></tr>`;
         }
 
+        // ─── ACCOUNTS ───
+        // Match keys: account name, email, phone, website hostname, Zoho CRM ID.
         function renderAccountRows(groups) {
             const tbody = document.getElementById('accountsTable');
+            const items = [];
+            for (const g of groups) for (const r of (g.accounts || [])) items.push(r);
+
+            const websiteOf = r => {
+                const raw = r && r.raw_data ? r.raw_data : {};
+                return r.website || raw.Website || raw.website || r.domain || '';
+            };
+            const extractors = {
+                name:    r => _normName(r.record_name),
+                email:   r => _normEmail(r.email),
+                phone:   r => _normPhone(r.phone),
+                website: r => _normWebsite(websiteOf(r)),
+                id:      r => String(r.zoho_record_id || '').trim(),
+            };
+            const keyDefs = {
+                name:    { emoji: '👤', label: 'name',    color: 'bg-purple-100 text-purple-800' },
+                email:   { emoji: '📧', label: 'email',   color: 'bg-red-100 text-red-800' },
+                phone:   { emoji: '📞', label: 'phone',   color: 'bg-orange-100 text-orange-800' },
+                website: { emoji: '🌐', label: 'website', color: 'bg-cyan-100 text-cyan-800' },
+                id:      { emoji: '🆔', label: 'CRM ID',  color: 'bg-rose-200 text-rose-900 border border-rose-400' },
+            };
+            const counts = _dupCounts(items, extractors);
+            const groupList = _dupBuckets(items, extractors);
+
             let rows = '';
-            for (const g of groups) for (const r of (g.accounts || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Accounts')}</td>${clusterDomainCell(r)}<td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.phone||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.source||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
-            }
-            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_accounts'))}</td></tr>`;
+            groupList.forEach((idxs, gIdx) => {
+                const gid = 'accounts-' + gIdx;
+                const summary = _dupGroupSummary(items, idxs, extractors, keyDefs);
+                rows += _dupGroupHeaderRow(gid, summary, 8, 'accounts');
+
+                idxs.forEach(i => {
+                    const r = items[i];
+                    const site = websiteOf(r);
+                    const nKey = extractors.name(r), eKey = extractors.email(r), pKey = extractors.phone(r), wKey = extractors.website(r), idKey = extractors.id(r);
+                    const nDup  = nKey && counts.name[nKey] > 1 ? counts.name[nKey] : 0;
+                    const eDup  = eKey && counts.email[eKey] > 1 ? counts.email[eKey] : 0;
+                    const pDup  = pKey && counts.phone[pKey] > 1 ? counts.phone[pKey] : 0;
+                    const wDup  = wKey && counts.website[wKey] > 1 ? counts.website[wKey] : 0;
+                    const idDup = idKey && counts.id[idKey] > 1 ? counts.id[idKey] : 0;
+
+                    const identity = _dupIdentityCell(r, 'Accounts', r.source ? ('Source: ' + r.source) : '', !!nDup);
+                    const signals = [];
+                    if (nDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="${nDup} accounts on this page share this exact name">👤 name ×${nDup}</span>`);
+                    if (eDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${eDup} accounts on this page share this exact email">📧 email ×${eDup}</span>`);
+                    if (pDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800" title="${pDup} accounts on this page share this exact phone">📞 phone ×${pDup}</span>`);
+                    if (wDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-100 text-cyan-800" title="${wDup} accounts on this page share the same website hostname">🌐 website ×${wDup}</span>`);
+                    if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same Zoho CRM ID — usually an indexer/sync bug, not a true CRM duplicate.">🆔 dup CRM ID ×${idDup}</span>`);
+                    if (!signals.length) signals.push('<span class="text-gray-400 text-xs">-</span>');
+                    const signalCell = `<td class="px-4 py-3 text-sm"><div class="flex flex-wrap gap-1">${signals.join('')}</div></td>`;
+
+                    const emailCell = r.email
+                        ? `<td class="px-4 py-3 text-sm ${eDup ? 'text-red-700 font-medium' : 'text-gray-600'}">${escapeHtml(r.email)}</td>`
+                        : '<td class="px-4 py-3 text-sm text-gray-400">-</td>';
+                    const phoneCell = r.phone
+                        ? `<td class="px-4 py-3 text-sm font-mono text-xs ${pDup ? 'text-orange-700 font-medium' : 'text-gray-600'}">${escapeHtml(r.phone)}</td>`
+                        : '<td class="px-4 py-3 text-sm text-gray-400">-</td>';
+                    const websiteCell = site
+                        ? `<td class="px-4 py-3 text-sm ${wDup ? 'text-cyan-700 font-medium' : 'text-gray-600'}">${escapeHtml(_normWebsite(site) || site)}</td>`
+                        : '<td class="px-4 py-3 text-sm text-gray-400">-</td>';
+                    const ownerCell = `<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name || '-')}</td>`;
+
+                    rows += `<tr data-dup-group="${gid}" class="hidden bg-white">${identity}${signalCell}${emailCell}${phoneCell}${websiteCell}${_dupLayoutCell(r)}${ownerCell}${_dupCreatedCell(r)}</tr>`;
+                });
+            });
+            tbody.innerHTML = rows || `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No duplicate accounts detected on this page — every account has a unique name, email, phone, website, and CRM ID.</td></tr>`;
         }
 
         // C3: Owner accountability with RAG status
