@@ -548,6 +548,8 @@
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Lead Name</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this lead was flagged: 📧 = another lead on this page has the same email · 📞 = another lead on this page has the same phone · 🌐 = part of a multi-lead domain cluster">Dup signal</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
@@ -2381,13 +2383,65 @@
             return `<td class="px-4 py-3 text-sm font-medium"><a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[${cid}]" class="text-blue-600 hover:text-blue-800 hover:underline" title="View this cluster's full record set + recommendations" data-testid="link-record-cluster-${cid}">${label}</a></td>`;
         }
 
+        // Pull a usable phone for a lead row. Zoho exposes both Phone and
+        // Mobile separately, and the duplicate scan should treat either as
+        // a match key — many reps put the cell number in the wrong field.
+        function leadPhone(r) {
+            const raw = r && r.raw_data ? r.raw_data : {};
+            return r.phone || raw.Phone || raw.Mobile || raw.Home_Phone || '';
+        }
+
+        // Normalize email/phone for cross-row matching: lowercase email,
+        // strip non-digits from phone. Avoids "Ali@X.com" != "ali@x.com"
+        // and "+966 50 123 4567" != "966501234567".
+        function _normEmail(s) { return String(s || '').trim().toLowerCase(); }
+        function _normPhone(s) { return String(s || '').replace(/\D+/g, ''); }
+
         function renderLeadRows(groups) {
             const tbody = document.getElementById('leadsTable');
-            let rows = '';
-            for (const g of groups) for (const r of (g.leads || [])) {
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td>${clusterDomainCell(r)}<td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+            // Flatten the page so we can count duplicate emails/phones
+            // across every lead currently shown.
+            const allLeads = [];
+            for (const g of groups) for (const r of (g.leads || [])) allLeads.push(r);
+
+            // Counts so each row can show "📧 × N" / "📞 × N" badges that
+            // make the duplicate signal visible per-row instead of forcing
+            // the user to scan the whole table.
+            const emailCounts = {};
+            const phoneCounts = {};
+            for (const r of allLeads) {
+                const e = _normEmail(r.email);
+                const p = _normPhone(leadPhone(r));
+                if (e) emailCounts[e] = (emailCounts[e] || 0) + 1;
+                if (p) phoneCounts[p] = (phoneCounts[p] || 0) + 1;
             }
-            tbody.innerHTML = rows || `<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_leads'))}</td></tr>`;
+
+            let rows = '';
+            for (const r of allLeads) {
+                const phone = leadPhone(r);
+                const e = _normEmail(r.email);
+                const p = _normPhone(phone);
+                const eDup = e && emailCounts[e] > 1 ? emailCounts[e] : 0;
+                const pDup = p && phoneCounts[p] > 1 ? phoneCounts[p] : 0;
+                const hasDomainSignal = r.cluster_id ? 1 : 0;
+
+                const emailCell = r.email
+                    ? `<span>${escapeHtml(r.email)}</span>${eDup ? ` <span class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${eDup} leads on this page share this email — strong duplicate signal">× ${eDup}</span>` : ''}`
+                    : '<span class="text-gray-400">-</span>';
+                const phoneCell = phone
+                    ? `<span class="font-mono text-xs">${escapeHtml(phone)}</span>${pDup ? ` <span class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${pDup} leads on this page share this phone — strong duplicate signal">× ${pDup}</span>` : ''}`
+                    : '<span class="text-gray-400">-</span>';
+
+                const signals = [];
+                if (eDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${eDup} leads on this page share this exact email — this lead is almost certainly a duplicate of another lead in Zoho">📧 same email</span>`);
+                if (pDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800" title="${pDup} leads on this page share this exact phone number — this lead is almost certainly a duplicate of another lead in Zoho">📞 same phone</span>`);
+                if (hasDomainSignal && !eDup && !pDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Grouped only by company domain. Weaker than email/phone — confirm before merging, especially for free-mail providers like outlook.sa or gmail.com.">🌐 domain only</span>`);
+                if (!signals.length) signals.push('<span class="text-gray-400 text-xs">-</span>');
+                const signalCell = `<div class="flex flex-wrap gap-1">${signals.join('')}</div>`;
+
+                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td>${clusterDomainCell(r)}<td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${emailCell}</td><td class="px-4 py-3 text-sm text-gray-500">${phoneCell}</td><td class="px-4 py-3 text-sm">${signalCell}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+            }
+            tbody.innerHTML = rows || `<tr><td colspan="12" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_leads'))}</td></tr>`;
         }
 
         function renderDealRows(groups) {
