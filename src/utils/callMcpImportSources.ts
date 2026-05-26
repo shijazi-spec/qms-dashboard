@@ -8,7 +8,16 @@ import { getSdrProcessScopeForApi } from "./sdrProcessScope";
 
 export type ImportChannelId = "five9" | "bulk_upload" | "google_drive";
 
-export type ImportChannelStatus = "available" | "partial" | "planned";
+/**
+ * Channel availability state. `suspended` was added when the SDR/QA team
+ * paused the Five9 integration pending a real Reporting-API rollout (see
+ * `FIVE9_ENABLED` env flag below). It differs from `planned` (work hasn't
+ * started) and `partial` (some endpoints work but full sync isn't wired)
+ * by signalling "the code is here, the team chose not to expose it yet".
+ * The UI renders suspended channels with a neutral banner and disabled
+ * controls instead of error states.
+ */
+export type ImportChannelStatus = "available" | "partial" | "planned" | "suspended";
 
 export interface ImportChannelEndpoint {
   method: string;
@@ -22,6 +31,25 @@ export interface ImportChannelInfo {
   status: ImportChannelStatus;
   description: string;
   endpoints: ImportChannelEndpoint[];
+  /**
+   * Optional operator-facing message shown verbatim by the dashboard
+   * banner when the channel is `suspended`. Only set on suspended
+   * channels — UI ignores it for other statuses.
+   */
+  suspended_notice?: string;
+}
+
+/**
+ * Read the FIVE9_ENABLED env flag. Default is `false` — i.e. the Five9
+ * channel is *suspended* until ops explicitly opts in by setting
+ * FIVE9_ENABLED=true. The actual Five9 backend code, routes, and DB
+ * tables remain in place so flipping the flag re-enables the integration
+ * without a code change. The flag controls UI visibility + the catalog
+ * status reported by /api/calls/evaluation/import-sources (and the
+ * `get-import-sources` MCP tool), nothing more.
+ */
+function isFive9Enabled(): boolean {
+  return process.env.FIVE9_ENABLED === "true";
 }
 
 export const CRM_PHONE_MATCH_SCOPE =
@@ -44,9 +72,19 @@ export function getCallImportSourcesCatalog(): {
       {
         id: "five9",
         label: "Five9",
-        status: "partial",
+        // When FIVE9_ENABLED=true → fall back to the historical 'partial'
+        // status (legacy behaviour). When the flag is off (the default
+        // tonight, pending the tech team) → 'suspended', which the UI
+        // renders as a neutral banner rather than an error or empty state.
+        status: isFive9Enabled() ? "partial" : "suspended",
         description:
           "SDR team documentation and operational scripts live in Five9. Automated Five9 Reporting/Web Services pull (list calls + recording URLs) is deferred — add later. Meanwhile: configure/test via POST /api/calls/five9/* and ingest per call with POST /api/calls/ingest (source five9) when recording URLs are available from exports or webhooks.",
+        ...(isFive9Enabled()
+          ? {}
+          : {
+              suspended_notice:
+                "Five9 integration is prepared but temporarily suspended. Please use manual upload until API setup is completed.",
+            }),
         endpoints: [
           { method: "POST", path: "/api/calls/five9/test" },
           { method: "POST", path: "/api/calls/five9/configure" },
