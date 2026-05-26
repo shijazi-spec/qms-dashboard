@@ -653,7 +653,9 @@ export const manualAuditRoutes = [
               linked_capa_id: null,
               linked_risk_id: null,
             } as any);
-            await markFindingPromoted(f.id, created.id);
+            if (created.id != null) {
+              await markFindingPromoted(f.id, created.id);
+            }
             promoted++;
           } catch (err: any) {
             logger.error("[ManualIntake] failed to promote finding", f.id, err);

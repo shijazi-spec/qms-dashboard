@@ -28,7 +28,7 @@ export const sandboxApiRoutes = [
           return c.json({
             mode,
             description:
-              mode === "mock"
+              mode === "MOCK"
                 ? "Using mock data for testing"
                 : "Using live CRM data",
           });

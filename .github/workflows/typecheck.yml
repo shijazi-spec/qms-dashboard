@@ -1,15 +1,18 @@
 name: Typecheck
 
-# Runs `tsc` against the project on every push and PR. Both jobs are
-# advisory-only (continue-on-error) right now because the existing src/
-# code carries ~900 pre-existing type errors that have always been there
-# but were hidden by the lack of a CI typecheck step. The intent is:
-#   1. surface the count on every run so it can't grow silently;
-#   2. drive both counts (src + tests) down over time;
-#   3. flip continue-on-error off once a category hits 0 so a regression
-#      blocks merge.
-# tests/** is already at 0 — see the summary step below. The remaining
-# work to make `check` blocking is incremental cleanup of src/.
+# Runs `tsc` against the project on every push and PR.
+#
+# History: when this workflow was first introduced, both jobs ran with
+# `continue-on-error: true` because src/ carried ~900 pre-existing type
+# errors that had been hidden by the absence of any CI typecheck step.
+# A series of root-cause shared-definition fixes (LogPayload → unknown,
+# action_type/entity_type → string, UserRole adds "viewer", SessionUser
+# gets `id`, etc.) plus per-file cleanup drove the count to 0. Both jobs
+# are now hard gates — a regression in either typecheck blocks merge.
+#
+# To intentionally introduce a temporary regression (e.g. a refactor
+# split across multiple PRs), revert the specific step to
+# `continue-on-error: true` with a comment naming the tracking issue.
 
 on:
   push:
@@ -38,38 +41,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Advisory: src/** + scripts/**. ~900 pre-existing errors when this
-      # workflow was introduced. Drop continue-on-error and make this a
-      # hard gate once the count is at 0.
-      - name: tsc (src + scripts, advisory)
-        id: check_src
-        continue-on-error: true
+      # Hard gate: src + scripts must type-check.
+      - name: tsc (src + scripts)
         run: npm run check
 
-      # Advisory: tests/**. Was at 0 when this workflow was introduced —
-      # ready to flip to a hard gate as soon as confidence is high (a
-      # regression here is much rarer than in src/, so doing this first
-      # gives the biggest signal-to-noise win).
-      - name: tsc (tests, advisory)
-        id: check_tests
-        continue-on-error: true
+      # Hard gate: tests must type-check.
+      - name: tsc (tests)
         run: npm run check:tests
-
-      - name: Summarise advisory results
-        if: always()
-        run: |
-          echo "### Typecheck summary"
-          if [ "${{ steps.check_src.outcome }}" = "success" ]; then
-            echo "✅ src + scripts type-check passed — consider promoting to a hard gate."
-            echo "::notice::src + scripts type-check is now clean. Remove continue-on-error to make it blocking."
-          else
-            echo "⚠️  src + scripts type-check has known pre-existing errors (advisory only)."
-            echo "::warning::Run \`npm run check\` locally to see them."
-          fi
-          if [ "${{ steps.check_tests.outcome }}" = "success" ]; then
-            echo "✅ tests/** type-check passed — consider promoting to a hard gate."
-            echo "::notice::tests/** type-check is at 0. Flip continue-on-error to false to make a regression blocking."
-          else
-            echo "⚠️  tests/** type-check failed (regression?)."
-            echo "::warning::Run \`npm run check:tests\` locally to see new errors."
-          fi

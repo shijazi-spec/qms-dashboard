@@ -9,9 +9,9 @@ export interface Lead {
   Lead_Source: string;
   Lead_Status: string;
   Owner: string;
-  Layouts: string;
-  Products: string;
-  Created_By: string;
+  Layouts?: string;
+  Products?: string;
+  Created_By?: string;
   Created_Time: string;
   Modified_Time: string;
   _hygiene_issue?: string;
@@ -25,9 +25,9 @@ export interface Deal {
   Amount: number;
   Closing_Date: string;
   Owner: string;
-  Layouts: string;
-  Products: string;
-  Created_By: string;
+  Layouts?: string;
+  Products?: string;
+  Created_By?: string;
   Lead_Source: string;
   Contact_Name: string;
   Created_Time: string;

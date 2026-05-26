@@ -162,7 +162,9 @@ export async function seedCopcScorecard(
   // because the bundler doesn't copy non-imported assets into
   // .mastra/output — the file isn't there at runtime. Inlining as a
   // TS module survives the build.
-  const canonical = { scorecard: CANONICAL_COPC_V2.scorecard } as CopcCanonical;
+  const canonical = {
+    scorecard: CANONICAL_COPC_V2.scorecard,
+  } as unknown as CopcCanonical;
   const s = canonical.scorecard;
 
   const before = (

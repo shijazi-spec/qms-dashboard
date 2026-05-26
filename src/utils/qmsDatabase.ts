@@ -221,7 +221,7 @@ async function initQmsSchema(): Promise<void> {
 // (logging them) so a bad DATABASE_URL on a dev box doesn't blow up unrelated
 // imports — the subsequent pool.query() call will surface the real error.
 await initQmsSchema().catch((err) => {
-  logger.error({ err }, '[QMS] schema init failed');
+  logger.error('[QMS] schema init failed', { err });
 });
 
 export interface CapaRecord {

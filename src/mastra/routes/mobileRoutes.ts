@@ -132,7 +132,7 @@ export const mobileRoutes = [
             // Pinned server-side — see file header. Ignoring any
             // `clientSurface` the caller supplied is intentional.
             surface: MOBILE_SURFACE,
-            userHash: user.userId,
+            userHash: String(user.userId),
             comment: cleanComment ?? null,
           });
 
@@ -207,7 +207,7 @@ export const mobileRoutes = [
             rating,
             category: category || undefined,
             comment: comment ? String(comment).substring(0, 1000) : undefined,
-            user_id: user.userId,
+            user_id: String(user.userId),
             user_email: user.email,
             prompt_preview: promptPreview || undefined,
             response_preview: responsePreview || undefined,

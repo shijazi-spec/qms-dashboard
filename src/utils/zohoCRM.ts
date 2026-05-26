@@ -181,6 +181,7 @@ async function makeZohoRequest<T>(
 
 export function getZohoConnectionStatus(): {
   configured: boolean;
+  connected?: boolean;
   autoRefresh: boolean;
   tokenCached: boolean;
   tokenExpired: boolean;
@@ -188,20 +189,22 @@ export function getZohoConnectionStatus(): {
 } {
   const oauthConfig = getZohoOAuthConfig();
   const hasStaticToken = !!process.env.ZOHO_ACCESS_TOKEN;
-  
+
   if (oauthConfig) {
     return {
       configured: true,
+      connected: !!cachedAccessToken && !isTokenExpired(),
       autoRefresh: true,
       tokenCached: !!cachedAccessToken,
       tokenExpired: isTokenExpired(),
       message: 'Zoho CRM configured with OAuth auto-refresh',
     };
   }
-  
+
   if (hasStaticToken) {
     return {
       configured: true,
+      connected: true,
       autoRefresh: false,
       tokenCached: false,
       tokenExpired: false,
@@ -211,6 +214,7 @@ export function getZohoConnectionStatus(): {
   
   return {
     configured: false,
+    connected: false,
     autoRefresh: false,
     tokenCached: false,
     tokenExpired: false,

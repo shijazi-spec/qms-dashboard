@@ -17,7 +17,8 @@ export interface CallRecord {
     | "google_drive"
     | "bulk_upload"
     | "manual"
-    | "api";
+    | "api"
+    | "zoho_calls";
   lead_id?: string;
   deal_id?: string;
   contact_name?: string;
@@ -29,6 +30,8 @@ export interface CallRecord {
   call_date?: Date;
   status: "pending" | "processing" | "analyzed" | "failed";
   metadata?: any;
+  /** AI analysis blob persisted alongside the row. Free-form string (JSON). */
+  ai_insights?: string;
   created_at?: Date;
   updated_at?: Date;
 }

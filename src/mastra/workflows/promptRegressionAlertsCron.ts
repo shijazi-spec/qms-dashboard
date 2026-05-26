@@ -123,6 +123,11 @@ export interface EffectivePromptRegressionConfig {
   minFeedback: number;
   dropPctPoints: number;
   notifyThrottleMin: number;
+  /**
+   * Deep-link rendered into Slack/email alerts (e.g. /ai-ops?tab=regression).
+   * Optional — falls back to a sensible default at render time.
+   */
+  link?: string;
 }
 
 /**
@@ -138,12 +143,18 @@ export function mergePromptRegressionOverrides(
     ...PROMPT_REGRESSION_ENV_BASELINE,
   };
   if (!overrides) return merged;
+  // Only the numeric threshold keys (intersection of the two configs) are
+  // overridable from the DB row; non-numeric fields like `link` are derived
+  // from runtime config and intentionally skipped here.
+  type NumericOverrideKey = keyof PromptRegressionConfigOverrides &
+    keyof EffectivePromptRegressionConfig;
   for (const key of Object.keys(merged) as Array<
     keyof EffectivePromptRegressionConfig
   >) {
-    const v = overrides[key];
-    if (v != null && Number.isFinite(v) && v >= 0) {
-      merged[key] = v;
+    if (!(key in overrides)) continue;
+    const v = overrides[key as NumericOverrideKey];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+      merged[key as NumericOverrideKey] = v;
     }
   }
   return merged;

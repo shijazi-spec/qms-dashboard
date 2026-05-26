@@ -58,10 +58,11 @@ export interface KPIValue {
   period_end: Date;
   actual_value: number;
   target_value?: number;
-  status: "green" | "amber" | "red";
+  status?: "green" | "amber" | "red";
   trend?: "improving" | "stable" | "declining";
-  calculated_by?: "system" | "manual";
+  calculated_by?: "system" | "manual" | "system_auto";
   override_reason?: string;
+  notes?: string;
   evidence_ids?: number[];
   ai_confidence?: number;
   ai_insights?: any;
@@ -1481,7 +1482,7 @@ export async function getKPIDashboardSummary(): Promise<any> {
     summary.byCategory[kpi.category]++;
 
     const latestValue = await getLatestKPIValue(kpi.id!);
-    if (latestValue) {
+    if (latestValue && latestValue.status) {
       summary.byStatus[latestValue.status]++;
       summary.kpiDetails.push({
         ...kpi,

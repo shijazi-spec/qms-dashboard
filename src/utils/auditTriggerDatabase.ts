@@ -45,7 +45,7 @@ export interface AuditTrigger {
 export interface AuditNotification {
   id?: number;
   trigger_id: number;
-  recipient_email: string;
+  recipient_email?: string;
   recipient_role: string;
   notification_type: "email" | "dashboard" | "both";
   subject: string;
@@ -248,6 +248,7 @@ export async function fireNonconformanceDetectedTrigger(
     minorCount: number;
     ncIds: number[];
     auditDate: Date;
+    moduleBreakdown?: unknown[];
   },
 ): Promise<AuditTrigger> {
   const severity =

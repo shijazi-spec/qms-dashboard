@@ -319,7 +319,7 @@ export const complianceRoutes = [
               .replace(/[\r\n"\\\/]/g, "")
               .replace(/^\.+/, "")
               .trim() || "regulation.pdf";
-          return new Response(file.buffer, {
+          return new Response(new Uint8Array(file.buffer), {
             status: 200,
             headers: {
               "Content-Type": "application/pdf",
@@ -1828,7 +1828,6 @@ export const complianceRoutes = [
             })),
           });
           return bufferResponseWithRange(
-            c,
             buf,
             "application/pdf",
             `audit-${a.audit_code}.pdf`,
@@ -1936,7 +1935,6 @@ export const complianceRoutes = [
             })),
           });
           return bufferResponseWithRange(
-            c,
             buf,
             "application/pdf",
             `gap-${reg.rows[0].regulation_code}.pdf`,

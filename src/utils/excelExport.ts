@@ -321,7 +321,7 @@ export async function* cursorQuery<T = Record<string, unknown>>(
     // CJS module value as a fallback for bundler shapes that drop `.default`).
     type QueryStreamModule = typeof import("pg-query-stream");
     type QueryStreamCtorT = NonNullable<CursorQueryDeps["QueryStream"]>;
-    const mod = (await import("pg-query-stream")) as QueryStreamModule & {
+    const mod = (await import("pg-query-stream")) as unknown as QueryStreamModule & {
       default?: QueryStreamCtorT;
     };
     QueryStreamCtor = mod.default ?? (mod as unknown as QueryStreamCtorT);
@@ -562,7 +562,7 @@ export function bufferResponseWithRange(
   const ifRangeHeader = readReqHeader(reqHeaders, "if-range");
 
   if (!rangeHeader) {
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: { ...baseHeaders, "Content-Length": String(total) },
     });
@@ -572,7 +572,7 @@ export function bufferResponseWithRange(
   // Compare verbatim — both weak and strong validator forms must match exactly
   // for resume to be safe.
   if (ifRangeHeader && ifRangeHeader.trim() !== etag.trim()) {
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: { ...baseHeaders, "Content-Length": String(total) },
     });
@@ -581,7 +581,7 @@ export function bufferResponseWithRange(
   const parsed = parseSingleRange(rangeHeader, total);
   if (parsed === null) {
     // Malformed Range — RFC 7233 §3.1 says we MUST treat as if Range was absent.
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: { ...baseHeaders, "Content-Length": String(total) },
     });
@@ -595,7 +595,7 @@ export function bufferResponseWithRange(
 
   const { start, end } = parsed;
   const slice = buffer.subarray(start, end + 1);
-  return new Response(slice, {
+  return new Response(new Uint8Array(slice), {
     status: 206,
     headers: {
       ...baseHeaders,
@@ -2134,7 +2134,7 @@ export async function stageAndServeStreamingExport(
     }
 
     if (result.kind === "passthrough") {
-      return new Response(result.body, {
+      return new Response(new Uint8Array(result.body), {
         status: result.status,
         statusText: result.statusText,
         headers: result.headers,
@@ -2214,9 +2214,11 @@ function serveFromStagedEntry(
 
   const webStream = new ReadableStream<Uint8Array>({
     start(controller) {
-      nodeStream.on("data", (chunk: Buffer) => {
+      nodeStream.on("data", (chunk: string | Buffer) => {
+        const buf =
+          typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer);
         controller.enqueue(
-          new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
+          new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength),
         );
       });
       nodeStream.on("end", () => {

@@ -395,7 +395,13 @@ async function testStreamCsvMemoryUnder128MBFor500kRows() {
   let bytesRead = 0;
   let chunks    = 0;
   while (true) {
-    const { done, value } = await reader.read();
+    // `reader.read()` returns `ReadableStreamReadResult<R>` where R defaults
+    // to `Uint8Array | undefined`. With strict narrowing, after the
+    // `instanceof Uint8Array` else-branch below, TS narrows the
+    // `typeof value === 'string'` branch to `never` (the reader's value type
+    // never resolves to string). Cast to a loose union so both branches
+    // remain reachable in the body-size accounting.
+    const { done, value } = (await reader.read()) as { done: boolean; value: string | Uint8Array | undefined };
     if (done) break;
     chunks++;
     if (typeof value === 'string') bytesRead += value.length;

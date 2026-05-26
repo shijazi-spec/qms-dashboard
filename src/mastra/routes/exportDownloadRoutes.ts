@@ -25,7 +25,7 @@ export const exportDownloadRoutes = [
           const entries = await getRecentDownloads(user.userId);
           return c.json({ entries });
         } catch (error) {
-          logger.error({ err: error }, "[ExportDownloads] GET error");
+          logger.error("[ExportDownloads] GET error", { err: error });
           return c.json({ entries: [] });
         }
       };
@@ -53,7 +53,7 @@ export const exportDownloadRoutes = [
           await upsertRecentDownloads(user.userId, safeEntries);
           return c.json({ success: true });
         } catch (error) {
-          logger.error({ err: error }, "[ExportDownloads] POST error");
+          logger.error("[ExportDownloads] POST error", { err: error });
           return c.json({ error: "Failed to save recent downloads" }, 500);
         }
       };
@@ -72,7 +72,7 @@ export const exportDownloadRoutes = [
           await clearRecentDownloads(user.userId);
           return c.json({ success: true });
         } catch (error) {
-          logger.error({ err: error }, "[ExportDownloads] DELETE error");
+          logger.error("[ExportDownloads] DELETE error", { err: error });
           return c.json({ error: "Failed to clear recent downloads" }, 500);
         }
       };

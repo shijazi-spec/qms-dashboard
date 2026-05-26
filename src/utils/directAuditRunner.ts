@@ -24,7 +24,7 @@ function analyzeRecordBatch(
   records: ZohoCRMRecord[],
   governanceRules: any[],
   issueTypeCounts: Record<string, { count: number; severity: string; module: string }>,
-  detailedIssues?: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>,
+  detailedIssues?: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; stage?: string; pipeline?: string; leadStatus?: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>,
   detailedCountsByModule?: Map<string, number>,
   recordIdsWithIssues?: Set<string>
 ): { issueCount: number; critical: number; high: number; medium: number; low: number; recordsWithIssues: number } {
@@ -468,7 +468,7 @@ export async function runDirectAudit(
   let allFindingTypes: Array<{ module: string; issueType: string; count: number; severity: string }> = [];
   let auditSuccess = false;
   let skipReason = "";
-  const detailedIssues: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; stage: string; pipeline: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }> = [];
+  const detailedIssues: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; stage?: string; pipeline?: string; leadStatus?: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }> = [];
   // Per-module tally so each module gets its own quota of detailed (per-record)
   // issues — prevents the first modules in the iteration order from starving
   // later ones (e.g. Tasks, Accounts) of `all_issues` entries.

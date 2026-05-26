@@ -286,7 +286,7 @@ const kpiAutoCalcFunction = inngest.createFunction(
           calculateKPI5_RiskRegisterHygiene,
           calculateKPI6_ExecutiveReportingReadiness,
         } = await import("../../utils/scorecardDatabase");
-        const { recordKPIValue, getKPIDefinitions } =
+        const { recordKPIValue, getAllKPIDefinitions: getKPIDefinitions } =
           await import("../../utils/kpiDatabase");
 
         const calculators = [
@@ -313,7 +313,7 @@ const kpiAutoCalcFunction = inngest.createFunction(
           },
         ];
 
-        const kpiDefs = await getKPIDefinitions({});
+        const kpiDefs = await getKPIDefinitions();
         const now = new Date();
         const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -321,12 +321,12 @@ const kpiAutoCalcFunction = inngest.createFunction(
         for (const calc of calculators) {
           try {
             const { value } = await calc.fn();
-            const matchingKpi = kpiDefs.definitions.find((k: any) =>
+            const matchingKpi = kpiDefs.find((k: any) =>
               k.name
                 .toLowerCase()
                 .includes(calc.name.split(" ")[0].toLowerCase()),
             );
-            if (matchingKpi) {
+            if (matchingKpi && matchingKpi.id != null) {
               await recordKPIValue({
                 kpi_id: matchingKpi.id,
                 actual_value: value,
@@ -359,18 +359,24 @@ const duplicateSyncFunction = inngest.createFunction(
   { id: "duplicate-radar-auto-sync" },
   { cron: process.env.DUPLICATE_SCAN_CRON || "0 */6 * * *" },
   async ({ step }) => {
-    const syncResult = await step.run("sync-crm-data", async () => {
-      logger.info("[DuplicateRadar] Auto-sync: fetching CRM data");
-      const { syncAllModules } = await import("../routes/duplicateRadarRoutes");
-      return await syncAllModules("incremental");
+    // scanZohoCRMForDuplicates does both the sync + detection in one pass.
+    // We split its return value into the two shapes downstream expects so the
+    // logging/notification code keeps working unchanged.
+    const scanResult = await step.run("sync-and-detect", async () => {
+      logger.info("[DuplicateRadar] Auto-sync: scanning CRM");
+      const { scanZohoCRMForDuplicates } = await import(
+        "../routes/duplicateRadarRoutes"
+      );
+      return await scanZohoCRMForDuplicates("scheduled");
     });
 
-    const detectionResult = await step.run("detect-duplicates", async () => {
-      logger.info("[DuplicateRadar] Auto-sync: running duplicate detection");
-      const { runDuplicateDetection } =
-        await import("../routes/duplicateRadarRoutes");
-      return await runDuplicateDetection();
-    });
+    const syncResult = {
+      totalSynced: scanResult.totalRecordsScanned,
+      moduleBreakdown: scanResult.moduleBreakdown,
+    };
+    const detectionResult = {
+      clustersScored: scanResult.totalClustersFound,
+    };
 
     await step.run("notify-results", async () => {
       logger.info("[DuplicateRadar] Sync result:", {

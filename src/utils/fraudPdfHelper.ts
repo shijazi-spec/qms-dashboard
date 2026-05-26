@@ -16,7 +16,9 @@
  */
 
 import type { UserRole as _UserRole } from "./rbacDatabase"; // type-only import keeps deps minimal
-void _UserRole;
+// Reference the type symbol so unused-import lints stay quiet without
+// needing a runtime `void` call.
+export type _FraudPdfHelperUserRoleRef = _UserRole;
 
 export interface FraudPdfColumn {
   /** Header label (printed in the table head). */

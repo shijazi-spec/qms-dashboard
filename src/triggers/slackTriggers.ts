@@ -279,7 +279,7 @@ export function registerSlackTrigger<
     triggerInfo: TriggerInfoSlackOnNewMessage,
   ) => Promise<WorkflowResult<TState, TInput, TOutput, TSteps> | null>;
 }): Array<ApiRoute> {
-  const slackWebhookHandler = async (c: Context<Env>) => {
+  const slackWebhookHandler = async (c: Context<Env>): Promise<Response> => {
     const mastra = c.get("mastra");
     const logger = mastra.getLogger();
     try {
@@ -358,10 +358,17 @@ export function registerSlackTrigger<
   };
 
   return [
+    // registerApiRoute can return a sentinel string when called with a path
+    // that starts with `/api` (reserved); ours starts with `/webhooks` so the
+    // runtime branch we hit always returns an ApiRoute. The cast lets the
+    // ApiRoute[] return type stay strict.
     registerApiRoute("/webhooks/slack/action", {
       method: "POST",
-      handler: slackWebhookHandler,
-    }),
+      // The hono `Handler` generic is parameterised by the literal path
+      // string; the local handler's `Promise<Response>` shape is compatible
+      // but TS can't see through the generic, so cast through Handler.
+      handler: slackWebhookHandler as unknown as Handler,
+    }) as ApiRoute,
     {
       path: "/api/webhooks/slack/action",
       method: "POST",

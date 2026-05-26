@@ -140,7 +140,7 @@ export const qmsDocsRoutes = [
             mime_type: fileInfo.mimeType,
             notes,
             regulation_codes,
-            uploaded_by: g.user!.email || g.user!.id || "unknown",
+            uploaded_by: g.user!.email || String(g.user!.id ?? "") || "unknown",
           });
 
           return c.json({ success: true, document: row });
@@ -207,7 +207,7 @@ export const qmsDocsRoutes = [
             );
 
           const files = formData.getAll("file").filter(
-            (f) => f instanceof File && (f as File).size > 0,
+            (f: unknown) => f instanceof File && (f as File).size > 0,
           ) as File[];
           if (files.length === 0)
             return c.json({ error: "No files provided" }, 400);
@@ -254,7 +254,7 @@ export const qmsDocsRoutes = [
                 mime_type: fileInfo.mimeType,
                 notes,
                 regulation_codes,
-                uploaded_by: g.user!.email || g.user!.id || "unknown",
+                uploaded_by: g.user!.email || String(g.user!.id ?? "") || "unknown",
               });
               uploaded.push(row);
             } catch (err: any) {
@@ -310,10 +310,11 @@ export const qmsDocsRoutes = [
           // underlying ArrayBuffer (which may be larger than `fileBlob` when
           // the buffer was sliced/pooled). Copy to a tight Uint8Array so we
           // never leak adjacent memory and the response length is exact.
+          const buf = fileBlob.buffer;
           const payload = new Uint8Array(
-            fileBlob.buffer,
-            fileBlob.byteOffset,
-            fileBlob.byteLength,
+            buf.buffer,
+            buf.byteOffset,
+            buf.byteLength,
           );
           c.header("Content-Length", String(payload.byteLength));
           return c.body(payload);

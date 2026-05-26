@@ -526,7 +526,7 @@ export async function getFindingById(id: number): Promise<AuditFinding | null> {
 }
 
 export async function getFindingsByAudit(
-  auditId: number,
+  auditId: number | string,
 ): Promise<AuditFinding[]> {
   const result = await pool.query(
     "SELECT * FROM grc_audit_findings WHERE audit_id = $1 ORDER BY severity DESC, created_at DESC",
@@ -760,7 +760,9 @@ export async function createChecklist(
   return allRows;
 }
 
-export async function getChecklist(auditId: number): Promise<AuditChecklist[]> {
+export async function getChecklist(
+  auditId: number | string,
+): Promise<AuditChecklist[]> {
   const result = await pool.query(
     "SELECT * FROM audit_checklists WHERE audit_id = $1 ORDER BY category, order_index",
     [auditId],

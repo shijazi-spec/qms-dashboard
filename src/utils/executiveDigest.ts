@@ -1273,7 +1273,7 @@ export interface EnterpriseHealthScoreComponent {
   weight: number;
   included: boolean;
   reason?: string; // why omitted
-  raw?: Record<string, number | null>;
+  raw?: Record<string, number | null | unknown[]>;
 }
 
 export interface EnterpriseHealthScoreDetail {

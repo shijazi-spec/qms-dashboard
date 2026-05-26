@@ -71,8 +71,8 @@ export async function runComplianceAfterLink(
     if (!checked.success || !checked.result) {
       await saveCompliance({
         call_record_id: callId,
-        lead_id: leadId ?? null,
-        deal_id: dealId ?? null,
+        lead_id: leadId ?? undefined,
+        deal_id: dealId ?? undefined,
         notes_updated: false,
         call_logged: false,
         task_created: false,
@@ -92,8 +92,8 @@ export async function runComplianceAfterLink(
     const r = checked.result;
     await saveCompliance({
       call_record_id: callId,
-      lead_id: leadId ?? null,
-      deal_id: dealId ?? null,
+      lead_id: leadId ?? undefined,
+      deal_id: dealId ?? undefined,
       notes_updated: r.notes_updated,
       call_logged: r.call_logged,
       task_created: r.task_created,
@@ -157,7 +157,7 @@ export interface AutoLinkAndComplianceResult {
  */
 export async function autoLinkCallAndCompliance(
   callRecord: {
-    id: number;
+    id?: number;
     agent_email?: string | null;
     agent_name?: string | null;
     call_date?: any;

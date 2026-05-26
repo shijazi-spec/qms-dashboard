@@ -1257,7 +1257,7 @@ Respond with JSON only:
             callRecordId: callId,
             leadId,
             dealId,
-            callDate: callRecord.call_date,
+            callDate: callRecord.call_date ?? new Date(),
             expectedActions,
           });
 
@@ -1539,7 +1539,7 @@ Respond with JSON only:
                 }
               }
             }
-            return new Response(blob.buffer, {
+            return new Response(new Uint8Array(blob.buffer), {
               status: 200,
               headers: {
                 "Content-Type": blob.mime,
@@ -3345,7 +3345,9 @@ ${transcriptText}
                   404,
                 );
               }
-              const audioBlob = new Blob([audioBuffer], { type: audioMime });
+              const audioBlob = new Blob([new Uint8Array(audioBuffer)], {
+                type: audioMime,
+              });
 
               const formData = new FormData();
               formData.append("file", audioBlob, "audio.wav");
@@ -3623,6 +3625,7 @@ ${transcriptText}
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param("id"));
           const body = await c.req.json().catch(() => ({}));
+          const { getSessionFromCookie } = await import("./authRoutes");
           const session = getSessionFromCookie(c.req.header("Cookie"));
           const reviewerEmail = session?.email || body.reviewer_email || "unknown";
           const reviewerName = session?.name || body.reviewer_name || null;
@@ -4094,7 +4097,8 @@ ${transcriptText}
           );
           const result = await submitPendingForBatch({
             scorecardTeam: body.scorecard_team || "SDR",
-            submittedBy: admin.email || admin.id || null,
+            submittedBy:
+              admin.email || (admin.id != null ? String(admin.id) : undefined),
             maxCalls: typeof body.max_calls === "number" ? body.max_calls : 200,
           });
           return c.json({ success: true, ...result });
@@ -4785,7 +4789,7 @@ ${transcriptText}
           const timeline = await getSdrActivityTimeline(
             recordId,
             module,
-            record.call_date,
+            record.call_date ?? new Date(),
           );
           return c.json({ success: true, ...timeline });
         } catch (error: any) {
@@ -5030,27 +5034,30 @@ ${transcriptText}
           const { getSdrProcessScopeForApi } = await import(
             "../../utils/sdrProcessScope"
           );
+          // record is typed as CallRecord but in practice the query also
+          // joins transcript/QA fields, so widen the local view.
+          const rec = record as Record<string, unknown> & typeof record;
           const report = buildTranscriptVsEvaluationReport({
             call_record_id: id,
-            lead_id: record.lead_id ?? null,
-            agent_email: record.agent_email ?? null,
+            lead_id: rec.lead_id ?? null,
+            agent_email: rec.agent_email ?? null,
             transcript_text:
-              typeof record.transcript_text === "string"
-                ? record.transcript_text
+              typeof rec.transcript_text === "string"
+                ? rec.transcript_text
                 : null,
             qa_score_percentage:
-              typeof record.qa_score_percentage === "number"
-                ? record.qa_score_percentage
+              typeof rec.qa_score_percentage === "number"
+                ? rec.qa_score_percentage
                 : null,
             talk_ratio:
-              typeof record.talk_ratio === "number"
-                ? record.talk_ratio
+              typeof rec.talk_ratio === "number"
+                ? rec.talk_ratio
                 : null,
             sentiment_label:
-              typeof record.sentiment_label === "string"
-                ? record.sentiment_label
+              typeof rec.sentiment_label === "string"
+                ? rec.sentiment_label
                 : null,
-            improvements: record.improvements ?? null,
+            improvements: rec.improvements ?? null,
           });
           return c.json({
             report,

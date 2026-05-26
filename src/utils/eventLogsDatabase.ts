@@ -71,7 +71,7 @@ export interface EventLog {
   old_value?: any;
   new_value?: any;
   ai_involved: boolean;
-  severity: "INFO" | "WARNING" | "CRITICAL";
+  severity: "INFO" | "WARNING" | "CRITICAL" | "ERROR";
   correlation_id?: string;
   ip_address?: string;
   user_agent?: string;

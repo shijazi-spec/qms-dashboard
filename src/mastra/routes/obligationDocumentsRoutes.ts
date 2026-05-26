@@ -106,7 +106,7 @@ export const obligationDocumentsRoutes = [
             const link = await linkDocumentToObligation({
               obligation_id: id,
               document_id: documentId,
-              linked_by: g.user!.email || g.user!.id || "unknown",
+              linked_by: g.user!.email || String(g.user!.id ?? "") || "unknown",
             });
             try {
               const { logEvent } = await import(
@@ -277,7 +277,7 @@ export const obligationDocumentsRoutes = [
           const notes = rawNotes || null;
 
           const files = formData.getAll("file").filter(
-            (f) => f instanceof File && (f as File).size > 0,
+            (f: unknown) => f instanceof File && (f as File).size > 0,
           ) as File[];
           if (files.length === 0)
             return c.json({ error: "No files provided" }, 400);
@@ -329,12 +329,12 @@ export const obligationDocumentsRoutes = [
                 mime_type: fileInfo.mimeType,
                 notes,
                 regulation_codes,
-                uploaded_by: g.user!.email || g.user!.id || "unknown",
+                uploaded_by: g.user!.email || String(g.user!.id ?? "") || "unknown",
               });
               await linkDocumentToObligation({
                 obligation_id: obligationId,
                 document_id: doc.id,
-                linked_by: g.user!.email || g.user!.id || "unknown",
+                linked_by: g.user!.email || String(g.user!.id ?? "") || "unknown",
               });
               uploaded.push(doc);
             } catch (err: any) {
@@ -435,7 +435,7 @@ export const obligationDocumentsRoutes = [
             link = await linkDocumentToObligation({
               obligation_id: obligationId,
               document_id: documentId,
-              linked_by: g.user!.email || g.user!.id || "ai-suggest",
+              linked_by: g.user!.email || String(g.user!.id ?? "") || "ai-suggest",
             });
           } catch (err: any) {
             if (err && err.code === "23503")

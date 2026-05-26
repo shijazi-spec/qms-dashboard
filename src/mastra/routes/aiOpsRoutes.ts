@@ -550,7 +550,7 @@ export const aiOpsRoutes = [
           const ok = await insertCallFeedback(
             parsedCallId,
             rating as "thumbs_up" | "thumbs_down",
-            user.userId,
+            String(user.userId),
             cleanComment,
           );
           // Best-effort: backfill `metadata.prompt_version` on the rated
@@ -1880,7 +1880,9 @@ export const aiOpsRoutes = [
           ) as Array<keyof typeof PROMPT_REGRESSION_DEFAULTS>;
 
           const cleanOverrides: {
-            [K in keyof typeof PROMPT_REGRESSION_DEFAULTS]?: number | null;
+            -readonly [K in keyof typeof PROMPT_REGRESSION_DEFAULTS]?:
+              | number
+              | null;
           } = {};
           for (const field of validFields) {
             if (!Object.prototype.hasOwnProperty.call(overridesIn, field)) {

@@ -14,9 +14,9 @@ export interface Notification {
   id?: number;
   title: string;
   message: string;
-  module: string;
-  priority: NotificationPriority;
-  channel: NotificationChannel;
+  module?: string;
+  priority?: NotificationPriority;
+  channel?: NotificationChannel;
   status?: NotificationStatus;
   recipient?: string;
   related_entity_type?: string;
@@ -25,6 +25,11 @@ export interface Notification {
   sent_at?: Date;
   read_at?: Date;
   created_at?: Date;
+  // Legacy/alternate fields accepted by createNotification callers; the
+  // runtime helper maps these onto the canonical columns above.
+  type?: "info" | "alert" | "warning" | "success";
+  link?: string;
+  severity?: "low" | "medium" | "high" | "critical";
 }
 
 export async function initNotificationTables(): Promise<void> {
@@ -180,7 +185,7 @@ async function sendEmailNotification(notif: Notification): Promise<void> {
         process.env.EMAIL_FROM ||
         "QMS Platform <noreply@qms-dashboard.replit.app>",
       to: notif.recipient,
-      subject: `[${notif.priority.toUpperCase()}] ${notif.title}`,
+      subject: `[${(notif.priority ?? "medium").toUpperCase()}] ${notif.title}`,
       html: `<h2>${notif.title}</h2><p>${notif.message}</p>${notif.action_url ? `<p><a href="${notif.action_url}">View Details</a></p>` : ""}`,
     });
     await pool.query(`UPDATE notifications SET sent_at = NOW() WHERE id = $1`, [
@@ -201,8 +206,9 @@ async function sendSlackNotification(notif: Notification): Promise<void> {
     const { WebClient } = await import("@slack/web-api");
     const slack = new WebClient(slackToken);
     const priorityEmoji =
-      { critical: "🔴", high: "🟠", medium: "🟡", low: "🟢" }[notif.priority] ||
-      "⚪";
+      { critical: "🔴", high: "🟠", medium: "🟡", low: "🟢" }[
+        notif.priority ?? "medium"
+      ] || "⚪";
     await slack.chat.postMessage({
       channel: slackChannel,
       text: `${priorityEmoji} *${notif.title}*\n${notif.message}${notif.action_url ? `\n<${notif.action_url}|View Details>` : ""}`,

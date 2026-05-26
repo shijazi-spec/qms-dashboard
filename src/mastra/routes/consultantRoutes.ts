@@ -403,7 +403,7 @@ export const consultantRoutes = [
                     agentName: "WalaPlus QMS Consultant",
                     model: "gpt-4o",
                     promptText: message,
-                    userId: user.userId,
+                    userId: String(user.userId),
                     sessionId: resolvedThreadId,
                     metadata: buildAiCallTelemetryMetadata({
                       promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
@@ -521,7 +521,7 @@ export const consultantRoutes = [
             agentName: "WalaPlus QMS Consultant",
             model: "gpt-4o",
             promptText: message,
-            userId: user.userId,
+            userId: String(user.userId),
             sessionId: resolvedThreadId,
             metadata: buildAiCallTelemetryMetadata({
               promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
@@ -990,7 +990,7 @@ export const consultantRoutes = [
             rating,
             category: category || undefined,
             comment: comment ? String(comment).substring(0, 1000) : undefined,
-            user_id: user.userId,
+            user_id: String(user.userId),
             user_email: user.email,
             prompt_preview: promptPreview || undefined,
             response_preview: responsePreview || undefined,
@@ -1133,7 +1133,7 @@ export const consultantRoutes = [
 
           const feedback = await getFeedbackByMessageId(
             messageId,
-            user.userId,
+            String(user.userId),
             user.email,
           );
           if (!feedback) return c.json({ rating: null });
@@ -1192,7 +1192,7 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
                 agentName: "WalaPlus QMS Consultant",
                 model: "gpt-4o",
                 promptText: scanPrompt.slice(0, 300),
-                userId: user.userId,
+                userId: String(user.userId),
                 metadata: buildAiCallTelemetryMetadata({
                   scanType: "platform_scan",
                   promptVersion: QMS_CONSULTANT_PROMPT_VERSION,

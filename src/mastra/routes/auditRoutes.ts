@@ -1102,9 +1102,16 @@ export const auditRoutes = [
                       { field: "Scope", value: audit.scope || "" },
                       {
                         field: "Start Date",
-                        value: formatDate(audit.start_date),
+                        value: formatDate(
+                          audit.actual_start_date ?? audit.planned_start_date,
+                        ),
                       },
-                      { field: "End Date", value: formatDate(audit.end_date) },
+                      {
+                        field: "End Date",
+                        value: formatDate(
+                          audit.actual_end_date ?? audit.planned_end_date,
+                        ),
+                      },
                       { field: "Created", value: formatDate(audit.created_at) },
                       { field: "Total Findings", value: agg.total },
                       { field: "Critical Findings", value: agg.critical },

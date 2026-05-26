@@ -155,7 +155,7 @@ export interface OwnerAccountability {
 
 export interface DuplicateDetectionLog {
   id?: number;
-  detection_type: "manual" | "scheduled" | "on_demand";
+  detection_type: "manual" | "scheduled" | "on_demand" | "interval-fallback";
   total_records_scanned: number;
   total_clusters_found: number;
   total_duplicates_detected: number;

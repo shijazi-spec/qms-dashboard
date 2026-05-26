@@ -123,6 +123,7 @@ const VIOLATION_TITLES: Record<CsViolationCode, string> = {
   termination_missing_churn_reason: "CS data integrity: Termination phase missing Churn Reason",
   phase_transition_stalled: "CS SLA breach: phase transition stalled",
   adoption_premature: "CS process breach: Adoption reached without Onboarding completion",
+  missing_company_domain: "CS data integrity: Account missing Company Domain",
 };
 
 function buildTitle(

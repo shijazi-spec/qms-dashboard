@@ -8,12 +8,16 @@ import {
   type RolePermission,
 } from "./rbacDatabase";
 
+export type { UserRole } from "./rbacDatabase";
+
 import { logger } from "./logger";
 
 const platformPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 export interface SessionUser {
   userId: number;
+  /** Alias for `userId`. Kept for handlers that read `user.id`. */
+  id?: number;
   email: string;
   name: string;
   role: string;

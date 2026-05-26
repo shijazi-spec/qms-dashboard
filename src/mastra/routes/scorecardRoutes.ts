@@ -16,7 +16,7 @@ import {
 } from "../../utils/scorecardDatabase";
 
 initScorecardTables().catch((err) =>
-  safeLogger.error("[ScorecardRoutes] initScorecardTables failed", err),
+  logger.error("[ScorecardRoutes] initScorecardTables failed", err),
 );
 
 const SCORECARD_READ_ROLES = [

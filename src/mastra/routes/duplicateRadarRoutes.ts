@@ -345,7 +345,7 @@ async function runDeletionDetection(clustersUpdated: Set<number>): Promise<{
 }
 
 async function scanZohoCRMForDuplicates(
-  detectionType: "manual" | "scheduled" = "manual",
+  detectionType: "manual" | "scheduled" | "interval-fallback" = "manual",
 ): Promise<{
   success: boolean;
   totalRecordsScanned: number;
