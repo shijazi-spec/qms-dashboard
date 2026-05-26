@@ -171,12 +171,23 @@ export const mastra = new Mastra({
     allTools: new MCPServer({
       name: "allTools",
       version: "1.0.0",
+      // Tool keys MUST match each tool's own `id` field. The previous
+      // shorthand `{ evaluateSdrGovernanceTool, ... }` registered every
+      // tool under its JavaScript VARIABLE name (camelCase + "Tool"
+      // suffix), so external MCP clients (Cursor / Claude Desktop /
+      // Windsurf) calling `tools/call` with the documented id
+      // ("evaluate-sdr-governance") received "Unknown tool". Inside
+      // Mastra's own agent runtime the calls worked because agents
+      // dispatch on the tool object directly without going through
+      // the MCP protocol surface — which is exactly why this bug went
+      // unnoticed until tests/mcpProtocol.test.ts started driving the
+      // server through the wire-level lifecycle.
       tools: {
-        evaluateSdrGovernanceTool,
-        reconcileCallTool,
-        matchLeadByPhoneTool,
-        driveCallImportTool,
-        checkCommunicationEligibilityTool,
+        "evaluate-sdr-governance": evaluateSdrGovernanceTool,
+        "reconcile-call": reconcileCallTool,
+        "match-lead-by-phone": matchLeadByPhoneTool,
+        "drive-call-import": driveCallImportTool,
+        "check-communication-eligibility": checkCommunicationEligibilityTool,
       },
     }),
   },
