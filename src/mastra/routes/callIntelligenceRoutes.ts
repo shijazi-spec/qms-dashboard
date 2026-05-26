@@ -592,6 +592,76 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // Weekly Report rollup — Week 2-3 of the lean 5-week plan
+    // (see docs/Decision_Record_Amend_AI_Only_No_QA_Review_2026_05_25.md).
+    // Backs the new Weekly Report section on the Overview tab.
+    //
+    //   GET /api/calls/weekly-report
+    //       ?start=YYYY-MM-DD   (optional; default = 7 days before end)
+    //       &end=YYYY-MM-DD     (optional; default = now)
+    //
+    // Returns: {
+    //   window, prior_window,
+    //   totals: { total_calls, total_evaluated, avg_overall_score,
+    //             avg_compliance_score, critical_fails,
+    //             coaching_plans_pending, active_agents },
+    //   agents: [{ agent_email, agent_name, call_count, evaluated_count,
+    //              avg_overall_score, avg_compliance_score, critical_fails,
+    //              coaching_plans_pending, coaching_plans_awaiting_verification,
+    //              gap_to_target, trend_direction, prior_avg_overall_score }]
+    // }
+    //
+    // Agents sorted by gap_to_target DESC (worst at top of leaderboard).
+    // Covered by the catch-all GET /api/calls RBAC rule.
+    path: "/api/calls/weekly-report",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const logger = mastra?.getLogger();
+
+          const { getWeeklyReportRollup, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+
+          await initCallIntelligenceTables();
+
+          // Parse YYYY-MM-DD into a Date. Invalid strings degrade to
+          // undefined so the function falls back to its default
+          // 7-day window rather than throwing on malformed input.
+          const parseDay = (s?: string): Date | undefined => {
+            if (!s) return undefined;
+            const d = new Date(s);
+            return isNaN(d.getTime()) ? undefined : d;
+          };
+
+          const startDate = parseDay(c.req.query("start"));
+          const endDate = parseDay(c.req.query("end"));
+
+          const rollup = await getWeeklyReportRollup({ startDate, endDate });
+
+          logger?.info("📊 [API] Weekly report fetched", {
+            window: rollup.window.label,
+            agents: rollup.agents.length,
+            total_calls: rollup.totals.total_calls,
+          });
+
+          return c.json(rollup);
+        } catch (error: any) {
+          safeLogger.error("[API] weekly-report failed", {
+            message: error?.message,
+          });
+          return c.json(
+            { error: "Failed to fetch weekly report" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     // DMAIC Improve: bulk CRM-compliance backfill. The breakdown card in
     // the Overview tab was stuck at all-zeros because the 199 historical
     // calls were never auto-linked to a Zoho Lead/Deal (either Zoho was

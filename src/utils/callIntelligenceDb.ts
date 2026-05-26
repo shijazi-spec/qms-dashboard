@@ -1353,6 +1353,290 @@ export async function getCallAnalyticsSummary(
   };
 }
 
+// ===================================================================
+//  Weekly Report rollup — Phase 1 (Week 2-3 of the lean 5-week plan)
+//
+//  Per-agent aggregate over a date window, plus team totals and a
+//  trend indicator computed against the prior equal-length window.
+//  This is the foundation for the Weekly Report section on the
+//  Overview tab — the manager's Monday-morning home page.
+//
+//  Why a dedicated function instead of extending getCallAnalyticsSummary:
+//  the existing summary is consumed by the legacy KPI strip + charts
+//  and is shaped for those needs (sentiment distribution, qa trend
+//  by week). The Weekly Report needs different aggregates (critical
+//  fails per agent, coaching plan counts, gap-to-target, prior-window
+//  trend) that would bloat the summary response for callers that
+//  don't need them. Two endpoints, one source of truth (the same
+//  underlying tables + the same canonical-score rule for COALESCE).
+// ===================================================================
+
+export interface WeeklyReportAgent {
+  agent_email: string;
+  agent_name: string | null;
+  call_count: number;
+  evaluated_count: number;
+  avg_overall_score: number | null;
+  avg_compliance_score: number | null;
+  critical_fails: number;
+  coaching_plans_pending: number;
+  coaching_plans_awaiting_verification: number;
+  gap_to_target: number | null;
+  trend_direction: "up" | "down" | "flat" | null;
+  prior_avg_overall_score: number | null;
+}
+
+export interface WeeklyReportRollup {
+  window: { start: string; end: string; label: string };
+  prior_window: { start: string; end: string };
+  totals: {
+    total_calls: number;
+    total_evaluated: number;
+    avg_overall_score: number | null;
+    avg_compliance_score: number | null;
+    critical_fails: number;
+    coaching_plans_pending: number;
+    active_agents: number;
+  };
+  agents: WeeklyReportAgent[];
+}
+
+/** Format a Date as a YYYY-MM-DD label using Asia/Riyadh local date. */
+function formatRiyadhDate(d: Date): string {
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+}
+
+/** Format a Date as a human "MMM d" label using Asia/Riyadh local date. */
+function formatRiyadhShortDate(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    timeZone: "Asia/Riyadh",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
+ * Per-agent rollup over a date window, with team totals and trend
+ * direction computed against the equal-length prior window.
+ *
+ *   gap_to_target = 75 - avg_overall_score  (positive = below target)
+ *   trend_direction = up | down | flat compared to prior_avg_overall_score
+ *     (threshold: ±3 points = flat, > = up, < = down — calibrated for
+ *      the COPC v2 scoring scale of 0-100)
+ *
+ * Agents are returned sorted by gap_to_target DESC (worst at the top
+ * of the leaderboard). Agents with no calls in the window aren't
+ * included — this is a "what happened this week" view, not a roster.
+ */
+export async function getWeeklyReportRollup(
+  options: {
+    startDate?: Date;
+    endDate?: Date;
+  } = {},
+): Promise<WeeklyReportRollup> {
+  // Default window: last 7 days ending now.
+  const endDate = options.endDate ?? new Date();
+  const startDate =
+    options.startDate ??
+    new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  // Prior window is equal-length, ending where this window starts.
+  const windowMs = endDate.getTime() - startDate.getTime();
+  const priorEndDate = startDate;
+  const priorStartDate = new Date(priorEndDate.getTime() - windowMs);
+
+  // Per-agent SQL: one query covers current + prior windows via
+  // a CASE / FILTER fan-out, so we hit the indexes once.
+  // Canonical-score rule (same as getCallAnalyticsSummary): manager-
+  // reviewed adjusted_overall_score wins over raw AI overall_score
+  // via a LATERAL join.
+  //
+  // Critical-fails detection: any call whose evaluation has a
+  // non-empty critical_risks JSONB array. Belt-and-braces with
+  // jsonb_typeof so a malformed row doesn't error the rollup.
+  let rows: any[] = [];
+  try {
+    const result = await pool.query(
+      `
+      WITH cur AS (
+        SELECT
+          cr.agent_email,
+          cr.agent_name,
+          COUNT(DISTINCT cr.id) AS call_count,
+          COUNT(DISTINCT se.id) AS evaluated_count,
+          AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS avg_overall_score,
+          AVG(cc.compliance_score) AS avg_compliance_score,
+          COUNT(DISTINCT CASE
+            WHEN se.critical_risks IS NOT NULL
+             AND jsonb_typeof(se.critical_risks) = 'array'
+             AND jsonb_array_length(se.critical_risks) > 0
+            THEN cr.id
+          END) AS critical_fails
+        FROM call_records cr
+        LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+        LEFT JOIN LATERAL (
+          SELECT adjusted_overall_score
+          FROM sdr_evaluation_reviews sr
+          WHERE sr.evaluation_id = se.id
+            AND sr.adjusted_overall_score IS NOT NULL
+          ORDER BY sr.reviewed_at DESC
+          LIMIT 1
+        ) latest_review ON TRUE
+        LEFT JOIN call_compliance cc ON cc.call_record_id = cr.id
+        WHERE cr.call_date >= $1 AND cr.call_date < $2
+          AND cr.agent_email IS NOT NULL
+        GROUP BY cr.agent_email, cr.agent_name
+      ),
+      prior AS (
+        SELECT
+          cr.agent_email,
+          AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS prior_avg
+        FROM call_records cr
+        LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+        LEFT JOIN LATERAL (
+          SELECT adjusted_overall_score
+          FROM sdr_evaluation_reviews sr
+          WHERE sr.evaluation_id = se.id
+            AND sr.adjusted_overall_score IS NOT NULL
+          ORDER BY sr.reviewed_at DESC
+          LIMIT 1
+        ) latest_review ON TRUE
+        WHERE cr.call_date >= $3 AND cr.call_date < $4
+          AND cr.agent_email IS NOT NULL
+        GROUP BY cr.agent_email
+      ),
+      plans AS (
+        SELECT
+          agent_email,
+          COUNT(*) FILTER (WHERE status = 'pending_delivery') AS pending,
+          COUNT(*) FILTER (WHERE status = 'awaiting_verification') AS awaiting
+        FROM coaching_plans
+        WHERE status IN ('pending_delivery', 'awaiting_verification')
+        GROUP BY agent_email
+      )
+      SELECT
+        cur.agent_email,
+        cur.agent_name,
+        cur.call_count,
+        cur.evaluated_count,
+        cur.avg_overall_score,
+        cur.avg_compliance_score,
+        cur.critical_fails,
+        prior.prior_avg,
+        COALESCE(plans.pending, 0) AS coaching_pending,
+        COALESCE(plans.awaiting, 0) AS coaching_awaiting
+      FROM cur
+      LEFT JOIN prior ON prior.agent_email = cur.agent_email
+      LEFT JOIN plans ON plans.agent_email = cur.agent_email
+      ORDER BY (75 - COALESCE(cur.avg_overall_score, 0)) DESC, cur.call_count DESC
+      `,
+      [startDate, endDate, priorStartDate, priorEndDate],
+    );
+    rows = result.rows;
+  } catch (err) {
+    logger.error("[WeeklyReport] Per-agent rollup query failed:", err);
+    rows = [];
+  }
+
+  const agents: WeeklyReportAgent[] = rows.map((r) => {
+    const avg = r.avg_overall_score === null ? null : parseFloat(r.avg_overall_score);
+    const prior = r.prior_avg === null ? null : parseFloat(r.prior_avg);
+    const compliance =
+      r.avg_compliance_score === null ? null : parseFloat(r.avg_compliance_score);
+
+    let trend: "up" | "down" | "flat" | null = null;
+    if (avg !== null && prior !== null) {
+      const delta = avg - prior;
+      if (delta > 3) trend = "up";
+      else if (delta < -3) trend = "down";
+      else trend = "flat";
+    }
+
+    return {
+      agent_email: r.agent_email,
+      agent_name: r.agent_name,
+      call_count: parseInt(r.call_count, 10) || 0,
+      evaluated_count: parseInt(r.evaluated_count, 10) || 0,
+      avg_overall_score: avg !== null && !isNaN(avg) ? Math.round(avg * 10) / 10 : null,
+      avg_compliance_score:
+        compliance !== null && !isNaN(compliance)
+          ? Math.round(compliance * 10) / 10
+          : null,
+      critical_fails: parseInt(r.critical_fails, 10) || 0,
+      coaching_plans_pending: parseInt(r.coaching_pending, 10) || 0,
+      coaching_plans_awaiting_verification: parseInt(r.coaching_awaiting, 10) || 0,
+      gap_to_target: avg !== null && !isNaN(avg) ? Math.round((75 - avg) * 10) / 10 : null,
+      trend_direction: trend,
+      prior_avg_overall_score:
+        prior !== null && !isNaN(prior) ? Math.round(prior * 10) / 10 : null,
+    };
+  });
+
+  // Team totals — sum / average across the agent rows so the
+  // headline numbers reconcile exactly with the leaderboard the
+  // user is looking at (rather than running a separate aggregate
+  // that might disagree due to NULL-agent rows or other edge cases).
+  const totalCalls = agents.reduce((s, a) => s + a.call_count, 0);
+  const totalEvaluated = agents.reduce((s, a) => s + a.evaluated_count, 0);
+  const totalCriticalFails = agents.reduce((s, a) => s + a.critical_fails, 0);
+  const totalPlansPending = agents.reduce(
+    (s, a) => s + a.coaching_plans_pending,
+    0,
+  );
+  const scoreSamples = agents
+    .filter((a) => a.avg_overall_score !== null && a.evaluated_count > 0)
+    .map((a) => ({ score: a.avg_overall_score as number, n: a.evaluated_count }));
+  const totalScoreWeight = scoreSamples.reduce((s, x) => s + x.n, 0);
+  const teamAvgScore =
+    totalScoreWeight > 0
+      ? Math.round(
+          (scoreSamples.reduce((s, x) => s + x.score * x.n, 0) /
+            totalScoreWeight) *
+            10,
+        ) / 10
+      : null;
+  const complianceSamples = agents
+    .filter((a) => a.avg_compliance_score !== null && a.call_count > 0)
+    .map((a) => ({ score: a.avg_compliance_score as number, n: a.call_count }));
+  const totalComplianceWeight = complianceSamples.reduce((s, x) => s + x.n, 0);
+  const teamAvgCompliance =
+    totalComplianceWeight > 0
+      ? Math.round(
+          (complianceSamples.reduce((s, x) => s + x.score * x.n, 0) /
+            totalComplianceWeight) *
+            10,
+        ) / 10
+      : null;
+
+  // Display window label uses "May 18 – May 24" style; the end date
+  // shown to the user is inclusive (one day before the exclusive
+  // SQL upper bound) so a "Last 7 days" filter labels correctly.
+  const inclusiveEnd = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+  const label = `${formatRiyadhShortDate(startDate)} – ${formatRiyadhShortDate(inclusiveEnd)}`;
+
+  return {
+    window: {
+      start: formatRiyadhDate(startDate),
+      end: formatRiyadhDate(endDate),
+      label,
+    },
+    prior_window: {
+      start: formatRiyadhDate(priorStartDate),
+      end: formatRiyadhDate(priorEndDate),
+    },
+    totals: {
+      total_calls: totalCalls,
+      total_evaluated: totalEvaluated,
+      avg_overall_score: teamAvgScore,
+      avg_compliance_score: teamAvgCompliance,
+      critical_fails: totalCriticalFails,
+      coaching_plans_pending: totalPlansPending,
+      active_agents: agents.length,
+    },
+    agents,
+  };
+}
+
 export async function createOrUpdateQAScore(
   data: Omit<CallQAScore, "id" | "created_at">,
 ): Promise<CallQAScore> {

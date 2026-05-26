@@ -230,6 +230,99 @@
                 </div>
             </div>
 
+            <!--
+                Weekly Report — Week 2-3 of the 5-week lean plan
+                (docs/Decision_Record_Amend_AI_Only_No_QA_Review_2026_05_25.md).
+                The manager's Monday-morning home page: date filter +
+                summary strip in Slice 1, agent leaderboard rows in
+                Slice 2, inline drill in Slice 3, critical-fails
+                banner in Slice 4. Backed by GET /api/calls/weekly-report.
+            -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
+                <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold" data-i18n="calls.sec_weekly_report">Weekly Report</h3>
+                        <div id="wr-window-label" class="text-xs text-gray-500 mt-1">--</div>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <button id="wr-range-7d" data-on-click="setWeeklyReportRange" data-args='["7d"]'
+                            class="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white font-medium">
+                            <span data-i18n="calls.wr_range_7d">Last 7 days</span>
+                        </button>
+                        <button id="wr-range-30d" data-on-click="setWeeklyReportRange" data-args='["30d"]'
+                            class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">
+                            <span data-i18n="calls.wr_range_30d">Last 30 days</span>
+                        </button>
+                        <button id="wr-range-90d" data-on-click="setWeeklyReportRange" data-args='["90d"]'
+                            class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">
+                            <span data-i18n="calls.wr_range_90d">Last 90 days</span>
+                        </button>
+                        <button id="wr-range-custom-toggle" data-on-click="toggleWeeklyReportCustom"
+                            class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">
+                            <span data-i18n="calls.wr_range_custom">Custom</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Custom date inputs, revealed by the Custom button. CSP-safe:
+                     the apply button has data-on-click; nothing inline. -->
+                <div id="wr-custom-row" class="hidden mb-4 flex items-center gap-2 flex-wrap text-sm">
+                    <label class="text-gray-600">
+                        <span data-i18n="calls.wr_from">From</span>
+                        <input type="date" id="wr-custom-start" class="ml-2 px-2 py-1 border border-gray-300 rounded">
+                    </label>
+                    <label class="text-gray-600">
+                        <span data-i18n="calls.wr_to">To</span>
+                        <input type="date" id="wr-custom-end" class="ml-2 px-2 py-1 border border-gray-300 rounded">
+                    </label>
+                    <button id="wr-custom-apply" data-on-click="applyWeeklyReportCustom"
+                        class="px-3 py-1 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">
+                        <span data-i18n="calls.wr_apply">Apply</span>
+                    </button>
+                </div>
+
+                <!-- Summary strip — rendered from /api/calls/weekly-report.totals.
+                     5 small cells, one row, mirrors the structure managers will
+                     scan first thing Monday morning. -->
+                <div id="wr-summary" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                        <div class="text-xs text-gray-500" data-i18n="calls.wr_total_calls">Calls</div>
+                        <div class="text-xl font-bold text-gray-900" id="wr-total-calls">--</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                        <div class="text-xs text-gray-500" data-i18n="calls.wr_evaluated">Evaluated</div>
+                        <div class="text-xl font-bold text-green-700" id="wr-total-evaluated">--</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                        <div class="text-xs text-gray-500" data-i18n="calls.wr_team_avg">Team avg</div>
+                        <div class="text-xl font-bold text-purple-700" id="wr-team-avg">--</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                        <div class="text-xs text-gray-500" data-i18n="calls.wr_critical_fails">Critical fails</div>
+                        <div class="text-xl font-bold text-red-700" id="wr-critical-fails">--</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                        <div class="text-xs text-gray-500" data-i18n="calls.wr_plans_pending">Plans pending</div>
+                        <div class="text-xl font-bold text-amber-700" id="wr-plans-pending">--</div>
+                    </div>
+                </div>
+
+                <!-- Leaderboard slot — Slice 2 populates this with one row per
+                     agent sorted by gap-to-target. For Slice 1 it shows the
+                     loading / empty / error states only. -->
+                <div id="wr-leaderboard">
+                    <div id="wr-loading" class="text-center text-gray-400 py-6 text-sm">
+                        <span data-i18n="calls.wr_loading">Loading the weekly report…</span>
+                    </div>
+                    <div id="wr-empty" class="hidden text-center text-gray-400 py-6 text-sm">
+                        <span data-i18n="calls.wr_empty">No calls in this window.</span>
+                    </div>
+                    <div id="wr-error" class="hidden text-center text-red-600 py-6 text-sm">
+                        <span data-i18n="calls.wr_error">Couldn't load the weekly report. Try again.</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
                 <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
                     <h3 class="text-lg font-semibold" data-i18n="calls.sec_crm_compliance">CRM Compliance Breakdown</h3>
@@ -1917,6 +2010,188 @@
             renderComplianceCoverageBanner(cov);
 
             renderCharts();
+
+            // Weekly Report — fires whenever Overview is rendered. Fire-
+            // and-forget; loadWeeklyReport handles its own loading/empty/
+            // error states inside the section, so a fetch failure here
+            // never blocks the KPI strip or charts above.
+            loadWeeklyReport().catch((e) => {
+                console.error('[WeeklyReport] initial load failed:', e);
+            });
+        }
+
+        // ===================================================================
+        //   Weekly Report — Week 2 Slice 1
+        //   Date range filter + summary strip. Slices 2-6 layer the agent
+        //   leaderboard, inline drill, coaching actions, and CSV export
+        //   on top of this same `_weeklyReportData` cache.
+        // ===================================================================
+
+        // Active range key — '7d' | '30d' | '90d' | 'custom'.
+        // Persisted across re-renders so toggling another tab and coming
+        // back doesn't reset to "Last 7 days" if the user picked 30/90/custom.
+        let _weeklyReportRange = '7d';
+        let _weeklyReportCustomStart = null;
+        let _weeklyReportCustomEnd = null;
+        let _weeklyReportData = null;
+
+        /**
+         * Fetch /api/calls/weekly-report for the active range and paint
+         * the summary strip + window label. Slice 2 will extend this to
+         * also paint the leaderboard rows from _weeklyReportData.agents.
+         */
+        async function loadWeeklyReport() {
+            const params = computeWeeklyReportParams();
+            const loadingEl = document.getElementById('wr-loading');
+            const emptyEl = document.getElementById('wr-empty');
+            const errorEl = document.getElementById('wr-error');
+            if (loadingEl) loadingEl.classList.remove('hidden');
+            if (emptyEl) emptyEl.classList.add('hidden');
+            if (errorEl) errorEl.classList.add('hidden');
+
+            try {
+                const qs = new URLSearchParams();
+                if (params.start) qs.set('start', params.start);
+                if (params.end) qs.set('end', params.end);
+                const url = '/api/calls/weekly-report' + (qs.toString() ? '?' + qs.toString() : '');
+                const res = await fetch(url, { credentials: 'same-origin' });
+                if (!res.ok) {
+                    throw new Error('HTTP ' + res.status);
+                }
+                const data = await res.json();
+                _weeklyReportData = data;
+                renderWeeklyReportSummary(data);
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if ((data.agents || []).length === 0) {
+                    if (emptyEl) emptyEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('[WeeklyReport] load failed:', err);
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (errorEl) errorEl.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Map the active range key to ISO date strings for the API.
+         * Returns { start, end } where either may be null to let the
+         * server use its default (7 days ending now).
+         */
+        function computeWeeklyReportParams() {
+            const now = new Date();
+            const toIso = (d) => d.toISOString().slice(0, 10);
+            switch (_weeklyReportRange) {
+                case '30d': {
+                    const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    return { start: toIso(start), end: toIso(now) };
+                }
+                case '90d': {
+                    const start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+                    return { start: toIso(start), end: toIso(now) };
+                }
+                case 'custom': {
+                    return {
+                        start: _weeklyReportCustomStart || null,
+                        end: _weeklyReportCustomEnd || null,
+                    };
+                }
+                case '7d':
+                default: {
+                    const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    return { start: toIso(start), end: toIso(now) };
+                }
+            }
+        }
+
+        function renderWeeklyReportSummary(data) {
+            const fmtNum = (n) => (n == null ? '--' : _fn(n));
+            const fmtScore = (n) => (n == null ? '--' : `${_fn(Number(n).toFixed(1))}%`);
+            const label = data?.window?.label || '--';
+            const labelEl = document.getElementById('wr-window-label');
+            if (labelEl) labelEl.textContent = label;
+            const t = data?.totals || {};
+            const set = (id, v) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = v;
+            };
+            set('wr-total-calls', fmtNum(t.total_calls));
+            set('wr-total-evaluated', fmtNum(t.total_evaluated));
+            set('wr-team-avg', fmtScore(t.avg_overall_score));
+            set('wr-critical-fails', fmtNum(t.critical_fails));
+            set('wr-plans-pending', fmtNum(t.coaching_plans_pending));
+        }
+
+        /**
+         * Range-pill click handler. Updates active state visually, swaps
+         * the cached range key, hides the custom row if it was open,
+         * and re-fetches.
+         */
+        function setWeeklyReportRange(range) {
+            if (!range || range === _weeklyReportRange) {
+                // Same range tapped — still re-fetch to refresh data.
+                _weeklyReportRange = range || _weeklyReportRange;
+            } else {
+                _weeklyReportRange = range;
+            }
+            // Hide the custom-date row whenever a preset is chosen.
+            if (range !== 'custom') {
+                const row = document.getElementById('wr-custom-row');
+                if (row) row.classList.add('hidden');
+            }
+            // Repaint the pill active states.
+            ['7d', '30d', '90d'].forEach((k) => {
+                const btn = document.getElementById('wr-range-' + k);
+                if (!btn) return;
+                if (k === _weeklyReportRange) {
+                    btn.classList.add('bg-indigo-600', 'text-white', 'font-medium');
+                    btn.classList.remove('bg-gray-100', 'hover:bg-gray-200', 'text-gray-700');
+                } else {
+                    btn.classList.remove('bg-indigo-600', 'text-white', 'font-medium');
+                    btn.classList.add('bg-gray-100', 'hover:bg-gray-200', 'text-gray-700');
+                }
+            });
+            loadWeeklyReport().catch((e) => console.error('[WeeklyReport]', e));
+        }
+
+        /** Reveal / hide the custom date inputs. */
+        function toggleWeeklyReportCustom() {
+            const row = document.getElementById('wr-custom-row');
+            if (!row) return;
+            row.classList.toggle('hidden');
+            // Pre-fill the inputs with the current window so the user
+            // sees a sensible starting point rather than empty fields.
+            if (!row.classList.contains('hidden')) {
+                const startEl = document.getElementById('wr-custom-start');
+                const endEl = document.getElementById('wr-custom-end');
+                const params = computeWeeklyReportParams();
+                if (startEl && !startEl.value && params.start) startEl.value = params.start;
+                if (endEl && !endEl.value && params.end) endEl.value = params.end;
+            }
+        }
+
+        /**
+         * Apply a custom YYYY-MM-DD start/end pair. Silently no-ops if
+         * either field is empty — the user can fill one and tab to the
+         * other; nothing should fire until both have values.
+         */
+        function applyWeeklyReportCustom() {
+            const startEl = document.getElementById('wr-custom-start');
+            const endEl = document.getElementById('wr-custom-end');
+            const start = startEl ? startEl.value : '';
+            const end = endEl ? endEl.value : '';
+            if (!start || !end) return;
+            if (new Date(start) > new Date(end)) return;
+            _weeklyReportRange = 'custom';
+            _weeklyReportCustomStart = start;
+            _weeklyReportCustomEnd = end;
+            // None of the presets are active when custom is in use.
+            ['7d', '30d', '90d'].forEach((k) => {
+                const btn = document.getElementById('wr-range-' + k);
+                if (!btn) return;
+                btn.classList.remove('bg-indigo-600', 'text-white', 'font-medium');
+                btn.classList.add('bg-gray-100', 'hover:bg-gray-200', 'text-gray-700');
+            });
+            loadWeeklyReport().catch((e) => console.error('[WeeklyReport]', e));
         }
 
         // Diagnostic banner that explains the gap between "analyzed" and
