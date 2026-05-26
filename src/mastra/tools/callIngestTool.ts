@@ -58,7 +58,7 @@ export const callIngestTool = createTool({
         duration_seconds: context.duration_seconds,
         recording_url: context.recording_url,
         call_date: context.call_date ? new Date(context.call_date) : new Date(),
-        status: "pending",
+        status: "uploaded",
         metadata: context.metadata || {}
       });
 
@@ -71,7 +71,7 @@ export const callIngestTool = createTool({
         success: true,
         call_record_id: callRecord.id,
         call_id: callRecord.call_id,
-        status: "pending",
+        status: "uploaded",
         message: `Call record created successfully. Ready for transcription and analysis.`
       };
     } catch (error) {

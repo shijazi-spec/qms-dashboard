@@ -28,7 +28,7 @@ export interface CallRecord {
   duration_seconds?: number;
   recording_url?: string;
   call_date?: Date;
-  status: "pending" | "processing" | "analyzed" | "failed";
+  status: CallStatus;
   metadata?: any;
   /** AI analysis blob persisted alongside the row. Free-form string (JSON). */
   ai_insights?: string;
@@ -128,6 +128,99 @@ export interface CallGovernanceResult {
   load_error: string | null;
   evaluated_at?: Date;
   created_at?: Date;
+}
+
+/**
+ * Pipeline-status enum for call_records (Phase 2 of the Call Evaluation
+ * tab improvement plan). The historical 4-state enum
+ *
+ *   "pending" | "processing" | "analyzed" | "failed"
+ *
+ * was migrated 1-to-1 onto a richer 8-state pipeline that surfaces the
+ * stages an operator and a QA reviewer care about:
+ *
+ *   uploaded            — file received, no transcription run yet
+ *   transcribing        — Whisper / Five9-recording-fetch in flight
+ *   transcribed         — transcript persisted; ready for evaluation
+ *   evaluating          — scorecard run in flight
+ *   evaluated           — AI evaluation complete; QA review may be pending
+ *   qa_review_pending   — flagged for human review (low confidence, threshold,
+ *                         critical fail, or explicit assignment)
+ *   qa_reviewed         — human reviewer finalised the evaluation
+ *   failed              — terminal: transcription or evaluation errored out
+ *
+ * Migration is hard-cut (option A approved): every historical row gets a
+ * deterministic new label. See `migrateCallStatusEnum()` below for the
+ * exact mapping. Calls to `updateCallStatus()` accept any of the new
+ * values; the legacy ones are no longer reachable from the typed API.
+ *
+ * Phase 2 only renames + introduces. The intermediate `transcribed` /
+ * `evaluating` / `qa_review_pending` / `qa_reviewed` states become
+ * reachable through the type system today but are wired into transitions
+ * by later phases (Phase 4-6 of the improvement plan).
+ */
+export type CallStatus =
+  | "uploaded"
+  | "transcribing"
+  | "transcribed"
+  | "evaluating"
+  | "evaluated"
+  | "qa_review_pending"
+  | "qa_reviewed"
+  | "failed";
+
+export const CALL_STATUS_VALUES: readonly CallStatus[] = [
+  "uploaded",
+  "transcribing",
+  "transcribed",
+  "evaluating",
+  "evaluated",
+  "qa_review_pending",
+  "qa_reviewed",
+  "failed",
+] as const;
+
+/**
+ * Idempotent one-way migration of legacy `call_records.status` values to
+ * the new 8-state pipeline enum. Runs unconditionally inside
+ * `initCallIntelligenceTables()` (and therefore on every server boot)
+ * because:
+ *
+ *   1. Postgres UPDATE with a no-op WHERE costs ~one indexed scan when
+ *      there are no legacy values left — cheap to leave in place.
+ *   2. A fresh-restore from a pre-migration backup must self-heal
+ *      without a manual step.
+ *
+ * The mapping:
+ *
+ *   pending     → uploaded     (file landed but no work has run yet)
+ *   processing  → transcribing (in-flight work; "transcribing" is the
+ *                               first sub-stage the old "processing"
+ *                               umbrella covered, conservatively chosen
+ *                               so historical in-flight rows don't
+ *                               jump straight to "evaluated")
+ *   analyzed    → evaluated    (terminal happy-path; aligns with the
+ *                               new naming used by the dashboard's
+ *                               summary cards)
+ *   failed      → failed       (no change)
+ *
+ * Any non-legacy value is left untouched, so re-running the migration
+ * after operators have started writing new states is safe.
+ */
+async function migrateCallStatusEnum(): Promise<void> {
+  // Single CASE statement so only rows in the legacy set are rewritten
+  // and the round-trip stays bounded by the partial index on status.
+  await pool.query(`
+    UPDATE call_records
+       SET status = CASE status
+         WHEN 'pending'    THEN 'uploaded'
+         WHEN 'processing' THEN 'transcribing'
+         WHEN 'analyzed'   THEN 'evaluated'
+         ELSE status
+       END,
+       updated_at = updated_at  -- preserve the row's original timestamp
+     WHERE status IN ('pending','processing','analyzed');
+  `);
 }
 
 export async function initCallIntelligenceTables(): Promise<void> {
@@ -415,6 +508,13 @@ export async function initCallIntelligenceTables(): Promise<void> {
   } catch {
     /* module load failure — never block init */
   }
+
+  // Phase 2 migration: rewrite any legacy 4-state values
+  // (pending / processing / analyzed) into the new 8-state pipeline.
+  // Idempotent — see migrateCallStatusEnum() above for the mapping +
+  // safety reasoning. Awaited so the very next call to getCallById /
+  // listCallRecords sees the canonical values, never a mix.
+  await migrateCallStatusEnum();
 }
 
 /**
@@ -1111,7 +1211,11 @@ export async function getCallAnalyticsSummary(
     `
     SELECT
       COUNT(DISTINCT cr.id) as total_calls,
-      COUNT(DISTINCT CASE WHEN cr.status = 'analyzed' THEN cr.id END) as analyzed_calls,
+      -- "analyzed" in the legacy 4-state enum mapped to "the AI ran".
+      -- In the new 8-state pipeline the same semantics is covered by
+      -- any post-evaluation state (evaluated / qa_review_pending /
+      -- qa_reviewed). All three count as "analyzed" for dashboard stats.
+      COUNT(DISTINCT CASE WHEN cr.status IN ('evaluated','qa_review_pending','qa_reviewed') THEN cr.id END) as analyzed_calls,
       AVG(ca.sentiment_score) as avg_sentiment,
       AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) as avg_qa_score,
       AVG(cc.compliance_score) as avg_compliance
@@ -1279,7 +1383,10 @@ export async function getCallAnalyticsSummary(
   // "0 Notes Updated" can't tell whether that's because 0 of 199 calls
   // had a Note logged, or because 0 of 0 checked calls had a Note
   // logged. We compute three explicit denominators:
-  //   - total_analyzed: every call with status='analyzed'
+  //   - total_analyzed: every call that has finished the AI pipeline
+  //     (status IN evaluated, qa_review_pending, qa_reviewed). The
+  //     legacy 4-state enum used just 'analyzed' here — see Phase 2
+  //     migration in this file's header.
   //   - total_with_compliance_row: any row in call_compliance (incl.
   //     the "not_checked" sentinel rows written when Zoho was
   //     unreachable / call had no linked Lead/Deal)
@@ -1302,9 +1409,9 @@ export async function getCallAnalyticsSummary(
     const cov = await pool.query(
       `
       SELECT
-        SUM(CASE WHEN cr.status = 'analyzed' THEN 1 ELSE 0 END)::int AS total_analyzed,
+        SUM(CASE WHEN cr.status IN ('evaluated','qa_review_pending','qa_reviewed') THEN 1 ELSE 0 END)::int AS total_analyzed,
         SUM(CASE
-              WHEN cr.status = 'analyzed'
+              WHEN cr.status IN ('evaluated','qa_review_pending','qa_reviewed')
                AND (NULLIF(cr.lead_id, '') IS NOT NULL OR NULLIF(cr.deal_id, '') IS NOT NULL)
               THEN 1 ELSE 0 END)::int AS total_linked_to_crm,
         SUM(CASE WHEN cc.id IS NOT NULL THEN 1 ELSE 0 END)::int AS total_with_compliance_row,

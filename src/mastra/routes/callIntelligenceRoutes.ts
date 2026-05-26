@@ -74,7 +74,7 @@ export const callIntelligenceRoutes = [
             duration_seconds: data.duration_seconds,
             recording_url: data.recording_url,
             call_date: data.call_date ? new Date(data.call_date) : new Date(),
-            status: "pending",
+            status: "uploaded",
             metadata: data.metadata || {},
           });
 
@@ -1101,7 +1101,7 @@ export const callIntelligenceRoutes = [
             );
           }
 
-          await updateCallRecord(callId, { status: "processing" });
+          await updateCallRecord(callId, { status: "transcribing" });
 
           const { saveTranscript, saveCallAnalysis, saveQAScore } =
             await import("../../utils/callIntelligenceDb");
@@ -1185,7 +1185,7 @@ Respond with JSON only:
             ai_insights: analysisData.ai_insights,
           });
 
-          await updateCallRecord(callId, { status: "analyzed" });
+          await updateCallRecord(callId, { status: "evaluated" });
 
           // Phase B — fire-and-forget SDR scorecard evaluation. Runs the
           // active scorecard against this call's transcript so the SDR
@@ -2178,7 +2178,7 @@ Respond with JSON only:
             direction: direction as "inbound" | "outbound",
             recording_url: recordingUrl,
             call_date: new Date(callDate),
-            status: "pending",
+            status: "uploaded",
             metadata: {
               uploaded_at: new Date().toISOString(),
               original_filename: file?.name || "",
@@ -2232,7 +2232,7 @@ Respond with JSON only:
                 saveCallAnalysis,
               } = await import("../../utils/callIntelligenceDb");
 
-              await updateCallRecord(callRecord.id, { status: "processing" });
+              await updateCallRecord(callRecord.id, { status: "transcribing" });
               analysisStatus = "processing";
 
               const OpenAI = (await import("openai")).default;
@@ -2386,7 +2386,7 @@ ${transcriptText}
                 }),
               });
 
-              await updateCallRecord(callRecord.id, { status: "analyzed" });
+              await updateCallRecord(callRecord.id, { status: "evaluated" });
               analysisStatus = "analyzed";
               logger?.info("✅ [API] Manual upload analysis completed", {
                 id: callRecord.id,
@@ -2447,7 +2447,7 @@ ${transcriptText}
                   "../../utils/callIntelligenceDb"
                 );
                 await updateCallRecord(callRecord.id, {
-                  status: "pending",
+                  status: "uploaded",
                   ai_insights: JSON.stringify({
                     last_analysis_error: errMsg,
                     last_analysis_error_code: errCode || null,
@@ -2653,7 +2653,7 @@ ${transcriptText}
             direction: "outbound",
             recording_url: `/uploads/calls/${fileName}`,
             call_date: parsedCallDate,
-            status: "pending",
+            status: "uploaded",
             metadata: {
               uploaded_at: new Date().toISOString(),
               original_filename: file.name,
@@ -2732,7 +2732,7 @@ ${transcriptText}
 
           if (autoAnalyze) {
             try {
-              await updateCallRecord(callId, { status: "processing" });
+              await updateCallRecord(callId, { status: "transcribing" });
               analysisStatus = "processing";
 
               const OpenAI = (await import("openai")).default;
@@ -2902,7 +2902,7 @@ ${transcriptText}
                 }),
               });
 
-              await updateCallRecord(callId, { status: "analyzed" });
+              await updateCallRecord(callId, { status: "evaluated" });
               analysisStatus = "analyzed";
               logger?.info("✅ [API] Full analysis completed", { callId });
 
@@ -2956,7 +2956,7 @@ ${transcriptText}
                 stack: errAny?.stack,
               });
               await updateCallRecord(callId, {
-                status: "pending",
+                status: "uploaded",
                 ai_insights: JSON.stringify({
                   last_analysis_error: errMsg,
                   last_analysis_error_code: errCode || null,
@@ -3054,7 +3054,7 @@ ${transcriptText}
                   ? new Date(call.call_date)
                   : new Date(),
                 duration_seconds: call.duration_seconds || null,
-                status: "pending",
+                status: "uploaded",
                 metadata: {
                   uploaded_at: new Date().toISOString(),
                   bulk_upload: true,
@@ -3283,7 +3283,7 @@ ${transcriptText}
           });
 
           if (body.complete) {
-            await updateCallStatus(callId, "analyzed");
+            await updateCallStatus(callId, "evaluated");
           }
 
           logger?.info("✅ [API] SDR evaluation saved", { id: qaScore.id });
@@ -3566,7 +3566,7 @@ ${transcriptText}
           };
 
           const evaluationId = await saveSDREvaluation(evaluation);
-          await updateCallStatus(callId, "analyzed");
+          await updateCallStatus(callId, "evaluated");
 
           logger?.info("💾 [API] SDR evaluation saved", { evaluationId });
 

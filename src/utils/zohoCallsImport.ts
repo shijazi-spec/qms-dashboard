@@ -233,7 +233,12 @@ export async function runZohoCallsImport(
         ),
         recording_url: recordingUrl,
         call_date: callDate ? new Date(callDate) : new Date(),
-        status: recordingUrl ? "pending" : "analyzed",
+        // Zoho-imported calls land in `uploaded` when we have a
+        // recording_url to transcribe later, or `evaluated` when Zoho
+        // already supplies the analysis fields and there's no audio
+        // to download. Same semantic split as the legacy pending/
+        // analyzed pair, just in the new 8-state enum.
+        status: recordingUrl ? "uploaded" : "evaluated",
         metadata: {
           zoho_id: c.id,
           zoho_subject: raw.Subject || null,

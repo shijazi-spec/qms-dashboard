@@ -1743,6 +1743,66 @@
             });
         }
 
+        /**
+         * Call-pipeline status helpers (Phase 2 of the Call Evaluation
+         * improvement plan). Maps each of the 8 server-side status
+         * values to a label + Tailwind class set + colour bucket from
+         * the spec:
+         *
+         *   gray   = uploaded                    (sitting, no work yet)
+         *   blue   = transcribing / transcribed  (mid-pipeline, in motion)
+         *            / evaluating
+         *   orange = qa_review_pending           (needs human review)
+         *   green  = evaluated / qa_reviewed     (terminal happy-path)
+         *   red    = failed                      (terminal error)
+         *
+         * Legacy 4-state values (pending / processing / analyzed) still
+         * appear in any HTML pre-cached by a stale browser session; the
+         * fallthrough below keeps the badge rendering them with the
+         * closest match instead of an unstyled white box. The server-side
+         * migration in initCallIntelligenceTables() rewrites the row
+         * values on next boot, so legacy entries disappear from new
+         * fetches within a single deploy cycle.
+         */
+        const CALL_STATUS_INFO = {
+            uploaded:           { label: 'Uploaded',          cls: 'bg-gray-100 text-gray-700' },
+            transcribing:      { label: 'Transcribing',       cls: 'bg-blue-100 text-blue-700' },
+            transcribed:       { label: 'Transcribed',        cls: 'bg-blue-100 text-blue-700' },
+            evaluating:        { label: 'Evaluating',         cls: 'bg-blue-100 text-blue-700' },
+            evaluated:         { label: 'Evaluated',          cls: 'bg-green-100 text-green-700' },
+            qa_review_pending: { label: 'QA Review Pending', cls: 'bg-orange-100 text-orange-700' },
+            qa_reviewed:       { label: 'QA Reviewed',        cls: 'bg-green-100 text-green-700' },
+            failed:            { label: 'Failed',             cls: 'bg-red-100 text-red-700' },
+            // Fallbacks for legacy 4-state rows in stale caches.
+            pending:           { label: 'Uploaded',           cls: 'bg-gray-100 text-gray-700' },
+            processing:        { label: 'Transcribing',       cls: 'bg-blue-100 text-blue-700' },
+            analyzed:          { label: 'Evaluated',          cls: 'bg-green-100 text-green-700' },
+        };
+
+        /**
+         * Set of statuses representing "AI evaluation has completed".
+         * Used for analytics filters and the View Evaluation CTA. Both
+         * the legacy `analyzed` and the new `evaluated / qa_review_pending
+         * / qa_reviewed` count.
+         */
+        const CALL_STATUS_EVALUATED_SET = new Set([
+            'analyzed',
+            'evaluated',
+            'qa_review_pending',
+            'qa_reviewed',
+        ]);
+
+        /** Returns the rendered <span> for a call's status badge. */
+        function renderCallStatusBadge(status) {
+            const info = CALL_STATUS_INFO[status] || { label: status || '—', cls: 'bg-gray-100 text-gray-600' };
+            return `<span class="px-2 py-1 text-xs rounded-full font-medium ${info.cls}">${escapeHtml(info.label)}</span>`;
+        }
+
+        /** True when the call is in any post-evaluation state. */
+        function isCallEvaluated(status) {
+            return CALL_STATUS_EVALUATED_SET.has(status);
+        }
+
         async function init() {
             wireDropzone('upload-dropzone', 'call-file-input', false);
             wireDropzone('bulk-audio-dropzone', 'bulk-audio-input', true);
@@ -3027,13 +3087,11 @@
                     <td class="px-4 py-3 text-sm text-center text-gray-600">${escapeHtml(_fd(call.call_date))}</td>
                     <td class="px-4 py-3 text-center">${renderCrmLinkCell(call)}</td>
                     <td class="px-4 py-3 text-center">
-                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium status-${escapeHtml(call.status)}">
-                            ${escapeHtml(call.status)}
-                        </span>
+                        ${renderCallStatusBadge(call.status)}
                     </td>
                     <td class="px-4 py-3 text-center">
                         <div class="inline-flex items-center gap-3">
-                            ${call.status === 'analyzed'
+                            ${isCallEvaluated(call.status)
                                 ? `<button data-on-click="viewCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-view-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.view_btn'))}</button>`
                                 : `<button data-on-click="analyzeCall" data-args="[${call.id}]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-analyze-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.analyze_btn'))}</button>`}
                             <button data-on-click="deleteCall" data-args="[${call.id},&quot;${escapeHtml(call.call_id)}&quot;]" class="text-red-600 hover:text-red-800 text-sm font-medium" data-testid="button-delete-call-${call.id}">${escapeHtml(WalaPlusI18n.t('dyn.calls.delete_btn'))}</button>
@@ -3073,7 +3131,9 @@
             slot.innerHTML = '';
             for (const call of rows) {
                 if (!call || _eagerDurationSeen.has(call.id)) continue;
-                if (call.status !== 'analyzed') continue;
+                // Phase 2 status enum: only post-evaluation rows have a
+                // duration worth eagerly hydrating. See CALL_STATUS_INFO.
+                if (!isCallEvaluated(call.status)) continue;
                 if (call.duration_seconds && call.duration_seconds > 0) continue;
                 _eagerDurationSeen.add(call.id);
                 const a = document.createElement('audio');
@@ -3638,7 +3698,7 @@
                 g.sources = Array.from(new Set(g.calls.map(c => c.source).filter(Boolean)));
                 g.has_lead = g.calls.some(c => c.lead_id && !/^\+?\d[\d\s\-()]{4,}$/.test(String(c.lead_id)));
                 g.has_deal = g.calls.some(c => c.deal_id);
-                g.analyzed_count = g.calls.filter(c => c.status === 'analyzed').length;
+                g.analyzed_count = g.calls.filter(c => isCallEvaluated(c.status)).length;
                 return g;
             }).sort((a, b) => new Date(b.latest || 0) - new Date(a.latest || 0));
 
@@ -4995,7 +5055,11 @@
                 const r = await fetch('/api/calls?limit=500');
                 const data = await r.json();
                 const all = (data && data.records) || [];
-                pending = all.filter(c => c.status === 'pending' || c.status === 'processing' || c.status === 'failed');
+                // "Pending" here means "not yet evaluated" — anything
+                // that hasn't reached a post-evaluation state (or that
+                // already failed) is a candidate for the bulk-analyze
+                // retry button.
+                pending = all.filter(c => !isCallEvaluated(c.status));
             } catch (e) {
                 btn.disabled = false;
                 btn.innerHTML = originalLabel;
@@ -5536,7 +5600,7 @@
                                     <div class="text-xs text-gray-500">${escapeHtml(call.contact_name || WalaPlusI18n.t('dyn.calls.unknown_contact'))} - ${escapeHtml(_fd(call.call_date))}</div>
                                 </div>
                             </div>
-                            <span class="px-2 py-1 text-xs rounded-full ${call.status === 'analyzed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${escapeHtml(call.status)}</span>
+                            ${renderCallStatusBadge(call.status)}
                         </div>
                     `).join('');
                 } else {

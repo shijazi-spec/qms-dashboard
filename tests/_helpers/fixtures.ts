@@ -283,7 +283,7 @@ export function makeCallRecord(overrides: Partial<CallRecord> = {}): CallRecord 
     source: "five9",
     agent_email: "agent@example.com",
     direction: "outbound",
-    status: "pending",
+    status: "uploaded",
     ...overrides,
   };
 }

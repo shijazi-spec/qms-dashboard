@@ -112,7 +112,7 @@ export const driveCallImportTool = createTool({
           agent_email: context.agent_email,
           direction: context.default_direction ?? "outbound",
           recording_url: `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(f.id)}?alt=media`,
-          status: "pending",
+          status: "uploaded",
           call_date: f.modifiedTime ? new Date(f.modifiedTime) : new Date(),
           metadata: {
             drive_file_id: f.id,

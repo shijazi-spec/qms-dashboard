@@ -597,7 +597,7 @@ async function processBatchOutput(
         evaluated_at: new Date(),
       };
       await saveSDREvaluation(evaluation);
-      await updateCallStatus(callId, "analyzed");
+      await updateCallStatus(callId, "evaluated");
       saved += 1;
     } catch (err: any) {
       logger.warn(

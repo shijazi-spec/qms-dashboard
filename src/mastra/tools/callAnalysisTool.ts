@@ -61,7 +61,7 @@ export const callAnalysisTool = createTool({
         throw new Error(`Call record not found: ${context.call_record_id}`);
       }
 
-      await updateCallRecord(context.call_record_id, { status: "processing" });
+      await updateCallRecord(context.call_record_id, { status: "transcribing" });
 
       await saveTranscript({
         call_record_id: context.call_record_id,
@@ -220,7 +220,7 @@ Respond ONLY with the JSON.` : '';
         }
       }
 
-      await updateCallRecord(context.call_record_id, { status: "analyzed" });
+      await updateCallRecord(context.call_record_id, { status: "evaluated" });
 
       logger?.info("✅ [CallAnalysis] Call analysis completed", { 
         call_record_id: context.call_record_id 

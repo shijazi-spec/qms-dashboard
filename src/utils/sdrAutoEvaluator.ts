@@ -211,7 +211,7 @@ export async function triggerSDREvaluationForCall(
     let evaluationId: number;
     try {
       evaluationId = await saveSDREvaluation(evaluation as any);
-      await updateCallStatus(callId, "analyzed");
+      await updateCallStatus(callId, "evaluated");
     } catch (saveErr: any) {
       logger.warn(
         `[SDRAutoEval] Save failed for call ${callId}: ${saveErr?.message || saveErr}`,
