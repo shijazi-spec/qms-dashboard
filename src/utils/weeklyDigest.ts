@@ -315,6 +315,24 @@ export async function sendWeeklyDigest(
 ): Promise<SendDigestResult> {
   const { identity, forceSend = false } = options;
 
+  // DECOMMISSIONED per 3rd + 4th scope amendments (2026-05-25). The Weekly
+  // Report now lives inside the dashboard (in-app, opened Monday morning);
+  // Slack + email push channels were dropped to eliminate operational
+  // complexity without unique value. This guard runs BEFORE the flag check
+  // and BEFORE forceSend, so the function is a no-op no matter how it's
+  // reached — Inngest cron, manual POST, direct import in tests, etc.
+  //
+  // To re-enable (e.g. if a future amendment re-introduces push channels),
+  // delete this block AND set DIGEST_DECOMMISSIONED_OVERRIDE=true in Replit.
+  if (process.env.DIGEST_DECOMMISSIONED_OVERRIDE !== "true") {
+    return {
+      sent: false,
+      slack: { attempted: false, ok: false },
+      email: { attempted: false, ok: false },
+      skipped_reason: "decommissioned_per_amendments_3_and_4",
+    };
+  }
+
   if (!forceSend && !isFlagEnabled("weekly_digest", identity)) {
     return {
       sent: false,

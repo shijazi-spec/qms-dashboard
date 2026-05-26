@@ -411,24 +411,35 @@ const duplicateSyncFunction = inngest.createFunction(
 );
 inngestFunctions.push(duplicateSyncFunction);
 
-// Weekly Call Evaluation Digest — DMAIC Solution #3.
-// Fires every Sunday 06:00 Asia/Riyadh (= 03:00 UTC). Flag-gated on
-// WEEKLY_DIGEST inside sendWeeklyDigest, so the cron wakes up but
-// does nothing until the flag is flipped — that's the deploy-free
-// toggle for go-live. Override the schedule with WEEKLY_DIGEST_CRON.
-const weeklyDigestFunction = inngest.createFunction(
-  { id: "calls-weekly-digest" },
-  { cron: process.env.WEEKLY_DIGEST_CRON || "0 3 * * 0" },
-  async ({ step }) => {
-    return await step.run("send-weekly-digest", async () => {
-      const { weeklyDigestCronWorkflow } = await import(
-        "../workflows/weeklyDigestCron"
-      );
-      return await weeklyDigestCronWorkflow();
-    });
-  },
-);
-inngestFunctions.push(weeklyDigestFunction);
+// Weekly Call Evaluation Digest — DECOMMISSIONED 2026-05-25.
+// Per scope amendments 3 (skip weekly digest) + 4 (Weekly Report is
+// in-dashboard only), this Inngest cron is unregistered. The function
+// id `calls-weekly-digest` will no longer be scheduled. If Replit
+// retains the schedule from a previous deploy, it'll fail-open: the
+// underlying sendWeeklyDigest() is also short-circuited at the source
+// (src/utils/weeklyDigest.ts) and the POST /api/calls/weekly-digest/send
+// route returns 410 Gone. Three layers of defence so the spam stops.
+//
+// To re-enable in a future amendment:
+//   1. Uncomment the createFunction block below
+//   2. Remove the DIGEST_DECOMMISSIONED_OVERRIDE guard in weeklyDigest.ts
+//   3. Restore the manual-trigger handler in callIntelligenceRoutes.ts
+//
+// (Original cron: Sunday 03:00 UTC = Sunday 06:00 Asia/Riyadh)
+//
+// const weeklyDigestFunction = inngest.createFunction(
+//   { id: "calls-weekly-digest" },
+//   { cron: process.env.WEEKLY_DIGEST_CRON || "0 3 * * 0" },
+//   async ({ step }) => {
+//     return await step.run("send-weekly-digest", async () => {
+//       const { weeklyDigestCronWorkflow } = await import(
+//         "../workflows/weeklyDigestCron"
+//       );
+//       return await weeklyDigestCronWorkflow();
+//     });
+//   },
+// );
+// inngestFunctions.push(weeklyDigestFunction);
 
 // CS-pipeline overlap nightly refresh.
 // Re-classifies every duplicate cluster that contains a Deal record, so the
