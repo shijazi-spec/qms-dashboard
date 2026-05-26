@@ -543,18 +543,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Zoho ID</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Lead Name</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Lead</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this lead was flagged. OR rule — any one of these is enough to mark it as a duplicate: 👤 same name · 📧 same email · 📞 same phone · 🆔 same Zoho CRM ID">Dup signal</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this lead was flagged. OR rule — any one of these is enough to mark it as a duplicate: 👤 = another lead on this page has the same name · 📧 = another lead on this page has the same email · 📞 = another lead on this page has the same phone">Dup signal</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created By</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Primary</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created</th>
                         </tr>
                     </thead>
                     <tbody id="leadsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -2399,26 +2394,54 @@
         function _normPhone(s) { return String(s || '').replace(/\D+/g, ''); }
         function _normName(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
 
+        // Compact "3d ago" style relative time. Falls back to absolute
+        // date when the gap is large or unparseable. Full timestamp is
+        // always available via the cell's title attribute.
+        function _relTime(ts) {
+            if (!ts) return { short: '-', full: '' };
+            const d = new Date(ts);
+            if (isNaN(d.getTime())) return { short: '-', full: String(ts) };
+            const full = _fd(d, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+            const diffMs = Date.now() - d.getTime();
+            const sec = Math.round(diffMs / 1000);
+            if (sec < 60) return { short: 'just now', full };
+            const min = Math.round(sec / 60);
+            if (min < 60) return { short: min + 'm ago', full };
+            const hr = Math.round(min / 60);
+            if (hr < 24) return { short: hr + 'h ago', full };
+            const day = Math.round(hr / 24);
+            if (day < 30) return { short: day + 'd ago', full };
+            const mo = Math.round(day / 30);
+            if (mo < 12) return { short: mo + 'mo ago', full };
+            const yr = Math.round(mo / 12);
+            return { short: yr + 'y ago', full };
+        }
+
         function renderLeadRows(groups) {
             const tbody = document.getElementById('leadsTable');
-            // Flatten the page so we can count duplicate names/emails/phones
+            // Flatten the page so we can count duplicate names/emails/phones/IDs
             // across every lead currently shown.
             const allLeads = [];
             for (const g of groups) for (const r of (g.leads || [])) allLeads.push(r);
 
-            // Counts per match-key so each row can show "👤/📧/📞 × N"
-            // badges. OR rule: a row is a duplicate if ANY of name, email,
-            // or phone matches another lead on this page.
+            // Counts per match-key so each row can show 👤/📧/📞/🆔 badges.
+            // OR rule: a row is a duplicate if ANY of name, email, phone, or
+            // Zoho CRM ID matches another lead on this page. A repeated Zoho
+            // ID is normally an indexer/sync bug (the same record stored
+            // twice in our DB) — worth surfacing explicitly.
             const nameCounts = {};
             const emailCounts = {};
             const phoneCounts = {};
+            const idCounts = {};
             for (const r of allLeads) {
                 const n = _normName(r.record_name);
                 const e = _normEmail(r.email);
                 const p = _normPhone(leadPhone(r));
+                const id = String(r.zoho_record_id || '').trim();
                 if (n) nameCounts[n] = (nameCounts[n] || 0) + 1;
                 if (e) emailCounts[e] = (emailCounts[e] || 0) + 1;
                 if (p) phoneCounts[p] = (phoneCounts[p] || 0) + 1;
+                if (id) idCounts[id] = (idCounts[id] || 0) + 1;
             }
 
             let rows = '';
@@ -2427,28 +2450,56 @@
                 const n = _normName(r.record_name);
                 const e = _normEmail(r.email);
                 const p = _normPhone(phone);
+                const idKey = String(r.zoho_record_id || '').trim();
                 const nDup = n && nameCounts[n] > 1 ? nameCounts[n] : 0;
                 const eDup = e && emailCounts[e] > 1 ? emailCounts[e] : 0;
                 const pDup = p && phoneCounts[p] > 1 ? phoneCounts[p] : 0;
+                const idDup = idKey && idCounts[idKey] > 1 ? idCounts[idKey] : 0;
 
-                const nameCell = `<span>${escapeHtml(r.record_name || '-')}</span>${nDup ? ` <span class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="${nDup} leads on this page share this exact name — strong duplicate signal">× ${nDup}</span>` : ''}`;
-                const emailCell = r.email
-                    ? `<span>${escapeHtml(r.email)}</span>${eDup ? ` <span class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${eDup} leads on this page share this email — strong duplicate signal">× ${eDup}</span>` : ''}`
-                    : '<span class="text-gray-400">-</span>';
-                const phoneCell = phone
-                    ? `<span class="font-mono text-xs">${escapeHtml(phone)}</span>${pDup ? ` <span class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800" title="${pDup} leads on this page share this phone — strong duplicate signal">× ${pDup}</span>` : ''}`
-                    : '<span class="text-gray-400">-</span>';
+                // Lead cell — name (bold) + company (small grey) + primary
+                // star + tiny Zoho-link icon. Single identity column instead
+                // of four separate ones (Zoho ID / Domain / Name / Company).
+                const star = r.is_primary
+                    ? `<span class="text-yellow-500 me-1" title="${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))} — system-chosen master record for this cluster">★</span>`
+                    : '';
+                const zohoIconLink = r.zoho_record_id && !String(r.zoho_record_id).startsWith('test_') && !String(r.zoho_record_id).startsWith('LEAD_')
+                    ? `<a href="https://crm.zoho.com/crm/org766568398/tab/Leads/${r.zoho_record_id}" target="_blank" class="text-blue-500 hover:text-blue-700 ms-1 text-xs" title="Open in Zoho CRM (id ${escapeHtml(String(r.zoho_record_id))})" data-testid="link-zoho-${r.zoho_record_id}">↗</a>`
+                    : '';
+                const nameColorCls = nDup ? 'text-purple-700' : 'text-gray-900';
+                const leadCell = `<td class="px-4 py-3 text-sm">
+                    <div class="flex items-center font-medium ${nameColorCls}">${star}<span title="${nDup ? nDup + ' leads on this page share this exact name' : ''}">${escapeHtml(r.record_name || '-')}</span>${zohoIconLink}</div>
+                    <div class="text-xs text-gray-500">${escapeHtml(r.company_name || '-')}</div>
+                </td>`;
 
+                // Dup signal — single source of truth, no more inline × N chips.
                 const signals = [];
-                if (nDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="${nDup} leads on this page share this exact name — duplicate by name">👤 same name</span>`);
-                if (eDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${eDup} leads on this page share this exact email — duplicate by email">📧 same email</span>`);
-                if (pDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800" title="${pDup} leads on this page share this exact phone number — duplicate by phone">📞 same phone</span>`);
-                if (!signals.length) signals.push('<span class="text-gray-400 text-xs" title="No name/email/phone collisions with other leads on this page">-</span>');
-                const signalCell = `<div class="flex flex-wrap gap-1">${signals.join('')}</div>`;
+                if (nDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="${nDup} leads on this page share this exact name">👤 name ×${nDup}</span>`);
+                if (eDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${eDup} leads on this page share this exact email">📧 email ×${eDup}</span>`);
+                if (pDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800" title="${pDup} leads on this page share this exact phone">📞 phone ×${pDup}</span>`);
+                if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same Zoho CRM ID — usually an indexer/sync bug, not a true CRM duplicate. Investigate before merging.">🆔 dup CRM ID ×${idDup}</span>`);
+                if (!signals.length) signals.push('<span class="text-gray-400 text-xs" title="No name/email/phone/ID collisions with other leads on this page">-</span>');
+                const signalCell = `<td class="px-4 py-3 text-sm"><div class="flex flex-wrap gap-1">${signals.join('')}</div></td>`;
 
-                rows += `<tr><td class="px-4 py-3 text-sm">${zohoLink(r.zoho_record_id,'Leads')}</td>${clusterDomainCell(r)}<td class="px-4 py-3 text-sm">${nameCell}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${emailCell}</td><td class="px-4 py-3 text-sm text-gray-500">${phoneCell}</td><td class="px-4 py-3 text-sm">${signalCell}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score||r.cluster_confidence||0)} px-2 py-1 rounded text-xs">${r.confidence_score||r.cluster_confidence||0}%</span></td>${createdByCell(r)}<td class="px-4 py-3 text-sm">${r.is_primary?`<span class="text-green-600 font-medium">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.primary'))}</span>`:`<span class="text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.duplicate_short'))}</span>`}</td></tr>`;
+                const emailCell = r.email
+                    ? `<td class="px-4 py-3 text-sm ${eDup ? 'text-red-700 font-medium' : 'text-gray-600'}">${escapeHtml(r.email)}</td>`
+                    : '<td class="px-4 py-3 text-sm text-gray-400">-</td>';
+                const phoneCell = phone
+                    ? `<td class="px-4 py-3 text-sm font-mono text-xs ${pDup ? 'text-orange-700 font-medium' : 'text-gray-600'}">${escapeHtml(phone)}</td>`
+                    : '<td class="px-4 py-3 text-sm text-gray-400">-</td>';
+
+                // Created — relative time on top, creator name below in grey.
+                const raw = r && r.raw_data ? r.raw_data : {};
+                const creator = (raw.Created_By && raw.Created_By.name) || r.created_by_name || '';
+                const ts = raw.Created_Time || r.created_date || r.created_at || null;
+                const rel = _relTime(ts);
+                const createdCell = `<td class="px-4 py-3 text-sm">
+                    <div class="text-gray-700" title="${escapeHtml(rel.full)}">${escapeHtml(rel.short)}</div>
+                    ${creator ? `<div class="text-xs text-gray-400">${escapeHtml(creator)}</div>` : ''}
+                </td>`;
+
+                rows += `<tr>${leadCell}${signalCell}${emailCell}${phoneCell}<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td>${createdCell}</tr>`;
             }
-            tbody.innerHTML = rows || `<tr><td colspan="12" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_leads'))}</td></tr>`;
+            tbody.innerHTML = rows || `<tr><td colspan="7" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_leads'))}</td></tr>`;
         }
 
         function renderDealRows(groups) {
