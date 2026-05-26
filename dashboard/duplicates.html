@@ -2417,6 +2417,19 @@
             return { short: yr + 'y ago', full };
         }
 
+        // Toggle the expanded/collapsed state of one duplicate group on
+        // the Leads tab. Wired through SafeActions via data-on-click.
+        function toggleLeadDupGroup(groupId) {
+            const children = document.querySelectorAll('tr[data-dup-group="' + groupId + '"]');
+            const chevron = document.getElementById('lead-dup-chev-' + groupId);
+            let nowOpen = false;
+            children.forEach(tr => {
+                tr.classList.toggle('hidden');
+                if (!tr.classList.contains('hidden')) nowOpen = true;
+            });
+            if (chevron) chevron.textContent = nowOpen ? '▼' : '▶';
+        }
+
         function renderLeadRows(groups) {
             const tbody = document.getElementById('leadsTable');
             // Flatten the page so we can count duplicate names/emails/phones/IDs
@@ -2444,8 +2457,80 @@
                 if (id) idCounts[id] = (idCounts[id] || 0) + 1;
             }
 
+            // Union-find: merge any two leads that share at least one of
+            // name / email / phone / Zoho ID. This way a lead matching
+            // another by phone AND a third by email all end up in the same
+            // group. Index-into-allLeads is the node identifier.
+            const parent = allLeads.map((_, i) => i);
+            const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+            const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+            const byKey = (keyName) => {
+                const map = {};
+                allLeads.forEach((r, i) => {
+                    let k = '';
+                    if (keyName === 'name') k = _normName(r.record_name);
+                    else if (keyName === 'email') k = _normEmail(r.email);
+                    else if (keyName === 'phone') k = _normPhone(leadPhone(r));
+                    else if (keyName === 'id') k = String(r.zoho_record_id || '').trim();
+                    if (!k) return;
+                    if (map[k] === undefined) map[k] = i;
+                    else union(map[k], i);
+                });
+            };
+            byKey('name'); byKey('email'); byKey('phone'); byKey('id');
+
+            // Bucket indices by their union-find root.
+            const buckets = {};
+            allLeads.forEach((_, i) => {
+                const r = find(i);
+                (buckets[r] = buckets[r] || []).push(i);
+            });
+
+            // Build the render list: only groups with 2+ leads (singletons
+            // are not duplicates by any signal). Order by group size desc
+            // so the messiest clusters are at the top.
+            const groupList = Object.values(buckets)
+                .filter(idxs => idxs.length >= 2)
+                .sort((a, b) => b.length - a.length);
+
+            // Friendly summary for the group header: shared key + N members
+            // + the "primary" lead's name as the human label.
+            function _groupSummary(idxs) {
+                const recs = idxs.map(i => allLeads[i]);
+                const sharedKeys = [];
+                const nameVals = new Set(recs.map(r => _normName(r.record_name)).filter(Boolean));
+                const emailVals = new Set(recs.map(r => _normEmail(r.email)).filter(Boolean));
+                const phoneVals = new Set(recs.map(r => _normPhone(leadPhone(r))).filter(Boolean));
+                const idVals = new Set(recs.map(r => String(r.zoho_record_id || '').trim()).filter(Boolean));
+                if (nameVals.size === 1) sharedKeys.push({ k: '👤', label: 'name', color: 'bg-purple-100 text-purple-800', value: [...nameVals][0] });
+                if (emailVals.size === 1) sharedKeys.push({ k: '📧', label: 'email', color: 'bg-red-100 text-red-800', value: [...emailVals][0] });
+                if (phoneVals.size === 1) sharedKeys.push({ k: '📞', label: 'phone', color: 'bg-orange-100 text-orange-800', value: [...phoneVals][0] });
+                if (idVals.size === 1 && recs.length > 1) sharedKeys.push({ k: '🆔', label: 'CRM ID', color: 'bg-rose-200 text-rose-900', value: [...idVals][0] });
+                const primary = recs.find(r => r.is_primary) || recs[0];
+                return { sharedKeys, primary, count: recs.length };
+            }
+
             let rows = '';
-            for (const r of allLeads) {
+            groupList.forEach((idxs, gIdx) => {
+                const summary = _groupSummary(idxs);
+                const chips = summary.sharedKeys.length
+                    ? summary.sharedKeys.map(s => `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${s.color}" title="All ${summary.count} leads in this group share this ${s.label}: ${escapeHtml(String(s.value))}">${s.k} ${escapeHtml(s.label)}</span>`).join(' ')
+                    : '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Members of this group are linked through chained matches (e.g. A shares email with B, B shares phone with C)">🔗 chained match</span>';
+
+                rows += `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleLeadDupGroup" data-args="[${gIdx}]" data-testid="row-lead-dup-group-${gIdx}">
+                    <td class="px-4 py-3 text-sm" colspan="7">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span id="lead-dup-chev-${gIdx}" class="text-gray-600 font-mono" aria-hidden="true">▶</span>
+                            <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
+                            <span class="text-xs text-gray-500">${summary.count} duplicate leads</span>
+                            <span class="flex flex-wrap gap-1">${chips}</span>
+                            <span class="ms-auto text-xs text-gray-500">Click to expand</span>
+                        </div>
+                    </td>
+                </tr>`;
+
+                idxs.forEach(i => {
+                    const r = allLeads[i];
                 const phone = leadPhone(r);
                 const n = _normName(r.record_name);
                 const e = _normEmail(r.email);
@@ -2497,9 +2582,10 @@
                     ${creator ? `<div class="text-xs text-gray-400">${escapeHtml(creator)}</div>` : ''}
                 </td>`;
 
-                rows += `<tr>${leadCell}${signalCell}${emailCell}${phoneCell}<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td>${createdCell}</tr>`;
-            }
-            tbody.innerHTML = rows || `<tr><td colspan="7" class="px-4 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_dup_leads'))}</td></tr>`;
+                    rows += `<tr data-dup-group="${gIdx}" class="hidden bg-white">${leadCell}${signalCell}${emailCell}${phoneCell}<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td>${createdCell}</tr>`;
+                });
+            });
+            tbody.innerHTML = rows || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No duplicate leads detected on this page — every lead has a unique name, email, phone, and CRM ID.</td></tr>`;
         }
 
         function renderDealRows(groups) {
