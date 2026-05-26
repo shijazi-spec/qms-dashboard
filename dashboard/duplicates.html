@@ -111,12 +111,6 @@
                     </svg>
                     Export CSV
                 </button>
-                <button data-on-click="refreshData" data-testid="button-refresh" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
-                    Refresh
-                </button>
             </div>
         </div>
 
@@ -880,7 +874,6 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
-                <button data-on-click="loadAccountHints" id="accountHintsRefreshBtn" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border hover:bg-gray-50">Refresh</button>
             </div>
 
             <!-- Table -->
@@ -944,7 +937,6 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="loadCsLifecycle" data-args="[&quot;all&quot;]" id="csLifeRefreshBtn" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Refresh</button>
             </div>
 
             <!-- Table -->
@@ -1034,7 +1026,6 @@
             </div>
 
             <div class="flex items-center gap-2">
-                <button data-on-click="loadAutoCapaKpis" id="autoCapaKpiRefreshBtn" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Refresh</button>
                 <span id="autoCapaKpiGeneratedAt" class="text-xs text-gray-500"></span>
             </div>
         </div>
@@ -1186,17 +1177,11 @@
         }
 
         async function refreshData() {
-            // Visual feedback so users know the click registered. Without
-            // this the button looked dead because the function does its work
-            // silently and (previously) didn't even touch the currently-open
-            // tab — clicking it from CS Lifecycle appeared to do nothing.
-            const refreshBtn = document.querySelector('[data-testid="button-refresh"]');
-            let originalBtnHtml = null;
-            if (refreshBtn) {
-                originalBtnHtml = refreshBtn.innerHTML;
-                refreshBtn.disabled = true;
-                refreshBtn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refreshing…';
-            }
+            // Note: the visible Refresh button is the global one in the top
+            // header (rendered by navigation.js). It already handles its own
+            // spinner / disabled state and awaits this function — see
+            // WalaPlusNav.refreshDashboard. Keep this function focused on
+            // the data work; don't touch the button here.
             try {
                 await fetch('/api/duplicates/recalculate-stats', { method: 'POST' }).catch(() => {});
                 const [summaryRes, logsRes, ownerAccRes] = await Promise.all([
@@ -1231,14 +1216,6 @@
                 if (activeTab === 'account-hints')  loadAccountHints();
             } catch (error) {
                 console.error('Error refreshing data:', error);
-            } finally {
-                if (refreshBtn && originalBtnHtml !== null) {
-                    refreshBtn.innerHTML = '✓ Refreshed';
-                    setTimeout(() => {
-                        refreshBtn.innerHTML = originalBtnHtml;
-                        refreshBtn.disabled = false;
-                    }, 1200);
-                }
             }
             // Load sparkline outside the try so it still renders even if summary calls fail
             loadClustersTrendSparkline();
@@ -1249,6 +1226,12 @@
             // cards reflect current state on every refresh.
             loadCrossModule();
         }
+
+        // Register page-level refresh hook so the global Refresh button in
+        // the top header (navigation.js → WalaPlusNav.refreshDashboard) runs
+        // our smart refresh — summary + active tab — instead of a full page
+        // reload.
+        window.refreshDashboard = refreshData;
 
         // R6: pairing labels and per-pairing recommended action — kept in
         // one place so the badge / chip / table all stay consistent.

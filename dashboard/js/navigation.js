@@ -577,9 +577,45 @@ const WalaPlusNav = {
   },
 
   refreshDashboard() {
-    if (typeof window.refreshDashboard === 'function') {
-      window.refreshDashboard();
+    // Visual feedback so the user knows the click registered. Without
+    // this the button looked dead on pages whose custom refresh runs
+    // silently (e.g. /duplicates CS Lifecycle).
+    var btn = document.querySelector('[data-testid="button-refresh"]');
+    var originalHtml = null;
+    if (btn) {
+      originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      btn.innerHTML = '<svg class="w-4 h-4 animate-spin" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span>Refreshing…</span>';
     }
+    var restore = function () {
+      if (btn && originalHtml !== null) {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+      }
+    };
+    try {
+      if (typeof window.refreshDashboard === 'function') {
+        // Page-specific refresh hook. Support both sync and async
+        // implementations so we can restore the button when work
+        // actually finishes rather than immediately.
+        var result = window.refreshDashboard();
+        if (result && typeof result.then === 'function') {
+          result.finally(restore);
+        } else {
+          setTimeout(restore, 600);
+        }
+        return;
+      }
+    } catch (e) {
+      // Fall through to reload below so the user still gets fresh data.
+      try { console.error('refreshDashboard hook failed:', e); } catch (_) {}
+    }
+    // Fallback for pages that haven't registered a custom refresh hook:
+    // reload the page so the user always gets fresh data from the global
+    // header Refresh button, regardless of which dashboard they're on.
+    window.location.reload();
   },
 
   setLang(lang) {
