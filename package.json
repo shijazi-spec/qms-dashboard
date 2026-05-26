@@ -15,7 +15,7 @@
     "mcp-eval": "npx tsx tests/mcp-eval/runMcpEval.ts",
     "new-feature": "bash scripts/new-feature.sh",
     "ship": "bash scripts/ship-feature.sh",
-    "postinstall": "node scripts/patch-lazystream.mjs"
+    "postinstall": "node scripts/patch-lazystream.mjs && node scripts/patch-mastra-provider-types.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.65",
