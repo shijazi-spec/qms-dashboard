@@ -99,12 +99,6 @@
                     </svg>
                     Sync Now
                 </button>
-                <button data-on-click="scanZohoCRM" id="scanZohoBtn" data-testid="button-scan-zoho" title="Full re-scan: re-fetches every record from Zoho and rebuilds clusters (slower)" class="px-4 py-2 bg-orange-700 text-white rounded-lg hover:bg-orange-800 font-medium flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
-                    </svg>
-                    Scan from Zoho
-                </button>
                 <button data-on-click="exportData" data-pass-event="true" data-estimate-url="/api/duplicates/export" data-testid="button-export-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
@@ -5124,8 +5118,11 @@
                 const data = await res.json();
                 if (data.status === 'scanning') {
                     document.getElementById('scanProgressBar').classList.remove('hidden');
-                    document.getElementById('scanZohoBtn').disabled = true;
-                    document.getElementById('scanZohoBtn').textContent = WalaPlusI18n.t('dyn.duplicates.scanning');
+                    const scanBtn = document.getElementById('scanZohoBtn');
+                    if (scanBtn) {
+                        scanBtn.disabled = true;
+                        scanBtn.textContent = WalaPlusI18n.t('dyn.duplicates.scanning');
+                    }
                     startScanPolling();
                 }
             } catch {}
