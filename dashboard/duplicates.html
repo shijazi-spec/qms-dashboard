@@ -505,7 +505,15 @@
                 <select id="layoutFilter" aria-label="Filter by Zoho layout" data-on-change="loadClusters" data-testid="select-layout-filter" class="border rounded-lg px-3 py-2 min-w-[180px]" title="Filter by Zoho layout (Corporate Accounts, Standard, Marketplace, ...)">
                     <option value="">All Layouts</option>
                 </select>
+                <select id="qualityFilter" aria-label="Filter by data quality flag" data-on-change="applyQualityFilter" data-testid="select-quality-filter" class="border rounded-lg px-3 py-2" title="Filter by the colored badges shown on each cluster card (synthetic, placeholder, mixed). 'Clean' shows clusters with none of those flags.">
+                    <option value="">All quality flags</option>
+                    <option value="synthetic">🔧 Synthetic only</option>
+                    <option value="placeholder">❓ Placeholder only</option>
+                    <option value="mixed">⚠ Mixed only</option>
+                    <option value="clean">✓ Clean (no flags)</option>
+                </select>
                 <span id="layoutFilterHint" class="text-xs text-gray-400"></span>
+                <span id="qualityFilterHint" class="text-xs text-gray-400"></span>
                 <div class="flex-1"></div>
                 <label class="text-xs text-gray-500 uppercase tracking-wide">Sort by</label>
                 <select id="clusterSort" aria-label="Sort clusters" data-on-change="loadClusters" data-testid="select-cluster-sort" class="border rounded-lg px-3 py-2">
@@ -1887,8 +1895,41 @@
             return flags.length ? '<div class="flex flex-wrap gap-1 mb-2">' + flags.join('') + '</div>' : '';
         }
 
+        // Cache the most recent server page so the client-side quality
+        // filter can re-paint without re-fetching.
+        let _lastClustersPage = [];
+
+        // Classify a cluster against the three card-badge flags so the
+        // qualityFilter dropdown matches what users actually see on the
+        // card. Mirrors the logic in clusterCardFlags().
+        function clusterQualityKind(c) {
+            const isPlaceholder = c.domain === '_placeholder.cluster';
+            const isSynthetic = typeof c.domain === 'string' && c.domain.endsWith('.cluster') && !isPlaceholder;
+            const isMixed = Number(c.domain_count || 0) >= 2;
+            if (isPlaceholder) return 'placeholder';
+            if (isSynthetic) return 'synthetic';
+            if (isMixed) return 'mixed';
+            return 'clean';
+        }
+
+        function applyQualityFilter() {
+            renderClusters(_lastClustersPage);
+        }
+
         function renderClusters(clusters) {
-            document.getElementById('clustersGrid').innerHTML = clusters.map(c => `
+            _lastClustersPage = Array.isArray(clusters) ? clusters : [];
+            const qSel = document.getElementById('qualityFilter');
+            const quality = qSel ? qSel.value : '';
+            const filtered = quality
+                ? _lastClustersPage.filter(c => clusterQualityKind(c) === quality)
+                : _lastClustersPage;
+            const hint = document.getElementById('qualityFilterHint');
+            if (hint) {
+                hint.textContent = quality
+                    ? `${_fn(filtered.length)} of ${_fn(_lastClustersPage.length)} on this page match`
+                    : '';
+            }
+            document.getElementById('clustersGrid').innerHTML = filtered.map(c => `
                 <div class="bg-white rounded-lg shadow p-4 cluster-card cursor-pointer" data-on-click="showClusterDetails" data-args="[${c.id}]" data-testid="card-cluster-${c.id}">
                     ${clusterCardFlags(c)}
                     <div class="flex justify-between items-start mb-3">
