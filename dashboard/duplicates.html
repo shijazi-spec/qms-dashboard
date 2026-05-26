@@ -3987,13 +3987,43 @@
             });
             const body = document.getElementById('accountHintsTable');
             body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
-            try {
-                const res = await fetch('/api/duplicates/account-hints?status=' + encodeURIComponent(status));
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const data = await res.json();
-                renderAccountHints(data);
-            } catch (e) {
-                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-red-600">Failed to load: ' + escapeHtml(String(e.message || e)) + '</td></tr>';
+            // Track this load so a later filter switch / tab change cancels
+            // any in-flight auto-retry instead of stomping the new view.
+            const loadId = (window._accountHintsLoadId = (window._accountHintsLoadId || 0) + 1);
+            const MAX_RETRIES = 5;
+            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const res = await fetch('/api/duplicates/account-hints?status=' + encodeURIComponent(status));
+                    if (loadId !== window._accountHintsLoadId) return; // superseded
+                    if (res.status === 429 && attempt < MAX_RETRIES) {
+                        // Honor Retry-After (seconds) when present, else back off
+                        // 5s → 10s → 20s → 40s → 60s.
+                        const retryAfterHdr = parseInt(res.headers.get('Retry-After') || '', 10);
+                        const waitSec = Number.isFinite(retryAfterHdr) && retryAfterHdr > 0
+                            ? Math.min(retryAfterHdr, 60)
+                            : Math.min(5 * Math.pow(2, attempt), 60);
+                        body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-amber-700">'
+                            + 'Rate-limited by the server — retrying in ' + waitSec + 's… '
+                            + '<span class="text-xs text-gray-500">(attempt ' + (attempt + 1) + ' of ' + MAX_RETRIES + ')</span>'
+                            + '</td></tr>';
+                        await new Promise(r => setTimeout(r, waitSec * 1000));
+                        if (loadId !== window._accountHintsLoadId) return;
+                        continue;
+                    }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    if (loadId !== window._accountHintsLoadId) return;
+                    renderAccountHints(data);
+                    return;
+                } catch (e) {
+                    if (loadId !== window._accountHintsLoadId) return;
+                    const msg = String(e && e.message || e);
+                    const friendly = /HTTP 429/.test(msg)
+                        ? 'The server is still rate-limited. Wait a minute and try again.'
+                        : 'Failed to load: ' + escapeHtml(msg);
+                    body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-red-600">' + friendly + '</td></tr>';
+                    return;
+                }
             }
         }
 
