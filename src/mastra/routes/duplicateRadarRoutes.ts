@@ -189,11 +189,20 @@ async function processModule(
     records = await fetchAllZohoRecords(moduleName, {
       maxRecords: SCAN_MAX_PER_MODULE,
     });
-  } catch (e) {
+  } catch (e: any) {
     logger.error(`Error fetching ${moduleName}:`, e);
     scanState.moduleStatuses[moduleName] = "error";
     broadcastSSE("module", { module: moduleName, status: "error" });
     await upsertSyncState(moduleName, 0, "failed");
+    // If Zoho's OAuth endpoint is in its per-account "too many requests"
+    // cooldown, every module will fail for the same reason. Bubble the
+    // error so the outer scan catch can fail the whole run with a clear
+    // message instead of silently "completing" with 0 records / 0 clusters
+    // (which is what was making the dashboard tabs look empty while the
+    // header progress bar appeared to finish successfully).
+    if (e?.isZohoRateLimited || /too many requests/i.test(String(e?.message || ""))) {
+      throw e;
+    }
     return { count: 0 };
   }
 
@@ -634,6 +643,15 @@ async function scanZohoCRMForDuplicates(
     return resultData;
   } catch (error: any) {
     logger.error("❌ [DuplicateRadar] Scan error:", error);
+    // Surface Zoho rate-limit cooldowns with a user-actionable message
+    // instead of leaking the raw OAuth body or "An internal error occurred".
+    const rateLimited =
+      error?.isZohoRateLimited ||
+      /too many requests/i.test(String(error?.message || ""));
+    const userMessage = rateLimited
+      ? "Zoho is temporarily rate-limited (too many token refresh attempts in a short window). Wait a few minutes, then click Run scan again."
+      : error?.message || "An internal error occurred";
+
     const errorResult = {
       success: false,
       totalRecordsScanned: 0,
@@ -644,13 +662,15 @@ async function scanZohoCRMForDuplicates(
       moduleBreakdown: [],
       pipelineInflation: 0,
       durationMs: Date.now() - startTime,
-      error: "An internal error occurred",
+      error: userMessage,
     };
 
     scanState.status = "failed";
     scanState.completedAt = Date.now();
-    scanState.progress = "Scan failed";
-    scanState.error = error?.message || "An internal error occurred";
+    scanState.progress = rateLimited
+      ? "Scan failed — Zoho rate-limited"
+      : "Scan failed";
+    scanState.error = userMessage;
     scanState.result = errorResult;
 
     broadcastSSE("scan", { status: "failed", error: scanState.error });

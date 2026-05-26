@@ -87,7 +87,27 @@ async function refreshAccessToken(): Promise<string> {
   if (!response.ok) {
     const errorText = await response.text();
     logger.error('❌ [ZohoCRM] Token refresh failed', { httpStatus: response.status, errorText });
-    throw new Error(`Failed to refresh Zoho access token: ${response.status} - ${errorText}`);
+    // Zoho returns HTTP 400 with body {"error":"Access Denied","error_description":"You
+    // have made too many requests continuously..."} when the OAuth endpoint is in its
+    // per-account cooldown. The body is the only signal — the status code is the same
+    // generic 400 used for malformed requests. Tag the error so callers (the duplicate
+    // radar scan, the consultant tool, etc.) can surface a clear "Zoho is rate-limited,
+    // try again later" message instead of letting it look like a credential / code bug.
+    const isRateLimited = /too many requests|rate.?limit/i.test(errorText);
+    // Do NOT attach the raw Zoho body to the thrown error — the body is
+    // already logged above (subject to the redaction sweep), and re-attaching
+    // it as a property risks structured-log sinks re-serializing it through
+    // less-redacted paths. The normalized message + httpStatus is enough for
+    // callers to branch on, and the redacted log line is the source of truth.
+    const err: Error & { isZohoRateLimited?: boolean; httpStatus?: number } =
+      new Error(
+        isRateLimited
+          ? 'Zoho OAuth is temporarily rate-limited (too many token refresh attempts). Wait a few minutes and try again.'
+          : `Failed to refresh Zoho access token: ${response.status}`,
+      );
+    if (isRateLimited) err.isZohoRateLimited = true;
+    err.httpStatus = response.status;
+    throw err;
   }
   
   const data = await response.json();

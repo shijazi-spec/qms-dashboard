@@ -3721,13 +3721,47 @@
                 }
             };
 
-            const finishScan = (status) => {
+            const finishScan = (status, errorMessage) => {
                 closeScanProgressSse();
                 stopElapsedTicker();
                 scanRunning = false;
-                setTimeout(() => {
-                    document.getElementById('scanProgressBar').classList.add('hidden');
-                }, 3000);
+                if (status === 'failed') {
+                    // Pull the error message from /scan-status if the SSE event
+                    // didn't include one, then show it as a visible banner on
+                    // the progress bar so users don't have to guess why the
+                    // header just stopped spinning.
+                    const showFailure = (msg) => {
+                        const text = String(msg || 'Scan failed. Check server logs for details.');
+                        const bar = document.getElementById('scanProgressBar');
+                        const progressText = document.getElementById('scanProgressText');
+                        if (progressText) progressText.textContent = text;
+                        if (bar) {
+                            bar.classList.remove('hidden');
+                            bar.classList.remove('bg-blue-50', 'border-blue-200');
+                            bar.classList.add('bg-red-50', 'border-red-300');
+                        }
+                        const fill = document.getElementById('scanProgressFill');
+                        if (fill) {
+                            fill.style.width = '100%';
+                            fill.classList.remove('bg-blue-600');
+                            fill.classList.add('bg-red-500');
+                        }
+                        // Stay visible — failure is information, not noise.
+                        // Users dismiss it by triggering another scan.
+                    };
+                    if (errorMessage) {
+                        showFailure(errorMessage);
+                    } else {
+                        fetch('/api/duplicates/scan-status')
+                            .then(r => r.json())
+                            .then(d => showFailure(d?.error || d?.progress))
+                            .catch(() => showFailure(null));
+                    }
+                } else {
+                    setTimeout(() => {
+                        document.getElementById('scanProgressBar').classList.add('hidden');
+                    }, 3000);
+                }
                 const btn = document.getElementById('scanZohoBtn');
                 if (btn) {
                     btn.disabled = false;
@@ -3764,7 +3798,7 @@
                 try {
                     const d = JSON.parse(e.data);
                     if (d && (d.status === 'completed' || d.status === 'failed')) {
-                        finishScan(d.status);
+                        finishScan(d.status, d.error);
                     }
                 } catch {}
             });
@@ -3774,7 +3808,7 @@
                 // long enough that we suspect the server actually finished.
                 fetch('/api/duplicates/scan-status').then(r => r.json()).then(d => {
                     if (d && (d.status === 'completed' || d.status === 'failed')) {
-                        finishScan(d.status);
+                        finishScan(d.status, d.error);
                     }
                 }).catch(() => {});
             };
