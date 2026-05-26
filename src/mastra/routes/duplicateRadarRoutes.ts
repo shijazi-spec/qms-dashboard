@@ -1736,6 +1736,21 @@ export const duplicateRadarRoutes = [
           if (recordType) {
             filterParams.push(recordType);
             whereClause += ` AND dr.record_type = $${filterParams.length}`;
+            // Match the per-tab UI (getDuplicateRecordsByType): a record only
+            // appears under the Lead/Deal/Contact/Account tab when its cluster
+            // has more than one record of that same type. Without this guard
+            // the CSV pulled extra rows from cross-module clusters (e.g. a
+            // lead sharing a cluster with a contact but no other lead) and
+            // ended up larger than the table the user was looking at.
+            const countCol =
+              recordType === "lead"
+                ? "total_leads"
+                : recordType === "deal"
+                  ? "total_deals"
+                  : recordType === "contact"
+                    ? "total_contacts"
+                    : "total_accounts";
+            whereClause += ` AND dc.${countCol} > 1`;
           }
 
           // Use the module-level shared pool. The cursor stream releases
