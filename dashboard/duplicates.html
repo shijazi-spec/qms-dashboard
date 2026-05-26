@@ -2526,9 +2526,31 @@
 
         function __renderClusterDetailBody({ cluster, records, recommendations, primary_type, is_cross_module, record_types, mixed_signal, recMap, id }) {
 
+            // Per-record-type tally so users can see at a glance what's
+            // inside the "N records" total without scrolling through the
+            // record cards below. Same color scheme as the cluster cards
+            // on the Domain Clusters tab (leads=amber, deals=red,
+            // contacts=teal, accounts=indigo).
+            const _typeCounts = { lead: 0, deal: 0, contact: 0, account: 0 };
+            for (const r of records) {
+                const t = String(r.record_type || '').toLowerCase();
+                if (t in _typeCounts) _typeCounts[t]++;
+            }
+            const _typeChipMeta = [
+                { key: 'lead',    label: 'Leads',    cls: 'bg-amber-100 text-amber-800',   testid: 'badge-type-leads' },
+                { key: 'deal',    label: 'Deals',    cls: 'bg-red-100 text-red-800',       testid: 'badge-type-deals' },
+                { key: 'contact', label: 'Contacts', cls: 'bg-teal-100 text-teal-800',     testid: 'badge-type-contacts' },
+                { key: 'account', label: 'Accounts', cls: 'bg-indigo-100 text-indigo-800', testid: 'badge-type-accounts' },
+            ];
+            const _typeChips = _typeChipMeta
+                .filter(m => _typeCounts[m.key] > 0)
+                .map(m => `<span data-testid="${m.testid}" class="px-2.5 py-1 rounded-full text-xs font-medium ${m.cls}" title="${_fn(_typeCounts[m.key])} ${escapeHtml(m.label.toLowerCase())} in this cluster">${escapeHtml(m.label)}: ${_fn(_typeCounts[m.key])}</span>`)
+                .join('');
+
             let html = `<div class="mb-4 flex flex-wrap gap-2 items-center">
                 <span class="confidence-${['high','medium','low'].includes(cluster.confidence_level)?cluster.confidence_level:'low'} px-3 py-1 rounded-full text-sm font-medium">${WalaPlusI18n.t('dyn.duplicates.badge_match', { score: _fn(cluster.confidence_score) })}</span>
                 <span class="px-3 py-1 rounded-full text-sm bg-gray-100">${WalaPlusI18n.t('dyn.duplicates.badge_records', { n: _fn(records.length) })}</span>
+                ${_typeChips}
                 <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">${WalaPlusI18n.t('dyn.duplicates.badge_inflation', { value: formatCurrency(cluster.estimated_pipeline_value||0) })}</span>
                 ${primary_type ? `<span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800">${WalaPlusI18n.t('dyn.duplicates.badge_primary', { type: escapeHtml(primary_type) })}</span>` : ''}
                 ${is_cross_module ? `<span data-testid="badge-cross-module" class="px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-800 font-medium">Cross-module cluster (${(record_types||[]).map(t => escapeHtml(t)).join(' + ')})</span>` : ''}
