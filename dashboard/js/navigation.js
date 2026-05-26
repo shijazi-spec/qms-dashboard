@@ -474,6 +474,11 @@ const WalaPlusNav = {
       // Re-apply once the nav (and toggle button) are in the DOM so the icon
       // matches the stored preference.
       this.applyTheme(this.loadTheme());
+      // Universal click-to-sort on every <table> across the platform.
+      // Loaded once from here so individual dashboard pages don't need to
+      // include the script tag. The helper is idempotent and self-guards
+      // against double-init.
+      this._ensureTableSortLoaded();
     };
     if (window.WalaPlusI18n) {
       window.WalaPlusI18n.init().then(doInit);
@@ -574,6 +579,16 @@ const WalaPlusNav = {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
     } catch (_) {}
     window.location.href = '/api/logout';
+  },
+
+  _ensureTableSortLoaded() {
+    if (window.__walaplusTableSortInit) return;
+    if (document.querySelector('script[data-walaplus-table-sort]')) return;
+    var s = document.createElement('script');
+    s.src = '/js/table-sort.js?v=1';
+    s.async = true;
+    s.setAttribute('data-walaplus-table-sort', '1');
+    document.head.appendChild(s);
   },
 
   refreshDashboard() {
