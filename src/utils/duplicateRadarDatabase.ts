@@ -1676,8 +1676,18 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
     }
   }
 
-  // A cluster is a TRUE duplicate only when it has 2+ records of the same type.
-  // 1 account + N contacts/deals is a legitimate parent-child hierarchy, not a duplicate.
+  // A cluster has 2+ records of the same type → classic same-module duplicate
+  // (merge candidate). A cluster with multiple records but ≤1 per type is a
+  // cross-module overlap (e.g. 1 Lead + 1 Account for the same company) — Zoho
+  // does NOT support cross-module merges, so the action is CONVERT (lead →
+  // contact under the existing account) or LINK (set Account_Name on the
+  // deal/contact). Either way these are real cleanup work and must be surfaced
+  // on the Cross-Module tab with a real confidence score, not buried at 0.
+  // The Cross-Module Overlaps query (getCrossModuleOverlaps) already accepts
+  // any cluster spanning 2+ record types regardless of score, so the only
+  // thing the previous `confidenceScore = 0` did was sort these clusters to
+  // the bottom and tag them as "legitimate_hierarchy" (a misleading label —
+  // they need action, just not via merge).
   const leadCount = parseInt(stats.lead_count) || 0;
   const dealCount = parseInt(stats.deal_count) || 0;
   const contactCount = parseInt(stats.contact_count) || 0;
@@ -1688,16 +1698,21 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
     contactCount,
     accountCount,
   );
-  const isHierarchy = totalRecords > 1 && maxOfSameType <= 1;
+  const isCrossModuleOnly = totalRecords > 1 && maxOfSameType <= 1;
 
   let confidenceScore: number;
-  if (totalRecords <= 1 || isHierarchy) {
+  if (totalRecords <= 1) {
     confidenceScore = 0;
-    if (isHierarchy) allSignals.add("legitimate_hierarchy");
   } else if (bestScore > 0) {
     confidenceScore = bestScore;
   } else {
     confidenceScore = totalRecords > 3 ? 65 : 55;
+  }
+  if (isCrossModuleOnly) {
+    // Tag for the Cross-Module tab + the cluster-detail modal verdict logic.
+    // Keep the legacy signal too so any historic dashboard filter still works.
+    allSignals.add("cross_module_link_candidate");
+    allSignals.add("legitimate_hierarchy");
   }
 
   const inflationResult = await pool.query(
@@ -2192,17 +2207,20 @@ export async function findOrCreateClusterByCompany(
     );
     if (existingByCompany.rows[0]) {
       const candidate = existingByCompany.rows[0];
-      // Domain conflict guard — if this incoming record carries a corporate
-      // domain (explicit Company_Domain OR derived from its email) and the
-      // candidate cluster already holds records with a *different* corporate
-      // domain, do NOT fuse them. Two unrelated companies that share an
-      // identical normalized name (e.g. "industrial services") are a
-      // real-world scenario in this dataset.
-      if (
-        effectiveDomain &&
+      // Domain conflict guard — calibrated, not absolute. Two unrelated
+      // companies sharing a SHORT generic normalized name (e.g. "industrial
+      // services", "alkhalij", "saudi group") with different corporate
+      // domains are a real false-positive risk and must stay separate.
+      // But LONG name matches (≥10 chars normalized) on different corporate
+      // domains are far more likely to be a real duplicate where one record
+      // has a stale, secondary, or typo'd domain — fuse them and let the
+      // reviewer split via the UI if it's actually wrong.
+      const domainsConflict =
+        !!effectiveDomain &&
         isCorporateDomain(effectiveDomain) &&
-        (await clusterHasConflictingDomain(candidate.id, effectiveDomain))
-      ) {
+        (await clusterHasConflictingDomain(candidate.id, effectiveDomain));
+      const nameIsGeneric = normalizedName.length < 10;
+      if (domainsConflict && nameIsGeneric) {
         // fall through to fuzzy step / new-cluster creation below
       } else {
         return candidate;
@@ -2228,7 +2246,13 @@ export async function findOrCreateClusterByCompany(
       );
       for (const candidate of trgmResult.rows) {
         if (!(candidate.sim >= 0.6)) continue;
+        // Calibrated domain guard: skip the candidate only when both the
+        // name-similarity is borderline (< 0.85) AND the domains conflict.
+        // A very high trgm similarity (≥ 0.85) is strong enough evidence
+        // to override the domain mismatch — typically a stale / secondary
+        // / typo'd domain on one of the records.
         if (
+          candidate.sim < 0.85 &&
           effectiveDomain &&
           isCorporateDomain(effectiveDomain) &&
           (await clusterHasConflictingDomain(candidate.id, effectiveDomain))
@@ -2264,8 +2288,12 @@ export async function findOrCreateClusterByCompany(
             normalizedName,
           );
           if (similarity >= 85) {
-            // Same domain conflict guard for the Levenshtein fallback path.
+            // Calibrated domain guard for the Levenshtein fallback path —
+            // matches the trgm path: only skip when name similarity is in
+            // the 85–94 borderline band AND domains conflict. ≥95
+            // overrides the domain mismatch.
             if (
+              similarity < 95 &&
               effectiveDomain &&
               isCorporateDomain(effectiveDomain) &&
               (await clusterHasConflictingDomain(cluster.id, effectiveDomain))
