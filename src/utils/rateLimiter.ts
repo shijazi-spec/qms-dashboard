@@ -90,7 +90,22 @@ function getCategory(path?: string): string {
   if (path) {
     if (AUTH_PATHS.some((p) => path.startsWith(p) || path.includes(p)))
       return "auth";
-    if (EXPORT_PATHS.some((p) => path.includes(p))) return "export";
+    if (EXPORT_PATHS.some((p) => path.includes(p))) {
+      // Sibling `/estimate` endpoints (e.g. `/api/duplicates/export/estimate`)
+      // are cheap COUNT(*) preflights used by streaming-download.js to show
+      // an "≈ X MB" size hint on export buttons. Every Export click sends
+      // BOTH the estimate and the actual download, so counting estimates
+      // against EXPORT_LIMIT (10/min) cuts the user's effective click
+      // budget in half — and with per-tab Export CSV buttons on the
+      // duplicates dashboard that produces unexpected 429s after only a
+      // handful of clicks. Treat estimate preflights as ordinary reads
+      // (READ_LIMIT=100/min); the real export download is still
+      // export-limited, which is what protects the heavy streaming path.
+      if (path.endsWith("/estimate") || path.includes("/estimate?")) {
+        return "general";
+      }
+      return "export";
+    }
   }
   return "general";
 }
