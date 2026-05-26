@@ -723,8 +723,9 @@
                     <tbody id="crossModuleTable" class="bg-white divide-y divide-gray-200"></tbody>
                 </table>
             </div>
-            <div class="flex justify-end mt-3">
+            <div class="flex justify-end mt-3 gap-2">
                 <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
             </div>
 
             <!-- Follow-up 3: result modal for bulk-close-leads runs. -->
