@@ -547,6 +547,7 @@
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this lead was flagged. OR rule — any one of these is enough to mark it as a duplicate: 👤 same name · 📧 same email · 📞 same phone · 🆔 same Zoho CRM ID">Dup signal</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Zoho layout this lead belongs to (Standard, Corporate Accounts, Marketplace, ...)">Layout</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created</th>
@@ -2518,7 +2519,7 @@
                     : '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Members of this group are linked through chained matches (e.g. A shares email with B, B shares phone with C)">🔗 chained match</span>';
 
                 rows += `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleLeadDupGroup" data-args="[${gIdx}]" data-testid="row-lead-dup-group-${gIdx}">
-                    <td class="px-4 py-3 text-sm" colspan="7">
+                    <td class="px-4 py-3 text-sm" colspan="8">
                         <div class="flex items-center gap-2 flex-wrap">
                             <span id="lead-dup-chev-${gIdx}" class="text-gray-600 font-mono" aria-hidden="true">▶</span>
                             <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
@@ -2582,10 +2583,12 @@
                     ${creator ? `<div class="text-xs text-gray-400">${escapeHtml(creator)}</div>` : ''}
                 </td>`;
 
-                    rows += `<tr data-dup-group="${gIdx}" class="hidden bg-white">${leadCell}${signalCell}${emailCell}${phoneCell}<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td>${createdCell}</tr>`;
+                    const layoutName = (raw.Layout && (raw.Layout.name || raw.Layout.display_label)) || r.layout || '-';
+                    const layoutCell = `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho layout">${escapeHtml(layoutName || '-')}</td>`;
+                    rows += `<tr data-dup-group="${gIdx}" class="hidden bg-white">${leadCell}${signalCell}${emailCell}${phoneCell}${layoutCell}<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td>${createdCell}</tr>`;
                 });
             });
-            tbody.innerHTML = rows || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No duplicate leads detected on this page — every lead has a unique name, email, phone, and CRM ID.</td></tr>`;
+            tbody.innerHTML = rows || `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No duplicate leads detected on this page — every lead has a unique name, email, phone, and CRM ID.</td></tr>`;
         }
 
         function renderDealRows(groups) {
