@@ -245,6 +245,9 @@
 
         <!-- ═══ EXECUTIVE SUMMARY TAB (D4 enhanced) ═══ -->
         <div id="content-summary" class="tab-content">
+            <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4 text-sm text-indigo-900">
+                <strong>Executive summary.</strong> Cross-module headline counts for every duplicate the radar is tracking right now — total clusters, records inside those clusters, ARR exposure, and a creation-rate trend so leadership can see whether duplicate hygiene is improving week over week. Use this tab for status reporting; drill into the per-module tabs (Leads, Deals, Contacts, Accounts) to act on individual clusters.
+            </div>
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
                 <div class="bg-white rounded-lg shadow p-3 border-s-4 border-blue-600">
                     <div class="text-xs text-gray-500" data-i18n="duplicates.true_duplicates">True Duplicates</div>
@@ -426,6 +429,9 @@
 
         <!-- ═══ SEARCH TAB ═══ -->
         <div id="content-search" class="tab-content hidden">
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 text-sm text-slate-900">
+                <strong>Cross-CRM search.</strong> Type a name, email, phone number, or domain to find every matching Lead, Deal, Contact, and Account across Zoho in one query. Use this before manually creating a new record to confirm a duplicate doesn't already exist, or to quickly locate the merged survivor after a cluster is resolved.
+            </div>
             <div class="bg-white rounded-lg shadow p-6 mb-6">
                 <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
                     <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -480,6 +486,9 @@
 
         <!-- ═══ CLUSTERS TAB (C4: paginated 30/page) ═══ -->
         <div id="content-clusters" class="tab-content hidden">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-900">
+                <strong>Domain clusters.</strong> Groups of records that share the same company domain (e.g. <code>acme.com</code>) across one or more Zoho modules. Each cluster is a candidate merge: open one to see the underlying Leads / Deals / Contacts / Accounts, decide which record should survive, and take action in Zoho. Filter by module or cluster type to focus on a specific cleanup batch.
+            </div>
             <div class="mb-4 flex gap-4 items-center">
                 <select id="clusterFilter" aria-label="Filter by cluster type" data-on-change="loadClusters" data-testid="select-cluster-filter" class="border rounded-lg px-3 py-2">
                     <option value="">All Similarity</option>
@@ -516,6 +525,9 @@
 
         <!-- ═══ LEADS TAB ═══ -->
         <div id="content-leads" class="tab-content hidden">
+            <div class="bg-cyan-50 border border-cyan-200 rounded-lg p-3 mb-3 text-sm text-cyan-900">
+                <strong>Lead duplicates.</strong> Leads in Zoho that share an email, phone, or company domain with another lead — the highest-volume source of duplicate creation. Resolving these prevents two reps from working the same prospect and stops the same company from appearing twice in pipeline reports.
+            </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -540,6 +552,9 @@
 
         <!-- ═══ DEALS TAB ═══ -->
         <div id="content-deals" class="tab-content hidden">
+            <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3 text-sm text-emerald-900">
+                <strong>Deal duplicates.</strong> Deals on the same Account (or same company domain) that look like they describe the same opportunity. Critical to clean up before quarter-end because each duplicate deal inflates pipeline value and skews forecast accuracy.
+            </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -564,6 +579,9 @@
 
         <!-- ═══ CONTACTS TAB ═══ -->
         <div id="content-contacts" class="tab-content hidden">
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 text-sm text-purple-900">
+                <strong>Contact duplicates.</strong> Contact records that share an email address, phone, or full name within the same Account. Merging these keeps activity history (calls, emails, meetings) attached to a single person instead of scattered across copies, and prevents duplicate outreach.
+            </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -588,6 +606,9 @@
 
         <!-- ═══ ACCOUNTS TAB ═══ -->
         <div id="content-accounts" class="tab-content hidden">
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 text-sm text-amber-900">
+                <strong>Account duplicates.</strong> Account records that appear to describe the same company — same domain, same legal name, or close fuzzy-name match. Resolving these is the foundation of clean reporting: once Accounts are unique, related Contacts and Deals roll up correctly under one customer.
+            </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -712,6 +733,9 @@
 
         <!-- ═══ CS PIPELINE OVERLAP TAB ═══ -->
         <div id="content-cs-overlap" class="tab-content hidden">
+            <div class="bg-rose-50 border border-rose-200 rounded-lg p-3 mb-4 text-sm text-rose-900">
+                <strong>CS pipeline overlap.</strong> Companies where the Customer Success team is already managing an active account but Sales still has open Leads / Deals for the same domain — i.e. someone is selling to an existing customer. Verdicts: <code>BLOCK</code> stops the sales motion (likely cannibalisation), <code>REVIEW</code> needs a CS-Sales conversation, <code>WARN</code> is informational. ARR exposure quantifies the revenue at risk.
+            </div>
             <!-- Summary widget -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 <div class="bg-white rounded-lg shadow p-4">
@@ -1032,6 +1056,9 @@
 
         <!-- ═══ OWNERS TAB (C3: RAG status) ═══ -->
         <div id="content-owners" class="tab-content hidden">
+            <div class="bg-teal-50 border border-teal-200 rounded-lg p-3 mb-3 text-sm text-teal-900">
+                <strong>Owner accountability.</strong> Per-owner RAG scorecard showing how much duplicate debt each rep is carrying — open clusters they own, days since the oldest one was created, and whether the trend is improving. Use this for coaching conversations and to set fair cleanup targets; it's the input to the monthly CRM-hygiene KPI.
+            </div>
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -1054,6 +1081,9 @@
 
         <!-- ═══ EXPORT TAB ═══ -->
         <div id="content-export" class="tab-content hidden">
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3 text-sm text-gray-800">
+                <strong>Export center.</strong> Download the current radar state as CSV or XLSX for offline analysis, audit evidence, or bulk-merge planning in a spreadsheet. Exports respect the currently-applied filters and include cluster IDs so you can map a row back to the in-app view.
+            </div>
             <div class="bg-white rounded-lg shadow p-6">
                 <h3 class="text-lg font-semibold mb-4">Export Duplicate Data</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1067,6 +1097,9 @@
 
         <!-- ═══ LOGS TAB ═══ -->
         <div id="content-logs" class="tab-content hidden">
+            <div class="bg-stone-50 border border-stone-200 rounded-lg p-3 mb-3 text-sm text-stone-800">
+                <strong>Activity logs.</strong> Audit trail of every action the radar has taken — scans run, clusters detected, merges marked resolved, sync jobs executed — with timestamps and actor. Use this to investigate "why did this duplicate appear?" questions and to satisfy SDR-KPI-09 (Duplicate Rate ≤ 2%) evidence requests.
+            </div>
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
