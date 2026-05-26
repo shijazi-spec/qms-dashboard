@@ -723,6 +723,9 @@
                     <tbody id="crossModuleTable" class="bg-white divide-y divide-gray-200"></tbody>
                 </table>
             </div>
+            <div class="flex justify-end mt-3">
+                <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
+            </div>
 
             <!-- Follow-up 3: result modal for bulk-close-leads runs. -->
             <div id="cmoBulkResultModal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center" data-style="z-index:60" data-testid="modal-cmo-bulk-result">
@@ -781,6 +784,7 @@
                     <button data-on-click="filterCsOverlap" data-args="[&quot;warn&quot;]" id="csOverlapChip-warn" data-testid="cs-overlap-chip-warn" class="px-3 py-1.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200">Warn</button>
                 </div>
                 <div class="flex-1"></div>
+                <button data-on-click="refreshCsOverlapFromZoho" id="csOverlapZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this CS Overlap view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="rescanCsOverlap" id="csOverlapScanBtn" data-testid="button-cs-overlap-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">
                     Run scan
                 </button>
@@ -909,6 +913,7 @@
                     <button data-on-click="filterAccountHints" data-args="[&quot;dismissed&quot;]" id="accountHintsChip-dismissed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">Dismissed</button>
                 </div>
                 <div class="flex-1"></div>
+                <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
             </div>
 
@@ -1070,6 +1075,9 @@
         <div id="content-owners" class="tab-content hidden">
             <div class="bg-teal-50 border border-teal-200 rounded-lg p-3 mb-3 text-sm text-teal-900">
                 <strong>Owner accountability.</strong> Per-owner RAG scorecard showing how much duplicate debt each rep is carrying — open clusters they own, days since the oldest one was created, and whether the trend is improving. Use this for coaching conversations and to set fair cleanup targets; it's the input to the monthly CRM-hygiene KPI.
+            </div>
+            <div class="flex justify-end mb-3">
+                <button data-on-click="refreshOwnersFromZoho" id="ownersZohoRefreshBtn" title="Reload the per-owner scorecard from the most recent CRM sync. For a full live re-pull of every record from Zoho, use the top-header Sync Now button." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🔄 Refresh from Zoho (live)</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -1913,6 +1921,276 @@
 
         // C4: Paginated record tabs (50/page)
         let recordPages = { leads: 0, deals: 0, contacts: 0, accounts: 0 };
+        // Generic "Refresh from Zoho (live)" engine — scrapes the visible
+        // Zoho ids out of a tbody (via the data-testid="link-zoho-<id>"
+        // anchors emitted by zohoLink()), infers each row's Zoho module
+        // from the anchor's href (/tab/Leads/... etc), groups ids by
+        // module, and posts each group to /api/duplicates/refresh-records.
+        // This lets tabs that mix record types (Cross-Module, CS Overlap,
+        // Account Hints) all use the same one-click live-sync UX as the
+        // per-module Leads/Deals/Contacts/Accounts tabs.
+        //
+        // opts = { reload?: () => Promise|void, silent?: bool }
+        //   reload — invoked after a successful refresh to repaint the
+        //            tab from its own data source. If omitted, the tab is
+        //            left as-is and only the refreshed values land in
+        //            the underlying duplicate_records table.
+        //   silent — suppress alert popups (for chained callers).
+        async function refreshTbodyFromZoho(tbodyId, btnId, opts) {
+            const silent = !!(opts && opts.silent);
+            const reload = opts && opts.reload;
+            const tbody = document.getElementById(tbodyId);
+            const btn = btnId ? document.getElementById(btnId) : null;
+            if (!tbody) return { refreshed: 0, skipped: true };
+
+            // Collect (module, id) pairs from every Zoho-link anchor in
+            // the table body. The module name is read from the href so
+            // mixed-module tabs (Cross-Module, CS Overlap, Account Hints)
+            // are dispatched correctly without needing tab-specific code.
+            const MODULE_FROM_TAB = {
+                Leads: 'leads',
+                Deals: 'deals',
+                Contacts: 'contacts',
+                Accounts: 'accounts',
+            };
+            const byModule = { leads: new Set(), deals: new Set(), contacts: new Set(), accounts: new Set() };
+            const anchors = tbody.querySelectorAll('a[data-testid^="link-zoho-"]');
+            for (const a of anchors) {
+                const id = (a.getAttribute('data-testid') || '').replace(/^link-zoho-/, '');
+                if (!id || id.startsWith('test_') || id.startsWith('LEAD_') || id.startsWith('DEAL_')) continue;
+                const href = a.getAttribute('href') || '';
+                const m = href.match(/\/tab\/(Leads|Deals|Contacts|Accounts)\//);
+                if (!m) continue;
+                const moduleKey = MODULE_FROM_TAB[m[1]];
+                if (!moduleKey) continue;
+                byModule[moduleKey].add(id);
+            }
+            const totalIds = Object.values(byModule).reduce((n, s) => n + s.size, 0);
+            if (totalIds === 0) {
+                if (!silent) alert('No Zoho records on this view to refresh.');
+                return { refreshed: 0, skipped: true };
+            }
+
+            const orig = btn ? btn.innerHTML : null;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = 'Refreshing ' + totalIds + ' record' + (totalIds === 1 ? '' : 's') + '…';
+            }
+            try {
+                const CHUNK = 50;
+                let totalRefreshed = 0, totalFailed = 0, totalMissing = 0;
+                for (const [moduleKey, set] of Object.entries(byModule)) {
+                    const ids = Array.from(set);
+                    if (ids.length === 0) continue;
+                    for (let i = 0; i < ids.length; i += CHUNK) {
+                        const slice = ids.slice(i, i + CHUNK);
+                        const res = await fetch('/api/duplicates/refresh-records', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ module: moduleKey, zohoIds: slice }),
+                        });
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            throw new Error(err.error || ('HTTP ' + res.status));
+                        }
+                        const json = await res.json();
+                        totalRefreshed += json.refreshed_count || 0;
+                        totalFailed += json.failed_count || 0;
+                        totalMissing += json.missing_count || 0;
+                    }
+                }
+                const notes = [];
+                if (totalFailed) notes.push(totalFailed + ' failed');
+                if (totalMissing) notes.push(totalMissing + ' not found in Zoho');
+                if (btn) {
+                    btn.innerHTML = '✓ Refreshed ' + totalRefreshed + (notes.length ? ' (' + notes.join(', ') + ')' : '');
+                }
+                if (typeof reload === 'function') {
+                    try { await reload(); } catch (_) {}
+                }
+                if (btn) setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                return { refreshed: totalRefreshed, failed: totalFailed, missing: totalMissing };
+            } catch (e) {
+                if (btn) {
+                    btn.innerHTML = '✗ Failed';
+                    setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                }
+                if (!silent) {
+                    alert('Refresh from Zoho failed: ' + (e.message || e));
+                } else {
+                    try { console.error('Refresh from Zoho failed:', e); } catch (_) {}
+                }
+                return { refreshed: 0, error: String(e && e.message || e) };
+            }
+        }
+
+        // Cluster-aware live refresh — used by Cross-Module and CS Overlap
+        // tabs where each visible row represents a cluster (not a single
+        // Zoho record) and links to showClusterDetails(clusterId). For
+        // each visible cluster we fetch its constituent records via the
+        // existing /api/duplicates/clusters/:id endpoint, group those
+        // records' Zoho ids by module, and reuse the same per-module
+        // refresh-records endpoint as every other tab.
+        async function refreshClustersFromZoho(tbodyId, btnId, opts) {
+            const silent = !!(opts && opts.silent);
+            const reload = opts && opts.reload;
+            const tbody = document.getElementById(tbodyId);
+            const btn = btnId ? document.getElementById(btnId) : null;
+            if (!tbody) return { refreshed: 0, skipped: true };
+
+            // Scrape unique cluster IDs from data-args of any row element
+            // that opens the cluster detail modal.
+            const clusterIds = new Set();
+            const triggers = tbody.querySelectorAll('[data-on-click="showClusterDetails"][data-args]');
+            for (const el of triggers) {
+                try {
+                    const args = JSON.parse(el.getAttribute('data-args') || '[]');
+                    const id = Number(args[0]);
+                    if (Number.isFinite(id) && id > 0) clusterIds.add(id);
+                } catch (_) { /* ignore malformed data-args */ }
+            }
+            if (clusterIds.size === 0) {
+                if (!silent) alert('No clusters on this view to refresh.');
+                return { refreshed: 0, skipped: true };
+            }
+
+            const orig = btn ? btn.innerHTML : null;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = 'Resolving ' + clusterIds.size + ' cluster' + (clusterIds.size === 1 ? '' : 's') + '…';
+            }
+
+            const RECORD_TYPE_TO_MODULE = { lead: 'leads', deal: 'deals', contact: 'contacts', account: 'accounts' };
+            const byModule = { leads: new Set(), deals: new Set(), contacts: new Set(), accounts: new Set() };
+
+            try {
+                // Fetch cluster contents with bounded parallelism so we
+                // don't fan out hundreds of requests at once.
+                const ids = Array.from(clusterIds);
+                const POOL = 6;
+                let idx = 0;
+                async function worker() {
+                    while (idx < ids.length) {
+                        const cid = ids[idx++];
+                        try {
+                            const r = await fetch('/api/duplicates/clusters/' + cid);
+                            if (!r.ok) continue;
+                            const j = await r.json();
+                            for (const rec of (j.records || [])) {
+                                const mod = RECORD_TYPE_TO_MODULE[String(rec.record_type || '').toLowerCase()];
+                                const zid = rec.zoho_record_id;
+                                if (!mod || !zid || typeof zid !== 'string') continue;
+                                if (zid.startsWith('test_') || zid.startsWith('LEAD_') || zid.startsWith('DEAL_')) continue;
+                                byModule[mod].add(zid);
+                            }
+                        } catch (_) { /* skip individual cluster failures */ }
+                    }
+                }
+                await Promise.all(Array.from({ length: Math.min(POOL, ids.length) }, worker));
+
+                const totalIds = Object.values(byModule).reduce((n, s) => n + s.size, 0);
+                if (totalIds === 0) {
+                    if (btn) {
+                        btn.innerHTML = 'No Zoho records resolved';
+                        setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                    }
+                    return { refreshed: 0, skipped: true };
+                }
+
+                if (btn) btn.innerHTML = 'Refreshing ' + totalIds + ' record' + (totalIds === 1 ? '' : 's') + '…';
+                const CHUNK = 50;
+                let totalRefreshed = 0, totalFailed = 0, totalMissing = 0;
+                for (const [moduleKey, set] of Object.entries(byModule)) {
+                    const arr = Array.from(set);
+                    for (let i = 0; i < arr.length; i += CHUNK) {
+                        const slice = arr.slice(i, i + CHUNK);
+                        const res = await fetch('/api/duplicates/refresh-records', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ module: moduleKey, zohoIds: slice }),
+                        });
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            throw new Error(err.error || ('HTTP ' + res.status));
+                        }
+                        const json = await res.json();
+                        totalRefreshed += json.refreshed_count || 0;
+                        totalFailed += json.failed_count || 0;
+                        totalMissing += json.missing_count || 0;
+                    }
+                }
+                const notes = [];
+                if (totalFailed) notes.push(totalFailed + ' failed');
+                if (totalMissing) notes.push(totalMissing + ' not found in Zoho');
+                if (btn) btn.innerHTML = '✓ Refreshed ' + totalRefreshed + (notes.length ? ' (' + notes.join(', ') + ')' : '');
+                if (typeof reload === 'function') { try { await reload(); } catch (_) {} }
+                if (btn) setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                return { refreshed: totalRefreshed, failed: totalFailed, missing: totalMissing };
+            } catch (e) {
+                if (btn) {
+                    btn.innerHTML = '✗ Failed';
+                    setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                }
+                if (!silent) alert('Refresh from Zoho failed: ' + (e.message || e));
+                return { refreshed: 0, error: String(e && e.message || e) };
+            }
+        }
+
+        // Tab-specific wrappers that point the generic engines at the
+        // right tbody / button / reload function for each tab.
+        async function refreshCrossModuleFromZoho(opts) {
+            // Each Cross-Module row is a cluster (no per-record Zoho
+            // anchors), so resolve cluster IDs to constituent records.
+            return refreshClustersFromZoho('crossModuleTable', 'crossModuleZohoRefreshBtn', {
+                reload: () => loadCrossModule(),
+                silent: !!(opts && opts.silent),
+            });
+        }
+        async function refreshCsOverlapFromZoho(opts) {
+            // Each CS Overlap row is also a cluster — same resolution path.
+            return refreshClustersFromZoho('csOverlapTable', 'csOverlapZohoRefreshBtn', {
+                reload: () => loadCsOverlap(window._csOverlapFilter || 'all'),
+                silent: !!(opts && opts.silent),
+            });
+        }
+        async function refreshAccountHintsFromZoho(opts) {
+            // Account Hints rows render Deal/Account/Contact Zoho links
+            // directly, so the anchor-scrape engine works as-is.
+            return refreshTbodyFromZoho('accountHintsTable', 'accountHintsZohoRefreshBtn', {
+                reload: () => loadAccountHints(),
+                silent: !!(opts && opts.silent),
+            });
+        }
+        // Owner Accountability has no per-record Zoho ids in its table
+        // (it's an aggregate per-owner scorecard computed from the locally
+        // synced duplicate_records). The button reloads the aggregate so
+        // owners see whatever the most-recent global sync produced; for a
+        // true live re-pull of every record the user should click the
+        // top-header "Sync Now" button which scans the whole CRM.
+        async function refreshOwnersFromZoho() {
+            const btn = document.getElementById('ownersZohoRefreshBtn');
+            const orig = btn ? btn.innerHTML : null;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = 'Refreshing…';
+            }
+            try {
+                if (typeof loadOwners === 'function') {
+                    await loadOwners();
+                }
+                if (btn) {
+                    btn.innerHTML = '✓ Refreshed';
+                    setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                }
+            } catch (e) {
+                if (btn) {
+                    btn.innerHTML = '✗ Failed';
+                    setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+                }
+                alert('Refresh failed: ' + (e.message || e));
+            }
+        }
+
         // Per-module live refresh from Zoho. Same UX as the green
         // "Refresh from Zoho (live)" button on the CS Lifecycle tab, but
         // generic so every per-module tab (Leads / Deals / Contacts /
