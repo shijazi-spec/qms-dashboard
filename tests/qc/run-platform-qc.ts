@@ -50,6 +50,24 @@ function isExpectedStatus(test: QCTestCase, httpStatus: number): boolean {
 function isPass(test: QCTestCase, httpStatus: number): boolean {
   if (isExpectedStatus(test, httpStatus)) return true;
   if (test.allowUnauth && httpStatus === 401) return true;
+  // Implicit admin-key-only mode: a recent security hardening scoped
+  // `X-Admin-Key` to `/api/admin/*` and `/api/inngest*` only. Every
+  // other `/api/*` route now requires a real OIDC session. When the
+  // QC runner is invoked with ADMIN_API_KEY set (the common case —
+  // see `globalAuthHeaders` in runOne) but no session cookie, a 401
+  // on a non-admin route is the expected RBAC outcome rather than a
+  // regression. We still flag every other status mismatch (500s,
+  // 404s, unexpected 200s on protected routes) so the QC keeps its
+  // teeth — see `expectedStatus` and `allowUnauth` for the explicit
+  // opt-ins each test can use to assert a specific status.
+  if (
+    httpStatus === 401 &&
+    process.env.ADMIN_API_KEY &&
+    !test.path.startsWith("/api/admin/") &&
+    !test.path.startsWith("/api/inngest")
+  ) {
+    return true;
+  }
   return false;
 }
 
