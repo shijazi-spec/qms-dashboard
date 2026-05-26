@@ -1,5 +1,6 @@
 {pkgs}: {
     deps = [
+      pkgs.with-shell
       pkgs.xorg.libxkbfile
       pkgs.xorg.libxshmfence
       pkgs.xorg.libXtst
