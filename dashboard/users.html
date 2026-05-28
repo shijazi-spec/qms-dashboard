@@ -556,13 +556,13 @@
                     <div class="p-4 hover:bg-gray-50">
                         <div class="flex justify-between items-start">
                             <div>
-                                <h4 class="font-medium">${u.full_name}</h4>
-                                <p class="text-sm text-gray-500">${u.email}</p>
+                                <h4 class="font-medium">${escAttr(u.full_name)}</h4>
+                                <p class="text-sm text-gray-500">${escAttr(u.email)}</p>
                                 <div class="flex gap-2 mt-2">
-                                    <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${u.role}</span>
-                                    <span class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">${u.team}</span>
+                                    <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${escAttr(u.role)}</span>
+                                    <span class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">${escAttr(u.team)}</span>
                                 </div>
-                                ${u.access_reason ? `<p class="text-sm text-gray-600 mt-2"><strong>Reason:</strong> ${u.access_reason}</p>` : ''}
+                                ${u.access_reason ? `<p class="text-sm text-gray-600 mt-2"><strong>Reason:</strong> ${escAttr(u.access_reason)}</p>` : ''}
                                 <p class="text-xs text-gray-400 mt-2">Requested: ${new Date(u.created_at).toLocaleString()}</p>
                             </div>
                             <div class="flex gap-2">
@@ -591,15 +591,15 @@
 
                 container.innerHTML = data.users.map(u => `
                     <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3">${u.full_name}</td>
-                        <td class="px-4 py-3 text-sm text-gray-600">${u.email}</td>
-                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${u.role}</span></td>
-                        <td class="px-4 py-3 text-sm">${u.team}</td>
+                        <td class="px-4 py-3">${escAttr(u.full_name)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${escAttr(u.email)}</td>
+                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${escAttr(u.role)}</span></td>
+                        <td class="px-4 py-3 text-sm">${escAttr(u.team)}</td>
                         <td class="px-4 py-3 text-sm text-gray-500">${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
                         <td class="px-4 py-3">
                             <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm me-2">Edit</button>
                             <button data-on-click="disableUser" data-args="[${u.id}]" class="text-amber-600 hover:text-amber-800 text-sm me-2">Disable</button>
-                            <button data-on-click="deleteUserConfirm" data-args='[${u.id}, ${JSON.stringify(u.email)}]' class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                            <button data-on-click="deleteUserConfirm" data-args="[${u.id}, &quot;${escAttr(u.email)}&quot;]" class="text-red-600 hover:text-red-800 text-sm">Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -621,16 +621,16 @@
 
                 container.innerHTML = data.users.map(u => `
                     <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3">${u.full_name}</td>
-                        <td class="px-4 py-3 text-sm text-gray-600">${u.email}</td>
-                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${u.role}</span></td>
-                        <td class="px-4 py-3 text-sm">${u.team}</td>
-                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded status-${u.status}">${u.status.replace('_', ' ')}</span></td>
+                        <td class="px-4 py-3">${escAttr(u.full_name)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${escAttr(u.email)}</td>
+                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${escAttr(u.role)}</span></td>
+                        <td class="px-4 py-3 text-sm">${escAttr(u.team)}</td>
+                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded status-${escAttr(u.status)}">${escAttr(u.status.replace('_', ' '))}</span></td>
                         <td class="px-4 py-3">
                             <button data-on-click="viewUserDetail" data-args="[${u.id}]" class="text-blue-600 hover:text-blue-800 text-sm me-2">View</button>
                             ${u.status === 'disabled' ? `<button data-on-click="enableUser" data-args="[${u.id}]" class="text-green-600 hover:text-green-800 text-sm me-2">Enable</button>` : ''}
                             ${u.status === 'active' ? `<button data-on-click="disableUser" data-args="[${u.id}]" class="text-amber-600 hover:text-amber-800 text-sm me-2">Disable</button>` : ''}
-                            <button data-on-click="deleteUserConfirm" data-args='[${u.id}, ${JSON.stringify(u.email)}]' class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                            <button data-on-click="deleteUserConfirm" data-args="[${u.id}, &quot;${escAttr(u.email)}&quot;]" class="text-red-600 hover:text-red-800 text-sm">Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -656,10 +656,10 @@
                     const statusClass = inv.used ? 'bg-green-100 text-green-700' : (expired ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700');
                     return `
                         <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3">${inv.email}</td>
-                            <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${inv.role}</span></td>
-                            <td class="px-4 py-3 text-sm">${inv.team}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600">${inv.invited_by}</td>
+                            <td class="px-4 py-3">${escAttr(inv.email)}</td>
+                            <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${escAttr(inv.role)}</span></td>
+                            <td class="px-4 py-3 text-sm">${escAttr(inv.team)}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">${escAttr(inv.invited_by)}</td>
                             <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded ${statusClass}">${status}</span></td>
                             <td class="px-4 py-3 text-sm text-gray-500">${new Date(inv.token_expires_at).toLocaleDateString()}</td>
                         </tr>
@@ -694,7 +694,7 @@
 
                 container.innerHTML = Object.entries(data.roles).filter(([k]) => k !== 'custom').map(([role, perms]) => `
                     <div class="border rounded-lg p-4">
-                        <h4 class="font-medium mb-3">${roleNames[role] || role}</h4>
+                        <h4 class="font-medium mb-3">${escAttr(roleNames[role] || role)}</h4>
                         <div class="flex flex-wrap gap-2">
                             ${perms.can_view ? '<span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">View</span>' : ''}
                             ${perms.can_create ? '<span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Create</span>' : ''}
@@ -730,10 +730,10 @@
 
                 container.innerHTML = data.logs.map(log => `
                     <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-gray-100 rounded">${log.event_type}</span></td>
-                        <td class="px-4 py-3 text-sm">${log.target_email || '-'}</td>
-                        <td class="px-4 py-3 text-sm text-gray-600">${log.action}</td>
-                        <td class="px-4 py-3 text-sm">${log.performed_by}</td>
+                        <td class="px-4 py-3"><span class="text-xs px-2 py-1 bg-gray-100 rounded">${escAttr(log.event_type)}</span></td>
+                        <td class="px-4 py-3 text-sm">${escAttr(log.target_email || '-')}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${escAttr(log.action)}</td>
+                        <td class="px-4 py-3 text-sm">${escAttr(log.performed_by)}</td>
                         <td class="px-4 py-3 text-sm text-gray-500">${new Date(log.created_at).toLocaleString()}</td>
                     </tr>
                 `).join('');
@@ -986,7 +986,7 @@
                             </div>
                             <div>
                                 <label class="text-sm text-gray-500">Status</label>
-                                <p class="mt-2"><span class="px-2 py-1 rounded text-sm status-${u.status}">${u.status.replace('_', ' ')}</span></p>
+                                <p class="mt-2"><span class="px-2 py-1 rounded text-sm status-${escAttr(u.status)}">${escAttr(u.status.replace('_', ' '))}</span></p>
                             </div>
                             <div>
                                 <label class="text-sm text-gray-500">Created</label>
@@ -1021,7 +1021,7 @@
                                     <tbody>
                                         ${perms.map(p => `
                                             <tr class="border-b">
-                                                <td class="px-2 py-1">${p.screen_name}</td>
+                                                <td class="px-2 py-1">${escAttr(p.screen_name)}</td>
                                                 <td class="px-2 py-1 text-center">${p.can_view ? '✓' : '-'}</td>
                                                 <td class="px-2 py-1 text-center">${p.can_create ? '✓' : '-'}</td>
                                                 <td class="px-2 py-1 text-center">${p.can_edit ? '✓' : '-'}</td>
