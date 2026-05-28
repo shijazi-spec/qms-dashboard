@@ -4660,7 +4660,14 @@ export async function scanCsLifecycleViolations(opts: {
   limit?: number;
 } = {}): Promise<CsLifecycleScanResult> {
   const t0 = Date.now();
-  const limit = Math.max(1, Math.min(opts.limit ?? 2000, 5000));
+  // Bumped default 2000 → 10000 and cap 5000 → 50000 so the scan covers
+  // the full Deal corpus by default. The bulk Zoho sync currently caps
+  // at 5,000 records per module, so 10000 comfortably scans every
+  // synced Deal; the 50000 ceiling leaves headroom for a future Zoho
+  // page-size bump without another deploy. Without this, the "CS Deals
+  // Scanned" KPI was silently capped at the 2000 most-recently-modified
+  // Deals — orgs with >2k Deals never saw every CS deal evaluated.
+  const limit = Math.max(1, Math.min(opts.limit ?? 10000, 50000));
 
   const dealRows = await pool.query(
     `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,

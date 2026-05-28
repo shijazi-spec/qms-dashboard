@@ -132,16 +132,20 @@
                 <span class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
                 CS Pipeline Overlap
             </button>
+            <!-- CS Lifecycle sits directly next to CS Pipeline Overlap so the
+                 two Customer-Success tabs are visually grouped. Operators
+                 typically check both back-to-back when triaging a CS
+                 incident. -->
+            <button data-on-click="showTab" data-args="[&quot;cs-lifecycle&quot;]" id="tab-cs-lifecycle" data-testid="tab-cs-lifecycle" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Customer Success lifecycle compliance — deals deviating from GRQ-defined CS process rules">
+                <span class="inline-block w-2 h-2 rounded-full bg-purple-500"></span>
+                CS Lifecycle
+            </button>
             <button data-on-click="showTab" data-args="[&quot;preflight&quot;]" id="tab-preflight" data-testid="tab-preflight" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Check a batch of incoming leads/deals against existing CRM data BEFORE pushing to CRM">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Preflight Check
             </button>
             <button data-on-click="showTab" data-args="[&quot;account-hints&quot;]" id="tab-account-hints" data-testid="tab-account-hints" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Smart account inference — deals missing a real Account_Name get a suggested account based on their contact's email domain. Sales fixes the Zoho record from here.">
                 Account Hints <span id="accountHintsPendingBadge" class="hidden inline-block min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white text-center">0</span>
-            </button>
-            <button data-on-click="showTab" data-args="[&quot;cs-lifecycle&quot;]" id="tab-cs-lifecycle" data-testid="tab-cs-lifecycle" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Customer Success lifecycle compliance — deals deviating from GRQ-defined CS process rules">
-                <span class="inline-block w-2 h-2 rounded-full bg-purple-500"></span>
-                CS Lifecycle
             </button>
             <button data-on-click="showTab" data-args="[&quot;auto-capa-kpis&quot;]" id="tab-auto-capa-kpis" data-testid="tab-auto-capa-kpis" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="KPIs for auto-created CAPAs from the CS overlap + CS lifecycle pipelines">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
@@ -4980,8 +4984,15 @@
             const body = document.getElementById('csLifecycleTable');
             body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
 
-            let url = '/api/duplicates/cs-lifecycle/violations';
-            if (window._csLifecycleFilter !== 'all') url += '?severity=' + encodeURIComponent(window._csLifecycleFilter);
+            // Ask for the full deal corpus. The bulk Zoho sync caps each
+            // module at 5,000 records so 10,000 comfortably covers every
+            // Deal currently in duplicate_records. The previous default
+            // (server-side 2,000) silently undercounted "CS Deals Scanned"
+            // whenever the org had more than 2k synced deals — the KPI
+            // showed only the most recently-modified slice instead of the
+            // true CS-deal population.
+            let url = '/api/duplicates/cs-lifecycle/violations?limit=10000';
+            if (window._csLifecycleFilter !== 'all') url += '&severity=' + encodeURIComponent(window._csLifecycleFilter);
             try {
                 const res = await fetch(url);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
