@@ -76,12 +76,18 @@ type Pool = {
  * older than 5 minutes to avoid counting calls that are mid-pipeline.
  */
 export async function fetchPipelineYield(pool: Pool): Promise<PipelineYieldMetrics> {
+  // Phase 2 status-enum migration retired the 'analyzed' / 'pending' /
+  // 'analysis_failed' string literals — the canonical post-evaluation
+  // states are now 'evaluated' / 'qa_review_pending' / 'qa_reviewed',
+  // the pre-pipeline state is 'uploaded', and terminal failures land
+  // in 'failed'. Without this update the analyzed / pending / failed
+  // KPIs all stuck at 0 because no row carries the old values.
   const result = await pool.query(`
     SELECT
       COUNT(*)::int AS total_calls,
-      COUNT(*) FILTER (WHERE status = 'analyzed')::int AS analyzed,
-      COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
-      COUNT(*) FILTER (WHERE status = 'analysis_failed' OR status LIKE 'analysis_failed%')::int AS analysis_failed
+      COUNT(*) FILTER (WHERE status IN ('evaluated','qa_review_pending','qa_reviewed'))::int AS analyzed,
+      COUNT(*) FILTER (WHERE status = 'uploaded')::int AS pending,
+      COUNT(*) FILTER (WHERE status = 'failed')::int AS analysis_failed
     FROM call_records
     WHERE created_at < NOW() - INTERVAL '5 minutes'
   `);

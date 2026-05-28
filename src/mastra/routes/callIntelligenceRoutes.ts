@@ -712,16 +712,36 @@ export const callIntelligenceRoutes = [
           // (either no call_compliance row at all OR a "not_checked"
           // sentinel from a previous failed check). LEFT JOIN + IS NULL
           // catches both.
+          // TWO LEGACY-MIGRATION BUGS fixed here (2026-05-28):
+          //
+          //   1. `cr.contact_phone` doesn't exist on call_records — the
+          //      contact phone has always lived inside metadata JSONB
+          //      (extracted by extractCallPhoneCandidates() downstream).
+          //      The query was throwing `column cr.contact_phone does
+          //      not exist`, leaving the Backfill CRM Compliance button
+          //      dead with "Backfill failed".
+          //
+          //   2. `cr.status = 'analyzed'` — that string was retired in
+          //      Phase 2's status-enum migration. Real post-evaluation
+          //      rows now have status in
+          //      ('evaluated','qa_review_pending','qa_reviewed'). The
+          //      query would have returned ZERO candidates even after
+          //      bug #1 was fixed, because no row carries 'analyzed'
+          //      anymore.
+          //
+          // We also pull `cr.metadata` (already in the SELECT) so the
+          // autoLinkCallAndCompliance helper can read metadata.contact_phone
+          // via extractCallPhoneCandidates.
           const candidatesRes = await callIntelligencePool.query(
             `
             SELECT cr.id, cr.call_id, cr.lead_id, cr.deal_id, cr.call_date,
-                   cr.agent_email, cr.agent_name, cr.contact_phone,
+                   cr.agent_email, cr.agent_name,
                    cr.metadata
             FROM call_records cr
             LEFT JOIN call_compliance cc
               ON cc.call_record_id = cr.id
              AND (cc.compliance_details->>'mode' IS DISTINCT FROM 'not_checked')
-            WHERE cr.status = 'analyzed'
+            WHERE cr.status IN ('evaluated','qa_review_pending','qa_reviewed')
               AND cc.id IS NULL
             ORDER BY cr.call_date DESC NULLS LAST
             LIMIT $1
@@ -6092,7 +6112,7 @@ ${transcriptText}
                      ELSE '[]'::jsonb END
               ) elem ON TRUE
               WHERE cr.call_date >= NOW() - ($1 || ' days')::INTERVAL
-                AND cr.status = 'analyzed'
+                AND cr.status IN ('evaluated','qa_review_pending','qa_reviewed')
                 AND elem IS NOT NULL
                 AND LENGTH(TRIM(elem)) > 0
             ),
@@ -6132,7 +6152,7 @@ ${transcriptText}
             SELECT COUNT(*)::int AS n
               FROM call_records
              WHERE call_date >= NOW() - ($1 || ' days')::INTERVAL
-               AND status = 'analyzed'
+               AND status IN ('evaluated','qa_review_pending','qa_reviewed')
             `,
             [String(windowDays)],
           );
