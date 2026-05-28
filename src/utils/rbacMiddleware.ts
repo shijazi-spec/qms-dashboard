@@ -1343,6 +1343,54 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  // ─────────────────────────────────────────────────────────────────────────
+  // Admin-only backfill of routes that shipped without ROUTE_PERMISSION_MAP
+  // entries (P1 coaching loop + call-intelligence enhancements + read-only
+  // Zoho activities reader). The rbacRouteCoverage test caught these via
+  // synthetic concrete paths (e.g. `/api/zoho/activities/1/1` — a numeric
+  // module that the narrower production rule above does not match). Routes
+  // are intentionally locked to admin-only as a conservative default until a
+  // follow-up task designs the right per-route allowlist per feature area
+  // (coaching managers vs call reviewers vs ops). See replit.md / agent
+  // memory for the follow-up backlog.
+  //
+  // Coaching Sessions API (callIntelligenceRoutes.ts)
+  {
+    pattern: /^\/api\/coaching-sessions(\/(kpis|\d+(\/link-outcome)?))?$/,
+    methods: ["GET", "POST", "PATCH"],
+    roles: ["admin"],
+  },
+  // Call batch + Zoho import + evaluation + per-call mutations
+  // (callIntelligenceRoutes.ts + mcpCallEvaluationRoutes.ts)
+  {
+    pattern: /^\/api\/calls\/batch\/(submit-pending|jobs\/\d+\/sync)$/,
+    methods: ["POST"],
+    roles: ["admin"],
+  },
+  {
+    pattern: /^\/api\/calls\/import-from-zoho$/,
+    methods: ["POST"],
+    roles: ["admin"],
+  },
+  {
+    pattern: /^\/api\/calls\/evaluation\/(leads\/match-phone|drive-import|validate\/\d+)$/,
+    methods: ["POST"],
+    roles: ["admin"],
+  },
+  {
+    pattern: /^\/api\/calls\/\d+(\/auto-link-lead)?$/,
+    methods: ["DELETE", "POST"],
+    roles: ["admin"],
+  },
+  // Catch-all Zoho activities reader for module patterns that the narrower
+  // Leads/Deals-only rule above doesn't cover (e.g. test-synthetic numeric
+  // modules). Order matters: the specific Leads|Deals rule above wins for
+  // real production traffic; this rule only catches the long-tail.
+  {
+    pattern: /^\/api\/zoho\/activities\/[^/]+\/[^/]+$/,
+    methods: ["GET"],
+    roles: ["admin"],
+  },
   { pattern: /^\/api\/meetings\/mom$/, methods: ["POST"], roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"] },
   {
     pattern: /^\/api\/quality-scorecards(\/\d+)?$/,
