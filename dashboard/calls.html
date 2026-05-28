@@ -4427,27 +4427,37 @@
                     audioEl.addEventListener('error', async () => {
                         const slot = document.getElementById(`callAudioError-${callId}`);
                         if (!slot) return;
+                        // Plain-language wording — operators reading this
+                        // didn't author the bulk-upload code that lost the
+                        // bytes years ago, and they don't need the API
+                        // diagnostic info to act. Tell them what's true
+                        // about the record and what they can do next.
                         let reason = 'Recording could not be loaded.';
                         try {
                             const probe = await fetch(`/api/calls/${callId}/audio`, { method: 'HEAD' });
                             if (probe.status === 404) {
-                                reason = 'No audio_blob persisted for this record. The original upload path didn\'t save the bytes (legacy bulk import). The transcript above came from the original Whisper run and is still trustworthy.';
+                                reason = '🎙 Audio not stored for this call. It was uploaded before the platform started saving recordings to the database. The transcript and AI analysis above are still accurate — they were produced when the audio first came in.';
                             } else if (probe.status === 401 || probe.status === 403) {
-                                reason = 'Not authorised to fetch this recording. Try refreshing the page to renew the session.';
+                                // After Phase 5e (the RBAC entry for
+                                // /api/calls/:id/audio), this branch is
+                                // a true permission issue rather than a
+                                // missing-entry artifact. Word it that way.
+                                reason = '🔒 Your account doesn\'t have permission to play call recordings. Ask an admin to grant the call-access role.';
                             } else if (probe.status >= 500) {
-                                reason = `Server error fetching the recording (HTTP ${probe.status}). Check the deployment logs.`;
+                                reason = `⚠ Server error fetching the recording (HTTP ${probe.status}). The deploy logs should show the cause.`;
                             } else if (!probe.ok) {
-                                reason = `Audio endpoint returned HTTP ${probe.status}.`;
+                                reason = `⚠ Audio endpoint returned HTTP ${probe.status}.`;
                             } else {
-                                reason = 'Audio file fetched but the browser couldn\'t decode it (unsupported codec or corrupted blob).';
+                                reason = '🎙 Audio file fetched, but the browser couldn\'t decode it (the file may be in an unsupported format or corrupted).';
                             }
                         } catch {
-                            reason = 'Network error reaching the audio endpoint.';
+                            reason = '🌐 Network error reaching the audio endpoint. Check your connection and try again.';
                         }
                         slot.textContent = reason;
                         slot.classList.remove('hidden');
-                        // Hide the broken player to avoid the misleading
-                        // 0:00 / 0:00 display sitting above the explanation.
+                        // Hide the broken player so the operator doesn't
+                        // see a misleading 0:00 / 0:00 strip above the
+                        // explanation.
                         audioEl.classList.add('hidden');
                     });
                 }

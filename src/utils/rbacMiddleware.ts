@@ -1347,6 +1347,20 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
   {
+    // Per-call audio playback — streams the recording bytes from
+    // call_records.audio_blob (or the FS fallback) with HTTP Range
+    // support so the <audio> element in the Call Details modal can
+    // play and seek. Was missing from the permission map, which made
+    // the deny-by-default rule return 403 and surfaced as the
+    // misleading "Not authorised to fetch this recording. Try
+    // refreshing the page to renew the session" banner — even though
+    // the operator was perfectly authenticated and the audio bytes
+    // were sitting in the DB ready to stream.
+    pattern: /^\/api\/calls\/\d+\/audio$/,
+    methods: ["GET", "HEAD"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
     // Bulk backfills — destructive-ish ops, admin/ops only
     pattern: /^\/api\/calls\/backfill-(call-dates|compliance)$/,
     methods: ["POST"],
