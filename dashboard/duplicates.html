@@ -688,6 +688,15 @@
                 </div>
             </div>
 
+            <!-- Action buttons (moved above the table for parity with other
+                 tabs). Previously sat below the table where they were easy to
+                 miss — operators expect Export / Refresh / Run scan up top. -->
+            <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
+                <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of the full radar (cross-module clusters are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
+                <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
+            </div>
+
             <!-- Filter chips per pairing type -->
             <div class="flex flex-wrap gap-2 mb-4" id="cmoChips">
                 <button data-on-click="filterCrossModule" data-args="[&quot;all&quot;]" id="cmoChip-all" data-testid="cmo-chip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
@@ -730,11 +739,10 @@
                     <tbody id="crossModuleTable" class="bg-white divide-y divide-gray-200"></tbody>
                 </table>
             </div>
-            <div class="flex justify-end mt-3 gap-2">
-                <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of the full radar (cross-module clusters are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
-            </div>
+            <!-- Action buttons now live above the table (see block above the
+                 KPI cards). This footer placeholder is intentionally empty so
+                 the bulk-result modal below keeps its DOM position. -->
+            
 
             <!-- Follow-up 3: result modal for bulk-close-leads runs. -->
             <div id="cmoBulkResultModal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center" data-style="z-index:60" data-testid="modal-cmo-bulk-result">
@@ -1347,10 +1355,28 @@
             mixed:          { label: '3+ modules',       chip: 'cmoChip-mixed',          action: 'Compound case — open the cluster to see per-record recommendations' },
         };
 
+        // Tracks the last load outcome so the empty-state row can explain
+        // *why* the table is empty (auth, server error, or genuinely zero
+        // overlaps) instead of always showing the same "No cross-module
+        // overlaps in this view." message. Repeated empty fetches were
+        // indistinguishable from a 401 / 500 silent failure before.
+        let crossModuleLoadError = null;
         async function loadCrossModule() {
+            crossModuleLoadError = null;
             try {
-                const res = await fetch('/api/duplicates/cross-module-overlaps');
-                if (!res.ok) return;
+                const res = await fetch('/api/duplicates/cross-module-overlaps', { credentials: 'same-origin' });
+                if (!res.ok) {
+                    let body = '';
+                    try { body = (await res.text()).slice(0, 200); } catch (_) {}
+                    crossModuleLoadError = `HTTP ${res.status} from /api/duplicates/cross-module-overlaps${body ? ' — ' + body : ''}`;
+                    console.error('cross-module load failed:', crossModuleLoadError);
+                    crossModuleClusters = [];
+                    crossModuleByPairing = {};
+                    updateCrossModuleKpis({});
+                    updateCrossModuleBadge();
+                    renderCrossModuleTable();
+                    return;
+                }
                 const data = await res.json();
                 crossModuleClusters = Array.isArray(data && data.clusters) ? data.clusters : [];
                 crossModuleByPairing = (data && data.by_pairing) || {};
@@ -1358,7 +1384,13 @@
                 updateCrossModuleBadge();
                 renderCrossModuleTable();
             } catch (e) {
+                crossModuleLoadError = (e && e.message) ? e.message : String(e);
                 console.error('cross-module load failed:', e);
+                crossModuleClusters = [];
+                crossModuleByPairing = {};
+                updateCrossModuleKpis({});
+                updateCrossModuleBadge();
+                renderCrossModuleTable();
             }
         }
 
@@ -1415,7 +1447,15 @@
                 return c.pairing === crossModuleFilter;
             });
             if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">No cross-module overlaps in this view.</td></tr>';
+                let msg;
+                if (crossModuleLoadError) {
+                    msg = `<div class="text-red-700 font-medium mb-1">Cross-module fetch failed</div><div class="text-xs text-red-600 break-all">${escapeHtml(crossModuleLoadError)}</div><div class="text-xs text-gray-500 mt-2">Click <strong>Run scan</strong> to rebuild, or check the server logs for <code>cross-module-overlaps</code>.</div>`;
+                } else if ((crossModuleClusters || []).length === 0) {
+                    msg = '<div class="text-gray-600">No cross-module overlaps detected.</div><div class="text-xs text-gray-500 mt-1">Either the latest sync found none, or no Zoho scan has been run yet. Click <strong>Run scan</strong> to rebuild clusters.</div>';
+                } else {
+                    msg = 'No cross-module overlaps match this filter — try the <strong>All</strong> chip.';
+                }
+                tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-sm">${msg}</td></tr>`;
                 updateCrossModuleBulkBar();
                 return;
             }
