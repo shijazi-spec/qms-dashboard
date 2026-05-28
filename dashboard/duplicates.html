@@ -805,7 +805,7 @@
                     <button data-on-click="filterCsOverlap" data-args="[&quot;warn&quot;]" id="csOverlapChip-warn" data-testid="cs-overlap-chip-warn" class="px-3 py-1.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200">Warn</button>
                 </div>
                 <div class="flex-1"></div>
-                <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="csOverlapExportBtn" data-testid="button-export-cs-overlap" title="Download a CSV of the full radar (CS pipeline overlaps are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
+                <button data-on-click="exportCsOverlap" id="csOverlapExportBtn" data-testid="button-export-cs-overlap" title="Download a CSV of exactly the CS-overlap clusters shown below, in the current sort order and filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshCsOverlapFromZoho" id="csOverlapZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this CS Overlap view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="rescanCsOverlap" id="csOverlapScanBtn" data-testid="button-cs-overlap-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">
                     Run scan
@@ -935,7 +935,7 @@
                     <button data-on-click="filterAccountHints" data-args="[&quot;dismissed&quot;]" id="accountHintsChip-dismissed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">Dismissed</button>
                 </div>
                 <div class="flex-1"></div>
-                <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of the full radar (Account-Hint candidates are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
+                <button data-on-click="exportAccountHints" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of exactly the Account-Hint rows shown below, in the current order and status filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
             </div>
@@ -1000,7 +1000,7 @@
                     <button data-on-click="filterCsLifecycle" data-args="[&quot;info&quot;]" id="csLifeChip-info" class="px-3 py-1.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200">Info</button>
                 </div>
                 <div class="flex-1"></div>
-                <button data-on-click="exportTab" data-args="[&quot;deal&quot;]" data-pass-event="true" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of every Deal duplicate currently in the radar (CS Lifecycle pivots on Deals)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
+                <button data-on-click="exportCsLifecycle" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of exactly the CS-lifecycle violations shown below (incl. CS detail columns), in the current sort order and filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
             </div>
@@ -4272,6 +4272,98 @@
             return streamingDownloadFromEvent(event, url, { filename });
         }
 
+        // ─── Client-side CSV export ──────────────────────────────────────────
+        // Tabs whose rows are fully loaded + sorted in the browser (CS Lifecycle,
+        // CS Overlap, Account Hints) export exactly what's on screen — same rows,
+        // same columns, same applied sort order and status/verdict filter — rather
+        // than the server's generic full-radar duplicate dump. The module tabs
+        // (Leads/Deals/Contacts/Accounts/Cross-Module) stay on the streaming
+        // server export because they're server-paginated, so "the data in the
+        // tab" is the full per-type set the server already returns.
+        function csvCell(v) {
+            let s = (v === null || v === undefined) ? '' : String(v);
+            // CSV-injection hardening: a leading = + - @ can be run as a formula
+            // by Excel/Sheets, so neutralize it with a leading apostrophe.
+            if (/^[=+\-@]/.test(s)) s = "'" + s;
+            if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+            return s;
+        }
+        function downloadCsvRows(filename, headers, rows) {
+            const lines = [headers.map(csvCell).join(',')];
+            for (const r of rows) lines.push(r.map(csvCell).join(','));
+            // Prepend a UTF-8 BOM so Excel renders Arabic company names correctly.
+            const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        function exportCsLifecycle() {
+            const data = window._csLifecycleData;
+            const violations = (data && data.violations) || [];
+            if (!violations.length) { alert('Nothing to export for the current filter.'); return; }
+            const groups = groupCsLifecycleByDeal(violations);
+            const sorted = sortCsLifecycleRows(groups, window._csLifecycleSort.key, window._csLifecycleSort.dir);
+            const headers = ['Severity', 'Account', 'Domain', 'Phase', 'CS Owner', 'Customer Since', 'Renewal Date', 'Churn Date', 'Health', 'Days Since Modified', 'Violations', 'Messages'];
+            const rows = sorted.map(g => [
+                g.worst_severity || '',
+                g.account_name || '',
+                g.domain || '',
+                g.current_phase || '',
+                g.cs_owner_name || '',
+                g.customer_since || '',
+                g.renewal_date || '',
+                g.churn_date || '',
+                (g.health == null || g.health === '') ? '' : g.health,
+                g.days_since_modified == null ? '' : g.days_since_modified,
+                g.violations.map(v => csLifeViolationLabel(v.code)).join('; '),
+                g.violations.map(v => (v.severity || '').toUpperCase() + ': ' + (v.message || '')).join(' | '),
+            ]);
+            downloadCsvRows('cs-lifecycle-violations.csv', headers, rows);
+        }
+
+        function exportCsOverlap() {
+            const data = window._csOverlapData;
+            const clusters = (data && data.clusters) || [];
+            if (!clusters.length) { alert('Nothing to export for the current filter.'); return; }
+            const sorted = sortCsOverlapRows(clusters, window._csOverlapSort.key, window._csOverlapSort.dir);
+            const sectorText = s => s === 'government' ? 'Government' : s === 'private' ? 'Private' : '';
+            const headers = ['Verdict', 'Domain', 'Company', 'Sector', 'Phase', 'ARR Exposure', 'Records', 'Updated'];
+            const rows = sorted.map(r => [
+                (r.cs_overlap_verdict || '').toUpperCase(),
+                r.domain || '',
+                r.company_name || r.company_name_arabic || '',
+                sectorText(r.client_sector),
+                csPhaseLabel(r.pipeline_lifecycle_state),
+                Number(r.arr_exposure || 0),
+                Number(r.total_records || 0),
+                r.updated_at ? formatDate(r.updated_at) : '',
+            ]);
+            downloadCsvRows('cs-overlap-clusters.csv', headers, rows);
+        }
+
+        function exportAccountHints() {
+            const data = window._accountHintsData;
+            const hints = (data && data.hints) || [];
+            if (!hints.length) { alert('Nothing to export for the current filter.'); return; }
+            const headers = ['Deal', 'Deal Account (current)', 'Suggested Account', 'Suggested Domain', 'Evidence Contact', 'Confidence %', 'Status'];
+            const rows = hints.map(h => [
+                h.deal_company_name || h.deal_account_name || '',
+                h.deal_account_name || '',
+                h.suggested_account_name || '',
+                h.suggested_domain || '',
+                h.evidence_contact_email || '',
+                Number(h.confidence || 0),
+                h.status || '',
+            ]);
+            downloadCsvRows('account-hints.csv', headers, rows);
+        }
+
         function exportOwner(anchor, event) {
             const owner = anchor && anchor.dataset ? (anchor.dataset.owner || 'owner') : 'owner';
             const safe = owner.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'owner';
@@ -4440,6 +4532,8 @@
         }
 
         function renderAccountHints(data) {
+            // Cache for the per-tab "Export CSV" button (exportAccountHints).
+            window._accountHintsData = data;
             const summary = data.summary || { pending: 0, applied: 0, dismissed: 0 };
             document.getElementById('accountHintsSumPending').textContent   = summary.pending;
             document.getElementById('accountHintsSumApplied').textContent   = summary.applied;
