@@ -48,6 +48,68 @@ let pendingRefresh: Promise<string> | null = null;
 let lastRefreshAttempt: number = 0;
 const MIN_REFRESH_INTERVAL_MS = 5000;
 
+// Rate-limit cooldown — when Zoho's OAuth endpoint returns the
+// "too many requests continuously" 400, we MUST stop calling it.
+// Until this fix, every subsequent caller saw `cachedAccessToken === null`
+// and triggered another refreshAccessToken(), which hit Zoho again,
+// which kept the per-account quota permanently exhausted. The duplicate
+// radar (and every other Zoho-dependent feature) therefore never recovered
+// without a process restart.
+//
+// `zohoRateLimitedUntil` is the wall-clock instant at which it is safe to
+// try again. While `Date.now() < zohoRateLimitedUntil`, getValidAccessToken
+// throws an `isZohoRateLimited` error WITHOUT making a network call, so
+// callers fail fast with a clear message and Zoho's quota can actually
+// drain. The cooldown is set from the `Retry-After` header when present,
+// otherwise from ZOHO_RATE_LIMIT_COOLDOWN_MS (default 5 minutes — Zoho's
+// per-account OAuth quotas are minute-scale, so anything shorter just
+// re-triggers the storm).
+let zohoRateLimitedUntil: number = 0;
+// Generation counter — incremented every time a 429 sets the cooldown.
+// refreshAccessToken() snapshots this before its network call and only
+// clears `zohoRateLimitedUntil` on success if the snapshot still matches.
+// Without this, a parallel attempt that succeeds AFTER another attempt
+// got rate-limited would prematurely clear the new cooldown window and
+// reopen the storm. Pairs with the `pendingRefresh` recheck in
+// getValidAccessToken() — together they close the singleflight gap.
+let rateLimitEpoch: number = 0;
+const DEFAULT_RATE_LIMIT_COOLDOWN_MS = (() => {
+  const fromEnv = Number(process.env.ZOHO_RATE_LIMIT_COOLDOWN_MS);
+  return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : 5 * 60 * 1000;
+})();
+
+function buildRateLimitedError(retryAfterMs: number): Error & {
+  isZohoRateLimited: true;
+  httpStatus: number;
+  rateLimitedUntil: number;
+} {
+  const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+  const err = new Error(
+    `Zoho OAuth is temporarily rate-limited (too many token refresh attempts). Wait ~${seconds}s and try again.`,
+  ) as Error & {
+    isZohoRateLimited: true;
+    httpStatus: number;
+    rateLimitedUntil: number;
+  };
+  err.isZohoRateLimited = true;
+  err.httpStatus = 429;
+  err.rateLimitedUntil = zohoRateLimitedUntil;
+  return err;
+}
+
+/**
+ * Exposed for tests and the /api/zoho/connection-status dashboard. NEVER
+ * read this directly inside the module — always go through getValidAccessToken
+ * so the cooldown is enforced uniformly.
+ */
+export function getZohoRateLimitState(): { rateLimited: boolean; cooldownMsRemaining: number } {
+  const remaining = zohoRateLimitedUntil - Date.now();
+  return {
+    rateLimited: remaining > 0,
+    cooldownMsRemaining: remaining > 0 ? remaining : 0,
+  };
+}
+
 function getZohoOAuthConfig(): ZohoOAuthConfig | null {
   const clientId = process.env.ZOHO_CLIENT_ID_NEW || process.env.ZOHO_CLIENT_ID;
   const clientSecret = process.env.ZOHO_CLIENT_SECRET;
@@ -62,10 +124,16 @@ function getZohoOAuthConfig(): ZohoOAuthConfig | null {
 
 async function refreshAccessToken(): Promise<string> {
   const oauthConfig = getZohoOAuthConfig();
-  
+
   if (!oauthConfig) {
     throw new Error('CRM integration not configured. Please contact your administrator.');
   }
+
+  // Snapshot the rate-limit epoch BEFORE the network call. If another
+  // parallel refresh observes a 429 and bumps the epoch while this call
+  // is in flight, we must NOT clear its cooldown on our success — the
+  // newer 429 takes precedence.
+  const epochAtStart = rateLimitEpoch;
   
   logger.info('🔄 [ZohoCRM] Refreshing access token...');
   
@@ -94,18 +162,36 @@ async function refreshAccessToken(): Promise<string> {
     // radar scan, the consultant tool, etc.) can surface a clear "Zoho is rate-limited,
     // try again later" message instead of letting it look like a credential / code bug.
     const isRateLimited = /too many requests|rate.?limit/i.test(errorText);
+    if (isRateLimited) {
+      // Set the module-level cooldown so subsequent getValidAccessToken()
+      // calls short-circuit WITHOUT another network round-trip. Without
+      // this, every retry by every Zoho-dependent feature keeps hitting
+      // the OAuth endpoint, which keeps the quota permanently exhausted.
+      // Honor `Retry-After` (seconds, per RFC 7231) if Zoho sends it;
+      // otherwise fall back to the configured default.
+      const retryAfterHeader = response.headers.get('retry-after');
+      let cooldownMs = DEFAULT_RATE_LIMIT_COOLDOWN_MS;
+      if (retryAfterHeader) {
+        const parsed = Number(retryAfterHeader);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          cooldownMs = Math.max(cooldownMs, parsed * 1000);
+        }
+      }
+      zohoRateLimitedUntil = Date.now() + cooldownMs;
+      rateLimitEpoch++;
+      logger.warn(
+        `🛑 [ZohoCRM] OAuth rate-limited — cooling down for ${Math.round(cooldownMs / 1000)}s before any further token refresh attempts.`,
+      );
+      throw buildRateLimitedError(cooldownMs);
+    }
     // Do NOT attach the raw Zoho body to the thrown error — the body is
     // already logged above (subject to the redaction sweep), and re-attaching
     // it as a property risks structured-log sinks re-serializing it through
     // less-redacted paths. The normalized message + httpStatus is enough for
     // callers to branch on, and the redacted log line is the source of truth.
-    const err: Error & { isZohoRateLimited?: boolean; httpStatus?: number } =
-      new Error(
-        isRateLimited
-          ? 'Zoho OAuth is temporarily rate-limited (too many token refresh attempts). Wait a few minutes and try again.'
-          : `Failed to refresh Zoho access token: ${response.status}`,
-      );
-    if (isRateLimited) err.isZohoRateLimited = true;
+    const err: Error & { httpStatus?: number } = new Error(
+      `Failed to refresh Zoho access token: ${response.status}`,
+    );
     err.httpStatus = response.status;
     throw err;
   }
@@ -123,9 +209,16 @@ async function refreshAccessToken(): Promise<string> {
   
   cachedAccessToken = data.access_token;
   tokenExpiresAt = Date.now() + ((data.expires_in || 3600) - 300) * 1000;
-  
+  // Conditionally clear the cooldown — only if no parallel attempt bumped
+  // the epoch (i.e. observed a 429) while we were in flight. Otherwise
+  // a stale success would prematurely reopen the floodgates against a
+  // freshly-set cooldown window.
+  if (rateLimitEpoch === epochAtStart) {
+    zohoRateLimitedUntil = 0;
+  }
+
   logger.info(`✅ [ZohoCRM] Access token refreshed successfully, expires in ${data.expires_in} seconds`);
-  
+
   return data.access_token;
 }
 
@@ -140,6 +233,16 @@ export async function getValidAccessToken(): Promise<string> {
     if (cachedAccessToken && !isTokenExpired()) {
       return cachedAccessToken;
     }
+    // Fail fast while Zoho's OAuth endpoint is in its cooldown window —
+    // no network call, no further quota burn. This is the single guard
+    // that prevents the "duplicate radar shows no data" failure mode
+    // observed in production logs: a previous storm of parallel refresh
+    // calls poisoned the per-account quota, and every subsequent feature
+    // re-triggered the same 400 because nothing remembered the cooldown.
+    const cooldownRemaining = zohoRateLimitedUntil - Date.now();
+    if (cooldownRemaining > 0) {
+      throw buildRateLimitedError(cooldownRemaining);
+    }
     if (pendingRefresh) {
       return await pendingRefresh;
     }
@@ -147,6 +250,22 @@ export async function getValidAccessToken(): Promise<string> {
     if (now - lastRefreshAttempt < MIN_REFRESH_INTERVAL_MS) {
       if (cachedAccessToken) return cachedAccessToken;
       await new Promise(r => setTimeout(r, MIN_REFRESH_INTERVAL_MS - (now - lastRefreshAttempt)));
+      // Re-check the cooldown after the sleep — a concurrent caller may
+      // have hit a 429 while we were waiting.
+      const stillCoolingDown = zohoRateLimitedUntil - Date.now();
+      if (stillCoolingDown > 0) {
+        throw buildRateLimitedError(stillCoolingDown);
+      }
+      // Also re-check pendingRefresh — multiple sleepers can wake at the
+      // same time; without this, each would launch its own refresh and
+      // re-create the storm we're trying to prevent. Honor the in-flight
+      // one and a successful refresh would also be cached for the rest.
+      if (cachedAccessToken && !isTokenExpired()) {
+        return cachedAccessToken;
+      }
+      if (pendingRefresh) {
+        return await pendingRefresh;
+      }
     }
     lastRefreshAttempt = Date.now();
     pendingRefresh = refreshAccessToken().finally(() => { pendingRefresh = null; });
@@ -178,16 +297,20 @@ async function makeZohoRequest<T>(
   
   if (response.status === 401) {
     logger.info('🔄 [ZohoCRM] Access token expired (401), attempting refresh...');
-    
+
     cachedAccessToken = null;
     tokenExpiresAt = 0;
-    
+
     const oauthConfig = getZohoOAuthConfig();
     if (oauthConfig) {
-      await refreshAccessToken();
+      // Route through getValidAccessToken (not refreshAccessToken directly)
+      // so the rate-limit cooldown and singleflight are honored. Calling
+      // refreshAccessToken() here would bypass both, which historically
+      // turned a single 401 retry into another OAuth quota hit during
+      // cooldown windows.
       config = await getZohoAccessToken();
       response = await requestFn(config);
-      
+
       if (response.status === 401) {
         throw new Error('Zoho API authentication failed after token refresh. Please verify your OAuth credentials.');
       }
@@ -205,10 +328,13 @@ export function getZohoConnectionStatus(): {
   autoRefresh: boolean;
   tokenCached: boolean;
   tokenExpired: boolean;
+  rateLimited: boolean;
+  cooldownMsRemaining: number;
   message: string;
 } {
   const oauthConfig = getZohoOAuthConfig();
   const hasStaticToken = !!process.env.ZOHO_ACCESS_TOKEN;
+  const rateLimit = getZohoRateLimitState();
 
   if (oauthConfig) {
     return {
@@ -217,7 +343,11 @@ export function getZohoConnectionStatus(): {
       autoRefresh: true,
       tokenCached: !!cachedAccessToken,
       tokenExpired: isTokenExpired(),
-      message: 'Zoho CRM configured with OAuth auto-refresh',
+      rateLimited: rateLimit.rateLimited,
+      cooldownMsRemaining: rateLimit.cooldownMsRemaining,
+      message: rateLimit.rateLimited
+        ? `Zoho OAuth is cooling down — ~${Math.ceil(rateLimit.cooldownMsRemaining / 1000)}s remaining`
+        : 'Zoho CRM configured with OAuth auto-refresh',
     };
   }
 
@@ -228,16 +358,20 @@ export function getZohoConnectionStatus(): {
       autoRefresh: false,
       tokenCached: false,
       tokenExpired: false,
+      rateLimited: false,
+      cooldownMsRemaining: 0,
       message: 'Zoho CRM configured with static token (no auto-refresh)',
     };
   }
-  
+
   return {
     configured: false,
     connected: false,
     autoRefresh: false,
     tokenCached: false,
     tokenExpired: false,
+    rateLimited: false,
+    cooldownMsRemaining: 0,
     message: 'CRM integration not configured. Please contact your administrator.',
   };
 }

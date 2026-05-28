@@ -62,113 +62,101 @@ export const crmComplianceTool = createTool({
       let meetingOutcomeLogged = false;
       const complianceDetails: Record<string, any> = {};
 
-      const zohoClientId = process.env.ZOHO_CLIENT_ID;
-      const zohoClientSecret = process.env.ZOHO_CLIENT_SECRET;
-      const zohoRefreshToken = process.env.ZOHO_REFRESH_TOKEN;
+      // Route ALL Zoho traffic through the shared zohoCRM helper so the
+      // OAuth cooldown, singleflight, and token caching enforced in
+      // src/utils/zohoCRM.ts apply to this tool too. Previously this tool
+      // had its own raw fetch to /oauth/v2/token and Zoho APIs, which
+      // bypassed the cooldown entirely — under load it kept burning the
+      // per-account OAuth quota even while the rest of the app was
+      // honoring the rate-limit window.
+      const {
+        getZohoConnectionStatus,
+        getValidAccessToken,
+      } = await import("../../utils/zohoCRM");
 
-      if (zohoClientId && zohoClientSecret && zohoRefreshToken) {
+      const zohoStatus = getZohoConnectionStatus();
+      if (zohoStatus.configured) {
         logger?.info("📡 [CRMCompliance] Checking Zoho CRM for updates");
 
         try {
-          const zohoAccountsUrl = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
-          const tokenResponse = await fetch(`${zohoAccountsUrl}/oauth/v2/token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              grant_type: 'refresh_token',
-              client_id: zohoClientId,
-              client_secret: zohoClientSecret,
-              refresh_token: zohoRefreshToken
-            })
-          });
+          // Single token acquisition routed through the shared helper so
+          // the OAuth cooldown + singleflight + token cache all apply.
+          // The returned token is cached for the session, so the four
+          // CRM reads below reuse it without re-hitting /oauth/v2/token.
+          const accessToken = await getValidAccessToken();
+          const apiDomain = process.env.ZOHO_API_DOMAIN || "https://www.zohoapis.com";
+          const authHeader = { Authorization: `Zoho-oauthtoken ${accessToken}` };
 
-          const tokenData = await tokenResponse.json();
-          const accessToken = tokenData.access_token;
-
-          if (accessToken && leadId) {
+          if (leadId) {
             const callDate = callRecord.call_date ? new Date(callRecord.call_date) : new Date();
-            const checkAfter = callDate.toISOString().split('T')[0];
 
-            const notesResponse = await fetch(
+            const authedFetch = async (url: string): Promise<any | null> => {
+              const resp = await fetch(url, { headers: authHeader });
+              return resp.ok ? await resp.json() : null;
+            };
+
+            const notesData = await authedFetch(
               `https://www.zohoapis.com/crm/v2/Leads/${leadId}/Notes?page=1&per_page=5`,
-              {
-                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-              }
             );
-
-            if (notesResponse.ok) {
-              const notesData = await notesResponse.json();
-              if (notesData.data && notesData.data.length > 0) {
-                const recentNote = notesData.data.find((note: any) => {
-                  const noteDate = new Date(note.Created_Time);
-                  return noteDate >= callDate;
-                });
-                notesUpdated = !!recentNote;
-                complianceDetails.notes = notesUpdated ? "Note found after call" : "No note found after call";
-              }
+            if (notesData?.data?.length) {
+              const recentNote = notesData.data.find(
+                (note: any) => new Date(note.Created_Time) >= callDate,
+              );
+              notesUpdated = !!recentNote;
+              complianceDetails.notes = notesUpdated
+                ? "Note found after call"
+                : "No note found after call";
             }
 
-            const callsResponse = await fetch(
+            const callsData = await authedFetch(
               `https://www.zohoapis.com/crm/v2/Leads/${leadId}/Calls?page=1&per_page=5`,
-              {
-                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-              }
             );
-
-            if (callsResponse.ok) {
-              const callsData = await callsResponse.json();
-              if (callsData.data && callsData.data.length > 0) {
-                const recentCall = callsData.data.find((call: any) => {
-                  const callLogDate = new Date(call.Created_Time);
-                  return callLogDate >= callDate;
-                });
-                callLogged = !!recentCall;
-                complianceDetails.calls = callLogged ? "Call logged after call" : "No call log found";
-              }
+            if (callsData?.data?.length) {
+              const recentCall = callsData.data.find(
+                (call: any) => new Date(call.Created_Time) >= callDate,
+              );
+              callLogged = !!recentCall;
+              complianceDetails.calls = callLogged
+                ? "Call logged after call"
+                : "No call log found";
             }
 
-            const tasksResponse = await fetch(
+            const tasksData = await authedFetch(
               `https://www.zohoapis.com/crm/v2/Tasks?criteria=(What_Id:equals:${leadId})&page=1&per_page=5`,
-              {
-                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-              }
             );
-
-            if (tasksResponse.ok) {
-              const tasksData = await tasksResponse.json();
-              if (tasksData.data && tasksData.data.length > 0) {
-                const recentTask = tasksData.data.find((task: any) => {
-                  const taskDate = new Date(task.Created_Time);
-                  return taskDate >= callDate;
-                });
-                taskCreated = !!recentTask;
-                complianceDetails.tasks = taskCreated ? "Task created after call" : "No task found";
-              }
+            if (tasksData?.data?.length) {
+              const recentTask = tasksData.data.find(
+                (task: any) => new Date(task.Created_Time) >= callDate,
+              );
+              taskCreated = !!recentTask;
+              complianceDetails.tasks = taskCreated
+                ? "Task created after call"
+                : "No task found";
             }
 
-            const leadResponse = await fetch(
+            const leadData = await authedFetch(
               `https://www.zohoapis.com/crm/v2/Leads/${leadId}`,
-              {
-                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-              }
             );
-
-            if (leadResponse.ok) {
-              const leadData = await leadResponse.json();
-              if (leadData.data && leadData.data[0]) {
-                const lead = leadData.data[0];
-                const modifiedTime = new Date(lead.Modified_Time);
-                stageUpdated = modifiedTime >= callDate;
-                complianceDetails.stage = stageUpdated ? "Lead modified after call" : "No stage update detected";
-              }
+            if (leadData?.data?.[0]) {
+              const lead = leadData.data[0];
+              const modifiedTime = new Date(lead.Modified_Time);
+              stageUpdated = modifiedTime >= callDate;
+              complianceDetails.stage = stageUpdated
+                ? "Lead modified after call"
+                : "No stage update detected";
             }
           }
         } catch (zohoError) {
-          logger?.error("❌ [CRMCompliance] Zoho API error", { 
-            error: zohoError instanceof Error ? zohoError.message : String(zohoError) 
+          const isRateLimited =
+            zohoError && typeof zohoError === "object" &&
+            (zohoError as { isZohoRateLimited?: boolean }).isZohoRateLimited === true;
+          logger?.error("❌ [CRMCompliance] Zoho API error", {
+            error: zohoError instanceof Error ? zohoError.message : String(zohoError),
+            rateLimited: isRateLimited,
           });
-          complianceDetails.mode = "zoho_error";
-          complianceDetails.error = zohoError instanceof Error ? zohoError.message : String(zohoError);
+          complianceDetails.mode = isRateLimited ? "zoho_rate_limited" : "zoho_error";
+          complianceDetails.error =
+            zohoError instanceof Error ? zohoError.message : String(zohoError);
         }
       } else {
         logger?.warn("⚠️ [CRMCompliance] Zoho credentials not configured, cannot check CRM compliance");
