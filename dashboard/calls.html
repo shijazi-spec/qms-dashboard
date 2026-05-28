@@ -3641,8 +3641,21 @@
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(rec.call_record_id)}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(rec.agent_email || '--')}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(rec.lead_id || rec.deal_id || '--')}</td>
-                    <td class="px-4 py-3 text-center">${renderCheckmark(rec.notes_updated)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${(() => {
+                        // Lead/Deal ID is now a deep link into Zoho CRM so
+                        // operators can jump straight to the record to
+                        // verify why a compliance check failed (notes,
+                        // task, stage). org id 766568398 is the same WalaPlus
+                        // Zoho org used by every other CRM link on this
+                        // page (search/details panels above).
+                        const id = rec.lead_id || rec.deal_id;
+                        if (!id) return '--';
+                        const tab = rec.lead_id ? 'Leads' : 'Potentials';
+                        const url = `https://crm.zoho.com/crm/org766568398/tab/${tab}/${encodeURIComponent(id)}`;
+                        const label = rec.lead_id ? 'Lead' : 'Deal';
+                        return `<a href="${url}" target="_blank" rel="noopener" class="text-indigo-600 hover:text-indigo-800 underline" title="Open ${label} ${escapeHtml(String(id))} in Zoho CRM ↗">${escapeHtml(String(id))}</a>`;
+                    })()}</td>
+                    <td class="px-4 py-3 text-center" title="Did the agent add follow-up Notes to the linked Zoho Lead/Deal after this call? Green = a Note attached to this record was created within the compliance window. Red = no Note found — the call happened but the CRM record was not updated.">${renderCheckmark(rec.notes_updated)}</td>
                     <td class="px-4 py-3 text-center">${renderCheckmark(rec.call_logged)}</td>
                     <td class="px-4 py-3 text-center">${renderCheckmark(rec.task_created)}</td>
                     <td class="px-4 py-3 text-center">${renderCheckmark(rec.stage_updated)}</td>
