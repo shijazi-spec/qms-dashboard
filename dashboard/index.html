@@ -1779,6 +1779,9 @@
                     complianceText = ((clean / records) * 100).toFixed(1) + '%';
                 }
 
+                // Prefer the user's active date filter; fall back to the latest
+                // audit's own audit_date so the CSV header reflects the period
+                // the data actually covers instead of an inaccurate "All Time".
                 const filterParts = [];
                 if (currentDateFilters.created.start && currentDateFilters.created.end) {
                     filterParts.push(`Created: ${currentDateFilters.created.start} to ${currentDateFilters.created.end}`);
@@ -1786,7 +1789,18 @@
                 if (currentDateFilters.modified.start && currentDateFilters.modified.end) {
                     filterParts.push(`Modified: ${currentDateFilters.modified.start} to ${currentDateFilters.modified.end}`);
                 }
-                const dateRangeStr = filterParts.length > 0 ? filterParts.join(' | ') : 'All Time';
+                let dateRangeStr;
+                if (filterParts.length > 0) {
+                    dateRangeStr = filterParts.join(' | ');
+                } else if (audit.audit_date) {
+                    const d = new Date(audit.audit_date);
+                    const dateLabel = isNaN(d.getTime())
+                        ? String(audit.audit_date)
+                        : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                    dateRangeStr = `Audit run on ${dateLabel}`;
+                } else {
+                    dateRangeStr = 'Latest audit';
+                }
 
                 const lines = [];
                 lines.push(row(['WalaPlus Quality Audit Report']));
