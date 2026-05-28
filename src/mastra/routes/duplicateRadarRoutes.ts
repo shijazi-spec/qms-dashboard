@@ -174,12 +174,38 @@ interface ExtractedRecord {
   accountType?: string;
 }
 
+// Errors that indicate the database is in a state where NO record will ever
+// succeed — schema drift, missing column, missing extension, exhausted
+// connection pool, etc. When we hit one of these, swallowing it per-record
+// just lets the loop "complete" with 0 writes and stamps the sync chip green.
+// That is the exact silent-failure mode that made the radar look empty in
+// May 2026. Treat these as fatal: bubble out so the whole scan fails loudly.
+function isFatalPersistenceError(err: any): boolean {
+  const msg = String(err?.message || err || "");
+  const code = String(err?.code || "");
+  // Postgres SQLSTATE class:
+  //   42xxx — syntax error / schema mismatch (missing column, undefined func)
+  //   53xxx — out of resources (connection pool exhausted, disk full)
+  //   57xxx — operator intervention (admin shutdown, query canceled)
+  //   58xxx — system error
+  //   08xxx — connection exception
+  if (/^(08|42|53|57|58)\d{3}$/.test(code)) return true;
+  // Generic "column does not exist" / "relation does not exist" string match
+  // for cases where the driver doesn't surface the SQLSTATE code cleanly.
+  if (/column .* does not exist/i.test(msg)) return true;
+  if (/relation .* does not exist/i.test(msg)) return true;
+  if (/no such column/i.test(msg)) return true;
+  if (/connection terminated/i.test(msg)) return true;
+  if (/too many connections/i.test(msg)) return true;
+  return false;
+}
+
 async function processModule(
   moduleName: string,
   recordType: "lead" | "deal" | "contact" | "account",
   clustersUpdated: Set<number>,
   extractRecord: (record: any) => ExtractedRecord,
-): Promise<{ count: number }> {
+): Promise<{ count: number; written: number; skipped: number }> {
   let records: any[] = [];
   scanState.moduleStatuses[moduleName] = "fetching";
   broadcastSSE("module", { module: moduleName, status: "fetching" });
@@ -203,7 +229,7 @@ async function processModule(
     if (e?.isZohoRateLimited || /too many requests/i.test(String(e?.message || ""))) {
       throw e;
     }
-    return { count: 0 };
+    return { count: 0, written: 0, skipped: 0 };
   }
 
   logger.info(
@@ -217,11 +243,20 @@ async function processModule(
     count: records.length,
   });
 
+  let written = 0;
   let skipped = 0;
+  let droppedNoCompany = 0;
   for (const record of records) {
     try {
       const data = extractRecord(record);
-      if (!data.companyName || data.companyName === "Unknown") continue;
+      if (!data.companyName || data.companyName === "Unknown") {
+        // Previously a silent `continue`. Now we count it so the post-loop
+        // summary can flag a Zoho layout that doesn't populate Company /
+        // Account_Name / Last_Name as expected — that was the only other
+        // explanation for an apparently-successful sync with 0 writes.
+        droppedNoCompany++;
+        continue;
+      }
 
       const cluster = await findOrCreateClusterByCompany(
         data.companyName,
@@ -276,8 +311,20 @@ async function processModule(
         account_type: data.accountType,
       });
 
+      written++;
       clustersUpdated.add(cluster.id!);
-    } catch (recordErr) {
+    } catch (recordErr: any) {
+      // Schema/connection-class errors mean NO record will succeed — fail
+      // the whole scan loudly instead of looping through 5,000 identical
+      // failures and stamping "completed" at the end.
+      if (isFatalPersistenceError(recordErr)) {
+        logger.error(
+          `❌ [DuplicateRadar] Fatal persistence error on ${moduleName} record ${record.id} — aborting scan:`,
+          recordErr,
+        );
+        await upsertSyncState(moduleName, written, "failed");
+        throw recordErr;
+      }
       skipped++;
       if (skipped <= 5)
         logger.warn(
@@ -285,6 +332,10 @@ async function processModule(
         );
     }
   }
+  if (droppedNoCompany > 0)
+    logger.warn(
+      `⚠️ [DuplicateRadar] ${moduleName}: dropped ${droppedNoCompany} record(s) with no extractable company name (Zoho layout likely missing Company / Account_Name / Last_Name)`,
+    );
   if (skipped > 0)
     logger.warn(
       `⚠️ [DuplicateRadar] Skipped ${skipped} ${moduleName} records due to errors`,
@@ -294,10 +345,17 @@ async function processModule(
   broadcastSSE("module", {
     module: moduleName,
     status: "done",
-    count: records.length,
+    count: written,
   });
-  await upsertSyncState(moduleName, records.length, "completed");
-  return { count: records.length };
+  // CHIP HONESTY: report the count actually persisted to the database, not
+  // the count fetched from Zoho. Previously this passed records.length even
+  // when every upsertRecord threw — sync_status went 'completed' / 5000
+  // while duplicate_records stayed empty, which is what hid the silent
+  // failure for weeks. If `written < records.length` something dropped
+  // rows; if `written === 0 && records.length > 0` the chip will say
+  // "0 (completed)" instead of lying about 5,000.
+  await upsertSyncState(moduleName, written, "completed");
+  return { count: records.length, written, skipped: skipped + droppedNoCompany };
 }
 
 // Detect records deleted/merged inside Zoho CRM since the last successful sync
@@ -525,22 +583,50 @@ async function scanZohoCRMForDuplicates(
       ]);
 
     // Tasks pagination removed per platform-wide Tasks data removal.
+    // `totalRecords` was previously the count fetched from Zoho — that
+    // counter looked healthy even when every upsertRecord threw. Use
+    // `written` (the count actually persisted) so the scan summary, the
+    // detection log, and the dashboard agree with what's queryable.
     totalRecords =
+      leadsResult.written +
+      dealsResult.written +
+      contactsResult.written +
+      accountsResult.written;
+    const totalFetched =
       leadsResult.count +
       dealsResult.count +
       contactsResult.count +
       accountsResult.count;
+    const totalSkipped =
+      leadsResult.skipped +
+      dealsResult.skipped +
+      contactsResult.skipped +
+      accountsResult.skipped;
     moduleBreakdown.push(
-      { module: "Leads", count: leadsResult.count },
-      { module: "Deals", count: dealsResult.count },
-      { module: "Contacts", count: contactsResult.count },
-      { module: "Accounts", count: accountsResult.count },
+      { module: "Leads",    fetched: leadsResult.count,    written: leadsResult.written,    skipped: leadsResult.skipped },
+      { module: "Deals",    fetched: dealsResult.count,    written: dealsResult.written,    skipped: dealsResult.skipped },
+      { module: "Contacts", fetched: contactsResult.count, written: contactsResult.written, skipped: contactsResult.skipped },
+      { module: "Accounts", fetched: accountsResult.count, written: accountsResult.written, skipped: accountsResult.skipped },
     );
+
+    // Loud signal in the server log when a sync persisted nothing despite
+    // fetching records. Operators tailing logs catch this immediately; the
+    // chip showing "0 (completed)" instead of "5000 (completed)" is the
+    // user-facing tell.
+    if (totalFetched > 0 && totalRecords === 0) {
+      logger.error(
+        `❌ [DuplicateRadar] Scan persisted 0 records despite fetching ${totalFetched} from Zoho — every upsert was skipped or threw. Check the warnings above (${totalSkipped} skipped).`,
+      );
+    } else if (totalSkipped > 0) {
+      logger.warn(
+        `⚠️ [DuplicateRadar] Scan wrote ${totalRecords}/${totalFetched} records (${totalSkipped} skipped across all modules)`,
+      );
+    }
 
     scanState.percentage = 60;
     broadcastSSE("progress", {
       percentage: 60,
-      message: `All modules fetched (${totalRecords} records)`,
+      message: `All modules fetched (${totalFetched} from Zoho, ${totalRecords} persisted)`,
     });
 
     // Deletion-detection pass: ask Zoho which records were deleted/merged
