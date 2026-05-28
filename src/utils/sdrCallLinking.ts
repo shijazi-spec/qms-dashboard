@@ -23,7 +23,12 @@
  *     this lead/deal after the call"
  */
 
-import { fetchAllZohoRecords, type ZohoCRMRecord, fetchZohoRecords } from "./zohoCRM";
+import {
+  fetchAllZohoRecords,
+  type ZohoCRMRecord,
+  fetchZohoRecords,
+  searchZohoRecords,
+} from "./zohoCRM";
 import { normalizePhoneDigits } from "./callMcpReconciliation";
 import { logger } from "./logger";
 
@@ -132,18 +137,118 @@ export async function findCrmRecordByPhone(
     return { normalized_query, matches: [], scanned_leads: 0, scanned_deals: 0 };
   }
 
+  // ─── Phase 4f: native Zoho search-by-phone (PRIMARY path). ─────────────
+  //
+  // Until this fix, the matcher fetched the first 2,500 Leads + 2,500 Deals
+  // and compared phones in JavaScript. That worked for small CRMs but
+  // SILENTLY missed any matching record sitting beyond the cutoff. The
+  // 2026-05-28 root cause investigation found Dina Attia (Lead phone
+  // 0500966554, owned by r.alsammak) sitting outside the top-2500 window
+  // for one of the user's Sep 2025 calls — even though the normalized
+  // forms (`500966554` ↔ `500966554`) were a perfect match. Zoho's CRM
+  // had grown past 2,500 leads, the lead hadn't been modified recently,
+  // and the scan never reached it.
+  //
+  // The fix: use Zoho's native /crm/v2/<module>/search endpoint with a
+  // `Phone:contains:<9 digits>` criteria. Zoho indexes phone fields and
+  // returns the matching record(s) regardless of how deep they sit in
+  // the CRM, in a single round-trip with no maxRecords cap.
+  //
+  // We search BOTH Phone and Mobile (Zoho stores Saudi cellphones on
+  // either, depending on layout). The OR'd criteria pulls both with
+  // one API call per module.
+  //
+  // Defensive fallback: if the native search returns nothing AND zero
+  // errors (so it's a clean "not found" not a transient failure), we
+  // still run the legacy 2500-record scan as a safety net. Three
+  // reasons we keep the fallback:
+  //   1. Older Zoho instances without phone-field indexing skip the
+  //      search but might still match via JS-side comparison.
+  //   2. The legacy scan catches edge-cases where the phone is stored
+  //      in a custom field the search criteria doesn't cover.
+  //   3. Belt-and-braces — a regression that breaks native search
+  //      degrades to the slower path instead of breaking auto-link.
+  const matches: CrmPhoneMatch[] = [];
+  let scanned_leads = 0;
+  let scanned_deals = 0;
+  let nativeSearchSucceeded = false;
+
+  try {
+    // Native Zoho search-criteria syntax: (Field:operator:value)
+    // We use `contains` instead of `equals` so any of these stored
+    // formats match the 9-digit normalized query:
+    //   0500966554, +966500966554, 00966500966554, 966500966554
+    // All five contain `500966554` as a substring.
+    const criteria = `((Phone:contains:${normalized_query})or(Mobile:contains:${normalized_query}))`;
+    const dealCriteria = `((Phone:contains:${normalized_query})or(Mobile:contains:${normalized_query})or(Contact_Phone:contains:${normalized_query}))`;
+
+    const [leadHits, dealHits] = await Promise.allSettled([
+      searchZohoRecords("Leads", criteria),
+      searchZohoRecords("Deals", dealCriteria),
+    ]);
+
+    if (leadHits.status === "fulfilled") {
+      nativeSearchSucceeded = true;
+      for (const r of leadHits.value) {
+        // Re-verify the match on our side using the same normaliser as
+        // the JS-fallback path, so a Zoho `contains` hit that doesn't
+        // actually normalize to the same 9 digits (e.g. a 12-digit
+        // record that happens to contain the substring) is dropped.
+        const p = normalizePhoneDigits(readLeadPhone(r));
+        if (p && (p === normalized_query || p.endsWith(normalized_query) || normalized_query.endsWith(p))) {
+          matches.push(leadToMatch(r));
+        }
+      }
+    } else {
+      logger.warn("[sdrCallLinking] Native Leads search failed, will fall back to scan", {
+        error: leadHits.reason?.message,
+      });
+    }
+
+    if (dealHits.status === "fulfilled") {
+      nativeSearchSucceeded = true;
+      for (const r of dealHits.value) {
+        const p = normalizePhoneDigits(readDealPhone(r));
+        if (p && (p === normalized_query || p.endsWith(normalized_query) || normalized_query.endsWith(p))) {
+          matches.push(dealToMatch(r));
+        }
+      }
+    } else {
+      logger.warn("[sdrCallLinking] Native Deals search failed, will fall back to scan", {
+        error: dealHits.reason?.message,
+      });
+    }
+  } catch (err: any) {
+    logger.warn("[sdrCallLinking] Native search threw; falling back to JS scan", {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ─── Native search worked AND found a match → done. ────────────────────
+  if (nativeSearchSucceeded && matches.length > 0) {
+    return {
+      normalized_query,
+      matches,
+      // Scan counts are 0 here because we used the indexed search; we
+      // return -1 sentinels could be confusing for the diagnostic UI.
+      // Use 0 + the matches.length speaks for itself.
+      scanned_leads: 0,
+      scanned_deals: 0,
+    };
+  }
+
+  // ─── Fallback (PHASE B): legacy 2500-record scan. ──────────────────────
+  // Runs when:
+  //   (a) Native search threw / partially failed, OR
+  //   (b) Native search returned zero matches — possibly a CRM that
+  //       stores phones in a custom field, or an indexing gap.
+  // Same algorithm we shipped pre-Phase 4f.
   const maxRecords = options.maxRecordsPerModule ?? 2500;
 
-  // Run both fetches in parallel. Each failure is local — partial result
-  // is still useful (e.g. Leads worked, Deals timed out → return Leads).
   const [leadsResult, dealsResult] = await Promise.allSettled([
     fetchAllZohoRecords("Leads", { maxRecords }),
     fetchAllZohoRecords("Deals", { maxRecords }),
   ]);
-
-  const matches: CrmPhoneMatch[] = [];
-  let scanned_leads = 0;
-  let scanned_deals = 0;
 
   if (leadsResult.status === "fulfilled") {
     const leads = leadsResult.value;
@@ -156,7 +261,10 @@ export async function findCrmRecordByPhone(
         p.endsWith(normalized_query) ||
         normalized_query.endsWith(p)
       ) {
-        matches.push(leadToMatch(r));
+        // Avoid duplicate from native search.
+        if (!matches.some((m) => m.module === "Leads" && m.id === r.id)) {
+          matches.push(leadToMatch(r));
+        }
       }
     }
   } else {
@@ -176,7 +284,9 @@ export async function findCrmRecordByPhone(
         p.endsWith(normalized_query) ||
         normalized_query.endsWith(p)
       ) {
-        matches.push(dealToMatch(r));
+        if (!matches.some((m) => m.module === "Deals" && m.id === r.id)) {
+          matches.push(dealToMatch(r));
+        }
       }
     }
   } else {
