@@ -541,7 +541,93 @@
         </div>
 
         <div id="content-sources" class="tab-content hidden fade-in">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Bulk Audio Upload Section — moved to top because it's the
+                 primary day-to-day action on this tab. Five9 + Zoho cards
+                 below are configure-once integrations users return to
+                 rarely; the upload widget is what they open the tab for. -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-600 to-cyan-600">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-white" data-i18n="calls.sec_bulk_upload">Bulk Call Recordings Upload</h3>
+                            <p class="text-sm text-white/80">Upload multiple recordings — agent email & client phone are auto-detected from filenames like <code class="bg-white/20 px-1 rounded">+966500908386 by agent@walaplus.com @ 8_58_04 AM</code></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-blue-400 transition cursor-pointer" id="bulk-audio-dropzone" data-on-click="clickElement" data-args="[&quot;bulk-audio-input&quot;]">
+                        <input type="file" id="bulk-audio-input" class="hidden" accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg" multiple data-on-change="handleBulkAudioSelect" data-pass-event="true">
+                        <svg class="w-10 h-10 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                        </svg>
+                        <p class="text-gray-600 font-medium mb-1">Drop audio/video files here or click to browse</p>
+                        <p class="text-sm text-gray-400">Supports MP3, WAV, M4A, MP4, WebM, OGG (max 25MB each, 50 files)</p>
+                    </div>
+                    <div id="bulk-audio-list" class="hidden mt-4 space-y-2">
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-sm font-medium text-gray-700" data-i18n="calls.f_selected_files">Selected Files</h4>
+                            <button data-on-click="clearBulkAudio" class="text-xs text-red-600 hover:text-red-800">Clear All</button>
+                        </div>
+                        <div id="bulk-audio-files" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                    </div>
+                    <!-- DMAIC Improve: filename is the canonical source of
+                         truth. Every required field (phone, agent email,
+                         date, time) is parsed from the filename, so the
+                         old "Fallback Agent Email / Name" inputs were
+                         removed. Files that don't match the canonical
+                         format are rejected before upload — the parse
+                         preview chips above each file show what was
+                         (and wasn't) extracted.
+                         Canonical: "+966XXXXXXXXX by <email> on M_D_YYYY @ H_M_S AM/PM.ext"
+                    -->
+                    <div class="mt-4 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-900">
+                        <strong>Filename format:</strong>
+                        <code class="font-mono">+966XXXXXXXXX by &lt;agent&gt;@walaplus.com on M_D_YYYY @ H_M_S AM/PM.wav</code>
+                        — every selected file is parsed for phone, agent, date and time. Files missing any field are flagged below and won't upload.
+                    </div>
+                    <div class="mt-4 flex items-center gap-3">
+                        <input type="checkbox" id="bulk-auto-analyze" checked class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                        <label for="bulk-auto-analyze" class="text-sm text-gray-700">Auto-transcribe and analyze after upload (Arabic supported)</label>
+                    </div>
+                    <!-- Phase 4c: persistent amber notice when one or more queued
+                         files are missing their time component. The upload itself
+                         still proceeds — these rows just default to 00:00:00 on
+                         the parsed day — but the operator should see at a glance
+                         that some records will have synthetic call times. -->
+                    <div id="bulk-time-missing-notice" class="mt-3 hidden p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 13a7 7 0 1014 0 7 7 0 00-14 0z"/></svg>
+                        <span>Some queued files have no time component; those records will be saved with <strong>00:00:00</strong> as the call time on the parsed day. You can edit each call's date later from the call details page.</span>
+                    </div>
+                    <button data-on-click="uploadBulkAudioCalls" id="bulk-audio-upload-btn" class="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium disabled:opacity-50" disabled>
+                        <span class="flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                            </svg>
+                            Upload & Process All Files
+                        </span>
+                    </button>
+                    <div id="bulk-audio-progress" class="hidden mt-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium text-gray-700">Processing...</span>
+                            <span id="bulk-progress-text" class="text-sm text-gray-500">0/0</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="bulk-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all w-0"></div>
+                        </div>
+                    </div>
+                    <div id="bulk-audio-results" class="hidden mt-4 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold mb-2">Upload Results</h4>
+                        <div id="bulk-audio-results-content"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-indigo-600 to-purple-600">
                         <div class="flex items-center gap-3">
@@ -649,7 +735,7 @@
                     </div>
                     <div class="p-6">
                         <div class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
-                            <strong>Note:</strong> Zoho stores call <em>activity</em> data (who called, when, duration, linked lead/deal) but NOT the audio recording itself. For audio, use <strong>Bulk Call Recordings Upload</strong> below. The value of this import is surfacing calls the SDR team logged in Zoho but never uploaded a recording for — i.e. visible coverage gaps.
+                            <strong>Note:</strong> Zoho stores call <em>activity</em> data (who called, when, duration, linked lead/deal) but NOT the audio recording itself. For audio, use <strong>Bulk Call Recordings Upload</strong> above. The value of this import is surfacing calls the SDR team logged in Zoho but never uploaded a recording for — i.e. visible coverage gaps.
                         </div>
                         <p class="text-sm text-gray-600 mb-4">
                             Imports go into <code>call_records</code> with status=<code>analyzed</code> so the scorecard can run against the Zoho-stored Description text. Re-running is safe — calls upsert on <code>call_id</code>.
@@ -792,89 +878,6 @@
                 </div>
             </div>
             
-            <!-- Bulk Audio Upload Section -->
-            <div class="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-600 to-cyan-600">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-semibold text-white" data-i18n="calls.sec_bulk_upload">Bulk Call Recordings Upload</h3>
-                            <p class="text-sm text-white/80">Upload multiple recordings — agent email & client phone are auto-detected from filenames like <code class="bg-white/20 px-1 rounded">+966500908386 by agent@walaplus.com @ 8_58_04 AM</code></p>
-                        </div>
-                    </div>
-                </div>
-                <div class="p-6">
-                    <div class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-blue-400 transition cursor-pointer" id="bulk-audio-dropzone" data-on-click="clickElement" data-args="[&quot;bulk-audio-input&quot;]">
-                        <input type="file" id="bulk-audio-input" class="hidden" accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg" multiple data-on-change="handleBulkAudioSelect" data-pass-event="true">
-                        <svg class="w-10 h-10 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
-                        </svg>
-                        <p class="text-gray-600 font-medium mb-1">Drop audio/video files here or click to browse</p>
-                        <p class="text-sm text-gray-400">Supports MP3, WAV, M4A, MP4, WebM, OGG (max 25MB each, 50 files)</p>
-                    </div>
-                    <div id="bulk-audio-list" class="hidden mt-4 space-y-2">
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="text-sm font-medium text-gray-700" data-i18n="calls.f_selected_files">Selected Files</h4>
-                            <button data-on-click="clearBulkAudio" class="text-xs text-red-600 hover:text-red-800">Clear All</button>
-                        </div>
-                        <div id="bulk-audio-files" class="space-y-2 max-h-48 overflow-y-auto"></div>
-                    </div>
-                    <!-- DMAIC Improve: filename is the canonical source of
-                         truth. Every required field (phone, agent email,
-                         date, time) is parsed from the filename, so the
-                         old "Fallback Agent Email / Name" inputs were
-                         removed. Files that don't match the canonical
-                         format are rejected before upload — the parse
-                         preview chips above each file show what was
-                         (and wasn't) extracted.
-                         Canonical: "+966XXXXXXXXX by <email> on M_D_YYYY @ H_M_S AM/PM.ext"
-                    -->
-                    <div class="mt-4 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-900">
-                        <strong>Filename format:</strong>
-                        <code class="font-mono">+966XXXXXXXXX by &lt;agent&gt;@walaplus.com on M_D_YYYY @ H_M_S AM/PM.wav</code>
-                        — every selected file is parsed for phone, agent, date and time. Files missing any field are flagged below and won't upload.
-                    </div>
-                    <div class="mt-4 flex items-center gap-3">
-                        <input type="checkbox" id="bulk-auto-analyze" checked class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
-                        <label for="bulk-auto-analyze" class="text-sm text-gray-700">Auto-transcribe and analyze after upload (Arabic supported)</label>
-                    </div>
-                    <!-- Phase 4c: persistent amber notice when one or more queued
-                         files are missing their time component. The upload itself
-                         still proceeds — these rows just default to 00:00:00 on
-                         the parsed day — but the operator should see at a glance
-                         that some records will have synthetic call times. -->
-                    <div id="bulk-time-missing-notice" class="mt-3 hidden p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
-                        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 13a7 7 0 1014 0 7 7 0 00-14 0z"/></svg>
-                        <span>Some queued files have no time component; those records will be saved with <strong>00:00:00</strong> as the call time on the parsed day. You can edit each call's date later from the call details page.</span>
-                    </div>
-                    <button data-on-click="uploadBulkAudioCalls" id="bulk-audio-upload-btn" class="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium disabled:opacity-50" disabled>
-                        <span class="flex items-center justify-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-                            </svg>
-                            Upload & Process All Files
-                        </span>
-                    </button>
-                    <div id="bulk-audio-progress" class="hidden mt-4">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-sm font-medium text-gray-700">Processing...</span>
-                            <span id="bulk-progress-text" class="text-sm text-gray-500">0/0</span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div id="bulk-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all w-0"></div>
-                        </div>
-                    </div>
-                    <div id="bulk-audio-results" class="hidden mt-4 p-4 rounded-lg">
-                        <h4 class="text-sm font-semibold mb-2">Upload Results</h4>
-                        <div id="bulk-audio-results-content"></div>
-                    </div>
-                </div>
-            </div>
-
             <div class="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h3 class="text-lg font-semibold mb-4" data-i18n="calls.sec_recent_uploads">Recent Uploads</h3>
                 <div id="recent-uploads-list" class="space-y-2">
