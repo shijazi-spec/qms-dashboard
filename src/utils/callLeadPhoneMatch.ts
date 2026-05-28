@@ -89,10 +89,33 @@ export async function findLeadsByPhoneMatch(
   const maxRecords = options.maxRecords ?? 2500;
   const leads = await fetchAllZohoRecords("Leads", { maxRecords });
   const matches: LeadPhoneMatch[] = [];
+  // Minimum overlap length for a suffix match. Without this floor a junk
+  // Lead with Phone="11" (or any <7-digit value) matches every call whose
+  // number happens to end with those digits — producing CRM Compliance
+  // rows that link the call to a completely unrelated record (e.g.
+  // +966505896511 silently auto-linked to a Lead whose phone is "11"
+  // because "966505896511".endsWith("11")). E.164 mobile / landline
+  // numbers are always ≥7 digits, so anything shorter is data noise and
+  // should never anchor a suffix match. We still allow long lead phones
+  // to match shorter call queries (rare, but possible for legacy logs).
+  const MIN_OVERLAP_DIGITS = 7;
   for (const r of leads) {
     const p = normalizePhoneDigits(readPhone(r));
     if (!p) continue;
-    if (p === normalized_query || p.endsWith(normalized_query) || normalized_query.endsWith(p)) {
+    // Skip leads whose stored Phone is too short to be a real number —
+    // they cannot anchor any reliable match.
+    if (p.length < MIN_OVERLAP_DIGITS) continue;
+    const exact = p === normalized_query;
+    // For each suffix-match direction, require the SHORTER side (i.e. the
+    // actual overlap length) to be ≥ MIN_OVERLAP_DIGITS. Comparing
+    // `.length` of the two values is sufficient because the shorter
+    // string is what determines how much of a tail actually matched.
+    const leadEndsWithQuery =
+      p.endsWith(normalized_query) &&
+      normalized_query.length >= MIN_OVERLAP_DIGITS;
+    const queryEndsWithLead =
+      normalized_query.endsWith(p) && p.length >= MIN_OVERLAP_DIGITS;
+    if (exact || leadEndsWithQuery || queryEndsWithLead) {
       const d = r.data || {};
       matches.push({
         id: r.id,
