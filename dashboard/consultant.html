@@ -1145,9 +1145,28 @@
                         // similar.
                         var respText = (data && (data.response || data.message)) || '';
                         if (!respText) {
-                            var serverErr = data && (data.error || data.details);
-                            if (serverErr) {
-                                respText = '**AI Consultant error:** ' + serverErr;
+                            // Prefer `details` (the underlying error message
+                            // from the catch — e.g. "OpenAIError: 401
+                            // Incorrect API key", "RateLimitError",
+                            // "AbortError: aborted") over `error` (the
+                            // generic envelope label like "Failed to process
+                            // message"). The previous version of this code
+                            // showed `data.error || data.details`, which
+                            // always picked the generic label and silently
+                            // dropped the actionable detail — the same
+                            // silent-empty pattern this whole fix was meant
+                            // to kill.
+                            var detail   = data && data.details;
+                            var label    = data && data.error;
+                            var errClass = data && (data.errorClass || '');
+                            if (detail) {
+                                respText = '**AI Consultant error:** ' + detail
+                                    + (errClass ? ' _(' + errClass + ')_' : '')
+                                    + (label && label !== detail ? '\n\n_Server label:_ ' + label : '');
+                            } else if (label) {
+                                respText = '**AI Consultant error:** ' + label
+                                    + (errClass ? ' _(' + errClass + ')_' : '')
+                                    + '\n\nNo `details` field on the server response — check the server log for the underlying exception, or open DevTools → Network → /api/consultant/chat → Response.';
                             } else if (!fallback.ok) {
                                 respText = '**AI Consultant error (HTTP ' + fallback.status + ').** '
                                     + 'The agent did not return a response. Check the server logs '
@@ -1159,6 +1178,11 @@
                                     + 'Try a more specific question or click Retry.';
                             }
                         }
+                        // Always log the full server payload to the console
+                        // so the operator can copy/paste the exact failure
+                        // back to whoever owns the fix, without needing to
+                        // open the Network tab and find the right request.
+                        try { console.error('[Consultant] non-stream error envelope:', data); } catch (_) {}
                         bubble = createAssistantMessage();
                         bubble.innerHTML = renderMarkdown(respText);
                         if (isArabic(respText)) bubble.setAttribute('dir', 'rtl');
