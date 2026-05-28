@@ -3629,6 +3629,58 @@
         //  inline timeline inside Call Details. See loadInlineActivityTimeline
         //  and renderInlineActivityTimeline near viewCall().)
 
+        // Tracks which phone-groups are expanded. Persists across
+        // re-renders (filter changes, refreshes) so an operator drilling
+        // into a noisy number doesn't lose their place every time the
+        // table re-paints. Keyed by the normalized phone (digits-only,
+        // last 10) used as the group key below.
+        const complianceExpandedGroups = new Set();
+
+        // Normalise a phone for grouping. We strip everything that
+        // isn't a digit and keep the trailing 10 digits — that absorbs
+        // the country code (+966, 00966, 966-prefixed, or none) so
+        // "+966501234567", "00966501234567", and "0501234567" all
+        // group together. Rows without any usable phone fall into a
+        // single "Unknown phone" bucket rather than disappearing.
+        function _complianceGroupKey(rec) {
+            const raw = (rec && (rec.contact_phone || rec.source_call_id || '')) + '';
+            const digits = raw.replace(/\D/g, '');
+            if (!digits) return '__unknown__';
+            return digits.length > 10 ? digits.slice(-10) : digits;
+        }
+
+        function _complianceDisplayPhone(rec) {
+            const raw = (rec && rec.contact_phone) ? String(rec.contact_phone).trim() : '';
+            if (raw) return raw;
+            // Fallback to the legacy call_id-encoded phone if metadata
+            // doesn't have one yet (pre-migration rows).
+            const fromCallId = (rec && rec.source_call_id) ? String(rec.source_call_id).trim() : '';
+            if (fromCallId && /\d{6,}/.test(fromCallId)) return fromCallId;
+            return '';
+        }
+
+        function toggleComplianceGroup(key) {
+            if (!key) return;
+            if (complianceExpandedGroups.has(key)) complianceExpandedGroups.delete(key);
+            else complianceExpandedGroups.add(key);
+            renderComplianceTable();
+        }
+
+        function _complianceLeadDealCell(rec) {
+            // Same Zoho deep-link rendering used everywhere else on this
+            // page (org id 766568398, /tab/Leads/ for leads,
+            // /tab/Potentials/ for deals — Zoho's internal name).
+            const id = rec.lead_id || rec.deal_id;
+            if (!id) return '--';
+            const tab = rec.lead_id ? 'Leads' : 'Potentials';
+            const url = `https://crm.zoho.com/crm/org766568398/tab/${tab}/${encodeURIComponent(id)}`;
+            const label = rec.lead_id ? 'Lead' : 'Deal';
+            return `<a href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="text-indigo-600 hover:text-indigo-800 underline" title="Open ${label} ${escapeHtml(String(id))} in Zoho CRM ↗">${escapeHtml(String(id))}</a>`;
+            // csp-safe-inline-handler: stopPropagation only — prevents the
+            // row click (group-toggle) from firing when the operator
+            // clicks the CRM link inside the row. Pure UI plumbing.
+        }
+
         function renderComplianceTable() {
             const tbody = document.getElementById('complianceTable');
 
@@ -3637,36 +3689,112 @@
                 return;
             }
 
-            tbody.innerHTML = complianceRecords.map(rec => `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(rec.call_record_id)}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(rec.agent_email || '--')}</td>
-                    <td class="px-4 py-3 text-sm text-gray-600">${(() => {
-                        // Lead/Deal ID is now a deep link into Zoho CRM so
-                        // operators can jump straight to the record to
-                        // verify why a compliance check failed (notes,
-                        // task, stage). org id 766568398 is the same WalaPlus
-                        // Zoho org used by every other CRM link on this
-                        // page (search/details panels above).
-                        const id = rec.lead_id || rec.deal_id;
-                        if (!id) return '--';
-                        const tab = rec.lead_id ? 'Leads' : 'Potentials';
-                        const url = `https://crm.zoho.com/crm/org766568398/tab/${tab}/${encodeURIComponent(id)}`;
-                        const label = rec.lead_id ? 'Lead' : 'Deal';
-                        return `<a href="${url}" target="_blank" rel="noopener" class="text-indigo-600 hover:text-indigo-800 underline" title="Open ${label} ${escapeHtml(String(id))} in Zoho CRM ↗">${escapeHtml(String(id))}</a>`;
-                    })()}</td>
-                    <td class="px-4 py-3 text-center" title="Did the agent add follow-up Notes to the linked Zoho Lead/Deal after this call? Green = a Note attached to this record was created within the compliance window. Red = no Note found — the call happened but the CRM record was not updated.">${renderCheckmark(rec.notes_updated)}</td>
-                    <td class="px-4 py-3 text-center">${renderCheckmark(rec.call_logged)}</td>
-                    <td class="px-4 py-3 text-center">${renderCheckmark(rec.task_created)}</td>
-                    <td class="px-4 py-3 text-center">${renderCheckmark(rec.stage_updated)}</td>
-                    <td class="px-4 py-3 text-center text-sm font-medium">${_fn(rec.compliance_score || 0)}%</td>
-                    <td class="px-4 py-3 text-center">
-                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${rec.overall_compliance ? 'compliance-pass' : 'compliance-fail'}">
-                            ${escapeHtml(rec.overall_compliance ? WalaPlusI18n.t('dyn.calls.compliant') : WalaPlusI18n.t('dyn.calls.non_compliant'))}
-                        </span>
-                    </td>
-                </tr>
-            `).join('');
+            // Group by normalized phone. Preserves insertion order so
+            // the table still reflects "most recent compliance row
+            // first" (server orders by created_at DESC).
+            const groups = new Map();
+            for (const rec of complianceRecords) {
+                const key = _complianceGroupKey(rec);
+                if (!groups.has(key)) groups.set(key, { key, rows: [], displayPhone: _complianceDisplayPhone(rec) });
+                const g = groups.get(key);
+                g.rows.push(rec);
+                if (!g.displayPhone) g.displayPhone = _complianceDisplayPhone(rec);
+            }
+
+            const html = [];
+            for (const g of groups.values()) {
+                const total = g.rows.length;
+                const passes = g.rows.filter(r => r.overall_compliance).length;
+                const fails = total - passes;
+                const notesOk = g.rows.filter(r => r.notes_updated).length;
+                const loggedOk = g.rows.filter(r => r.call_logged).length;
+                const taskOk = g.rows.filter(r => r.task_created).length;
+                const stageOk = g.rows.filter(r => r.stage_updated).length;
+                const avgScore = Math.round(g.rows.reduce((s, r) => s + (Number(r.compliance_score) || 0), 0) / total);
+
+                // Agent display: usually the same person for every call
+                // to the same number, but on shared leads it can split.
+                const agents = Array.from(new Set(g.rows.map(r => r.agent_email).filter(Boolean)));
+                const agentCell = agents.length === 0 ? '--'
+                    : agents.length === 1 ? escapeHtml(agents[0])
+                    : `${escapeHtml(agents[0])} <span class="text-xs text-gray-400">+${agents.length - 1}</span>`;
+
+                // Lead/Deal display: a single phone usually maps to one
+                // CRM record, but show the count if it spans several.
+                const crmIds = Array.from(new Set(g.rows.map(r => r.lead_id || r.deal_id).filter(Boolean)));
+                const crmCell = crmIds.length === 0 ? '--'
+                    : crmIds.length === 1 ? _complianceLeadDealCell(g.rows.find(r => (r.lead_id || r.deal_id) === crmIds[0]))
+                    : `<span class="text-xs text-gray-500" title="This number is linked to ${crmIds.length} different Zoho records. Expand to see per-call links.">${crmIds.length} records</span>`;
+
+                const isOpen = complianceExpandedGroups.has(g.key);
+                const phoneLabel = g.displayPhone || 'Unknown phone';
+                const phoneDigitsForSearch = g.key === '__unknown__' ? '' : g.key;
+                const zohoSearchUrl = phoneDigitsForSearch
+                    ? `https://crm.zoho.com/crm/org766568398/search?searchword=${encodeURIComponent(phoneDigitsForSearch)}&searchWordKeyType=phone`
+                    : '';
+
+                // Header (parent) row. Whole row is clickable to toggle;
+                // the phone-search link inside calls stopPropagation so
+                // it opens Zoho without also toggling the group.
+                html.push(`
+                    <tr class="hover:bg-indigo-50 cursor-pointer bg-gray-50" data-on-click="toggleComplianceGroup" data-args='["${g.key}"]' title="${total} call${total === 1 ? '' : 's'} to this number — click to ${isOpen ? 'collapse' : 'expand'}">
+                        <td class="px-4 py-3 text-sm font-medium text-gray-900">
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-500 inline-block w-3">${isOpen ? '▼' : '▶'}</span>
+                                <span>${escapeHtml(phoneLabel)}</span>
+                                <span class="text-xs text-gray-500">(${total} call${total === 1 ? '' : 's'})</span>
+                                ${zohoSearchUrl ? `<a href="${zohoSearchUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="text-xs text-indigo-600 hover:text-indigo-800 underline ms-1" title="Search this number in Zoho CRM ↗">CRM ↗</a>` : ''}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${agentCell}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${crmCell}</td>
+                        <td class="px-4 py-3 text-center text-xs font-medium text-gray-700" title="Calls in this group where a Note was added to the Zoho record">${notesOk}/${total}</td>
+                        <td class="px-4 py-3 text-center text-xs font-medium text-gray-700" title="Calls in this group logged as a Zoho Call activity">${loggedOk}/${total}</td>
+                        <td class="px-4 py-3 text-center text-xs font-medium text-gray-700" title="Calls in this group that produced a follow-up Task">${taskOk}/${total}</td>
+                        <td class="px-4 py-3 text-center text-xs font-medium text-gray-700" title="Calls in this group that advanced the Lead status / Deal stage">${stageOk}/${total}</td>
+                        <td class="px-4 py-3 text-center text-sm font-medium">${avgScore}%</td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${fails === 0 ? 'compliance-pass' : (passes === 0 ? 'compliance-fail' : 'compliance-partial')}" title="${passes} compliant, ${fails} non-compliant">
+                                ${passes}/${total} ✓
+                            </span>
+                        </td>
+                    </tr>
+                `);
+
+                if (!isOpen) continue;
+
+                // Child rows: one per individual call, indented and
+                // visually grouped. Shows the per-call checks so the
+                // operator can see exactly which call(s) in the group
+                // missed the activity / task / note.
+                for (const rec of g.rows) {
+                    const when = rec.call_date ? new Date(rec.call_date).toLocaleString() : '';
+                    html.push(`
+                        <tr class="hover:bg-gray-50 bg-white">
+                            <td class="ps-10 pe-4 py-2 text-xs text-gray-600">
+                                <div class="flex flex-col">
+                                    <span class="text-gray-700">Call #${escapeHtml(String(rec.call_record_id))}</span>
+                                    ${when ? `<span class="text-[11px] text-gray-400">${escapeHtml(when)}</span>` : ''}
+                                </div>
+                            </td>
+                            <td class="px-4 py-2 text-xs text-gray-600">${escapeHtml(rec.agent_email || '--')}</td>
+                            <td class="px-4 py-2 text-xs text-gray-600">${_complianceLeadDealCell(rec)}</td>
+                            <td class="px-4 py-2 text-center" title="Did the agent add follow-up Notes to the linked Zoho Lead/Deal after this call?">${renderCheckmark(rec.notes_updated)}</td>
+                            <td class="px-4 py-2 text-center">${renderCheckmark(rec.call_logged)}</td>
+                            <td class="px-4 py-2 text-center">${renderCheckmark(rec.task_created)}</td>
+                            <td class="px-4 py-2 text-center">${renderCheckmark(rec.stage_updated)}</td>
+                            <td class="px-4 py-2 text-center text-xs font-medium">${_fn(rec.compliance_score || 0)}%</td>
+                            <td class="px-4 py-2 text-center">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${rec.overall_compliance ? 'compliance-pass' : 'compliance-fail'}">
+                                    ${escapeHtml(rec.overall_compliance ? WalaPlusI18n.t('dyn.calls.compliant') : WalaPlusI18n.t('dyn.calls.non_compliant'))}
+                                </span>
+                            </td>
+                        </tr>
+                    `);
+                }
+            }
+
+            tbody.innerHTML = html.join('');
         }
 
         function renderAnalytics() {
@@ -5590,9 +5718,9 @@
                 alert(WalaPlusI18n.t('dyn.calls.no_export_compliance'));
                 return;
             }
-            const headers = ['Call Record ID','Agent Email','Lead/Deal ID','Notes Updated','Call Logged','Task Created','Stage Updated','Score (%)','Overall Compliance'];
+            const headers = ['Call Record ID','Phone','Agent Email','Lead/Deal ID','Notes Updated','Call Logged','Task Created','Stage Updated','Score (%)','Overall Compliance'];
             const rows = [headers, ...complianceRecords.map(r => [
-                r.call_record_id, r.agent_email || '', r.lead_id || r.deal_id || '',
+                r.call_record_id, r.contact_phone || '', r.agent_email || '', r.lead_id || r.deal_id || '',
                 r.notes_updated ? 'Yes' : 'No', r.call_logged ? 'Yes' : 'No',
                 r.task_created ? 'Yes' : 'No', r.stage_updated ? 'Yes' : 'No',
                 r.compliance_score || 0, r.overall_compliance ? 'Compliant' : 'Non-Compliant'
