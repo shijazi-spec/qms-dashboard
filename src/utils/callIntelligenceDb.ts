@@ -240,6 +240,30 @@ export async function initCallIntelligenceTables(): Promise<void> {
       call_date TIMESTAMP,
       status VARCHAR(50) NOT NULL DEFAULT 'pending',
       metadata JSONB DEFAULT '{}',
+      -- audio_blob* columns: persist the recording bytes in Postgres so
+      -- the audio survives a Replit redeploy that wipes the uploads/
+      -- filesystem. Declared in the canonical CREATE TABLE (not only
+      -- via the runtime ensureAudioBlobColumns() ALTER) so Replit's
+      -- deploy-time schema-diff tool sees them as expected columns and
+      -- doesn't propose dropping them on every Publish flow.
+      -- The runtime ensureAudioBlobColumns() ALTER is still kept as a
+      -- belt-and-braces safety net for environments where this CREATE
+      -- TABLE did not run with these columns (legacy snapshots).
+      audio_blob BYTEA,
+      audio_blob_mime VARCHAR(64),
+      audio_blob_size INTEGER,
+      -- audio_file_path: filesystem location of the recording for
+      -- environments that still write to disk. Kept in sync with the
+      -- audio_blob columns for fast playback / re-transcribe before
+      -- the blob is read. Was historically only added via a runtime
+      -- ALTER; declared here so the schema-diff tool doesn't flag it.
+      audio_file_path TEXT,
+      -- linked_via: diagnostic field that records how a Zoho Lead/Deal
+      -- was attached to this call (phone, activity, manual). Used by
+      -- the auto-link analytics + the "Why was this linked?" tooltip
+      -- in the CRM Link cell. Same story — declared here for schema
+      -- parity with the runtime ALTER at line ~659.
+      linked_via VARCHAR(20),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
