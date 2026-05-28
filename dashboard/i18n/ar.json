@@ -2599,6 +2599,8 @@
     "sec_recent_uploads": "الرفعات الأخيرة",
     "sec_select_call": "اختر مكالمة للتقييم",
     "col_date": "التاريخ",
+    "col_record_date": "تاريخ المكالمة",
+    "col_uploaded_date": "تاريخ الرفع",
     "f_agent_name": "اسم المندوب *",
     "f_agent_email": "بريد المندوب *",
     "f_contact_name": "اسم جهة الاتصال",

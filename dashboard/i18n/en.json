@@ -2599,6 +2599,8 @@
     "sec_recent_uploads": "Recent Uploads",
     "sec_select_call": "Select Call to Evaluate",
     "col_date": "Date",
+    "col_record_date": "Record Date",
+    "col_uploaded_date": "Uploaded Date",
     "f_agent_name": "Agent Name *",
     "f_agent_email": "Agent Email *",
     "f_contact_name": "Contact Name",

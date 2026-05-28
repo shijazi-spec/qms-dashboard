@@ -470,7 +470,15 @@
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_contact">Contact</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_direction">Direction</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_duration">Duration</th>
-                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_date">Date</th>
+                                <!-- Phase 4a: "Date" → "Record Date" so operators can tell at a
+                                     glance that this column is the actual call moment parsed
+                                     from the filename, not when the upload landed. -->
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_record_date">Record Date</th>
+                                <!-- Phase 4a: NEW column. Shows call_records.created_at — the
+                                     moment the record was uploaded / synced into the platform.
+                                     Lets the team distinguish "called 3 months ago, uploaded
+                                     yesterday" from "called yesterday, uploaded yesterday". -->
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.col_uploaded_date">Uploaded Date</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">CRM Link</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -795,6 +803,15 @@
                     <div class="mt-4 flex items-center gap-3">
                         <input type="checkbox" id="bulk-auto-analyze" checked class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
                         <label for="bulk-auto-analyze" class="text-sm text-gray-700">Auto-transcribe and analyze after upload (Arabic supported)</label>
+                    </div>
+                    <!-- Phase 4c: persistent amber notice when one or more queued
+                         files are missing their time component. The upload itself
+                         still proceeds — these rows just default to 00:00:00 on
+                         the parsed day — but the operator should see at a glance
+                         that some records will have synthetic call times. -->
+                    <div id="bulk-time-missing-notice" class="mt-3 hidden p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 13a7 7 0 1014 0 7 7 0 00-14 0z"/></svg>
+                        <span>Some queued files have no time component; those records will be saved with <strong>00:00:00</strong> as the call time on the parsed day. You can edit each call's date later from the call details page.</span>
                     </div>
                     <button data-on-click="uploadBulkAudioCalls" id="bulk-audio-upload-btn" class="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium disabled:opacity-50" disabled>
                         <span class="flex items-center justify-center gap-2">
@@ -3084,7 +3101,13 @@
                         </span>
                     </td>
                     <td class="px-4 py-3 text-sm text-center text-gray-600" id="row-dur-${call.id}">${formatDuration(call.duration_seconds)}</td>
+                    <!-- Record Date: the call's actual moment (parsed from the
+                         filename M_D_YYYY @ H_M_S). -->
                     <td class="px-4 py-3 text-sm text-center text-gray-600">${escapeHtml(_fd(call.call_date))}</td>
+                    <!-- Uploaded Date: when the row landed in call_records.
+                         For bulk uploads, that's the moment the file hit /upload-audio;
+                         for Zoho sync, the moment runZohoCallsImport created the row. -->
+                    <td class="px-4 py-3 text-sm text-center text-gray-600">${escapeHtml(_fd(call.created_at))}</td>
                     <td class="px-4 py-3 text-center">${renderCrmLinkCell(call)}</td>
                     <td class="px-4 py-3 text-center">
                         ${renderCallStatusBadge(call.status)}
@@ -5235,7 +5258,18 @@
                 phone: '', phone_suffix: '',
                 agentEmail: '', agentName: '',
                 date_iso: '', date_human: '', time_human: '',
-                complete: false, missing: [],
+                // `complete` = every field present (phone + agent + date + time).
+                // `uploadable` = the minimum the upload path needs:
+                //   phone + agent + date. Time is optional — files missing only
+                //   the time component upload with a default 00:00:00 stamp and
+                //   surface as an amber warning chip instead of a red blocker.
+                //   This is the Phase 4c behaviour (user asked: "accept upload
+                //   when no time after the date with an alert only").
+                // `missing` lists the field names that didn't parse, regardless
+                // of whether the file is still uploadable.
+                complete: false,
+                uploadable: false,
+                missing: [],
             };
             if (!name) return out;
             const stem = String(name).replace(/\.[^./\\]+$/, '');
@@ -5292,19 +5326,34 @@
                 out.missing.push('time');
             }
 
-            if (mm && dd && yyyy && hh != null && mi != null && ss != null) {
+            if (mm && dd && yyyy) {
                 // Build an ISO local string. Saudi Arabia is UTC+3 with
                 // no DST; we send local time and let the backend record
                 // it as the call time. Anchoring to the actual call
                 // moment is what fixes the "every record stamped with
                 // upload date" bug.
+                //
+                // Phase 4c: if the filename has no time, fall back to
+                // 00:00:00 so the date still anchors the row to the
+                // correct day. The amber "time missing" chip on the
+                // upload preview makes it clear to the operator that
+                // the time stamp is synthetic.
                 const pad = (n) => String(n).padStart(2, '0');
-                out.date_iso = `${yyyy}-${pad(mm)}-${pad(dd)}T${pad(hh)}:${pad(mi)}:${pad(ss)}`;
+                const hhSafe = hh != null ? hh : 0;
+                const miSafe = mi != null ? mi : 0;
+                const ssSafe = ss != null ? ss : 0;
+                out.date_iso = `${yyyy}-${pad(mm)}-${pad(dd)}T${pad(hhSafe)}:${pad(miSafe)}:${pad(ssSafe)}`;
                 const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mm - 1];
                 out.date_human = `${monthName} ${dd}, ${yyyy}`;
             }
 
             out.complete = out.missing.length === 0;
+            // Uploadable = phone + agent + date present. Time missing is a
+            // warning, not a blocker. Phone / agent / date missing remain
+            // hard errors because without them the row can't be deduped,
+            // routed to an SDR, or filtered by day.
+            const blocking = out.missing.filter((m) => m !== 'time');
+            out.uploadable = blocking.length === 0;
             return out;
         }
 
@@ -5325,10 +5374,15 @@
             // BEFORE upload. Files missing any required field render with
             // an amber border + warning chip and the global upload button
             // is disabled until they're removed.
-            let hasIncomplete = false;
+            // Phase 4c: distinguish "blocking" issues (no phone / no agent /
+            // no date — these prevent upload) from "warnings" (missing time
+            // only — upload still succeeds, time defaults to 00:00:00).
+            let hasBlocking = false;
+            let hasTimeWarning = false;
             filesDiv.innerHTML = bulkAudioFiles.map((file, idx) => {
                 const p = parseCallFilename(file.name);
-                if (!p.complete) hasIncomplete = true;
+                if (!p.uploadable) hasBlocking = true;
+                if (p.uploadable && !p.time_human) hasTimeWarning = true;
                 const chip = (cls, text) => `<span class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${cls}">${text}</span>`;
                 const phoneChip = p.phone
                     ? chip('bg-blue-100 text-blue-800', `📞 ${escapeHtml(p.phone)}`)
@@ -5342,12 +5396,19 @@
                 const dateChip = p.date_human
                     ? chip('bg-purple-100 text-purple-800', `📅 ${escapeHtml(p.date_human)}`)
                     : chip('bg-red-100 text-red-800', '⚠ date missing');
+                // Time missing now renders as an amber warning (uploadable)
+                // instead of a red blocker. The 00:00:00 default goes onto the
+                // ISO stamp so the row anchors to the correct day.
                 const timeChip = p.time_human
                     ? chip('bg-purple-50 text-purple-700', `🕒 ${escapeHtml(p.time_human)}`)
-                    : chip('bg-red-100 text-red-800', '⚠ time missing');
-                const cardClass = p.complete
-                    ? 'p-2 bg-blue-50 rounded-lg'
-                    : 'p-2 bg-red-50 border border-red-200 rounded-lg';
+                    : chip('bg-amber-100 text-amber-800', '⏱ time missing (will use 00:00:00)');
+                // Card colouring tiers: green-tinted on full parse,
+                // amber on time-only warning, red on hard-blocker.
+                const cardClass = !p.uploadable
+                    ? 'p-2 bg-red-50 border border-red-200 rounded-lg'
+                    : (p.complete
+                        ? 'p-2 bg-blue-50 rounded-lg'
+                        : 'p-2 bg-amber-50 border border-amber-200 rounded-lg');
                 return `
                 <div class="${cardClass}">
                     <div class="flex items-center justify-between gap-2">
@@ -5369,15 +5430,23 @@
                 `;
             }).join('');
 
-            // Disable the upload button if ANY file failed to parse. Forces
-            // the user to either rename or remove malformed files before
-            // they enter the dataset — keeps the table clean and avoids
-            // the historical "Sep 1, 2025" stamped-with-upload-date bug.
+            // Disable the upload button only when a file has a HARD-BLOCKING
+            // missing field (phone / agent / date). Time-missing files are
+            // still uploadable — they default to 00:00:00 on the parsed day
+            // so the row still anchors correctly. A persistent amber notice
+            // surfaces under the button so the operator confirms the
+            // synthetic-time semantic before pressing Upload.
             const btn = document.getElementById('bulk-audio-upload-btn');
-            btn.disabled = hasIncomplete;
-            btn.title = hasIncomplete
-                ? 'One or more filenames are missing a required field. Rename or remove them to enable upload.'
-                : '';
+            btn.disabled = hasBlocking;
+            btn.title = hasBlocking
+                ? 'One or more filenames are missing phone / agent / date. Rename or remove those files to enable upload.'
+                : (hasTimeWarning
+                    ? 'One or more filenames have no time; those rows will use 00:00:00 as the call time.'
+                    : '');
+            const notice = document.getElementById('bulk-time-missing-notice');
+            if (notice) {
+                notice.classList.toggle('hidden', !hasTimeWarning || hasBlocking);
+            }
         }
 
         function removeBulkAudioFile(idx) {
@@ -5401,18 +5470,35 @@
 
             const autoAnalyze = document.getElementById('bulk-auto-analyze').checked;
 
-            // DMAIC Improve: strict filename enforcement. Every file must
-            // parse to a complete record (phone + agent + date + time)
-            // — no more fallback inputs, no more "Sep 1, 2025"
-            // upload-date stamping. Files that don't comply are blocked
-            // at the UI (button disabled) and again here as a safety net.
-            const incomplete = bulkAudioFiles.filter(f => !parseCallFilename(f.name).complete);
-            if (incomplete.length > 0) {
-                alert(`${incomplete.length} file(s) don't match the canonical filename format.\n\n` +
+            // Filename enforcement (Phase 4c relaxation):
+            //   - Phone / agent / date missing  → BLOCKING. Without these
+            //     we can't dedupe, route to an SDR, or filter by day; we
+            //     refuse to upload.
+            //   - Time missing                  → WARNING. We default the
+            //     time component to 00:00:00 on the parsed day so the row
+            //     still anchors to the right calendar date. A confirm
+            //     dialog asks the operator to acknowledge the synthetic
+            //     time stamp before proceeding.
+            const blocking = bulkAudioFiles.filter(f => !parseCallFilename(f.name).uploadable);
+            if (blocking.length > 0) {
+                alert(`${blocking.length} file(s) are missing required fields (phone, agent, or date).\n\n` +
                       `Expected: +966XXXXXXXXX by <agent>@walaplus.com on M_D_YYYY @ H_M_S AM/PM.wav\n\n` +
                       `Rename or remove these files first:\n` +
-                      incomplete.slice(0, 5).map(f => '• ' + f.name).join('\n'));
+                      blocking.slice(0, 5).map(f => '• ' + f.name).join('\n'));
                 return;
+            }
+            const timeMissing = bulkAudioFiles.filter(f => {
+                const p = parseCallFilename(f.name);
+                return p.uploadable && !p.time_human;
+            });
+            if (timeMissing.length > 0) {
+                const proceed = confirm(
+                    `${timeMissing.length} file(s) have no time component in their filename.\n\n` +
+                    `These rows will be saved with 00:00:00 as the call time on the parsed day.\n` +
+                    `You can edit each call's date later from the call details page.\n\n` +
+                    `Proceed?`,
+                );
+                if (!proceed) return;
             }
 
             const btn = document.getElementById('bulk-audio-upload-btn');
