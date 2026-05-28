@@ -4684,6 +4684,11 @@ export interface CsLifecycleViolationRow {
   domain: string | null;
   current_phase: string | null;
   days_since_modified: number | null;
+  cs_owner_name: string | null;
+  customer_since: string | null;
+  renewal_date: string | null;
+  churn_date: string | null;
+  health: string | null;
   violation: CsViolation;
 }
 
@@ -4737,6 +4742,18 @@ export async function scanCsLifecycleViolations(opts: {
     evaluations.push(ev);
     if (!ev.is_cs_deal) continue;
 
+    // Pull the Customer Success section detail fields for display alongside
+    // each violation (CS owner, customer-since, renewal/churn dates, health).
+    // Same extractor evaluateCsLifecycle uses, so values stay consistent.
+    const detail = extractCsFieldsFromRawData(row.raw_data, {
+      domain: row.domain,
+    });
+    const fmtDate = (d: string | Date | null | undefined): string | null => {
+      if (!d) return null;
+      const s = typeof d === "string" ? d : d.toISOString();
+      return s.slice(0, 10);
+    };
+
     for (const v of ev.violations) {
       if (opts.severity && v.severity !== opts.severity) continue;
       if (opts.code && v.code !== opts.code) continue;
@@ -4748,6 +4765,11 @@ export async function scanCsLifecycleViolations(opts: {
         domain: row.domain ?? null,
         current_phase: ev.current_phase,
         days_since_modified: ev.days_since_modified,
+        cs_owner_name: detail.cs_owner_name ?? null,
+        customer_since: fmtDate(detail.customer_since),
+        renewal_date: fmtDate(detail.renewal_date),
+        churn_date: fmtDate(detail.churn_date),
+        health: detail.health ?? null,
         violation: v,
       });
     }

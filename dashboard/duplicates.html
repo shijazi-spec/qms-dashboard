@@ -1014,13 +1014,18 @@
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;account&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="account">Account <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;domain&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;phase&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="phase">Phase <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">CS Owner</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Customer Since</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Renewal Date</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Churn Date</th>
+                            <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Health</th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;days&quot;]" class="cs-lifecycle-sort px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="days">Days since modified <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="violation">Violation <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;message&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="message">Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody id="csLifecycleTable" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
+                        <tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -5015,7 +5020,7 @@
                 }
             });
             const body = document.getElementById('csLifecycleTable');
-            body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
+            body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
 
             // Ask for the full deal corpus. The bulk Zoho sync caps each
             // module at 5,000 records so 10,000 comfortably covers every
@@ -5032,7 +5037,7 @@
                 const data = await res.json();
                 renderCsLifecycle(data);
             } catch (e) {
-                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-red-600">Failed to load: ' + escapeHtml(String(e.message || e)) + '</td></tr>';
+                body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-red-600">Failed to load: ' + escapeHtml(String(e.message || e)) + '</td></tr>';
             }
         }
 
@@ -5060,6 +5065,11 @@
                         domain: v.domain,
                         current_phase: v.current_phase,
                         days_since_modified: v.days_since_modified,
+                        cs_owner_name: v.cs_owner_name,
+                        customer_since: v.customer_since,
+                        renewal_date: v.renewal_date,
+                        churn_date: v.churn_date,
+                        health: v.health,
                         violations: [],
                     });
                 }
@@ -5148,7 +5158,7 @@
             const body = document.getElementById('csLifecycleTable');
             const allViolations = data.violations || [];
             if (allViolations.length === 0) {
-                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No violations detected. CS is compliant for the current filter.</td></tr>';
+                body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">No violations detected. CS is compliant for the current filter.</td></tr>';
                 return;
             }
             // Each API row is one (deal × violation) pair. Group into one
@@ -5179,6 +5189,11 @@
                     + '<td class="px-3 py-2 text-xs text-gray-800">' + accountCell + '</td>'
                     + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(g.domain || '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(g.current_phase || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(g.cs_owner_name || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs whitespace-nowrap text-gray-600">' + escapeHtml(g.customer_since || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs whitespace-nowrap text-gray-600">' + escapeHtml(g.renewal_date || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs whitespace-nowrap text-gray-600">' + escapeHtml(g.churn_date || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-end text-gray-700">' + escapeHtml(g.health == null || g.health === '' ? '—' : String(g.health)) + '</td>'
                     + '<td class="px-3 py-2 text-xs text-end text-gray-600">' + (g.days_since_modified == null ? '—' : g.days_since_modified) + '</td>'
                     + '<td class="px-3 py-2 text-xs"><div class="flex flex-wrap gap-1">' + violationPills + '</div></td>'
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + messageStack + '</td>'

@@ -292,6 +292,8 @@ export function extractCsFieldsFromRawData(
   company_domain?: string | null;
   churn_reason?: string | null;
   renewal_date?: string | Date | null;
+  cs_owner_name?: string | null;
+  health?: string | null;
 } {
   if (!rawData || typeof rawData !== "object") {
     return { domain: context.domain ?? null };
@@ -423,6 +425,37 @@ export function extractCsFieldsFromRawData(
     ]),
   );
 
+  // CS Owner display name — surfaced for the lifecycle violations table so CS
+  // can see who owns the deal without opening Zoho. Tolerant of the common
+  // Zoho key variants; a lookup field may arrive as an object {name}.
+  const csOwnerRaw = tryKeysOrNormalized(
+    envOr("DUPLICATE_RADAR_FIELD_CS_OWNER", [
+      "CS_Owner_Name",
+      "cs_owner_name",
+      "CSOwnerName",
+      "CS Owner Name",
+      "CS_Owner1",
+      "CS_Owner",
+    ]),
+  );
+  const csOwnerName =
+    csOwnerRaw == null
+      ? null
+      : typeof csOwnerRaw === "object"
+        ? ((csOwnerRaw as Record<string, unknown>).name == null
+            ? null
+            : String((csOwnerRaw as Record<string, unknown>).name))
+        : String(csOwnerRaw);
+  // CS Health score — display only.
+  const healthRaw = tryKeysOrNormalized(
+    envOr("DUPLICATE_RADAR_FIELD_HEALTH", [
+      "Health",
+      "health",
+      "CS_Health",
+      "Customer_Health",
+    ]),
+  );
+
   const arrNum =
     arrRaw == null
       ? null
@@ -450,6 +483,9 @@ export function extractCsFieldsFromRawData(
         : String(churnReasonRaw).trim() || null,
     renewal_date:
       renewalDateRaw == null ? null : (renewalDateRaw as string | Date),
+    cs_owner_name:
+      csOwnerName == null ? null : csOwnerName.trim() || null,
+    health: healthRaw == null ? null : String(healthRaw).trim() || null,
   };
 }
 
