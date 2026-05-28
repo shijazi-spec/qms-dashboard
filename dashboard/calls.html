@@ -4184,7 +4184,15 @@
                                         <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.direction_label'))}</dt><dd class="font-medium">${escapeHtml(data.record?.direction || '--')}</dd></div>
                                         <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.duration_label'))}</dt><dd class="font-medium" id="callDuration-${callId}">${formatDuration(data.record?.duration_seconds)}</dd></div>
                                         <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('calls.details_phone_label'))}</dt><dd class="font-medium font-mono text-sm">${escapeHtml(rawPhone || '--')}</dd></div>
-                                        <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.lead_id_label'))}</dt><dd class="font-medium">${leadDirectUrl ? `<a href="${leadDirectUrl}" target="_blank" rel="noopener" class="text-blue-600 hover:underline" data-testid="link-lead-${escapeHtml(data.record.lead_id)}">${escapeHtml(data.record.lead_id)}</a>` : `<span class="text-gray-400">--</span> <button type="button" data-on-click="autoLinkLeadByCall" data-args="[${callId}]" class="ms-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700" data-testid="button-auto-link-lead-${callId}">${escapeHtml(WalaPlusI18n.t('dyn.calls.auto_link_lead'))}</button>`}</dd></div>
+                                        <!-- Phase 5e: the inline "Match by phone" button used to live
+                                             here. Removed per operator review on 2026-05-28: it duplicated
+                                             both the sidebar "Re-run auto-link" link (also retired) and the
+                                             primary CRM Compliance "Run compliance now" button — three buttons
+                                             firing /api/calls/:id/auto-link with subtly different follow-up
+                                             behaviour. The single surviving entry point is "Run compliance
+                                             now" in the CRM Compliance section below, which auto-links AND
+                                             then runs the compliance check in one click. -->
+                                        <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.lead_id_label'))}</dt><dd class="font-medium">${leadDirectUrl ? `<a href="${leadDirectUrl}" target="_blank" rel="noopener" class="text-blue-600 hover:underline" data-testid="link-lead-${escapeHtml(data.record.lead_id)}">${escapeHtml(data.record.lead_id)}</a>` : `<span class="text-gray-400">--</span>`}</dd></div>
                                         <div class="flex justify-between"><dt class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.status_label'))}</dt><dd><span class="px-2 py-1 rounded-full text-xs font-medium status-${escapeHtml(data.record?.status)}">${escapeHtml(data.record?.status)}</span></dd></div>
                                     </dl>
                                 </div>
@@ -4254,8 +4262,14 @@
                             <!-- Activity Timeline — inlined (was a separate modal).
                                  Loads async into #inlineActivityBody after the
                                  outer markup mounts so a slow Zoho fetch doesn't
-                                 block the Call Details modal opening. -->
-                            <div class="pt-6 border-t">
+                                 block the Call Details modal opening.
+                                 Phase 5e: the wrapper has an id so the loader
+                                 can hide the whole section (header + spacer
+                                 included) when the call has no CRM link, instead
+                                 of just rendering an "Activities can't be loaded
+                                 without a CRM link" placeholder underneath the
+                                 header. -->
+                            <div id="inlineActivitySection" class="pt-6 border-t">
                                 <div class="flex items-center justify-between mb-3">
                                     <h4 class="font-semibold text-gray-900">${escapeHtml(WalaPlusI18n.t('calls.details_activity_title'))}</h4>
                                     <span class="text-xs text-gray-500">${escapeHtml(WalaPlusI18n.t('calls.details_activity_subtitle'))}</span>
@@ -4321,7 +4335,13 @@
                                     ${dealDirectUrl ? `<a href="${dealDirectUrl}" target="_blank" rel="noopener" class="inline-flex items-center justify-between gap-2 px-3 py-2 bg-indigo-50 text-indigo-800 rounded hover:bg-indigo-100 text-sm"><span>${escapeHtml(WalaPlusI18n.t('calls.details_crm_open_deal'))}</span><span class="text-xs">↗</span></a>` : ''}
                                     ${leadDirectUrl ? `<a href="${leadDirectUrl}" target="_blank" rel="noopener" class="inline-flex items-center justify-between gap-2 px-3 py-2 bg-green-50 text-green-800 rounded hover:bg-green-100 text-sm"><span>${escapeHtml(WalaPlusI18n.t('calls.details_crm_open_lead'))}</span><span class="text-xs">↗</span></a>` : ''}
                                     ${zohoSearchUrl ? `<a href="${zohoSearchUrl}" target="_blank" rel="noopener" class="inline-flex items-center justify-between gap-2 px-3 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 text-sm"><span>${escapeHtml(WalaPlusI18n.t('calls.details_crm_search_phone'))}</span><span class="text-xs">↗</span></a>` : `<p class="text-xs text-gray-400">${escapeHtml(WalaPlusI18n.t('calls.details_crm_no_phone'))}</p>`}
-                                    ${(!leadDirectUrl && !dealDirectUrl) ? `<button type="button" data-on-click="autoLinkCall" data-args="[${callId}]" class="text-xs text-amber-700 hover:text-amber-900 underline self-start mt-1">${escapeHtml(WalaPlusI18n.t('calls.details_crm_relink'))}</button>` : ''}
+                                    <!-- Phase 5e: the "Re-run auto-link" link used to live
+                                         here on unlinked calls. Removed per operator review
+                                         on 2026-05-28 — it was the second of three buttons
+                                         all wired to /api/calls/:id/auto-link. The single
+                                         surviving entry point is "Run compliance now" in
+                                         the CRM Compliance section below, which auto-links
+                                         AND runs the compliance check in one click. -->
                                 </div>
                             </div>
 
@@ -4546,11 +4566,14 @@
             }
 
             if (fetchTargets.length === 0) {
-                body.innerHTML = `
-                    <div class="p-4 text-center text-gray-500 text-xs">
-                        No Zoho Lead/Deal linked to this call (or any peer call on the same phone).
-                        Activities can't be loaded without a CRM link.
-                    </div>`;
+                // Phase 5e: hide the ENTIRE section (header + body + spacer)
+                // when the call has no CRM link, instead of just rendering
+                // an "Activities can't be loaded" placeholder underneath
+                // the header. The "Compliance has not been checked" banner
+                // in the CRM Compliance section above already tells the
+                // operator the same thing in better words.
+                const section = document.getElementById('inlineActivitySection');
+                if (section) section.classList.add('hidden');
                 return;
             }
 
@@ -4861,18 +4884,17 @@
             const strengths = (evaluation.top_strengths || []).slice(0, 3);
             const gaps = (evaluation.top_gaps || []).slice(0, 3);
 
-            // DMAIC Step 5 — if this row was backfilled from v1.5,
-            // surface a "Previously: X (v1.5)" footnote so the audit
-            // record stays visible alongside the new COPC score.
-            const legacyV1Score = evaluation.legacy_score_v1;
-            const legacyV1Name = evaluation.legacy_scorecard_name_v1;
-            const legacyFootnote = (legacyV1Score != null)
-                ? `<div class="mt-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800">
-                       <strong>Audit:</strong> backfilled from v1 score
-                       <span class="font-mono">${escapeHtml(Math.round(Number(legacyV1Score)))}%</span>
-                       (originally scored against ${escapeHtml(legacyV1Name || 'WalaaPlus Sales Quality Scorecard v1.5')})
-                   </div>`
-                : '';
+            // Phase 5e: the "Audit: backfilled from v1 score X% (originally
+            // scored against WalaPlus Sales Quality Scorecard v1.X)" footnote
+            // used to render here on every re-scored row. Removed per
+            // operator review on 2026-05-28 — it surfaced an internal data
+            // migration detail to QA reviewers who don't need it, and
+            // competed visually with the new canonical COPC score shown
+            // immediately below. The historical legacy score still lives on
+            // the sdr_call_evaluations row (legacy_score_v1 +
+            // legacy_scorecard_name_v1 columns) for audit/export — only the
+            // in-modal display is gone.
+            const legacyFootnote = '';
 
             slot.innerHTML = `
                 <div class="border-t pt-6 mt-2">
