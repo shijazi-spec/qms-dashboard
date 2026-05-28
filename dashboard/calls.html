@@ -2052,10 +2052,20 @@
                 //   - Two-of-three success still renders the page
                 //   - Total failure still hides the spinner and shows noData
                 //     instead of locking the user out
+                // Phase 5a — align all 3 fetches on the same 500 cap so
+                // Overview / Records / Compliance all reflect the same
+                // call set. Previously compliance was capped at 100 which
+                // meant if the user had 208 analyzed calls, only ~half of
+                // them had compliance status visible in the dashboard.
+                // 500 covers the realistic upper bound for any single
+                // SDR org's recent calls; for larger backlogs the
+                // server-side query is already paginated by /api/calls
+                // and the UI shows "Showing X-Y of N" so growth past 500
+                // is graceful.
                 const [analyticsResult, callsResult, complianceResult] = await Promise.allSettled([
                     _safeJsonFetch('/api/calls/analytics'),
                     _safeJsonFetch('/api/calls?limit=500'),
-                    _safeJsonFetch('/api/calls/compliance?limit=100'),
+                    _safeJsonFetch('/api/calls/compliance?limit=500'),
                 ]);
 
                 const analyticsOk = analyticsResult.status === 'fulfilled' && analyticsResult.value.ok;
@@ -2137,6 +2147,15 @@
             if (tab === 'evaluate' && typeof loadActiveSDRScorecardSummary === 'function') {
                 try { loadActiveSDRScorecardSummary(); }
                 catch (e) { console.error('loadActiveSDRScorecardSummary failed:', e); }
+                // Phase 5a — re-pull the call list when the operator
+                // switches to SDR Evaluation. Previously this only ran
+                // once at page boot (`loadCallsForEval()` in init),
+                // so newly-uploaded calls were invisible from this tab
+                // until a full-page refresh. Reuses the in-memory
+                // callRecords array (same source as the Records tab)
+                // when available, so the two tabs are always in sync.
+                try { loadCallsForEval(); }
+                catch (e) { console.error('loadCallsForEval (tab switch) failed:', e); }
             }
             if (tab === 'coaching') {
                 try { reloadCoachingPlans(); }
@@ -6130,7 +6149,26 @@
 
         async function loadCallsForEval() {
             try {
-                const res = await fetch('/api/calls?limit=50');
+                // Phase 5a — SAME 500-record cap as the Records tab so
+                // SDR Evaluation can see every call the Overview tab claims
+                // exists. Previously the cap was 50 here, which meant the
+                // Overview said "208 total calls" but SDR Evaluation could
+                // only score 50 of them — operators saw inconsistent
+                // numbers and assumed the platform was double-counting.
+                //
+                // We ALSO reuse the in-memory callRecords array populated
+                // by refreshData() if it's already there. That keeps the
+                // SDR Evaluation tab consistent with whatever the operator
+                // is seeing on the Records tab — same agent, same filter,
+                // same call set. Falls back to a fresh fetch when the
+                // cache is empty (rare, but possible if refreshData
+                // partially failed).
+                if (Array.isArray(callRecords) && callRecords.length > 0) {
+                    callsForEval = callRecords.slice();
+                    renderEvalCallsList(callsForEval);
+                    return;
+                }
+                const res = await fetch('/api/calls?limit=500', { cache: 'no-store' });
                 const data = await res.json();
                 callsForEval = data.records || [];
                 renderEvalCallsList(callsForEval);
