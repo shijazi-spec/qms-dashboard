@@ -1205,6 +1205,12 @@
         let summary = {};
         let sourceChart = null;
         let confidenceChart = null;
+        // Tracks which heavy tabs (clusters, leads, deals, contacts, accounts)
+        // have already fetched their data this refresh cycle. Initialised at
+        // module scope so showTab can safely consult it even if the user
+        // clicks a tab before refreshData has run. refreshData clears it so
+        // the next click on each tab re-fetches.
+        window._loadedTabs = window._loadedTabs || new Set();
         // R4: creation-rate trend chart instance (lazily created on first
         // render so it can be destroyed + rebuilt when the window selector
         // changes without leaking canvases).
@@ -1234,14 +1240,35 @@
             return { from: from || null, to: to || null };
         }
 
+        // The duplicate radar fans out a *lot* of API calls per paint
+        // (summary + logs + owners + clusters + 4 record tabs + sparkline +
+        // creation-trend + cross-module + nav notifications, plus polls).
+        // The per-user READ_LIMIT is 100/min — eagerly hitting every tab on
+        // every refresh blew through that within a couple of refreshes,
+        // and the silent-empty error path made the dashboard look like it
+        // had no data at all.
+        //
+        // Strategy: load the tab the user can actually see, and defer the
+        // rest until the user clicks into them (showTab lazy-loads). The
+        // Domain Clusters + 4 record tabs are the heaviest queries and only
+        // one of them is ever visible, so this cuts ~5 fetches per paint.
         async function refreshData() {
-            // Note: the visible Refresh button is the global one in the top
-            // header (rendered by navigation.js). It already handles its own
-            // spinner / disabled state and awaits this function — see
-            // WalaPlusNav.refreshDashboard. Keep this function focused on
-            // the data work; don't touch the button here.
+            // The visible Refresh button is the global one in the top
+            // header (rendered by navigation.js); it handles its own
+            // spinner/disabled state and awaits this function.
+            //
+            // Refresh invalidates every lazy tab so the next click reloads
+            // it from the server instead of showing pre-refresh data.
+            if (window._loadedTabs) window._loadedTabs.clear();
+
+            const activeTabEl = document.querySelector('[id^="tab-"].tab-active');
+            const activeTab = activeTabEl ? activeTabEl.id.replace(/^tab-/, '') : 'summary';
+
             try {
                 await fetch('/api/duplicates/recalculate-stats', { method: 'POST' }).catch(() => {});
+                // Always-on summary essentials — these power the KPI cards
+                // and the Logs / Owners tabs (which can render off cached
+                // data; the actual tabs lazy-load if missing).
                 const [summaryRes, logsRes, ownerAccRes] = await Promise.all([
                     fetch('/api/duplicates/summary'),
                     fetch('/api/duplicates/logs'),
@@ -1256,19 +1283,15 @@
                 renderLogs(logsData.logs || []);
                 renderOwners(ownerAccData.owners || []);
                 populateLayoutFilter();
-                loadClusters();
-                loadRecordTab('leads');
-                loadRecordTab('deals');
-                loadRecordTab('contacts');
-                loadRecordTab('accounts');
 
-                // Also refresh the currently-active tab — previously the top
-                // Refresh button only touched summary/clusters/per-record tabs,
-                // so users on CS Lifecycle / Auto-CAPA / CS Overlap / Account
-                // Hints saw no visible change and assumed the button was broken.
-                const activeTabEl = document.querySelector('[id^="tab-"].tab-active');
-                const activeTab = activeTabEl ? activeTabEl.id.replace(/^tab-/, '') : null;
-                if (activeTab === 'cs-lifecycle') {
+                // Load ONLY the active tab's heavy data. Other heavy tabs
+                // (Domain Clusters + lead/deal/contact/account record tabs)
+                // are loaded on first click by showTab().
+                if (activeTab === 'clusters') {
+                    await loadClusters();
+                } else if (['leads','deals','contacts','accounts'].includes(activeTab)) {
+                    await loadRecordTab(activeTab);
+                } else if (activeTab === 'cs-lifecycle') {
                     // Sync the visible deals live from Zoho the same way the
                     // green "Refresh from Zoho (live)" button does, so the
                     // CS Lifecycle radar stays consistent with the other
@@ -1277,10 +1300,15 @@
                     // visible-id list that refreshCsLifecycleFromZoho needs.
                     await loadCsLifecycle(window._csLifecycleFilter || 'all');
                     await refreshCsLifecycleFromZoho({ silent: true });
+                } else if (activeTab === 'cs-overlap') {
+                    loadCsOverlap(window._csOverlapFilter || 'all');
+                } else if (activeTab === 'auto-capa-kpis') {
+                    loadAutoCapaKpis();
+                } else if (activeTab === 'account-hints') {
+                    loadAccountHints();
                 }
-                if (activeTab === 'cs-overlap')     loadCsOverlap(window._csOverlapFilter || 'all');
-                if (activeTab === 'auto-capa-kpis') loadAutoCapaKpis();
-                if (activeTab === 'account-hints')  loadAccountHints();
+                // summary / logs / owners / search tabs need no extra work —
+                // summary essentials above already populated them.
             } catch (error) {
                 console.error('Error refreshing data:', error);
             }
@@ -1814,6 +1842,20 @@
         }
 
         // C4: Paginated cluster loading
+        // Render a status message into the Domain Clusters grid so a 429 /
+        // auth / network error is visible instead of looking like "no clusters".
+        function _renderClustersMessage(html, tone) {
+            const grid = document.getElementById('clustersGrid');
+            if (!grid) return;
+            const palette = {
+                info:  'text-gray-500',
+                warn:  'text-amber-700',
+                error: 'text-red-600',
+            };
+            const colorClass = palette[tone] || palette.info;
+            grid.innerHTML = '<div class="col-span-full text-center py-8 text-sm ' + colorClass + '">' + html + '</div>';
+        }
+
         async function loadClusters(page = 0) {
             clusterPage = page;
             const conf = document.getElementById('clusterFilter').value;
@@ -1830,12 +1872,60 @@
             if (range.from) url += `&start_date=${range.from}`;
             if (range.to) url += `&end_date=${range.to}`;
 
-            const res = await fetch(url);
-            const data = await res.json();
-            renderClusters(data.clusters || []);
-            renderPagination('clustersPagination', page, data.pages || 1, loadClusters);
-            const hint = document.getElementById('layoutFilterHint');
-            if (hint) hint.textContent = layout ? WalaPlusI18n.t('dyn.duplicates.filtered_in_layout', { n: _fn(data.total ?? 0), layout: layout }) : '';
+            // Supersede earlier in-flight loads (paginate / filter change).
+            const loadId = window._clustersLoadId = (window._clustersLoadId || 0) + 1;
+            const MAX_RETRIES = 4;
+
+            _renderClustersMessage('Loading…', 'info');
+
+            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const res = await fetch(url, { credentials: 'same-origin' });
+                    if (loadId !== window._clustersLoadId) return;
+
+                    if (res.status === 429 && attempt < MAX_RETRIES) {
+                        const retryAfterHdr = parseInt(res.headers.get('Retry-After') || '', 10);
+                        const waitSec = Number.isFinite(retryAfterHdr) && retryAfterHdr > 0
+                            ? Math.min(retryAfterHdr, 60)
+                            : Math.min(5 * Math.pow(2, attempt), 60);
+                        _renderClustersMessage(
+                            'Rate-limited — retrying in ' + waitSec + 's… '
+                                + '<span class="text-xs text-gray-500">(attempt ' + (attempt + 1) + ' of ' + MAX_RETRIES + ')</span>',
+                            'warn',
+                        );
+                        await new Promise(r => setTimeout(r, waitSec * 1000));
+                        if (loadId !== window._clustersLoadId) return;
+                        continue;
+                    }
+                    if (res.status === 401 || res.status === 403) {
+                        _renderClustersMessage(
+                            'Not authorized to view clusters. Ask an admin to grant your account the duplicate-radar read role.',
+                            'error',
+                        );
+                        return;
+                    }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    if (loadId !== window._clustersLoadId) return;
+
+                    renderClusters(data.clusters || []);
+                    renderPagination('clustersPagination', page, data.pages || 1, loadClusters);
+                    const hint = document.getElementById('layoutFilterHint');
+                    if (hint) hint.textContent = layout ? WalaPlusI18n.t('dyn.duplicates.filtered_in_layout', { n: _fn(data.total ?? 0), layout: layout }) : '';
+                    window._loadedTabs.add('clusters');
+                    return;
+                } catch (e) {
+                    if (loadId !== window._clustersLoadId) return;
+                    const msg = String(e && e.message || e);
+                    _renderClustersMessage(
+                        /HTTP 429/.test(msg)
+                            ? 'Still rate-limited after ' + (MAX_RETRIES + 1) + ' attempts. Wait a minute and click Refresh.'
+                            : 'Failed to load: ' + escapeHtml(msg),
+                        'error',
+                    );
+                    return;
+                }
+            }
         }
 
         function toggleClusterSortDir() {
@@ -2311,6 +2401,32 @@
             }
         }
 
+        // Track which record/cluster tabs have already loaded so we don't
+        // refetch them just because the user clicked the tab again. Cleared
+        // by refreshData() and after a successful sync.
+        window._loadedTabs = window._loadedTabs || new Set();
+
+        // Render a one-row table message into the tab's tbody so 429/error
+        // states are visible instead of looking like "no data". Column count
+        // varies per tab; pick a value that spans every column in the table
+        // header (leads has 8 columns, deals 7, contacts 7, accounts 8).
+        function _recordTabColspan(type) {
+            return type === 'deals' || type === 'contacts' ? 7 : 8;
+        }
+        function _renderRecordTabMessage(type, html, tone) {
+            const tbody = document.getElementById(type + 'Table');
+            if (!tbody) return;
+            const palette = {
+                info:   'text-gray-500',
+                warn:   'text-amber-700',
+                error:  'text-red-600',
+            };
+            const colorClass = palette[tone] || palette.info;
+            tbody.innerHTML = '<tr><td colspan="' + _recordTabColspan(type)
+                + '" class="px-4 py-8 text-center text-sm ' + colorClass + '">'
+                + html + '</td></tr>';
+        }
+
         async function loadRecordTab(type, page = 0) {
             recordPages[type] = page;
             const range = getDateRange();
@@ -2318,17 +2434,71 @@
             if (range.from) url += `&start_date=${range.from}`;
             if (range.to) url += `&end_date=${range.to}`;
 
-            const res = await fetch(url);
-            const data = await res.json();
-            const groups = data.groups || [];
-            const pages = data.pages || 1;
+            // Cancel any older in-flight load for this tab so a quick double
+            // click / paginate doesn't race with the previous fetch.
+            const loadKey = '_recordTabLoadId_' + type;
+            const loadId = window[loadKey] = (window[loadKey] || 0) + 1;
+            const MAX_RETRIES = 4;
 
-            if (type === 'leads') renderLeadRows(groups);
-            else if (type === 'deals') renderDealRows(groups);
-            else if (type === 'contacts') renderContactRows(groups);
-            else if (type === 'accounts') renderAccountRows(groups);
+            _renderRecordTabMessage(type, 'Loading…', 'info');
 
-            renderPagination(type + 'Pagination', page, pages, (p) => loadRecordTab(type, p));
+            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const res = await fetch(url, { credentials: 'same-origin' });
+                    if (loadId !== window[loadKey]) return; // superseded
+
+                    // Rate-limited by our own limiter (READ_LIMIT=100/min/user).
+                    // Honor Retry-After when present, else exponential backoff
+                    // (5s → 10s → 20s → 40s, capped at 60s).
+                    if (res.status === 429 && attempt < MAX_RETRIES) {
+                        const retryAfterHdr = parseInt(res.headers.get('Retry-After') || '', 10);
+                        const waitSec = Number.isFinite(retryAfterHdr) && retryAfterHdr > 0
+                            ? Math.min(retryAfterHdr, 60)
+                            : Math.min(5 * Math.pow(2, attempt), 60);
+                        _renderRecordTabMessage(
+                            type,
+                            'Rate-limited — retrying in ' + waitSec + 's… '
+                                + '<span class="text-xs text-gray-500">(attempt ' + (attempt + 1) + ' of ' + MAX_RETRIES + ')</span>',
+                            'warn',
+                        );
+                        await new Promise(r => setTimeout(r, waitSec * 1000));
+                        if (loadId !== window[loadKey]) return;
+                        continue;
+                    }
+                    if (res.status === 401 || res.status === 403) {
+                        _renderRecordTabMessage(
+                            type,
+                            'Not authorized to view this data. Ask an admin to grant your account the duplicate-radar read role.',
+                            'error',
+                        );
+                        return;
+                    }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    if (loadId !== window[loadKey]) return;
+
+                    const groups = data.groups || [];
+                    const pages  = data.pages  || 1;
+                    if (type === 'leads')        renderLeadRows(groups);
+                    else if (type === 'deals')   renderDealRows(groups);
+                    else if (type === 'contacts') renderContactRows(groups);
+                    else if (type === 'accounts') renderAccountRows(groups);
+                    renderPagination(type + 'Pagination', page, pages, (p) => loadRecordTab(type, p));
+                    window._loadedTabs.add(type);
+                    return;
+                } catch (e) {
+                    if (loadId !== window[loadKey]) return;
+                    const msg = String(e && e.message || e);
+                    _renderRecordTabMessage(
+                        type,
+                        /HTTP 429/.test(msg)
+                            ? 'Still rate-limited after ' + (MAX_RETRIES + 1) + ' attempts. Wait a minute and click Refresh.'
+                            : 'Failed to load: ' + escapeHtml(msg),
+                        'error',
+                    );
+                    return;
+                }
+            }
         }
 
         function zohoLink(id, module, label) {
@@ -4003,10 +4173,24 @@
             document.getElementById('content-' + tab).classList.remove('hidden');
             document.getElementById('tab-' + tab).classList.remove('tab-inactive');
             document.getElementById('tab-' + tab).classList.add('tab-active');
+            // Lazy-load the heavy tabs on first visit. _loadedTabs is cleared
+            // by refreshData() so a top-header Refresh re-fetches whichever
+            // tab the user lands on next. These four cs-* / account-hints
+            // loaders already short-circuit cheaply on re-entry, so calling
+            // them every time is fine — they manage their own state.
             if (tab === 'cs-overlap') loadCsOverlap(window._csOverlapFilter || 'all');
             if (tab === 'cs-lifecycle') loadCsLifecycle(window._csLifecycleFilter || 'all');
             if (tab === 'auto-capa-kpis') loadAutoCapaKpis();
             if (tab === 'account-hints') loadAccountHints();
+            // The Domain Clusters + 4 record tabs are expensive list queries;
+            // load each one ONLY on first visit per refresh cycle. This is
+            // the change that keeps the page under the 100 reads/min limit.
+            if (tab === 'clusters' && !window._loadedTabs.has('clusters')) {
+                loadClusters();
+            }
+            if (['leads','deals','contacts','accounts'].includes(tab) && !window._loadedTabs.has(tab)) {
+                loadRecordTab(tab);
+            }
         }
 
         // ─── Account Hints (smart account inference) ────────────────────────
