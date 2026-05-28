@@ -822,6 +822,10 @@ export const callIntelligenceRoutes = [
                   rec.deal_id ?? null,
                   rec.call_date,
                   logger,
+                  {
+                    agentEmail: rec.agent_email ?? null,
+                    agentName: rec.agent_name ?? null,
+                  },
                 );
                 checked++;
               }
@@ -856,6 +860,256 @@ export const callIntelligenceRoutes = [
             {
               success: false,
               error: error?.message || "Backfill failed",
+              duration_ms: Date.now() - startedAt,
+            },
+            500,
+          );
+        }
+      };
+    },
+  },
+  // ===================================================================
+  // CRM link audit + repair sweep.
+  //
+  // The historical Phone-suffix matcher had no minimum-overlap floor, so
+  // a junk Lead with Phone="11" matched every call whose number ended in
+  // "11" (e.g. +966505896511 → Lead "رايد الجحدلي" phone "11"). The
+  // matcher is now fixed (9-digit overlap), but the BAD LINKS it already
+  // wrote are still persisted on call_records.lead_id/deal_id — and the
+  // auto-linker skips already-linked rows, so they never self-heal.
+  //
+  // This sweep re-validates each existing phone-derived link against the
+  // same 9-digit overlap rule the matcher now enforces. When the linked
+  // Lead/Deal's Zoho phone does NOT share the call's subscriber number,
+  // the link is a confirmed mismatch: we clear it (lead_id/deal_id +
+  // compliance row) and re-run the auto-linker so a correct Lead can be
+  // found or the call is left honestly unlinked.
+  //
+  // Activity-linked rows (linked_via='activity') are intentionally
+  // skipped — they were matched by same-agent/same-day CRM activity, not
+  // phone, so a phone mismatch is expected and not a defect.
+  //
+  // Admin-only. Body (all optional):
+  //   { limit?: number (default 50, max 200), dry_run?: boolean,
+  //     relink?: boolean (default true) }
+  // Returns: { scanned, mismatched, cleared, relinked, kept, errors[],
+  //            samples[], has_more, duration_ms }
+  // ===================================================================
+  {
+    path: "/api/calls/audit-crm-links",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        const startedAt = Date.now();
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+
+          let body: any = {};
+          try {
+            const txt = await c.req.text();
+            if (txt && txt.trim()) body = JSON.parse(txt);
+          } catch {
+            body = {};
+          }
+          const limit = Math.min(Math.max(parseInt(body.limit) || 50, 1), 200);
+          const dryRun = body.dry_run === true;
+          const relink = body.relink !== false;
+          // Deterministic id-cursor pagination. Without it, ORDER BY
+          // updated_at re-surfaces just-relinked rows (clear + relink
+          // bumps updated_at), so the UI loop could reprocess the same
+          // rows forever and never reach older links. Advancing strictly
+          // by id guarantees each row is visited at most once per run.
+          const afterId = Number.isFinite(parseInt(body.after_id))
+            ? parseInt(body.after_id)
+            : 0;
+
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          const { fetchZohoRecords, getZohoConnectionStatus } = await import(
+            "../../utils/zohoCRM"
+          );
+          const conn = getZohoConnectionStatus();
+          if (!conn.connected) {
+            return c.json(
+              { success: false, error: "zoho_not_connected" },
+              503,
+            );
+          }
+
+          const { phonesShareSubscriberNumber, extractCallPhoneCandidates } =
+            await import("../../utils/callLeadPhoneMatch");
+
+          // Candidates: phone-derived links only. linked_via='activity'
+          // is excluded (phone mismatch is expected there). Legacy NULL
+          // linked_via is included because the buggy matcher predates the
+          // column.
+          const candidatesRes = await callIntelligencePool.query(
+            `
+            SELECT id, call_id, lead_id, deal_id, linked_via, metadata,
+                   agent_email, agent_name, call_date
+            FROM call_records
+            WHERE (lead_id IS NOT NULL OR deal_id IS NOT NULL)
+              AND linked_via IS DISTINCT FROM 'activity'
+              AND id > $2
+            ORDER BY id ASC
+            LIMIT $1
+            `,
+            [limit, afterId],
+          );
+          const candidates = candidatesRes.rows;
+
+          // Read the parent record's phone from Zoho. Leads carry
+          // Phone/Mobile directly; Deals rarely have a usable phone, so a
+          // missing Deal phone is treated as "can't verify" → kept.
+          const readZohoPhone = async (
+            module: "Leads" | "Deals",
+            recordId: string,
+          ): Promise<{ phone: string | null; found: boolean }> => {
+            try {
+              const rows = await fetchZohoRecords(module, {
+                criteria: `id:equals:${recordId}`,
+                perPage: 1,
+              });
+              const r: any = rows[0];
+              if (!r) return { phone: null, found: false };
+              const d = r.data || {};
+              const raw =
+                (typeof d.Phone === "object" && d.Phone?.name) ||
+                d.Phone ||
+                (typeof d.Mobile === "object" && d.Mobile?.name) ||
+                d.Mobile ||
+                "";
+              return { phone: String(raw || "").trim() || null, found: true };
+            } catch (err: any) {
+              logger?.warn("[audit-crm-links] zoho read failed", {
+                module,
+                recordId,
+                error: err?.message,
+              });
+              return { phone: null, found: false };
+            }
+          };
+
+          const { clearCallRecordCrmLink } = await import(
+            "../../utils/callIntelligenceDb"
+          );
+          const { autoLinkCallAndCompliance } = await import(
+            "../../utils/callPostIngestPipeline"
+          );
+
+          const errors: Array<{ id: number; error: string }> = [];
+          const samples: Array<{
+            id: number;
+            module: string;
+            record_id: string;
+            zoho_phone: string | null;
+            call_phones: string[];
+          }> = [];
+          let mismatched = 0;
+          let cleared = 0;
+          let relinked = 0;
+          let kept = 0;
+
+          for (const rec of candidates) {
+            try {
+              const module: "Leads" | "Deals" = rec.lead_id
+                ? "Leads"
+                : "Deals";
+              const recordId = String(rec.lead_id || rec.deal_id);
+              const callPhones = extractCallPhoneCandidates(rec) || [];
+
+              // No call-side phone → can't verify by phone; keep as-is.
+              if (callPhones.length === 0) {
+                kept++;
+                continue;
+              }
+
+              const { phone: zohoPhone, found } = await readZohoPhone(
+                module,
+                recordId,
+              );
+              // Couldn't read / no phone on the Zoho record → can't prove
+              // a mismatch; keep conservatively.
+              if (!found || !zohoPhone) {
+                kept++;
+                continue;
+              }
+
+              const overlaps = callPhones.some((p: string) =>
+                phonesShareSubscriberNumber(zohoPhone, p),
+              );
+              if (overlaps) {
+                kept++;
+                continue;
+              }
+
+              // Confirmed mismatch.
+              mismatched++;
+              if (samples.length < 10) {
+                samples.push({
+                  id: rec.id,
+                  module,
+                  record_id: recordId,
+                  zoho_phone: zohoPhone,
+                  call_phones: callPhones,
+                });
+              }
+              if (dryRun) continue;
+
+              await clearCallRecordCrmLink(rec.id);
+              cleared++;
+
+              if (relink) {
+                const out = await autoLinkCallAndCompliance(
+                  {
+                    id: rec.id,
+                    agent_email: rec.agent_email ?? null,
+                    agent_name: rec.agent_name ?? null,
+                    call_date: rec.call_date,
+                    metadata: rec.metadata,
+                  },
+                  { logger, logTag: "link-audit" },
+                );
+                if (out.linked) relinked++;
+              }
+            } catch (err: any) {
+              errors.push({ id: rec.id, error: err?.message || String(err) });
+            }
+            // Throttle for Zoho's RPS budget (read + optional re-link).
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+
+          const result = {
+            success: true,
+            dry_run: dryRun,
+            scanned: candidates.length,
+            mismatched,
+            cleared,
+            relinked,
+            kept,
+            errors,
+            samples,
+            next_cursor:
+              candidates.length > 0
+                ? candidates[candidates.length - 1].id
+                : afterId,
+            has_more: candidates.length === limit,
+            duration_ms: Date.now() - startedAt,
+          };
+          logger?.info("🧹 [API] audit-crm-links run complete", result);
+          return c.json(result);
+        } catch (error: any) {
+          safeLogger.error("[API] audit-crm-links failed", {
+            error: error?.message,
+          });
+          return c.json(
+            {
+              success: false,
+              error: error?.message || "Link audit failed",
               duration_ms: Date.now() - startedAt,
             },
             500,
@@ -2020,6 +2274,8 @@ Respond with JSON only:
             dealId,
             callDate: callRecord.call_date ?? new Date(),
             expectedActions,
+            agentEmail: (callRecord as any).agent_email ?? null,
+            agentName: (callRecord as any).agent_name ?? null,
           });
 
           if (!checked.success || !checked.result) {
@@ -5883,6 +6139,11 @@ ${transcriptText}
               result.lead_id ?? null,
               result.deal_id ?? null,
               (record as any).call_date ?? (record as any).created_at,
+              undefined,
+              {
+                agentEmail: (record as any).agent_email ?? null,
+                agentName: (record as any).agent_name ?? null,
+              },
             );
           }
           return c.json(result);
@@ -6171,6 +6432,11 @@ ${transcriptText}
               (result as any).lead_id ?? null,
               (result as any).deal_id ?? null,
               (record as any).call_date ?? (record as any).created_at,
+              undefined,
+              {
+                agentEmail: (record as any).agent_email ?? null,
+                agentName: (record as any).agent_name ?? null,
+              },
             );
           }
           return c.json(result);

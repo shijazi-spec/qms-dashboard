@@ -51,6 +51,37 @@ export interface LeadPhoneMatch {
   owner?: string;
 }
 
+// Minimum overlap length for a suffix phone match. Without this floor a
+// junk Lead with Phone="11" (or any short value) matches every call
+// whose number happens to end with those digits — producing CRM
+// Compliance rows that link the call to a completely unrelated record
+// (e.g. +966505896511 silently auto-linked to a Lead whose phone is
+// "11" because "966505896511".endsWith("11")). Set to 9 per ops
+// decision: KSA / GCC mobile subscriber numbers are 9 digits after the
+// country code (e.g. 50 589 6511), so requiring a 9-digit overlap means
+// the whole subscriber number must agree — preventing area-code-only or
+// junk-suffix collisions while still tolerating "+966" vs leading-0
+// prefix differences between Zoho and the call provider.
+export const MIN_PHONE_OVERLAP_DIGITS = 9;
+
+/**
+ * True when two phone strings refer to the same subscriber number.
+ * Both are normalized to digits, then matched either exactly or by a
+ * suffix overlap of at least MIN_PHONE_OVERLAP_DIGITS. Shared by the
+ * Lead matcher and the link-audit sweep so they stay in lockstep.
+ */
+export function phonesShareSubscriberNumber(a: string, b: string): boolean {
+  const x = normalizePhoneDigits(a || "");
+  const y = normalizePhoneDigits(b || "");
+  if (!x || !y) return false;
+  if (x === y) return true;
+  // A suffix match only counts when the SHORTER side (the actual overlap
+  // length) is ≥ the floor. Anything shorter is data noise.
+  if (x.endsWith(y) && y.length >= MIN_PHONE_OVERLAP_DIGITS) return true;
+  if (y.endsWith(x) && x.length >= MIN_PHONE_OVERLAP_DIGITS) return true;
+  return false;
+}
+
 function readPhone(r: ZohoCRMRecord): string {
   const d = r.data || {};
   const raw =
@@ -89,35 +120,9 @@ export async function findLeadsByPhoneMatch(
   const maxRecords = options.maxRecords ?? 2500;
   const leads = await fetchAllZohoRecords("Leads", { maxRecords });
   const matches: LeadPhoneMatch[] = [];
-  // Minimum overlap length for a suffix match. Without this floor a junk
-  // Lead with Phone="11" (or any short value) matches every call whose
-  // number happens to end with those digits — producing CRM Compliance
-  // rows that link the call to a completely unrelated record (e.g.
-  // +966505896511 silently auto-linked to a Lead whose phone is "11"
-  // because "966505896511".endsWith("11")). Set to 9 per ops decision:
-  // KSA / GCC mobile subscriber numbers are 9 digits after the country
-  // code (e.g. 50 589 6511), so requiring a 9-digit overlap means the
-  // whole subscriber number must agree — preventing area-code-only or
-  // junk-suffix collisions while still tolerating "+966" vs leading-0
-  // prefix differences between Zoho and the call provider.
-  const MIN_OVERLAP_DIGITS = 9;
   for (const r of leads) {
-    const p = normalizePhoneDigits(readPhone(r));
-    if (!p) continue;
-    // Skip leads whose stored Phone is too short to be a real number —
-    // they cannot anchor any reliable match.
-    if (p.length < MIN_OVERLAP_DIGITS) continue;
-    const exact = p === normalized_query;
-    // For each suffix-match direction, require the SHORTER side (i.e. the
-    // actual overlap length) to be ≥ MIN_OVERLAP_DIGITS. Comparing
-    // `.length` of the two values is sufficient because the shorter
-    // string is what determines how much of a tail actually matched.
-    const leadEndsWithQuery =
-      p.endsWith(normalized_query) &&
-      normalized_query.length >= MIN_OVERLAP_DIGITS;
-    const queryEndsWithLead =
-      normalized_query.endsWith(p) && p.length >= MIN_OVERLAP_DIGITS;
-    if (exact || leadEndsWithQuery || queryEndsWithLead) {
+    const leadPhone = readPhone(r);
+    if (phonesShareSubscriberNumber(leadPhone, normalized_query)) {
       const d = r.data || {};
       matches.push({
         id: r.id,

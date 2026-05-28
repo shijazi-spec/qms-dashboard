@@ -717,6 +717,30 @@ export async function updateCallRecordDealId(
   return result.rows[0] || null;
 }
 
+/**
+ * Clear a call's CRM linkage (lead_id, deal_id, linked_via) and remove
+ * any persisted compliance row, so a subsequent re-link/compliance run
+ * starts from a clean slate. Used by the link-audit sweep when an
+ * existing link is found to be a phone mismatch (e.g. the historical
+ * Phone="11" junk-Lead collisions). Returns the updated row.
+ */
+export async function clearCallRecordCrmLink(
+  id: number,
+): Promise<CallRecord | null> {
+  await ensureLinkedViaColumn();
+  await pool.query(`DELETE FROM call_compliance WHERE call_record_id = $1`, [
+    id,
+  ]);
+  const result = await pool.query(
+    `UPDATE call_records
+        SET lead_id = NULL, deal_id = NULL, linked_via = NULL, updated_at = NOW()
+      WHERE id = $1
+      RETURNING *`,
+    [id],
+  );
+  return result.rows[0] || null;
+}
+
 // Persist which signal produced the CRM link — "phone" (digit match
 // against Leads/Deals) or "activity" (same-day same-agent CRM activity).
 // Diagnostic only; the eval panel surfaces this as a confidence badge.

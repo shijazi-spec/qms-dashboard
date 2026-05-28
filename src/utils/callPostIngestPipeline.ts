@@ -50,6 +50,7 @@ export async function runComplianceAfterLink(
   dealId: string | null | undefined,
   callDate: any,
   logger?: any,
+  agent?: { agentEmail?: string | null; agentName?: string | null },
 ): Promise<void> {
   try {
     if (!leadId && !dealId) return;
@@ -67,6 +68,8 @@ export async function runComplianceAfterLink(
       dealId: dealId ?? undefined,
       callDate,
       expectedActions,
+      agentEmail: agent?.agentEmail ?? undefined,
+      agentName: agent?.agentName ?? undefined,
     });
     if (!checked.success || !checked.result) {
       await saveCompliance({
@@ -233,6 +236,10 @@ export async function autoLinkCallAndCompliance(
         linkResult.deal_id ?? null,
         callRecord.call_date,
         logger,
+        {
+          agentEmail: callRecord.agent_email ?? null,
+          agentName: callRecord.agent_name ?? null,
+        },
       );
 
       return {

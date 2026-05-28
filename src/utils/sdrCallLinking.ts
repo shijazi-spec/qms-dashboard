@@ -31,6 +31,7 @@ import {
   searchZohoRecordsByWord,
 } from "./zohoCRM";
 import { normalizePhoneDigits } from "./callMcpReconciliation";
+import { phonesShareSubscriberNumber } from "./callLeadPhoneMatch";
 import { logger } from "./logger";
 
 export type CrmModule = "Leads" | "Deals";
@@ -204,8 +205,7 @@ export async function findCrmRecordByPhone(
         // normalize to the same 9 digits (e.g. a 9-digit address suffix
         // that happens to collide with the query) is dropped before we
         // claim a match.
-        const p = normalizePhoneDigits(readLeadPhone(r));
-        if (p && (p === normalized_query || p.endsWith(normalized_query) || normalized_query.endsWith(p))) {
+        if (phonesShareSubscriberNumber(readLeadPhone(r), normalized_query)) {
           matches.push(leadToMatch(r));
         }
       }
@@ -218,8 +218,7 @@ export async function findCrmRecordByPhone(
     if (dealHits.status === "fulfilled") {
       nativeSearchSucceeded = true;
       for (const r of dealHits.value) {
-        const p = normalizePhoneDigits(readDealPhone(r));
-        if (p && (p === normalized_query || p.endsWith(normalized_query) || normalized_query.endsWith(p))) {
+        if (phonesShareSubscriberNumber(readDealPhone(r), normalized_query)) {
           matches.push(dealToMatch(r));
         }
       }
@@ -264,13 +263,7 @@ export async function findCrmRecordByPhone(
     const leads = leadsResult.value;
     scanned_leads = leads.length;
     for (const r of leads) {
-      const p = normalizePhoneDigits(readLeadPhone(r));
-      if (!p) continue;
-      if (
-        p === normalized_query ||
-        p.endsWith(normalized_query) ||
-        normalized_query.endsWith(p)
-      ) {
+      if (phonesShareSubscriberNumber(readLeadPhone(r), normalized_query)) {
         // Avoid duplicate from native search.
         if (!matches.some((m) => m.module === "Leads" && m.id === r.id)) {
           matches.push(leadToMatch(r));
@@ -287,13 +280,7 @@ export async function findCrmRecordByPhone(
     const deals = dealsResult.value;
     scanned_deals = deals.length;
     for (const r of deals) {
-      const p = normalizePhoneDigits(readDealPhone(r));
-      if (!p) continue;
-      if (
-        p === normalized_query ||
-        p.endsWith(normalized_query) ||
-        normalized_query.endsWith(p)
-      ) {
+      if (phonesShareSubscriberNumber(readDealPhone(r), normalized_query)) {
         if (!matches.some((m) => m.module === "Deals" && m.id === r.id)) {
           matches.push(dealToMatch(r));
         }
@@ -355,11 +342,11 @@ interface ActivityParent {
   activities: number;
 }
 
-function ymdInUTC(d: Date): string {
+export function ymdInUTC(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function activityFallsOnDay(
+export function activityFallsOnDay(
   ts: string | undefined | null,
   targetDay: string,
 ): boolean {
@@ -369,7 +356,7 @@ function activityFallsOnDay(
   return ymdInUTC(parsed) === targetDay;
 }
 
-function ownerMatchesAgent(
+export function ownerMatchesAgent(
   ownerName: string | undefined,
   agentEmail: string,
   agentName: string | null,

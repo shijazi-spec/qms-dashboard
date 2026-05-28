@@ -16,6 +16,11 @@
  */
 
 import { fetchZohoRecords, getZohoConnectionStatus } from "./zohoCRM";
+import {
+  ownerMatchesAgent,
+  activityFallsOnDay,
+  ymdInUTC,
+} from "./sdrCallLinking";
 import { logger } from "./logger";
 
 export interface CrmComplianceCheckInput {
@@ -24,6 +29,15 @@ export interface CrmComplianceCheckInput {
   dealId?: string | null;
   callDate: Date | string;
   expectedActions?: string[];
+  /**
+   * Agent who actually made the recorded call. Used to verify that the
+   * matching Zoho Call activity was logged BY THAT SAME AGENT and on the
+   * SAME DATE. A Call logged by a different rep, or stamped with a
+   * different date, does not count as the caller's own post-call hygiene
+   * and is treated as non-compliant.
+   */
+  agentEmail?: string | null;
+  agentName?: string | null;
 }
 
 export interface CrmComplianceCheckResult {
@@ -124,12 +138,37 @@ export async function runCrmComplianceCheck(
     }
   };
 
-  const [notes, calls, tasks, events, recordSelf] = await Promise.all([
+  // Calls get a richer fetch (rows, not just a count) so we can verify
+  // the logged Call was made BY THE SAME AGENT and ON THE SAME DATE as
+  // the recorded call. A Call logged by another rep or with a mismatched
+  // date is the exact non-compliance pattern ops flagged (e.g. a call by
+  // r.alsammak whose Zoho Call was logged by "هاجر الجبري" on a later day
+  // with an "Invalid number" result).
+  const safeFetchRows = async (
+    moduleName: string,
+    criteria: string,
+  ): Promise<{ rows: any[]; error?: string }> => {
+    try {
+      const rows = await fetchZohoRecords(moduleName, {
+        criteria,
+        perPage: 20,
+      });
+      return { rows };
+    } catch (err: any) {
+      logger.warn(`[crmComplianceCheck] ${moduleName} query failed`, {
+        criteria,
+        error: err?.message,
+      });
+      return { rows: [], error: String(err?.message || err) };
+    }
+  };
+
+  const [notes, callRows, tasks, events, recordSelf] = await Promise.all([
     safeCount(
       "Notes",
       `(Parent_Id:equals:${recordId})and(Created_Time:greater_than:${cutoffIso})`,
     ),
-    safeCount(
+    safeFetchRows(
       "Calls",
       `(${linkField}:equals:${recordId})and(Call_Start_Time:greater_than:${cutoffIso})`,
     ),
@@ -173,8 +212,40 @@ export async function runCrmComplianceCheck(
     }
   }
 
+  // Verify the matching Zoho Call activity belongs to the same agent and
+  // the same calendar day as the recorded call. A Call logged by another
+  // rep, or stamped with a different date, is NOT valid post-call hygiene
+  // for this caller and must not satisfy the "call logged" check.
+  const callAgentEmail = (input.agentEmail || "").trim();
+  const callAgentName = (input.agentName || "").trim() || null;
+  const callDay = ymdInUTC(callDate);
+  const canCheckOwner = !!(callAgentEmail || callAgentName);
+
+  let matchingCalls = 0;
+  let wrongAgentCalls = 0;
+  let wrongDateCalls = 0;
+  for (const row of callRows.rows) {
+    const owner = (row as any)?.owner as string | undefined;
+    const startTime =
+      (row as any)?.data?.Call_Start_Time ?? (row as any)?.Call_Start_Time;
+    const dateOk = activityFallsOnDay(startTime, callDay);
+    const ownerOk = canCheckOwner
+      ? ownerMatchesAgent(owner, callAgentEmail, callAgentName)
+      : true;
+    if (dateOk && ownerOk) {
+      matchingCalls++;
+    } else {
+      if (!ownerOk) wrongAgentCalls++;
+      if (!dateOk) wrongDateCalls++;
+    }
+  }
+
   const notesUpdated = notes.count > 0;
-  const callLogged = calls.count > 0;
+  // call_logged now requires a same-agent, same-day Call. When we cannot
+  // identify the agent (no email/name on the record) we fall back to the
+  // legacy same-day-only rule so we never over-penalize on missing data.
+  const callLogged = matchingCalls > 0;
+  const callLoggedByOther = matchingCalls === 0 && callRows.rows.length > 0;
   const taskCreated = tasks.count > 0;
   const meetingOutcomeLogged = events.count > 0;
 
@@ -187,7 +258,18 @@ export async function runCrmComplianceCheck(
     missingActions.push("Notes not updated after call");
   }
   if (expected.includes("call_logged") && !callLogged) {
-    missingActions.push("Call not logged in CRM");
+    if (callLoggedByOther) {
+      // A Call exists on the record but it was logged by a different
+      // agent and/or on a different date — surface the precise reason.
+      const reasons: string[] = [];
+      if (wrongAgentCalls > 0) reasons.push("by a different agent");
+      if (wrongDateCalls > 0) reasons.push("with a mismatched date");
+      missingActions.push(
+        `Call logged ${reasons.join(" and ") || "incorrectly"} in CRM`,
+      );
+    } else {
+      missingActions.push("Call not logged in CRM");
+    }
   }
   if (expected.includes("task_created") && !taskCreated) {
     missingActions.push("No follow-up task created");
@@ -226,8 +308,12 @@ export async function runCrmComplianceCheck(
         parent_modified_time: parentModifiedTime,
         notes_count: notes.count,
         notes_error: notes.error,
-        calls_count: calls.count,
-        calls_error: calls.error,
+        calls_count: callRows.rows.length,
+        calls_error: callRows.error,
+        calls_matching_agent_date: matchingCalls,
+        calls_wrong_agent: wrongAgentCalls,
+        calls_wrong_date: wrongDateCalls,
+        call_logged_by_other: callLoggedByOther,
         tasks_count: tasks.count,
         tasks_error: tasks.error,
         events_count: events.count,

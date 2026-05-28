@@ -341,6 +341,10 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             <span id="backfillBtnLabel">Backfill CRM Compliance</span>
                         </button>
+                        <button id="btn-audit-links" data-on-click="auditCrmLinks" class="text-sm bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="Re-validate every phone-derived CRM link against the 9-digit overlap rule. Clears wrong links (e.g. the Phone=&quot;11&quot; junk-Lead matches) and re-runs auto-link so calls point at the correct Lead/Deal or stay honestly unlinked.">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span id="auditLinksBtnLabel">Audit CRM Links</span>
+                        </button>
                     </div>
                 </div>
                 <!-- Diagnostic banner: explains the gap between "analyzed"
@@ -2805,6 +2809,83 @@
                 btn.disabled = false;
                 btn.classList.remove('opacity-60', 'cursor-not-allowed');
                 if (lbl) lbl.textContent = 'Backfill CRM Compliance';
+            }
+        }
+
+        // CRM link-audit driver. Loops POST /api/calls/audit-crm-links in
+        // 50-row chunks until has_more=false. Re-validates every
+        // phone-derived link against the 9-digit overlap rule, clears the
+        // confirmed wrong links (e.g. the legacy Phone="11" junk-Lead
+        // collisions), and re-runs auto-link so each call points at the
+        // correct Lead/Deal or stays honestly unlinked.
+        let _auditLinksInFlight = false;
+        async function auditCrmLinks() {
+            if (_auditLinksInFlight) return;
+            const btn = document.getElementById('btn-audit-links');
+            const lbl = document.getElementById('auditLinksBtnLabel');
+            if (!btn) return;
+            if (!confirm(
+                'Audit CRM links?\n\n' +
+                'This re-checks every phone-matched call→Lead/Deal link. ' +
+                'Links whose Zoho phone no longer matches the call number ' +
+                '(the "11" junk matches) are cleared and re-linked. ' +
+                'Activity-matched links are left untouched.'
+            )) return;
+            _auditLinksInFlight = true;
+            btn.disabled = true;
+            btn.classList.add('opacity-60', 'cursor-not-allowed');
+            const totals = { scanned: 0, mismatched: 0, cleared: 0, relinked: 0, kept: 0, errors: 0 };
+            try {
+                let hasMore = true;
+                let pass = 0;
+                let cursor = 0;  // id-cursor: advances monotonically so each link is audited once
+                // Loop until the server reports no more candidate rows. The
+                // id-cursor guarantees forward progress and termination, so
+                // the only cap here is a generous infinite-loop safety net.
+                const MAX_PASSES = 100000;
+                while (hasMore && pass < MAX_PASSES) {
+                    pass++;
+                    if (lbl) lbl.textContent = `Auditing… ${totals.scanned} checked, ${totals.cleared} fixed`;
+                    const res = await fetch('/api/calls/audit-crm-links', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ limit: 50, after_id: cursor }),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        alert(`Link audit failed: ${err.error || res.statusText}`);
+                        break;
+                    }
+                    const data = await res.json();
+                    totals.scanned += data.scanned || 0;
+                    totals.mismatched += data.mismatched || 0;
+                    totals.cleared += data.cleared || 0;
+                    totals.relinked += data.relinked || 0;
+                    totals.kept += data.kept || 0;
+                    totals.errors += (data.errors || []).length;
+                    hasMore = !!data.has_more;
+                    if (typeof data.next_cursor === 'number') cursor = data.next_cursor;
+                    if (data.scanned === 0) break;
+                }
+                if (lbl) lbl.textContent = 'Audit CRM Links';
+                alert(
+                    `Link audit complete:\n` +
+                    `• ${totals.scanned} links checked\n` +
+                    `• ${totals.mismatched} phone mismatches found\n` +
+                    `• ${totals.cleared} wrong links cleared\n` +
+                    `• ${totals.relinked} re-linked to a correct record\n` +
+                    `• ${totals.kept} valid links kept\n` +
+                    `• ${totals.errors} errors\n\n` +
+                    `Refreshing dashboard…`
+                );
+                await refreshData();
+            } catch (e) {
+                alert('Link audit threw: ' + (e.message || e));
+            } finally {
+                _auditLinksInFlight = false;
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-not-allowed');
+                if (lbl) lbl.textContent = 'Audit CRM Links';
             }
         }
 
