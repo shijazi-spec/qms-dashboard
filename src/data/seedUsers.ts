@@ -157,6 +157,7 @@ export const SEED_USERS: SeedUser[] = [
   { name: 'WalaPlus', team: 'WP Sales', status: 'Inactive', totalRecords: 14, modules: ['Deals', 'Accounts'] },
   { name: 'waseem albalawi', team: 'Unassigned', status: 'Inactive', totalRecords: 11, modules: ['Deals'] },
   { name: 'Yahya Alshehri', team: 'WP Sales', status: 'Active', totalRecords: 846, modules: ['Deals', 'Contacts', 'Accounts'] },
+  { name: 'Yara Moheb', team: 'MP', status: 'Active', totalRecords: 5, modules: ['Deals', 'Contacts', 'Accounts'] },
   { name: 'zahrah alnasser', team: 'Unassigned', status: 'Inactive', totalRecords: 149, modules: ['Deals'] },
   { name: 'Zaid Alholaibah', team: 'WP Sales', status: 'Inactive', totalRecords: 66, modules: ['Deals', 'Contacts', 'Accounts'] },
   { name: 'Zeina  Mamdouh', team: 'CS', status: 'Active', totalRecords: 30, modules: ['Deals', 'Contacts', 'Accounts'] },
