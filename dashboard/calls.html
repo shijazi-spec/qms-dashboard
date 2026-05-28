@@ -2123,6 +2123,28 @@
                 } else if (analytics.totalCalls === 0) {
                     document.getElementById('noData').classList.remove('hidden');
                 } else {
+                    // Partial-success path: analytics loaded but the
+                    // records list didn't. This is the exact 401
+                    // mismatch fixed in 2026-05-29: /api/calls used
+                    // verifyAdminKey while /api/calls/analytics used
+                    // verifyCallAccess, so non-admin readable roles saw
+                    // "Total Calls: 42" + "No call records found".
+                    // Show an explicit banner that distinguishes auth
+                    // failure from network/server failure so future
+                    // asymmetries are visible instead of silent.
+                    const callsStatus = callsResult.status === 'fulfilled' ? callsResult.value.status : null;
+                    if (!callsOk && (callsStatus === 401 || callsStatus === 403)) {
+                        const top = document.querySelector('main') || document.body;
+                        const existing = document.getElementById('callsAuthBanner');
+                        if (existing) existing.remove();
+                        const banner = document.createElement('div');
+                        banner.id = 'callsAuthBanner';
+                        banner.className = 'mx-6 mt-4 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900';
+                        banner.innerHTML = '<strong>Records list hidden:</strong> the Overview KPIs loaded, but your role is not authorized for the per-call records endpoint. Ask an admin to update the route\'s allowed roles (see verifyCallAccess in callIntelligenceRoutes.ts) or grant your account the admin role.';
+                        top.insertBefore(banner, top.firstChild);
+                    } else if (!callsOk) {
+                        console.warn('[refreshData] callRecords failed:', callsResult);
+                    }
                     showTab('overview');
                     renderOverview();
                 }

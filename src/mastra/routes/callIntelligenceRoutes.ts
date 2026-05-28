@@ -114,8 +114,19 @@ export const callIntelligenceRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const admin = await verifyAdminKey(c);
-          if (!admin) return unauthorizedResponse(c);
+          // Reading the call list is a READ, not a write. It must use the
+          // same role gate as /api/calls/analytics (which computes the
+          // headline KPI cards over these same rows). Previously this route
+          // used verifyAdminKey (admin-only) while analytics used
+          // verifyCallAccess (CALL_READ_ROLES). The asymmetry meant a
+          // head_of_operations_quality / quality_manager / team_lead /
+          // grc_manager user saw "Total Calls: 42" on the Overview tab but
+          // "No call records found" on the Records tab — the 401 was
+          // silently coerced into an empty array by the frontend. There is
+          // no security argument for hiding the underlying rows from a role
+          // that can already see their count + per-agent breakdown.
+          const user = await verifyCallAccess(c);
+          if (!user) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
           logger?.info("📞 [API] Fetching call records");
