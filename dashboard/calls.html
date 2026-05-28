@@ -435,6 +435,18 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 5.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                             Diagnose Linking
                         </button>
+                        <!-- Phase 5e finale: bulk-delete every record whose
+                             audio_blob is NULL (the historical bulk-upload
+                             rows whose audio bytes were discarded). The
+                             operator then re-uploads from local .wav copies
+                             so the new ingest path captures audio_blob +
+                             duration + auto-link via the word-search fix.
+                             Two-step: first click does a dry-run preview,
+                             second click does the actual delete. -->
+                        <button data-on-click="cleanupNoAudioRecords" id="btn-cleanup-no-audio" class="text-sm bg-red-100 hover:bg-red-200 text-red-900 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="Find records whose audio bytes were discarded by the old bulk-upload path. Two-step preview + confirm.">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg>
+                            Delete legacy (no audio)
+                        </button>
                         <!-- Test Zoho button RELOCATED to Duplicate Radar
                              (dashboard/duplicates.html) per operator request —
                              that page is the most Zoho-dependent surface and is
@@ -5383,6 +5395,78 @@
                 successMessageSingular: 'deleted',
                 throttleMs: 200,
             });
+        }
+
+        // Phase 5e finale — bulk-delete every record whose audio_blob
+        // is NULL. Two-step UX:
+        //   1. First click  → dry_run, server returns candidate count +
+        //                    sample of 10 records. Modal shows preview.
+        //   2. Confirm in modal → actual DELETE, server cascades the
+        //                    delete to analysis / transcripts / evaluations.
+        // After success, refreshData() re-pulls the call list so the
+        // deleted rows disappear from the table immediately.
+        async function cleanupNoAudioRecords() {
+            const btn = document.getElementById('btn-cleanup-no-audio');
+            if (!btn) return;
+            const originalLabel = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Scanning…`;
+            try {
+                // Step 1 — dry run to get the count + sample.
+                const dryRes = await fetch('/api/calls/cleanup-no-audio', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dry_run: true }),
+                });
+                const dryData = await dryRes.json();
+                if (!dryData.success) {
+                    alert(`Cleanup preview failed: ${dryData.error || 'unknown'}`);
+                    return;
+                }
+                if (dryData.candidate_count === 0) {
+                    alert('No legacy records to clean up — every call_records row already has stored audio. Nothing to do.');
+                    return;
+                }
+                const sampleLines = (dryData.sample || [])
+                    .slice(0, 10)
+                    .map((r) => `  • #${r.id} ${r.call_id} (${r.agent_email || '?'}, ${r.source || '?'})`)
+                    .join('\n');
+                const proceed = confirm(
+                    `${dryData.candidate_count} call_records have no stored audio and will be PERMANENTLY DELETED.\n\n` +
+                    `Their transcripts, analysis, and scorecard evaluations will also be removed (cascaded).\n\n` +
+                    `Sample of what will be deleted:\n${sampleLines}\n\n` +
+                    `Re-upload the original .wav files afterwards to get audio playback + auto-link + scoring on every record.\n\n` +
+                    `Continue with the deletion?`,
+                );
+                if (!proceed) return;
+
+                // Step 2 — actual delete.
+                btn.innerHTML = `<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Deleting…`;
+                const delRes = await fetch('/api/calls/cleanup-no-audio', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dry_run: false }),
+                });
+                const delData = await delRes.json();
+                if (!delData.success) {
+                    alert(`Cleanup failed: ${delData.error || 'unknown'}`);
+                    return;
+                }
+                alert(
+                    `✓ Deleted ${delData.deleted_count} legacy records.\n\n` +
+                    `Now re-upload the original .wav files via the bulk audio upload form. Every new upload will:\n` +
+                    `  • Store audio bytes in the DB (playback works forever)\n` +
+                    `  • Capture duration via Whisper\n` +
+                    `  • Auto-link to Zoho via the native phone search\n` +
+                    `  • Auto-evaluate against the active scorecard`,
+                );
+                await refreshData();
+            } catch (e) {
+                alert('Cleanup threw: ' + (e.message || e));
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalLabel;
+            }
         }
 
         // Quick Win #1 — batch-analyze every pending/processing call without

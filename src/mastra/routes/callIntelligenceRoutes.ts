@@ -845,6 +845,153 @@ export const callIntelligenceRoutes = [
       };
     },
   },
+  // ===================================================================
+  // Phase 5e finale — "Delete legacy records with no audio" cleanup.
+  //
+  // The pre-Phase-3 bulk-upload path transcribed the audio then
+  // discarded the bytes before they hit Postgres. Those records
+  // (audio_blob IS NULL) can't be played back, can't have their
+  // duration recovered, and can't be re-evaluated against a refreshed
+  // scorecard with audio context — they're a permanent dead-weight
+  // class in the table.
+  //
+  // The operator's pragmatic answer was "let me delete them and
+  // re-upload from the original .wav files I still have locally." This
+  // endpoint makes that a one-click action instead of forcing them to
+  // select the ~196 rows by hand in the table.
+  //
+  // Admin-only (DELETE is destructive). Supports `dry_run: true` to
+  // preview the count without deleting. Cascades to call_analysis,
+  // call_transcripts, call_qa_scores, sdr_call_evaluations, etc. via
+  // the existing FK ON DELETE CASCADE rules on each child table.
+  // Writes an event_logs audit row regardless of dry_run.
+  // ===================================================================
+  {
+    path: "/api/calls/cleanup-no-audio",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        const startedAt = Date.now();
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+
+          const body = await c.req.json().catch(() => ({}));
+          const dryRun = body.dry_run === true;
+
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          // Identify the candidates first so the dry-run + audit log
+          // can list them. audio_blob IS NULL is the canonical "no
+          // recoverable audio" predicate; audio_file_path is a stale
+          // pointer to a wiped FS location and isn't trusted here.
+          const candidates = await callIntelligencePool.query<{
+            id: number;
+            call_id: string;
+            agent_email: string | null;
+            call_date: Date | null;
+            source: string | null;
+          }>(
+            `SELECT id, call_id, agent_email, call_date, source
+               FROM call_records
+              WHERE audio_blob IS NULL
+              ORDER BY id ASC`,
+          );
+
+          const result = {
+            success: true,
+            dry_run: dryRun,
+            candidate_count: candidates.rowCount ?? 0,
+            deleted_count: 0,
+            sample: candidates.rows.slice(0, 10).map((r) => ({
+              id: r.id,
+              call_id: r.call_id,
+              agent_email: r.agent_email,
+              call_date: r.call_date,
+              source: r.source,
+            })),
+            duration_ms: 0,
+          };
+
+          if (!dryRun && (candidates.rowCount ?? 0) > 0) {
+            // Single DELETE with the same predicate — cascades cover
+            // child rows. Wrap in a transaction so a partial failure
+            // doesn't leave orphaned analysis/transcript rows.
+            const ids = candidates.rows.map((r) => r.id);
+            await callIntelligencePool.query("BEGIN");
+            try {
+              const deleted = await callIntelligencePool.query(
+                `DELETE FROM call_records
+                  WHERE id = ANY($1::int[])
+                RETURNING id`,
+                [ids],
+              );
+              result.deleted_count = deleted.rowCount ?? 0;
+              await callIntelligencePool.query("COMMIT");
+            } catch (txErr: any) {
+              await callIntelligencePool
+                .query("ROLLBACK")
+                .catch(() => undefined);
+              throw txErr;
+            }
+          }
+
+          // Audit-trail row — ISO 9001 + PDPL traceability for any
+          // bulk destructive action. Written regardless of dry_run
+          // so a preview run is also visible in the audit log.
+          try {
+            const { logEvent } = await import(
+              "../../utils/eventLogsDatabase"
+            );
+            await logEvent({
+              actionType: "call_records_cleanup_no_audio",
+              entityType: "call_record",
+              module: "calls",
+              severity: "WARNING",
+              aiInvolved: false,
+              userEmail: (admin as any).email || undefined,
+              userName: (admin as any).name || undefined,
+              description: dryRun
+                ? `Dry-run: ${result.candidate_count} call_records have no stored audio and would be deleted.`
+                : `Deleted ${result.deleted_count} call_records that had no stored audio (operator chose to re-upload from local copies).`,
+              newValue: {
+                dry_run: dryRun,
+                candidate_count: result.candidate_count,
+                deleted_count: result.deleted_count,
+                sample_ids: candidates.rows.slice(0, 25).map((r) => r.id),
+              },
+            });
+          } catch (logErr: any) {
+            logger?.warn("[API] cleanup-no-audio audit log failed", {
+              error: logErr?.message || String(logErr),
+            });
+          }
+
+          result.duration_ms = Date.now() - startedAt;
+          logger?.info(
+            `[API] cleanup-no-audio ${dryRun ? "(dry-run)" : ""}`,
+            result,
+          );
+          return c.json(result);
+        } catch (error: any) {
+          safeLogger.error("[API] cleanup-no-audio failed", {
+            error: error?.message,
+          });
+          return c.json(
+            {
+              success: false,
+              error: error?.message || "Cleanup failed",
+              duration_ms: Date.now() - startedAt,
+            },
+            500,
+          );
+        }
+      };
+    },
+  },
   {
     // DMAIC Improve: one-off call_date backfill for the 199 historical
     // records whose call_date was set to file.lastModified (i.e. the

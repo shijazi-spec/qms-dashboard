@@ -1288,7 +1288,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // per-call phone candidates which we don't want broadly visible.
   {
     pattern:
-      /^\/api\/calls\/(duration-backfill|diagnostic\/auto-link|diagnostic\/zoho)$/,
+      /^\/api\/calls\/(duration-backfill|diagnostic\/auto-link|diagnostic\/zoho|cleanup-no-audio)$/,
     methods: ["GET", "POST"],
     roles: ["admin"],
   },
