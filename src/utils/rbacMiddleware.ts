@@ -1282,6 +1282,16 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["GET", "POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  // Phase 4b/4d — duration backfill + auto-link diagnostic. Admin-only
+  // operations: the backfill rewrites duration_seconds across the whole
+  // table in one pass; the diagnostic exposes Zoho connection state +
+  // per-call phone candidates which we don't want broadly visible.
+  {
+    pattern:
+      /^\/api\/calls\/(duration-backfill|diagnostic\/auto-link)$/,
+    methods: ["GET", "POST"],
+    roles: ["admin"],
+  },
   {
     pattern: /^\/api\/coaching\/effectiveness$/,
     methods: ["GET"],

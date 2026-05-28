@@ -979,6 +979,307 @@ export const callIntelligenceRoutes = [
       };
     },
   },
+  // ===================================================================
+  // Phase 4b — Server-side duration backfill.
+  //
+  // Records uploaded before the Whisper verbose_json fix landed with
+  // duration_seconds NULL, so the Call Records table renders "--" for
+  // the legacy batch. The client-side eager backfill in calls.html
+  // (eagerBackfillDurations) only heals rows the operator paginates
+  // through, one page at a time — not great for ~200+ historical rows.
+  //
+  // This endpoint runs a single bulk pass: every row with
+  // audio_blob IS NOT NULL AND duration_seconds missing gets its
+  // duration decoded server-side via music-metadata (pure JS, no
+  // ffprobe native deps required) and written back in one UPDATE.
+  // Records without audio_blob (legacy bulk uploads that discarded
+  // the bytes after transcription) are reported as "unrecoverable"
+  // and left alone — their duration is permanently gone.
+  //
+  // Idempotent — re-running after a full backfill is a quiet no-op.
+  // Admin-only.
+  // ===================================================================
+  {
+    path: "/api/calls/duration-backfill",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+
+          const body = await c.req.json().catch(() => ({}));
+          const limit =
+            typeof body.limit === "number" && body.limit > 0
+              ? Math.min(body.limit, 2000)
+              : undefined;
+
+          const { runCallDurationBackfill } = await import(
+            "../../utils/callDurationBackfill"
+          );
+          const result = await runCallDurationBackfill({ limit });
+          logger?.info("[API] duration-backfill complete", result);
+
+          // Audit-trail — durable evidence we touched these rows,
+          // for ISO 9001 + PDPL traceability. Only when something
+          // actually changed to keep the partition tidy.
+          if (result.populated > 0 || result.errors > 0) {
+            try {
+              const { logEvent } = await import(
+                "../../utils/eventLogsDatabase"
+              );
+              await logEvent({
+                actionType: "call_duration_backfill",
+                entityType: "call_record",
+                module: "calls",
+                severity: result.errors > 0 ? "WARNING" : "INFO",
+                aiInvolved: false,
+                description:
+                  `Duration backfill: populated ${result.populated} row(s), ` +
+                  `parsed_zero ${result.parsed_zero}, parse_failed ${result.parse_failed}, ` +
+                  `unrecoverable ${result.unrecoverable}, scanned ${result.scanned}.`,
+                newValue: result,
+              });
+            } catch (e: any) {
+              logger?.warn("[API] duration-backfill audit log failed", {
+                error: e?.message || String(e),
+              });
+            }
+          }
+
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          safeLogger.error("[API] duration-backfill failed", {
+            error: error?.message,
+          });
+          return c.json(
+            {
+              success: false,
+              error: error?.message || "Duration backfill failed",
+            },
+            500,
+          );
+        }
+      };
+    },
+  },
+  // ===================================================================
+  // Phase 4d — Auto-link diagnostic.
+  //
+  // Every record in the Call Records table currently displays "Not
+  // linked" in the By Phone view, which is driven by lead_id / deal_id
+  // being null. autoLinkCallAndCompliance IS called from the upload
+  // path, so the link is failing somewhere downstream. Three plausible
+  // failure modes:
+  //   1. Zoho disconnected — getZohoConnectionStatus().connected = false
+  //   2. Zoho rate-limited — every fetchZohoRecords call returns 429
+  //   3. Phone-format mismatch — phones in CRM don't match the
+  //      normalised form our matcher emits
+  //
+  // This endpoint pulls a small sample, re-runs the linker in
+  // dry-run mode (no persist), and returns a structured diagnostic
+  // for each call: phones extracted, scan counts, match counts,
+  // reason code. Operator can hit it from the browser console
+  // and read off the actual failure mode.
+  // ===================================================================
+  {
+    path: "/api/calls/diagnostic/auto-link",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+
+          const n = (() => {
+            const raw = c.req.query("n");
+            const parsed = raw ? parseInt(raw, 10) : 3;
+            return Number.isFinite(parsed) && parsed > 0 && parsed <= 20
+              ? parsed
+              : 3;
+          })();
+
+          const {
+            callIntelligencePool,
+            initCallIntelligenceTables,
+          } = await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          const sample = await callIntelligencePool.query<{
+            id: number;
+            call_id: string;
+            agent_email: string | null;
+            agent_name: string | null;
+            contact_name: string | null;
+            lead_id: string | null;
+            deal_id: string | null;
+            call_date: Date | null;
+            metadata: any;
+          }>(
+            `SELECT id, call_id, agent_email, agent_name, contact_name,
+                    lead_id, deal_id, call_date, metadata
+               FROM call_records
+              WHERE lead_id IS NULL
+                AND deal_id IS NULL
+              ORDER BY id DESC
+              LIMIT $1`,
+            [n],
+          );
+
+          const { getZohoConnectionStatus } = await import(
+            "../../utils/zohoCRM"
+          );
+          const zohoStatus = getZohoConnectionStatus();
+
+          const { extractCallPhoneCandidates } = await import(
+            "../../utils/callLeadPhoneMatch"
+          );
+          const { findCrmRecordByPhone } = await import(
+            "../../utils/sdrCallLinking"
+          );
+          const { normalizePhoneDigits } = await import(
+            "../../utils/callMcpReconciliation"
+          );
+
+          const results = [];
+          for (const row of sample.rows) {
+            const phones = extractCallPhoneCandidates(row);
+            const phonesNormalized = phones.map((p) => ({
+              raw: p,
+              normalized: p ? normalizePhoneDigits(p) : null,
+            }));
+            const phoneAttempts = [];
+            for (const phone of phones) {
+              if (!phone) continue;
+              const normalized = normalizePhoneDigits(phone);
+              if (!normalized || normalized.length < 7) {
+                phoneAttempts.push({
+                  raw: phone,
+                  normalized,
+                  skipped: "too_short",
+                });
+                continue;
+              }
+              try {
+                const matchRes = await findCrmRecordByPhone(phone, {
+                  maxRecordsPerModule: 200,
+                });
+                phoneAttempts.push({
+                  raw: phone,
+                  normalized,
+                  scanned_leads: matchRes.scanned_leads,
+                  scanned_deals: matchRes.scanned_deals,
+                  matches: matchRes.matches.map((m) => ({
+                    id: m.id,
+                    module: m.module,
+                    display_name: m.display_name,
+                    phone: m.phone,
+                  })),
+                });
+              } catch (err: any) {
+                phoneAttempts.push({
+                  raw: phone,
+                  normalized,
+                  error: err?.message || String(err),
+                });
+              }
+            }
+
+            results.push({
+              call_id: row.call_id,
+              id: row.id,
+              agent_email: row.agent_email,
+              contact_name: row.contact_name,
+              call_date: row.call_date,
+              extracted_phones: phonesNormalized,
+              phone_attempts: phoneAttempts,
+              current_link: {
+                lead_id: row.lead_id,
+                deal_id: row.deal_id,
+              },
+            });
+          }
+
+          // Roll up a single-sentence diagnosis based on the data.
+          let diagnosis = "Unclear — review per-call detail below.";
+          if (!zohoStatus.connected) {
+            diagnosis =
+              "Zoho is NOT connected — that's why no auto-links can land. Reconnect Zoho on the Integrations tab.";
+          } else if (results.length === 0) {
+            diagnosis =
+              "Every call_records row already has a lead/deal — no unlinked rows to diagnose. The 'Not linked' badge may be a UI bug — check the By Phone group_by code.";
+          } else {
+            const totalScanned = results.reduce(
+              (sum, r) =>
+                sum +
+                r.phone_attempts.reduce(
+                  (s: number, a: any) =>
+                    s + (a.scanned_leads || 0) + (a.scanned_deals || 0),
+                  0,
+                ),
+              0,
+            );
+            const totalMatches = results.reduce(
+              (sum, r) =>
+                sum +
+                r.phone_attempts.reduce(
+                  (s: number, a: any) =>
+                    s + (Array.isArray(a.matches) ? a.matches.length : 0),
+                  0,
+                ),
+              0,
+            );
+            const anyErrors = results.some((r) =>
+              r.phone_attempts.some((a: any) => a.error),
+            );
+            if (anyErrors) {
+              diagnosis =
+                "Zoho fetch errored on at least one phone — likely rate-limited (429) or token expired. See `phone_attempts[].error` per row.";
+            } else if (totalScanned === 0) {
+              diagnosis =
+                "Zoho returned zero records for every phone attempted — auth issue OR rate-limit bail. Verify the integration on /integrations and try again.";
+            } else if (totalMatches === 0) {
+              diagnosis =
+                `Zoho returned ${totalScanned} records but ZERO phone matches — phone format mismatch likely. ` +
+                `Compare the 'normalized' field below against the Phone column on a Zoho Lead.`;
+            } else {
+              diagnosis =
+                `Phone match worked (${totalMatches} hits across ${results.length} calls) — but the persist step on these specific rows failed. Check ai_insights / metadata for errors.`;
+            }
+          }
+
+          logger?.info("[API] auto-link diagnostic complete", {
+            sample_size: results.length,
+            zoho_connected: zohoStatus.connected,
+          });
+
+          return c.json({
+            success: true,
+            diagnosis,
+            zoho_connection: {
+              connected: zohoStatus.connected,
+              status: zohoStatus,
+            },
+            sample_size: results.length,
+            results,
+          });
+        } catch (error: any) {
+          safeLogger.error("[API] auto-link diagnostic failed", {
+            error: error?.message,
+          });
+          return c.json(
+            {
+              success: false,
+              error: error?.message || "Diagnostic failed",
+            },
+            500,
+          );
+        }
+      };
+    },
+  },
   {
     path: "/api/calls/compliance",
     method: "GET" as const,

@@ -418,6 +418,23 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                             Analyze All Pending
                         </button>
+                        <!-- Phase 4b: server-side bulk duration backfill. Decodes
+                             audio_blob via music-metadata (no ffprobe native dep)
+                             for every row with duration_seconds NULL and writes
+                             the result back. Idempotent — re-running after a
+                             full pass is a quiet no-op. -->
+                        <button data-on-click="backfillDurations" id="btn-backfill-durations" class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="Recompute duration for every record with audio still in the DB blob. Records uploaded before the duration fix landed will populate.">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span id="backfillDurBtnLabel">Backfill Durations</span>
+                        </button>
+                        <!-- Phase 4d: auto-link diagnostic. Pulls a small sample
+                             of unlinked records, re-runs the linker, and shows
+                             the failure mode (Zoho disconnected / rate-limited /
+                             phone format mismatch). Read-only — does not persist. -->
+                        <button data-on-click="runAutoLinkDiagnostic" id="btn-diagnose-link" class="text-sm bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="Diagnose why records show 'Not linked'. Read-only — no records change.">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 5.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            Diagnose Linking
+                        </button>
                         <button data-on-click="exportCalls" data-args="[&quot;csv&quot;]" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export CSV</button>
                         <!-- DMAIC Improve: view-mode toggle. "Records" is the
                              flat row-per-call table; "By Phone" consolidates
@@ -2425,6 +2442,127 @@
                 btn.disabled = false;
                 btn.classList.remove('opacity-60', 'cursor-not-allowed');
                 if (lbl) lbl.textContent = 'Backfill Dates';
+            }
+        }
+
+        // Phase 4b — server-side duration backfill driver.
+        //
+        // Hits POST /api/calls/duration-backfill which decodes audio_blob
+        // via music-metadata for every row missing duration_seconds and
+        // writes the result back. Idempotent: re-running after a clean
+        // pass is a quiet no-op. Rows without audio_blob (legacy bulk
+        // uploads that discarded the bytes) stay null — their duration
+        // is permanently gone and the summary surfaces that count.
+        let _durBackfillInFlight = false;
+        async function backfillDurations() {
+            if (_durBackfillInFlight) return;
+            const btn = document.getElementById('btn-backfill-durations');
+            const lbl = document.getElementById('backfillDurBtnLabel');
+            if (!btn) return;
+            if (!confirm('Recompute call durations for every record with audio still stored in the database?\n\nReads audio headers only — no transcription. Cheap to run, no OpenAI cost.')) return;
+            _durBackfillInFlight = true;
+            btn.disabled = true;
+            btn.classList.add('opacity-60', 'cursor-not-allowed');
+            if (lbl) lbl.textContent = 'Backfilling…';
+            try {
+                const res = await fetch('/api/calls/duration-backfill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ limit: 1000 }),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    alert(`Duration backfill failed: ${data.error || 'unknown'}`);
+                    return;
+                }
+                alert(
+                    `Duration backfill complete:\n\n` +
+                    `• ${data.scanned} record(s) with audio scanned\n` +
+                    `• ${data.populated} duration(s) populated\n` +
+                    `• ${data.parsed_zero} couldn't decode (corrupt / unknown codec)\n` +
+                    `• ${data.parse_failed} errored during decode\n` +
+                    `• ${data.unrecoverable} record(s) have no stored audio (duration unrecoverable)\n\n` +
+                    `Duration: ${data.duration_ms}ms` +
+                    (data.error_samples && data.error_samples.length
+                        ? `\n\nFirst errors:\n${data.error_samples.join('\n')}`
+                        : '')
+                );
+                await refreshData();
+            } catch (e) {
+                alert('Duration backfill threw: ' + (e.message || e));
+            } finally {
+                _durBackfillInFlight = false;
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-not-allowed');
+                if (lbl) lbl.textContent = 'Backfill Durations';
+            }
+        }
+
+        // Phase 4d — auto-link diagnostic.
+        //
+        // Calls GET /api/calls/diagnostic/auto-link?n=3 which pulls a small
+        // sample of records with NULL lead_id AND NULL deal_id, re-runs
+        // the linker in dry-run mode, and returns: zoho connection state,
+        // phones extracted per call, per-phone scan + match counts, and
+        // a single-sentence diagnosis. Read-only — no records change.
+        async function runAutoLinkDiagnostic() {
+            const btn = document.getElementById('btn-diagnose-link');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch('/api/calls/diagnostic/auto-link?n=3');
+                const data = await res.json();
+                if (!data.success) {
+                    alert(`Diagnostic failed: ${data.error || 'unknown'}`);
+                    return;
+                }
+                const lines = [];
+                lines.push(`DIAGNOSIS: ${data.diagnosis}`);
+                lines.push('');
+                lines.push(`Zoho connected: ${data.zoho_connection.connected ? 'YES' : 'NO'}`);
+                lines.push(`Sample size: ${data.sample_size}`);
+                lines.push('');
+                for (const r of data.results || []) {
+                    lines.push(`--- Call ${r.call_id} (id=${r.id}, agent=${r.agent_email || '?'}) ---`);
+                    lines.push(`  Phones extracted: ${(r.extracted_phones || []).map(p => `${p.raw || '(empty)'} → ${p.normalized || '(empty)'}`).join(', ') || '(none)'}`);
+                    for (const a of r.phone_attempts || []) {
+                        if (a.skipped) {
+                            lines.push(`  ${a.raw}: skipped (${a.skipped})`);
+                        } else if (a.error) {
+                            lines.push(`  ${a.raw}: ERROR — ${a.error}`);
+                        } else {
+                            const matchSummary = (a.matches && a.matches.length)
+                                ? a.matches.map(m => `${m.module}:${m.id} (${m.display_name || '?'} / ${m.phone || '?'})`).join(', ')
+                                : 'no matches';
+                            lines.push(`  ${a.raw}: scanned ${a.scanned_leads || 0} leads + ${a.scanned_deals || 0} deals → ${matchSummary}`);
+                        }
+                    }
+                    lines.push('');
+                }
+                // Pop the result into a wide pre-formatted dialog so the
+                // operator can read the full structured diagnostic. Native
+                // alert() truncates long content on some browsers, so we
+                // emit a modal instead.
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h3 class="text-lg font-semibold">Auto-Link Diagnostic</h3>
+                            <button class="text-gray-400 hover:text-gray-700" data-diagnostic-close>
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <pre class="px-6 py-4 overflow-auto text-xs font-mono text-gray-800 flex-1"></pre>
+                    </div>`;
+                modal.querySelector('pre').textContent = lines.join('\n');
+                modal.querySelector('[data-diagnostic-close]').addEventListener('click', () => modal.remove());
+                modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+                document.body.appendChild(modal);
+                console.log('[AutoLink Diagnostic]', data);
+            } catch (e) {
+                alert('Diagnostic threw: ' + (e.message || e));
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
 
