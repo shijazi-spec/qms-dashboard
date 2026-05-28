@@ -1,4 +1,4 @@
-import { isAdminAuthorized } from "../../utils/rbacMiddleware";
+import { isAdminAuthorizedLive } from "../../utils/rbacMiddleware";
 
 import { logger } from "../../utils/logger";
 export const qmsApiRoutes = [
@@ -8,7 +8,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const { getQmsDashboardData } =
             await import("../../utils/qmsDatabase");
@@ -27,7 +27,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const { getDealEvaluations } =
             await import("../../utils/qmsDatabase");
@@ -61,7 +61,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const { getEvaluationStatistics } =
             await import("../../utils/qmsDatabase");
@@ -80,7 +80,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const { getCapaRecords } = await import("../../utils/qmsDatabase");
           const limit = parseInt(c.req.query("limit") || "50");
@@ -115,7 +115,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const id = parseInt(c.req.param("id"));
           const { getCapaById, getCapaActionItems } =
@@ -137,7 +137,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const data = await c.req.json();
           const { createCapaRecord } = await import("../../utils/qmsDatabase");
@@ -184,7 +184,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const { getNonconformances } =
             await import("../../utils/qmsDatabase");
@@ -212,7 +212,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const data = await c.req.json();
           const { createNonconformance } =
@@ -257,7 +257,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const { getTrainingRecords } =
             await import("../../utils/qmsDatabase");
@@ -290,7 +290,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const { getTrainingAssignments } =
             await import("../../utils/qmsDatabase");
@@ -320,7 +320,7 @@ export const qmsApiRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c))
+          if (!await isAdminAuthorizedLive(c))
             return c.json({ error: "Insufficient permissions" }, 403);
           const { getActiveFramework } =
             await import("../../utils/qmsDatabase");

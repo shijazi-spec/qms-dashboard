@@ -565,9 +565,9 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { requireWriteRole, unauthorizedResponse } =
+          const { requireWriteRoleLive, unauthorizedResponse } =
             await import("../../utils/rbacMiddleware");
-          const sessionUser = requireWriteRole(c);
+          const sessionUser = await requireWriteRoleLive(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const logger = mastra?.getLogger();
@@ -1125,9 +1125,9 @@ export const policyRoutes = [
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
         try {
-          const { requireWriteRole, unauthorizedResponse } =
+          const { requireWriteRoleLive, unauthorizedResponse } =
             await import("../../utils/rbacMiddleware");
-          const sessionUser = requireWriteRole(c);
+          const sessionUser = await requireWriteRoleLive(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
           const { deletePolicy, getPolicyById, initPolicyTables } =

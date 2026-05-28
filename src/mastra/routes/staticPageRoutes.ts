@@ -3,7 +3,7 @@ import { join } from "path";
 import { getSessionFromCookie } from "./authRoutes";
 import {
   isAdminKeyConfigured,
-  isAdminAuthorized,
+  isAdminAuthorizedLive,
   hasValidAdminApiKey,
 } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
@@ -291,7 +291,7 @@ export const staticPageRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c)) {
+          if (!await isAdminAuthorizedLive(c)) {
             return c.html(
               renderSetupRequiredPage(
                 "Admin Setup Required",
@@ -321,7 +321,7 @@ export const staticPageRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c)) {
+          if (!await isAdminAuthorizedLive(c)) {
             return c.html(
               renderSetupRequiredPage(
                 "Admin Setup Required",
@@ -361,7 +361,7 @@ export const staticPageRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          if (!isAdminAuthorized(c)) {
+          if (!await isAdminAuthorizedLive(c)) {
             return c.html(
               renderSetupRequiredPage(
                 "QMS Setup Required",

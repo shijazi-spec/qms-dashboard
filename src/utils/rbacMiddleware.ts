@@ -171,6 +171,24 @@ export function requireWriteRole(c: any): SessionUser | null {
   return user;
 }
 
+/**
+ * Async, live-DB variant of requireWriteRole.  Always fetches the caller's
+ * current role from platform_users instead of trusting the signed cookie so
+ * that a role demotion takes effect on the very next request.
+ */
+export async function requireWriteRoleLive(
+  c: any,
+): Promise<SessionUser | null> {
+  const user = getSessionUser(c);
+  if (!user) return null;
+  const platformUser = await getPlatformUser(user.email);
+  if (!platformUser || platformUser.status !== "active") return null;
+  user.role = platformUser.role;
+  if (READ_ONLY_ROLES.includes(user.role as UserRole)) return null;
+  if (!WRITE_ROLES.includes(user.role as UserRole)) return null;
+  return user;
+}
+
 export function isDepartmentViewer(c: any): boolean {
   const user = getSessionUser(c);
   return user?.role === "department_viewer";
@@ -332,6 +350,22 @@ export function isAdminAuthorized(c: any): boolean {
   if (hasValidAdminApiKey(c)) return true;
   const session = getSessionFromCookie(c.req.header("Cookie"));
   return session?.role === "admin";
+}
+
+/**
+ * Async, live-DB variant of isAdminAuthorized.  For session-cookie callers it
+ * fetches the current role from platform_users rather than trusting the signed
+ * cookie, so a demotion away from admin takes effect immediately without
+ * requiring the user to log out.  Server-to-server callers that supply a valid
+ * X-Admin-Key header are still granted access without a DB round-trip.
+ */
+export async function isAdminAuthorizedLive(c: any): Promise<boolean> {
+  if (hasValidAdminApiKey(c)) return true;
+  const user = getSessionUser(c);
+  if (!user) return false;
+  const platformUser = await getPlatformUser(user.email);
+  if (!platformUser || platformUser.status !== "active") return false;
+  return platformUser.role === "admin";
 }
 
 export async function requireAdminOrKey(c: any): Promise<SessionUser | null> {
