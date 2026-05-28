@@ -1,1 +1,2 @@
 - [Dev/prod DB parity](dev-prod-db-parity.md) — manual sync procedure (executeSql notebook) and nightly Inngest cron for prod→dev table mirroring; argv-limit and live-write gotchas
+- [Duplicate Radar record-tab pagination](duplicate-radar-pagination.md) — record tabs must paginate by cluster (coarser display unit), not by row, or the tail of clusters is unreachable

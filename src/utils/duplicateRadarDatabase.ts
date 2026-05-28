@@ -3124,21 +3124,79 @@ export async function getDuplicateRecordsByType(
           ? "total_contacts"
           : "total_accounts";
 
+  // The date filter constrains which records (and therefore which clusters)
+  // are in scope. Built once with placeholders starting at $2 so it can be
+  // reused inside the EXISTS sub-queries below.
   let dateFilter = "";
-  const params: any[] = [recordType];
-  let pi = 2;
-
+  const dateParams: any[] = [];
   if (options?.start_date) {
-    dateFilter += ` AND dr.created_date >= $${pi++}`;
-    params.push(options.start_date);
+    dateFilter += ` AND dr.created_date >= $${dateParams.length + 2}`;
+    dateParams.push(options.start_date);
   }
   if (options?.end_date) {
-    dateFilter += ` AND dr.created_date <= $${pi++}`;
-    params.push(options.end_date + "T23:59:59Z");
+    dateFilter += ` AND dr.created_date <= $${dateParams.length + 2}`;
+    dateParams.push(options.end_date + "T23:59:59Z");
   }
 
   const limit = options?.limit || 50;
   const offset = options?.offset || 0;
+
+  // ── Paginate by CLUSTER, not by record. ────────────────────────────────
+  //
+  // This view groups records into duplicate clusters, so the unit of
+  // pagination must be the cluster. The previous implementation applied
+  // LIMIT/OFFSET to individual `duplicate_records` rows while computing the
+  // page count from the DISTINCT cluster total. Because every duplicate
+  // cluster holds >=2 records, there were always more record-pages than the
+  // reported cluster-page count, so the low-confidence tail of clusters was
+  // unreachable and any cluster whose records straddled a page boundary was
+  // split into partial groups. We instead select the page of cluster ids
+  // first, then fetch ALL in-scope records for exactly those clusters.
+  const clusterPage = await pool.query(
+    `
+    SELECT dc.id
+    FROM duplicate_clusters dc
+    WHERE dc.${countField} > 1 AND dc.status = 'active'
+      AND EXISTS (
+        SELECT 1 FROM duplicate_records dr
+        WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
+      )
+    ORDER BY dc.confidence_score DESC, dc.id ASC
+    LIMIT $${dateParams.length + 2} OFFSET $${dateParams.length + 3}
+  `,
+    [recordType, ...dateParams, limit, offset],
+  );
+
+  const clusterIds = clusterPage.rows.map((r) => r.id);
+
+  const countResult = await pool.query(
+    `
+    SELECT COUNT(*) as total
+    FROM duplicate_clusters dc
+    WHERE dc.${countField} > 1 AND dc.status = 'active'
+      AND EXISTS (
+        SELECT 1 FROM duplicate_records dr
+        WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
+      )
+  `,
+    [recordType, ...dateParams],
+  );
+
+  if (clusterIds.length === 0) {
+    return { groups: [], total: parseInt(countResult.rows[0]?.total) || 0 };
+  }
+
+  // Records date filter re-anchored to $3 ($1=recordType, $2=clusterIds).
+  let recDateFilter = "";
+  const recDateParams: any[] = [];
+  if (options?.start_date) {
+    recDateFilter += ` AND dr.created_date >= $${recDateParams.length + 3}`;
+    recDateParams.push(options.start_date);
+  }
+  if (options?.end_date) {
+    recDateFilter += ` AND dr.created_date <= $${recDateParams.length + 3}`;
+    recDateParams.push(options.end_date + "T23:59:59Z");
+  }
 
   const result = await pool.query(
     `
@@ -3148,23 +3206,10 @@ export async function getDuplicateRecordsByType(
            dc.id as cluster_id_ref
     FROM duplicate_records dr
     JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-    WHERE dr.record_type = $1 AND dc.${countField} > 1 AND dc.status = 'active'
-    ${dateFilter}
-    ORDER BY dc.confidence_score DESC, dr.is_primary DESC, dr.created_date ASC
-    LIMIT $${pi++} OFFSET $${pi++}
+    WHERE dr.record_type = $1 AND dr.cluster_id = ANY($2::int[])${recDateFilter}
+    ORDER BY dc.confidence_score DESC, dc.id ASC, dr.is_primary DESC, dr.created_date ASC
   `,
-    [...params, limit, offset],
-  );
-
-  const countResult = await pool.query(
-    `
-    SELECT COUNT(DISTINCT dc.id) as total
-    FROM duplicate_records dr
-    JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-    WHERE dr.record_type = $1 AND dc.${countField} > 1 AND dc.status = 'active'
-    ${dateFilter}
-  `,
-    params,
+    [recordType, clusterIds, ...recDateParams],
   );
 
   const grouped: Record<number, any> = {};
