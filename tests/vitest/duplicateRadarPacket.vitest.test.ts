@@ -19,6 +19,11 @@ import type {
 const owner: OwnerAccountability = {
   owner_name: "Lina Khaled",
   owner_email: "lina@walaplus.com",
+  // `team` was added to OwnerAccountability so coaching reports can group
+  // owners by squad (MP / WO Sales / CS / MGMT / Unassigned). The packet
+  // builders don't actually read this field — but the test fixture has to
+  // satisfy the interface or `npm run check:tests` fails CI.
+  team: "MP",
   total_records: 120,
   duplicate_records: 18,
   duplicate_rate: 15,
