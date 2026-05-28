@@ -1988,6 +1988,148 @@ export const callIntelligenceRoutes = [
       };
     },
   },
+  // ===================================================================
+  //  Topic Clustering (DMAIC Improve P3, 2026-05-25)
+  //
+  //  REGISTRATION-ORDER NOTE (2026-05-29):
+  //  This route MUST stay registered BEFORE /api/calls/:callId. Mastra's
+  //  apiRoutes array is matched in order, and the dynamic :callId catches
+  //  any single-segment GET under /api/calls/* — including the literal
+  //  string "topic-clusters". When this route was originally defined
+  //  ~5000 lines below the :callId route, every request hit the
+  //  :callId handler, parseInt("topic-clusters") returned NaN, and the
+  //  user saw "HTTP 400 — Invalid call ID" instead of the topic data.
+  //  Same shadowing pattern as task-670 (the qms enhanced-routes vs
+  //  qmsApiRoutes precedence). See src/mastra/index.ts:233 for the
+  //  precedent.
+  //  Aggregates call_analysis.key_topics across analyzed calls in a
+  //  rolling window. Surfaces systemic gaps: "20 calls mentioned
+  //  pricing objection in last 30 days" → coaching opportunity at
+  //  TEAM level, not just per-call. Reuses the existing AI-generated
+  //  topic list — no new model spend.
+  // ===================================================================
+  {
+    path: "/api/calls/topic-clusters",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const windowDays = Math.min(
+            Math.max(parseInt(c.req.query("window_days") || "30"), 1),
+            365,
+          );
+          const topN = Math.min(
+            Math.max(parseInt(c.req.query("top_n") || "20"), 1),
+            100,
+          );
+
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          // jsonb_array_elements_text expands a JSONB array column into
+          // one row per element. We then COUNT(DISTINCT call_record_id)
+          // per topic so the same call mentioning the same topic twice
+          // doesn't inflate the metric. Window filter on call_date.
+          const res = await callIntelligencePool.query(
+            `
+            WITH topic_rows AS (
+              SELECT
+                cr.id AS call_id,
+                cr.call_date,
+                cr.agent_email,
+                LOWER(TRIM(elem)) AS topic
+              FROM call_records cr
+              JOIN call_analysis ca ON ca.call_record_id = cr.id
+              LEFT JOIN LATERAL jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(ca.key_topics) = 'array'
+                     THEN ca.key_topics
+                     ELSE '[]'::jsonb END
+              ) elem ON TRUE
+              WHERE cr.call_date >= NOW() - ($1 || ' days')::INTERVAL
+                AND cr.status IN ('evaluated','qa_review_pending','qa_reviewed')
+                AND elem IS NOT NULL
+                AND LENGTH(TRIM(elem)) > 0
+            ),
+            topic_agg AS (
+              SELECT
+                topic,
+                COUNT(DISTINCT call_id)::int AS call_count,
+                COUNT(DISTINCT agent_email)::int AS agent_count,
+                MAX(call_date) AS latest_call_date,
+                ARRAY(
+                  SELECT call_id FROM topic_rows tr2
+                   WHERE tr2.topic = topic_rows.topic
+                   ORDER BY call_date DESC
+                   LIMIT 10
+                ) AS sample_call_ids,
+                ARRAY(
+                  SELECT DISTINCT agent_email FROM topic_rows tr3
+                   WHERE tr3.topic = topic_rows.topic
+                     AND agent_email IS NOT NULL
+                   LIMIT 10
+                ) AS sample_agents
+              FROM topic_rows
+              GROUP BY topic
+            )
+            SELECT * FROM topic_agg
+             WHERE call_count >= 2
+             ORDER BY call_count DESC, latest_call_date DESC
+             LIMIT $2
+            `,
+            [String(windowDays), topN],
+          );
+
+          // Total analyzed calls in window — denominator so the UI can
+          // render "X% of calls in this window mention <topic>".
+          const totalRes = await callIntelligencePool.query(
+            `
+            SELECT COUNT(*)::int AS n
+              FROM call_records
+             WHERE call_date >= NOW() - ($1 || ' days')::INTERVAL
+               AND status IN ('evaluated','qa_review_pending','qa_reviewed')
+            `,
+            [String(windowDays)],
+          );
+
+          // Cache-Control: no-store stops the browser from holding onto a
+          // stale 400 response from before the RBAC entry for this route
+          // landed (commit fdcb05b). Without it, even after a successful
+          // deploy a user who saw the error once would keep seeing the
+          // cached 400 until they hard-refreshed.
+          c.header("Cache-Control", "no-store, no-cache, must-revalidate");
+          return c.json({
+            window_days: windowDays,
+            total_analyzed_calls: totalRes.rows[0]?.n || 0,
+            topics: res.rows.map((r: any) => ({
+              topic: r.topic,
+              call_count: r.call_count,
+              agent_count: r.agent_count,
+              latest_call_date: r.latest_call_date,
+              sample_call_ids: r.sample_call_ids || [],
+              sample_agents: r.sample_agents || [],
+            })),
+          });
+        } catch (error: any) {
+          safeLogger.error("[API] topic clusters failed", {
+            error: error?.message,
+            stack: error?.stack,
+          });
+          c.header("Cache-Control", "no-store");
+          return c.json(
+            {
+              error: error?.message || "Failed to compute topic clusters",
+              hint: "If this just shows 'HTTP 400' or 'Failed', hard-refresh (Ctrl+Shift+R) — the response is no longer cached.",
+            },
+            500,
+          );
+        }
+      };
+    },
+  },
   {
     path: "/api/calls/:callId",
     method: "GET" as const,
@@ -6720,136 +6862,8 @@ ${transcriptText}
       };
     },
   },
-  // ===================================================================
-  //  Topic Clustering (DMAIC Improve P3, 2026-05-25)
-  //  Aggregates call_analysis.key_topics across analyzed calls in a
-  //  rolling window. Surfaces systemic gaps: "20 calls mentioned
-  //  pricing objection in last 30 days" → coaching opportunity at
-  //  TEAM level, not just per-call. Reuses the existing AI-generated
-  //  topic list — no new model spend.
-  // ===================================================================
-  {
-    path: "/api/calls/topic-clusters",
-    method: "GET" as const,
-    createHandler: async ({ mastra }: any) => {
-      return async (c: any) => {
-        try {
-          const admin = await verifyCallAccess(c);
-          if (!admin) return unauthorizedResponse(c);
-
-          const windowDays = Math.min(
-            Math.max(parseInt(c.req.query("window_days") || "30"), 1),
-            365,
-          );
-          const topN = Math.min(
-            Math.max(parseInt(c.req.query("top_n") || "20"), 1),
-            100,
-          );
-
-          const { callIntelligencePool, initCallIntelligenceTables } =
-            await import("../../utils/callIntelligenceDb");
-          await initCallIntelligenceTables();
-
-          // jsonb_array_elements_text expands a JSONB array column into
-          // one row per element. We then COUNT(DISTINCT call_record_id)
-          // per topic so the same call mentioning the same topic twice
-          // doesn't inflate the metric. Window filter on call_date.
-          const res = await callIntelligencePool.query(
-            `
-            WITH topic_rows AS (
-              SELECT
-                cr.id AS call_id,
-                cr.call_date,
-                cr.agent_email,
-                LOWER(TRIM(elem)) AS topic
-              FROM call_records cr
-              JOIN call_analysis ca ON ca.call_record_id = cr.id
-              LEFT JOIN LATERAL jsonb_array_elements_text(
-                CASE WHEN jsonb_typeof(ca.key_topics) = 'array'
-                     THEN ca.key_topics
-                     ELSE '[]'::jsonb END
-              ) elem ON TRUE
-              WHERE cr.call_date >= NOW() - ($1 || ' days')::INTERVAL
-                AND cr.status IN ('evaluated','qa_review_pending','qa_reviewed')
-                AND elem IS NOT NULL
-                AND LENGTH(TRIM(elem)) > 0
-            ),
-            topic_agg AS (
-              SELECT
-                topic,
-                COUNT(DISTINCT call_id)::int AS call_count,
-                COUNT(DISTINCT agent_email)::int AS agent_count,
-                MAX(call_date) AS latest_call_date,
-                ARRAY(
-                  SELECT call_id FROM topic_rows tr2
-                   WHERE tr2.topic = topic_rows.topic
-                   ORDER BY call_date DESC
-                   LIMIT 10
-                ) AS sample_call_ids,
-                ARRAY(
-                  SELECT DISTINCT agent_email FROM topic_rows tr3
-                   WHERE tr3.topic = topic_rows.topic
-                     AND agent_email IS NOT NULL
-                   LIMIT 10
-                ) AS sample_agents
-              FROM topic_rows
-              GROUP BY topic
-            )
-            SELECT * FROM topic_agg
-             WHERE call_count >= 2
-             ORDER BY call_count DESC, latest_call_date DESC
-             LIMIT $2
-            `,
-            [String(windowDays), topN],
-          );
-
-          // Total analyzed calls in window — denominator so the UI can
-          // render "X% of calls in this window mention <topic>".
-          const totalRes = await callIntelligencePool.query(
-            `
-            SELECT COUNT(*)::int AS n
-              FROM call_records
-             WHERE call_date >= NOW() - ($1 || ' days')::INTERVAL
-               AND status IN ('evaluated','qa_review_pending','qa_reviewed')
-            `,
-            [String(windowDays)],
-          );
-
-          // Cache-Control: no-store stops the browser from holding onto a
-          // stale 400 response from before the RBAC entry for this route
-          // landed (commit fdcb05b). Without it, even after a successful
-          // deploy a user who saw the error once would keep seeing the
-          // cached 400 until they hard-refreshed.
-          c.header("Cache-Control", "no-store, no-cache, must-revalidate");
-          return c.json({
-            window_days: windowDays,
-            total_analyzed_calls: totalRes.rows[0]?.n || 0,
-            topics: res.rows.map((r: any) => ({
-              topic: r.topic,
-              call_count: r.call_count,
-              agent_count: r.agent_count,
-              latest_call_date: r.latest_call_date,
-              sample_call_ids: r.sample_call_ids || [],
-              sample_agents: r.sample_agents || [],
-            })),
-          });
-        } catch (error: any) {
-          safeLogger.error("[API] topic clusters failed", {
-            error: error?.message,
-            stack: error?.stack,
-          });
-          c.header("Cache-Control", "no-store");
-          return c.json(
-            {
-              error: error?.message || "Failed to compute topic clusters",
-              hint: "If this just shows 'HTTP 400' or 'Failed', hard-refresh (Ctrl+Shift+R) — the response is no longer cached.",
-            },
-            500,
-          );
-        }
-      };
-    },
-  },
+  // (Topic Clustering route moved up to register before /api/calls/:callId
+  //  — see the comment block above that route for the rationale.)
   // ===================================================================
   //  Peer Benchmark (DMAIC Improve P2, 2026-05-25)
   //  Per-attribute: agent's average score vs anonymised team median
