@@ -93,9 +93,9 @@ export async function runCallDurationBackfill(
     const recoverable = await callIntelligencePool.query<{
       id: number;
       audio_blob: Buffer;
-      audio_mime_type: string | null;
+      audio_blob_mime: string | null;
     }>(
-      `SELECT id, audio_blob, audio_mime_type
+      `SELECT id, audio_blob, audio_blob_mime
          FROM call_records
         WHERE (duration_seconds IS NULL OR duration_seconds <= 0)
           AND audio_blob IS NOT NULL
@@ -127,7 +127,7 @@ export async function runCallDurationBackfill(
         // magic bytes — but passing it speeds parsing on ambiguous
         // headers (small WAV files with a non-RIFF first chunk).
         const metadata = await mm.parseBuffer(buf, {
-          mimeType: row.audio_mime_type || undefined,
+          mimeType: row.audio_blob_mime || undefined,
         });
         const dur =
           typeof metadata.format.duration === "number"
