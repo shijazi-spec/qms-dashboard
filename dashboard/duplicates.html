@@ -3071,12 +3071,20 @@
             tbody.innerHTML = rows || `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No duplicate accounts detected on this page — every account has a unique name, email, phone, website, and CRM ID.</td></tr>`;
         }
 
-        // C3: Owner accountability with RAG status
+        // C3: Owner accountability with RAG status.
+        // Owners are cached on window so the Export CSV button can build a
+        // CSV from the currently selected rows without re-fetching.
+        let _ownersCache = [];
         function renderOwners(owners) {
+            _ownersCache = Array.isArray(owners) ? owners.slice() : [];
             const tbody = document.getElementById('ownersTable');
-            tbody.innerHTML = owners.map(o => `
-                <tr data-testid="row-owner-${escAttr(o.owner_name)}">
+            tbody.innerHTML = _ownersCache.map((o, idx) => {
+                const rowKey = encodeURIComponent(o.owner_name || `row-${idx}`);
+                return `
+                <tr data-testid="row-owner-${escAttr(o.owner_name)}" data-owner-row data-owner-key="${rowKey}" data-owner-name="${escAttr(o.owner_name || '')}" data-owner-team="${escAttr(o.team || 'Unassigned')}" data-owner-email="${escAttr(o.owner_email || '')}">
+                    <td class="px-4 py-3 text-sm"><input type="checkbox" class="owner-row-checkbox" data-on-change="syncOwnersSelectionState" data-testid="checkbox-owner-${escAttr(o.owner_name)}" aria-label="Select ${escAttr(o.owner_name || '')}" /></td>
                     <td class="px-6 py-3 text-sm font-medium">${escapeHtml(o.owner_name)}</td>
+                    <td class="px-6 py-3 text-sm"><span class="px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">${escapeHtml(o.team || 'Unassigned')}</span></td>
                     <td class="px-6 py-3 text-sm text-gray-500">${escapeHtml(o.owner_email || '-')}</td>
                     <td class="px-6 py-3 text-sm">${o.total_records}</td>
                     <td class="px-6 py-3 text-sm font-medium">${o.duplicate_records}</td>
@@ -3084,12 +3092,128 @@
                     <td class="px-6 py-3 text-sm"><span class="rag-${['green','amber','red'].includes(o.rag_status)?o.rag_status:'red'} px-2 py-1 rounded text-xs font-medium">${escapeHtml(o.rag_status === 'green' ? WalaPlusI18n.t('dyn.duplicates.rag_green') : o.rag_status === 'amber' ? WalaPlusI18n.t('dyn.duplicates.rag_amber') : WalaPlusI18n.t('dyn.duplicates.rag_red'))}</span></td>
                     <td class="px-6 py-3 text-sm">${_fn(o.high_confidence_duplicates)}</td>
                     <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}</td>
-                    <td class="px-6 py-3 text-sm whitespace-nowrap"><a href="/api/duplicates/owner-packet?owner=${encodeURIComponent(o.owner_name)}" data-owner="${escAttr(o.owner_name)}" data-on-click="downloadOwnerPacket" data-args='["@this"]' data-pass-event="true" class="text-green-600 hover:underline text-xs me-3" data-testid="link-packet-owner-${escAttr(o.owner_name)}" aria-label="Download remediation packet for ${escAttr(o.owner_name)}" title="Download a 4-sheet remediation packet (Cover, Action Items, Raw Records, FAQ) tailored to this owner">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.packet'))}</a><a href="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" data-owner="${escAttr(o.owner_name)}" data-on-click="exportOwner" data-args='["@this"]' data-pass-event="true" data-estimate-url="/api/duplicates/export?owner=${encodeURIComponent(o.owner_name)}" class="text-blue-600 hover:underline text-xs" data-testid="link-export-owner-${escAttr(o.owner_name)}" aria-label="Export duplicate records for ${escAttr(o.owner_name)}">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.export'))} <span data-size-hint class="ms-1 opacity-75"></span></a></td>
-                </tr>
-            `).join('') || `<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_owner_data'))}</td></tr>`;
-            if (window.streamingDownload && streamingDownload.attachSizeHints) {
-                streamingDownload.attachSizeHints(tbody);
+                </tr>`;
+            }).join('') || `<tr><td colspan="10" class="px-6 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_owner_data'))}</td></tr>`;
+            // Re-apply any active filter and refresh select-all/count chrome.
+            filterOwnersTable();
+            syncOwnersSelectionState();
+        }
+
+        // Hide rows that don't match the owner/role/email filter input.
+        // Filtering hides rows but does NOT uncheck them — operators can
+        // search → tick → clear filter → search again → tick more, then
+        // export the union with one click.
+        function filterOwnersTable() {
+            const inp = document.getElementById('ownersFilterInput');
+            const q = (inp && inp.value || '').trim().toLowerCase();
+            const tbody = document.getElementById('ownersTable');
+            if (!tbody) return;
+            tbody.querySelectorAll('tr[data-owner-row]').forEach(tr => {
+                if (!q) { tr.classList.remove('hidden'); return; }
+                const hay = [
+                    tr.dataset.ownerName,
+                    tr.dataset.ownerTeam,
+                    tr.dataset.ownerEmail,
+                ].filter(Boolean).join(' ').toLowerCase();
+                tr.classList.toggle('hidden', !hay.includes(q));
+            });
+            syncOwnersSelectionState();
+        }
+
+        // Header checkbox: select / clear every VISIBLE owner row.
+        function toggleAllOwnersSelected() {
+            const all = document.getElementById('ownersSelectAll');
+            const checked = !!(all && all.checked);
+            const tbody = document.getElementById('ownersTable');
+            if (!tbody) return;
+            tbody.querySelectorAll('tr[data-owner-row]:not(.hidden) .owner-row-checkbox').forEach(cb => {
+                cb.checked = checked;
+            });
+            syncOwnersSelectionState();
+        }
+
+        // Keep the header checkbox in sync (checked / unchecked / indeterminate)
+        // and update the "X selected" hint next to the filter input.
+        function syncOwnersSelectionState() {
+            const tbody = document.getElementById('ownersTable');
+            if (!tbody) return;
+            const visibleRows = Array.from(tbody.querySelectorAll('tr[data-owner-row]:not(.hidden)'));
+            const checkedRows = visibleRows.filter(tr => {
+                const cb = tr.querySelector('.owner-row-checkbox');
+                return cb && cb.checked;
+            });
+            const all = document.getElementById('ownersSelectAll');
+            if (all) {
+                if (visibleRows.length === 0) {
+                    all.checked = false;
+                    all.indeterminate = false;
+                } else if (checkedRows.length === visibleRows.length) {
+                    all.checked = true;
+                    all.indeterminate = false;
+                } else if (checkedRows.length === 0) {
+                    all.checked = false;
+                    all.indeterminate = false;
+                } else {
+                    all.checked = false;
+                    all.indeterminate = true;
+                }
             }
+            const totalChecked = tbody.querySelectorAll('.owner-row-checkbox:checked').length;
+            const hint = document.getElementById('ownersSelectionCount');
+            if (hint) hint.textContent = totalChecked > 0 ? `${totalChecked} selected` : '';
+        }
+
+        // Build a CSV from the currently checked owner rows (cached server
+        // payload, not DOM scraping, so numeric fields keep their precision).
+        // No-op + alert when nothing is ticked — avoids an empty download
+        // which is the more confusing failure mode.
+        function exportOwnersSelected() {
+            const tbody = document.getElementById('ownersTable');
+            if (!tbody) return;
+            const checkedKeys = new Set();
+            tbody.querySelectorAll('tr[data-owner-row] .owner-row-checkbox:checked').forEach(cb => {
+                const tr = cb.closest('tr[data-owner-row]');
+                if (tr && tr.dataset.ownerKey) checkedKeys.add(tr.dataset.ownerKey);
+            });
+            if (checkedKeys.size === 0) {
+                alert('Tick at least one row in the table to include it in the CSV.');
+                return;
+            }
+            const selected = _ownersCache.filter((o, idx) => {
+                const k = encodeURIComponent(o.owner_name || `row-${idx}`);
+                return checkedKeys.has(k);
+            });
+            const esc = (v) => {
+                if (v === null || v === undefined) return '""';
+                return '"' + String(v).replace(/"/g, '""') + '"';
+            };
+            const row = (cells) => cells.map(esc).join(',');
+            const lines = [];
+            lines.push(row(['Owner', 'Role', 'Email', 'Total Records', 'Duplicates', 'Dup Rate (%)', 'KPI Status', 'High Confidence', 'Waste Value (SAR)']));
+            for (const o of selected) {
+                lines.push(row([
+                    o.owner_name || '',
+                    o.team || 'Unassigned',
+                    o.owner_email || '',
+                    o.total_records ?? 0,
+                    o.duplicate_records ?? 0,
+                    o.duplicate_rate ?? 0,
+                    o.rag_status || '',
+                    o.high_confidence_duplicates ?? 0,
+                    o.estimated_waste_value ?? 0,
+                ]));
+            }
+            // BOM so Excel decodes UTF-8 (Arabic owner names) correctly.
+            const csv = '\uFEFF' + lines.join('\r\n') + '\r\n';
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `owner-accountability-${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         function renderLogs(logs) {
