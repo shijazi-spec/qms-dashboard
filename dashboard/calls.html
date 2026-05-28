@@ -2614,6 +2614,48 @@
                     }
                     lines.push('');
                 }
+                // Zoho phone-field-shape dump — see what raw Zoho phones
+                // look like so a custom-field hideout (Mobile_Number,
+                // WhatsApp_Number, etc.) is visible without poking Zoho
+                // directly. Shows the first 10 records from Leads + 10
+                // from Deals; each record lists every key that contains
+                // "phone" / "mobile" / "whatsapp" plus the normalized form.
+                if (data.zoho_sample_phones) {
+                    lines.push('--- Zoho Phone Fields (sample of first 10 Leads + 10 Deals) ---');
+                    const renderSample = (label, arr) => {
+                        if (arr && arr.error) {
+                            lines.push(`  ${label}: ERROR — ${arr.error}`);
+                            return;
+                        }
+                        if (!Array.isArray(arr) || arr.length === 0) {
+                            lines.push(`  ${label}: (none)`);
+                            return;
+                        }
+                        for (const rec of arr) {
+                            const fields = rec.phone_fields || {};
+                            const keys = Object.keys(fields);
+                            if (keys.length === 0) {
+                                lines.push(`  ${label} ${rec.id} (${rec.full_name || '?'}): NO phone fields found on this record`);
+                            } else {
+                                for (const k of keys) {
+                                    const v = fields[k];
+                                    lines.push(`  ${label} ${rec.id} (${rec.full_name || '?'}) ${k}: "${v.raw}" → normalized "${v.normalized}"`);
+                                }
+                            }
+                        }
+                    };
+                    renderSample('Lead', data.zoho_sample_phones.leads_first10);
+                    lines.push('');
+                    renderSample('Deal', data.zoho_sample_phones.deals_first10);
+                    lines.push('');
+                    lines.push('  Tip: if Lead phones are present here but our normalized form');
+                    lines.push('  doesn\'t match a single Zoho normalized value, it\'s a real format gap');
+                    lines.push('  and the matcher needs to be updated. If NO phone fields appear,');
+                    lines.push('  Zoho records likely have phones in a custom field — paste this');
+                    lines.push('  whole modal contents back so the readLeadPhone() reader can be');
+                    lines.push('  extended to pick that field up.');
+                    lines.push('');
+                }
                 // Pop the result into a wide pre-formatted dialog so the
                 // operator can read the full structured diagnostic. Native
                 // alert() truncates long content on some browsers, so we

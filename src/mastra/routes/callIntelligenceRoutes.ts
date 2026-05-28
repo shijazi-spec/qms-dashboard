@@ -1323,6 +1323,67 @@ export const callIntelligenceRoutes = [
             "../../utils/callMcpReconciliation"
           );
 
+          // Sample Zoho phone field values — taken from the first 10
+          // records in Leads + first 10 in Deals — so the operator can
+          // SEE what raw format Zoho stores phones in, and compare
+          // against our normalized form. This is what tells us whether
+          // we're looking at:
+          //   - Format mismatch on a known field (rare; the matcher
+          //     already normalizes both sides via normalizePhoneDigits)
+          //   - Phone stored in a custom field our readers don't pick up
+          //     (e.g. WhatsApp_Number, Client_Phone, Mobile_Number_2)
+          //   - The phones genuinely not in Zoho (e.g. leads were created
+          //     without phone, or the CRM has been pruned).
+          let zohoSamplePhones: any = null;
+          try {
+            const { fetchAllZohoRecords } = await import("../../utils/zohoCRM");
+            const [leadsSample, dealsSample] = await Promise.allSettled([
+              fetchAllZohoRecords("Leads", { maxRecords: 10 }),
+              fetchAllZohoRecords("Deals", { maxRecords: 10 }),
+            ]);
+            const dumpFields = (rec: any) => {
+              const d = rec?.data || {};
+              // Surface every "phone-shaped" field on the record so a
+              // custom field (Mobile_Number, WhatsApp_Number, etc.) jumps
+              // out at the operator. We pattern-match key names that
+              // contain "phone" or "mobile" (case-insensitive) plus the
+              // canonical Phone / Mobile fields.
+              const phoneFields: Record<string, any> = {};
+              for (const [key, val] of Object.entries(d)) {
+                if (val == null || val === "") continue;
+                if (/phone|mobile|whatsapp|wa_number/i.test(key)) {
+                  // Normalize the value too so the operator can see if
+                  // it matches the call's normalized form.
+                  const rawStr =
+                    typeof val === "object" && (val as any).name
+                      ? String((val as any).name)
+                      : String(val);
+                  phoneFields[key] = {
+                    raw: rawStr,
+                    normalized: normalizePhoneDigits(rawStr),
+                  };
+                }
+              }
+              return {
+                id: rec?.id,
+                full_name: d.Full_Name || d.Last_Name || d.Deal_Name || null,
+                phone_fields: phoneFields,
+              };
+            };
+            zohoSamplePhones = {
+              leads_first10:
+                leadsSample.status === "fulfilled"
+                  ? leadsSample.value.map(dumpFields)
+                  : { error: leadsSample.reason?.message || "fetch failed" },
+              deals_first10:
+                dealsSample.status === "fulfilled"
+                  ? dealsSample.value.map(dumpFields)
+                  : { error: dealsSample.reason?.message || "fetch failed" },
+            };
+          } catch (sampleErr: any) {
+            zohoSamplePhones = { error: sampleErr?.message || String(sampleErr) };
+          }
+
           const results = [];
           for (const row of sample.rows) {
             const phones = extractCallPhoneCandidates(row);
@@ -1343,8 +1404,12 @@ export const callIntelligenceRoutes = [
                 continue;
               }
               try {
+                // Use the full 2500-record cap — same as the real
+                // auto-link — so the diagnostic isn't falsely
+                // confident about "no match" when the lead is actually
+                // present beyond the 200-record sample.
                 const matchRes = await findCrmRecordByPhone(phone, {
-                  maxRecordsPerModule: 200,
+                  maxRecordsPerModule: 2500,
                 });
                 phoneAttempts.push({
                   raw: phone,
@@ -1444,6 +1509,7 @@ export const callIntelligenceRoutes = [
             },
             sample_size: results.length,
             results,
+            zoho_sample_phones: zohoSamplePhones,
           });
         } catch (error: any) {
           safeLogger.error("[API] auto-link diagnostic failed", {
