@@ -1993,33 +1993,100 @@
             if (banner) banner.classList.add('hidden');
         }
 
+        // Robust per-fetch helper used by refreshData below. Two guarantees:
+        //
+        //   1. Hard 20s timeout via AbortController so a stuck backend
+        //      endpoint (server still warming up after a deploy, DB
+        //      migration holding a lock, Inngest cron eating the worker
+        //      pool, etc.) can NEVER leave the page on its loading spinner
+        //      indefinitely. The page chooses whether to retry, render
+        //      partial, or show the empty state — but it always makes a
+        //      decision within 20 seconds of the first paint.
+        //
+        //   2. Resolves to { ok, data, error } instead of throwing, so the
+        //      caller can use Promise.allSettled semantics naturally without
+        //      a try/catch around each call.
+        async function _safeJsonFetch(url, timeoutMs = 20_000) {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort('timeout'), timeoutMs);
+            try {
+                const res = await fetch(url, { signal: ctrl.signal });
+                if (!res.ok) {
+                    return { ok: false, data: null, status: res.status, error: `HTTP ${res.status}` };
+                }
+                const data = await res.json();
+                return { ok: true, data };
+            } catch (err) {
+                return { ok: false, data: null, error: (err && err.message) || String(err) };
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
         async function refreshData() {
             try {
                 document.getElementById('loading').classList.remove('hidden');
                 document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
                 document.getElementById('noData').classList.add('hidden');
 
-                const [analyticsRes, callsRes, complianceRes] = await Promise.all([
-                    fetch('/api/calls/analytics'),
-                    // Pull the full set so phone search + Related Calls
-                    // panel see every record, not just the first page. The
-                    // backend Postgres query is paginated server-side and
-                    // 500 rows is well under the page-render budget.
-                    fetch('/api/calls?limit=500'),
-                    fetch('/api/calls/compliance?limit=100')
+                // ROOT-CAUSE FIX (2026-05-28):
+                // Previously this used `Promise.all` over the three fetches,
+                // which meant if ANY one of them hung the entire page stayed
+                // on "Loading call data..." with no way out. After a Replit
+                // deploy that triggered a long-running schema migration, one
+                // of these endpoints (typically /api/calls?limit=500 because
+                // it runs the heaviest query + ensureAudioBlobColumns ALTER)
+                // would sit pending for minutes and the dashboard was dead.
+                //
+                // Switched to Promise.allSettled + a per-fetch 20s abort so:
+                //   - Slow endpoint timing out is a recoverable error
+                //   - Two-of-three success still renders the page
+                //   - Total failure still hides the spinner and shows noData
+                //     instead of locking the user out
+                const [analyticsResult, callsResult, complianceResult] = await Promise.allSettled([
+                    _safeJsonFetch('/api/calls/analytics'),
+                    _safeJsonFetch('/api/calls?limit=500'),
+                    _safeJsonFetch('/api/calls/compliance?limit=100'),
                 ]);
 
-                analytics = await analyticsRes.json();
-                const callsData = await callsRes.json();
-                const complianceData = await complianceRes.json();
+                const analyticsOk = analyticsResult.status === 'fulfilled' && analyticsResult.value.ok;
+                const callsOk = callsResult.status === 'fulfilled' && callsResult.value.ok;
+                const complianceOk = complianceResult.status === 'fulfilled' && complianceResult.value.ok;
 
+                analytics = analyticsOk ? analyticsResult.value.data : { totalCalls: 0 };
+                const callsData = callsOk ? callsResult.value.data : { records: [] };
+                const complianceData = complianceOk ? complianceResult.value.data : { records: [] };
                 callRecords = callsData.records || [];
                 complianceRecords = complianceData.records || [];
+
+                // Surface partial failures in the console so the operator
+                // (or me on a follow-up) can tell which endpoint is the
+                // slow one without having to open DevTools Network tab.
+                if (!analyticsOk || !callsOk || !complianceOk) {
+                    console.warn('[refreshData] partial load:', {
+                        analytics_ok: analyticsOk,
+                        analytics_err: analyticsResult.status === 'fulfilled' ? analyticsResult.value.error : analyticsResult.reason,
+                        calls_ok: callsOk,
+                        calls_err: callsResult.status === 'fulfilled' ? callsResult.value.error : callsResult.reason,
+                        compliance_ok: complianceOk,
+                        compliance_err: complianceResult.status === 'fulfilled' ? complianceResult.value.error : complianceResult.reason,
+                    });
+                }
 
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('lastUpdated').textContent = WalaPlusI18n.t('dyn.crm.updated_at', { time: new Date().toLocaleTimeString() });
 
-                if (analytics.totalCalls === 0) {
+                if (!analyticsOk && !callsOk) {
+                    // Both critical endpoints failed — page can't render
+                    // anything useful. Show the empty state and a
+                    // banner so the operator knows it's a backend issue
+                    // and not "you have no calls".
+                    document.getElementById('noData').classList.remove('hidden');
+                    const banner = document.createElement('div');
+                    banner.className = 'mx-6 mt-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800';
+                    banner.textContent = '⚠ Could not load call data from the server (timed out or 500). The deploy may still be warming up — refresh the page in 30 seconds. If it persists, check /api/calls and /api/calls/analytics in DevTools.';
+                    document.getElementById('noData').parentElement?.insertBefore(banner, document.getElementById('noData'));
+                } else if (analytics.totalCalls === 0) {
                     document.getElementById('noData').classList.remove('hidden');
                 } else {
                     showTab('overview');
