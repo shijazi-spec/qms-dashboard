@@ -702,7 +702,87 @@ export async function runDirectAudit(
         process.env.SLACK_CHANNEL_ID ||
         process.env.SLACK_DEFAULT_CHANNEL;
 
-      if (directAuditSlackEnabled && slackToken && slackChannel) {
+      if (directAuditSlackEnabled && slackToken && slackChannel && totalRecordsAudited === 0) {
+        // ROOT-CAUSE GUARD (2026-05-28):
+        // If the audit returned ZERO records (Zoho rate-limited, token
+        // expired, network failure that survived all 3 retry attempts,
+        // or a genuinely empty source) the downstream score math
+        // collapses to 100% because (records - issues) / records is
+        // 0/0 → fallback 100. The unconditional Slack success message
+        // below would then page operators with a misleading
+        // "Quality Audit Completed — 100% / Records: 0" — exactly the
+        // false-positive that prompted this fix after operators saw a
+        // 100% success on Slack while the dashboard showed 143k records
+        // with 21.6% compliance.
+        //
+        // When records=0, send a DIFFERENT "audit yielded no data"
+        // warning instead. The success-message branch below is
+        // explicitly skipped via the `&& totalRecordsAudited > 0` guard
+        // we add on its `if`, so this branch and that one are
+        // mutually exclusive and the success message never fires on
+        // an empty-source run.
+        const {
+          enqueueSlackOutboxMessage,
+          processOutboxMessageById,
+          processDueOutboxMessages,
+        } = await import("./notificationOutbox");
+        const dashUrl = process.env.PUBLIC_DASHBOARD_URL || "https://qms-dashboard.replit.app/";
+        const generatedAtKsa = new Date().toLocaleTimeString("en-US", {
+          timeZone: "Asia/Riyadh",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        });
+        const reason = !hasZohoCredentials
+          ? "Zoho CRM credentials are not configured"
+          : "Zoho returned zero records across all modules (likely rate-limited / 429 or token expired)";
+        const warningBlocks: any[] = [
+          {
+            type: "header",
+            text: { type: "plain_text", text: "⚠️ Quality Audit Yielded No Data" },
+          },
+          {
+            type: "section",
+            fields: [
+              { type: "mrkdwn", text: `*Records Audited:*\n0` },
+              { type: "mrkdwn", text: `*Reason:*\n${reason}` },
+              { type: "mrkdwn", text: `*Generated at (KSA):*\n${generatedAtKsa}` },
+              { type: "mrkdwn", text: `*Action:*\nVerify the Zoho integration on /integrations and re-run the audit. The numeric score is suppressed because dividing-by-zero falls back to 100% which would be misleading.` },
+            ],
+          },
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: { type: "plain_text", text: "Open Dashboard" },
+                url: dashUrl,
+              },
+            ],
+          },
+        ];
+        try {
+          await processDueOutboxMessages(20);
+          const outboxEntry = await enqueueSlackOutboxMessage({
+            source: "direct_audit_no_data",
+            destination: slackChannel,
+            text: `⚠️ WalaPlus Quality Audit — no records audited (${reason})`,
+            blocks: warningBlocks,
+            dedupeKey: savedResult.id ? `direct-audit:${savedResult.id}:slack-no-data` : undefined,
+            metadata: {
+              auditId: savedResult.id || null,
+              reason,
+            },
+            maxAttempts: Number.parseInt(process.env.DIRECT_AUDIT_OUTBOX_MAX_ATTEMPTS || "4", 10),
+          });
+          await processOutboxMessageById(outboxEntry.id);
+          logger?.warn("⚠️ [DirectAudit] Audit completed with 0 records — sent 'no data' warning to Slack instead of fake-success message", {
+            reason,
+          });
+        } catch (warnErr) {
+          logger?.error("❌ [DirectAudit] Failed to enqueue 'no data' warning:", warnErr);
+        }
+      } else if (directAuditSlackEnabled && slackToken && slackChannel && totalRecordsAudited > 0) {
         const {
           enqueueSlackOutboxMessage,
           processOutboxMessageById,
