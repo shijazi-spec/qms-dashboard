@@ -144,6 +144,10 @@ export interface MergeAction {
 export interface OwnerAccountability {
   owner_name: string;
   owner_email: string;
+  // Team / role badge sourced from SEED_USERS so coaching reports can group
+  // owners by squad ("MP", "WO Sales", "CS", "MGMT", etc.). "Unassigned" when
+  // the owner name doesn't match a known seed user.
+  team: string;
   total_records: number;
   duplicate_records: number;
   duplicate_rate: number;
@@ -2756,6 +2760,11 @@ export async function getOwnerAccountability(): Promise<OwnerAccountability[]> {
     ORDER BY duplicate_records DESC
   `);
 
+  // Resolve owner → team via the SEED_USERS roster so the UI can render a
+  // role badge without an extra round-trip. Lazy-imported to avoid pulling
+  // the static seed list into modules that don't touch the owner scorecard.
+  const { findSeedUser } = await import("../data/seedUsers");
+
   return result.rows.map((r) => {
     const totalRecs = parseInt(r.total_records) || 0;
     const dupRecs = parseInt(r.duplicate_records) || 0;
@@ -2764,9 +2773,13 @@ export async function getOwnerAccountability(): Promise<OwnerAccountability[]> {
     if (dupRate > 5) ragStatus = "red";
     else if (dupRate > 2) ragStatus = "amber";
 
+    const seed = findSeedUser(r.owner_name);
+    const team = (seed && seed.team) || "Unassigned";
+
     return {
       owner_name: r.owner_name,
       owner_email: r.owner_email || "",
+      team,
       total_records: totalRecs,
       duplicate_records: dupRecs,
       duplicate_rate: dupRate,

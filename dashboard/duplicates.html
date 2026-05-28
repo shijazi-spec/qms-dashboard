@@ -1089,16 +1089,24 @@
             <div class="bg-teal-50 border border-teal-200 rounded-lg p-3 mb-3 text-sm text-teal-900">
                 <strong>Owner accountability.</strong> Per-owner RAG scorecard showing how much duplicate debt each rep is carrying — open clusters they own, days since the oldest one was created, and whether the trend is improving. Use this for coaching conversations and to set fair cleanup targets; it's the input to the monthly CRM-hygiene KPI.
             </div>
-            <div class="flex justify-end mb-3">
-                <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="ownersExportBtn" data-testid="button-export-owners" title="Download a CSV of the full radar (every owner's duplicates included). For a single-owner packet, use the per-row Export / Packet links in the table below." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshOwnersFromZoho" id="ownersZohoRefreshBtn" title="Reload the per-owner scorecard from the most recent CRM sync. For a full live re-pull of every record from Zoho, use the top-header Sync Now button." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2 text-sm text-gray-600">
+                    <input type="text" id="ownersFilterInput" data-on-input="filterOwnersTable" data-testid="input-filter-owners" placeholder="Filter by owner, email, role…" class="px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 w-64" />
+                    <span id="ownersSelectionCount" data-testid="text-owners-selection-count" class="text-xs text-gray-500"></span>
+                </div>
+                <div class="flex">
+                    <button data-on-click="exportOwnersSelected" id="ownersExportBtn" data-testid="button-export-owners" title="Download a CSV of the rows you ticked in the table below. Tick the header checkbox to select every visible row." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
+                    <button data-on-click="refreshOwnersFromZoho" id="ownersZohoRefreshBtn" title="Reload the per-owner scorecard from the most recent CRM sync. For a full live re-pull of every record from Zoho, use the top-header Sync Now button." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
+                    <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
+                </div>
             </div>
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase w-10"><input type="checkbox" id="ownersSelectAll" data-on-change="toggleAllOwnersSelected" data-testid="checkbox-select-all-owners" aria-label="Select all visible owners" /></th>
                             <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Role</th>
                             <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
                             <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Total Records</th>
                             <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Duplicates</th>
@@ -1106,7 +1114,6 @@
                             <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">KPI Status</th>
                             <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">High Conf.</th>
                             <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Waste Value</th>
-                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Export</th>
                         </tr>
                     </thead>
                     <tbody id="ownersTable" class="bg-white divide-y divide-gray-200"></tbody>
