@@ -4495,7 +4495,40 @@
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 const ts = new Date().toLocaleTimeString();
-                const summary = `${ts} — scanned ${data.scanned}, hinted ${data.hinted} (${data.inserted} new, ${data.updated} refreshed)`;
+
+                // Surface ALL counters the backend returns. Previously this
+                // dropped no_contact + no_match, which were exactly the two
+                // numbers that explained a "scanned N, hinted 0" outcome:
+                // is it that the problem deals have no linked Contact at
+                // all (no_contact), or that the contacts exist but their
+                // email domain doesn't match any Account record (no_match)?
+                // Each failure mode has a different remediation, so the
+                // operator needs to see both to act.
+                const noContact = Number(data.no_contact || 0);
+                const noMatch   = Number(data.no_match || 0);
+                const scanned   = Number(data.scanned   || 0);
+                const hinted    = Number(data.hinted    || 0);
+                const inserted  = Number(data.inserted  || 0);
+                const updated   = Number(data.updated   || 0);
+
+                // Inline plain-English explanation when nothing was hinted.
+                // Each branch maps to a specific data-quality finding the
+                // operator can act on, instead of staring at "hinted 0" and
+                // wondering whether the engine is broken.
+                let explainer = '';
+                if (scanned === 0) {
+                    explainer = ' — no deals need help (every deal already has a real Account_Name or sits in a cluster with a real corporate domain).';
+                } else if (hinted === 0) {
+                    if (noContact === scanned) {
+                        explainer = ' — all problem deals have NO linked Contact in Zoho (the engine walks deal → contact → account; no contact = no inference path). Fix in Zoho: set Contact_Name on each deal, re-sync, re-scan.';
+                    } else if (noMatch === scanned) {
+                        explainer = ' — every problem deal has a linked contact, but their email domains do not match any Account record (or the domains are free-mail). Fix in Zoho: set the Account_Name directly, or set a corporate Company_Domain on the related Account.';
+                    } else if (noContact > 0 && noMatch > 0) {
+                        explainer = ` — ${noContact} deal(s) have no linked Contact; ${noMatch} have contacts whose domain didn't match any Account. Mix of both data-quality gaps above.`;
+                    }
+                }
+
+                const summary = `${ts} — scanned ${scanned}, hinted ${hinted} (${inserted} new, ${updated} refreshed; ${noContact} no-contact, ${noMatch} no-domain-match)${explainer}`;
                 document.getElementById('accountHintsLastScan').textContent = summary;
                 await loadAccountHints();
             } catch (e) {
