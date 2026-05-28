@@ -20,6 +20,9 @@ import { test, expect, type BrowserContext } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 
+// The page gate (src/mastra/middleware) accepts a valid X-Admin-Key header in
+// lieu of an OIDC session for non-public routes, so we set it on every request
+// the browser makes (including the /duplicates navigation itself).
 async function authenticate(context: BrowserContext): Promise<boolean> {
   const adminKey = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
   if (!adminKey) return false;
@@ -27,7 +30,9 @@ async function authenticate(context: BrowserContext): Promise<boolean> {
     data: { key: adminKey },
     headers: { 'Content-Type': 'application/json' },
   });
-  return res.status() === 200;
+  if (res.status() !== 200) return false;
+  await context.setExtraHTTPHeaders({ 'X-Admin-Key': adminKey });
+  return true;
 }
 
 async function readDownload(downloadPromise: Promise<import('@playwright/test').Download>): Promise<string> {
@@ -139,8 +144,9 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
     const lines = csv.replace(/^\uFEFF/, '').split('\r\n');
 
     expect(lines[0]).toBe('Deal,Deal Account (current),Suggested Account,Suggested Domain,Evidence Contact,Confidence %,Status');
-    // Formula-looking value is neutralized with a leading apostrophe then quoted.
-    expect(lines[1]).toContain(`"'=cmd|calc"`);
+    // Formula-looking value is neutralized with a leading apostrophe (no comma
+    // in the value, so it isn't additionally quoted).
+    expect(lines[1].startsWith("'=cmd|calc,")).toBe(true);
     expect(lines[1]).toContain('Acme,acme.com,a@acme.com,88,pending');
     expect(lines[2]).toContain('Globex,Globex LLC,Globex Corp');
   });
