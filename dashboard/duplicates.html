@@ -696,7 +696,7 @@
                  tabs). Previously sat below the table where they were easy to
                  miss — operators expect Export / Refresh / Run scan up top. -->
             <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
-                <button data-on-click="exportTab" data-args="[&quot;all&quot;]" data-pass-event="true" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of the full radar (cross-module clusters are included)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
+                <button data-on-click="exportCrossModule" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of exactly the cross-module overlap clusters shown below, in the current order and pairing filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
             </div>
@@ -4362,6 +4362,35 @@
                 h.status || '',
             ]);
             downloadCsvRows('account-hints.csv', headers, rows);
+        }
+
+        // Cross-Module tab export: emit exactly the overlap clusters shown in
+        // the table, honouring the active pairing filter and the server order
+        // they were rendered in (the table applies no client-side re-sort).
+        function exportCrossModule() {
+            const list = (crossModuleClusters || []).filter(c =>
+                crossModuleFilter === 'all' ? true : c.pairing === crossModuleFilter);
+            if (!list.length) { alert('Nothing to export for the current filter.'); return; }
+            const headers = ['Pairing', 'Domain', 'Company', 'Modules', 'Records', 'Confidence %', 'Pipeline Value', 'Recommended Action'];
+            const rows = list.map(c => {
+                const meta = CROSS_MODULE_PAIRING_LABELS[c.pairing] || { label: c.pairing || '', action: '' };
+                const modules = [];
+                if (c.total_leads    > 0) modules.push('Leads(' + c.total_leads + ')');
+                if (c.total_contacts > 0) modules.push('Contacts(' + c.total_contacts + ')');
+                if (c.total_accounts > 0) modules.push('Accounts(' + c.total_accounts + ')');
+                if (c.total_deals    > 0) modules.push('Deals(' + c.total_deals + ')');
+                return [
+                    meta.label || '',
+                    c.domain || '',
+                    c.company_name || '',
+                    modules.join(' · '),
+                    Number(c.total_records || 0),
+                    Number(c.confidence_score || 0),
+                    formatCurrency(Number(c.estimated_pipeline_value || 0)),
+                    meta.action || '',
+                ];
+            });
+            downloadCsvRows('cross-module-overlaps.csv', headers, rows);
         }
 
         function exportOwner(anchor, event) {

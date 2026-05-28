@@ -148,4 +148,33 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
     expect(lines[1]).toContain('Acme,acme.com,a@acme.com,88,pending');
     expect(lines[2]).toContain('Globex,Globex LLC,Globex Corp');
   });
+
+  test('Cross-Module exports only the clusters matching the active pairing filter', async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.goto(`${BASE_URL}/duplicates`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => typeof (window as any).exportCrossModule === 'function');
+
+    // Seed two clusters of different pairings, then pin the filter to one
+    // pairing so the export must drop the non-matching cluster — proving the
+    // export reflects the tab's current view, not the full radar.
+    await page.evaluate(() => {
+      (window as any).crossModuleClusters = [
+        { id: 1, pairing: 'lead_contact', domain: 'alpha.com', company_name: 'Alpha Inc', total_leads: 1, total_contacts: 2, total_accounts: 0, total_deals: 0, total_records: 3, confidence_score: 92, estimated_pipeline_value: 50000 },
+        { id: 2, pairing: 'mixed', domain: 'beta.com', company_name: 'Beta Corp', total_leads: 0, total_contacts: 1, total_accounts: 1, total_deals: 1, total_records: 3, confidence_score: 70, estimated_pipeline_value: 12000 },
+      ];
+      (window as any).crossModuleFilter = 'lead_contact';
+    });
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 30_000 });
+    await page.evaluate(() => (window as any).exportCrossModule());
+    const csv = await readDownload(downloadPromise);
+    const lines = csv.replace(/^\uFEFF/, '').split('\r\n').filter((l) => l.length > 0);
+
+    expect(lines[0]).toBe('Pairing,Domain,Company,Modules,Records,Confidence %,Pipeline Value,Recommended Action');
+    // Only the lead_contact cluster is exported; the mixed cluster is filtered out.
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain('alpha.com,Alpha Inc');
+    expect(lines[1]).toContain('Leads(1) · Contacts(2)');
+    expect(csv).not.toContain('beta.com');
+  });
 });
