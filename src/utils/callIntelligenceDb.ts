@@ -1140,8 +1140,22 @@ export async function getComplianceRecords(
 ): Promise<{ records: CallCompliance[]; total: number }> {
   const { limit = 50, offset = 0, lead_id, agent_email } = options;
 
+  // Phone is surfaced so the Compliance dashboard can group all calls
+  // placed to the same number — SDRs often log activity on one call out
+  // of three to the same lead, and grouping by phone makes that gap
+  // immediately visible. The phone lives in metadata.contact_phone
+  // (set by the bulk-upload filename parser and the Zoho Calls import);
+  // call_records has no dedicated phone column. Falls back to call_id
+  // for legacy rows where the early loader stuffed the phone fragment
+  // there before the metadata column existed (see migration at ~L553).
   let query = `
-    SELECT cc.*, cr.agent_email, cr.agent_name, cr.contact_name, cr.call_date
+    SELECT cc.*,
+           cr.agent_email,
+           cr.agent_name,
+           cr.contact_name,
+           cr.call_date,
+           cr.call_id AS source_call_id,
+           cr.metadata->>'contact_phone' AS contact_phone
     FROM call_compliance cc
     JOIN call_records cr ON cc.call_record_id = cr.id
     WHERE 1=1
