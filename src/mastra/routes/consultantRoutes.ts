@@ -768,7 +768,27 @@ export const consultantRoutes = [
           });
         } catch (error) {
           logger.error("[Consultant] Stream error:", error);
-          return c.json({ error: "Failed to start stream" }, 500);
+          // Surface the underlying error class + message in the response so
+          // DevTools shows the real cause (e.g. "OpenAIError: 401 Incorrect
+          // API key", "AbortError", "RateLimitError"). The frontend
+          // previously got an opaque "Failed to start stream" and could only
+          // tell the user "No response received." — invisible by design.
+          //
+          // Safe to leak: this endpoint already gates on requireRole, and the
+          // error messages emitted by the upstream SDKs never contain
+          // credentials (only the redacted class/status). If you ever add an
+          // error path that DOES leak secrets, redact at THIS layer, not by
+          // hiding the whole message.
+          const errMsg = error instanceof Error ? error.message : String(error);
+          const errClass = error instanceof Error ? error.constructor.name : "Error";
+          return c.json(
+            {
+              error: "Failed to start stream",
+              details: errMsg,
+              errorClass: errClass,
+            },
+            500,
+          );
         }
       };
     },

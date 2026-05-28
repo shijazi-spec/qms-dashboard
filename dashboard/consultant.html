@@ -1018,7 +1018,30 @@
                     body: JSON.stringify({ message: text, threadId: getThreadId() })
                 });
 
-                if (!response.ok) throw new Error('Stream endpoint returned ' + response.status);
+                if (!response.ok) {
+                    // Capture the status + body BEFORE the catch so the
+                    // fallback path can surface the actual server message
+                    // instead of swallowing it as "stream failed".
+                    var streamErrBody = '';
+                    try { streamErrBody = await response.clone().text(); } catch (_) { /* body might be already consumed */ }
+                    try { console.warn('[Consultant] /chat/stream returned', response.status, response.statusText, streamErrBody); } catch (_) {}
+                    // 429 + 401/403 are user-actionable — render inline now
+                    // rather than going through the non-stream fallback (which
+                    // would hit the same limiter/role check and surface the
+                    // same error message via the fallback handler below).
+                    if (response.status === 429) {
+                        hideTyping();
+                        var retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+                        var waitSec = (Number.isFinite(retryAfter) && retryAfter > 0) ? Math.min(retryAfter, 60) : 30;
+                        bubble = createAssistantMessage();
+                        bubble.innerHTML = renderMarkdown(
+                            '**Rate-limited.** Wait ' + waitSec + 's and click Retry.'
+                        );
+                        addRetryButton(bubble);
+                        return;
+                    }
+                    throw new Error('Stream endpoint returned ' + response.status + (streamErrBody ? ': ' + streamErrBody.slice(0, 200) : ''));
+                }
 
                 var reader = response.body.getReader();
                 var decoder = new TextDecoder();
@@ -1070,25 +1093,90 @@
             } catch (err) {
                 if (!streamOk) {
                     hideTyping();
+                    // Log the streaming failure so DevTools shows WHY we're
+                    // falling back — historically this was invisible and the
+                    // user only saw the generic "No response received."
+                    // placeholder, indistinguishable from a 401/403/429/500/
+                    // network outage.
+                    try { console.warn('[Consultant] stream failed, falling back to non-stream:', err && err.message || err); } catch (_) {}
                     try {
                         var fallback = await fetch('/api/consultant/chat', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             credentials: 'same-origin',
                             body: JSON.stringify({ message: text, threadId: getThreadId() })
                         });
-                        var data = await fallback.json();
-                        if (data.threadId) { threadId = data.threadId; sessionStorage.setItem('consultant_threadId', threadId); }
+                        // 429 — same per-user limiter that hit the
+                        // Duplicate Radar tabs. Honor Retry-After (capped
+                        // at 60s) and tell the user instead of silently
+                        // rendering "No response received."
+                        if (fallback.status === 429) {
+                            var retryAfter = parseInt(fallback.headers.get('Retry-After') || '0', 10);
+                            var waitSec = (Number.isFinite(retryAfter) && retryAfter > 0) ? Math.min(retryAfter, 60) : 30;
+                            bubble = createAssistantMessage();
+                            bubble.innerHTML = renderMarkdown(
+                                '**Rate-limited.** The server is throttling requests from this account. '
+                                + 'Wait ' + waitSec + 's and click **Retry** below.'
+                            );
+                            addRetryButton(bubble);
+                            return;
+                        }
+                        if (fallback.status === 401 || fallback.status === 403) {
+                            bubble = createAssistantMessage();
+                            bubble.innerHTML = renderMarkdown(
+                                '**Not authorized.** Your account does not have access to the AI Consultant. '
+                                + 'Ask an admin to grant a consultant-eligible role.'
+                            );
+                            return;
+                        }
+                        // Parse defensively so a non-JSON 500 body (e.g.
+                        // an HTML error page from a misconfigured proxy)
+                        // doesn't crash the renderer.
+                        var data = null;
+                        try { data = await fallback.json(); } catch (_) { data = null; }
+                        if (data && data.threadId) { threadId = data.threadId; sessionStorage.setItem('consultant_threadId', threadId); }
+
+                        // If the backend returned an error envelope —
+                        // {error, details} from the non-stream handler —
+                        // SHOW it instead of "No response received." The
+                        // previous behaviour was the same silent-empty
+                        // pattern that hid the duplicate-radar 429 bug.
+                        // Also covers fallback.ok === false where the body
+                        // explicitly says "Failed to process message" or
+                        // similar.
+                        var respText = (data && (data.response || data.message)) || '';
+                        if (!respText) {
+                            var serverErr = data && (data.error || data.details);
+                            if (serverErr) {
+                                respText = '**AI Consultant error:** ' + serverErr;
+                            } else if (!fallback.ok) {
+                                respText = '**AI Consultant error (HTTP ' + fallback.status + ').** '
+                                    + 'The agent did not return a response. Check the server logs '
+                                    + 'or DevTools → Network → ' + (fallback.url ? fallback.url.split('/').pop() : 'chat')
+                                    + ' for the underlying cause.';
+                            } else {
+                                // Genuinely empty 200 — model returned no text.
+                                respText = '**No response.** The model returned an empty answer. '
+                                    + 'Try a more specific question or click Retry.';
+                            }
+                        }
                         bubble = createAssistantMessage();
-                        var respText = data.response || data.message || 'No response received.';
                         bubble.innerHTML = renderMarkdown(respText);
                         if (isArabic(respText)) bubble.setAttribute('dir', 'rtl');
                         chatMessages.push({ role: 'assistant', content: respText, time: new Date().toISOString() });
-                        if (respText.trim()) {
-                            attachFeedbackUI(bubble, data.messageId, text, respText, data.callId, data.promptVersion);
+                        // Only attach the feedback UI when we actually got
+                        // a real model answer (data.response). Attaching
+                        // thumbs to an error message would let the user
+                        // "rate" the error text, which corrupts feedback
+                        // analytics.
+                        if (data && data.response && data.response.trim()) {
+                            attachFeedbackUI(bubble, data.messageId, text, data.response, data.callId, data.promptVersion);
+                        } else {
+                            addRetryButton(bubble);
                         }
                     } catch (fallbackErr) {
+                        try { console.error('[Consultant] fallback fetch threw:', fallbackErr); } catch (_) {}
                         bubble = createAssistantMessage();
-                        bubble.innerHTML = renderMarkdown('**Connection Error:** Unable to reach the AI Consultant. Please check your connection and try again.');
+                        bubble.innerHTML = renderMarkdown('**Connection Error:** Unable to reach the AI Consultant. Please check your connection and try again. (' + escapeHtml(String(fallbackErr && fallbackErr.message || fallbackErr)) + ')');
                         addRetryButton(bubble);
                     }
                 } else if (bubble) {
