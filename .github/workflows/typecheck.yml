@@ -48,3 +48,25 @@ jobs:
       # Hard gate: tests must type-check.
       - name: tsc (tests)
         run: npm run check:tests
+
+      # Hard gate: every <script> block in dashboard/*.html must parse
+      # cleanly. Catches the class of bug that took the dashboard down
+      # on 2026-05-28 — backticks inside an HTML comment nested in a JS
+      # template literal closed the outer template early, and the JS
+      # never even loaded in the browser. tsc doesn't see this because
+      # the code lives in .html files; this script does.
+      - name: dashboard HTML <script> syntax check
+        run: node scripts/check-dashboard-html-js.mjs
+
+      # Warning gate (today): schema canonical-source parity. Catches
+      # columns added by runtime ALTER TABLE ADD COLUMN that don't
+      # appear in the canonical CREATE TABLE — exactly the drift that
+      # got Replit's deploy-time schema-diff to propose DROPping the
+      # audio_blob columns on 2026-05-28 ("delete audio_blob column …
+      # with 208 items"). 75 historical instances exist today; this
+      # step runs in warning mode and surfaces them without failing.
+      # Once the historical debt is paid down, set STRICT=1 here so a
+      # new drift instance hard-blocks the merge.
+      - name: schema canonical-source parity (warning)
+        run: node scripts/check-schema-parity.mjs
+        continue-on-error: true

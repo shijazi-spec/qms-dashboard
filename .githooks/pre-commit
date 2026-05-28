@@ -44,6 +44,29 @@ if ! bash scripts/check-no-inline-handlers.sh; then
   failed=1
 fi
 
+# Dashboard HTML <script> JS syntax guardrail — catches the class of bug
+# that took the dashboard down on 2026-05-28 (backticks in an HTML comment
+# nested inside a JS template literal closed the outer literal early,
+# leaving the page with a fatal SyntaxError that no other check caught).
+# Hard gate: a broken <script> in any dashboard/*.html aborts the commit.
+if printf '%s\n' "$staged_paths" | grep -Eq '^dashboard/.*\.html$'; then
+  echo "→ pre-commit: running dashboard HTML JS syntax guardrail…"
+  if ! node scripts/check-dashboard-html-js.mjs; then
+    failed=1
+  fi
+fi
+
+# Schema canonical-source parity guardrail — warns when a runtime ALTER
+# TABLE ADD COLUMN adds a column that's missing from the canonical
+# CREATE TABLE, which is the drift Replit's deploy-time schema-diff
+# proposes to "fix" by dropping data from production. Warning-only
+# right now (75 historical instances of drift in the codebase); flip
+# STRICT=1 in this script after the historical debt is paid down.
+if printf '%s\n' "$staged_paths" | grep -Eq '^src/'; then
+  echo "→ pre-commit: running schema-parity guardrail (warning mode)…"
+  node scripts/check-schema-parity.mjs || true
+fi
+
 if [ "$failed" -ne 0 ]; then
   echo "" >&2
   echo "✗ pre-commit: CSP guardrail(s) failed — commit aborted." >&2
