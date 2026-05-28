@@ -1331,6 +1331,16 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
   {
+    // Topic clusters (read). The Analytics tab fetches this on load
+    // to render the "Most-mentioned topics" panel. Was mentioned in
+    // the comment block above as one of the 2026-05-25 additions but
+    // the actual entry was never written — surfaced as "Failed: HTTP
+    // 400" in the panel because deny-by-default rejected the request.
+    pattern: /^\/api\/calls\/topic-clusters$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
     // Per-call audio-derived duration write — same shape as analyze/compliance
     pattern: /^\/api\/calls\/\d+\/duration$/,
     methods: ["POST"],
