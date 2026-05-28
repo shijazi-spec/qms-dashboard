@@ -842,9 +842,9 @@ export async function searchZohoRecords(
         const error = await response.json().catch(() => ({}));
         throw new Error(`Zoho CRM search error: ${response.status} - ${error.message || response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
+
       return (data.data || []).map((record: any) => ({
         id: record.id,
         module,
@@ -854,6 +854,62 @@ export async function searchZohoRecords(
         data: record,
       }));
     }
+  );
+}
+
+/**
+ * Word-based search — same indexed lookup the Zoho UI uses for the
+ * "Global Search" box at the top of the CRM. Searches every indexed
+ * field on the module (phone, mobile, email, name, etc.) for a
+ * substring match against `word`. Far more permissive than the
+ * structured `criteria=` search and the right tool for phone-number
+ * lookup because Zoho's phone fields ARE indexed for global search but
+ * do NOT support the `contains` operator on criteria-based search.
+ *
+ * Reference: the 2026-05-28 root-cause investigation found a Lead
+ * (القحطاني نوره, phone 966505523305) that the criteria-based
+ * `Phone:contains:505523305` search missed but the UI global search
+ * found instantly. That gap drove this helper into existence.
+ */
+export async function searchZohoRecordsByWord(
+  module: string,
+  word: string,
+): Promise<ZohoCRMRecord[]> {
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/${module}/search?word=${encodeURIComponent(word)}`;
+      return fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Zoho-oauthtoken ${config.accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+    },
+    async (response) => {
+      if (!response.ok) {
+        if (response.status === 204) {
+          return [];
+        }
+        const error = await response.json().catch(() => ({}));
+        throw new Error(
+          `Zoho CRM word search error: ${response.status} - ${
+            error.message || response.statusText
+          }`,
+        );
+      }
+
+      const data = await response.json();
+
+      return (data.data || []).map((record: any) => ({
+        id: record.id,
+        module,
+        owner: record.Owner?.name || record.Owner?.id,
+        createdTime: record.Created_Time,
+        modifiedTime: record.Modified_Time,
+        data: record,
+      }));
+    },
   );
 }
 

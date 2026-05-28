@@ -28,6 +28,7 @@ import {
   type ZohoCRMRecord,
   fetchZohoRecords,
   searchZohoRecords,
+  searchZohoRecordsByWord,
 } from "./zohoCRM";
 import { normalizePhoneDigits } from "./callMcpReconciliation";
 import { logger } from "./logger";
@@ -174,33 +175,42 @@ export async function findCrmRecordByPhone(
   let nativeSearchSucceeded = false;
 
   try {
-    // Native Zoho search-criteria syntax: (Field:operator:value)
-    // We use `contains` instead of `equals` so any of these stored
-    // formats match the 9-digit normalized query:
-    //   0500966554, +966500966554, 00966500966554, 966500966554
-    // All five contain `500966554` as a substring.
-    const criteria = `((Phone:contains:${normalized_query})or(Mobile:contains:${normalized_query}))`;
-    const dealCriteria = `((Phone:contains:${normalized_query})or(Mobile:contains:${normalized_query})or(Contact_Phone:contains:${normalized_query}))`;
-
+    // CRITICAL: use Zoho's `word=` global search, NOT `criteria=contains`.
+    //
+    // The 2026-05-28 root-cause investigation found that
+    // `Phone:contains:505523305` returns ZERO records even when a lead
+    // exists with Phone=966505523305 (Drovox Co's القحطاني نوره) —
+    // confirmed by performing the EXACT same query in Zoho's UI search
+    // and getting an immediate hit. Zoho's phone fields are indexed for
+    // the global `?word=` search but do NOT support the `contains`
+    // operator on structured `?criteria=` search.
+    //
+    // The word-based search (which is what the Zoho UI's global search
+    // box uses) does substring lookup across all indexed fields,
+    // including phone, mobile, email, name, etc. — exactly what we
+    // need. Pass the 9-digit normalized form so every Saudi format
+    // (+966505523305, 00966505523305, 966505523305, 0505523305,
+    // 505523305) matches the same query.
     const [leadHits, dealHits] = await Promise.allSettled([
-      searchZohoRecords("Leads", criteria),
-      searchZohoRecords("Deals", dealCriteria),
+      searchZohoRecordsByWord("Leads", normalized_query),
+      searchZohoRecordsByWord("Deals", normalized_query),
     ]);
 
     if (leadHits.status === "fulfilled") {
       nativeSearchSucceeded = true;
       for (const r of leadHits.value) {
         // Re-verify the match on our side using the same normaliser as
-        // the JS-fallback path, so a Zoho `contains` hit that doesn't
-        // actually normalize to the same 9 digits (e.g. a 12-digit
-        // record that happens to contain the substring) is dropped.
+        // the JS-fallback path, so a Zoho word-hit that doesn't actually
+        // normalize to the same 9 digits (e.g. a 9-digit address suffix
+        // that happens to collide with the query) is dropped before we
+        // claim a match.
         const p = normalizePhoneDigits(readLeadPhone(r));
         if (p && (p === normalized_query || p.endsWith(normalized_query) || normalized_query.endsWith(p))) {
           matches.push(leadToMatch(r));
         }
       }
     } else {
-      logger.warn("[sdrCallLinking] Native Leads search failed, will fall back to scan", {
+      logger.warn("[sdrCallLinking] Native Leads word-search failed, will fall back to scan", {
         error: leadHits.reason?.message,
       });
     }
@@ -214,12 +224,12 @@ export async function findCrmRecordByPhone(
         }
       }
     } else {
-      logger.warn("[sdrCallLinking] Native Deals search failed, will fall back to scan", {
+      logger.warn("[sdrCallLinking] Native Deals word-search failed, will fall back to scan", {
         error: dealHits.reason?.message,
       });
     }
   } catch (err: any) {
-    logger.warn("[sdrCallLinking] Native search threw; falling back to JS scan", {
+    logger.warn("[sdrCallLinking] Native word-search threw; falling back to JS scan", {
       error: err?.message || String(err),
     });
   }
