@@ -6383,6 +6383,12 @@ ${transcriptText}
             [String(windowDays)],
           );
 
+          // Cache-Control: no-store stops the browser from holding onto a
+          // stale 400 response from before the RBAC entry for this route
+          // landed (commit fdcb05b). Without it, even after a successful
+          // deploy a user who saw the error once would keep seeing the
+          // cached 400 until they hard-refreshed.
+          c.header("Cache-Control", "no-store, no-cache, must-revalidate");
           return c.json({
             window_days: windowDays,
             total_analyzed_calls: totalRes.rows[0]?.n || 0,
@@ -6398,8 +6404,16 @@ ${transcriptText}
         } catch (error: any) {
           safeLogger.error("[API] topic clusters failed", {
             error: error?.message,
+            stack: error?.stack,
           });
-          return c.json({ error: error?.message || "Failed" }, 500);
+          c.header("Cache-Control", "no-store");
+          return c.json(
+            {
+              error: error?.message || "Failed to compute topic clusters",
+              hint: "If this just shows 'HTTP 400' or 'Failed', hard-refresh (Ctrl+Shift+R) — the response is no longer cached.",
+            },
+            500,
+          );
         }
       };
     },

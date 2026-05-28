@@ -3177,9 +3177,30 @@
             list.innerHTML = '<p class="text-xs text-gray-500">Loading topics…</p>';
             if (summary) summary.textContent = '';
             try {
-                const res = await fetch(`/api/calls/topic-clusters?window_days=${encodeURIComponent(days)}&top_n=30`);
+                // Add `cache: 'no-store'` so a stale 400 from before the
+                // RBAC fix landed (commit fdcb05b) can't be returned from
+                // the browser's HTTP cache. The server already returns
+                // Cache-Control: no-store but belt-and-braces.
+                const res = await fetch(
+                    `/api/calls/topic-clusters?window_days=${encodeURIComponent(days)}&top_n=30`,
+                    { cache: 'no-store' },
+                );
                 if (!res.ok) {
-                    list.innerHTML = `<p class="text-xs text-red-600">Failed: HTTP ${res.status}</p>`;
+                    // Show the actual error message from the server, not
+                    // just "HTTP 400". If the body itself isn't JSON
+                    // (e.g. a middleware rejection), surface what we can
+                    // grab so the operator knows whether it's RBAC, an
+                    // SQL bug, or a cache issue.
+                    let detail = `HTTP ${res.status}`;
+                    try {
+                        const body = await res.clone().json();
+                        if (body?.error) detail += ` — ${body.error}`;
+                        if (body?.hint) detail += ` (${body.hint})`;
+                    } catch {
+                        const txt = await res.clone().text().catch(() => '');
+                        if (txt) detail += ` — ${txt.slice(0, 200)}`;
+                    }
+                    list.innerHTML = `<p class="text-xs text-red-600">Failed: ${escapeHtml(detail)}</p>`;
                     return;
                 }
                 const data = await res.json();
