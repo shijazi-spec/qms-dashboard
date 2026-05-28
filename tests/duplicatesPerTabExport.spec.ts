@@ -22,15 +22,13 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
 
 // The page gate (src/mastra/middleware) accepts a valid X-Admin-Key header in
 // lieu of an OIDC session for non-public routes, so we set it on every request
-// the browser makes (including the /duplicates navigation itself).
+// the browser makes (including the /duplicates navigation itself). We set the
+// header directly rather than POSTing to /api/admin/auth — that endpoint only
+// verifies the key (it sets no cookie) and is tightly rate-limited, which would
+// flake the suite when several tests run back-to-back.
 async function authenticate(context: BrowserContext): Promise<boolean> {
   const adminKey = process.env.TEST_ADMIN_KEY || process.env.ADMIN_API_KEY;
   if (!adminKey) return false;
-  const res = await context.request.post(`${BASE_URL}/api/admin/auth`, {
-    data: { key: adminKey },
-    headers: { 'Content-Type': 'application/json' },
-  });
-  if (res.status() !== 200) return false;
   await context.setExtraHTTPHeaders({ 'X-Admin-Key': adminKey });
   return true;
 }
