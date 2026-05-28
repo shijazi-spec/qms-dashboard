@@ -414,11 +414,17 @@ describe("GET /api/agents/performance", () => {
 
 describe("GET /api/crm/data", () => {
   test("400 when Zoho is not configured", async () => {
+    // rateLimited + cooldownMsRemaining were added to the
+    // getZohoConnectionStatus return type by the Zoho 429 reliability
+    // work (commit 2adb025) — keep these mocks complete so the typecheck
+    // workflow stays green.
     vi.mocked(zoho.getZohoConnectionStatus).mockReturnValue({
       configured: false,
       autoRefresh: false,
       tokenCached: false,
       tokenExpired: false,
+      rateLimited: false,
+      cooldownMsRemaining: 0,
       message: "CRM integration not configured.",
     });
 
@@ -440,6 +446,8 @@ describe("GET /api/crm/data", () => {
       autoRefresh: true,
       tokenCached: true,
       tokenExpired: false,
+      rateLimited: false,
+      cooldownMsRemaining: 0,
       message: "ok",
     });
     vi.mocked(zoho.fetchZohoRecords).mockResolvedValueOnce([
@@ -488,6 +496,8 @@ describe("GET /api/crm/data", () => {
       autoRefresh: true,
       tokenCached: true,
       tokenExpired: false,
+      rateLimited: false,
+      cooldownMsRemaining: 0,
       message: "ok",
     });
     vi.mocked(zoho.fetchZohoRecords).mockRejectedValueOnce(new Error("zoho 500"));
