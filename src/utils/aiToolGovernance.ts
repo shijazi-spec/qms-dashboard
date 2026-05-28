@@ -234,13 +234,31 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       'WP-FORM-044 (AI Tool Approval Checklist)',
     ],
     entityType: 'checklist',
-    buildPreview: (p: any) =>
-      [
+    buildPreview: (p: any) => {
+      const lines: string[] = [
         `**Action:** ${p?.action ?? 'n/a'}`,
-        p?.checklistName ? `**Checklist:** ${trim(p.checklistName, 120)}` : null,
-        p?.checklistId ? `**Checklist ID:** ${p.checklistId}` : null,
-        Array.isArray(p?.items) ? `**Items:** ${p.items.length}` : null,
-      ].filter(Boolean).join('\n'),
+      ];
+      if (p?.checklistName) lines.push(`**Checklist:** ${trim(p.checklistName, 120)}`);
+      if (p?.checklistId) lines.push(`**Checklist ID:** ${p.checklistId}`);
+      if (Array.isArray(p?.items)) {
+        lines.push(`**Items:** ${p.items.length}`);
+        // Surface the modules and any embedded SQL so approvers can see what
+        // data sources will be queried before authorising a create action.
+        const modulesUsed: string[] = [];
+        const sqlSnippets: string[] = [];
+        for (const item of p.items) {
+          if (item?.module_to_query && !modulesUsed.includes(item.module_to_query)) {
+            modulesUsed.push(item.module_to_query);
+          }
+          if (item?.check_type === 'data_query' && item?.query_config?.sql) {
+            sqlSnippets.push(trim(String(item.query_config.sql), 120));
+          }
+        }
+        if (modulesUsed.length > 0) lines.push(`**Modules queried:** ${modulesUsed.join(', ')}`);
+        if (sqlSnippets.length > 0) lines.push(`**Custom SQL (data_query items):**\n${sqlSnippets.map(s => `  - ${s}`).join('\n')}`);
+      }
+      return lines.filter(Boolean).join('\n');
+    },
   },
 
   // --- tools explicitly exempted from the gate ---

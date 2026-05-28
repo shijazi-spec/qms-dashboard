@@ -1,5 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { getCurrentAgentContext } from "../../utils/withApprovalGate";
+import { CHECKLIST_MODULE_ROLE_ALLOWLIST } from "../../utils/checklistDatabase";
 
 export const runChecklistTool = createTool({
   id: "run-checklist",
@@ -42,7 +44,11 @@ export const runChecklistTool = createTool({
 
     if (action === "run") {
       if (!checklistId) return { success: false, error: "checklistId is required for run action" };
-      const run = await runChecklist(checklistId, "ai_consultant");
+      // Thread the caller's role into the engine so it enforces per-module RBAC
+      // and blocks data_query items for non-admin callers.
+      const agentCtx = getCurrentAgentContext();
+      const callerRole = agentCtx?.user?.role as string | undefined;
+      const run = await runChecklist(checklistId, "ai_consultant", callerRole);
       return {
         success: true,
         checklistId,
@@ -111,6 +117,37 @@ export const manageChecklistTool = createTool({
     if (action === "create") {
       if (!name || !standard) return { success: false, error: "name and standard are required" };
       if (!items || items.length === 0) return { success: false, error: "At least one item is required" };
+
+      // Enforce module-level RBAC at creation time: reject items that reference
+      // modules the caller cannot read, or that use data_query (arbitrary SQL)
+      // without admin privileges.
+      const agentCtxCreate = getCurrentAgentContext();
+      const callerRoleCreate = agentCtxCreate?.user?.role as string | undefined;
+      const isAdmin = callerRoleCreate === "admin";
+      const RESTRICTED_MODULES = ["pdpl", "event_logs"];
+      for (const item of items) {
+        if (item.module_to_query && RESTRICTED_MODULES.includes(item.module_to_query)) {
+          return {
+            success: false,
+            error: `Module '${item.module_to_query}' is restricted and cannot be used in checklist items`,
+          };
+        }
+        if (item.check_type === "data_query" && !isAdmin) {
+          return {
+            success: false,
+            error: "data_query check type requires administrator role",
+          };
+        }
+        if (item.module_to_query && callerRoleCreate !== undefined) {
+          const allowedRoles = CHECKLIST_MODULE_ROLE_ALLOWLIST[item.module_to_query];
+          if (allowedRoles && !allowedRoles.includes(callerRoleCreate)) {
+            return {
+              success: false,
+              error: `Role '${callerRoleCreate}' is not permitted to create checklist items for the '${item.module_to_query}' module`,
+            };
+          }
+        }
+      }
 
       const checklist = await createChecklist({ name, standard, description, category, created_by: "ai_consultant" });
       const savedItems = await addChecklistItems(checklist.id!, items.map(i => ({

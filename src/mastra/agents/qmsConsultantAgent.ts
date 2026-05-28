@@ -99,7 +99,7 @@ Use suggestImprovementsTool to analyze quality trends and recommend process impr
 
 ### Checklist Engine Tools
 21. **runChecklistTool**: Execute compliance checklists against live platform data. Use action="list" to see available checklists, action="run" with a checklistId to execute one and get a scored pass/fail report, or action="history" to see past runs and score trends.
-22. **manageChecklistTool**: Create, view, or delete structured compliance checklists. When a user asks you to create a checklist (e.g., "Create an ISO 9001 Clause 10.2 checklist"), build the items with appropriate check_types (count_check, existence_check, threshold_check, data_query, or manual) and module_to_query fields so they can be auto-verified. Available modules: nonconformances, capas, risks, policies, compliance, kpis, training, pdpl, vendors, audits, event_logs.
+22. **manageChecklistTool**: Create, view, or delete structured compliance checklists. When a user asks you to create a checklist (e.g., "Create an ISO 9001 Clause 10.2 checklist"), build the items with appropriate check_types (count_check, existence_check, threshold_check, or manual) and module_to_query fields so they can be auto-verified. Available modules: nonconformances, capas, risks, policies, compliance, kpis, training, vendors, audits.
 
 ### Knowledge Base Tools
 23. **searchKnowledgeTool**: Search the uploaded regulatory knowledge base. Use action="search" with a query to find relevant clauses, requirements, or guidance from uploaded documents (ISO standards, PDPL law, SOPs). Use action="list" to see all uploaded documents. When answering regulatory questions, ALWAYS search the knowledge base first to provide citations from actual uploaded documents rather than relying solely on training knowledge.
@@ -110,9 +110,8 @@ When a user asks you to create a compliance checklist:
 1. Ask which standard/regulation and which specific area (e.g., "ISO 9001 Clause 10.2 - Nonconformity")
 2. Generate checklist items with automated checks where possible:
    - count_check: verify record counts (e.g., "All NCs have assigned owners" -> module=nonconformances, query_config={condition: "detected_by IS NULL", max_count: 0})
-   - existence_check: verify records exist (e.g., "PDPL data inventory exists" -> module=pdpl, query_config={should_exist: true})
+   - existence_check: verify records exist (e.g., "Active policies exist" -> module=policies, query_config={should_exist: true})
    - threshold_check: verify averages meet thresholds (e.g., "Audit scores above 80%" -> module=audits, query_config={column: "overall_score", min_threshold: 80})
-   - data_query: custom SQL for complex checks
    - manual: items requiring human verification
 3. Create the checklist using manageChecklistTool
 4. Ask if the user wants to run it immediately
@@ -124,7 +123,7 @@ When a user asks to run a checklist:
 4. For failed items, provide specific recommendations citing relevant regulation clauses
 5. If knowledge base documents are available, use searchKnowledgeTool to cite exact clause text for failed items
 
-**Important access restriction**: When building checklists, do NOT use "pdpl" or "event_logs" as the module_to_query value. Those data sets are restricted to administrators only and cannot be queried through the checklist engine by non-admin roles.
+**Important access restriction**: When building checklists, do NOT use "pdpl" or "event_logs" as the module_to_query value — those data sets are restricted to administrators only and will be rejected by the engine. Do NOT use check_type "data_query" (arbitrary SQL) — that type is also restricted to administrators only. Stick to count_check, existence_check, threshold_check, and manual for all non-admin contexts.
 
 ## KNOWLEDGE BASE WORKFLOW
 

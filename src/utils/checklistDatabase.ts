@@ -1,6 +1,84 @@
 import { createRedactedPool } from "./redactedPool";
 import { logger } from "./logger";
 
+/**
+ * Validates a WHERE-clause fragment from stored checklist config.
+ *
+ * SQL-injection risk: for count_check / existence_check / threshold_check the
+ * `condition` and `column` fields are interpolated directly into SQL. Even
+ * after module-level RBAC the values could contain subqueries or correlated
+ * queries against restricted tables (e.g. `(SELECT secret FROM pdpl_data_inventory LIMIT 1) > 0`).
+ *
+ * This function rejects any string that contains SQL keywords commonly used to
+ * reach outside the target table. It errs on the side of rejection: if the
+ * expression looks like it contains a nested query, a table reference, or a
+ * DML/DDL statement, it is blocked.
+ */
+function validateChecklistCondition(condition: string): { ok: true } | { ok: false; reason: string } {
+  if (!condition || condition.trim() === "") return { ok: true };
+
+  const upper = condition.toUpperCase();
+
+  const BLOCKED_PATTERNS: Array<[RegExp, string]> = [
+    [/\bSELECT\b/,             "SELECT subquery not allowed in condition"],
+    [/\bFROM\b/,               "FROM clause not allowed in condition"],
+    [/\bJOIN\b/,               "JOIN not allowed in condition"],
+    [/\bUNION\b/,              "UNION not allowed in condition"],
+    [/\bINTERSECT\b/,          "INTERSECT not allowed in condition"],
+    [/\bEXCEPT\b/,             "EXCEPT not allowed in condition"],
+    [/\bINSERT\b/,             "INSERT not allowed in condition"],
+    [/\bUPDATE\b/,             "UPDATE not allowed in condition"],
+    [/\bDELETE\b/,             "DELETE not allowed in condition"],
+    [/\bDROP\b/,               "DROP not allowed in condition"],
+    [/\bTRUNCATE\b/,           "TRUNCATE not allowed in condition"],
+    [/\bALTER\b/,              "ALTER not allowed in condition"],
+    [/\bGRANT\b/,              "GRANT not allowed in condition"],
+    [/\bEXECUTE\b/,            "EXECUTE not allowed in condition"],
+    [/\bPG_/,                  "pg_ system functions not allowed in condition"],
+    [/\bINFORMATION_SCHEMA\b/, "information_schema not allowed in condition"],
+    [/\bPG_CATALOG\b/,         "pg_catalog not allowed in condition"],
+    [/\(\s*SELECT/i,           "subquery not allowed in condition"],
+  ];
+
+  for (const [pattern, reason] of BLOCKED_PATTERNS) {
+    if (pattern.test(upper)) {
+      return { ok: false, reason };
+    }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Validates a column-name fragment from stored checklist config.
+ * Only simple SQL identifiers are permitted — no function calls, subqueries,
+ * or expressions that could reference other tables.
+ */
+function validateChecklistColumn(column: string): { ok: true } | { ok: false; reason: string } {
+  if (!column || column.trim() === "") return { ok: true };
+  if (!/^[A-Za-z_$][A-Za-z0-9_$.]*$/.test(column.trim())) {
+    return { ok: false, reason: `Column name '${column}' contains invalid characters; only simple identifiers are permitted` };
+  }
+  return { ok: true };
+}
+
+// Mirrors queryPlatformDataTool's MODULE_ROLE_ALLOWLIST so that automated
+// checklist items cannot be used as a shadow reporting channel that bypasses
+// the per-module RBAC enforced on normal REST API routes.
+// pdpl and event_logs are intentionally absent — those tables must never be
+// reachable through the checklist engine by non-admin roles.
+export const CHECKLIST_MODULE_ROLE_ALLOWLIST: Record<string, string[]> = {
+  nonconformances: ["admin"],
+  capas:           ["admin"],
+  risks:           ["admin", "head_of_operations_quality", "grc_manager", "quality_manager", "executive"],
+  policies:        ["admin", "grc_manager", "quality_manager", "head_of_operations_quality", "bu_owner", "executive", "quality_specialist", "auditor", "team_lead", "ai_specialist"],
+  audits:          ["admin", "head_of_operations_quality", "grc_manager", "quality_manager", "executive"],
+  compliance:      ["admin", "head_of_operations_quality", "grc_manager", "quality_manager", "executive"],
+  kpis:            ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
+  vendors:         ["admin", "head_of_operations_quality", "grc_manager", "quality_manager"],
+  training:        ["admin"],
+};
+
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
 });
@@ -260,7 +338,10 @@ export async function getChecklistRuns(
   return result.rows;
 }
 
-export async function executeChecklistItem(item: ChecklistItem): Promise<{
+export async function executeChecklistItem(
+  item: ChecklistItem,
+  callerRole?: string,
+): Promise<{
   status: "pass" | "fail" | "na" | "error";
   actual_value: any;
   details: string;
@@ -285,6 +366,8 @@ export async function executeChecklistItem(item: ChecklistItem): Promise<{
       };
     }
 
+    // pdpl and event_logs are restricted to admin-only API routes and must
+    // never be reachable through the checklist engine.
     const tableMap: Record<string, string> = {
       nonconformances: "nonconformance_records",
       capas: "capa_records",
@@ -293,11 +376,36 @@ export async function executeChecklistItem(item: ChecklistItem): Promise<{
       compliance: "obligations",
       kpis: "kpi_definitions",
       training: "training_assignments",
-      pdpl: "pdpl_data_inventory",
       vendors: "vendors",
       audits: "quality_audit_results",
-      event_logs: "event_logs",
     };
+
+    // Enforce per-module RBAC — default-deny.
+    // callerRole must be a known role string; if it is absent (undefined) the
+    // execution context could not be verified and we refuse rather than fail open.
+    const allowedRoles = CHECKLIST_MODULE_ROLE_ALLOWLIST[module];
+    if (!callerRole || !allowedRoles || !allowedRoles.includes(callerRole)) {
+      logger.warn("[ChecklistDB] Role not permitted for module in checklist item", {
+        module,
+        callerRole: callerRole ?? "(none)",
+      });
+      return {
+        status: "na",
+        actual_value: null,
+        details: callerRole
+          ? `Access denied: role '${callerRole}' is not permitted to query the '${module}' module`
+          : "Access denied: no verified role context available for automated checklist execution",
+      };
+    }
+
+    // data_query executes arbitrary stored SQL — restrict to admin only.
+    if (item.check_type === "data_query" && callerRole !== "admin") {
+      return {
+        status: "na",
+        actual_value: null,
+        details: "data_query checks require administrator role",
+      };
+    }
 
     const table = tableMap[module];
     if (!table) {
@@ -310,6 +418,12 @@ export async function executeChecklistItem(item: ChecklistItem): Promise<{
 
     if (item.check_type === "count_check") {
       const condition = config.condition || "";
+      if (condition) {
+        const v = validateChecklistCondition(condition);
+        if (!v.ok) {
+          return { status: "error", actual_value: null, details: `Invalid condition: ${v.reason}` };
+        }
+      }
       const query = condition
         ? `SELECT COUNT(*)::int as count FROM ${table} WHERE ${condition}`
         : `SELECT COUNT(*)::int as count FROM ${table}`;
@@ -336,6 +450,12 @@ export async function executeChecklistItem(item: ChecklistItem): Promise<{
 
     if (item.check_type === "existence_check") {
       const condition = config.condition || "1=1";
+      if (condition !== "1=1") {
+        const v = validateChecklistCondition(condition);
+        if (!v.ok) {
+          return { status: "error", actual_value: null, details: `Invalid condition: ${v.reason}` };
+        }
+      }
       const result = await pool.query(
         `SELECT EXISTS(SELECT 1 FROM ${table} WHERE ${condition}) as exists_flag`,
       );
@@ -352,6 +472,16 @@ export async function executeChecklistItem(item: ChecklistItem): Promise<{
     if (item.check_type === "threshold_check") {
       const column = config.column || "id";
       const condition = config.condition || "";
+      const colCheck = validateChecklistColumn(column);
+      if (!colCheck.ok) {
+        return { status: "error", actual_value: null, details: `Invalid column: ${colCheck.reason}` };
+      }
+      if (condition) {
+        const condCheck = validateChecklistCondition(condition);
+        if (!condCheck.ok) {
+          return { status: "error", actual_value: null, details: `Invalid condition: ${condCheck.reason}` };
+        }
+      }
       const query = condition
         ? `SELECT AVG(${column})::numeric as avg_val FROM ${table} WHERE ${condition}`
         : `SELECT AVG(${column})::numeric as avg_val FROM ${table}`;
@@ -417,6 +547,7 @@ export async function executeChecklistItem(item: ChecklistItem): Promise<{
 export async function runChecklist(
   checklistId: number,
   runBy?: string,
+  callerRole?: string,
 ): Promise<ChecklistRun> {
   const data = await getChecklistById(checklistId);
   if (!data) throw new Error(`Checklist ${checklistId} not found`);
@@ -428,7 +559,7 @@ export async function runChecklist(
     na = 0;
 
   for (const item of items) {
-    const result = await executeChecklistItem(item);
+    const result = await executeChecklistItem(item, callerRole);
     itemResults.push({
       item_number: item.item_number,
       clause_reference: item.clause_reference,

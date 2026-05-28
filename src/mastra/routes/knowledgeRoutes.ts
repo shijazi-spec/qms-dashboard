@@ -170,6 +170,13 @@ export const knowledgeRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const user = await requireRole(c, [
+            "admin", "ai_specialist", "auditor", "bu_owner", "executive",
+            "grc_manager", "head_of_operations_quality", "quality_manager",
+            "quality_specialist", "team_lead",
+          ] as UserRole[]);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
           const { getChecklists, initChecklistTables } =
             await import("../../utils/checklistDatabase");
           await initChecklistTables();
@@ -188,6 +195,13 @@ export const knowledgeRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const user = await requireRole(c, [
+            "admin", "ai_specialist", "auditor", "bu_owner", "executive",
+            "grc_manager", "head_of_operations_quality", "quality_manager",
+            "quality_specialist", "team_lead",
+          ] as UserRole[]);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
           const { getChecklistById, initChecklistTables } =
@@ -195,7 +209,16 @@ export const knowledgeRoutes = [
           await initChecklistTables();
           const data = await getChecklistById(id);
           if (!data) return c.json({ error: "Checklist not found" }, 404);
-          return c.json({ success: true, ...data });
+
+          // Strip query_config (may contain SQL) from items returned to non-admins
+          // to prevent leaking sensitive query payloads through the definition endpoint.
+          const isAdmin = user.role === "admin";
+          const sanitizedItems = data.items.map((item: any) => {
+            if (isAdmin) return item;
+            const { query_config, ...rest } = item;
+            return rest;
+          });
+          return c.json({ success: true, checklist: data.checklist, items: sanitizedItems });
         } catch (error) {
           return c.json({ error: "Failed to fetch checklist" }, 500);
         }
@@ -208,12 +231,21 @@ export const knowledgeRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const user = await requireRole(c, [
+            "admin", "ai_specialist", "auditor", "bu_owner", "executive",
+            "grc_manager", "head_of_operations_quality", "quality_manager",
+            "quality_specialist", "team_lead",
+          ] as UserRole[]);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
           const { runChecklist, initChecklistTables } =
             await import("../../utils/checklistDatabase");
           await initChecklistTables();
-          const run = await runChecklist(id, "api");
+          // Pass the caller's role so the engine enforces per-module RBAC and
+          // blocks data_query items for non-admin callers.
+          const run = await runChecklist(id, user.name ?? "api", user.role as string);
           return c.json({ success: true, run });
         } catch (error) {
           return c.json({ error: "Failed to run checklist" }, 500);
@@ -227,13 +259,31 @@ export const knowledgeRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          const user = await requireRole(c, [
+            "admin", "ai_specialist", "auditor", "bu_owner", "executive",
+            "grc_manager", "head_of_operations_quality", "quality_manager",
+            "quality_specialist", "team_lead",
+          ] as UserRole[]);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
           const { getChecklistRuns, initChecklistTables } =
             await import("../../utils/checklistDatabase");
           await initChecklistTables();
           const runs = await getChecklistRuns(id);
-          return c.json({ success: true, runs });
+
+          // Non-admins receive summary-only run records: strip actual_value from
+          // item_results to prevent historical run data from serving as a shadow
+          // reporting channel for restricted module content.
+          const isAdmin = user.role === "admin";
+          const sanitizedRuns = isAdmin ? runs : runs.map((run: any) => ({
+            ...run,
+            item_results: Array.isArray(run.item_results)
+              ? run.item_results.map(({ actual_value, ...rest }: any) => rest)
+              : run.item_results,
+          }));
+          return c.json({ success: true, runs: sanitizedRuns });
         } catch (error) {
           return c.json({ error: "Failed to fetch runs" }, 500);
         }
