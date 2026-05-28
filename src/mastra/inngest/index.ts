@@ -1995,6 +1995,69 @@ const fraudKpiMonthlyReminderFunction = inngest.createFunction(
 inngestFunctions.push(fraudKpiMonthlyReminderFunction);
 
 // ──────────────────────────────────────────────────────────────────────
+// Call pipeline watchdog (Phase 3c).
+//
+// The /api/calls/upload and /api/calls/upload-audio handlers execute
+// transcribe → analyze → SDR-evaluate inline so a clean upload settles
+// in `evaluated` (or `qa_review_pending`) before the response returns.
+// A server kill mid-request — Replit redeploy, OOM, container restart —
+// leaves the call row stranded at `transcribing` or `evaluating` and it
+// will never move forward without manual intervention.
+//
+// This cron resurrects stuck rows:
+//   - status='evaluating'  → re-fire triggerSDREvaluationForCall.
+//   - status='transcribing' → demote to 'failed' with a clear reason in
+//     ai_insights.last_pipeline_error (we can't re-attempt transcription
+//     without the original audio buffer; the upload endpoint discarded
+//     the FormData after the first try).
+//
+// Threshold + batch tunable via CALL_PIPELINE_WATCHDOG_STUCK_MIN /
+// CALL_PIPELINE_WATCHDOG_BATCH; default cron is every 10 minutes.
+// Audit-trail row is written only when something actually moved so the
+// event_logs partition isn't polluted with empty 10-minute noise.
+// ──────────────────────────────────────────────────────────────────────
+const callPipelineWatchdogFunction = inngest.createFunction(
+  { id: "call-pipeline-watchdog" },
+  { cron: process.env.CALL_PIPELINE_WATCHDOG_CRON || "*/10 * * * *" },
+  async ({ step }) => {
+    return await step.run("watchdog-resurrect-stuck-calls", async () => {
+      logger.info("[CallWatchdog] Pipeline watchdog firing");
+      const { runCallPipelineWatchdog } = await import(
+        "../../utils/callPipelineWatchdog"
+      );
+      const summary = await runCallPipelineWatchdog();
+      logger.info("[CallWatchdog] Watchdog pass complete:", summary);
+
+      const moved =
+        summary.resumed_evaluate +
+        summary.resumed_transcribe +
+        summary.marked_failed;
+      if (moved > 0 || summary.errors > 0) {
+        try {
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          await logEvent({
+            actionType: "call_pipeline_watchdog",
+            entityType: "call_record",
+            module: "calls",
+            severity: summary.errors > 0 ? "WARNING" : "INFO",
+            aiInvolved: false,
+            description:
+              `Call pipeline watchdog resumed ${summary.resumed_evaluate} ` +
+              `evaluation(s), marked ${summary.marked_failed} as failed ` +
+              `(scanned ${summary.scanned}, errors ${summary.errors}).`,
+            newValue: summary,
+          });
+        } catch (e) {
+          logger.warn("[CallWatchdog] event_logs write failed:", e);
+        }
+      }
+      return summary;
+    });
+  },
+);
+inngestFunctions.push(callPipelineWatchdogFunction);
+
+// ──────────────────────────────────────────────────────────────────────
 // Phase 2.1 (document text-extraction + compliance-judge pipeline) was
 // previously registered here with five Inngest functions. Their backing
 // modules and DB schema were never authored, so the registrations only

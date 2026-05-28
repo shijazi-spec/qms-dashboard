@@ -1262,9 +1262,14 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   },
   // SDR evaluation manager-review writes — same allowed-role set as the
   // CRM Compliance read above; these are operator actions, not admin-only.
+  // The `qa-check` alias is the one-click "QA Checked" button (Phase 3b)
+  // that bundles review_status='approved' + optional notes + the
+  // qa_reviewed status promote in a single call. Same role gate as the
+  // rich review endpoint because both produce a row in
+  // sdr_evaluation_reviews and audit-log entry.
   {
     pattern:
-      /^\/api\/calls\/[^/]+\/(sdr-evaluation\/review|sdr-evaluation\/review\/adjust)$/,
+      /^\/api\/calls\/[^/]+\/(sdr-evaluation\/review|sdr-evaluation\/review\/adjust|qa-check)$/,
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },

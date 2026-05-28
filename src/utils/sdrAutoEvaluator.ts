@@ -93,6 +93,17 @@ export interface AutoEvalOutcome {
   evaluationId?: number;
   scorecardId?: number;
   overallScore?: number;
+  /**
+   * Post-evaluation routing the auto-evaluator wrote to call_records.status.
+   * Set only when `ran` is true. Lets the upload-path caller surface the
+   * QA-review bucket decision back to the operator without re-querying.
+   */
+  postEvalStatus?: "evaluated" | "qa_review_pending";
+  /**
+   * Human-readable reason a low-confidence run landed in qa_review_pending.
+   * Empty/undefined when postEvalStatus === "evaluated".
+   */
+  qaReviewReason?: "score_below_threshold" | "skipped_attributes";
   skipReason?:
     | "no_call_record"
     | "no_transcript"
@@ -208,10 +219,54 @@ export async function triggerSDREvaluationForCall(
       evaluated_at: new Date(),
     };
 
+    // QA-review routing (Phase 3a):
+    //   evaluated         — clean run, score ≥ 60, every attribute scored
+    //   qa_review_pending — flagged for a human pass before it's trusted.
+    //
+    // Two signals push a call into qa_review_pending:
+    //
+    //   1. Low score: overall_score < QA_REVIEW_THRESHOLD (default 60).
+    //      Below this the AI evaluation is either a real coaching event
+    //      or a noisy run; either way a manager should eyeball it before
+    //      it feeds analytics or coaching plans.
+    //
+    //   2. Skipped attributes: any attribute in attribute_evaluations
+    //      came back with `skipped` / `skip_reason` / `verdict='NA'`.
+    //      The AI is telling us it couldn't judge that dimension from the
+    //      transcript — a human needs to fill the gap (or confirm "truly
+    //      not applicable") before the score is final.
+    //
+    // Threshold is tunable via SDR_QA_REVIEW_SCORE_THRESHOLD so QA can
+    // tighten or loosen it from Replit Secrets without a redeploy.
+    const qaThreshold = (() => {
+      const raw = process.env.SDR_QA_REVIEW_SCORE_THRESHOLD;
+      const parsed = parseInt(raw ?? "60", 10);
+      return Number.isFinite(parsed) ? parsed : 60;
+    })();
+    const hasSkippedAttribute = (
+      evaluation.attribute_evaluations as any[]
+    ).some((attr) => {
+      if (!attr || typeof attr !== "object") return false;
+      // The schema fluctuates between AI runs — be tolerant of both
+      // `skipped: true`, `skip_reason: "..."`, and `verdict: "NA"`.
+      if (attr.skipped === true) return true;
+      if (typeof attr.skip_reason === "string" && attr.skip_reason.trim()) {
+        return true;
+      }
+      const verdict = String(attr.verdict ?? "").toUpperCase();
+      if (verdict === "NA" || verdict === "N/A") return true;
+      return false;
+    });
+    const needsQaReview =
+      evaluation.overall_score < qaThreshold || hasSkippedAttribute;
+    const newStatus: "evaluated" | "qa_review_pending" = needsQaReview
+      ? "qa_review_pending"
+      : "evaluated";
+
     let evaluationId: number;
     try {
       evaluationId = await saveSDREvaluation(evaluation as any);
-      await updateCallStatus(callId, "evaluated");
+      await updateCallStatus(callId, newStatus);
     } catch (saveErr: any) {
       logger.warn(
         `[SDRAutoEval] Save failed for call ${callId}: ${saveErr?.message || saveErr}`,
@@ -224,7 +279,15 @@ export async function triggerSDREvaluationForCall(
     }
 
     logger.info(
-      `[SDRAutoEval] Call ${callId} evaluated — score ${evaluation.overall_score}, scorecard ${scorecard.id} (${scorecard.name})`,
+      `[SDRAutoEval] Call ${callId} evaluated — score ${evaluation.overall_score}, ` +
+        `scorecard ${scorecard.id} (${scorecard.name}), routed to ${newStatus}` +
+        (needsQaReview
+          ? ` (reason: ${
+              evaluation.overall_score < qaThreshold
+                ? `score<${qaThreshold}`
+                : "skipped_attributes"
+            })`
+          : ""),
     );
 
     // Audit-trail — durable evidence that this AI evaluation happened, what
@@ -283,6 +346,12 @@ export async function triggerSDREvaluationForCall(
       evaluationId,
       scorecardId: scorecard.id,
       overallScore: evaluation.overall_score,
+      postEvalStatus: newStatus,
+      qaReviewReason: needsQaReview
+        ? evaluation.overall_score < qaThreshold
+          ? "score_below_threshold"
+          : "skipped_attributes"
+        : undefined,
     };
   } catch (err: any) {
     logger.warn(

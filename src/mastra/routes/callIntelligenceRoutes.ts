@@ -2407,6 +2407,8 @@ ${transcriptText}
                     id: callRecord.id,
                     scorecardId: outcome.scorecardId,
                     overallScore: outcome.overallScore,
+                    postEvalStatus: outcome.postEvalStatus,
+                    qaReviewReason: outcome.qaReviewReason,
                   });
                 } else {
                   logger?.info("📋 [API] Auto-SDR-eval skipped on manual upload", {
@@ -2919,6 +2921,8 @@ ${transcriptText}
                     callId,
                     scorecardId: outcome.scorecardId,
                     overallScore: outcome.overallScore,
+                    postEvalStatus: outcome.postEvalStatus,
+                    qaReviewReason: outcome.qaReviewReason,
                   });
                 } else {
                   logger?.info("📋 [API] Auto-SDR-eval skipped on upload", {
@@ -3741,12 +3745,72 @@ ${transcriptText}
             review_notes: body.review_notes,
           });
 
+          // Phase 3b — promote the call to `qa_reviewed` once a human has
+          // weighed in. Any of approved / adjusted / disagreed counts as
+          // "human looked at it" for status purposes; the review_status
+          // column on sdr_evaluation_reviews keeps the verdict-level
+          // detail so reports can split them out later. Skipped on the
+          // status-update layer if the call has already been QA-reviewed
+          // (idempotent).
+          let statusPromoted = false;
+          try {
+            const { updateCallStatus: promoteCallStatus } = await import(
+              "../../utils/callIntelligenceDb"
+            );
+            await promoteCallStatus(callId, "qa_reviewed");
+            statusPromoted = true;
+          } catch (statusErr: any) {
+            logger?.warn("⚠️ [API] qa_reviewed status promote failed", {
+              callId,
+              reviewId,
+              error: statusErr?.message || String(statusErr),
+            });
+          }
+
+          // Audit trail — surfaces who reviewed and when in the
+          // immutable event_logs partition. ISO 9001 §9.1.3 (analysis
+          // and evaluation) plus PDPL Art. 31 (decision traceability).
+          try {
+            const { logEvent } = await import(
+              "../../utils/eventLogsDatabase"
+            );
+            await logEvent({
+              actionType: "sdr_evaluation_reviewed",
+              entityType: "call_record",
+              entityId: String(callId),
+              module: "calls",
+              severity: reviewStatus === "disagreed" ? "WARNING" : "INFO",
+              aiInvolved: false,
+              userEmail: reviewerEmail,
+              userName: reviewerName || undefined,
+              description: `Human reviewer ${reviewerEmail} ${reviewStatus} the SDR evaluation for call ${callId}`,
+              newValue: {
+                review_id: reviewId,
+                evaluation_id: evaluationId,
+                review_status: reviewStatus,
+                adjusted_overall_score:
+                  typeof body.adjusted_overall_score === "number"
+                    ? body.adjusted_overall_score
+                    : null,
+                has_review_notes: Boolean(body.review_notes),
+                status_promoted: statusPromoted,
+              },
+            });
+          } catch (logErr: any) {
+            logger?.warn("[API] sdr_evaluation_reviewed audit write failed", {
+              callId,
+              reviewId,
+              error: logErr?.message || String(logErr),
+            });
+          }
+
           logger?.info("📝 [API] SDR evaluation review saved", {
             callId,
             evaluationId,
             reviewId,
             reviewStatus,
             reviewer: reviewerEmail,
+            statusPromoted,
           });
 
           return c.json({
@@ -3754,6 +3818,7 @@ ${transcriptText}
             review_id: reviewId,
             evaluation_id: evaluationId,
             review_status: reviewStatus,
+            call_status: statusPromoted ? "qa_reviewed" : undefined,
           });
         } catch (error) {
           const errAny: any = error;
@@ -3793,6 +3858,182 @@ ${transcriptText}
           });
           return c.json(
             { success: false, error: errAny?.message || "Failed to fetch reviews" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  // ===================================================================
+  // Phase 3b — "QA Checked" button.
+  //
+  // The /sdr-evaluation/review endpoint above is the full
+  // approved / adjusted / disagreed review surface for managers who want
+  // to push back on the AI's scoring. Operators (QA leads who are just
+  // confirming "I read the transcript, the AI scoring matches my read,
+  // good to go") needed a one-click button that doesn't require picking
+  // a verdict shape or filling out per-attribute adjustments.
+  //
+  // This endpoint is a thin wrapper: review_status is locked to
+  // "approved", review_notes is the only optional payload field, and the
+  // same auditable plumbing (sdr_evaluation_reviews row + qa_reviewed
+  // status promote + event_logs audit row) fires under the hood.
+  //
+  // Operator workflow:
+  //   1. Upload triggers auto-transcribe + auto-evaluate → status lands
+  //      in `evaluated` (clean run) or `qa_review_pending` (flagged).
+  //   2. QA opens the call detail, reads transcript + AI scoring.
+  //   3. QA clicks "QA Checked" — optionally types a verification note.
+  //   4. POST hits this endpoint → call_records.status → qa_reviewed,
+  //      sdr_evaluation_reviews gets an `approved` row, event_logs gets
+  //      a tamper-evident audit entry.
+  //
+  // Idempotent for repeated clicks (new review row each time, no de-dup
+  // — same as the existing review endpoint — so operators reviewing the
+  // history can compare verification runs).
+  // ===================================================================
+  {
+    path: "/api/calls/:id/qa-check",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const logger = mastra?.getLogger();
+          const callId = parseInt(c.req.param("id"));
+          if (!Number.isFinite(callId)) {
+            return c.json(
+              { success: false, error: "Invalid call id" },
+              400,
+            );
+          }
+
+          const body = await c.req.json().catch(() => ({}));
+          const { getSessionFromCookie } = await import("./authRoutes");
+          const session = getSessionFromCookie(c.req.header("Cookie"));
+          const reviewerEmail =
+            session?.email || body.reviewer_email || "unknown";
+          const reviewerName = session?.name || body.reviewer_name || null;
+          const reviewNotes =
+            typeof body.review_notes === "string"
+              ? body.review_notes.trim() || null
+              : null;
+
+          const {
+            getSDREvaluation,
+            saveSDREvaluationReview,
+            updateCallStatus: promoteCallStatus,
+            callIntelligencePool,
+            initCallIntelligenceTables,
+          } = await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          // No evaluation = nothing to certify. We return 409 (conflict)
+          // not 404 because the call record itself almost certainly does
+          // exist — the auto-eval just hasn't run / has skipped. The
+          // operator can re-run auto-eval and try again.
+          const evaluation = await getSDREvaluation(callId);
+          if (!evaluation) {
+            return c.json(
+              {
+                success: false,
+                error:
+                  "No SDR evaluation exists yet for this call — run the auto-evaluator first, then QA-check.",
+              },
+              409,
+            );
+          }
+          const evalIdResult = await callIntelligencePool.query(
+            `SELECT id FROM sdr_call_evaluations WHERE call_record_id = $1`,
+            [callId],
+          );
+          const evaluationId = evalIdResult.rows[0]?.id;
+          if (!evaluationId) {
+            return c.json(
+              { success: false, error: "Evaluation id lookup failed" },
+              500,
+            );
+          }
+
+          const reviewId = await saveSDREvaluationReview({
+            evaluation_id: evaluationId,
+            call_record_id: callId,
+            reviewer_email: reviewerEmail,
+            reviewer_name: reviewerName,
+            review_status: "approved",
+            review_notes: reviewNotes,
+          });
+
+          let statusPromoted = false;
+          try {
+            await promoteCallStatus(callId, "qa_reviewed");
+            statusPromoted = true;
+          } catch (statusErr: any) {
+            logger?.warn("⚠️ [API] qa-check status promote failed", {
+              callId,
+              reviewId,
+              error: statusErr?.message || String(statusErr),
+            });
+          }
+
+          try {
+            const { logEvent } = await import(
+              "../../utils/eventLogsDatabase"
+            );
+            await logEvent({
+              actionType: "sdr_qa_checked",
+              entityType: "call_record",
+              entityId: String(callId),
+              module: "calls",
+              severity: "INFO",
+              aiInvolved: false,
+              userEmail: reviewerEmail,
+              userName: reviewerName || undefined,
+              description: `QA reviewer ${reviewerEmail} QA-checked call ${callId} (evaluation ${evaluationId})`,
+              newValue: {
+                review_id: reviewId,
+                evaluation_id: evaluationId,
+                review_status: "approved",
+                has_review_notes: Boolean(reviewNotes),
+                status_promoted: statusPromoted,
+                source: "qa_check_button",
+              },
+            });
+          } catch (logErr: any) {
+            logger?.warn("[API] sdr_qa_checked audit write failed", {
+              callId,
+              reviewId,
+              error: logErr?.message || String(logErr),
+            });
+          }
+
+          logger?.info("✅ [API] QA Checked button fired", {
+            callId,
+            evaluationId,
+            reviewId,
+            reviewer: reviewerEmail,
+            statusPromoted,
+          });
+
+          return c.json({
+            success: true,
+            review_id: reviewId,
+            evaluation_id: evaluationId,
+            call_status: statusPromoted ? "qa_reviewed" : undefined,
+          });
+        } catch (error) {
+          const errAny: any = error;
+          safeLogger.error("Error processing QA Checked:", {
+            message: errAny?.message,
+            code: errAny?.code,
+          });
+          return c.json(
+            {
+              success: false,
+              error: errAny?.message || "Failed to QA-check call",
+            },
             500,
           );
         }
