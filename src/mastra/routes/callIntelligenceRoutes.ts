@@ -131,6 +131,13 @@ export const callIntelligenceRoutes = [
           const agent_email = c.req.query("agent_email");
           const status = c.req.query("status");
           const lead_id = c.req.query("lead_id");
+          // Whitelist sort to the two columns the DB function actually
+          // supports; anything else falls back to the default (call_date).
+          const rawSort = c.req.query("sort");
+          const sort =
+            rawSort === "created_at" || rawSort === "call_date"
+              ? (rawSort as "created_at" | "call_date")
+              : undefined;
 
           const result = await getCallRecords({
             limit,
@@ -139,6 +146,7 @@ export const callIntelligenceRoutes = [
             agent_email,
             status,
             lead_id,
+            sort,
           });
 
           logger?.info("✅ [API] Call records fetched", {

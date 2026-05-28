@@ -223,7 +223,65 @@ async function migrateCallStatusEnum(): Promise<void> {
   `);
 }
 
+// Memoization handle for initCallIntelligenceTables.
+//
+// The init runs 33 CREATE TABLE / CREATE INDEX / ALTER TABLE statements
+// across multiple tables. They're idempotent (IF NOT EXISTS / IF NOT EXISTS
+// COLUMN) so re-running is safe, but on a cold Replit container the first
+// run takes 5–15s because the pool has to open a fresh TCP+SSL+auth
+// connection and Postgres has to parse + plan + execute every statement.
+//
+// Every /api/calls* route handler called this at the top of the request:
+//
+//   await initCallIntelligenceTables();   // ← blocked the request 5–15s
+//
+// Three of them fire in parallel from the dashboard's refreshData
+// (Promise.allSettled with a 20s per-fetch abort), so on a cold start
+// all three races for the same warmup work and the abort wins. That's
+// the "Could not load call data from the server (timed out or 500)"
+// banner the user sees right after Republish.
+//
+// Fix: memoize so the work runs exactly once per process lifetime.
+// Subsequent calls await the same promise (cached on first invocation)
+// and return effectively for free. The first request still pays the
+// cold-start cost, but the parallel siblings hitch a ride on the same
+// promise instead of triggering three duplicate schema introspections.
+let _initPromise: Promise<void> | null = null;
+let _initDone = false;
+
 export async function initCallIntelligenceTables(): Promise<void> {
+  if (_initDone) return;
+  if (_initPromise) return _initPromise;
+  _initPromise = (async () => {
+    const startedAt = Date.now();
+    try {
+      await _doInitCallIntelligenceTables();
+      _initDone = true;
+      const ms = Date.now() - startedAt;
+      // Loud when it was slow so an operator tailing logs can spot a
+      // cold start (the legitimate 5–15s case) versus a recurring slow
+      // path (which would indicate the memoization broke).
+      if (ms > 2000) {
+        logger.warn(
+          `[callIntelligenceDb] initCallIntelligenceTables took ${ms}ms (cold start)`,
+        );
+      } else {
+        logger.info(
+          `[callIntelligenceDb] initCallIntelligenceTables completed in ${ms}ms`,
+        );
+      }
+    } catch (err) {
+      // If init failed, clear the cached promise so the next request
+      // retries. Otherwise we'd be permanently stuck on a transient
+      // connection blip.
+      _initPromise = null;
+      throw err;
+    }
+  })();
+  return _initPromise;
+}
+
+async function _doInitCallIntelligenceTables(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS call_records (
       id SERIAL PRIMARY KEY,
@@ -764,6 +822,12 @@ export async function getCallRecords(
     lead_id?: string;
     startDate?: Date;
     endDate?: Date;
+    // Sort key. Default is call_date (the call's own age) for the main
+    // Records tab. Pass 'created_at' to surface the most-recently UPLOADED
+    // calls — needed by the Recent Uploads activity-log section, which
+    // otherwise misrepresents back-dated manual uploads as "old".
+    // Whitelist-validated below so a stray query param can't inject SQL.
+    sort?: "call_date" | "created_at";
   } = {},
 ): Promise<{ records: CallRecord[]; total: number }> {
   const {
@@ -775,7 +839,13 @@ export async function getCallRecords(
     lead_id,
     startDate,
     endDate,
+    sort,
   } = options;
+  const ALLOWED_SORTS: Record<string, string> = {
+    call_date: "cr.call_date",
+    created_at: "cr.created_at",
+  };
+  const orderColumn = (sort && ALLOWED_SORTS[sort]) || "cr.call_date";
 
   let whereClause = "WHERE 1=1";
   const params: any[] = [];
@@ -843,7 +913,7 @@ export async function getCallRecords(
          LIMIT 1
        ) latest_review ON TRUE
        ${whereClause.replace(/\b(source|agent_email|status|lead_id|call_date)\b/g, "cr.$1")}
-       ORDER BY cr.call_date DESC
+       ORDER BY ${orderColumn} DESC
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...params, limit, offset],
   );

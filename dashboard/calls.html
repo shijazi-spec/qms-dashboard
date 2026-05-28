@@ -6078,34 +6078,121 @@
             }
         }
 
+        // Pretty source label + colour. Generic palette so future sources
+        // (e.g. webhook/imported) inherit a sensible default instead of
+        // rendering as an empty/missing chip.
+        function _uploadSourceChip(src) {
+            const s = String(src || 'unknown').toLowerCase();
+            const palette = {
+                manual:   { label: 'Manual',      cls: 'bg-blue-100 text-blue-700' },
+                five9:    { label: 'Five9',       cls: 'bg-violet-100 text-violet-700' },
+                api:      { label: 'API',         cls: 'bg-emerald-100 text-emerald-700' },
+                webhook:  { label: 'Webhook',     cls: 'bg-amber-100 text-amber-700' },
+                imported: { label: 'Imported',    cls: 'bg-slate-100 text-slate-700' },
+                unknown:  { label: 'Unknown src', cls: 'bg-gray-100 text-gray-600' },
+            };
+            const p = palette[s] || palette.unknown;
+            return '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ' + p.cls + '">' + p.label + '</span>';
+        }
+
+        // "Recent Uploads" — historically filtered to source=manual with
+        // limit=5, which made the section look frozen at the 5 most-recent
+        // manual uploads regardless of how busy Five9 ingestion was. It
+        // also sorted by call_date (the call's age), not by upload time, so
+        // back-dating a manual upload would bury fresh activity.
+        //
+        // Behaviour now:
+        //   - All sources (manual + Five9 + API + webhook + …)
+        //   - 25 rows (limit raised so the section is a real activity log)
+        //   - Sorted server-side by call_date DESC; the client also displays
+        //     the upload time (created_at) per row so operators can see
+        //     when each call actually landed in the DB.
+        //   - Each row shows a source chip so manual vs Five9 is obvious.
+        //   - Failure / empty / rate-limit states surfaced explicitly
+        //     instead of silently rendering "No recent uploads" forever
+        //     (the same silent-empty pattern that hid the Duplicate Radar
+        //      bug shipped in fix/duplicate-radar-empty-tabs-rate-limit).
         async function loadRecentUploads() {
+            const container = document.getElementById('recent-uploads-list');
+            if (!container) return;
+
+            // Supersede stale loads (e.g. quick repeated clicks of Refresh)
+            // so an older fetch finishing late can't overwrite the newer one.
+            const loadId = window._recentUploadsLoadId = (window._recentUploadsLoadId || 0) + 1;
+
+            const renderMessage = (msg, tone) => {
+                if (loadId !== window._recentUploadsLoadId) return;
+                const palette = { info: 'text-gray-500', warn: 'text-amber-700', error: 'text-red-600' };
+                container.innerHTML = '<p class="text-sm ' + (palette[tone] || palette.info) + '">' + msg + '</p>';
+            };
+
             try {
-                const res = await fetch('/api/calls?source=manual&limit=5');
+                // No source filter → all upload paths. Limit=25 is enough
+                // for a glanceable activity log without paying the LATERAL
+                // join cost of the heavier /api/calls?limit=500 call.
+                // sort=created_at orders by upload time (not call date) so
+                // a back-dated manual upload still surfaces as fresh.
+                const res = await fetch('/api/calls?limit=25&sort=created_at', { credentials: 'same-origin' });
+                if (loadId !== window._recentUploadsLoadId) return;
+
+                if (res.status === 429) {
+                    const retryAfter = parseInt(res.headers.get('Retry-After') || '0', 10);
+                    renderMessage(
+                        'Rate-limited by the server' + (retryAfter > 0 ? ' — retry in ' + retryAfter + 's' : '') + '. Refresh shortly.',
+                        'warn',
+                    );
+                    return;
+                }
+                if (res.status === 401 || res.status === 403) {
+                    renderMessage('Not authorized to view call uploads.', 'error');
+                    return;
+                }
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+
                 const data = await res.json();
-                const container = document.getElementById('recent-uploads-list');
-                
-                if (data.records && data.records.length > 0) {
-                    container.innerHTML = data.records.map(call => `
+                if (loadId !== window._recentUploadsLoadId) return;
+                const records = Array.isArray(data.records) ? data.records : [];
+
+                if (records.length === 0) {
+                    renderMessage(escapeHtml(WalaPlusI18n.t('dyn.calls.no_recent_uploads')), 'info');
+                    return;
+                }
+
+                container.innerHTML = records.map(call => {
+                    const uploaded = call.created_at ? new Date(call.created_at) : null;
+                    const uploadedAgo = uploaded && !isNaN(uploaded.getTime())
+                        ? _fd(uploaded, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+                        : '—';
+                    const callDate = call.call_date
+                        ? _fd(call.call_date, { year: 'numeric', month: 'short', day: '2-digit' })
+                        : '—';
+                    return `
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center shrink-0">
                                     <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
                                     </svg>
                                 </div>
-                                <div>
-                                    <div class="text-sm font-medium">${escapeHtml(call.agent_name || call.agent_email)}</div>
-                                    <div class="text-xs text-gray-500">${escapeHtml(call.contact_name || WalaPlusI18n.t('dyn.calls.unknown_contact'))} - ${escapeHtml(_fd(call.call_date))}</div>
+                                <div class="min-w-0">
+                                    <div class="text-sm font-medium flex items-center gap-2">
+                                        <span class="truncate">${escapeHtml(call.agent_name || call.agent_email || '—')}</span>
+                                        ${_uploadSourceChip(call.source)}
+                                    </div>
+                                    <div class="text-xs text-gray-500 truncate" title="Call date: ${escapeHtml(callDate)} · Uploaded: ${escapeHtml(uploadedAgo)}">
+                                        ${escapeHtml(call.contact_name || WalaPlusI18n.t('dyn.calls.unknown_contact'))}
+                                        · call ${escapeHtml(callDate)}
+                                        · uploaded ${escapeHtml(uploadedAgo)}
+                                    </div>
                                 </div>
                             </div>
                             ${renderCallStatusBadge(call.status)}
                         </div>
-                    `).join('');
-                } else {
-                    container.innerHTML = `<p class="text-gray-500 text-sm">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_recent_uploads'))}</p>`;
-                }
+                    `;
+                }).join('');
             } catch (error) {
                 console.error('Error loading recent uploads:', error);
+                renderMessage('Failed to load recent uploads: ' + escapeHtml(String(error && error.message || error)), 'error');
             }
         }
 
