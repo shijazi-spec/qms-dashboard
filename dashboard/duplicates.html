@@ -93,6 +93,20 @@
                 <p class="text-sm text-gray-700 mt-1">AI-powered duplicate detection for CRM hygiene (Zoho-aligned, Read-Only)</p>
             </div>
             <div class="flex gap-3">
+                <!-- Phase 4e: active Zoho connection probe. Lives here in
+                     Duplicate Radar because the whole tab is Zoho-driven —
+                     a "No data" view here is most often the platform's
+                     first sign that the Zoho connection is broken. The
+                     button actively calls Zoho's OAuth endpoint and pops
+                     a modal with the exact failure reason (invalid client /
+                     invalid grant / wrong datacenter / rate-limited /
+                     network unreachable). Read-only, no records change. -->
+                <button data-on-click="runZohoDiagnostic" id="btn-diagnose-zoho-duplicates" title="Actively test the Zoho OAuth connection. Use this when the dashboard shows no data — surfaces the real error (invalid credentials / wrong region / rate-limited)." class="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Test Zoho
+                </button>
                 <button data-on-click="syncNowZohoCRM" id="syncNowBtn" data-testid="button-sync-now" title="Quick sync to pull latest changes from Zoho (recommended after merging duplicates in Zoho)" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -5136,6 +5150,85 @@
                 }
             } catch (e) {
                 console.error('Error loading sync status:', e);
+            }
+        }
+
+        // Phase 4e — Active Zoho connection probe (duplicated from calls.html).
+        //
+        // Hits GET /api/calls/diagnostic/zoho which actively calls
+        // getValidAccessToken() on the server and surfaces the EXACT
+        // error if connection fails. Use when this tab shows no data —
+        // surfaces invalid_client / invalid_grant / wrong datacenter /
+        // rate-limited / network unreachable in plain language.
+        async function runZohoDiagnostic() {
+            const btn = document.getElementById('btn-diagnose-zoho-duplicates');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch('/api/calls/diagnostic/zoho');
+                const data = await res.json();
+                if (!data.success) {
+                    alert(`Zoho diagnostic failed: ${data.error || 'unknown'}`);
+                    return;
+                }
+                const lines = [];
+                lines.push(`DIAGNOSIS: ${data.diagnosis}`);
+                lines.push('');
+                lines.push('--- Environment Secrets ---');
+                lines.push(`  ZOHO_CLIENT_ID:        ${data.env_secrets.ZOHO_CLIENT_ID.present ? `present (length=${data.env_secrets.ZOHO_CLIENT_ID.length})` : 'MISSING'}`);
+                lines.push(`  ZOHO_CLIENT_ID_NEW:    ${data.env_secrets.ZOHO_CLIENT_ID_NEW.present ? `present (length=${data.env_secrets.ZOHO_CLIENT_ID_NEW.length})` : 'not set (optional fallback)'}`);
+                lines.push(`  ZOHO_CLIENT_SECRET:    ${data.env_secrets.ZOHO_CLIENT_SECRET.present ? `present (length=${data.env_secrets.ZOHO_CLIENT_SECRET.length})` : 'MISSING'}`);
+                lines.push(`  ZOHO_REFRESH_TOKEN:    ${data.env_secrets.ZOHO_REFRESH_TOKEN.present ? `present (length=${data.env_secrets.ZOHO_REFRESH_TOKEN.length})` : 'MISSING'}`);
+                lines.push(`  ZOHO_ACCOUNTS_URL:     ${data.env_secrets.ZOHO_ACCOUNTS_URL}`);
+                lines.push(`  ZOHO_API_DOMAIN:       ${data.env_secrets.ZOHO_API_DOMAIN}`);
+                lines.push(`  ZOHO_ACCESS_TOKEN (static): ${data.env_secrets.ZOHO_ACCESS_TOKEN_static.present ? `present (length=${data.env_secrets.ZOHO_ACCESS_TOKEN_static.length})` : 'not set'}`);
+                lines.push('');
+                lines.push('--- Passive State Before Probe ---');
+                lines.push(`  connected: ${data.passive_status_before_probe.connected}`);
+                lines.push(`  tokenCached: ${data.passive_status_before_probe.tokenCached}`);
+                lines.push(`  tokenExpired: ${data.passive_status_before_probe.tokenExpired}`);
+                lines.push(`  message: ${data.passive_status_before_probe.message}`);
+                lines.push('');
+                lines.push('--- Rate Limit Cooldown ---');
+                lines.push(`  rateLimited: ${data.rate_limit_cooldown.rateLimited}`);
+                lines.push(`  cooldownMsRemaining: ${data.rate_limit_cooldown.cooldownMsRemaining}`);
+                lines.push('');
+                lines.push('--- ACTIVE PROBE (real OAuth refresh attempt) ---');
+                if (data.active_probe.ok) {
+                    lines.push(`  ✓ SUCCESS — access token obtained (length=${data.active_probe.tokenLength})`);
+                } else {
+                    lines.push(`  ✗ FAILED`);
+                    lines.push(`  errorClass: ${data.active_probe.errorClass || '(none)'}`);
+                    lines.push(`  errorHttpStatus: ${data.active_probe.errorHttpStatus || '(none)'}`);
+                    lines.push(`  errorMessage: ${data.active_probe.errorMessage || '(none)'}`);
+                    lines.push(`  isZohoRateLimited: ${data.active_probe.isZohoRateLimited}`);
+                }
+                lines.push('');
+                lines.push('--- Passive State After Probe ---');
+                lines.push(`  connected: ${data.passive_status_after_probe.connected}`);
+                lines.push(`  tokenCached: ${data.passive_status_after_probe.tokenCached}`);
+
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center p-4';
+                modal.setAttribute('data-style', 'z-index:60');
+                modal.innerHTML = `
+                    <div class="bg-white rounded-xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h3 class="text-lg font-semibold">Zoho Connection Diagnostic</h3>
+                            <button class="text-gray-400 hover:text-gray-700" data-zoho-diag-close>
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <pre class="px-6 py-4 overflow-auto text-xs font-mono text-gray-800 flex-1"></pre>
+                    </div>`;
+                modal.querySelector('pre').textContent = lines.join('\n');
+                modal.querySelector('[data-zoho-diag-close]').addEventListener('click', () => modal.remove());
+                modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+                document.body.appendChild(modal);
+                console.log('[Zoho Diagnostic]', data);
+            } catch (e) {
+                alert('Zoho diagnostic threw: ' + (e.message || e));
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
 

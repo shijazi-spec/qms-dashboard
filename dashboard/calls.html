@@ -435,16 +435,14 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 5.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                             Diagnose Linking
                         </button>
-                        <!-- Phase 4e: active Zoho connection probe. Different from
-                             Diagnose Linking — that one reads passive state. This
-                             one actually CALLS Zoho's OAuth endpoint and reports
-                             the real error if connection fails (invalid client,
-                             invalid grant, wrong datacenter URL, rate-limited).
-                             Use this when secrets look right but linking fails. -->
-                        <button data-on-click="runZohoDiagnostic" id="btn-diagnose-zoho" class="text-sm bg-rose-100 hover:bg-rose-200 text-rose-900 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="Actively test the Zoho OAuth connection. Reports the real error if credentials are rejected.">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                            Test Zoho
-                        </button>
+                        <!-- Test Zoho button RELOCATED to Duplicate Radar
+                             (dashboard/duplicates.html) per operator request —
+                             that page is the most Zoho-dependent surface and is
+                             where "no data" first signals a broken connection.
+                             The diagnostic endpoint /api/calls/diagnostic/zoho
+                             is unchanged; only the button host moved. The
+                             corresponding runZohoDiagnostic() JS handler was
+                             also removed from this file. -->
                         <button data-on-click="exportCalls" data-args="[&quot;csv&quot;]" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Export CSV</button>
                         <!-- DMAIC Improve: view-mode toggle. "Records" is the
                              flat row-per-call table; "By Phone" consolidates
@@ -2644,86 +2642,10 @@
             }
         }
 
-        // Phase 4e — Active Zoho connection probe.
-        //
-        // Hits GET /api/calls/diagnostic/zoho which actively calls
-        // getValidAccessToken() on the server and surfaces the EXACT
-        // error if it fails (invalid_client / invalid_grant / wrong
-        // datacenter URL / rate-limited / network unreachable).
-        // Different from "Diagnose Linking" which only reads passive
-        // state. Use this one when you've updated the Zoho secrets but
-        // the platform still reports "NOT connected" — this tells you
-        // why in concrete terms instead of just saying "not connected".
-        async function runZohoDiagnostic() {
-            const btn = document.getElementById('btn-diagnose-zoho');
-            if (btn) btn.disabled = true;
-            try {
-                const res = await fetch('/api/calls/diagnostic/zoho');
-                const data = await res.json();
-                if (!data.success) {
-                    alert(`Zoho diagnostic failed: ${data.error || 'unknown'}`);
-                    return;
-                }
-                const lines = [];
-                lines.push(`DIAGNOSIS: ${data.diagnosis}`);
-                lines.push('');
-                lines.push('--- Environment Secrets ---');
-                lines.push(`  ZOHO_CLIENT_ID:        ${data.env_secrets.ZOHO_CLIENT_ID.present ? `present (length=${data.env_secrets.ZOHO_CLIENT_ID.length})` : 'MISSING'}`);
-                lines.push(`  ZOHO_CLIENT_ID_NEW:    ${data.env_secrets.ZOHO_CLIENT_ID_NEW.present ? `present (length=${data.env_secrets.ZOHO_CLIENT_ID_NEW.length})` : 'not set (optional fallback)'}`);
-                lines.push(`  ZOHO_CLIENT_SECRET:    ${data.env_secrets.ZOHO_CLIENT_SECRET.present ? `present (length=${data.env_secrets.ZOHO_CLIENT_SECRET.length})` : 'MISSING'}`);
-                lines.push(`  ZOHO_REFRESH_TOKEN:    ${data.env_secrets.ZOHO_REFRESH_TOKEN.present ? `present (length=${data.env_secrets.ZOHO_REFRESH_TOKEN.length})` : 'MISSING'}`);
-                lines.push(`  ZOHO_ACCOUNTS_URL:     ${data.env_secrets.ZOHO_ACCOUNTS_URL}`);
-                lines.push(`  ZOHO_API_DOMAIN:       ${data.env_secrets.ZOHO_API_DOMAIN}`);
-                lines.push(`  ZOHO_ACCESS_TOKEN (static): ${data.env_secrets.ZOHO_ACCESS_TOKEN_static.present ? `present (length=${data.env_secrets.ZOHO_ACCESS_TOKEN_static.length})` : 'not set'}`);
-                lines.push('');
-                lines.push('--- Passive State Before Probe ---');
-                lines.push(`  connected: ${data.passive_status_before_probe.connected}`);
-                lines.push(`  tokenCached: ${data.passive_status_before_probe.tokenCached}`);
-                lines.push(`  tokenExpired: ${data.passive_status_before_probe.tokenExpired}`);
-                lines.push(`  message: ${data.passive_status_before_probe.message}`);
-                lines.push('');
-                lines.push('--- Rate Limit Cooldown ---');
-                lines.push(`  rateLimited: ${data.rate_limit_cooldown.rateLimited}`);
-                lines.push(`  cooldownMsRemaining: ${data.rate_limit_cooldown.cooldownMsRemaining}`);
-                lines.push('');
-                lines.push('--- ACTIVE PROBE (real OAuth refresh attempt) ---');
-                if (data.active_probe.ok) {
-                    lines.push(`  ✓ SUCCESS — access token obtained (length=${data.active_probe.tokenLength})`);
-                } else {
-                    lines.push(`  ✗ FAILED`);
-                    lines.push(`  errorClass: ${data.active_probe.errorClass || '(none)'}`);
-                    lines.push(`  errorHttpStatus: ${data.active_probe.errorHttpStatus || '(none)'}`);
-                    lines.push(`  errorMessage: ${data.active_probe.errorMessage || '(none)'}`);
-                    lines.push(`  isZohoRateLimited: ${data.active_probe.isZohoRateLimited}`);
-                }
-                lines.push('');
-                lines.push('--- Passive State After Probe ---');
-                lines.push(`  connected: ${data.passive_status_after_probe.connected}`);
-                lines.push(`  tokenCached: ${data.passive_status_after_probe.tokenCached}`);
-
-                const modal = document.createElement('div');
-                modal.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
-                modal.innerHTML = `
-                    <div class="bg-white rounded-xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col">
-                        <div class="px-6 py-4 border-b flex items-center justify-between">
-                            <h3 class="text-lg font-semibold">Zoho Connection Diagnostic</h3>
-                            <button class="text-gray-400 hover:text-gray-700" data-zoho-diag-close>
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                            </button>
-                        </div>
-                        <pre class="px-6 py-4 overflow-auto text-xs font-mono text-gray-800 flex-1"></pre>
-                    </div>`;
-                modal.querySelector('pre').textContent = lines.join('\n');
-                modal.querySelector('[data-zoho-diag-close]').addEventListener('click', () => modal.remove());
-                modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-                document.body.appendChild(modal);
-                console.log('[Zoho Diagnostic]', data);
-            } catch (e) {
-                alert('Zoho diagnostic threw: ' + (e.message || e));
-            } finally {
-                if (btn) btn.disabled = false;
-            }
-        }
+        // (runZohoDiagnostic JS handler was relocated to dashboard/duplicates.html
+        // alongside its "Test Zoho" button — see the matching comment on the
+        // <button> block above. Kept this stub comment so future greps for
+        // "runZohoDiagnostic" on this file find the relocation note.)
 
         // Bulk backfill driver. Loops POST /api/calls/backfill-compliance
         // in chunks of 50 until the server reports no more rows. UI
