@@ -1103,6 +1103,166 @@ export const callIntelligenceRoutes = [
   // reason code. Operator can hit it from the browser console
   // and read off the actual failure mode.
   // ===================================================================
+  // ===================================================================
+  // Phase 4e — Active Zoho connection probe.
+  //
+  // The auto-link diagnostic above reads getZohoConnectionStatus()
+  // which is a PASSIVE check — it only inspects the in-memory token
+  // cache and reports `connected: false` whenever cachedAccessToken
+  // is null. Right after a fresh deploy / process restart the cache is
+  // ALWAYS empty until something triggers the first refresh, so the
+  // diagnostic can say "Zoho NOT connected" even with perfectly valid
+  // credentials. The operator updates their secrets, redeploys, hits
+  // the diagnostic, sees "NOT connected", and concludes the secrets
+  // are wrong when they're actually fine.
+  //
+  // This endpoint actively probes:
+  //   1. Reports which of the 3 env vars are present (length hints so
+  //      formatting issues — extra space, truncated paste — are visible)
+  //   2. Reports the configured Zoho region (accounts URL + API domain)
+  //   3. Reports the current rate-limit cooldown state
+  //   4. ACTIVELY calls getValidAccessToken() and reports:
+  //      - success: token length + expires_in, plus connected: true
+  //      - failure: the exact error message and HTTP status from Zoho
+  //
+  // Admin-only because it surfaces Zoho secrets metadata and forces
+  // a token-refresh attempt (which counts against the per-account
+  // OAuth quota).
+  // ===================================================================
+  {
+    path: "/api/calls/diagnostic/zoho",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+
+          // Env-var presence check. We don't print VALUES — only
+          // presence + length so the operator can spot truncated /
+          // accidentally-quoted pastes (e.g. length=1004 on a refresh
+          // token that should be ~60 chars means someone wrapped it
+          // in quotes inside the secret).
+          const envReport = {
+            ZOHO_CLIENT_ID: {
+              present: !!process.env.ZOHO_CLIENT_ID,
+              length: (process.env.ZOHO_CLIENT_ID || "").length,
+            },
+            ZOHO_CLIENT_ID_NEW: {
+              present: !!process.env.ZOHO_CLIENT_ID_NEW,
+              length: (process.env.ZOHO_CLIENT_ID_NEW || "").length,
+            },
+            ZOHO_CLIENT_SECRET: {
+              present: !!process.env.ZOHO_CLIENT_SECRET,
+              length: (process.env.ZOHO_CLIENT_SECRET || "").length,
+            },
+            ZOHO_REFRESH_TOKEN: {
+              present: !!process.env.ZOHO_REFRESH_TOKEN,
+              length: (process.env.ZOHO_REFRESH_TOKEN || "").length,
+            },
+            ZOHO_ACCOUNTS_URL:
+              process.env.ZOHO_ACCOUNTS_URL || "(default: https://accounts.zoho.com)",
+            ZOHO_API_DOMAIN:
+              process.env.ZOHO_API_DOMAIN || "(default: https://www.zohoapis.com)",
+            ZOHO_ACCESS_TOKEN_static: {
+              present: !!process.env.ZOHO_ACCESS_TOKEN,
+              length: (process.env.ZOHO_ACCESS_TOKEN || "").length,
+            },
+          };
+
+          const {
+            getZohoConnectionStatus,
+            getZohoRateLimitState,
+            getValidAccessToken,
+          } = await import("../../utils/zohoCRM");
+
+          const passiveStatus = getZohoConnectionStatus();
+          const rateLimit = getZohoRateLimitState();
+
+          // Active probe — actually call getValidAccessToken so we
+          // exercise the OAuth refresh path and surface the real error
+          // if it fails. Catches: bad client credentials (HTTP 400
+          // "Invalid client"), bad refresh token (HTTP 400 "Invalid
+          // grant"), wrong datacenter URL (HTTP 404), rate-limited
+          // (cooldown active), network unreachable (TypeError).
+          let activeProbe: any = {
+            attempted: false,
+            ok: false,
+            errorClass: null,
+            errorMessage: null,
+            errorHttpStatus: null,
+            isZohoRateLimited: false,
+            tokenLength: 0,
+          };
+          try {
+            activeProbe.attempted = true;
+            const token = await getValidAccessToken();
+            activeProbe.ok = !!token;
+            activeProbe.tokenLength = (token || "").length;
+          } catch (err: any) {
+            activeProbe.ok = false;
+            activeProbe.errorClass = err?.constructor?.name || "Error";
+            activeProbe.errorMessage = err?.message || String(err);
+            activeProbe.errorHttpStatus = err?.httpStatus || null;
+            activeProbe.isZohoRateLimited = !!err?.isZohoRateLimited;
+          }
+
+          // Re-read passive status AFTER the active probe so the user
+          // can see whether the refresh attempt populated the cache.
+          const passiveStatusAfter = getZohoConnectionStatus();
+
+          // Diagnosis sentence — pick the most actionable explanation.
+          let diagnosis = "Unclear — review the per-field detail below.";
+          if (
+            !envReport.ZOHO_CLIENT_ID.present &&
+            !envReport.ZOHO_CLIENT_ID_NEW.present
+          ) {
+            diagnosis = "ZOHO_CLIENT_ID is NOT set in Replit Secrets. Add it and redeploy.";
+          } else if (!envReport.ZOHO_CLIENT_SECRET.present) {
+            diagnosis = "ZOHO_CLIENT_SECRET is NOT set in Replit Secrets. Add it and redeploy.";
+          } else if (!envReport.ZOHO_REFRESH_TOKEN.present) {
+            diagnosis = "ZOHO_REFRESH_TOKEN is NOT set in Replit Secrets. Generate one in the Zoho API Console and add it.";
+          } else if (activeProbe.isZohoRateLimited) {
+            diagnosis = `Zoho's OAuth endpoint is in cooldown — wait ~${Math.ceil((rateLimit.cooldownMsRemaining || 0) / 1000)}s and try again. (Caused by previous repeated refresh failures.)`;
+          } else if (activeProbe.ok) {
+            diagnosis = "Zoho is connected and the active token refresh just succeeded. If the dashboard still shows 'NOT connected' somewhere, it's caching the pre-probe state — hard-refresh the page.";
+          } else if (activeProbe.errorMessage) {
+            const msg = activeProbe.errorMessage.toLowerCase();
+            if (msg.includes("invalid client") || msg.includes("invalid_client")) {
+              diagnosis = "Zoho rejected the credentials with 'invalid client' — CLIENT_ID and/or CLIENT_SECRET don't match an active OAuth app on the configured datacenter. Verify both in the Zoho API Console.";
+            } else if (msg.includes("invalid grant") || msg.includes("invalid_grant") || msg.includes("invalid code")) {
+              diagnosis = "Zoho rejected the REFRESH_TOKEN with 'invalid grant' — the token has been revoked, expired, or was generated for a different OAuth app / scope. Generate a fresh refresh token in the Zoho API Console and update the secret.";
+            } else if (msg.includes("enotfound") || msg.includes("getaddrinfo") || activeProbe.errorClass === "TypeError") {
+              diagnosis = "Network reach failed — the Zoho accounts URL is unreachable from this server. Confirm ZOHO_ACCOUNTS_URL points at the right datacenter (.com / .eu / .in / .com.au / .sa).";
+            } else if (activeProbe.errorHttpStatus === 404 || msg.includes("404")) {
+              diagnosis = `Zoho returned HTTP 404 — the accounts URL '${envReport.ZOHO_ACCOUNTS_URL}' is wrong for your Zoho region. Try https://accounts.zoho.com (US), .eu (Europe), .in (India), .com.au (AU), or .sa (Saudi).`;
+            } else {
+              diagnosis = `Zoho refresh threw: ${activeProbe.errorMessage}`;
+            }
+          }
+
+          return c.json({
+            success: true,
+            diagnosis,
+            env_secrets: envReport,
+            passive_status_before_probe: passiveStatus,
+            passive_status_after_probe: passiveStatusAfter,
+            rate_limit_cooldown: rateLimit,
+            active_probe: activeProbe,
+          });
+        } catch (error: any) {
+          safeLogger.error("[API] zoho diagnostic failed", {
+            error: error?.message,
+          });
+          return c.json(
+            { success: false, error: error?.message || "Diagnostic failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
   {
     path: "/api/calls/diagnostic/auto-link",
     method: "GET" as const,
