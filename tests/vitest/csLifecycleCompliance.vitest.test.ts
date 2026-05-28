@@ -285,7 +285,11 @@ describe("phase_transition_stalled (info)", () => {
 });
 
 describe("adoption_premature", () => {
-  test("fires when Customer_Since is recent (< 30 days)", () => {
+  // GRQ ops decision: Adoption is the TERMINAL CS phase for new clients,
+  // so a recent Customer_Since is the normal path — not a process breach.
+  // The customer-age signal was removed; only the trial-not-ended signal
+  // remains.
+  test("does NOT fire when Customer_Since is recent (Adoption is terminal)", () => {
     const result = evaluateCsLifecycle({
       raw_data: {
         Phase: "Adoption",
@@ -293,10 +297,9 @@ describe("adoption_premature", () => {
       },
       modified_date: daysAgo(2),
     });
-    const codes = result.violations.map((v) => v.code);
-    expect(codes).toContain("adoption_premature");
-    const v = result.violations.find((x) => x.code === "adoption_premature")!;
-    expect(v.severity).toBe("warning");
+    expect(result.violations.map((v) => v.code)).not.toContain(
+      "adoption_premature",
+    );
   });
 
   test("fires when Trial_End_Date is in the future", () => {
@@ -312,6 +315,8 @@ describe("adoption_premature", () => {
     expect(result.violations.map((v) => v.code)).toContain(
       "adoption_premature",
     );
+    const v = result.violations.find((x) => x.code === "adoption_premature")!;
+    expect(v.severity).toBe("warning");
   });
 
   test("does NOT fire when Customer_Since is old AND no future trial", () => {
@@ -350,7 +355,10 @@ describe("adoption_premature", () => {
     );
   });
 
-  test("threshold configurable via env", () => {
+  test("Customer_Since age no longer influences the rule even with env override", () => {
+    // CS_LIFECYCLE_ADOPTION_MIN_CUSTOMER_AGE_DAYS is intentionally a
+    // no-op after the GRQ ops decision; left here to lock the new
+    // behaviour in case the env var is still set in any deployment.
     process.env.CS_LIFECYCLE_ADOPTION_MIN_CUSTOMER_AGE_DAYS = "90";
     resetCsLifecycleConfigCache();
     const result = evaluateCsLifecycle({
@@ -360,7 +368,7 @@ describe("adoption_premature", () => {
       },
       modified_date: daysAgo(1),
     });
-    expect(result.violations.map((v) => v.code)).toContain(
+    expect(result.violations.map((v) => v.code)).not.toContain(
       "adoption_premature",
     );
   });

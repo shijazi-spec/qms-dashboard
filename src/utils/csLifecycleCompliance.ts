@@ -275,41 +275,27 @@ export function evaluateCsLifecycle(
     });
   }
 
-  // 5. Adoption premature — Phase = Adoption but either (a) the customer was
-  //    created less than `adoptionMinCustomerAgeDays` ago (jumped over the
-  //    Onboarding period) or (b) the trial period has not yet ended.
+  // 5. Adoption premature — Phase = Adoption but the trial period has not
+  //    yet ended (deal flipped to a paying / fully-adopted state while
+  //    still inside a free / evaluation window).
   //
-  //    This is the closest signal-only check we can do without Zoho Stage
-  //    History. Customer_Since and Trial_End_Date are env-mappable and may
-  //    be absent — when both are absent we skip the rule entirely rather
-  //    than fire false positives.
+  //    The earlier customer-age heuristic ("Customer_Since < N days =
+  //    jumped over Onboarding") was removed: in GRQ's CS model Adoption
+  //    is the **terminal** lifecycle phase for new clients, so reaching
+  //    it shortly after sign-up is the normal, healthy path — not a
+  //    process breach. The trial-end check is kept because a deal
+  //    flagged "Adoption" while still inside the trial is a genuine
+  //    billing / state inconsistency regardless of customer age.
   if (phase.toLowerCase() === "adoption") {
-    const customerSince = parseDate(fields.customer_since ?? null);
     const trialEnd = parseDate(fields.trial_end_date ?? null);
-    const reasons: string[] = [];
-
-    if (customerSince) {
-      const ageDays = daysBetween(customerSince, now);
-      if (ageDays < cfg.adoptionMinCustomerAgeDays) {
-        reasons.push(
-          `customer is only ${ageDays}d old (< ${cfg.adoptionMinCustomerAgeDays}d, expected post-Onboarding)`,
-        );
-      }
-    }
     if (trialEnd && trialEnd.getTime() > now.getTime()) {
       const daysRemaining = Math.ceil(
         (trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
       );
-      reasons.push(
-        `trial ends in ${daysRemaining}d (deal moved to Adoption before trial completion)`,
-      );
-    }
-
-    if (reasons.length > 0) {
       violations.push({
         code: "adoption_premature",
         severity: "warning",
-        message: `Adoption phase reached prematurely: ${reasons.join("; ")}.`,
+        message: `Adoption phase reached prematurely: trial ends in ${daysRemaining}d (deal moved to Adoption before trial completion).`,
         days_in_phase: daysSinceModified,
         current_phase: phase,
         suggested_action: SUGGESTED_ACTIONS.adoption_premature,
