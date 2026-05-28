@@ -503,11 +503,11 @@
                             </svg>
                             Run AI Audit
                         </button>
-                        <button data-on-click="exportAuditToPDF" id="exportPdfBtn" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2 shadow transition-all">
+                        <button data-on-click="exportAuditToCSV" id="exportPdfBtn" data-testid="button-export-csv" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium flex items-center gap-2 shadow transition-all">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
-                            Export PDF
+                            Export CSV
                         </button>
                         <button data-on-click="toggleSettingsPanel" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1727,40 +1727,58 @@
             URL.revokeObjectURL(url);
         }
 
-        // PDF Export function
-        async function exportAuditToPDF() {
+        // CSV Export — replaced the prior jsPDF flow, which failed silently when
+        // the (unused) `pdfAudit` reference threw inside computeRecordCountsByModule
+        // and when jspdf-autotable wasn't loaded. CSV needs no external library,
+        // opens cleanly in Excel/Sheets, and surfaces every row instead of being
+        // capped at the first 30 issues the PDF rendered.
+        async function exportAuditToCSV() {
             const btn = document.getElementById('exportPdfBtn');
             const originalContent = btn.innerHTML;
-            
-            // Check if data is available
+
             if (!allDashboardData || !allDashboardData.latestAudit) {
                 alert('No audit data available. Please run an AI Audit first before exporting.');
                 return;
             }
-            
+
             btn.disabled = true;
             btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating...';
             
             try {
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF('p', 'mm', 'a4');
-                const pageWidth = doc.internal.pageSize.getWidth();
-                const margin = 15;
-                let yPos = 20;
-                
-                // Header
-                doc.setFillColor(99, 102, 241);
-                doc.rect(0, 0, pageWidth, 35, 'F');
-                doc.setTextColor(255, 255, 255);
-                doc.setFontSize(22);
-                doc.setFont('helvetica', 'bold');
-                doc.text('WalaPlus Quality Audit Report', margin, 18);
-                doc.setFontSize(10);
-                doc.setFont('helvetica', 'normal');
-                doc.text(`Generated: ${new Date().toLocaleString()}`, margin, 28);
-                
-                // Date range info
-                // Build date filter string for PDF
+                // RFC 4180 CSV escaping — wrap every field in quotes and double
+                // any embedded quotes. Newlines inside quoted fields are valid.
+                const esc = (v) => {
+                    if (v === null || v === undefined) return '""';
+                    const s = String(v).replace(/"/g, '""');
+                    return `"${s}"`;
+                };
+                const row = (cells) => cells.map(esc).join(',');
+
+                const audit = allDashboardData.latestAudit;
+                const overall = parseFloat(audit.overall_score) || 0;
+                const people = parseFloat(audit.people_score) || 0;
+                const process = parseFloat(audit.process_score) || 0;
+                const gov = parseFloat(audit.governance_score) || 0;
+                const records = parseInt(audit.total_records_audited) || 0;
+                const issues = parseInt(audit.total_issues_found) || 0;
+
+                // Compliance rate is computed against unique records-with-issues
+                // (same definition the on-screen card uses) so the CSV matches
+                // what the user sees in the dashboard header.
+                const recordCounts = computeRecordCountsByModule(
+                    audit.raw_audit_data,
+                    audit.issues_by_category,
+                    audit.dimension_details,
+                );
+                const recordsWithIssues = Object.values(recordCounts).reduce(
+                    (s, n) => s + (Number(n) || 0), 0,
+                );
+                let complianceText = '';
+                if (records > 0 && Object.keys(recordCounts).length > 0) {
+                    const clean = Math.max(0, records - recordsWithIssues);
+                    complianceText = ((clean / records) * 100).toFixed(1) + '%';
+                }
+
                 const filterParts = [];
                 if (currentDateFilters.created.start && currentDateFilters.created.end) {
                     filterParts.push(`Created: ${currentDateFilters.created.start} to ${currentDateFilters.created.end}`);
@@ -1769,148 +1787,67 @@
                     filterParts.push(`Modified: ${currentDateFilters.modified.start} to ${currentDateFilters.modified.end}`);
                 }
                 const dateRangeStr = filterParts.length > 0 ? filterParts.join(' | ') : 'All Time';
-                doc.text(`Date Range: ${dateRangeStr}`, pageWidth - margin - 60, 28);
-                
-                yPos = 45;
-                doc.setTextColor(0, 0, 0);
-                
-                // Overall Score Section
-                if (allDashboardData && allDashboardData.latestAudit) {
-                    const audit = allDashboardData.latestAudit;
-                    
-                    doc.setFontSize(14);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text('Executive Summary', margin, yPos);
-                    yPos += 10;
-                    
-                    // Score box
-                    doc.setFillColor(236, 253, 245);
-                    doc.roundedRect(margin, yPos - 5, pageWidth - 2*margin, 25, 3, 3, 'F');
-                    doc.setFontSize(24);
-                    doc.setTextColor(5, 150, 105);
-                    const pdfOverall = parseFloat(audit.overall_score) || 0;
-                    const pdfPeople = parseFloat(audit.people_score) || 0;
-                    const pdfProcess = parseFloat(audit.process_score) || 0;
-                    const pdfGov = parseFloat(audit.governance_score) || 0;
-                    const pdfRecords = parseInt(audit.total_records_audited) || 0;
-                    const pdfIssues = parseInt(audit.total_issues_found) || 0;
 
-                    doc.text(`${pdfOverall.toFixed(1)}%`, margin + 10, yPos + 10);
-                    doc.setFontSize(10);
-                    doc.setTextColor(0, 0, 0);
-                    doc.text('Overall Quality Score', margin + 45, yPos + 5);
-                    doc.text(`People: ${pdfPeople.toFixed(1)}% | Process: ${pdfProcess.toFixed(1)}% | Governance: ${pdfGov.toFixed(1)}%`, margin + 45, yPos + 12);
-                    yPos += 30;
-                    
-                    // Audit Stats
-                    doc.setFontSize(12);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text('Audit Statistics', margin, yPos);
-                    yPos += 7;
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(10);
-                    doc.text(`Records Audited: ${pdfRecords}`, margin, yPos);
-                    doc.text(`Issues Found: ${pdfIssues}`, margin + 60, yPos);
-                    // Use unique records-with-issues so the rate stays in 0-100%.
-                    const pdfRecordCounts = computeRecordCountsByModule(pdfAudit?.raw_audit_data, pdfAudit?.issues_by_category, pdfAudit?.dimension_details);
-                    const pdfRecordsWithIssues = Object.values(pdfRecordCounts).reduce((s, n) => s + (Number(n) || 0), 0);
-                    let pdfComplianceText = '--';
-                    if (pdfRecords > 0 && pdfRecordsWithIssues >= 0 && Object.keys(pdfRecordCounts).length > 0) {
-                        const clean = Math.max(0, pdfRecords - pdfRecordsWithIssues);
-                        pdfComplianceText = ((clean / pdfRecords) * 100).toFixed(1) + '%';
-                    }
-                    doc.text(`Compliance Rate: ${pdfComplianceText}`, margin + 120, yPos);
-                    yPos += 15;
-                }
-                
-                // Issues Table
+                const lines = [];
+                lines.push(row(['WalaPlus Quality Audit Report']));
+                lines.push(row(['Generated', new Date().toLocaleString()]));
+                lines.push(row(['Date Range', dateRangeStr]));
+                lines.push('');
+
+                lines.push(row(['Executive Summary']));
+                lines.push(row(['Metric', 'Value']));
+                lines.push(row(['Overall Quality Score', overall.toFixed(1) + '%']));
+                lines.push(row(['People Score', people.toFixed(1) + '%']));
+                lines.push(row(['Process Score', process.toFixed(1) + '%']));
+                lines.push(row(['Governance Score', gov.toFixed(1) + '%']));
+                lines.push(row(['Records Audited', records]));
+                lines.push(row(['Issues Found', issues]));
+                lines.push(row(['Compliance Rate', complianceText || '--']));
+                lines.push('');
+
                 if (currentIssues && currentIssues.length > 0) {
-                    doc.setFontSize(14);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text('Quality Issues', margin, yPos);
-                    yPos += 5;
-                    
-                    const issueRows = currentIssues.slice(0, 30).map(issue => [
-                        issue.id || '-',
-                        issue.module || '-',
-                        issue.layouts || '-',
-                        issue.products || '-',
-                        (issue.createdBy || '-') + (issue.createdTime ? '\n' + formatDateTime(issue.createdTime) : ''),
-                        issue.owner || '-',
-                        (issue.issue || '').substring(0, 40),
-                        issue.severity || '-'
-                    ]);
-                    
-                    doc.autoTable({
-                        startY: yPos,
-                        head: [['Record ID', 'Module', 'Layouts', 'Products', 'Created By', 'Owner', 'Issue', 'Severity']],
-                        body: issueRows,
-                        theme: 'striped',
-                        headStyles: { fillColor: [99, 102, 241], fontSize: 8 },
-                        bodyStyles: { fontSize: 7 },
-                        columnStyles: {
-                            0: { cellWidth: 18 },
-                            1: { cellWidth: 14 },
-                            2: { cellWidth: 18 },
-                            3: { cellWidth: 18 },
-                            4: { cellWidth: 18 },
-                            5: { cellWidth: 18 },
-                            6: { cellWidth: 40 },
-                            7: { cellWidth: 14 }
-                        },
-                        margin: { left: margin, right: margin }
-                    });
-                    
-                    yPos = doc.lastAutoTable.finalY + 10;
-                }
-                
-                // Agent Performance Section
-                if (currentAgentData && currentAgentData.length > 0 && currentAgentData[0].id !== 'no_data') {
-                    if (yPos > 240) {
-                        doc.addPage();
-                        yPos = 20;
+                    lines.push(row(['Quality Issues']));
+                    lines.push(row(['Record ID', 'Module', 'Layouts', 'Products', 'Created By', 'Created Time', 'Owner', 'Issue', 'Severity']));
+                    for (const issue of currentIssues) {
+                        lines.push(row([
+                            issue.id || '',
+                            issue.module || '',
+                            issue.layouts || '',
+                            issue.products || '',
+                            issue.createdBy || '',
+                            issue.createdTime ? formatDateTime(issue.createdTime) : '',
+                            issue.owner || '',
+                            issue.issue || '',
+                            issue.severity || '',
+                        ]));
                     }
-                    
-                    doc.setFontSize(14);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text('Agent Performance', margin, yPos);
-                    yPos += 5;
-                    
-                    const agentRows = currentAgentData.map(agent => [
-                        agent.name,
-                        agent.team,
-                        `${agent.score}%`,
-                        agent.recordsAudited.toString(),
-                        `C:${agent.issues.critical} H:${agent.issues.high} M:${agent.issues.medium} L:${agent.issues.low}`
-                    ]);
-                    
-                    doc.autoTable({
-                        startY: yPos,
-                        head: [['Agent Name', 'Team', 'Score', 'Records', 'Issues (C/H/M/L)']],
-                        body: agentRows,
-                        theme: 'striped',
-                        headStyles: { fillColor: [16, 185, 129], fontSize: 9 },
-                        bodyStyles: { fontSize: 8 },
-                        margin: { left: margin, right: margin }
-                    });
+                    lines.push('');
                 }
-                
-                // Footer on all pages
-                const pageCount = doc.internal.getNumberOfPages();
-                for (let i = 1; i <= pageCount; i++) {
-                    doc.setPage(i);
-                    doc.setFontSize(8);
-                    doc.setTextColor(150, 150, 150);
-                    doc.text(`WalaPlus Quality Management System - Page ${i} of ${pageCount}`, pageWidth / 2, 290, { align: 'center' });
+
+                if (currentAgentData && currentAgentData.length > 0 && currentAgentData[0].id !== 'no_data') {
+                    lines.push(row(['Agent Performance']));
+                    lines.push(row(['Agent Name', 'Team', 'Score (%)', 'Records Audited', 'Critical', 'High', 'Medium', 'Low']));
+                    for (const agent of currentAgentData) {
+                        lines.push(row([
+                            agent.name,
+                            agent.team,
+                            agent.score,
+                            agent.recordsAudited,
+                            agent.issues.critical,
+                            agent.issues.high,
+                            agent.issues.medium,
+                            agent.issues.low,
+                        ]));
+                    }
                 }
-                
-                // Download the PDF
-                const filename = `WalaPlus_Audit_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-                doc.save(filename);
-                
+
+                // Prefix BOM so Excel opens UTF-8 (Arabic owner names) correctly.
+                const csv = '\uFEFF' + lines.join('\r\n') + '\r\n';
+                const filename = `WalaPlus_Audit_Report_${new Date().toISOString().split('T')[0]}.csv`;
+                downloadFile(csv, filename, 'text/csv;charset=utf-8;');
             } catch (error) {
-                console.error('Error generating PDF:', error);
-                alert('Error generating PDF. Please try again.');
+                console.error('Error generating CSV:', error);
+                alert('Error generating CSV. Please try again.');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalContent;
