@@ -93,9 +93,17 @@ import {
 } from "../../utils/zohoCRM";
 
 import { logger } from "../../utils/logger";
-const SCAN_MAX_PER_MODULE = parseInt(
-  process.env.DUPLICATE_SCAN_LIMIT || "5000",
-);
+// Default to fetching the entire module so duplicate detection reflects the
+// real CRM. Set DUPLICATE_SCAN_LIMIT to a positive integer to re-cap (useful
+// for staging or when Zoho daily-credit budget is tight). An unset, blank,
+// "0", or non-numeric value means "no cap" → fetchAllZohoRecords treats
+// Infinity as "page until Zoho says more_records=false".
+const SCAN_MAX_PER_MODULE = (() => {
+  const raw = process.env.DUPLICATE_SCAN_LIMIT;
+  if (!raw) return Infinity;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : Infinity;
+})();
 
 interface ScanState {
   status: "idle" | "scanning" | "completed" | "failed";
