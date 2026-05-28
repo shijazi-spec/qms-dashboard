@@ -827,7 +827,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/consultant\/alerts\/\d+\/(acknowledge|resolve|dismiss)$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "ai_specialist"],
   },
 
   {
@@ -1339,10 +1339,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   },
 
   // Consultant — alerts/feedback (CONSULTANT_ROLES; stats/trend = AI insiders).
+  // Alerts contain cross-module operational detail (risk scores, PDPL incidents,
+  // AI-ops failures) — restrict reads and mutations to privileged roles only.
   {
     pattern: /^\/api\/consultant\/alerts(\/count)?$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "ai_specialist"],
   },
   {
     pattern: /^\/api\/consultant\/feedback$/,

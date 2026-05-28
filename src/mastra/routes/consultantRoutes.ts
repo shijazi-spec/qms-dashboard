@@ -185,6 +185,12 @@ const CONSULTANT_ROLES: UserRole[] = [
   "custom",
 ];
 
+// Alert endpoints expose cross-module operational data (risk scores, PDPL
+// incidents, AI-ops failures, tool-health incidents) that is not scoped to
+// any individual user or module. Restrict both reads and mutations to roles
+// that legitimately own the full operational picture.
+const ALERT_ADMIN_ROLES: UserRole[] = ["admin", "ai_specialist"];
+
 initAIAlertsTable().catch((err) =>
   safeLogger.error("[ConsultantRoutes] initAIAlertsTable failed", err),
 );
@@ -774,7 +780,7 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = await requireRole(c, CONSULTANT_ROLES);
+          const user = await requireRole(c, ALERT_ADMIN_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const status = c.req.query("status") as AlertStatus | undefined;
@@ -817,7 +823,7 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = await requireRole(c, CONSULTANT_ROLES);
+          const user = await requireRole(c, ALERT_ADMIN_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const count = await getUnreadAlertCount();
@@ -835,7 +841,7 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = await requireRole(c, CONSULTANT_ROLES);
+          const user = await requireRole(c, ALERT_ADMIN_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const id = parseInt(c.req.param("id"));
@@ -860,7 +866,7 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = await requireRole(c, CONSULTANT_ROLES);
+          const user = await requireRole(c, ALERT_ADMIN_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const id = parseInt(c.req.param("id"));
@@ -903,7 +909,7 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = await requireRole(c, CONSULTANT_ROLES);
+          const user = await requireRole(c, ALERT_ADMIN_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const id = parseInt(c.req.param("id"));
