@@ -157,13 +157,19 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
     // Seed two clusters of different pairings, then pin the filter to one
     // pairing so the export must drop the non-matching cluster — proving the
     // export reflects the tab's current view, not the full radar.
-    await page.evaluate(() => {
-      (window as any).crossModuleClusters = [
-        { id: 1, pairing: 'lead_contact', domain: 'alpha.com', company_name: 'Alpha Inc', total_leads: 1, total_contacts: 2, total_accounts: 0, total_deals: 0, total_records: 3, confidence_score: 92, estimated_pipeline_value: 50000 },
-        { id: 2, pairing: 'mixed', domain: 'beta.com', company_name: 'Beta Corp', total_leads: 0, total_contacts: 1, total_accounts: 1, total_deals: 1, total_records: 3, confidence_score: 70, estimated_pipeline_value: 12000 },
-      ];
-      (window as any).crossModuleFilter = 'lead_contact';
-    });
+    // crossModuleClusters / crossModuleFilter are top-level `let` bindings
+    // (the renderer's real data source), not window properties — assign them by
+    // bare name so the exporter reads the same view the table renders.
+    const clusters = [
+      { id: 1, pairing: 'lead_contact', domain: 'alpha.com', company_name: 'Alpha Inc', total_leads: 1, total_contacts: 2, total_accounts: 0, total_deals: 0, total_records: 3, confidence_score: 92, estimated_pipeline_value: 50000 },
+      { id: 2, pairing: 'mixed', domain: 'beta.com', company_name: 'Beta Corp', total_leads: 0, total_contacts: 1, total_accounts: 1, total_deals: 1, total_records: 3, confidence_score: 70, estimated_pipeline_value: 12000 },
+    ];
+    await page.evaluate((seed) => {
+      // @ts-ignore - assign to the page's top-level lexical bindings
+      crossModuleClusters = seed;
+      // @ts-ignore
+      crossModuleFilter = 'lead_contact';
+    }, clusters);
 
     const downloadPromise = page.waitForEvent('download', { timeout: 30_000 });
     await page.evaluate(() => (window as any).exportCrossModule());
