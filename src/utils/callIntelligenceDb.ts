@@ -842,6 +842,83 @@ export async function getCallRecordByCallId(
   return result.rows[0] || null;
 }
 
+// ---------------------------------------------------------------------------
+// List-query column allowlist.
+//
+// ROOT-CAUSE FIX (2026-05-29): the Records tab silently showed
+// "No call records found" even though rows existed. getCallRecords used
+// `SELECT cr.*`, which includes `call_records.audio_blob` — a BYTEA column
+// holding the full recording bytes (up to ~1 MB/row; ~9.5 MB across a
+// typical org). Pulling that for a 500-row list serializes ~10-20 MB of
+// binary into the JSON response, which blows past the dashboard's 20s fetch
+// abort. The `/api/calls` fetch times out, the frontend coerces the failure
+// into an empty array, and the tab renders "0 records" while Overview KPIs
+// (which never touch the blob) still load.
+//
+// The list never needs the audio bytes — the player streams them on demand
+// via /api/calls/:callId/audio. So we SELECT every column EXCEPT audio_blob.
+// Computed once from information_schema (cached per process) so columns added
+// later are picked up automatically and any new heavy column can be excluded
+// in exactly one place, preventing this regression from recurring.
+const CALL_RECORD_LIST_EXCLUDED_COLUMNS = new Set<string>(["audio_blob"]);
+
+// Explicit safe fallback used only if the information_schema lookup returns
+// nothing (e.g. the table genuinely has no columns yet). Intentionally omits
+// audio_blob.
+const CALL_RECORD_LIST_FALLBACK_COLUMNS = [
+  "id",
+  "call_id",
+  "source",
+  "lead_id",
+  "deal_id",
+  "contact_name",
+  "agent_email",
+  "agent_name",
+  "direction",
+  "duration_seconds",
+  "recording_url",
+  "call_date",
+  "status",
+  "metadata",
+  "audio_blob_mime",
+  "audio_blob_size",
+  "audio_file_path",
+  "linked_via",
+  "created_at",
+  "updated_at",
+];
+
+let _callRecordListColumnsCache: string | null = null;
+
+/**
+ * Returns the comma-separated `cr."col"` projection for call_records LIST
+ * queries, with the heavy audio_blob BYTEA excluded. Cached per process.
+ */
+async function getCallRecordListColumns(): Promise<string> {
+  if (_callRecordListColumnsCache) return _callRecordListColumnsCache;
+  let columns: string[] = [];
+  try {
+    const res = await pool.query(
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_name = 'call_records'
+        ORDER BY ordinal_position`,
+    );
+    columns = res.rows
+      .map((r: any) => r.column_name as string)
+      .filter((c) => !CALL_RECORD_LIST_EXCLUDED_COLUMNS.has(c));
+  } catch {
+    columns = [];
+  }
+  if (columns.length === 0) {
+    columns = CALL_RECORD_LIST_FALLBACK_COLUMNS.filter(
+      (c) => !CALL_RECORD_LIST_EXCLUDED_COLUMNS.has(c),
+    );
+  }
+  _callRecordListColumnsCache = columns.map((c) => `cr."${c}"`).join(", ");
+  return _callRecordListColumnsCache;
+}
+
 export async function getCallRecords(
   options: {
     limit?: number;
@@ -927,8 +1004,13 @@ export async function getCallRecords(
   // the manager review settled on. COALESCE picks the manager's
   // adjusted_overall_score when a review exists, else the raw AI score.
   // LATERAL subquery picks the most recent review per evaluation.
+  // SELECT every call_records column EXCEPT the heavy audio_blob BYTEA — see
+  // getCallRecordListColumns() for the full rationale (prevents the Records
+  // tab from timing out on a multi-MB binary payload). Audio is streamed on
+  // demand via /api/calls/:callId/audio, never needed in the list.
+  const listColumns = await getCallRecordListColumns();
   const result = await pool.query(
-    `SELECT cr.*,
+    `SELECT ${listColumns},
             COALESCE(latest_review.adjusted_overall_score, se.overall_score) AS sdr_overall_score,
             se.overall_score AS sdr_ai_overall_score,
             latest_review.adjusted_overall_score AS sdr_adjusted_overall_score,
