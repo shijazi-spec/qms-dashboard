@@ -2124,14 +2124,70 @@
             `).join('') || `<div class="col-span-3 text-center py-8 text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_clusters_found'))}</div>`;
         }
 
+        // Pagination renderer (rewritten 2026-05-30).
+        //
+        // The previous implementation built buttons with
+        //   data-on-click="${callback.name}"
+        // and let the safe-actions delegator dispatch the click. That
+        // shape silently broke for any caller that passed an ARROW
+        // function — JavaScript reports `.name === ""` for arrows, so
+        // the rendered attribute was `data-on-click=""`, the delegator
+        // found no handler, and the Next / Prev buttons did nothing.
+        // Both record-tab pagination call-sites
+        //   renderPagination(type + 'Pagination', page, pages,
+        //                    (p) => loadRecordTab(type, p))
+        // hit exactly this gap, so Next was dead on every Lead / Deal /
+        // Contact / Account duplicates tab.
+        //
+        // Fix: bind the callback directly via addEventListener, no
+        // .name dependency. Works identically whether the caller passes
+        // a named function declaration (loadClusters) or an inline
+        // arrow expression. CSP-clean — listeners attached
+        // programmatically don't violate any inline-handler policy.
         function renderPagination(containerId, currentPage, totalPages, callback) {
             const el = document.getElementById(containerId);
+            if (!el) return;
             if (totalPages <= 1) { el.innerHTML = ''; return; }
-            let html = '';
-            if (currentPage > 0) html += `<button data-on-click="${callback.name}" data-args="[${currentPage-1}]" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm">${escapeHtml(WalaPlusI18n.t('dyn.common.prev_short'))}</button>`;
-            html += `<span class="px-3 py-1 text-sm text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.common.page_x_of_y', { current: _fn(currentPage+1), total: _fn(totalPages) }))}</span>`;
-            if (currentPage < totalPages - 1) html += `<button data-on-click="${callback.name}" data-args="[${currentPage+1}]" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm">${escapeHtml(WalaPlusI18n.t('dyn.common.next_short'))}</button>`;
-            el.innerHTML = html;
+            // Clear via innerHTML so any prior listeners on prior nodes
+            // are GC'd along with the nodes themselves. Then build the
+            // new buttons + status fragment from scratch.
+            el.innerHTML = '';
+
+            const btnClass = 'px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm';
+
+            if (currentPage > 0) {
+                const prevBtn = document.createElement('button');
+                prevBtn.type = 'button';
+                prevBtn.className = btnClass;
+                prevBtn.textContent = WalaPlusI18n.t('dyn.common.prev_short');
+                const prevPage = currentPage - 1;
+                prevBtn.addEventListener('click', () => {
+                    try { callback(prevPage); }
+                    catch (e) { console.error('[renderPagination] prev callback threw:', e); }
+                });
+                el.appendChild(prevBtn);
+            }
+
+            const status = document.createElement('span');
+            status.className = 'px-3 py-1 text-sm text-gray-500';
+            status.textContent = WalaPlusI18n.t('dyn.common.page_x_of_y', {
+                current: _fn(currentPage + 1),
+                total: _fn(totalPages),
+            });
+            el.appendChild(status);
+
+            if (currentPage < totalPages - 1) {
+                const nextBtn = document.createElement('button');
+                nextBtn.type = 'button';
+                nextBtn.className = btnClass;
+                nextBtn.textContent = WalaPlusI18n.t('dyn.common.next_short');
+                const nextPage = currentPage + 1;
+                nextBtn.addEventListener('click', () => {
+                    try { callback(nextPage); }
+                    catch (e) { console.error('[renderPagination] next callback threw:', e); }
+                });
+                el.appendChild(nextBtn);
+            }
         }
 
         // C4: Paginated record tabs (50/page)
