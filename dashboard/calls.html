@@ -1901,12 +1901,19 @@
             // colour follows the currently-selected status; on change the
             // handler re-renders the row and the colour updates with it.
             // data-pass-event=true so the handler can read event.target.value.
+            // data-prev-value lets changeCallStatus revert the <select> to
+            // its pre-change value if the POST fails (rate-limited, auth,
+            // server error) — without it the dropdown would visually
+            // stick on a value the server never accepted, and the next
+            // refreshData() would silently flip it back, confusing the
+            // operator.
             return `
                 <select
                     class="px-2 py-1 text-xs rounded-full font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-300 ${info.cls}"
                     data-on-change="changeCallStatus"
                     data-args="[${call.id}]"
                     data-pass-event="true"
+                    data-prev-value="${status}"
                     data-testid="select-status-${call.id}"
                     title="Change call status — audited"
                 >${opts}</select>`;
@@ -1953,6 +1960,10 @@
                 // immediately after the override.
                 const cached = (callRecords || []).find((r) => r.id === callId);
                 if (cached) cached.status = requested;
+                // Advance data-prev-value so the NEXT change rolls back to
+                // the value we just successfully wrote, not the one this
+                // row was rendered with.
+                sel.setAttribute('data-prev-value', requested);
                 renderCallsTable();
                 await refreshData();
             } catch (e) {
