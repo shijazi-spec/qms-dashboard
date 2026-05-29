@@ -3640,65 +3640,31 @@
             } else if (call.lead_id) {
                 directUrl = `https://crm.zoho.com/crm/org766568398/tab/Leads/${encodeURIComponent(call.lead_id)}`;
             }
-            // When nothing is linked, still expose the manual re-link
-            // button — managers can rerun the matcher once the lead/deal
-            // exists in CRM, or use the search URL to find it themselves.
-            const relinkBtn = (!call.lead_id && !call.deal_id)
-                ? `<button data-on-click="autoLinkCall" data-args="[${call.id}]" class="text-[10px] text-amber-600 hover:text-amber-800 underline" title="Re-run phone + activity matcher against Zoho">Link</button>`
-                : '';
+            // Per-row "Link" button removed 2026-05-29 per operator
+            // request — the dual-control (badge + Link) was confusing
+            // ("does the badge already try to link? what does Link add?").
+            // Final UX:
+            //   - Linked rows show a Lead / Deal badge that opens the
+            //     bound Zoho record directly.
+            //   - Unlinked rows show a generic "CRM" badge that opens
+            //     Zoho's global phone search so the operator can find
+            //     (and manually link) the right record themselves.
+            //   - Bulk re-linking is one click away via the "Audit CRM
+            //     Links" button in the Records-tab toolbar (which calls
+            //     POST /api/calls/audit-crm-links — same backend the
+            //     per-row Link button used to drive).
             return `
-                <div class="inline-flex flex-col items-center gap-1">
-                    <a href="${directUrl}" target="_blank" rel="noopener" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${tagClasses}" title="${tagTitle}">${tagLabel}</a>
-                    ${relinkBtn ? `<div class="flex items-center gap-1.5">${relinkBtn}</div>` : ''}
-                </div>`;
+                <a href="${directUrl}" target="_blank" rel="noopener" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${tagClasses}" title="${tagTitle}">${tagLabel}</a>`;
         }
 
-        // Manually re-run the phone-based auto-link on an existing call. Used
-        // for backfilling calls ingested before the auto-link feature shipped
-        // or for retrying when Zoho was unreachable at ingest time.
-        async function autoLinkCall(callId) {
-            try {
-                const res = await fetch(`/api/calls/${callId}/auto-link`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                });
-                const data = await res.json();
-                if (data.linked) {
-                    const via = data.linked_via === 'activity'
-                        ? '\n\nMatched via same-day same-agent activity (not phone) — verify in CRM.'
-                        : '';
-                    alert(`Linked to ${data.picked_module}: ${data.picked_match?.display_name || data.lead_id || data.deal_id}${via}`);
-                    await loadCalls();
-                } else if (data.reason === 'already_linked') {
-                    alert('This call is already linked.');
-                    await loadCalls();
-                } else if (data.reason === 'ambiguous') {
-                    alert(`Multiple matches (${data.matches_count}) — needs manual review.\nOpen the call detail to pick the right Lead/Deal.`);
-                } else if (data.reason === 'no_match') {
-                    // Surface the actual phone we tried + how many records we
-                    // scanned, so the operator can verify the call's phone is
-                    // present in Zoho (and report a phone-normalization gap
-                    // when it is and the linker still missed it).
-                    const ap = data.attempted_phone ? `\n• Tried phone: ${data.attempted_phone}` : '';
-                    const sc = (typeof data.scanned === 'number') ? `\n• Scanned ${data.scanned} Zoho record(s)` : '';
-                    alert(`No Lead/Deal matched the call.${ap}${sc}\n• No same-day CRM activity by this agent\nUse the "CRM" badge to search Zoho manually.`);
-                } else if (data.reason === 'no_zoho') {
-                    alert('Zoho CRM is not connected.');
-                } else if (data.reason === 'no_phone') {
-                    alert('Call has no phone number AND no same-day agent activity in CRM. Nothing to match against.');
-                } else if (data.reason === 'persist_failed') {
-                    alert('Linker found a match but couldn\'t persist the link. Check server logs for the DB error.');
-                } else if (data.reason === 'exception') {
-                    alert(`Link failed with an exception:\n${data.error || 'unknown'}`);
-                } else {
-                    // Include the full response so we can diagnose any new
-                    // reason value that doesn't yet have a UI branch.
-                    alert(`Link failed: ${data.reason || 'unknown'}\n\nFull response:\n${JSON.stringify(data, null, 2)}`);
-                }
-            } catch (e) {
-                alert('Link failed: ' + (e.message || e));
-            }
-        }
+        // autoLinkCall() handler retired 2026-05-29 along with the
+        // per-row "Link" button (see renderCrmLinkCell). The underlying
+        // POST /api/calls/:id/auto-link endpoint is preserved on disk so
+        // the bulk "Audit CRM Links" sweep + future scripts can still
+        // call it. Operators who need to re-link a single row now use
+        // either the "Audit CRM Links" toolbar button (sweeps every
+        // mismatch in one click) or open the call's CRM badge → Zoho's
+        // global phone search → manual link from there.
 
         // (showActivityTimeline / closeActivityTimeline / renderActivityTimeline
         //  removed — DMAIC Improve replaced the standalone modal with the
