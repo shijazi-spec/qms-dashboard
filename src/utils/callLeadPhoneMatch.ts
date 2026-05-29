@@ -1,4 +1,9 @@
-import { fetchAllZohoRecords, type ZohoCRMRecord } from "./zohoCRM";
+import {
+  fetchAllZohoRecords,
+  searchZohoRecords,
+  searchZohoRecordsByWord,
+  type ZohoCRMRecord,
+} from "./zohoCRM";
 import { normalizePhoneDigits } from "./callMcpReconciliation";
 import {
   CRM_PHONE_MATCH_SCOPE,
@@ -10,10 +15,32 @@ export { CRM_PHONE_MATCH_SCOPE, CRM_PHONE_MATCH_SCOPE_DESCRIPTION };
 export interface AutoLinkLeadResult {
   linked: boolean;
   lead_id: string | null;
+  // 2026-05-29: also surface a deal_id when the auto-linker walks
+  // through a Contact and finds the Deal it belongs to (the common
+  // post-conversion case where the original Lead is gone from Zoho).
+  deal_id?: string | null;
+  // Which Zoho module the linker actually matched against. "Leads" is
+  // the original path; "Deals_via_Contact" is the new fallback.
+  matched_via?: "Leads" | "Deals_via_Contact";
   matches_count: number;
   scanned: number;
-  reason: "linked" | "no_phone" | "no_match" | "ambiguous" | "already_linked" | "no_zoho" | "persist_failed";
+  reason:
+    | "linked"
+    | "no_phone"
+    | "no_match"
+    | "ambiguous"
+    | "already_linked"
+    | "no_zoho"
+    | "persist_failed";
   match?: LeadPhoneMatch;
+  // When matched via the Contact → Deal fallback, expose the underlying
+  // Contact id/name so the operator can see WHY this Deal was picked.
+  contact_match?: {
+    id: string;
+    full_name?: string;
+    phone?: string;
+    email?: string;
+  };
   attempted_phone?: string;
 }
 
@@ -183,7 +210,18 @@ export async function autoLinkLeadByPhone(
   callRecordId: number,
   phoneCandidates: Array<string | undefined | null>,
   persistLeadId: (callRecordId: number, leadId: string) => Promise<unknown>,
-  options: { maxRecords?: number } = {},
+  options: {
+    maxRecords?: number;
+    // 2026-05-29: optional Deal persister + linked_via setter so the
+    // matcher can record a Contact → Deal fallback link. When omitted,
+    // the matcher reverts to the legacy Leads-only behaviour so existing
+    // callers (e.g. tests) keep their original semantics.
+    persistDealId?: (callRecordId: number, dealId: string) => Promise<unknown>;
+    persistLinkedVia?: (
+      callRecordId: number,
+      via: "phone" | "phone_via_contact",
+    ) => Promise<unknown>;
+  } = {},
 ): Promise<AutoLinkLeadResult> {
   const phones = (phoneCandidates || []).filter(
     (p): p is string => typeof p === "string" && p.trim().length > 0,
@@ -227,6 +265,9 @@ export async function autoLinkLeadByPhone(
       const match = result.matches[0];
       try {
         await persistLeadId(callRecordId, match.id);
+        if (options.persistLinkedVia) {
+          await options.persistLinkedVia(callRecordId, "phone").catch(() => undefined);
+        }
       } catch {
         // Distinct reason so callers can distinguish "found-but-DB-failed"
         // from "no-match-found"; lead_id is surfaced for diagnostics.
@@ -238,6 +279,7 @@ export async function autoLinkLeadByPhone(
           reason: "persist_failed",
           match,
           attempted_phone: phone,
+          matched_via: "Leads",
         };
       }
       return {
@@ -248,6 +290,7 @@ export async function autoLinkLeadByPhone(
         reason: "linked",
         match,
         attempted_phone: phone,
+        matched_via: "Leads",
       };
     }
     if (result.matches.length > 1 && !ambiguousFallback) {
@@ -260,7 +303,133 @@ export async function autoLinkLeadByPhone(
         scanned: result.scanned,
         reason: "ambiguous",
         attempted_phone: phone,
+        matched_via: "Leads",
       };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Contact → Deal fallback (2026-05-29).
+  //
+  // The Leads-only matcher misses every call whose Lead has already
+  // been converted in Zoho. Conversion moves the phone from Leads to
+  // Contact + Deal + Account and removes the Lead row from the Leads
+  // module entirely, so the historical scan returns 0 matches and the
+  // call shows "Auto-link could not match this call to any Zoho Lead/
+  // Deal (no_match)" — even though the same phone number is alive on
+  // the converted Deal.
+  //
+  // Strategy: only run this fallback when a deal persister is supplied
+  // (so legacy callers stay on the old behaviour), and only when the
+  // Leads pass returned a no-match (not ambiguous and not a zoho-cred
+  // failure). For each phone candidate, ask Zoho's word-search index
+  // for Contacts whose phone field matches, filter to those whose
+  // normalised phone truly overlaps by MIN_PHONE_OVERLAP_DIGITS, then
+  // look up the Deals related to each matching Contact via the
+  // structured criteria search `(Contact_Name:equals:<contactId>)`.
+  //
+  // If exactly one Deal is found, link the call to it. Multiple Deals
+  // for the same Contact → ambiguous (the operator picks via the
+  // existing Search CRM by phone widget in the call-details modal).
+  //
+  // Cost: at most one word search + one criteria search per phone
+  // candidate per Contact. Word search is the indexed Zoho global
+  // lookup the UI uses, so it's much cheaper than the bulk
+  // fetchAllZohoRecords scan the Leads path performs.
+  if (options.persistDealId && !ambiguousFallback) {
+    for (const phone of phones) {
+      const normalized = normalizePhoneDigits(phone);
+      if (!normalized || normalized.length < MIN_PHONE_OVERLAP_DIGITS) continue;
+      let contactsRaw: ZohoCRMRecord[] = [];
+      try {
+        contactsRaw = await searchZohoRecordsByWord("Contacts", normalized);
+      } catch {
+        continue;
+      }
+      // Word search is fuzzy — verify the phone actually overlaps so
+      // we don't link a call to a Contact whose name *coincidentally*
+      // contains the digits (unlikely but possible in transliterated
+      // Arabic names with digits).
+      const realContactMatches = contactsRaw.filter((c) =>
+        phonesShareSubscriberNumber(readPhone(c), normalized),
+      );
+      if (realContactMatches.length === 0) continue;
+
+      // Iterate Contact matches; first to resolve to exactly one Deal wins.
+      // If every contact has 0 or multiple deals, defer to ambiguous /
+      // no_match below.
+      let dealAmbig: AutoLinkLeadResult | null = null;
+      for (const c of realContactMatches) {
+        let deals: ZohoCRMRecord[] = [];
+        try {
+          deals = await searchZohoRecords(
+            "Deals",
+            `(Contact_Name:equals:${c.id})`,
+          );
+        } catch {
+          continue;
+        }
+        if (deals.length === 1) {
+          const dealId = deals[0].id;
+          const cData = c.data || {};
+          const contactSummary = {
+            id: c.id,
+            full_name:
+              (typeof cData.Full_Name === "object"
+                ? cData.Full_Name?.name
+                : cData.Full_Name) || cData.Last_Name || undefined,
+            phone: readPhone(c),
+            email:
+              typeof cData.Email === "object"
+                ? cData.Email?.name
+                : cData.Email,
+          };
+          try {
+            await options.persistDealId(callRecordId, dealId);
+            if (options.persistLinkedVia) {
+              await options
+                .persistLinkedVia(callRecordId, "phone_via_contact")
+                .catch(() => undefined);
+            }
+          } catch {
+            return {
+              linked: false,
+              lead_id: null,
+              deal_id: dealId,
+              matches_count: 1,
+              scanned: lastResult?.scanned ?? 0,
+              reason: "persist_failed",
+              attempted_phone: phone,
+              matched_via: "Deals_via_Contact",
+              contact_match: contactSummary,
+            };
+          }
+          return {
+            linked: true,
+            lead_id: null,
+            deal_id: dealId,
+            matches_count: 1,
+            scanned: lastResult?.scanned ?? 0,
+            reason: "linked",
+            attempted_phone: phone,
+            matched_via: "Deals_via_Contact",
+            contact_match: contactSummary,
+          };
+        }
+        if (deals.length > 1 && !dealAmbig) {
+          dealAmbig = {
+            linked: false,
+            lead_id: null,
+            deal_id: null,
+            matches_count: deals.length,
+            scanned: lastResult?.scanned ?? 0,
+            reason: "ambiguous",
+            attempted_phone: phone,
+            matched_via: "Deals_via_Contact",
+          };
+        }
+      }
+      if (dealAmbig) return dealAmbig;
     }
   }
 

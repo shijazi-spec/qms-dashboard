@@ -6349,11 +6349,24 @@ ${transcriptText}
           const candidates = overridePhone
             ? [overridePhone]
             : extractCallPhoneCandidates(record);
+          // Pass the deal-id and linked-via persisters so the matcher
+          // can walk through Contacts → Deals when the original Lead has
+          // already been converted in Zoho. Without these options the
+          // matcher reverts to the legacy Leads-only behaviour, so older
+          // tests + callers keep their original semantics.
+          const { updateCallRecordDealId, updateCallRecordLinkedVia } =
+            await import("../../utils/callIntelligenceDb");
           const result = await autoLinkLeadByPhone(
             id,
             candidates,
             (cid, leadId) => updateCallRecordLeadId(cid, leadId),
-            { maxRecords },
+            {
+              maxRecords,
+              persistDealId: (cid, dealId) =>
+                updateCallRecordDealId(cid, dealId),
+              persistLinkedVia: (cid, via) =>
+                updateCallRecordLinkedVia(cid, via),
+            },
           );
           // Auto-trigger compliance check on freshly linked calls so
           // the Compliance Rate KPI updates without a manual run.

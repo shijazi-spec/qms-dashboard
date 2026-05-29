@@ -766,9 +766,15 @@ async function ensureLinkedViaColumn(): Promise<void> {
   return _linkedViaColumnReady;
 }
 
+// Widened 2026-05-29 to include "phone_via_contact" — the Contact → Deal
+// fallback walk added in callLeadPhoneMatch.autoLinkLeadByPhone. The DB
+// column is VARCHAR(20) so any short tag fits; the union is the canonical
+// list of supported tags. Adding a new tag here requires adding it to the
+// CALL_STATUS_INFO / linked-via tooltip rendering on the dashboard side
+// for parity, but the DB write is safe regardless.
 export async function updateCallRecordLinkedVia(
   id: number,
-  linkedVia: "phone" | "activity",
+  linkedVia: "phone" | "activity" | "phone_via_contact",
 ): Promise<void> {
   await ensureLinkedViaColumn();
   await pool.query(
