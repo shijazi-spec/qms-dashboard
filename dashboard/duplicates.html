@@ -4274,12 +4274,13 @@
 
         // ─── Client-side CSV export ──────────────────────────────────────────
         // Tabs whose rows are fully loaded + sorted in the browser (CS Lifecycle,
-        // CS Overlap, Account Hints) export exactly what's on screen — same rows,
-        // same columns, same applied sort order and status/verdict filter — rather
-        // than the server's generic full-radar duplicate dump. The module tabs
-        // (Leads/Deals/Contacts/Accounts/Cross-Module) stay on the streaming
-        // server export because they're server-paginated, so "the data in the
-        // tab" is the full per-type set the server already returns.
+        // CS Overlap, Account Hints, Cross-Module) export exactly what's on
+        // screen — same rows, same columns, same applied sort order and
+        // status/verdict/pairing filter — rather than the server's generic
+        // full-radar duplicate dump. The server-paginated module tabs
+        // (Leads/Deals/Contacts/Accounts) stay on the streaming server export
+        // because "the data in the tab" is the full per-type set the server
+        // already returns (exporting only the visible page would be worse).
         function csvCell(v) {
             let s = (v === null || v === undefined) ? '' : String(v);
             // CSV-injection hardening: a leading = + - @ can be run as a formula
