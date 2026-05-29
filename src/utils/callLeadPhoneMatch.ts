@@ -101,7 +101,16 @@ export function phonesShareSubscriberNumber(a: string, b: string): boolean {
   const x = normalizePhoneDigits(a || "");
   const y = normalizePhoneDigits(b || "");
   if (!x || !y) return false;
-  if (x === y) return true;
+  // Exact-equality match must clear the 9-digit floor too — without this
+  // gate, two short junk values that agree (Lead Phone="11" matched to a
+  // call whose extracted phone normalised to the same "11", or any other
+  // sub-9-digit duplicate) pass through as a false positive. Historical
+  // root cause of "+966505896511" linking to a Junk Lead whose Phone was
+  // literally "11" — the suffix branch below correctly rejected the
+  // match (2 < 9), but the equality branch inherited no floor and let it
+  // through. Closed 2026-05-29 in lockstep with the audit sweep at
+  // POST /api/calls/audit-crm-links which cleans up the stale survivors.
+  if (x === y && x.length >= MIN_PHONE_OVERLAP_DIGITS) return true;
   // A suffix match only counts when the SHORTER side (the actual overlap
   // length) is ≥ the floor. Anything shorter is data noise.
   if (x.endsWith(y) && y.length >= MIN_PHONE_OVERLAP_DIGITS) return true;

@@ -38,6 +38,20 @@ describe("phonesShareSubscriberNumber", () => {
   test("exact normalized equality matches", () => {
     expect(phonesShareSubscriberNumber("505896511", "505896511")).toBe(true);
   });
+  test("equal junk values shorter than the floor do NOT match", () => {
+    // Regression for the 2026-05-29 root-cause fix on the equality branch.
+    // Both sides normalise to the same short value (e.g. Lead Phone="11"
+    // and a call whose metadata only carries "11") and the original
+    // `if (x === y) return true` bypassed the 9-digit floor. The historic
+    // false-positive ("+966505896511" linked to a Junk Lead with Phone="11")
+    // survives only because the bypass let exact-equality through. With
+    // the floor now applied symmetrically, two-of-a-kind junk fails:
+    expect(phonesShareSubscriberNumber("11", "11")).toBe(false);
+    expect(phonesShareSubscriberNumber("123", "123")).toBe(false);
+    expect(phonesShareSubscriberNumber("12345678", "12345678")).toBe(false); // 8 < 9
+    // Exactly at the floor (9 digits) DOES still match — full subscriber.
+    expect(phonesShareSubscriberNumber("505896511", "505896511")).toBe(true);
+  });
   test("an 8-digit overlap is below the floor and does NOT match", () => {
     // Share only the last 8 digits (05896511) — one short of the floor.
     expect(phonesShareSubscriberNumber("966105896511", "966205896511")).toBe(
