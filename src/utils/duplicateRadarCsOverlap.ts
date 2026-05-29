@@ -339,6 +339,33 @@ export function extractCsFieldsFromRawData(
     return null;
   };
 
+  /**
+   * Fuzzy fallback (2026-05-30): when the exact + normalised passes
+   * above can't find the field, walk every raw_data key and match
+   * any whose normalised form CONTAINS one of the substrings. Used
+   * for fields whose Zoho API name varies enough across tenants that
+   * a fixed candidate list misses them — operator's CS section field
+   * "ExtID (Admin)" is one such field; depending on tenant it could
+   * be "ExtID", "Ext_ID", "ExtID_Admin", "ExtIDAdmin1", "External_ID_2",
+   * or any other variant. Substring containment means any of those
+   * lands the same value, while still avoiding accidental matches on
+   * obviously-unrelated fields ("Connection_ID" doesn't contain
+   * "extid" so it's safely ignored).
+   *
+   * Returns the FIRST non-empty value in iteration order over keys.
+   * Iteration order in modern engines matches insertion order, which
+   * for Zoho responses follows the layout order — close enough to
+   * "the field the operator means" in practice.
+   */
+  const tryKeysFuzzyContains = (substrs: string[]): unknown => {
+    const needles = substrs.map(norm).filter((s) => s.length > 0);
+    if (needles.length === 0) return null;
+    for (const [normKey, value] of normalizedKeyIndex) {
+      if (needles.some((n) => normKey.includes(n))) return value;
+    }
+    return null;
+  };
+
   const phaseRaw = tryKeys(
     envOr("DUPLICATE_RADAR_FIELD_PHASE", [
       "Phase",
@@ -459,21 +486,32 @@ export function extractCsFieldsFromRawData(
     ]),
   );
 
-  // ExtID (Admin) — Zoho custom field that operators use as an internal
-  // reference key. Default candidates cover the API name + a few common
-  // spellings; DUPLICATE_RADAR_FIELD_EXT_ID env var pins the exact API
-  // name if the tenant's layout disagrees with the defaults. Mirrors the
-  // pattern already used for Health, Company_Domain, etc.
-  const extIdRaw = tryKeysOrNormalized(
-    envOr("DUPLICATE_RADAR_FIELD_EXT_ID", [
-      "ExtID",
-      "Ext_ID",
-      "ExtID_Admin",
-      "Ext_ID_Admin",
-      "External_ID",
-      "External_Id",
-    ]),
-  );
+  // ExtID (Admin) — Zoho custom field operators use as an internal
+  // reference key (lives in the same Customer Success section as
+  // Health). Three-step lookup so the operator never has to hunt for
+  // the API name:
+  //   1. tryKeysOrNormalized against the documented candidates.
+  //   2. Fuzzy CONTAINS pass against every raw_data key — picks up
+  //      any tenant-specific spelling like "ExtIDAdmin1" or
+  //      "Ext_ID__Admin" without manual env-var configuration.
+  //   3. DUPLICATE_RADAR_FIELD_EXT_ID env var still overrides
+  //      everything for the rare case where the fuzzy pass picks
+  //      a wrong field with a colliding substring.
+  const extIdEnv = process.env.DUPLICATE_RADAR_FIELD_EXT_ID;
+  const extIdRaw = extIdEnv && extIdEnv.trim()
+    ? tryKeysOrNormalized([extIdEnv.trim()])
+    : tryKeysOrNormalized([
+        "ExtID",
+        "Ext_ID",
+        "ExtID_Admin",
+        "Ext_ID_Admin",
+        "External_ID",
+        "External_Id",
+      ]) ??
+      // Fuzzy fallback: any raw_data key whose normalised form
+      // contains "extid". Catches custom-field permutations that
+      // a fixed candidate list will always miss eventually.
+      tryKeysFuzzyContains(["ExtID", "External_ID"]);
 
   const arrNum =
     arrRaw == null
