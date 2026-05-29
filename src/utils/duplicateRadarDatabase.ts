@@ -4869,11 +4869,26 @@ export async function scanCsLifecycleViolations(opts: {
     for (const v of ev.violations) {
       if (opts.severity && v.severity !== opts.severity) continue;
       if (opts.code && v.code !== opts.code) continue;
+      // 2026-05-30 — operator request: the "Account" column on the CS
+      // Lifecycle tab must be sourced from the Customer Success section's
+      // Company custom field (the field the CS team curates) rather
+      // than the Deal's standard Account_Name lookup that duplicate_records
+      // .account_name was populated from at sync time. The two fields
+      // are normally aligned, but if a CS team renames a customer in the
+      // CS section without touching the top-level Account_Name lookup
+      // the dashboard otherwise drifts from the CRM's CS view. Fall back
+      // to the legacy Account_Name when the CS Company field is empty so
+      // legacy data still shows something useful.
+      const csAccountName =
+        (detail.cs_company && detail.cs_company.trim()) ||
+        row.account_name ||
+        null;
+
       violations.push({
         record_id: row.id,
         cluster_id: row.cluster_id ?? null,
         zoho_record_id: row.zoho_record_id ?? null,
-        account_name: row.account_name ?? null,
+        account_name: csAccountName,
         domain: row.domain ?? null,
         current_phase: ev.current_phase,
         days_since_modified: ev.days_since_modified,

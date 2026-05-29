@@ -297,6 +297,9 @@ export function extractCsFieldsFromRawData(
   // ExtID (Admin) — Zoho custom field surfaced in the CS Lifecycle tab.
   // Optional so legacy callers don't have to destructure it.
   ext_id?: string | null;
+  // Customer Success → Company field. Source of truth for the CS
+  // Lifecycle Account column (see scanCsLifecycleViolations).
+  cs_company?: string | null;
 } {
   if (!rawData || typeof rawData !== "object") {
     return { domain: context.domain ?? null };
@@ -486,6 +489,34 @@ export function extractCsFieldsFromRawData(
     ]),
   );
 
+  // Customer Success → Company field (2026-05-30). Operator wants the
+  // CS Lifecycle "Account" column sourced from THIS custom field rather
+  // than the Deal's standard Account_Name lookup. Without this, the
+  // column inherits Account_Name (which is what duplicate_records.
+  // account_name is populated from at sync time), and if the CS team
+  // renames the company in the CS section without touching the Deal's
+  // top-level lookup the dashboard drifts from the CRM's CS view.
+  //
+  // Lookup is two-step (no fuzzy fallback): exact + normalised against
+  // the candidates, then env-var override. Fuzzy CONTAINS pass is
+  // deliberately skipped because "company" is too generic a substring
+  // — accidentally matching Account_Name.name (when raw_data exposes
+  // the lookup as nested keys) or some unrelated "Company_Type" field
+  // is the kind of false positive a fuzzy pass would silently
+  // introduce. If a tenant's field name doesn't hit the candidate
+  // list, DUPLICATE_RADAR_FIELD_CS_COMPANY pins it.
+  const csCompanyEnv = process.env.DUPLICATE_RADAR_FIELD_CS_COMPANY;
+  const csCompanyRaw = csCompanyEnv && csCompanyEnv.trim()
+    ? tryKeysOrNormalized([csCompanyEnv.trim()])
+    : tryKeysOrNormalized([
+        "Company1",            // Zoho's common auto-suffix when "Company" already exists on the layout
+        "Company",
+        "CS_Company",
+        "Customer_Company",
+        "Customer_Success_Company",
+        "CS_Company_Name",
+      ]);
+
   // ExtID (Admin) — Zoho custom field operators use as an internal
   // reference key (lives in the same Customer Success section as
   // Health). Three-step lookup so the operator never has to hunt for
@@ -544,6 +575,12 @@ export function extractCsFieldsFromRawData(
       csOwnerName == null ? null : csOwnerName.trim() || null,
     health: healthRaw == null ? null : String(healthRaw).trim() || null,
     ext_id: extIdRaw == null ? null : String(extIdRaw).trim() || null,
+    cs_company:
+      csCompanyRaw == null
+        ? null
+        : typeof csCompanyRaw === "object" && (csCompanyRaw as any)?.name
+          ? String((csCompanyRaw as any).name).trim() || null
+          : String(csCompanyRaw).trim() || null,
   };
 }
 
