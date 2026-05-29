@@ -427,12 +427,21 @@ export const consultantRoutes = [
                         threadId: resolvedThreadId,
                       },
                       () =>
-                        // generateLegacy() is required because the Consultant
-                        // agent uses an AI SDK v4 model (openai.chat:gpt-4o);
-                        // Mastra's newer .generate() routes through .stream()
-                        // and rejects v4 models at runtime. Mirrors the
-                        // streamLegacy() call in the SSE path below.
-                        agent.generateLegacy(message, {
+                        // AI-SDK model-class precedence (revised 2026-05-29):
+                        // the OpenAI provider now hands Mastra a V2 LanguageModel
+                        // class (V1 was the legacy AI SDK v4 shape). Calling
+                        // .generateLegacy() against a V2 model throws:
+                        //   "V2 models are not supported for generateLegacy.
+                        //    Please use generate instead."
+                        // Older comment claimed the inverse (Mastra's .generate
+                        // rejects v4 models) — that was true at one point but
+                        // has since flipped with the AI-SDK upgrade. We use
+                        // .generate() now; if a future Mastra/SDK upgrade
+                        // flips it again, the bubble will name the failure
+                        // mode exactly (V1 not supported …) thanks to the
+                        // details-surfacing patch in 2a9654a. Mirrors the
+                        // .stream() call in the SSE path below.
+                        agent.generate(message, {
                           threadId: resolvedThreadId,
                           resourceId,
                           abortSignal: controller.signal,
@@ -581,10 +590,14 @@ export const consultantRoutes = [
                   threadId: resolvedThreadId,
                 },
                 () =>
-                  // streamLegacy() is required because the Consultant agent is
-                  // configured with an AI SDK v4 model (openai.responses:gpt-4o);
-                  // Mastra's newer .stream() call rejects v4 models at runtime.
-                  agent.streamLegacy(message, {
+                  // See the comment on agent.generate() in the non-stream
+                  // handler above. Same precedence flip: the OpenAI provider
+                  // now hands Mastra a V2 LanguageModel class, and
+                  // .streamLegacy() throws "V2 models are not supported".
+                  // Use .stream() now. The downstream consumers in this
+                  // file only read .textStream / .response / .usage, all of
+                  // which are present on the V2 stream result shape.
+                  agent.stream(message, {
                     threadId: resolvedThreadId,
                     resourceId,
                     abortSignal: controller.signal,
@@ -1225,9 +1238,9 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
                 }),
               },
               async () =>
-                // generateLegacy() — see note in the non-streaming chat
-                // handler above; the v4 openai.chat model requires it.
-                (await agent.generateLegacy(scanPrompt, {
+                // .generate() — see precedence-flip note on the non-stream
+                // chat handler above. V2 model class rejects *Legacy methods.
+                (await agent.generate(scanPrompt, {
                   threadId: `scan-${Date.now()}`,
                   resourceId: "system-scanner",
                   abortSignal: scanController.signal,

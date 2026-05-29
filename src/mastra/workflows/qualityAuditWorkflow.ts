@@ -577,7 +577,11 @@ Execute the audit now and report the findings.
               step: 'sdr-audit',
               promptVersion: SDR_QUALITY_PROMPT_VERSION,
             }) },
-          () => sdrQualityAgent.generateLegacy(
+          // .generate() (was .generateLegacy()) — the AI SDK V2 model
+          // class rejects *Legacy methods with "V2 models are not
+          // supported for generateLegacy". Same flip applied to the
+          // consultant routes — see consultantRoutes.ts for the note.
+          () => sdrQualityAgent.generate(
             [{ role: "user", content: sdrAuditPrompt }],
             { maxSteps: 5 }
           )
@@ -593,7 +597,7 @@ Execute the audit now and report the findings.
               step: 'sales-audit',
               promptVersion: SALES_QUALITY_PROMPT_VERSION,
             }) },
-          () => salesQualityAgent.generateLegacy(
+          () => salesQualityAgent.generate(
             [{ role: "user", content: salesAuditPrompt }],
             { maxSteps: 5 }
           )
@@ -932,7 +936,7 @@ RECOMMENDATIONS:
             step: 'generate-insights',
             promptVersion: QUALITY_SPECIALIST_PROMPT_VERSION,
           }) },
-        async () => (await qualitySpecialistAgent.generateLegacy([
+        async () => (await qualitySpecialistAgent.generate([
           { role: "user", content: prompt }
         ])) as { text: string }
       );
