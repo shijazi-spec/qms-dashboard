@@ -123,6 +123,9 @@
             <button data-on-click="showTab" data-args="[&quot;deals&quot;]" id="tab-deals" data-testid="tab-deals" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Deal Duplicates</button>
             <button data-on-click="showTab" data-args="[&quot;contacts&quot;]" id="tab-contacts" data-testid="tab-contacts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Contact Duplicates</button>
             <button data-on-click="showTab" data-args="[&quot;accounts&quot;]" id="tab-accounts" data-testid="tab-accounts" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Account Duplicates</button>
+            <button data-on-click="showTab" data-args="[&quot;account-hints&quot;]" id="tab-account-hints" data-testid="tab-account-hints" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Smart account inference — deals missing a real Account_Name get a suggested account based on their contact's email domain. Sales fixes the Zoho record from here.">
+                Account Hints <span id="accountHintsPendingBadge" class="hidden inline-block min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500 text-white text-center">0</span>
+            </button>
             <button data-on-click="showTab" data-args="[&quot;cross-module&quot;]" id="tab-cross-module" data-testid="tab-cross-module" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Clusters where the same company is represented across multiple Zoho modules (e.g. a Lead + an existing Contact under an Account). Fix is CONVERT or LINK — never merge across modules.">
                 <span class="inline-block w-2 h-2 rounded-full bg-indigo-500"></span>
                 Cross-Module
