@@ -426,13 +426,14 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                             Analyze All Pending
                         </button>
-                        <!-- Backfill Durations button retired 2026-05-29 per
-                             operator request — the eager per-row backfill in
-                             renderCallsTable + the upload-time duration
-                             capture have made the bulk-backfill path
-                             redundant. The /api/calls/duration-backfill
-                             endpoint is kept so a script / future
-                             re-introduction can still call it. -->
+                        <!-- Backfill Durations button + POST /api/calls/
+                             duration-backfill route retired 2026-05-29 per
+                             operator request. Eager per-row backfill in
+                             renderCallsTable plus upload-time duration
+                             capture cover every ingest path now. The
+                             underlying utility src/utils/callDurationBackfill.ts
+                             is preserved on disk in case a future script
+                             needs to import it. -->
                         <!-- Phase 4d: auto-link diagnostic. Pulls a small sample
                              of unlinked records, re-runs the linker, and shows
                              the failure mode (Zoho disconnected / rate-limited /
@@ -441,12 +442,13 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 5.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                             Diagnose Linking
                         </button>
-                        <!-- "Delete legacy (no audio)" button retired
+                        <!-- "Delete legacy (no audio)" button + POST
+                             /api/calls/cleanup-no-audio route retired
                              2026-05-29 per operator request — the historical
                              bulk-upload rows that needed it have been cleaned
-                             up. The /api/calls/cleanup-no-audio endpoint is
-                             kept so a script / future re-introduction can
-                             still call it. -->
+                             up. If you need to re-introduce the destructive
+                             bulk-delete, see git rev 0ec0549^ for the prior
+                             implementation. -->
 
                         <!-- Test Zoho button RELOCATED to Duplicate Radar
                              (dashboard/duplicates.html) per operator request —
@@ -2590,17 +2592,11 @@
             }
         }
 
-        // Phase 4b — server-side duration backfill driver.
-        //
-        // Hits POST /api/calls/duration-backfill which decodes audio_blob
-        // via music-metadata for every row missing duration_seconds and
-        // writes the result back. Idempotent: re-running after a clean
-        // pass is a quiet no-op. Rows without audio_blob (legacy bulk
-        // uploads that discarded the bytes) stay null — their duration
-        // is permanently gone and the summary surfaces that count.
-        // backfillDurations() handler retired 2026-05-29 along with its
-        // button — see the comment near the button in the Call Records
-        // toolbar. The /api/calls/duration-backfill endpoint stays.
+        // backfillDurations() handler + POST /api/calls/duration-backfill
+        // route retired 2026-05-29 along with the toolbar button — see the
+        // comment near the button in the Call Records toolbar. The
+        // underlying utility src/utils/callDurationBackfill.ts is
+        // preserved on disk.
 
         // Phase 4d — auto-link diagnostic.
         //
@@ -5610,11 +5606,10 @@
             });
         }
 
-        // cleanupNoAudioRecords() handler retired 2026-05-29 along with
-        // its "Delete legacy (no audio)" button — see the comment near the
-        // button in the Call Records toolbar. The /api/calls/cleanup-no-audio
-        // endpoint stays so a script / future re-introduction can still
-        // call it.
+        // cleanupNoAudioRecords() handler + POST /api/calls/cleanup-no-audio
+        // route retired 2026-05-29 along with the "Delete legacy (no audio)"
+        // toolbar button — see the comment near the button in the Call
+        // Records toolbar.
 
         // Quick Win #1 — batch-analyze every pending/processing call without
         // needing a DevTools snippet. Sequential with 1.5s throttle so we

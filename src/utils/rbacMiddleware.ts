@@ -1282,13 +1282,16 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["GET", "POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
-  // Phase 4b/4d — duration backfill + auto-link diagnostic. Admin-only
-  // operations: the backfill rewrites duration_seconds across the whole
-  // table in one pass; the diagnostic exposes Zoho connection state +
-  // per-call phone candidates which we don't want broadly visible.
+  // Phase 4d — auto-link diagnostic + Zoho connection probe. Admin-only:
+  // both endpoints expose Zoho connection state and per-call phone
+  // candidates which we don't want broadly visible.
+  //
+  // Trimmed 2026-05-29: duration-backfill + cleanup-no-audio routes were
+  // retired (see callIntelligenceRoutes.ts). If those routes are ever
+  // re-introduced, add them back to this regex.
   {
     pattern:
-      /^\/api\/calls\/(duration-backfill|diagnostic\/auto-link|diagnostic\/zoho|cleanup-no-audio)$/,
+      /^\/api\/calls\/(diagnostic\/auto-link|diagnostic\/zoho)$/,
     methods: ["GET", "POST"],
     roles: ["admin"],
   },
