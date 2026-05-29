@@ -294,6 +294,9 @@ export function extractCsFieldsFromRawData(
   renewal_date?: string | Date | null;
   cs_owner_name?: string | null;
   health?: string | null;
+  // ExtID (Admin) — Zoho custom field surfaced in the CS Lifecycle tab.
+  // Optional so legacy callers don't have to destructure it.
+  ext_id?: string | null;
 } {
   if (!rawData || typeof rawData !== "object") {
     return { domain: context.domain ?? null };
@@ -456,6 +459,22 @@ export function extractCsFieldsFromRawData(
     ]),
   );
 
+  // ExtID (Admin) — Zoho custom field that operators use as an internal
+  // reference key. Default candidates cover the API name + a few common
+  // spellings; DUPLICATE_RADAR_FIELD_EXT_ID env var pins the exact API
+  // name if the tenant's layout disagrees with the defaults. Mirrors the
+  // pattern already used for Health, Company_Domain, etc.
+  const extIdRaw = tryKeysOrNormalized(
+    envOr("DUPLICATE_RADAR_FIELD_EXT_ID", [
+      "ExtID",
+      "Ext_ID",
+      "ExtID_Admin",
+      "Ext_ID_Admin",
+      "External_ID",
+      "External_Id",
+    ]),
+  );
+
   const arrNum =
     arrRaw == null
       ? null
@@ -486,6 +505,7 @@ export function extractCsFieldsFromRawData(
     cs_owner_name:
       csOwnerName == null ? null : csOwnerName.trim() || null,
     health: healthRaw == null ? null : String(healthRaw).trim() || null,
+    ext_id: extIdRaw == null ? null : String(extIdRaw).trim() || null,
   };
 }
 

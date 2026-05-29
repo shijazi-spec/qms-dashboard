@@ -962,7 +962,21 @@
         </div>
 
         <!-- ═══ CS LIFECYCLE COMPLIANCE TAB ═══ -->
-        <div id="content-cs-lifecycle" class="tab-content hidden">
+        <!--
+            CS Lifecycle tab — 2026-05-30 operator request:
+              · Replace "Health" column with "ExtID (Admin)".
+              · Add a Phase filter so an operator can drill into a single
+                CS phase (Adoption / Onboarding / Renewal / …) at a time.
+              · Maximise table width so all 12 columns fit without
+                clipping. We give this one tab its own full-bleed
+                wrapper: the surrounding <main> caps content at
+                max-w-7xl; the negative margins below break out of that
+                cap on lg+ screens and the inner div lets the table
+                breathe up to the viewport edge (minus 16px of safety
+                padding on either side).
+        -->
+        <div id="content-cs-lifecycle" class="tab-content hidden lg:-mx-8 xl:-mx-16 2xl:-mx-32">
+          <div class="lg:px-8 xl:px-16 2xl:px-32">
             <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 text-sm text-purple-900">
                 <strong>Customer Success lifecycle compliance.</strong> Deals where the CS section deviates from GRQ-defined process rules (onboarding duration, phase ↔ churn-date sync, phase-transition SLA). Critical violations should be resolved within one working day per CS team policy.
             </div>
@@ -999,6 +1013,22 @@
                     <button data-on-click="filterCsLifecycle" data-args="[&quot;warning&quot;]" id="csLifeChip-warning" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">Warning</button>
                     <button data-on-click="filterCsLifecycle" data-args="[&quot;info&quot;]" id="csLifeChip-info" class="px-3 py-1.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200">Info</button>
                 </div>
+                <!--
+                    Phase filter (2026-05-30) — client-side dropdown,
+                    populated dynamically from the rows currently in the
+                    table so every distinct phase the operator sees in
+                    the data appears as a filter option (no hard-coded
+                    list to fall out of sync with Zoho's phase values).
+                    Selection survives a re-render via
+                    window._csLifecyclePhaseFilter; cleared when the
+                    dataset reloads.
+                -->
+                <div class="flex items-center gap-1 ms-2">
+                    <label for="csLifePhaseFilter" class="text-xs font-medium text-gray-600">Phase:</label>
+                    <select id="csLifePhaseFilter" data-on-change="onCsLifecyclePhaseChange" class="text-xs rounded-full border border-gray-300 bg-white px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                        <option value="">All phases</option>
+                    </select>
+                </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportCsLifecycle" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of exactly the CS-lifecycle violations shown below (incl. CS detail columns), in the current sort order and filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
@@ -1018,7 +1048,7 @@
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Customer Since</th>
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Renewal Date</th>
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Churn Date</th>
-                            <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Health</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="ExtID (Admin) — Zoho custom field. Set the API name via the DUPLICATE_RADAR_FIELD_EXT_ID env var if your tenant uses a non-default field name.">ExtID (Admin)</th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;days&quot;]" class="cs-lifecycle-sort px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="days">Days since modified <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="violation">Violation <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;message&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="message">Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
@@ -1029,6 +1059,7 @@
                     </tbody>
                 </table>
             </div>
+          </div><!-- /lg:px-… inner padding wrapper -->
         </div>
 
         <!-- ═══ AUTO-CAPA KPIs TAB ═══ -->
@@ -4319,7 +4350,12 @@
             if (!violations.length) { alert('Nothing to export for the current filter.'); return; }
             const groups = groupCsLifecycleByDeal(violations);
             const sorted = sortCsLifecycleRows(groups, window._csLifecycleSort.key, window._csLifecycleSort.dir);
-            const headers = ['Severity', 'Account', 'Domain', 'Phase', 'CS Owner', 'Customer Since', 'Renewal Date', 'Churn Date', 'Health', 'Days Since Modified', 'Violations', 'Messages'];
+            // CSV keeps BOTH Health and ExtID (Admin) — the dashboard UI
+            // replaced Health with ExtID per operator request, but losing
+            // Health from the audit-trail export would break downstream
+            // reporting. New "ExtID (Admin)" column slotted in next to
+            // Health so the file stays self-describing.
+            const headers = ['Severity', 'Account', 'Domain', 'Phase', 'CS Owner', 'Customer Since', 'Renewal Date', 'Churn Date', 'Health', 'ExtID (Admin)', 'Days Since Modified', 'Violations', 'Messages'];
             const rows = sorted.map(g => [
                 g.worst_severity || '',
                 g.account_name || '',
@@ -4330,6 +4366,7 @@
                 g.renewal_date || '',
                 g.churn_date || '',
                 (g.health == null || g.health === '') ? '' : g.health,
+                (g.ext_id == null || g.ext_id === '') ? '' : g.ext_id,
                 g.days_since_modified == null ? '' : g.days_since_modified,
                 g.violations.map(v => csLifeViolationLabel(v.code)).join('; '),
                 g.violations.map(v => (v.severity || '').toUpperCase() + ': ' + (v.message || '')).join(' | '),
@@ -5217,6 +5254,7 @@
                         renewal_date: v.renewal_date,
                         churn_date: v.churn_date,
                         health: v.health,
+                        ext_id: v.ext_id,
                         violations: [],
                     });
                 }
@@ -5291,6 +5329,55 @@
             if (window._csLifecycleData) renderCsLifecycle(window._csLifecycleData);
         }
 
+        // Phase filter helpers (2026-05-30).
+        //
+        // _refreshCsLifecyclePhaseOptions repopulates the <select> based on
+        // whatever phases the current dataset actually contains. We sort
+        // alphabetically — Zoho's phase values vary per tenant (Adoption /
+        // Onboarding / Renewal / Churn, plus tenant-custom values), so
+        // there's no canonical ordering and alphabetical is the least
+        // surprising default. The active selection is preserved across
+        // re-renders if the new dataset still contains that phase;
+        // otherwise it silently resets to "All phases" so the operator
+        // never sees a stale filter that returns zero rows.
+        //
+        // onCsLifecyclePhaseChange is the data-on-change handler. It
+        // stashes the choice on window so a subsequent renderCsLifecycle
+        // re-applies it, then triggers a render with the existing in-
+        // memory dataset (no Zoho re-fetch — phase filtering is purely
+        // client-side over the data we already loaded).
+        function _refreshCsLifecyclePhaseOptions(groups) {
+            const sel = document.getElementById('csLifePhaseFilter');
+            if (!sel) return;
+            const phases = new Set();
+            for (const g of (groups || [])) {
+                const p = String(g.current_phase || '').trim();
+                if (p) phases.add(p);
+            }
+            const sorted = Array.from(phases).sort((a, b) => a.localeCompare(b));
+            const current = window._csLifecyclePhaseFilter || '';
+            // Only the selection survives a re-render; if the previously
+            // chosen phase has dropped out of the dataset, clear it.
+            const stillPresent = current && phases.has(current);
+            const opts = ['<option value="">All phases</option>']
+                .concat(sorted.map(p =>
+                    '<option value="' + escAttr(p) + '"' + (p === current ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'
+                ));
+            sel.innerHTML = opts.join('');
+            if (!stillPresent && current) {
+                window._csLifecyclePhaseFilter = '';
+                sel.value = '';
+            }
+        }
+        function onCsLifecyclePhaseChange(event) {
+            const v = event && event.target && event.target.value;
+            window._csLifecyclePhaseFilter = v || '';
+            // Re-paint the table from the in-memory dataset with the new
+            // filter applied. No Zoho re-fetch.
+            const data = window._csLifecycleData;
+            if (data) renderCsLifecycle(data);
+        }
+
         function renderCsLifecycle(data) {
             window._csLifecycleData = data;
             const s = (data.summary && data.summary.by_severity) || {};
@@ -5306,13 +5393,31 @@
             const allViolations = data.violations || [];
             if (allViolations.length === 0) {
                 body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">No violations detected. CS is compliant for the current filter.</td></tr>';
+                _refreshCsLifecyclePhaseOptions([]);
                 return;
             }
             // Each API row is one (deal × violation) pair. Group into one
             // entry per deal so the table reads "this deal failed X and Y"
             // instead of duplicating the account name twice.
             const groups = groupCsLifecycleByDeal(allViolations);
-            const sorted = sortCsLifecycleRows(groups, window._csLifecycleSort.key, window._csLifecycleSort.dir);
+
+            // Phase filter — populated from the data, then applied. Done
+            // BEFORE sorting + rendering so the phase dropdown reflects
+            // the entire dataset (not just what survives the filter), and
+            // a selection like "Adoption" still narrows what we paint.
+            _refreshCsLifecyclePhaseOptions(groups);
+            const phaseSel = window._csLifecyclePhaseFilter || '';
+            const filtered = phaseSel
+                ? groups.filter(g => String(g.current_phase || '') === phaseSel)
+                : groups;
+
+            const sorted = sortCsLifecycleRows(filtered, window._csLifecycleSort.key, window._csLifecycleSort.dir);
+
+            if (sorted.length === 0) {
+                body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">No CS deals in the selected phase. Pick a different phase or clear the filter.</td></tr>';
+                return;
+            }
+
             body.innerHTML = sorted.map(g => {
                 // CS Lifecycle violations are always Deal records (see
                 // scanCsLifecycleViolations: WHERE zoho_module = 'Deals'), so
@@ -5340,7 +5445,7 @@
                     + '<td class="px-3 py-2 text-xs whitespace-nowrap text-gray-600">' + escapeHtml(g.customer_since || '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs whitespace-nowrap text-gray-600">' + escapeHtml(g.renewal_date || '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs whitespace-nowrap text-gray-600">' + escapeHtml(g.churn_date || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-end text-gray-700">' + escapeHtml(g.health == null || g.health === '' ? '—' : String(g.health)) + '</td>'
+                    + '<td class="px-3 py-2 text-xs text-start font-mono text-gray-700 whitespace-nowrap">' + escapeHtml(g.ext_id == null || g.ext_id === '' ? '—' : String(g.ext_id)) + '</td>'
                     + '<td class="px-3 py-2 text-xs text-end text-gray-600">' + (g.days_since_modified == null ? '—' : g.days_since_modified) + '</td>'
                     + '<td class="px-3 py-2 text-xs"><div class="flex flex-wrap gap-1">' + violationPills + '</div></td>'
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + messageStack + '</td>'

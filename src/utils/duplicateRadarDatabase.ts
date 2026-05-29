@@ -4796,6 +4796,11 @@ export interface CsLifecycleViolationRow {
   renewal_date: string | null;
   churn_date: string | null;
   health: string | null;
+  // ExtID (Admin) — Zoho custom field surfaced in the CS Lifecycle tab
+  // (operator request 2026-05-30). Replaces the Health column in the
+  // dashboard UI; Health stays on the row so existing CSV exports and
+  // any future consumer keep both signals available.
+  ext_id: string | null;
   violation: CsViolation;
 }
 
@@ -4877,6 +4882,7 @@ export async function scanCsLifecycleViolations(opts: {
         renewal_date: fmtDate(detail.renewal_date),
         churn_date: fmtDate(detail.churn_date),
         health: detail.health ?? null,
+        ext_id: detail.ext_id ?? null,
         violation: v,
       });
     }
