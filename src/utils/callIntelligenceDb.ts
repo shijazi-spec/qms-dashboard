@@ -898,10 +898,13 @@ async function getCallRecordListColumns(): Promise<string> {
   if (_callRecordListColumnsCache) return _callRecordListColumnsCache;
   let columns: string[] = [];
   try {
+    // Scope to the active schema so a same-named table in another schema
+    // can't leak the wrong column set into the projection.
     const res = await pool.query(
       `SELECT column_name
          FROM information_schema.columns
         WHERE table_name = 'call_records'
+          AND table_schema = current_schema()
         ORDER BY ordinal_position`,
     );
     columns = res.rows
@@ -915,8 +918,22 @@ async function getCallRecordListColumns(): Promise<string> {
       (c) => !CALL_RECORD_LIST_EXCLUDED_COLUMNS.has(c),
     );
   }
-  _callRecordListColumnsCache = columns.map((c) => `cr."${c}"`).join(", ");
+  // Defense-in-depth: identifiers come from DB metadata (not user input),
+  // but escape embedded double-quotes anyway before quoting.
+  _callRecordListColumnsCache = columns
+    .map((c) => `cr."${c.replace(/"/g, '""')}"`)
+    .join(", ");
   return _callRecordListColumnsCache;
+}
+
+/**
+ * Clears the cached call_records list-column projection so the next
+ * getCallRecords() call recomputes it from information_schema. Used to
+ * recover from a stale projection after live schema drift (column
+ * dropped/renamed without a process restart).
+ */
+export function clearCallRecordListColumnsCache(): void {
+  _callRecordListColumnsCache = null;
 }
 
 export async function getCallRecords(
@@ -1008,9 +1025,10 @@ export async function getCallRecords(
   // getCallRecordListColumns() for the full rationale (prevents the Records
   // tab from timing out on a multi-MB binary payload). Audio is streamed on
   // demand via /api/calls/:callId/audio, never needed in the list.
-  const listColumns = await getCallRecordListColumns();
-  const result = await pool.query(
-    `SELECT ${listColumns},
+  const runListQuery = async () => {
+    const listColumns = await getCallRecordListColumns();
+    return pool.query(
+      `SELECT ${listColumns},
             COALESCE(latest_review.adjusted_overall_score, se.overall_score) AS sdr_overall_score,
             se.overall_score AS sdr_ai_overall_score,
             latest_review.adjusted_overall_score AS sdr_adjusted_overall_score,
@@ -1027,8 +1045,25 @@ export async function getCallRecords(
        ${whereClause.replace(/\b(source|agent_email|status|lead_id|call_date)\b/g, "cr.$1")}
        ORDER BY ${orderColumn} DESC
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    [...params, limit, offset],
-  );
+      [...params, limit, offset],
+    );
+  };
+
+  let result;
+  try {
+    result = await runListQuery();
+  } catch (err: any) {
+    // A cached projection can go stale if a column is dropped/renamed while
+    // the process stays up. Postgres reports an undefined-column error
+    // (SQLSTATE 42703). Clear the cache and retry once with a fresh column
+    // list before giving up.
+    if (err?.code === "42703") {
+      clearCallRecordListColumnsCache();
+      result = await runListQuery();
+    } else {
+      throw err;
+    }
+  }
 
   return {
     records: result.rows,
