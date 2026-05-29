@@ -249,6 +249,105 @@ export async function findCrmRecordByPhone(
     };
   }
 
+  // ─── Contact → Deal walk (PHASE A2, 2026-05-29). ───────────────────────
+  //
+  // Mirror of the same walk added to autoLinkLeadByPhone the same day
+  // (commit f6f45b0). In Zoho's standard layout the phone number lives
+  // on the Contact, not on the Deal — the Deal only carries
+  // Contact_Name as a lookup. So a Lead that has been CONVERTED to a
+  // Deal has its phone migrated to the Contact + (sometimes) the
+  // Account, never the Deal record itself. searchZohoRecordsByWord(
+  // "Deals", ...) therefore returns zero hits for the user's example
+  // (+966 55 802 4516 → Desar National Factory deal), even though the
+  // phone is alive on the linked Contact (Shahad Almasabi).
+  //
+  // Steps:
+  //   1. searchZohoRecordsByWord("Contacts", normalized_query) — the
+  //      same indexed word lookup the Zoho UI's global search box uses.
+  //   2. Filter Contact hits to those whose phone REALLY shares the
+  //      subscriber number, so a fuzzy word-search hit (e.g. a Contact
+  //      whose name happens to contain those digits) is dropped.
+  //   3. For each real Contact match, fetch its Deals via the
+  //      structured criteria search (Contact_Name:equals:<contactId>).
+  //   4. Append each found Deal to the matches array via dealToMatch.
+  //   5. Return immediately so a Contact-walked Deal beats the 2500-
+  //      record scan (the latter is just a safety net for tenants with
+  //      a missing phone index, irrelevant once we've found a Deal).
+  //
+  // Cost: one word-search per phone candidate + one criteria-search per
+  // matched Contact. Both are indexed Zoho calls, far cheaper than the
+  // 2500-record bulk scan.
+  if (nativeSearchSucceeded && matches.length === 0) {
+    try {
+      const contactHits = await searchZohoRecordsByWord(
+        "Contacts",
+        normalized_query,
+      );
+      const realContactMatches = contactHits.filter((c) => {
+        const cd = c.data || {};
+        const cPhone =
+          (typeof cd.Phone === "object" && cd.Phone?.name) ||
+          cd.Phone ||
+          cd.Mobile ||
+          (typeof cd.Mobile === "object" && cd.Mobile?.name) ||
+          "";
+        return phonesShareSubscriberNumber(
+          String(cPhone || ""),
+          normalized_query,
+        );
+      });
+      for (const c of realContactMatches) {
+        try {
+          const deals = await searchZohoRecords(
+            "Deals",
+            `(Contact_Name:equals:${c.id})`,
+          );
+          for (const d of deals) {
+            if (!matches.some((m) => m.module === "Deals" && m.id === d.id)) {
+              const m = dealToMatch(d);
+              // Annotate the match so downstream diagnostics can see the
+              // phone we DID find (on the Contact) instead of the empty
+              // string readDealPhone yields for Contact-linked Deals.
+              if (!m.phone) {
+                const cd = c.data || {};
+                m.phone = String(
+                  (typeof cd.Phone === "object" && cd.Phone?.name) ||
+                    cd.Phone ||
+                    cd.Mobile ||
+                    "",
+                );
+              }
+              matches.push(m);
+            }
+          }
+        } catch (err: any) {
+          logger.warn(
+            "[sdrCallLinking] Contact→Deal criteria search failed; skipping contact",
+            {
+              contactId: c.id,
+              error: err?.message || String(err),
+            },
+          );
+        }
+      }
+      if (matches.length > 0) {
+        return {
+          normalized_query,
+          matches,
+          scanned_leads: 0,
+          scanned_deals: 0,
+        };
+      }
+    } catch (err: any) {
+      // Walk failure is non-fatal — fall through to the 2500-record
+      // scan, same as if the native search had partially failed.
+      logger.warn(
+        "[sdrCallLinking] Contact→Deal walk failed; falling back to bulk scan",
+        { error: err?.message || String(err) },
+      );
+    }
+  }
+
   // ─── Fallback (PHASE B): legacy 2500-record scan. ──────────────────────
   // Runs when:
   //   (a) Native search threw / partially failed, OR
