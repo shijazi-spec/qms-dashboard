@@ -124,6 +124,14 @@ const VIOLATION_TITLES: Record<CsViolationCode, string> = {
   phase_transition_stalled: "CS SLA breach: phase transition stalled",
   adoption_premature: "CS process breach: Adoption reached without Onboarding completion",
   missing_company_domain: "CS data integrity: Account missing Company Domain",
+  // CS data-quality completeness pack (2026-05-30) — auto-CAPA titles
+  // mirror the lifecycle ones so the CAPA inbox stays consistent.
+  missing_cs_owner: "CS data integrity: Active deal has no CS Owner",
+  missing_customer_since: "CS data integrity: Active deal missing Customer Since",
+  missing_renewal_date: "CS data integrity: Active deal missing Renewal Date",
+  missing_health_score: "CS data integrity: Active deal missing Health score",
+  missing_arr_value: "CS data integrity: Active deal missing ARR value",
+  renewal_overdue: "CS SLA breach: Renewal Date passed while phase still active",
 };
 
 function buildTitle(

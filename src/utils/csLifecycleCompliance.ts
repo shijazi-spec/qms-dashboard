@@ -21,7 +21,17 @@ export type CsViolationCode =
   | "termination_missing_churn_reason"
   | "phase_transition_stalled"
   | "adoption_premature"
-  | "missing_company_domain";
+  | "missing_company_domain"
+  // 2026-05-30 — CS data-quality audit pack. These rules surface deals
+  // where the CS team has not populated the section's core fields, so
+  // the dashboard becomes a per-deal completeness audit rather than
+  // just a process-violation list.
+  | "missing_cs_owner"
+  | "missing_customer_since"
+  | "missing_renewal_date"
+  | "missing_health_score"
+  | "missing_arr_value"
+  | "renewal_overdue";
 
 export type CsViolationSeverity = "info" | "warning" | "critical";
 
@@ -150,6 +160,18 @@ const SUGGESTED_ACTIONS: Record<CsViolationCode, string> = {
     "Deal moved to Adoption without evidence of a completed Onboarding period (or while still inside the trial window). Verify Onboarding sign-off and trial completion with CS before counting this as an active adopter.",
   missing_company_domain:
     "Active Customer Success deal has no Company_Domain populated. CS team should fill this field at Onboarding handoff so Marketing / Sales preflight checks recognise this account as an active customer.",
+  missing_cs_owner:
+    "Active CS deal has no CS Owner Name. Assign an owner so the deal has someone accountable for the CS motion.",
+  missing_customer_since:
+    "Active CS deal has no Customer Since date. Backfill it from the original signup / contract date so renewal and tenure reporting works.",
+  missing_renewal_date:
+    "Active CS deal has no Renewal Date. Set it so the radar can surface upcoming renewals and overdue renewal motion.",
+  missing_health_score:
+    "Active CS deal has no Health score. Score the customer (0–100) so coaching plans and CS escalation triggers have a signal to read from.",
+  missing_arr_value:
+    "Active CS deal has no ARR value (or it is zero). Set it so revenue-at-risk reports and ARR exposure rollups attribute correctly.",
+  renewal_overdue:
+    "Renewal Date has already passed but the deal is still in an active CS phase. Confirm renewal status with the customer and update the Renewal Date or Phase.",
 };
 
 /**
@@ -334,6 +356,116 @@ export function evaluateCsLifecycle(
     }
   }
 
+  // ─── CS data-quality completeness rules (2026-05-30) ───────────────────
+  //
+  // These rules fire only for ACTIVE CS phases — pre-Onboarding records
+  // and Termination are deliberately exempt. The CS team isn't expected
+  // to have filled every section field BEFORE Onboarding completes
+  // (data flows in over time during the sales→CS handoff), and a
+  // Terminated deal is read-only so flagging it for missing data adds
+  // noise without action.
+  //
+  // Each rule is independent — a single deal missing all five core
+  // fields will surface 5 separate violations, which the UI groups
+  // into one row per deal so the operator sees the full punch list at
+  // a glance. Severity choices reflect what's actionable:
+  //   • critical → blocks the CS motion (missing owner = no one running it).
+  //   • warning  → silently corrupts reporting (missing dates / scores).
+  //   • renewal_overdue is a warning, not critical, because a passed
+  //     renewal date may legitimately mean the renewal just landed and
+  //     the date hasn't been updated yet; the CS team should confirm
+  //     status before treating it as a SLA breach.
+  if (isActiveCsPhase) {
+    // 7. Missing CS Owner — every active CS deal must have someone
+    //    accountable for the motion. Severity = critical because the
+    //    absence of an owner means nobody is going to act on any of
+    //    the other warnings either.
+    if (!(fields.cs_owner_name ?? "").trim()) {
+      violations.push({
+        code: "missing_cs_owner",
+        severity: "critical",
+        message: `Active CS deal in phase "${phase}" has no CS Owner Name set. Nobody is accountable for the CS motion until this is filled.`,
+        days_in_phase: daysSinceModified,
+        current_phase: phase,
+        suggested_action: SUGGESTED_ACTIONS.missing_cs_owner,
+      });
+    }
+
+    // 8. Missing Customer Since — required for tenure / renewal reporting.
+    if (!fields.customer_since) {
+      violations.push({
+        code: "missing_customer_since",
+        severity: "warning",
+        message: `Active CS deal in phase "${phase}" has no Customer Since date. Backfill from the original contract / signup date.`,
+        days_in_phase: daysSinceModified,
+        current_phase: phase,
+        suggested_action: SUGGESTED_ACTIONS.missing_customer_since,
+      });
+    }
+
+    // 9. Missing Renewal Date — required for renewal motion + ARR risk.
+    if (!fields.renewal_date) {
+      violations.push({
+        code: "missing_renewal_date",
+        severity: "warning",
+        message: `Active CS deal in phase "${phase}" has no Renewal Date. Renewal motion and ARR-at-risk reports skip this deal.`,
+        days_in_phase: daysSinceModified,
+        current_phase: phase,
+        suggested_action: SUGGESTED_ACTIONS.missing_renewal_date,
+      });
+    }
+
+    // 10. Missing Health score — Health=null is the gap (Health=0 is
+    //     a legitimate "this customer is on fire" score and must NOT
+    //     trip this rule). String compare so the extractor's "null →
+    //     null", "empty-string → null" passthrough behaves correctly.
+    const healthVal = (fields.health ?? "").trim();
+    if (!healthVal) {
+      violations.push({
+        code: "missing_health_score",
+        severity: "warning",
+        message: `Active CS deal in phase "${phase}" has no Health score. Coaching plans and escalation triggers can't read a signal.`,
+        days_in_phase: daysSinceModified,
+        current_phase: phase,
+        suggested_action: SUGGESTED_ACTIONS.missing_health_score,
+      });
+    }
+
+    // 11. Missing ARR value — null or 0 both count as "not set" for
+    //     audit purposes. ARR=0 is a real data-entry mistake on a
+    //     paying customer; flag it the same as null. fields.arr_value
+    //     comes from the extractor as Number | null (already coerced).
+    const arrVal = fields.arr_value;
+    if (arrVal == null || arrVal === 0) {
+      violations.push({
+        code: "missing_arr_value",
+        severity: "warning",
+        message: `Active CS deal in phase "${phase}" has no ARR value${arrVal === 0 ? " (set to 0)" : ""}. Revenue-at-risk and ARR exposure rollups will under-count this customer.`,
+        days_in_phase: daysSinceModified,
+        current_phase: phase,
+        suggested_action: SUGGESTED_ACTIONS.missing_arr_value,
+      });
+    }
+
+    // 12. Renewal overdue — Renewal Date in the past while phase is
+    //     still active. Genuine signal that either the renewal landed
+    //     and the date wasn't updated, OR the customer is silently
+    //     past the agreed term without a renewal motion.
+    if (renewal && renewal.getTime() < now.getTime()) {
+      const daysOverdue = Math.floor(
+        (now.getTime() - renewal.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      violations.push({
+        code: "renewal_overdue",
+        severity: "warning",
+        message: `Renewal Date was ${daysOverdue} day(s) ago but deal is still in active phase "${phase}". Confirm renewal status and update the date or phase.`,
+        days_in_phase: daysSinceModified,
+        current_phase: phase,
+        suggested_action: SUGGESTED_ACTIONS.renewal_overdue,
+      });
+    }
+  }
+
   return {
     is_cs_deal: true,
     current_phase: phase,
@@ -370,6 +502,12 @@ export function summarizeViolations(
       phase_transition_stalled: 0,
       adoption_premature: 0,
       missing_company_domain: 0,
+      missing_cs_owner: 0,
+      missing_customer_since: 0,
+      missing_renewal_date: 0,
+      missing_health_score: 0,
+      missing_arr_value: 0,
+      renewal_overdue: 0,
     },
   };
   for (const ev of evaluations) {

@@ -427,21 +427,14 @@ export const consultantRoutes = [
                         threadId: resolvedThreadId,
                       },
                       () =>
-                        // AI-SDK model-class precedence (revised 2026-05-29):
-                        // the OpenAI provider now hands Mastra a V2 LanguageModel
-                        // class (V1 was the legacy AI SDK v4 shape). Calling
-                        // .generateLegacy() against a V2 model throws:
-                        //   "V2 models are not supported for generateLegacy.
-                        //    Please use generate instead."
-                        // Older comment claimed the inverse (Mastra's .generate
-                        // rejects v4 models) — that was true at one point but
-                        // has since flipped with the AI-SDK upgrade. We use
-                        // .generate() now; if a future Mastra/SDK upgrade
-                        // flips it again, the bubble will name the failure
-                        // mode exactly (V1 not supported …) thanks to the
-                        // details-surfacing patch in 2a9654a. Mirrors the
-                        // .stream() call in the SSE path below.
-                        agent.generate(message, {
+                        // 2026-05-30 fix — precedence flipped again. The .chat()
+                        // adapter on the agent now produces a V4 (AI SDK v4)
+                        // model class, and Mastra's .generate() rejects it
+                        // with the same v4/stream() error pattern reported
+                        // on the consultant page. Switch back to
+                        // .generateLegacy() to match the V4 shape. Mirrors
+                        // the .streamLegacy() call in the SSE handler below.
+                        agent.generateLegacy(message, {
                           threadId: resolvedThreadId,
                           resourceId,
                           abortSignal: controller.signal,
@@ -590,14 +583,19 @@ export const consultantRoutes = [
                   threadId: resolvedThreadId,
                 },
                 () =>
-                  // See the comment on agent.generate() in the non-stream
-                  // handler above. Same precedence flip: the OpenAI provider
-                  // now hands Mastra a V2 LanguageModel class, and
-                  // .streamLegacy() throws "V2 models are not supported".
-                  // Use .stream() now. The downstream consumers in this
-                  // file only read .textStream / .response / .usage, all of
-                  // which are present on the V2 stream result shape.
-                  agent.stream(message, {
+                  // 2026-05-30 fix — the precedence flipped AGAIN. After the
+                  // latest @ai-sdk/openai / @mastra/core upgrade, the .chat()
+                  // adapter returns a V4 (AI SDK v4) model class. Mastra's
+                  // .stream() rejects v4 with: "Agent ... is using AI SDK v4
+                  // model (openai.chat:gpt-4o) which is not compatible with
+                  // stream(). Please use AI SDK v5 models or call the
+                  // streamLegacy() method instead." Switching to
+                  // .streamLegacy() to match the V4 model produced by
+                  // openai.chat("gpt-4o") in qmsConsultantAgent.ts. If a
+                  // future upgrade flips this back, the bubble names the
+                  // exact failure mode thanks to the details-surfacing
+                  // patch in 2a9654a.
+                  agent.streamLegacy(message, {
                     threadId: resolvedThreadId,
                     resourceId,
                     abortSignal: controller.signal,
@@ -1238,9 +1236,11 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
                 }),
               },
               async () =>
-                // .generate() — see precedence-flip note on the non-stream
-                // chat handler above. V2 model class rejects *Legacy methods.
-                (await agent.generate(scanPrompt, {
+                // 2026-05-30 fix — mirror the precedence flip on the chat
+                // and SSE handlers above. The .chat() model class is V4 now,
+                // so use .generateLegacy(). If the model spec later returns
+                // to V5/V2 we'll swap back; the error bubble names which.
+                (await agent.generateLegacy(scanPrompt, {
                   threadId: `scan-${Date.now()}`,
                   resourceId: "system-scanner",
                   abortSignal: scanController.signal,
