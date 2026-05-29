@@ -2766,8 +2766,11 @@
             const creator = (raw.Created_By && raw.Created_By.name) || r.created_by_name || '';
             const ts = raw.Created_Time || r.created_date || r.created_at || null;
             const rel = _relTime(ts);
+            // Show the absolute date & time for auditing/comparison; relative
+            // time ("3d ago") stays available on hover via the title.
+            const disp = rel.full || rel.short;
             return `<td class="px-4 py-3 text-sm">
-                <div class="text-gray-700" title="${escapeHtml(rel.full)}">${escapeHtml(rel.short)}</div>
+                <div class="text-gray-700 whitespace-nowrap" title="${escapeHtml(rel.short)}">${escapeHtml(disp)}</div>
                 ${creator ? `<div class="text-xs text-gray-400">${escapeHtml(creator)}</div>` : ''}
             </td>`;
         }
@@ -2915,13 +2918,15 @@
                     ? `<td class="px-4 py-3 text-sm font-mono text-xs ${pDup ? 'text-orange-700 font-medium' : 'text-gray-600'}">${escapeHtml(phone)}</td>`
                     : '<td class="px-4 py-3 text-sm text-gray-400">-</td>';
 
-                // Created — relative time on top, creator name below in grey.
+                // Created — absolute date & time on top (relative on hover),
+                // creator name below in grey.
                 const raw = r && r.raw_data ? r.raw_data : {};
                 const creator = (raw.Created_By && raw.Created_By.name) || r.created_by_name || '';
                 const ts = raw.Created_Time || r.created_date || r.created_at || null;
                 const rel = _relTime(ts);
+                const createdDisp = rel.full || rel.short;
                 const createdCell = `<td class="px-4 py-3 text-sm">
-                    <div class="text-gray-700" title="${escapeHtml(rel.full)}">${escapeHtml(rel.short)}</div>
+                    <div class="text-gray-700 whitespace-nowrap" title="${escapeHtml(rel.short)}">${escapeHtml(createdDisp)}</div>
                     ${creator ? `<div class="text-xs text-gray-400">${escapeHtml(creator)}</div>` : ''}
                 </td>`;
 
