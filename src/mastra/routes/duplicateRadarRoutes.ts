@@ -19,6 +19,41 @@ async function requireDuplicateRadarAccess(c: any) {
   return requireRoleOrKey(c, [...DUPLICATE_RADAR_READ_ROLES]);
 }
 
+// Parse the shared Advanced Filters query params used by the per-tab record
+// endpoints (leads/deals/contacts/accounts). The Module filter is intentionally
+// omitted: each record tab already pins its own module, so module selection is
+// driven by which tab is active, not by this query param.
+function parseRecordTabFilters(url: URL): {
+  start_date?: string;
+  end_date?: string;
+  owners?: string[];
+  layouts?: string[];
+  pipelines?: string[];
+  stages?: string[];
+  confidence_level?: string;
+  domain?: string;
+} {
+  const csv = (key: string): string[] | undefined => {
+    const raw = url.searchParams.get(key);
+    if (!raw) return undefined;
+    const vals = raw
+      .split(",")
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+    return vals.length > 0 ? vals : undefined;
+  };
+  return {
+    start_date: url.searchParams.get("start_date") || undefined,
+    end_date: url.searchParams.get("end_date") || undefined,
+    owners: csv("owners"),
+    layouts: csv("layouts"),
+    pipelines: csv("pipelines"),
+    stages: csv("stages"),
+    confidence_level: url.searchParams.get("confidence_level") || undefined,
+    domain: url.searchParams.get("domain") || undefined,
+  };
+}
+
 import {
   initDuplicateRadarTables,
   getAllClusters,
@@ -2235,14 +2270,10 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get("limit") || "50");
           const offset = parseInt(url.searchParams.get("offset") || "0");
-          const start_date = url.searchParams.get("start_date") || undefined;
-          const end_date = url.searchParams.get("end_date") || undefined;
-
           const result = await getDuplicateRecordsByType("lead", {
             limit,
             offset,
-            start_date,
-            end_date,
+            ...parseRecordTabFilters(url),
           });
           return c.json({
             total_duplicate_groups: result.total,
@@ -2270,14 +2301,10 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get("limit") || "50");
           const offset = parseInt(url.searchParams.get("offset") || "0");
-          const start_date = url.searchParams.get("start_date") || undefined;
-          const end_date = url.searchParams.get("end_date") || undefined;
-
           const result = await getDuplicateRecordsByType("deal", {
             limit,
             offset,
-            start_date,
-            end_date,
+            ...parseRecordTabFilters(url),
           });
           return c.json({
             total_duplicate_groups: result.total,
@@ -2306,14 +2333,10 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get("limit") || "50");
           const offset = parseInt(url.searchParams.get("offset") || "0");
-          const start_date = url.searchParams.get("start_date") || undefined;
-          const end_date = url.searchParams.get("end_date") || undefined;
-
           const result = await getDuplicateRecordsByType("contact", {
             limit,
             offset,
-            start_date,
-            end_date,
+            ...parseRecordTabFilters(url),
           });
           return c.json({
             total_duplicate_groups: result.total,
@@ -2341,14 +2364,10 @@ export const duplicateRadarRoutes = [
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get("limit") || "50");
           const offset = parseInt(url.searchParams.get("offset") || "0");
-          const start_date = url.searchParams.get("start_date") || undefined;
-          const end_date = url.searchParams.get("end_date") || undefined;
-
           const result = await getDuplicateRecordsByType("account", {
             limit,
             offset,
-            start_date,
-            end_date,
+            ...parseRecordTabFilters(url),
           });
           return c.json({
             total_duplicate_groups: result.total,

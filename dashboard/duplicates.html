@@ -2485,10 +2485,14 @@
 
         async function loadRecordTab(type, page = 0) {
             recordPages[type] = page;
-            const range = getDateRange();
-            let url = `/api/duplicates/${type}?limit=50&offset=${page * 50}`;
-            if (range.from) url += `&start_date=${range.from}`;
-            if (range.to) url += `&end_date=${range.to}`;
+            // Per-tab Advanced Filters: the same filter selections (owner,
+            // layout, pipeline, stage, confidence, domain, date range) constrain
+            // the rows shown inside this tab. The server ignores the Module
+            // filter here because the tab itself pins the module.
+            const params = buildFilterParams();
+            params.set('limit', '50');
+            params.set('offset', String(page * 50));
+            const url = `/api/duplicates/${type}?` + params.toString();
 
             // Cancel any older in-flight load for this tab so a quick double
             // click / paginate doesn't race with the previous fetch.
@@ -5600,6 +5604,18 @@
                 badge.classList.remove('hidden');
             } else {
                 badge.classList.add('hidden');
+            }
+
+            // When the user is on a per-module record tab (Leads/Deals/Contacts/
+            // Accounts), filter that tab's rows in-place rather than jumping to
+            // the Domain Clusters view. loadRecordTab already folds the Advanced
+            // Filters into its request, so we just reload the active tab.
+            const activeTabEl = document.querySelector('[id^="tab-"].tab-active');
+            const activeTab = activeTabEl ? activeTabEl.id.replace(/^tab-/, '') : 'summary';
+            if (['leads', 'deals', 'contacts', 'accounts'].includes(activeTab)) {
+                if (window._loadedTabs) window._loadedTabs.delete(activeTab);
+                await loadRecordTab(activeTab, 0);
+                return;
             }
 
             const params = buildFilterParams();

@@ -3161,6 +3161,12 @@ export async function getDuplicateRecordsByType(
     offset?: number;
     start_date?: string;
     end_date?: string;
+    owners?: string[];
+    layouts?: string[];
+    pipelines?: string[];
+    stages?: string[];
+    confidence_level?: string;
+    domain?: string;
   },
 ): Promise<{ groups: any[]; total: number }> {
   const countField =
@@ -3172,9 +3178,11 @@ export async function getDuplicateRecordsByType(
           ? "total_contacts"
           : "total_accounts";
 
-  // The date filter constrains which records (and therefore which clusters)
-  // are in scope. Built once with placeholders starting at $2 so it can be
-  // reused inside the EXISTS sub-queries below.
+  // Date AND advanced-filter clauses constraining which records (and
+  // therefore which clusters) are in scope. Placeholders start at $2 so the
+  // fragment can be reused inside the EXISTS sub-queries below ($1 =
+  // recordType). dc is the correlated outer cluster alias in those
+  // sub-queries, so cluster-level predicates (confidence_level) are valid here.
   let dateFilter = "";
   const dateParams: any[] = [];
   if (options?.start_date) {
@@ -3184,6 +3192,30 @@ export async function getDuplicateRecordsByType(
   if (options?.end_date) {
     dateFilter += ` AND dr.created_date <= $${dateParams.length + 2}`;
     dateParams.push(options.end_date + "T23:59:59Z");
+  }
+  if (options?.owners && options.owners.length > 0) {
+    dateFilter += ` AND dr.owner_name = ANY($${dateParams.length + 2}::text[])`;
+    dateParams.push(options.owners);
+  }
+  if (options?.layouts && options.layouts.length > 0) {
+    dateFilter += ` AND dr.layout_name = ANY($${dateParams.length + 2}::text[])`;
+    dateParams.push(options.layouts);
+  }
+  if (options?.pipelines && options.pipelines.length > 0) {
+    dateFilter += ` AND dr.pipeline = ANY($${dateParams.length + 2}::text[])`;
+    dateParams.push(options.pipelines);
+  }
+  if (options?.stages && options.stages.length > 0) {
+    dateFilter += ` AND dr.stage = ANY($${dateParams.length + 2}::text[])`;
+    dateParams.push(options.stages);
+  }
+  if (options?.confidence_level) {
+    dateFilter += ` AND dc.confidence_level = $${dateParams.length + 2}`;
+    dateParams.push(options.confidence_level);
+  }
+  if (options?.domain) {
+    dateFilter += ` AND dr.domain ILIKE $${dateParams.length + 2}`;
+    dateParams.push(`%${options.domain}%`);
   }
 
   const limit = options?.limit || 50;
@@ -3234,7 +3266,10 @@ export async function getDuplicateRecordsByType(
     return { groups: [], total: parseInt(countResult.rows[0]?.total) || 0 };
   }
 
-  // Records date filter re-anchored to $3 ($1=recordType, $2=clusterIds).
+  // Records filter re-anchored to $3 ($1=recordType, $2=clusterIds). Mirrors
+  // the cluster-scoping fragment above so only records matching the active
+  // advanced filters are returned within each in-scope cluster. dc is JOINed
+  // in the records query, so confidence_level is valid here too.
   let recDateFilter = "";
   const recDateParams: any[] = [];
   if (options?.start_date) {
@@ -3244,6 +3279,30 @@ export async function getDuplicateRecordsByType(
   if (options?.end_date) {
     recDateFilter += ` AND dr.created_date <= $${recDateParams.length + 3}`;
     recDateParams.push(options.end_date + "T23:59:59Z");
+  }
+  if (options?.owners && options.owners.length > 0) {
+    recDateFilter += ` AND dr.owner_name = ANY($${recDateParams.length + 3}::text[])`;
+    recDateParams.push(options.owners);
+  }
+  if (options?.layouts && options.layouts.length > 0) {
+    recDateFilter += ` AND dr.layout_name = ANY($${recDateParams.length + 3}::text[])`;
+    recDateParams.push(options.layouts);
+  }
+  if (options?.pipelines && options.pipelines.length > 0) {
+    recDateFilter += ` AND dr.pipeline = ANY($${recDateParams.length + 3}::text[])`;
+    recDateParams.push(options.pipelines);
+  }
+  if (options?.stages && options.stages.length > 0) {
+    recDateFilter += ` AND dr.stage = ANY($${recDateParams.length + 3}::text[])`;
+    recDateParams.push(options.stages);
+  }
+  if (options?.confidence_level) {
+    recDateFilter += ` AND dc.confidence_level = $${recDateParams.length + 3}`;
+    recDateParams.push(options.confidence_level);
+  }
+  if (options?.domain) {
+    recDateFilter += ` AND dr.domain ILIKE $${recDateParams.length + 3}`;
+    recDateParams.push(`%${options.domain}%`);
   }
 
   const result = await pool.query(
