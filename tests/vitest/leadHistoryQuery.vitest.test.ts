@@ -15,19 +15,20 @@ import {
 } from "../../src/utils/leadHistoryQuery";
 
 describe("phoneToDigitSuffix", () => {
-  test("returns last 7 digits of a typical international number", () => {
-    expect(phoneToDigitSuffix("+966 50 123 4567")).toBe("1234567");
+  test("returns last 9 digits of a typical international number", () => {
+    expect(phoneToDigitSuffix("+966 50 123 4567")).toBe("501234567");
   });
-  test("returns last 7 digits of a local KSA number", () => {
-    expect(phoneToDigitSuffix("0501234567")).toBe("1234567");
+  test("returns last 9 digits of a local KSA number", () => {
+    expect(phoneToDigitSuffix("0501234567")).toBe("501234567");
   });
-  test("returns null for fewer than 7 digits", () => {
+  test("returns null for fewer than 9 digits", () => {
     expect(phoneToDigitSuffix("12345")).toBeNull();
+    expect(phoneToDigitSuffix("1234567")).toBeNull();
     expect(phoneToDigitSuffix("")).toBeNull();
     expect(phoneToDigitSuffix("---")).toBeNull();
   });
   test("strips non-digit characters", () => {
-    expect(phoneToDigitSuffix("(415) 555-0123")).toBe("5550123");
+    expect(phoneToDigitSuffix("(415) 555-012345")).toBe("555012345");
   });
 });
 
@@ -86,14 +87,14 @@ describe("buildLookupSql", () => {
     if (r.sql !== null) {
       expect(r.sql).toContain("metadata->>'from_number'");
       expect(r.sql).toContain("metadata->>'to_number'");
-      expect(r.values).toEqual(["%1234567"]);
+      expect(r.values).toEqual(["%501234567"]);
     }
   });
-  test("phone with fewer than 7 digits returns error, no SQL", () => {
-    const r = buildLookupSql("phone", "12", 200);
+  test("phone with fewer than 9 digits returns error, no SQL", () => {
+    const r = buildLookupSql("phone", "1234567", 200);
     expect(r.sql).toBe(null);
     if (r.sql === null) {
-      expect(r.error).toContain("7 digits");
+      expect(r.error).toContain("9 digits");
     }
   });
   test("limit is clamped 1..500 and integer-floored", () => {
@@ -163,13 +164,13 @@ describe("fetchLeadHistory (with mock pool)", () => {
       expect(r.status).toBe(400);
     }
   });
-  test("returns 400 when phone has fewer than 7 digits", async () => {
+  test("returns 400 when phone has fewer than 9 digits", async () => {
     const pool = { query: async () => ({ rows: [] }) };
-    const r = await fetchLeadHistory(pool, { phone: "12" });
+    const r = await fetchLeadHistory(pool, { phone: "1234567" });
     expect("error" in r).toBe(true);
     if ("error" in r) {
       expect(r.status).toBe(400);
-      expect(r.error).toContain("7 digits");
+      expect(r.error).toContain("9 digits");
     }
   });
   test("calls pool.query with parameterized SQL on lead_id lookup", async () => {

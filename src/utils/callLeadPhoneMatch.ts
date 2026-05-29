@@ -102,10 +102,33 @@ function readPhone(r: ZohoCRMRecord): string {
 export async function findLeadsByPhoneMatch(
   phone: string,
   options: { maxRecords?: number } = {},
-): Promise<{ normalized_query: string; matches: LeadPhoneMatch[]; scanned: number }> {
+): Promise<{
+  normalized_query: string;
+  matches: LeadPhoneMatch[];
+  scanned: number;
+  zoho_connected?: boolean;
+  note?: string;
+}> {
   const normalized_query = normalizePhoneDigits(phone);
   if (!normalized_query) {
-    return { normalized_query: "", matches: [], scanned: 0 };
+    return {
+      normalized_query: "",
+      matches: [],
+      scanned: 0,
+      note: "No digits found in the supplied phone value.",
+    };
+  }
+  // A suffix match requires a MIN_PHONE_OVERLAP_DIGITS-long overlap, so a
+  // query shorter than that floor can never match anything except an exact
+  // junk value. Surface that explicitly instead of returning a misleading
+  // empty "No matches" result.
+  if (normalized_query.length < MIN_PHONE_OVERLAP_DIGITS) {
+    return {
+      normalized_query,
+      matches: [],
+      scanned: 0,
+      note: `Phone must contain at least ${MIN_PHONE_OVERLAP_DIGITS} digits to match a subscriber number (got ${normalized_query.length}).`,
+    };
   }
 
   const hasZoho =
@@ -114,7 +137,13 @@ export async function findLeadsByPhoneMatch(
       process.env.ZOHO_CLIENT_SECRET &&
       process.env.ZOHO_REFRESH_TOKEN);
   if (!hasZoho) {
-    return { normalized_query, matches: [], scanned: 0 };
+    return {
+      normalized_query,
+      matches: [],
+      scanned: 0,
+      zoho_connected: false,
+      note: "Zoho CRM is not connected, so no Leads could be scanned.",
+    };
   }
 
   const maxRecords = options.maxRecords ?? 2500;
@@ -168,7 +197,9 @@ export async function autoLinkLeadByPhone(
   let ambiguousFallback: AutoLinkLeadResult | null = null;
   for (const phone of phones) {
     const normalized = normalizePhoneDigits(phone);
-    if (!normalized || normalized.length < 7) continue;
+    // Must be at least a full subscriber number; anything shorter can only
+    // collide with junk values (see MIN_PHONE_OVERLAP_DIGITS rationale).
+    if (!normalized || normalized.length < MIN_PHONE_OVERLAP_DIGITS) continue;
     let result;
     try {
       result = await findLeadsByPhoneMatch(phone, { maxRecords: options.maxRecords });

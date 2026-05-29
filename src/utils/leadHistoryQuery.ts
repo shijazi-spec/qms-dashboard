@@ -72,13 +72,19 @@ export interface LeadHistoryResult {
 
 /**
  * Normalize a phone number to its digits-only suffix.
- * Returns null if the input has fewer than 7 digits (too ambiguous
- * to match against — would explode the result set).
+ * Returns null if the input has fewer than PHONE_SUFFIX_DIGITS digits (too
+ * ambiguous to match against — would explode the result set).
  */
+// KSA / GCC subscriber numbers are 9 digits after the country code, so the
+// phone lookup requires a full 9-digit subscriber number. A shorter suffix
+// (e.g. 7 digits) collides across unrelated leads/calls — the same junk-match
+// problem the Lead matcher's MIN_PHONE_OVERLAP_DIGITS floor guards against.
+export const PHONE_SUFFIX_DIGITS = 9;
+
 export function phoneToDigitSuffix(phone: string): string | null {
   const digits = (phone || "").replace(/\D/g, "");
-  if (digits.length < 7) return null;
-  return digits.slice(-7);
+  if (digits.length < PHONE_SUFFIX_DIGITS) return null;
+  return digits.slice(-PHONE_SUFFIX_DIGITS);
 }
 
 /**
@@ -171,12 +177,13 @@ export function buildLookupSql(
     if (!suffix) {
       return {
         sql: null,
-        error: "Phone needs at least 7 digits to be searchable.",
+        error: `Phone needs at least ${PHONE_SUFFIX_DIGITS} digits to be searchable.`,
       };
     }
     // Match digit-only suffix of from_number or to_number in metadata.
     // regexp_replace strips non-digits; the LIKE compares the last
-    // 7+ digits so country-code variation doesn't break the match.
+    // PHONE_SUFFIX_DIGITS digits so country-code variation doesn't break the
+    // match while still requiring a full subscriber-number overlap.
     return {
       sql: `${baseSelect}
             WHERE regexp_replace(COALESCE(cr.metadata->>'from_number',''), '\\D', '', 'g') LIKE $1

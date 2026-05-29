@@ -31,7 +31,10 @@ import {
   searchZohoRecordsByWord,
 } from "./zohoCRM";
 import { normalizePhoneDigits } from "./callMcpReconciliation";
-import { phonesShareSubscriberNumber } from "./callLeadPhoneMatch";
+import {
+  phonesShareSubscriberNumber,
+  MIN_PHONE_OVERLAP_DIGITS,
+} from "./callLeadPhoneMatch";
 import { logger } from "./logger";
 
 export type CrmModule = "Leads" | "Deals";
@@ -570,7 +573,9 @@ export async function autoLinkCallToCrm(
   // Phase 1 — phone match (unchanged primary signal).
   for (const phone of phones) {
     const normalized = normalizePhoneDigits(phone);
-    if (!normalized || normalized.length < 7) continue;
+    // Require a full subscriber number; a shorter overlap can only collide
+    // with junk values (see MIN_PHONE_OVERLAP_DIGITS rationale).
+    if (!normalized || normalized.length < MIN_PHONE_OVERLAP_DIGITS) continue;
     lastAttemptedPhone = phone;
 
     let result: CombinedPhoneMatchResult;

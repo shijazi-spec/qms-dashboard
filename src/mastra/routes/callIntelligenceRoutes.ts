@@ -1733,9 +1733,8 @@ export const callIntelligenceRoutes = [
           );
           const zohoStatus = getZohoConnectionStatus();
 
-          const { extractCallPhoneCandidates } = await import(
-            "../../utils/callLeadPhoneMatch"
-          );
+          const { extractCallPhoneCandidates, MIN_PHONE_OVERLAP_DIGITS } =
+            await import("../../utils/callLeadPhoneMatch");
           const { findCrmRecordByPhone } = await import(
             "../../utils/sdrCallLinking"
           );
@@ -1815,7 +1814,7 @@ export const callIntelligenceRoutes = [
             for (const phone of phones) {
               if (!phone) continue;
               const normalized = normalizePhoneDigits(phone);
-              if (!normalized || normalized.length < 7) {
+              if (!normalized || normalized.length < MIN_PHONE_OVERLAP_DIGITS) {
                 phoneAttempts.push({
                   raw: phone,
                   normalized,
@@ -6386,10 +6385,14 @@ ${transcriptText}
           if (!phone.trim()) {
             return c.json({ error: "phone is required" }, 400);
           }
+          const { findLeadsByPhoneMatch, MIN_PHONE_OVERLAP_DIGITS } =
+            await import("../../utils/callLeadPhoneMatch");
           const digitsOnly = phone.replace(/\D+/g, "");
-          if (digitsOnly.length < 7) {
+          if (digitsOnly.length < MIN_PHONE_OVERLAP_DIGITS) {
             return c.json(
-              { error: "phone must contain at least 7 digits" },
+              {
+                error: `phone must contain at least ${MIN_PHONE_OVERLAP_DIGITS} digits`,
+              },
               400,
             );
           }
@@ -6397,9 +6400,6 @@ ${transcriptText}
             typeof body?.max_records === "number" && body.max_records > 0
               ? Math.min(body.max_records, 2000)
               : undefined;
-          const { findLeadsByPhoneMatch } = await import(
-            "../../utils/callLeadPhoneMatch"
-          );
           const result = await findLeadsByPhoneMatch(phone, {
             maxRecords: max,
           });
