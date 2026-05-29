@@ -257,6 +257,10 @@
                             class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">
                             <span data-i18n="calls.wr_range_90d">Last 90 days</span>
                         </button>
+                        <button id="wr-range-all" data-on-click="setWeeklyReportRange" data-args='["all"]'
+                            class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">
+                            <span data-i18n="calls.wr_range_all">All Records</span>
+                        </button>
                         <button id="wr-range-custom-toggle" data-on-click="toggleWeeklyReportCustom"
                             class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">
                             <span data-i18n="calls.wr_range_custom">Custom</span>
@@ -2319,6 +2323,14 @@
                     const start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
                     return { start: toIso(start), end: toIso(now) };
                 }
+                case 'all': {
+                    // "All Records" — span from a far-past start through the
+                    // end of today so every call ever logged is included.
+                    // The server upper bound is exclusive (call_date < end),
+                    // so use tomorrow to capture calls made earlier today.
+                    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                    return { start: '2000-01-01', end: toIso(tomorrow) };
+                }
                 case 'custom': {
                     return {
                         start: _weeklyReportCustomStart || null,
@@ -2336,7 +2348,11 @@
         function renderWeeklyReportSummary(data) {
             const fmtNum = (n) => (n == null ? '--' : _fn(n));
             const fmtScore = (n) => (n == null ? '--' : `${_fn(Number(n).toFixed(1))}%`);
-            const label = data?.window?.label || '--';
+            // "All Records" spans a synthetic far-past start, so show a
+            // friendly label instead of the literal "2000 – today" range.
+            const label = _weeklyReportRange === 'all'
+                ? (window.WalaPlusI18n ? WalaPlusI18n.t('calls.wr_range_all') : 'All Records')
+                : (data?.window?.label || '--');
             const labelEl = document.getElementById('wr-window-label');
             if (labelEl) labelEl.textContent = label;
             const t = data?.totals || {};
@@ -2369,7 +2385,7 @@
                 if (row) row.classList.add('hidden');
             }
             // Repaint the pill active states.
-            ['7d', '30d', '90d'].forEach((k) => {
+            ['7d', '30d', '90d', 'all'].forEach((k) => {
                 const btn = document.getElementById('wr-range-' + k);
                 if (!btn) return;
                 if (k === _weeklyReportRange) {
@@ -2415,7 +2431,7 @@
             _weeklyReportCustomStart = start;
             _weeklyReportCustomEnd = end;
             // None of the presets are active when custom is in use.
-            ['7d', '30d', '90d'].forEach((k) => {
+            ['7d', '30d', '90d', 'all'].forEach((k) => {
                 const btn = document.getElementById('wr-range-' + k);
                 if (!btn) return;
                 btn.classList.remove('bg-indigo-600', 'text-white', 'font-medium');

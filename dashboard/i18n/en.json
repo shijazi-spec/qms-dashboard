@@ -2583,6 +2583,7 @@
     "wr_range_7d": "Last 7 days",
     "wr_range_30d": "Last 30 days",
     "wr_range_90d": "Last 90 days",
+    "wr_range_all": "All Records",
     "wr_range_custom": "Custom",
     "wr_from": "From",
     "wr_to": "To",
