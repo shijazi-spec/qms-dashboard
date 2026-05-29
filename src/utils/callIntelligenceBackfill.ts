@@ -239,13 +239,182 @@ async function backfillAutoLinks(perBootCap: number): Promise<{
 }
 
 /**
- * Run all three passes. Logs a single summary line. Designed to be
+ * Pass 4 — re-validate every linked call against Zoho's current phone.
+ *
+ * Why: even after the 9-digit floor (MIN_PHONE_OVERLAP_DIGITS) was
+ * applied symmetrically in commit ed95616, the EXISTING bad
+ * `call_records.lead_id` values written by old code (or before the
+ * floor existed) survive in the DB. They show up on the dashboard as
+ * "Non-Compliant" compliance rows pointing at junk Zoho Leads whose
+ * Phone field is literally "11" (or some other sub-9-digit junk).
+ * The user has to know about the "Audit CRM Links" button to clean
+ * them up.
+ *
+ * Strategy: same algorithm as POST /api/calls/audit-crm-links, just
+ * bounded per boot so it can run on every cold start without exhausting
+ * the Zoho daily API budget. Already-correct links are read once and
+ * left alone (free verification); confirmed mismatches are cleared so
+ * `backfillAutoLinks` (Pass 3, runs BEFORE this — see ordering note in
+ * backfillUnpopulatedCallData) re-links them on the next boot via the
+ * new Leads + Contact→Deal walk in `findCrmRecordByPhone`.
+ *
+ * Skipped:
+ *   - linked_via='activity' rows (those weren't claimed-via-phone, so
+ *     a phone mismatch isn't a defect — the activity matcher chose
+ *     them for a different reason).
+ *   - Rows where the Zoho parent record can't be read (deleted /
+ *     permission / temporary Zoho failure) — keep conservatively to
+ *     avoid clearing a still-valid link on a transient error.
+ *   - Rows where the call has no extractable phone — can't prove a
+ *     mismatch, leave alone.
+ *
+ * Per-boot cap defaults to 50 (≈ 50 Zoho reads / cold start) to stay
+ * well under the daily limit even after the other passes have run.
+ */
+async function cleanupMismatchedLinks(perBootCap: number): Promise<{
+  scanned: number;
+  cleared: number;
+  kept: number;
+  unreadable: number;
+  no_phone: number;
+  no_zoho: boolean;
+}> {
+  const hasZoho =
+    process.env.ZOHO_ACCESS_TOKEN ||
+    (process.env.ZOHO_CLIENT_ID &&
+      process.env.ZOHO_CLIENT_SECRET &&
+      process.env.ZOHO_REFRESH_TOKEN);
+  if (!hasZoho) {
+    return {
+      scanned: 0,
+      cleared: 0,
+      kept: 0,
+      unreadable: 0,
+      no_phone: 0,
+      no_zoho: true,
+    };
+  }
+
+  const { fetchZohoRecords } = await import("./zohoCRM");
+  const { phonesShareSubscriberNumber } = await import("./callLeadPhoneMatch");
+  const { clearCallRecordCrmLink } = await import("./callIntelligenceDb");
+
+  // Order by id ASC so the cap is deterministic and successive boots
+  // make forward progress through the table even if Zoho's daily
+  // quota interrupts the sweep mid-pass.
+  const candidatesRes = await pool.query(
+    `
+    SELECT id, call_id, lead_id, deal_id, linked_via, metadata,
+           agent_email, agent_name, call_date, contact_phone
+      FROM call_records
+     WHERE (lead_id IS NOT NULL OR deal_id IS NOT NULL)
+       AND linked_via IS DISTINCT FROM 'activity'
+     ORDER BY id ASC
+     LIMIT $1
+    `,
+    [perBootCap],
+  );
+
+  let cleared = 0;
+  let kept = 0;
+  let unreadable = 0;
+  let no_phone = 0;
+
+  for (const rec of candidatesRes.rows) {
+    const callPhones = extractCallPhoneCandidates(rec) || [];
+    if (callPhones.length === 0) {
+      no_phone++;
+      continue;
+    }
+    const module: "Leads" | "Deals" = rec.lead_id ? "Leads" : "Deals";
+    const recordId = String(rec.lead_id || rec.deal_id);
+    let zohoPhone: string | null = null;
+    try {
+      const rows = await fetchZohoRecords(module, {
+        criteria: `id:equals:${recordId}`,
+        perPage: 1,
+      });
+      const r: any = rows[0];
+      if (!r) {
+        unreadable++;
+        continue;
+      }
+      const d = r.data || {};
+      const raw =
+        (typeof d.Phone === "object" && d.Phone?.name) ||
+        d.Phone ||
+        (typeof d.Mobile === "object" && d.Mobile?.name) ||
+        d.Mobile ||
+        "";
+      zohoPhone = String(raw || "").trim() || null;
+    } catch {
+      unreadable++;
+      continue;
+    }
+    if (!zohoPhone) {
+      // Deal/Lead exists but has no phone field at all — can't prove a
+      // mismatch from the phone side, defer to the audit button.
+      unreadable++;
+      continue;
+    }
+
+    const overlaps = callPhones.some((p: string) =>
+      phonesShareSubscriberNumber(zohoPhone as string, p),
+    );
+    if (overlaps) {
+      kept++;
+      continue;
+    }
+
+    // Confirmed mismatch under the 9-digit-floor rule. Clear the link;
+    // the next boot's Pass 3 (backfillAutoLinks) will re-link via the
+    // new Lead → Contact→Deal walk if a real match exists.
+    try {
+      await clearCallRecordCrmLink(rec.id);
+      cleared++;
+      logger.warn(
+        `[CallBackfill] cleared mismatched ${module} link on call ${rec.id} — Zoho phone "${zohoPhone}" does not match any call phone (call_phones=${JSON.stringify(callPhones)})`,
+      );
+    } catch (err: any) {
+      // Cleared++ deferred so the count reflects actual DB writes.
+      logger.warn("[CallBackfill] clear failed", {
+        callId: rec.id,
+        error: err?.message || String(err),
+      });
+    }
+
+    // Cooperative throttle so we stay polite under Zoho's per-second
+    // RPS cap when the sweep is at its busiest.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  return {
+    scanned: candidatesRes.rows.length,
+    cleared,
+    kept,
+    unreadable,
+    no_phone,
+    no_zoho: false,
+  };
+}
+
+/**
+ * Run all four passes. Logs a single summary line. Designed to be
  * fire-and-forget at process startup; any unexpected failure is
  * caught and logged without throwing.
  *
- * `perBootCap` bounds the Zoho-touching auto-link pass so cold starts
- * with hundreds of unlinked rows can't blow through the daily API
- * quota in one go. Remaining rows are picked up on later boots.
+ * `perBootCap` bounds the Zoho-touching passes so cold starts with
+ * hundreds of rows can't blow through the daily API quota in one go.
+ * Remaining rows are picked up on later boots.
+ *
+ * Order matters:
+ *   1. backfillPhonesFromFilenames — populates contact_phone metadata.
+ *   2. backfillDurationsFromAudio   — populates duration_seconds where missing.
+ *   3. backfillAutoLinks            — links UNLINKED calls now that phones exist.
+ *   4. cleanupMismatchedLinks       — clears stale phone-mismatched links
+ *                                      written by pre-fix code. Anything cleared
+ *                                      here gets a fresh re-link attempt on the
+ *                                      NEXT boot's Pass 3.
  */
 let _ran = false;
 export async function backfillUnpopulatedCallData(
@@ -258,10 +427,13 @@ export async function backfillUnpopulatedCallData(
     const phones = await backfillPhonesFromFilenames();
     const durations = await backfillDurationsFromAudio();
     const links = await backfillAutoLinks(perBootCap);
+    // Same cap envelope as the auto-link pass — both touch Zoho per row.
+    const mismatch = await cleanupMismatchedLinks(perBootCap * 2);
     logger.info("[CallBackfill] boot sweep complete", {
       phones,
       durations,
       links,
+      mismatch,
     });
   } catch (err: any) {
     logger.warn("[CallBackfill] sweep failed", {
