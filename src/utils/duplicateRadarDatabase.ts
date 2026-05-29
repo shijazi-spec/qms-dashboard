@@ -415,7 +415,55 @@ export function calculateMultiSignalScore(
   return { score: Math.min(score, 100), signals };
 }
 
+// Memoization handle for initDuplicateRadarTables.
+//
+// 6 route handlers in duplicateRadarRoutes.ts call this at the top of
+// every request (recalculate-stats, account-hints/scan, packet, kpis,
+// preflight, the lifecycle endpoints…). The init body executes ~30
+// CREATE TABLE / ALTER TABLE / CREATE INDEX statements plus an optional
+// pg_trgm extension install. They're idempotent (IF NOT EXISTS) but on
+// a cold Replit container the first run takes 5–15s, and 6 endpoints
+// firing in parallel from /duplicates' refreshData all race for the
+// same work. Same cold-start failure mode as initCallIntelligenceTables
+// before its memoization landed (see that file for the playbook).
+//
+// Fix: run the schema body exactly once per process lifetime. Subsequent
+// calls await the cached promise (cheap) and return as soon as the
+// first call finishes. Cached promise is cleared on failure so a
+// transient connection blip doesn't pin the cache forever.
+let _ddrInitPromise: Promise<void> | null = null;
+let _ddrInitDone = false;
+
 export async function initDuplicateRadarTables(): Promise<void> {
+  if (_ddrInitDone) return;
+  if (_ddrInitPromise) return _ddrInitPromise;
+  _ddrInitPromise = (async () => {
+    const startedAt = Date.now();
+    try {
+      await _doInitDuplicateRadarTables();
+      _ddrInitDone = true;
+      const ms = Date.now() - startedAt;
+      // Loud above 2s so an operator tailing logs can spot a legitimate
+      // cold start vs a recurring slow path (which would mean the
+      // memoization broke).
+      if (ms > 2000) {
+        logger.warn(
+          `[duplicateRadarDatabase] initDuplicateRadarTables took ${ms}ms (cold start)`,
+        );
+      } else {
+        logger.info(
+          `[duplicateRadarDatabase] initDuplicateRadarTables completed in ${ms}ms`,
+        );
+      }
+    } catch (err) {
+      _ddrInitPromise = null;
+      throw err;
+    }
+  })();
+  return _ddrInitPromise;
+}
+
+async function _doInitDuplicateRadarTables(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_clusters (
       id SERIAL PRIMARY KEY,

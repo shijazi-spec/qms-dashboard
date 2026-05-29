@@ -438,6 +438,12 @@ async function _doInitCallIntelligenceTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_call_records_lead ON call_records(lead_id);
     CREATE INDEX IF NOT EXISTS idx_call_records_deal ON call_records(deal_id);
     CREATE INDEX IF NOT EXISTS idx_call_records_date ON call_records(call_date);
+    -- Supports the sort=created_at path on /api/calls (powers the
+    -- Recent Uploads activity log on /calls). Without this, ORDER BY
+    -- cr.created_at DESC + LIMIT 25 triggers a sequential scan at
+    -- realistic table sizes (~50k+ rows). Costs nothing at small
+    -- volumes; the IF NOT EXISTS makes the migration idempotent.
+    CREATE INDEX IF NOT EXISTS idx_call_records_created_at ON call_records(created_at);
     CREATE INDEX IF NOT EXISTS idx_call_records_original_filename
       ON call_records ((metadata->>'original_filename'))
       WHERE metadata->>'original_filename' IS NOT NULL;
