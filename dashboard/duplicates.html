@@ -171,7 +171,7 @@
         </div>
 
         <!-- Merge Workflow Guidance Banner -->
-        <div id="mergeGuideBanner" class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 flex items-start gap-3" data-testid="banner-merge-guide">
+        <div id="mergeGuideBanner" class="hidden bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 flex items-start gap-3" data-testid="banner-merge-guide">
             <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             <div class="flex-1 text-xs text-blue-900">
                 <p class="font-semibold mb-1">After merging duplicates in Zoho — please do both:</p>
@@ -4475,6 +4475,20 @@
             document.getElementById('content-' + tab).classList.remove('hidden');
             document.getElementById('tab-' + tab).classList.remove('tab-inactive');
             document.getElementById('tab-' + tab).classList.add('tab-active');
+            // The post-merge guidance banner only makes sense on tabs that
+            // actually expose the "Mark Resolved" cluster action (the cluster +
+            // per-module duplicate tabs, including cross-module). Hide it
+            // everywhere else, and never override an explicit dismissal.
+            const mergeGuideTabs = ['clusters', 'leads', 'deals', 'contacts', 'accounts', 'cross-module'];
+            const mergeBanner = document.getElementById('mergeGuideBanner');
+            if (mergeBanner) {
+                const dismissed = localStorage.getItem('mergeGuideDismissed') === '1';
+                if (mergeGuideTabs.includes(tab) && !dismissed) {
+                    mergeBanner.classList.remove('hidden');
+                } else {
+                    mergeBanner.classList.add('hidden');
+                }
+            }
             // Lazy-load the heavy tabs on first visit. _loadedTabs is cleared
             // by refreshData() so a top-header Refresh re-fetches whichever
             // tab the user lands on next. These four cs-* / account-hints
