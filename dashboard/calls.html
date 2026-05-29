@@ -1865,6 +1865,104 @@
             return `<span class="px-2 py-1 text-xs rounded-full font-medium ${info.cls}">${escapeHtml(info.label)}</span>`;
         }
 
+        // The three post-evaluation states a quality reviewer is allowed
+        // to flip between. Pipeline-managed states (uploaded / transcribing /
+        // transcribed / evaluating / failed) are read-only — overriding
+        // those would race the worker that's actively moving them.
+        const STATUS_OVERRIDE_OPTIONS = [
+            { value: 'evaluated',         label: 'Evaluated' },
+            { value: 'qa_review_pending', label: 'QA Review Pending' },
+            { value: 'qa_reviewed',       label: 'QA Reviewed' },
+        ];
+        const STATUS_OVERRIDE_ALLOWED = new Set(STATUS_OVERRIDE_OPTIONS.map((o) => o.value));
+
+        /**
+         * Returns the rendered cell for a call's status column. For the
+         * three post-evaluation states (evaluated / qa_review_pending /
+         * qa_reviewed) the badge becomes a styled <select> so a quality
+         * reviewer can flip between them without re-running the AI eval.
+         * For any other state the read-only badge is rendered — see
+         * renderCallStatusBadge — because those states are pipeline-
+         * managed and overriding them would race the worker that owns
+         * them. Persistence: POST /api/calls/:id/status, audited via
+         * event_logs.action_type='call_status_manual_override'.
+         */
+        function renderCallStatusCell(call) {
+            const status = call && call.status;
+            if (!STATUS_OVERRIDE_ALLOWED.has(status)) {
+                return renderCallStatusBadge(status);
+            }
+            const info = CALL_STATUS_INFO[status] || { cls: 'bg-gray-100 text-gray-600' };
+            const opts = STATUS_OVERRIDE_OPTIONS.map((o) =>
+                `<option value="${o.value}"${o.value === status ? ' selected' : ''}>${escapeHtml(o.label)}</option>`,
+            ).join('');
+            // appearance-auto on the <select> keeps the native dropdown
+            // arrow so it's obvious the cell is interactive. The badge
+            // colour follows the currently-selected status; on change the
+            // handler re-renders the row and the colour updates with it.
+            // data-pass-event=true so the handler can read event.target.value.
+            return `
+                <select
+                    class="px-2 py-1 text-xs rounded-full font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-300 ${info.cls}"
+                    data-on-change="changeCallStatus"
+                    data-args="[${call.id}]"
+                    data-pass-event="true"
+                    data-testid="select-status-${call.id}"
+                    title="Change call status — audited"
+                >${opts}</select>`;
+        }
+
+        // POST /api/calls/:id/status with the new value, then refresh the
+        // table so the row picks up the new badge colour + downstream
+        // counters (Overview KPIs read the same statuses).
+        async function changeCallStatus(callId, event) {
+            const sel = event && event.target;
+            const requested = sel && sel.value;
+            if (!requested) return;
+            const previous = sel.getAttribute('data-prev-value') || '';
+            try {
+                sel.disabled = true;
+                const res = await fetch(`/api/calls/${callId}/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ status: requested }),
+                });
+                if (res.status === 401 || res.status === 403) {
+                    alert('Not authorized to change call status. Quality reviewer or admin role required.');
+                    if (previous) sel.value = previous;
+                    return;
+                }
+                if (res.status === 429) {
+                    const retry = parseInt(res.headers.get('Retry-After') || '0', 10);
+                    alert('Rate-limited — wait ' + (Number.isFinite(retry) && retry > 0 ? retry + 's' : 'a moment') + ' and try again.');
+                    if (previous) sel.value = previous;
+                    return;
+                }
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    alert('Status update failed: ' + (body.error || ('HTTP ' + res.status)));
+                    if (previous) sel.value = previous;
+                    return;
+                }
+                // Keep the in-memory cache + downstream renders in sync
+                // so a tab switch doesn't re-paint the old status. The
+                // refreshData() call also pulls fresh analytics — both
+                // the Overview KPIs and the SDR Evaluation tab read
+                // call_records.status — so the headline counts move
+                // immediately after the override.
+                const cached = (callRecords || []).find((r) => r.id === callId);
+                if (cached) cached.status = requested;
+                renderCallsTable();
+                await refreshData();
+            } catch (e) {
+                alert('Status update threw: ' + (e && e.message || e));
+                if (previous) sel.value = previous;
+            } finally {
+                sel.disabled = false;
+            }
+        }
+
         /** True when the call is in any post-evaluation state. */
         function isCallEvaluated(status) {
             return CALL_STATUS_EVALUATED_SET.has(status);
@@ -3494,7 +3592,7 @@
                     <td class="px-2 py-2 text-sm text-center text-gray-600 whitespace-nowrap">${escapeHtml(_fd(call.created_at))}</td>
                     <td class="px-2 py-2 text-center">${renderCrmLinkCell(call)}</td>
                     <td class="px-2 py-2 text-center">
-                        ${renderCallStatusBadge(call.status)}
+                        ${renderCallStatusCell(call)}
                     </td>
                     <td class="px-2 py-2 text-center whitespace-nowrap">
                         <div class="inline-flex items-center gap-3">

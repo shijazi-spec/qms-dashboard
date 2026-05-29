@@ -1955,6 +1955,155 @@ export const callIntelligenceRoutes = [
       };
     },
   },
+  // ===================================================================
+  //  Manual call-status override (2026-05-29)
+  //
+  //  Allows a quality reviewer / admin to change a single call's status
+  //  to any of evaluated / qa_review_pending / qa_reviewed WITHOUT
+  //  re-running the AI evaluation. Closes the workflow gap where the
+  //  AI auto-routed a low-confidence call to qa_review_pending and the
+  //  reviewer decided it was fine, or vice versa (AI was confident but
+  //  the reviewer wants a second pair of eyes).
+  //
+  //  Restricted to the three post-evaluation states by design:
+  //    - The intake states (uploaded / transcribing / transcribed /
+  //      evaluating) are pipeline-managed; a manual override there
+  //      would race the worker and corrupt the queue.
+  //    - "failed" is also pipeline-managed (terminal error state).
+  //
+  //  Audit-logged: every change writes an event_logs row capturing
+  //  who changed it, when, from what, to what — ISO 9001 §9.1.3 +
+  //  PDPL Art. 31 traceability, same envelope SDR review submissions
+  //  use (sdr_evaluation_reviewed action_type).
+  //
+  //  Body: { status: "evaluated" | "qa_review_pending" | "qa_reviewed" }
+  //  Auth: admin OR quality_manager / quality_specialist /
+  //        head_of_operations_quality / ai_specialist.
+  // ===================================================================
+  {
+    path: "/api/calls/:callId/status",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          // verifyCallAccess is the standard quality-team gate used by
+          // every other call read/write here — same CALL_READ_ROLES list.
+          // The post-evaluation states are quality-team decisions, not
+          // strict admin-only operations, so this aligns with the rest
+          // of the calls page rather than the heavier admin-only writes.
+          const user = await verifyCallAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const logger = mastra?.getLogger();
+          const callId = parseInt(c.req.param("callId"));
+          if (!Number.isFinite(callId)) {
+            return c.json({ error: "Invalid call ID" }, 400);
+          }
+
+          const body = await c.req.json().catch(() => ({}));
+          const requested = String(body?.status || "").trim();
+          const ALLOWED_OVERRIDES = new Set([
+            "evaluated",
+            "qa_review_pending",
+            "qa_reviewed",
+          ]);
+          if (!ALLOWED_OVERRIDES.has(requested)) {
+            return c.json(
+              {
+                error: "Invalid status. Allowed: evaluated, qa_review_pending, qa_reviewed.",
+                hint: "Pipeline-managed states (uploaded, transcribing, transcribed, evaluating, failed) cannot be set manually — let the worker drive those.",
+              },
+              400,
+            );
+          }
+
+          const {
+            getCallRecordById,
+            updateCallStatus,
+            initCallIntelligenceTables,
+          } = await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          const existing = await getCallRecordById(callId);
+          if (!existing) {
+            return c.json({ error: "Call record not found" }, 404);
+          }
+
+          // Idempotent — re-setting to the current status is a no-op
+          // success so the dashboard can fire the request without
+          // round-tripping a no-op alert.
+          if (existing.status === requested) {
+            return c.json({
+              success: true,
+              call_id: callId,
+              status: requested,
+              previous_status: requested,
+              no_op: true,
+            });
+          }
+
+          await updateCallStatus(callId, requested as any);
+
+          // Audit-trail — match the envelope SDR review submissions use
+          // so the event log timeline doesn't fragment across action
+          // types. severity defaults to INFO; bump to WARNING when a
+          // reviewer demotes qa_reviewed back to qa_review_pending
+          // (signals a finalized review was reopened).
+          try {
+            const { logEvent } = await import(
+              "../../utils/eventLogsDatabase"
+            );
+            const demoted =
+              existing.status === "qa_reviewed" &&
+              requested !== "qa_reviewed";
+            await logEvent({
+              actionType: "call_status_manual_override",
+              entityType: "call_record",
+              entityId: String(callId),
+              module: "calls",
+              severity: demoted ? "WARNING" : "INFO",
+              aiInvolved: false,
+              userEmail: (user as any).email || undefined,
+              userName: (user as any).name || undefined,
+              description: `Operator ${
+                (user as any).email || "(unknown)"
+              } changed call ${callId} status: ${existing.status} → ${requested}.`,
+              oldValue: { status: existing.status },
+              newValue: { status: requested },
+            });
+          } catch (logErr: any) {
+            logger?.warn("[API] call-status manual override audit failed", {
+              callId,
+              error: logErr?.message || String(logErr),
+            });
+          }
+
+          logger?.info("✅ [API] call status manually overridden", {
+            callId,
+            from: existing.status,
+            to: requested,
+            by: (user as any).email,
+          });
+
+          return c.json({
+            success: true,
+            call_id: callId,
+            status: requested,
+            previous_status: existing.status,
+            no_op: false,
+          });
+        } catch (error: any) {
+          safeLogger.error("[API] call-status manual override failed", {
+            error: error?.message,
+          });
+          return c.json(
+            { error: error?.message || "Status update failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
   {
     path: "/api/calls/:callId/analyze",
     method: "POST" as const,
