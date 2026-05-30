@@ -3637,6 +3637,204 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  // ===================================================================
+  //  Manual CAPA conversion endpoint (2026-05-30 operator request).
+  //
+  //  Every actionable row across the duplicate radar (CS Lifecycle
+  //  violation, Cross-Module overlap, Domain cluster, Account Hint,
+  //  Owner Accountability row, etc.) can be escalated to a formal
+  //  CAPA via this single endpoint. The frontend opens a shared
+  //  modal that pre-fills the body from row context; this handler
+  //  writes the CAPA into the canonical capa_records table so the
+  //  same record shows up in the QMS CAPA inbox (where Quality works
+  //  it) and in any Audit Reports rollup the team builds on top.
+  //
+  //  Idempotency: if an OPEN CAPA already exists for the same
+  //  (source_type, source_id), we return that record instead of
+  //  creating a duplicate. Operators can double-click the button
+  //  without spawning two CAPAs.
+  //
+  //  Body:
+  //    {
+  //      source_type: string,            // 'duplicate_cluster' | 'cs_lifecycle_manual' | ...
+  //      source_id: string,              // stable id from the row (cluster id, deal id, ...)
+  //      source_reference?: string,      // human label for cross-link (domain, account name)
+  //      title: string,                  // CAPA title (operator-editable in the modal)
+  //      description?: string,           // CAPA body (likewise editable)
+  //      severity?: 'critical' | 'major' | 'minor' | 'observation' (default 'major')
+  //      target_days?: number,           // SLA window in days from now (default 7)
+  //      assigned_to?: string,           // owner email
+  //      metadata?: any                  // free-form (origin tab, row IDs, …)
+  //    }
+  //
+  //  Returns: { success: true, capa_number, capa_id, was_existing: bool }
+  // ===================================================================
+  {
+    path: "/api/duplicates/capa/manual-open",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const body = await c.req.json().catch(() => ({}));
+          const sourceType = String(body?.source_type || "").trim();
+          const sourceId = String(body?.source_id || "").trim();
+          const title = String(body?.title || "").trim();
+          if (!sourceType || !sourceId || !title) {
+            return c.json(
+              {
+                error:
+                  "source_type, source_id and title are required.",
+              },
+              400,
+            );
+          }
+
+          const description = String(body?.description || "").trim() || undefined;
+          const sourceReference = String(body?.source_reference || "").trim() || undefined;
+          const assignedTo = String(body?.assigned_to || "").trim() || undefined;
+          const VALID_SEVERITIES = new Set([
+            "critical",
+            "major",
+            "minor",
+            "observation",
+          ]);
+          const severity = VALID_SEVERITIES.has(String(body?.severity))
+            ? (body.severity as "critical" | "major" | "minor" | "observation")
+            : "major";
+          // Severity → priority mapping mirrors the auto-CAPA pipeline
+          // (csLifecycleAutoCapa.priorityForViolation) so the QMS CAPA
+          // inbox sorts manual + auto CAPAs the same way.
+          const priority: "critical" | "high" | "medium" | "low" =
+            severity === "critical"
+              ? "critical"
+              : severity === "major"
+                ? "high"
+                : severity === "minor"
+                  ? "medium"
+                  : "low";
+
+          const targetDaysRaw = Number(body?.target_days);
+          const targetDays =
+            Number.isFinite(targetDaysRaw) && targetDaysRaw > 0
+              ? Math.min(targetDaysRaw, 365)
+              : 7;
+          const targetDate = new Date(Date.now() + targetDays * 86400 * 1000);
+
+          const { qmsPool, createCapaRecord } = await import(
+            "../../utils/qmsDatabase"
+          );
+
+          // Idempotency check — return existing open CAPA for the same
+          // (source_type, source_id) instead of duplicating. Matches the
+          // auto-CAPA runners' existingOpenCapa() rule.
+          const existingRes = await qmsPool.query(
+            `SELECT id, capa_number
+               FROM capa_records
+              WHERE source_type = $1
+                AND source_id   = $2
+                AND status NOT IN ('closed', 'cancelled')
+              LIMIT 1`,
+            [sourceType, sourceId],
+          );
+          if (existingRes.rows.length > 0) {
+            return c.json({
+              success: true,
+              capa_number: existingRes.rows[0].capa_number,
+              capa_id: existingRes.rows[0].id,
+              was_existing: true,
+            });
+          }
+
+          const userEmail = (user as any).email || undefined;
+          const userName = (user as any).name || undefined;
+          const createdBy = userEmail || "duplicate-radar:manual";
+
+          const capa = await createCapaRecord({
+            title,
+            description,
+            capa_type: "corrective",
+            source_type: sourceType,
+            source_id: sourceId,
+            source_reference: sourceReference,
+            severity,
+            status: "open",
+            priority,
+            assigned_to: assignedTo,
+            target_date: targetDate,
+            related_criteria: {},
+            attachments: [],
+            metadata: {
+              origin: "duplicate-radar",
+              opened_by: userEmail,
+              opened_by_name: userName,
+              ...(body?.metadata && typeof body.metadata === "object"
+                ? body.metadata
+                : {}),
+            },
+            created_by: createdBy,
+          });
+
+          // Audit-log every manual CAPA so the Audit Reports surface +
+          // the QMS CAPA history both have a trail. Same envelope shape
+          // the SDR review submissions and manual call-status overrides
+          // use, so timeline reports stay coherent across action types.
+          try {
+            const { logEvent } = await import(
+              "../../utils/eventLogsDatabase"
+            );
+            await logEvent({
+              actionType: "capa_manual_open",
+              entityType: "capa_record",
+              entityId: String(capa.id ?? ""),
+              entityName: capa.capa_number || title,
+              module: "duplicates",
+              severity:
+                severity === "critical"
+                  ? "WARNING"
+                  : "INFO",
+              aiInvolved: false,
+              userEmail,
+              userName,
+              description: `Operator ${userEmail || "(unknown)"} opened CAPA ${
+                capa.capa_number
+              } from the duplicate radar: ${title}`,
+              newValue: {
+                capa_id: capa.id,
+                capa_number: capa.capa_number,
+                source_type: sourceType,
+                source_id: sourceId,
+                source_reference: sourceReference,
+                severity,
+                target_days: targetDays,
+              },
+            });
+          } catch (logErr: any) {
+            logger.warn(
+              `[duplicate-radar/manual-capa] audit log failed: ${
+                logErr?.message || logErr
+              }`,
+            );
+          }
+
+          return c.json({
+            success: true,
+            capa_number: capa.capa_number,
+            capa_id: capa.id,
+            was_existing: false,
+          });
+        } catch (error: any) {
+          logger.error("Error opening manual CAPA:", error);
+          return c.json(
+            { error: error?.message || "Failed to open CAPA" },
+            500,
+          );
+        }
+      };
+    },
+  },
   {
     // KPI rollup over auto-created CAPAs (CS-overlap + CS-lifecycle).
     // Returns: totals, per-source-type breakdown, and a 30-day opened trend.
