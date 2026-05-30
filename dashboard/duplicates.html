@@ -756,6 +756,7 @@
                     <tbody id="crossModuleTable" class="bg-white divide-y divide-gray-200"></tbody>
                 </table>
             </div>
+            <div id="crossModulePagination" class="flex justify-center items-center gap-3 mt-4"></div>
             <!-- Action buttons now live above the table (see block above the
                  KPI cards). This footer placeholder is intentionally empty so
                  the bulk-result modal below keeps its DOM position. -->
@@ -846,6 +847,7 @@
                     </tbody>
                 </table>
             </div>
+            <div id="csOverlapPagination" class="flex justify-center items-center gap-3 mt-4"></div>
         </div>
 
         <!-- ═══ PREFLIGHT CHECK TAB ═══ -->
@@ -986,6 +988,7 @@
                     </tbody>
                 </table>
             </div>
+            <div id="accountHintsPagination" class="flex justify-center items-center gap-3 mt-4"></div>
         </div>
 
         <!-- ═══ CS LIFECYCLE COMPLIANCE TAB ═══ -->
@@ -1083,6 +1086,7 @@
                     </tbody>
                 </table>
             </div>
+            <div id="csLifecyclePagination" class="flex justify-center items-center gap-3 mt-4"></div>
           </div><!-- /lg:px-… inner padding wrapper -->
         </div>
 
@@ -1129,6 +1133,7 @@
                     <tbody id="ownersTable" class="bg-white divide-y divide-gray-200"></tbody>
                 </table>
             </div>
+            <div id="ownersPagination" class="flex justify-center items-center gap-3 mt-4"></div>
         </div>
 
         <!-- Export Center tab removed — replaced by per-tab "Export CSV"
@@ -1555,7 +1560,16 @@
                 updateCrossModuleBulkBar();
                 return;
             }
-            tbody.innerHTML = list.map(c => {
+            // Client-side pagination — 20 cross-module clusters per page.
+            window._crossModulePage = Number.isFinite(window._crossModulePage) ? window._crossModulePage : 0;
+            const crossModuleTotalPages = Math.max(1, Math.ceil(list.length / RADAR_PAGE_SIZE));
+            if (window._crossModulePage >= crossModuleTotalPages) window._crossModulePage = 0;
+            const crossModulePageStart = window._crossModulePage * RADAR_PAGE_SIZE;
+            const crossModuleSlice = list.slice(crossModulePageStart, crossModulePageStart + RADAR_PAGE_SIZE);
+            renderPagination('crossModulePagination', window._crossModulePage, crossModuleTotalPages,
+                (p) => { window._crossModulePage = p; renderCrossModuleTable(); },
+                list.length, 'clusters');
+            tbody.innerHTML = crossModuleSlice.map(c => {
                 const meta = CROSS_MODULE_PAIRING_LABELS[c.pairing] || { label: c.pairing || '—', action: 'Open cluster for per-record recommendations' };
                 const modules = [];
                 if (c.total_leads    > 0) modules.push('Leads(' + c.total_leads + ')');
@@ -2008,7 +2022,7 @@
             const dirBtn = document.getElementById('clusterSortDir');
             const dir = (dirBtn && dirBtn.getAttribute('data-sort-dir')) || 'desc';
             const range = getDateRange();
-            let url = `/api/duplicates/clusters?limit=30&offset=${page * 30}&sort=${encodeURIComponent(sort)}&dir=${encodeURIComponent(dir)}`;
+            let url = `/api/duplicates/clusters?limit=${RADAR_PAGE_SIZE}&offset=${page * RADAR_PAGE_SIZE}&sort=${encodeURIComponent(sort)}&dir=${encodeURIComponent(dir)}`;
             if (conf) url += `&confidence_level=${conf}`;
             if (status) url += `&status=${status}`;
             if (layout) url += `&layouts=${encodeURIComponent(layout)}`;
@@ -2052,7 +2066,7 @@
                     if (loadId !== window._clustersLoadId) return;
 
                     renderClusters(data.clusters || []);
-                    renderPagination('clustersPagination', page, data.pages || 1, loadClusters);
+                    renderPagination('clustersPagination', page, data.pages || 1, loadClusters, data.total, 'clusters');
                     const hint = document.getElementById('layoutFilterHint');
                     if (hint) hint.textContent = layout ? WalaPlusI18n.t('dyn.duplicates.filtered_in_layout', { n: _fn(data.total ?? 0), layout: layout }) : '';
                     window._loadedTabs.add('clusters');
@@ -2200,18 +2214,28 @@
         // a named function declaration (loadClusters) or an inline
         // arrow expression. CSP-clean — listeners attached
         // programmatically don't violate any inline-handler policy.
-        function renderPagination(containerId, currentPage, totalPages, callback) {
+        // Page size used by every paginated tab in the radar (Domain
+        // Clusters + the 4 record-tab Duplicate views). Centralised so
+        // the operator can change it in one place if they prefer denser
+        // pages later. Smaller pages = lower viewport scroll burden +
+        // faster server response on each click.
+        const RADAR_PAGE_SIZE = 20;
+
+        // renderPagination(containerId, currentPage, totalPages, callback,
+        //                  totalRecords?, unitLabel?)
+        // Renders:  [Prev]  Page X of Y · M total records  [Next]
+        // When totalPages <= 1 we still render the "M total records"
+        // chip on its own so the operator always sees the corpus size,
+        // not just a blank strip.
+        function renderPagination(containerId, currentPage, totalPages, callback, totalRecords, unitLabel) {
             const el = document.getElementById(containerId);
             if (!el) return;
-            if (totalPages <= 1) { el.innerHTML = ''; return; }
-            // Clear via innerHTML so any prior listeners on prior nodes
-            // are GC'd along with the nodes themselves. Then build the
-            // new buttons + status fragment from scratch.
             el.innerHTML = '';
 
+            const showButtons = totalPages > 1;
             const btnClass = 'px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm';
 
-            if (currentPage > 0) {
+            if (showButtons && currentPage > 0) {
                 const prevBtn = document.createElement('button');
                 prevBtn.type = 'button';
                 prevBtn.className = btnClass;
@@ -2224,15 +2248,33 @@
                 el.appendChild(prevBtn);
             }
 
+            // Status line: page indicator (when multi-page) + always the
+            // total record count when supplied. "20 of 1,234 accounts" beats
+            // "Page 2 of 62" alone because the operator immediately sees
+            // the corpus they're working through.
             const status = document.createElement('span');
-            status.className = 'px-3 py-1 text-sm text-gray-500';
-            status.textContent = WalaPlusI18n.t('dyn.common.page_x_of_y', {
-                current: _fn(currentPage + 1),
-                total: _fn(totalPages),
-            });
+            status.className = 'px-3 py-1 text-sm text-gray-600 font-medium';
+            const parts = [];
+            if (showButtons) {
+                parts.push(WalaPlusI18n.t('dyn.common.page_x_of_y', {
+                    current: _fn(currentPage + 1),
+                    total: _fn(totalPages),
+                }));
+            }
+            if (Number.isFinite(Number(totalRecords))) {
+                const unit = String(unitLabel || 'records');
+                const startRow = currentPage * RADAR_PAGE_SIZE + 1;
+                const endRow   = Math.min((currentPage + 1) * RADAR_PAGE_SIZE, Number(totalRecords));
+                if (showButtons) {
+                    parts.push(_fn(startRow) + '–' + _fn(endRow) + ' of ' + _fn(totalRecords) + ' ' + unit);
+                } else {
+                    parts.push(_fn(totalRecords) + ' ' + unit);
+                }
+            }
+            status.textContent = parts.join(' · ');
             el.appendChild(status);
 
-            if (currentPage < totalPages - 1) {
+            if (showButtons && currentPage < totalPages - 1) {
                 const nextBtn = document.createElement('button');
                 nextBtn.type = 'button';
                 nextBtn.className = btnClass;
@@ -2246,7 +2288,7 @@
             }
         }
 
-        // C4: Paginated record tabs (50/page)
+        // C4: Paginated record tabs (20/page)
         let recordPages = { leads: 0, deals: 0, contacts: 0, accounts: 0 };
         // Generic "Refresh from Zoho (live)" engine — scrapes the visible
         // Zoho ids out of a tbody (via the data-testid="link-zoho-<id>"
@@ -2633,8 +2675,8 @@
             // the rows shown inside this tab. The server ignores the Module
             // filter here because the tab itself pins the module.
             const params = buildFilterParams();
-            params.set('limit', '50');
-            params.set('offset', String(page * 50));
+            params.set('limit', String(RADAR_PAGE_SIZE));
+            params.set('offset', String(page * RADAR_PAGE_SIZE));
             const url = `/api/duplicates/${type}?` + params.toString();
 
             // Cancel any older in-flight load for this tab so a quick double
@@ -2682,11 +2724,12 @@
 
                     const groups = data.groups || [];
                     const pages  = data.pages  || 1;
+                    const total  = data.total_duplicate_groups;
                     if (type === 'leads')        renderLeadRows(groups);
                     else if (type === 'deals')   renderDealRows(groups);
                     else if (type === 'contacts') renderContactRows(groups);
                     else if (type === 'accounts') renderAccountRows(groups);
-                    renderPagination(type + 'Pagination', page, pages, (p) => loadRecordTab(type, p));
+                    renderPagination(type + 'Pagination', page, pages, (p) => loadRecordTab(type, p), total, 'duplicate groups');
                     window._loadedTabs.add(type);
                     return;
                 } catch (e) {
@@ -3359,9 +3402,19 @@
             }));
             if (_ownersCache.length > 0 && filteredOwners.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No owners match the active filters. Clear the Advanced Filters or pick a different owner.</td></tr>';
+                renderPagination('ownersPagination', 0, 1, () => {}, 0, 'owners');
                 return;
             }
-            tbody.innerHTML = filteredOwners.map((o, idx) => {
+            // Client-side pagination — 20 owners per page.
+            window._ownersPage = Number.isFinite(window._ownersPage) ? window._ownersPage : 0;
+            const ownersTotalPages = Math.max(1, Math.ceil(filteredOwners.length / RADAR_PAGE_SIZE));
+            if (window._ownersPage >= ownersTotalPages) window._ownersPage = 0;
+            const ownersPageStart = window._ownersPage * RADAR_PAGE_SIZE;
+            const ownersSlice = filteredOwners.slice(ownersPageStart, ownersPageStart + RADAR_PAGE_SIZE);
+            renderPagination('ownersPagination', window._ownersPage, ownersTotalPages,
+                (p) => { window._ownersPage = p; renderOwners(_ownersCache); },
+                filteredOwners.length, 'owners');
+            tbody.innerHTML = ownersSlice.map((o, idx) => {
                 const rowKey = encodeURIComponent(o.owner_name || `row-${idx}`);
                 // RAG class lives on the Dup Rate cell now (was a redundant
                 // separate KPI Status column showing the same threshold
@@ -5134,9 +5187,19 @@
             }));
             if (rows.length === 0) {
                 body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No hints match the active filters. Adjust the bucket chip or click <em>Clear All Filters</em>.</td></tr>';
+                renderPagination('accountHintsPagination', 0, 1, () => {}, 0, 'hints');
                 return;
             }
-            body.innerHTML = rows.map(h => {
+            // Client-side pagination — 20 hints per page.
+            window._accountHintsPage = Number.isFinite(window._accountHintsPage) ? window._accountHintsPage : 0;
+            const accountHintsTotalPages = Math.max(1, Math.ceil(rows.length / RADAR_PAGE_SIZE));
+            if (window._accountHintsPage >= accountHintsTotalPages) window._accountHintsPage = 0;
+            const accountHintsPageStart = window._accountHintsPage * RADAR_PAGE_SIZE;
+            const accountHintsSlice = rows.slice(accountHintsPageStart, accountHintsPageStart + RADAR_PAGE_SIZE);
+            renderPagination('accountHintsPagination', window._accountHintsPage, accountHintsTotalPages,
+                (p) => { window._accountHintsPage = p; renderAccountHints(window._accountHintsData); },
+                rows.length, 'hints');
+            body.innerHTML = accountHintsSlice.map(h => {
                 const dealCell = h.deal_zoho_id
                     ? zohoLink(h.deal_zoho_id, 'Deals', h.deal_company_name || h.deal_account_name || h.deal_zoho_id)
                     : escapeHtml(h.deal_company_name || h.deal_account_name || '—');
@@ -5389,7 +5452,16 @@
                 return;
             }
             const rows = sortCsOverlapRows(filteredRows, window._csOverlapSort.key, window._csOverlapSort.dir);
-            body.innerHTML = rows.map(r => {
+            // Client-side pagination — 20 clusters per page.
+            window._csOverlapPage = Number.isFinite(window._csOverlapPage) ? window._csOverlapPage : 0;
+            const csOverlapTotalPages = Math.max(1, Math.ceil(rows.length / RADAR_PAGE_SIZE));
+            if (window._csOverlapPage >= csOverlapTotalPages) window._csOverlapPage = 0;
+            const csOverlapPageStart = window._csOverlapPage * RADAR_PAGE_SIZE;
+            const csOverlapSlice = rows.slice(csOverlapPageStart, csOverlapPageStart + RADAR_PAGE_SIZE);
+            renderPagination('csOverlapPagination', window._csOverlapPage, csOverlapTotalPages,
+                (p) => { window._csOverlapPage = p; renderCsOverlap(window._csOverlapData); },
+                rows.length, 'clusters');
+            body.innerHTML = csOverlapSlice.map(r => {
                 const safeDomain = escapeHtml(r.domain || '');
                 const domainCell = r.id
                     ? '<a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[' + r.id + ']" class="text-blue-700 hover:text-blue-900 hover:underline font-mono text-xs" title="View this cluster\'s underlying records">' + safeDomain + '</a>'
@@ -6117,10 +6189,22 @@
 
             if (sorted.length === 0) {
                 body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS deals match the active filters. Adjust the phase chip or click <em>Clear All Filters</em> in the Advanced Filters panel.</td></tr>';
+                renderPagination('csLifecyclePagination', 0, 1, () => {}, 0, 'deals');
                 return;
             }
 
-            body.innerHTML = sorted.map(g => {
+            // Client-side pagination — 20 deals per page so the viewport
+            // doesn't have to scroll through hundreds of violations at
+            // once. Page state lives on window so a sort / filter resets
+            // back to page 0 (handled by the callers that mutate sort or
+            // filter state).
+            window._csLifecyclePage = Number.isFinite(window._csLifecyclePage) ? window._csLifecyclePage : 0;
+            const totalPages = Math.max(1, Math.ceil(sorted.length / RADAR_PAGE_SIZE));
+            if (window._csLifecyclePage >= totalPages) window._csLifecyclePage = 0;
+            const pageStart = window._csLifecyclePage * RADAR_PAGE_SIZE;
+            const pageSlice = sorted.slice(pageStart, pageStart + RADAR_PAGE_SIZE);
+
+            body.innerHTML = pageSlice.map(g => {
                 // CS Lifecycle violations are always Deal records (see
                 // scanCsLifecycleViolations: WHERE zoho_module = 'Deals'), so
                 // the Zoho link target is hard-coded to 'Deals'.
@@ -6173,6 +6257,10 @@
                     + '<td class="px-2 py-2">' + violationCell + '</td>'
                     + '</tr>';
             }).join('');
+
+            renderPagination('csLifecyclePagination', window._csLifecyclePage, totalPages,
+                (p) => { window._csLifecyclePage = p; renderCsLifecycle(window._csLifecycleData); },
+                sorted.length, 'deals');
         }
 
         // Severity → CAPA-form severity (matches csLifecycleAutoCapa.ts).
