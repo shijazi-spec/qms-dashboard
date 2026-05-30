@@ -1532,8 +1532,15 @@
             const tbody = document.getElementById('crossModuleTable');
             if (!tbody) return;
             const list = (crossModuleClusters || []).filter(c => {
-                if (crossModuleFilter === 'all') return true;
-                return c.pairing === crossModuleFilter;
+                if (crossModuleFilter !== 'all' && c.pairing !== crossModuleFilter) return false;
+                // Advanced Filter — Cross-Module clusters expose domain,
+                // confidence_score, and updated_at. The pairing chip above
+                // is the panel's complement; both stack.
+                return rowMatchesAdvancedFilter(c, {
+                    domainField:     'domain',
+                    confidenceField: 'confidence_score',
+                    dateField:       'updated_at',
+                });
             });
             if (list.length === 0) {
                 let msg;
@@ -3284,8 +3291,19 @@
             _ownersCache = Array.isArray(owners) ? owners.slice() : [];
             applyOwnersSort();
             updateOwnersSortIndicators();
+            // Advanced Filter — apply against owner_name (the typical
+            // identifier in the Advanced Filters' Owner multi-select). The
+            // owner-only filterbar above the table is the per-string search
+            // input; both narrow the same rows.
             const tbody = document.getElementById('ownersTable');
-            tbody.innerHTML = _ownersCache.map((o, idx) => {
+            const filteredOwners = _ownersCache.filter(o => rowMatchesAdvancedFilter(o, {
+                ownerField: 'owner_name',
+            }));
+            if (_ownersCache.length > 0 && filteredOwners.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No owners match the active filters. Clear the Advanced Filters or pick a different owner.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = filteredOwners.map((o, idx) => {
                 const rowKey = encodeURIComponent(o.owner_name || `row-${idx}`);
                 // RAG class lives on the Dup Rate cell now (was a redundant
                 // separate KPI Status column showing the same threshold
@@ -5037,9 +5055,19 @@
             }
 
             const body = document.getElementById('accountHintsTable');
-            const rows = data.hints || [];
-            if (rows.length === 0) {
+            const allHints = data.hints || [];
+            if (allHints.length === 0) {
                 body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No hints in this bucket. Click <em>Run scan</em> to generate fresh suggestions.</td></tr>';
+                return;
+            }
+            // Advanced Filter — client-side. Account Hints expose
+            // suggested_domain and a numeric confidence; map both.
+            const rows = allHints.filter(h => rowMatchesAdvancedFilter(h, {
+                domainField:     'suggested_domain',
+                confidenceField: 'confidence',
+            }));
+            if (rows.length === 0) {
+                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No hints match the active filters. Adjust the bucket chip or click <em>Clear All Filters</em>.</td></tr>';
                 return;
             }
             body.innerHTML = rows.map(h => {
@@ -5283,7 +5311,18 @@
                 body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS-pipeline overlaps detected. Click <em>Run scan</em> to evaluate.</td></tr>';
                 return;
             }
-            const rows = sortCsOverlapRows(allRows, window._csOverlapSort.key, window._csOverlapSort.dir);
+            // Advanced Filter — client-side. CS-Overlap clusters expose
+            // domain and updated_at, so we wire those dims; owner/confidence
+            // don't apply at the cluster level here.
+            const filteredRows = allRows.filter(r => rowMatchesAdvancedFilter(r, {
+                domainField: 'domain',
+                dateField:   'updated_at',
+            }));
+            if (filteredRows.length === 0) {
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS-Overlap clusters match the active filters. Adjust the chip above or click <em>Clear All Filters</em>.</td></tr>';
+                return;
+            }
+            const rows = sortCsOverlapRows(filteredRows, window._csOverlapSort.key, window._csOverlapSort.dir);
             body.innerHTML = rows.map(r => {
                 const safeDomain = escapeHtml(r.domain || '');
                 const domainCell = r.id
@@ -5990,14 +6029,26 @@
             // a selection like "Adoption" still narrows what we paint.
             _refreshCsLifecyclePhaseOptions(groups);
             const phaseSel = window._csLifecyclePhaseFilter || '';
-            const filtered = phaseSel
+            let filtered = phaseSel
                 ? groups.filter(g => String(g.current_phase || '') === phaseSel)
                 : groups;
+
+            // Advanced Filter — applied client-side here since
+            // /api/duplicates/cs-lifecycle/violations doesn't accept
+            // owner/domain/date params. Owner matches against cs_owner_name;
+            // domain against the company domain; date range against any of
+            // customer_since / renewal_date / churn_date (deal is "in
+            // window" if any lifecycle date sits inside the range).
+            filtered = filtered.filter(g => rowMatchesAdvancedFilter(g, {
+                ownerField:  'cs_owner_name',
+                domainField: 'domain',
+                dateFields:  ['customer_since', 'renewal_date', 'churn_date'],
+            }));
 
             const sorted = sortCsLifecycleRows(filtered, window._csLifecycleSort.key, window._csLifecycleSort.dir);
 
             if (sorted.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS deals in the selected phase. Pick a different phase or clear the filter.</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS deals match the active filters. Adjust the phase chip or click <em>Clear All Filters</em> in the Advanced Filters panel.</td></tr>';
                 return;
             }
 
@@ -6793,6 +6844,72 @@
             return Array.from(sel.selectedOptions).map(o => o.value);
         }
 
+        // ─── Advanced Filters — shared client-side spec & matcher ────────────
+        // Tabs whose loaders don't already forward filters to the backend
+        // (CS Lifecycle, CS Pipeline Overlap, Cross-Module, Owner
+        // Accountability, Account Hints) apply the filter in-renderer using
+        // the spec returned here. The record-tab loader still builds its
+        // server-side query via buildFilterParams() — both paths read the
+        // same panel controls so the operator sees one consistent state.
+        function getAdvancedFilterSpec() {
+            return {
+                owners:     getSelectedValues('filterOwner').map(s => String(s || '').toLowerCase()),
+                domain:     (document.getElementById('filterDomain').value || '').toLowerCase().trim(),
+                confidence: document.getElementById('filterConfidence').value || '',
+                dateFrom:   document.getElementById('filterDateFrom').value || '',
+                dateTo:     document.getElementById('filterDateTo').value || '',
+            };
+        }
+
+        // mapping: { ownerField?, domainField?, dateField?|dateFields?[],
+        //            confidenceField? } — names on the row to check.
+        // Returns true if the row should survive the filter. Missing
+        // mappings short-circuit that dimension as "matches" so a tab can
+        // opt-out of any dim that doesn't apply (e.g. Owners tab has no
+        // domain field).
+        function rowMatchesAdvancedFilter(row, mapping, spec) {
+            const s = spec || getAdvancedFilterSpec();
+            // Owner — case-insensitive substring against any selected name.
+            if (s.owners && s.owners.length > 0 && mapping.ownerField) {
+                const v = String(row[mapping.ownerField] || '').toLowerCase();
+                if (!s.owners.some(o => o && v.includes(o))) return false;
+            }
+            // Domain — case-insensitive substring (so 'acme' matches both
+            // acme.com and shop.acme.com).
+            if (s.domain && mapping.domainField) {
+                const v = String(row[mapping.domainField] || '').toLowerCase();
+                if (!v.includes(s.domain)) return false;
+            }
+            // Confidence dropdown maps to score ranges: high ≥80, medium
+            // 60–79, low <60. Only enforced if the row has a numeric
+            // confidence_score under mapping.confidenceField.
+            if (s.confidence && mapping.confidenceField) {
+                const score = Number(row[mapping.confidenceField] || 0);
+                if (s.confidence === 'high'   && score <  80) return false;
+                if (s.confidence === 'medium' && (score < 60 || score >= 80)) return false;
+                if (s.confidence === 'low'    && score >= 60) return false;
+            }
+            // Date range — at least one configured date field must fall
+            // inside [from, to]. Missing dates pass; empty mapping passes.
+            if ((s.dateFrom || s.dateTo) && (mapping.dateField || mapping.dateFields)) {
+                const fields = Array.isArray(mapping.dateFields)
+                    ? mapping.dateFields
+                    : [mapping.dateField];
+                let pass = false;
+                const fromT = s.dateFrom ? new Date(s.dateFrom).getTime() : -Infinity;
+                const toT   = s.dateTo   ? new Date(s.dateTo).getTime()   :  Infinity;
+                for (const f of fields) {
+                    const raw = row[f];
+                    if (!raw) continue;
+                    const t = new Date(raw).getTime();
+                    if (!Number.isFinite(t)) continue;
+                    if (t >= fromT && t <= toT) { pass = true; break; }
+                }
+                if (!pass) return false;
+            }
+            return true;
+        }
+
         function buildFilterParams() {
             const params = new URLSearchParams();
             const modules = getSelectedValues('filterModule');
@@ -6840,10 +6957,10 @@
                 badge.classList.add('hidden');
             }
 
-            // When the user is on a per-module record tab (Leads/Deals/Contacts/
-            // Accounts), filter that tab's rows in-place rather than jumping to
-            // the Domain Clusters view. loadRecordTab already folds the Advanced
-            // Filters into its request, so we just reload the active tab.
+            // Apply filters in the active tab's own renderer when possible.
+            // loadRecordTab already passes filters to the backend; the other
+            // tabs read getAdvancedFilterSpec() inside their renderers so
+            // re-rendering with the cached data is enough.
             const activeTabEl = document.querySelector('[id^="tab-"].tab-active');
             const activeTab = activeTabEl ? activeTabEl.id.replace(/^tab-/, '') : 'summary';
             if (['leads', 'deals', 'contacts', 'accounts'].includes(activeTab)) {
@@ -6851,7 +6968,34 @@
                 await loadRecordTab(activeTab, 0);
                 return;
             }
+            if (activeTab === 'cs-lifecycle') {
+                if (window._csLifecycleData) renderCsLifecycle(window._csLifecycleData);
+                else await loadCsLifecycle(window._csLifecycleFilter || 'all');
+                return;
+            }
+            if (activeTab === 'cs-overlap') {
+                if (window._csOverlapData) renderCsOverlap(window._csOverlapData);
+                else await loadCsOverlap(window._csOverlapFilter || 'all');
+                return;
+            }
+            if (activeTab === 'cross-module') {
+                if (Array.isArray(crossModuleClusters) && crossModuleClusters.length > 0) renderCrossModuleTable();
+                else await loadCrossModule();
+                return;
+            }
+            if (activeTab === 'account-hints') {
+                if (window._accountHintsData) renderAccountHints(window._accountHintsData);
+                else await loadAccountHints();
+                return;
+            }
+            if (activeTab === 'owners') {
+                if (Array.isArray(_ownersCache) && _ownersCache.length > 0) renderOwners(_ownersCache);
+                else if (typeof loadOwners === 'function') await loadOwners();
+                return;
+            }
 
+            // Fallback: legacy Domain Clusters routing kept for the Summary
+            // and other non-tab views — keeps the historic behaviour intact.
             const params = buildFilterParams();
             try {
                 const [clustersRes, summaryRes] = await Promise.all([
@@ -6894,7 +7038,11 @@
             document.getElementById('filterDateFrom').value = '';
             document.getElementById('filterDateTo').value = '';
             document.getElementById('activeFilterCount').classList.add('hidden');
-            refreshData();
+            // Re-render the active tab via the same routing applyAdvancedFilters
+            // uses so client-side-filtered tabs (CS Lifecycle / CS Overlap /
+            // Cross-Module / Owners / Account Hints) show their full data
+            // again without a full page reload.
+            applyAdvancedFilters();
         }
 
         function applyDateFilter() { applyAdvancedFilters(); }
