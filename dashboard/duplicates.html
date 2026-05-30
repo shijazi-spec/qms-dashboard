@@ -538,6 +538,7 @@
                     <option value="status">Status</option>
                 </select>
                 <button id="clusterSortDir" data-on-click="toggleClusterSortDir" data-sort-dir="desc" data-testid="button-cluster-sort-dir" class="border rounded-lg px-3 py-2 text-sm font-mono hover:bg-gray-50" title="Toggle sort direction">↓</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;clusters&quot;]" data-testid="button-open-capa-clusters" title="Open a corrective-action record (CAPA) on one of the duplicate clusters currently shown. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
             </div>
             <div id="clustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             <div id="clustersPagination" class="flex justify-center gap-3 mt-6"></div>
@@ -550,6 +551,7 @@
             </div>
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;lead&quot;]" data-pass-event="true" id="leadsExportBtn" data-testid="button-export-leads" title="Download a CSV of every Lead duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;leads&quot;]" data-testid="button-open-capa-leads" title="Open a corrective-action record (CAPA) on one of the lead-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;leads&quot;]" id="leadsZohoRefreshBtn" title="Pull live values from Zoho for every lead currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
             </div>
@@ -582,6 +584,7 @@
                 <button data-on-click="exportTab" data-args="[&quot;deal&quot;]" data-pass-event="true" id="dealsExportBtn" data-testid="button-export-deals" title="Download a CSV of every Deal duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;deals&quot;]" id="dealsZohoRefreshBtn" title="Pull live values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deals" title="Open a corrective-action record (CAPA) on one of the deal-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -611,6 +614,7 @@
                 <button data-on-click="exportTab" data-args="[&quot;contact&quot;]" data-pass-event="true" id="contactsExportBtn" data-testid="button-export-contacts" title="Download a CSV of every Contact duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;contacts&quot;]" data-testid="button-open-capa-contacts" title="Open a corrective-action record (CAPA) on one of the contact-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -640,6 +644,7 @@
                 <button data-on-click="exportTab" data-args="[&quot;account&quot;]" data-pass-event="true" id="accountsExportBtn" data-testid="button-export-accounts" title="Download a CSV of every Account duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;accounts&quot;]" id="accountsZohoRefreshBtn" title="Pull live values from Zoho for every account currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;accounts&quot;]" data-testid="button-open-capa-accounts" title="Open a corrective-action record (CAPA) on one of the account-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -706,6 +711,7 @@
                 <button data-on-click="exportCrossModule" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of exactly the cross-module overlap clusters shown below, in the current order and pairing filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
                 <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;cross-module&quot;]" data-testid="button-open-capa-cross-module" title="Open a corrective-action record (CAPA) on one of the cross-module clusters below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
             </div>
 
             <!-- Filter chips per pairing type -->
@@ -745,7 +751,6 @@
                             <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Confidence</th>
                             <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Pipeline value</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Recommended action</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="Open a CAPA for this cross-module overlap. Routed to the QMS CAPA inbox for Quality to investigate.">CAPA</th>
                         </tr>
                     </thead>
                     <tbody id="crossModuleTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -815,9 +820,10 @@
                 <div class="flex-1"></div>
                 <button data-on-click="exportCsOverlap" id="csOverlapExportBtn" data-testid="button-export-cs-overlap" title="Download a CSV of exactly the CS-overlap clusters shown below, in the current sort order and filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshCsOverlapFromZoho" id="csOverlapZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this CS Overlap view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="rescanCsOverlap" id="csOverlapScanBtn" data-testid="button-cs-overlap-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+                <button data-on-click="rescanCsOverlap" id="csOverlapScanBtn" data-testid="button-cs-overlap-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 me-2">
                     Run scan
                 </button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;cs-overlap&quot;]" data-testid="button-open-capa-cs-overlap" title="Open a corrective-action record (CAPA) on one of the CS-Overlap clusters below. The CAPA goes to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
             </div>
 
             <!-- Table -->
@@ -833,11 +839,10 @@
                             <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;arr&quot;]" class="cs-overlap-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="arr">ARR Exposure <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;records&quot;]" class="cs-overlap-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="records">Records <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsOverlap" data-args="[&quot;updated&quot;]" class="cs-overlap-sort px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="updated">Updated <span class="cs-overlap-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="Open a CAPA for this CS-Overlap cluster. The CAPA goes to the QMS CAPA inbox where Quality investigates and closes the loop.">CAPA</th>
                         </tr>
                     </thead>
                     <tbody id="csOverlapTable" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
+                        <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1052,7 +1057,8 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportCsLifecycle" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of exactly the CS-lifecycle violations shown below (incl. CS detail columns), in the current sort order and filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700 me-2">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;cs-lifecycle&quot;]" data-testid="button-open-capa-cs-lifecycle" title="Open a corrective-action record (CAPA) on one of the deals below. The CAPA goes to the QMS CAPA inbox where Quality investigates and closes it." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
             </div>
 
@@ -1073,11 +1079,10 @@
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;days&quot;]" class="cs-lifecycle-sort px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="days">Days since modified <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="violation">Violation <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                             <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;message&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="message">Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="Open a CAPA for the worst violation on this deal. The CAPA goes to the QMS CAPA inbox where Quality investigates and closes the loop.">CAPA</th>
                         </tr>
                     </thead>
                     <tbody id="csLifecycleTable" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="13" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
+                        <tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1190,6 +1195,18 @@
                     <button data-on-click="closeCapaModal" data-testid="button-close-capa" class="text-gray-400 hover:text-gray-700 text-2xl leading-none" aria-label="Close">&times;</button>
                 </div>
                 <div class="p-5 overflow-y-auto flex-1 space-y-3">
+                    <!-- Row picker — shown when openCapaPicker(tabKey) launches
+                         the modal so the operator can choose which deal /
+                         cluster / duplicate group the CAPA is about. The
+                         change handler fills in title / description /
+                         severity / target_days from the matching builder. -->
+                    <div id="capaPickerSection" class="hidden bg-blue-50 border border-blue-200 rounded-md p-3">
+                        <label class="block text-xs font-semibold text-blue-900 uppercase tracking-wide mb-1">Pick the row this CAPA is for</label>
+                        <select id="capaPickerSelect" data-on-change="onCapaPickerChange" class="w-full border border-blue-300 rounded-md px-3 py-2 text-sm bg-white">
+                            <option value="">— Pick the row this CAPA is for —</option>
+                        </select>
+                        <p id="capaPickerHint" class="text-[11px] text-blue-700 mt-1"></p>
+                    </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 uppercase tracking-wide mb-1">Title</label>
                         <input id="capaModalTitle" type="text" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="One-line summary of the issue" />
@@ -1529,7 +1546,7 @@
                 } else {
                     msg = 'No cross-module overlaps match this filter — try the <strong>All</strong> chip.';
                 }
-                tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-8 text-center text-sm">${msg}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-sm">${msg}</td></tr>`;
                 updateCrossModuleBulkBar();
                 return;
             }
@@ -1564,43 +1581,9 @@
                     + '<td class="px-4 py-2 text-xs text-end cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']"><span class="confidence-' + getConfidenceLevel(c.confidence_score || 0) + ' px-2 py-1 rounded">' + _fn(c.confidence_score || 0) + '%</span></td>'
                     + '<td class="px-4 py-2 text-xs text-end font-medium cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + formatCurrency(Number(c.estimated_pipeline_value || 0)) + '</td>'
                     + '<td class="px-4 py-2 text-xs text-gray-700 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(meta.action) + '</td>'
-                    + '<td class="px-4 py-2 text-xs whitespace-nowrap">' + crossModuleCapaButton(c, meta, modules) + '</td>'
                     + '</tr>';
             }).join('');
             updateCrossModuleBulkBar();
-        }
-
-        // Cross-Module overlap → CAPA. source_type 'cross_module_overlap'
-        // keeps it distinct in the QMS inbox; mixed pairings are flagged
-        // major (the recommended SOP is to delete the wrong module's
-        // record), pure pairings are minor.
-        function crossModuleCapaButton(c, meta, modules) {
-            const pairing = String(c.pairing || '').toLowerCase();
-            const sev = pairing === 'mixed' ? 'major' : 'minor';
-            const subject = c.company_name || c.domain || ('cluster #' + c.id);
-            const description = [
-                'Cross-module cluster: #' + c.id,
-                'Pairing: ' + (meta.label || c.pairing || '—'),
-                'Domain: ' + (c.domain || '—'),
-                'Company: ' + (c.company_name || '—'),
-                'Modules present: ' + (modules || []).join(' · '),
-                'Records: ' + (c.total_records || 0),
-                'Confidence: ' + (c.confidence_score || 0) + '%',
-                'Pipeline value: ' + formatCurrency(Number(c.estimated_pipeline_value || 0)),
-                '',
-                'Recommended action (radar): ' + (meta.action || 'Open cluster for per-record recommendations'),
-                '',
-                'Opened manually from the Duplicate Radar → Cross-Module tab.',
-            ].join('\n');
-            return renderOpenCapaButton({
-                sourceType:  'cross_module_overlap',
-                sourceId:    String(c.id),
-                sourceLabel: subject + ' · ' + (meta.label || c.pairing || ''),
-                title:       'Cross-module overlap (' + (meta.label || c.pairing || '—') + ') — ' + subject,
-                description,
-                severity:    sev,
-                targetDays:  pairing === 'mixed' ? 5 : 7,
-            }, { title: 'Open a CAPA for this cross-module overlap.' });
         }
 
         // Follow-up 3: bulk-close selection state + action.
@@ -2188,44 +2171,8 @@
                         <div><span class="text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.status_kw'))}</span> <span class="font-medium capitalize">${escapeHtml(c.status)}</span></div>
                         <div title="Pipeline inflation — sum of deal values for non-primary (duplicate) deals in this cluster. Not the cluster's total pipeline value."><span class="text-gray-500">Inflation:</span> <span class="font-medium">${formatCurrency(c.estimated_pipeline_value||0)}</span></div>
                     </div>
-                    <div class="mt-3 flex justify-end">${clusterCardCapaButton(c)}</div>
                 </div>
             `).join('') || `<div class="col-span-3 text-center py-8 text-gray-400">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_clusters_found'))}</div>`;
-        }
-
-        // Domain Cluster card → CAPA. source_type 'duplicate_cluster' is
-        // distinct from the cs_overlap_block CAPAs so an operator can sort
-        // the QMS CAPA inbox by source. Severity rises with confidence:
-        // high → major, medium → minor, low → observation. (Even a high-
-        // confidence cluster isn't "critical" by itself — the BLOCK verdict
-        // on CS Overlap is what flips an account to critical.)
-        function clusterCardCapaButton(c) {
-            const conf = String(c.confidence_level || '').toLowerCase();
-            const sev = conf === 'high' ? 'major' : conf === 'medium' ? 'minor' : 'observation';
-            const subject = c.company_name || c.domain || ('cluster #' + c.id);
-            const description = [
-                'Cluster: #' + c.id,
-                'Domain: ' + (c.domain || '—'),
-                'Company: ' + (c.company_name || '—'),
-                'Confidence: ' + (c.confidence_level || '—') + ' (' + (c.confidence_score || 0) + '%)',
-                'Status: ' + (c.status || '—'),
-                'Records: leads=' + (c.total_leads || 0) + ', deals=' + (c.total_deals || 0) + ', contacts=' + (c.total_contacts || 0) + ', accounts=' + (c.total_accounts || 0),
-                'Pipeline inflation: ' + formatCurrency(c.estimated_pipeline_value || 0),
-                '',
-                'Open this cluster from the Domain Clusters tab to see every',
-                'underlying record before merging / annotating per the SOP.',
-                '',
-                'Opened manually from the Duplicate Radar → Domain Clusters tab.',
-            ].join('\n');
-            return renderOpenCapaButton({
-                sourceType:  'duplicate_cluster',
-                sourceId:    String(c.id),
-                sourceLabel: subject + ' · cluster #' + c.id,
-                title:       'Duplicate cluster — ' + subject,
-                description,
-                severity:    sev,
-                targetDays:  7,
-            }, { title: 'Open a CAPA for this duplicate cluster.' });
         }
 
         // Pagination renderer (rewritten 2026-05-30).
@@ -2917,10 +2864,6 @@
             const chips = summary.sharedKeys.length
                 ? summary.sharedKeys.map(s => `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${s.color}" title="All ${summary.count} ${moduleLabel} in this group share this ${s.label}: ${escapeHtml(String(s.value))}">${s.k} ${escapeHtml(s.label)}</span>`).join(' ')
                 : `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Members of this group are linked through chained matches (e.g. A shares email with B, B shares phone with C)">🔗 chained match</span>`;
-            // moduleLabel here is 'leads' / 'deals' / 'contacts' / 'accounts'
-            // (lowercase plural) — that's the module key recordTabCapaButton
-            // expects, so we pass it straight through.
-            const capaBtn = recordTabCapaButton(moduleLabel, summary);
             return `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${gid}"]' data-testid="row-dup-group-${gid}">
                 <td class="px-4 py-3 text-sm" colspan="${colspan}">
                     <div class="flex items-center gap-2 flex-wrap">
@@ -2928,10 +2871,7 @@
                         <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
                         <span class="text-xs text-gray-500">${summary.count} duplicate ${moduleLabel}</span>
                         <span class="flex flex-wrap gap-1">${chips}</span>
-                        <span class="ms-auto flex items-center gap-2">
-                            ${capaBtn}
-                            <span class="text-xs text-gray-500">Click row to expand</span>
-                        </span>
+                        <span class="ms-auto text-xs text-gray-500">Click to expand</span>
                     </div>
                 </td>
             </tr>`;
@@ -3061,7 +3001,6 @@
                     : '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Members of this group are linked through chained matches (e.g. A shares email with B, B shares phone with C)">🔗 chained match</span>';
 
                 const _gid = 'leads-' + gIdx;
-                const capaBtn = recordTabCapaButton('leads', summary);
                 rows += `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${_gid}"]' data-testid="row-dup-group-${_gid}">
                     <td class="px-4 py-3 text-sm" colspan="8">
                         <div class="flex items-center gap-2 flex-wrap">
@@ -3069,10 +3008,7 @@
                             <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
                             <span class="text-xs text-gray-500">${summary.count} duplicate leads</span>
                             <span class="flex flex-wrap gap-1">${chips}</span>
-                            <span class="ms-auto flex items-center gap-2">
-                                ${capaBtn}
-                                <span class="text-xs text-gray-500">Click row to expand</span>
-                            </span>
+                            <span class="ms-auto text-xs text-gray-500">Click to expand</span>
                         </div>
                     </td>
                 </tr>`;
@@ -5346,7 +5282,7 @@
             const body = document.getElementById('csOverlapTable');
             const allRows = data.clusters || [];
             if (allRows.length === 0) {
-                body.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">No CS-pipeline overlaps detected. Click <em>Run scan</em> to evaluate.</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS-pipeline overlaps detected. Click <em>Run scan</em> to evaluate.</td></tr>';
                 return;
             }
             const rows = sortCsOverlapRows(allRows, window._csOverlapSort.key, window._csOverlapSort.dir);
@@ -5363,7 +5299,6 @@
                 const companyCell = r.id
                     ? '<a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[' + r.id + ']" class="text-blue-700 hover:text-blue-900 hover:underline text-xs" title="View this cluster\'s underlying records">' + safeCompany + '</a>'
                     : safeCompany;
-                const capaBtn = r.id ? csOverlapCapaButton(r) : '<span class="text-[10px] text-gray-400">—</span>';
                 return '<tr class="hover:bg-gray-50">'
                     + '<td class="px-4 py-2 whitespace-nowrap">' + csVerdictBadge(r.cs_overlap_verdict) + '</td>'
                     + '<td class="px-4 py-2">' + domainCell + '</td>'
@@ -5373,47 +5308,8 @@
                     + '<td class="px-4 py-2 text-xs text-end font-medium">' + formatCurrency(r.arr_exposure || 0) + '</td>'
                     + '<td class="px-4 py-2 text-xs text-end text-gray-600">' + (r.total_records || 0) + '</td>'
                     + '<td class="px-4 py-2 text-xs text-end text-gray-500">' + formatDate(r.updated_at) + '</td>'
-                    + '<td class="px-4 py-2 text-xs whitespace-nowrap">' + capaBtn + '</td>'
                     + '</tr>';
             }).join('');
-        }
-
-        // CS Overlap row → CAPA. Matches the auto-CAPA-on-block pattern:
-        // source_type = 'cs_overlap_block', source_id = String(cluster.id).
-        // Severity climbs with verdict: BLOCK → critical, REVIEW → major,
-        // WARN → minor; anything else is observation (manually-opened by
-        // operator review even though radar didn't flag it red).
-        function csOverlapCapaButton(r) {
-            const verdict = String(r.cs_overlap_verdict || '').toLowerCase();
-            const sev = verdict === 'block'  ? 'critical'
-                      : verdict === 'review' ? 'major'
-                      : verdict === 'warn'   ? 'minor'
-                      : 'observation';
-            const subject = r.company_name || r.company_name_arabic || r.domain || 'unknown account';
-            const description = [
-                'Cluster: #' + r.id,
-                'Domain: ' + (r.domain || '—'),
-                'Company: ' + subject,
-                'Sector: ' + (r.client_sector || '—'),
-                'CS phase: ' + (csPhaseLabel(r.pipeline_lifecycle_state) || '—'),
-                'ARR exposure: ' + formatCurrency(r.arr_exposure || 0),
-                'Records in cluster: ' + (r.total_records || 0),
-                'Radar verdict: ' + (r.cs_overlap_verdict || '—').toUpperCase(),
-                '',
-                'Open this cluster in the radar to see every underlying record,',
-                'then merge / reassign / annotate as the Quality SOP requires.',
-                '',
-                'Opened manually from the Duplicate Radar → CS Pipeline Overlap tab.',
-            ].join('\n');
-            return renderOpenCapaButton({
-                sourceType:  'cs_overlap_block',
-                sourceId:    String(r.id),
-                sourceLabel: subject + ' · cluster #' + r.id,
-                title:       'CS overlap (' + (r.cs_overlap_verdict || '—').toUpperCase() + ') — ' + subject,
-                description,
-                severity:    sev,
-                targetDays:  verdict === 'block' ? 3 : 7,
-            }, { title: 'Open a CAPA for this CS-Overlap cluster.' });
         }
 
         async function rescanCsOverlap() {
@@ -6081,7 +5977,7 @@
             const body = document.getElementById('csLifecycleTable');
             const allViolations = data.violations || [];
             if (allViolations.length === 0) {
-                body.innerHTML = '<tr><td colspan="13" class="px-4 py-8 text-center text-sm text-gray-500">No violations detected. CS is compliant for the current filter.</td></tr>';
+                body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">No violations detected. CS is compliant for the current filter.</td></tr>';
                 _refreshCsLifecyclePhaseOptions([]);
                 return;
             }
@@ -6103,7 +5999,7 @@
             const sorted = sortCsLifecycleRows(filtered, window._csLifecycleSort.key, window._csLifecycleSort.dir);
 
             if (sorted.length === 0) {
-                body.innerHTML = '<tr><td colspan="13" class="px-4 py-8 text-center text-sm text-gray-500">No CS deals in the selected phase. Pick a different phase or clear the filter.</td></tr>';
+                body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">No CS deals in the selected phase. Pick a different phase or clear the filter.</td></tr>';
                 return;
             }
 
@@ -6125,14 +6021,6 @@
                 const countSuffix = g.violations.length > 1
                     ? ' <span class="text-[10px] text-gray-500">(' + g.violations.length + ')</span>'
                     : '';
-                // CAPA seed: target the worst violation on this deal so the
-                // manual source_id matches the auto-CAPA pattern (lifecycle
-                // source_type = 'cs_lifecycle_violation', source_id =
-                // 'cs_lifecycle:<recordId>:<code>'). That keeps the backend
-                // idempotency check de-duping against auto-opened CAPAs too.
-                const capaBtn = g.worst_violation && g.record_id
-                    ? csLifeCapaButton(g, g.worst_violation)
-                    : '<span class="text-[10px] text-gray-400">—</span>';
                 return '<tr class="hover:bg-gray-50 align-top">'
                     + '<td class="px-3 py-2 whitespace-nowrap">' + csLifeSeverityBadge(g.worst_severity) + countSuffix + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-800">' + accountCell + '</td>'
@@ -6146,7 +6034,6 @@
                     + '<td class="px-3 py-2 text-xs text-end text-gray-600">' + (g.days_since_modified == null ? '—' : g.days_since_modified) + '</td>'
                     + '<td class="px-3 py-2 text-xs"><div class="flex flex-wrap gap-1">' + violationPills + '</div></td>'
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + messageStack + '</td>'
-                    + '<td class="px-3 py-2 text-xs whitespace-nowrap">' + capaBtn + '</td>'
                     + '</tr>';
             }).join('');
         }
@@ -6158,80 +6045,20 @@
             return 'minor';
         }
 
-        // Generic Open CAPA button — used by every actionable tab in the
-        // Duplicate Radar (CS Lifecycle, CS Overlap, Domain Clusters, the
-        // 4 record-duplicate tabs, Cross-Module, …). Each tab builds its
-        // own payload describing the source row; this helper just renders
-        // the button HTML with the payload JSON-stringified into data-args.
-        //
-        // payload shape: { sourceType, sourceId, sourceLabel?, title,
-        //                  description, severity?, targetDays? }
-        // opts: { label?, title?, classes? } — override button text/tooltip.
-        function renderOpenCapaButton(payload, opts) {
-            const o = opts || {};
-            const label   = o.label   || 'Open CAPA';
-            const tooltip = o.title   || 'Open a CAPA for this row. Routed to the QMS CAPA inbox where Quality investigates and closes it.';
-            const classes = o.classes || 'px-2 py-1 text-[11px] border border-blue-200 text-blue-700 rounded hover:bg-blue-50 whitespace-nowrap';
-            // escAttr (from safe-actions.js) handles &, ", ', <, > — the full
-            // set we need for an HTML attribute that embeds account-name JSON.
-            const esc = (typeof escAttr === 'function')
-                ? escAttr
-                : function (s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;'); };
-            const args = esc(JSON.stringify([payload]));
-            return '<button data-on-click="openCapaModal" data-args="' + args + '"'
-                + ' class="' + classes + '"'
-                + ' title="' + esc(tooltip) + '">' + escapeHtml(label) + '</button>';
-        }
-        window.renderOpenCapaButton = renderOpenCapaButton;
+        // ─── Per-tab payload builders ──────────────────────────────────────
+        // Each builder takes a row from the tab's data model and returns the
+        // payload shape that openCapaModal / submitOpenCapa expect. The
+        // row-picker (openCapaPicker) calls these to populate the modal
+        // when an operator selects a row from the dropdown. No button HTML
+        // is rendered here — buttons live at the tab-bar level now.
 
-        // Per-record-tab CAPA button (used by Lead / Deal / Contact / Account
-        // Duplicates). The group is page-relative (union-find over what's
-        // currently displayed), so we anchor the source_id on the primary
-        // record's Zoho ID — that stays stable across page reloads as long
-        // as the same primary is still on the page. If the primary changes,
-        // a new CAPA opens; that's acceptable for a manual flow.
-        //
-        // module: 'leads' | 'deals' | 'contacts' | 'accounts'
-        // summary: { primary, count, sharedKeys?, identityLabel? }
-        function recordTabCapaButton(module, summary) {
-            const primary = summary.primary || {};
-            const zid = String(primary.zoho_record_id || '').trim();
-            const moduleZoho = module === 'leads' ? 'Leads'
-                             : module === 'deals' ? 'Deals'
-                             : module === 'contacts' ? 'Contacts'
-                             : 'Accounts';
-            // No stable primary ID → fall back to a synthetic key. The CAPA
-            // is then de-duped on the synthetic key for THIS render, which
-            // is the best we can do without a server-side cluster identity.
-            const sourceId = zid ? (module + ':' + zid) : (module + ':' + (primary.record_name || primary.email || 'group') + ':' + (summary.count || 0));
-            const subject = primary.record_name || primary.company_name || primary.email || ('group of ' + (summary.count || 0));
-            const sharedDesc = (summary.sharedKeys || []).map(s => s.label + '=' + (s.value || '')).join(' · ') || '(chained match — no single shared field)';
-            const description = [
-                'Module: ' + moduleZoho + ' (page-level duplicate group)',
-                'Primary record: ' + subject + (zid ? ' (Zoho id ' + zid + ')' : ''),
-                'Members in group: ' + (summary.count || 0),
-                'Shared signals: ' + sharedDesc,
-                '',
-                'Open the ' + moduleZoho + ' Duplicates tab in the radar to see',
-                'every member of this group, then merge / annotate per the SOP.',
-                '',
-                'Opened manually from the Duplicate Radar → ' + moduleZoho + ' Duplicates tab.',
-            ].join('\n');
-            return renderOpenCapaButton({
-                sourceType:  'record_duplicate_group',
-                sourceId,
-                sourceLabel: moduleZoho + ' · ' + subject,
-                title:       moduleZoho + ' duplicate group — ' + subject,
-                description,
-                severity:    'minor',
-                targetDays:  7,
-            }, { title: 'Open a CAPA for this ' + moduleZoho + ' duplicate group.' });
-        }
-
-        // CS Lifecycle row button. Targets the worst violation on the deal so
-        // source_id matches the auto-CAPA cron's pattern (cs_lifecycle:<id>:<code>),
-        // keeping manual + auto opens idempotent against each other.
-        function csLifeCapaButton(g, v) {
+        // CS Lifecycle: payload targets the worst violation on the deal so
+        // source_id matches the auto-CAPA cron's pattern
+        // (cs_lifecycle:<recordId>:<code>), keeping manual + auto opens
+        // idempotent against each other.
+        function csLifePayloadFor(g) {
+            const v = g.worst_violation || (g.violations && g.violations[0]) || null;
+            if (!v || !g.record_id) return null;
             const subject = g.account_name || g.domain || 'unknown account';
             const description = [
                 'Account: ' + (g.account_name || '—'),
@@ -6246,7 +6073,7 @@
                 '',
                 'Opened manually from the Duplicate Radar → CS Lifecycle tab.',
             ].join('\n');
-            return renderOpenCapaButton({
+            return {
                 sourceType: 'cs_lifecycle_violation',
                 sourceId:   'cs_lifecycle:' + g.record_id + ':' + v.code,
                 sourceLabel: subject + ' · ' + v.code,
@@ -6254,7 +6081,149 @@
                 description,
                 severity:    csLifeSeverityToCapa(v.severity),
                 targetDays:  v.severity === 'critical' ? 3 : 7,
-            }, { title: 'Open a CAPA targeting the worst violation on this deal. Routed to the QMS CAPA inbox.' });
+            };
+        }
+
+        // CS Pipeline Overlap: payload matches the auto-CAPA-on-block pattern
+        // (source_type 'cs_overlap_block', source_id = cluster.id).
+        function csOverlapPayloadFor(r) {
+            if (!r || !r.id) return null;
+            const verdict = String(r.cs_overlap_verdict || '').toLowerCase();
+            const sev = verdict === 'block'  ? 'critical'
+                      : verdict === 'review' ? 'major'
+                      : verdict === 'warn'   ? 'minor'
+                      : 'observation';
+            const subject = r.company_name || r.company_name_arabic || r.domain || 'unknown account';
+            const description = [
+                'Cluster: #' + r.id,
+                'Domain: ' + (r.domain || '—'),
+                'Company: ' + subject,
+                'Sector: ' + (r.client_sector || '—'),
+                'CS phase: ' + (csPhaseLabel(r.pipeline_lifecycle_state) || '—'),
+                'ARR exposure: ' + formatCurrency(r.arr_exposure || 0),
+                'Records in cluster: ' + (r.total_records || 0),
+                'Radar verdict: ' + (r.cs_overlap_verdict || '—').toUpperCase(),
+                '',
+                'Open this cluster in the radar to see every underlying record,',
+                'then merge / reassign / annotate per the Quality SOP.',
+                '',
+                'Opened manually from the Duplicate Radar → CS Pipeline Overlap tab.',
+            ].join('\n');
+            return {
+                sourceType:  'cs_overlap_block',
+                sourceId:    String(r.id),
+                sourceLabel: subject + ' · cluster #' + r.id,
+                title:       'CS overlap (' + (r.cs_overlap_verdict || '—').toUpperCase() + ') — ' + subject,
+                description,
+                severity:    sev,
+                targetDays:  verdict === 'block' ? 3 : 7,
+            };
+        }
+
+        // Cross-Module overlap. source_type 'cross_module_overlap'.
+        function crossModulePayloadFor(c) {
+            if (!c || !c.id) return null;
+            const meta = CROSS_MODULE_PAIRING_LABELS[c.pairing] || { label: c.pairing || '—', action: 'Open cluster for per-record recommendations' };
+            const modules = [];
+            if (c.total_leads    > 0) modules.push('Leads(' + c.total_leads + ')');
+            if (c.total_contacts > 0) modules.push('Contacts(' + c.total_contacts + ')');
+            if (c.total_accounts > 0) modules.push('Accounts(' + c.total_accounts + ')');
+            if (c.total_deals    > 0) modules.push('Deals(' + c.total_deals + ')');
+            const pairing = String(c.pairing || '').toLowerCase();
+            const sev = pairing === 'mixed' ? 'major' : 'minor';
+            const subject = c.company_name || c.domain || ('cluster #' + c.id);
+            const description = [
+                'Cross-module cluster: #' + c.id,
+                'Pairing: ' + (meta.label || c.pairing || '—'),
+                'Domain: ' + (c.domain || '—'),
+                'Company: ' + (c.company_name || '—'),
+                'Modules present: ' + modules.join(' · '),
+                'Records: ' + (c.total_records || 0),
+                'Confidence: ' + (c.confidence_score || 0) + '%',
+                'Pipeline value: ' + formatCurrency(Number(c.estimated_pipeline_value || 0)),
+                '',
+                'Recommended action (radar): ' + (meta.action || 'Open cluster for per-record recommendations'),
+                '',
+                'Opened manually from the Duplicate Radar → Cross-Module tab.',
+            ].join('\n');
+            return {
+                sourceType:  'cross_module_overlap',
+                sourceId:    String(c.id),
+                sourceLabel: subject + ' · ' + (meta.label || c.pairing || ''),
+                title:       'Cross-module overlap (' + (meta.label || c.pairing || '—') + ') — ' + subject,
+                description,
+                severity:    sev,
+                targetDays:  pairing === 'mixed' ? 5 : 7,
+            };
+        }
+
+        // Domain Cluster card. source_type 'duplicate_cluster'.
+        function clusterPayloadFor(c) {
+            if (!c || !c.id) return null;
+            const conf = String(c.confidence_level || '').toLowerCase();
+            const sev = conf === 'high' ? 'major' : conf === 'medium' ? 'minor' : 'observation';
+            const subject = c.company_name || c.domain || ('cluster #' + c.id);
+            const description = [
+                'Cluster: #' + c.id,
+                'Domain: ' + (c.domain || '—'),
+                'Company: ' + (c.company_name || '—'),
+                'Confidence: ' + (c.confidence_level || '—') + ' (' + (c.confidence_score || 0) + '%)',
+                'Status: ' + (c.status || '—'),
+                'Records: leads=' + (c.total_leads || 0) + ', deals=' + (c.total_deals || 0) + ', contacts=' + (c.total_contacts || 0) + ', accounts=' + (c.total_accounts || 0),
+                'Pipeline inflation: ' + formatCurrency(c.estimated_pipeline_value || 0),
+                '',
+                'Open this cluster from the Domain Clusters tab to see every',
+                'underlying record before merging / annotating per the SOP.',
+                '',
+                'Opened manually from the Duplicate Radar → Domain Clusters tab.',
+            ].join('\n');
+            return {
+                sourceType:  'duplicate_cluster',
+                sourceId:    String(c.id),
+                sourceLabel: subject + ' · cluster #' + c.id,
+                title:       'Duplicate cluster — ' + subject,
+                description,
+                severity:    sev,
+                targetDays:  7,
+            };
+        }
+
+        // Record-tab duplicate group (leads / deals / contacts / accounts).
+        // source_id anchored on the primary's Zoho ID so re-clicking the same
+        // group hits the existing CAPA.
+        function recordTabPayloadFor(module, summary) {
+            if (!summary || !summary.primary) return null;
+            const primary = summary.primary;
+            const zid = String(primary.zoho_record_id || '').trim();
+            const moduleZoho = module === 'leads' ? 'Leads'
+                             : module === 'deals' ? 'Deals'
+                             : module === 'contacts' ? 'Contacts'
+                             : 'Accounts';
+            const sourceId = zid
+                ? (module + ':' + zid)
+                : (module + ':' + (primary.record_name || primary.email || 'group') + ':' + (summary.count || 0));
+            const subject = primary.record_name || primary.company_name || primary.email || ('group of ' + (summary.count || 0));
+            const sharedDesc = (summary.sharedKeys || []).map(s => s.label + '=' + (s.value || '')).join(' · ') || '(chained match — no single shared field)';
+            const description = [
+                'Module: ' + moduleZoho + ' (page-level duplicate group)',
+                'Primary record: ' + subject + (zid ? ' (Zoho id ' + zid + ')' : ''),
+                'Members in group: ' + (summary.count || 0),
+                'Shared signals: ' + sharedDesc,
+                '',
+                'Open the ' + moduleZoho + ' Duplicates tab in the radar to see',
+                'every member of this group, then merge / annotate per the SOP.',
+                '',
+                'Opened manually from the Duplicate Radar → ' + moduleZoho + ' Duplicates tab.',
+            ].join('\n');
+            return {
+                sourceType:  'record_duplicate_group',
+                sourceId,
+                sourceLabel: moduleZoho + ' · ' + subject,
+                title:       moduleZoho + ' duplicate group — ' + subject,
+                description,
+                severity:    'minor',
+                targetDays:  7,
+            };
         }
 
         // Auto-CAPA KPIs tab JS retired 2026-05-30. The /api/duplicates/auto-capa/kpis
@@ -6281,6 +6250,10 @@
             document.getElementById('capaModalTargetDays').value      = Number.isFinite(Number(o.targetDays)) ? Number(o.targetDays) : 7;
             document.getElementById('capaModalSourceLabel').textContent = window._capaModalState.sourceLabel || window._capaModalState.sourceType || '—';
             document.getElementById('capaModalSourceId').textContent    = window._capaModalState.sourceId    || '—';
+            // Explicit-payload path skips the picker — hide it so the operator
+            // doesn't see a stale dropdown from a previous picker session.
+            const picker = document.getElementById('capaPickerSection');
+            if (picker) picker.classList.add('hidden');
             const status = document.getElementById('capaModalStatus');
             status.classList.add('hidden');
             status.textContent = '';
@@ -6295,6 +6268,227 @@
             document.getElementById('capaModal').classList.add('hidden');
         }
         window.closeCapaModal = closeCapaModal;
+
+        // ─── Open CAPA picker — tab → row provider registry ─────────────────
+        // Each provider runs the tab's current rendered data through the
+        // matching payload-builder and returns one option per actionable
+        // row. The shared modal then lets the operator pick which row
+        // they're opening a CAPA on. Providers return [] when the tab has
+        // never been loaded — openCapaPicker shows a friendly hint in
+        // that case.
+        const CAPA_TAB_PROVIDERS = {
+            'cs-lifecycle': () => {
+                const data = window._csLifecycleData;
+                if (!data || !Array.isArray(data.violations) || data.violations.length === 0) return [];
+                // Same grouping the CS Lifecycle renderer uses, so the picker
+                // mirrors what's on screen (one option per deal, not per
+                // violation row).
+                const groups = groupCsLifecycleByDeal(data.violations);
+                return groups
+                    .map(g => {
+                        const p = csLifePayloadFor(g);
+                        if (!p) return null;
+                        const subject = g.account_name || g.domain || ('record #' + g.record_id);
+                        const sevTag = (g.worst_severity || '').toUpperCase();
+                        const violCode = (g.worst_violation && g.worst_violation.code) || '—';
+                        return {
+                            label: '[' + sevTag + '] ' + subject + ' — ' + violCode,
+                            payload: p,
+                        };
+                    })
+                    .filter(Boolean);
+            },
+            'cs-overlap': () => {
+                const data = window._csOverlapData;
+                if (!data || !Array.isArray(data.clusters) || data.clusters.length === 0) return [];
+                return data.clusters
+                    .map(r => {
+                        const p = csOverlapPayloadFor(r);
+                        if (!p) return null;
+                        const subject = r.company_name || r.domain || ('cluster #' + r.id);
+                        const v = (r.cs_overlap_verdict || '—').toUpperCase();
+                        return {
+                            label: '[' + v + '] ' + subject + ' — ' + (r.domain || '—'),
+                            payload: p,
+                        };
+                    })
+                    .filter(Boolean);
+            },
+            'cross-module': () => {
+                // crossModuleClusters / crossModuleFilter are script-scope
+                // `let` declarations earlier in this file (~line 1328) — same
+                // closure renderCrossModuleTable uses. Respect the current
+                // pairing filter so the picker shows the same rows the
+                // operator sees on screen.
+                const all = Array.isArray(crossModuleClusters) ? crossModuleClusters : [];
+                if (all.length === 0) return [];
+                const filtered = crossModuleFilter !== 'all'
+                    ? all.filter(c => c.pairing === crossModuleFilter)
+                    : all;
+                return filtered
+                    .map(c => {
+                        const p = crossModulePayloadFor(c);
+                        if (!p) return null;
+                        const subject = c.company_name || c.domain || ('cluster #' + c.id);
+                        const pairing = (CROSS_MODULE_PAIRING_LABELS[c.pairing] && CROSS_MODULE_PAIRING_LABELS[c.pairing].label) || c.pairing || '—';
+                        return {
+                            label: '[' + pairing + '] ' + subject + ' — ' + (c.domain || '—'),
+                            payload: p,
+                        };
+                    })
+                    .filter(Boolean);
+            },
+            'clusters': () => {
+                // Domain Clusters tab — only what's on the current page,
+                // since clusters paginate server-side. _lastClustersPage is
+                // a script-scope `let` populated by renderClusters().
+                const list = Array.isArray(_lastClustersPage) ? _lastClustersPage : [];
+                if (list.length === 0) return [];
+                return list
+                    .map(c => {
+                        const p = clusterPayloadFor(c);
+                        if (!p) return null;
+                        const subject = c.company_name || c.domain || ('cluster #' + c.id);
+                        const conf = (c.confidence_level || '—');
+                        return {
+                            label: '[' + conf + ' · ' + (c.confidence_score || 0) + '%] ' + subject + ' — ' + (c.domain || '—'),
+                            payload: p,
+                        };
+                    })
+                    .filter(Boolean);
+            },
+            'leads':    () => _recordTabPickerOptions('leads'),
+            'deals':    () => _recordTabPickerOptions('deals'),
+            'contacts': () => _recordTabPickerOptions('contacts'),
+            'accounts': () => _recordTabPickerOptions('accounts'),
+        };
+
+        // Lead / Deal / Contact / Account Duplicates picker. The renderer
+        // groups records on the fly using union-find; we mirror that here so
+        // the picker offers one option per visible duplicate group.
+        function _recordTabPickerOptions(module) {
+            // The renderers cache the last-rendered tbody by inserting rows
+            // into the DOM, not by stashing the grouped data on window. Re-
+            // derive groups from the dom-resident data we know exists: scan
+            // the table for yellow group-header rows and pull the primary
+            // record's text. Cheaper than re-fetching from /api/duplicates.
+            const tableId = module + 'Table';
+            const tbody = document.getElementById(tableId);
+            if (!tbody) return [];
+            const headers = tbody.querySelectorAll('tr[data-testid^="row-dup-group-"]');
+            const options = [];
+            headers.forEach((tr) => {
+                const gid = tr.getAttribute('data-testid').replace('row-dup-group-', '');
+                const primaryNameEl = tr.querySelector('.font-semibold');
+                const countEl = tr.querySelector('.text-gray-500');
+                const primaryName = primaryNameEl ? primaryNameEl.textContent.trim() : '(no name)';
+                const countText  = countEl ? countEl.textContent.trim() : '';
+                // Synthesise a minimal summary that recordTabPayloadFor can
+                // consume. The DOM doesn't carry the Zoho ID — fall back to
+                // the gid-based synthetic source_id, which is stable across
+                // re-renders of the same tab without rescanning.
+                const summary = {
+                    primary: { record_name: primaryName },
+                    count: parseInt((countText.match(/\d+/) || ['0'])[0], 10) || 0,
+                    sharedKeys: [],
+                };
+                const p = recordTabPayloadFor(module, summary);
+                if (!p) return;
+                // Override the source_id with the rendered group-id so picking
+                // the same group from the same render reliably hits the
+                // existing CAPA.
+                p.sourceId = module + ':group:' + gid + ':' + primaryName.toLowerCase().replace(/\s+/g, '_').slice(0, 40);
+                options.push({
+                    label: '[' + module.toUpperCase() + '] ' + primaryName + ' · ' + countText,
+                    payload: p,
+                });
+            });
+            return options;
+        }
+
+        function openCapaPicker(tabKey) {
+            const provider = CAPA_TAB_PROVIDERS[tabKey];
+            if (typeof provider !== 'function') {
+                alert('No CAPA picker is configured for this tab yet.');
+                return;
+            }
+            const rows = provider() || [];
+            const tabLabelMap = {
+                'cs-lifecycle': 'CS Lifecycle',
+                'cs-overlap':   'CS Pipeline Overlap',
+                'cross-module': 'Cross-Module',
+                'clusters':     'Domain Clusters',
+                'leads':        'Lead Duplicates',
+                'deals':        'Deal Duplicates',
+                'contacts':     'Contact Duplicates',
+                'accounts':     'Account Duplicates',
+            };
+            const tabLabel = tabLabelMap[tabKey] || tabKey;
+            if (rows.length === 0) {
+                alert('No rows are loaded on the ' + tabLabel + ' tab yet — open the tab (and run a scan if needed) so the picker has something to choose from.');
+                return;
+            }
+            // Stash for the picker change-handler to look up.
+            window._capaPickerRows = rows;
+            window._capaPickerTabLabel = tabLabel;
+
+            // Reset modal fields so a previous open doesn't leak.
+            document.getElementById('capaModalTitle').value           = '';
+            document.getElementById('capaModalDescription').value     = '';
+            document.getElementById('capaModalSeverity').value        = 'major';
+            document.getElementById('capaModalTargetDays').value      = 7;
+            document.getElementById('capaModalSourceLabel').textContent = '—';
+            document.getElementById('capaModalSourceId').textContent    = '—';
+            window._capaModalState = { sourceType: '', sourceId: '', sourceLabel: '' };
+
+            // Build + show the picker section.
+            const sel = document.getElementById('capaPickerSelect');
+            sel.innerHTML = '<option value="">— Pick the row this CAPA is for —</option>'
+                + rows.map((r, i) => '<option value="' + i + '">' + escapeHtml(r.label) + '</option>').join('');
+            sel.value = '';
+            document.getElementById('capaPickerHint').textContent =
+                'Tab: ' + tabLabel + ' · ' + rows.length + ' row' + (rows.length === 1 ? '' : 's') + ' available';
+            document.getElementById('capaPickerSection').classList.remove('hidden');
+
+            // Reset status + button label, then open the modal.
+            const status = document.getElementById('capaModalStatus');
+            status.classList.add('hidden');
+            status.textContent = '';
+            const btn = document.getElementById('capaModalSubmitBtn');
+            btn.disabled = false;
+            btn.textContent = 'Open CAPA';
+            document.getElementById('capaModal').classList.remove('hidden');
+        }
+        window.openCapaPicker = openCapaPicker;
+
+        function onCapaPickerChange() {
+            const sel = document.getElementById('capaPickerSelect');
+            const raw = sel.value;
+            const idx = parseInt(raw, 10);
+            if (!Number.isFinite(idx)) {
+                // "Pick a row" selected — clear fields so the operator can't
+                // submit an empty payload by accident.
+                window._capaModalState = { sourceType: '', sourceId: '', sourceLabel: '' };
+                document.getElementById('capaModalTitle').value       = '';
+                document.getElementById('capaModalDescription').value = '';
+                document.getElementById('capaModalSourceLabel').textContent = '—';
+                document.getElementById('capaModalSourceId').textContent    = '—';
+                return;
+            }
+            const row = (window._capaPickerRows || [])[idx];
+            if (!row || !row.payload) return;
+            const p = row.payload;
+            window._capaModalState.sourceType  = p.sourceType  || '';
+            window._capaModalState.sourceId    = p.sourceId    || '';
+            window._capaModalState.sourceLabel = p.sourceLabel || '';
+            document.getElementById('capaModalTitle').value       = String(p.title || '').slice(0, 240);
+            document.getElementById('capaModalDescription').value = String(p.description || '');
+            document.getElementById('capaModalSeverity').value    = ['critical','major','minor','observation'].includes(String(p.severity)) ? p.severity : 'major';
+            document.getElementById('capaModalTargetDays').value  = Number.isFinite(Number(p.targetDays)) ? Number(p.targetDays) : 7;
+            document.getElementById('capaModalSourceLabel').textContent = p.sourceLabel || p.sourceType || '—';
+            document.getElementById('capaModalSourceId').textContent    = p.sourceId    || '—';
+        }
+        window.onCapaPickerChange = onCapaPickerChange;
 
         async function submitOpenCapa() {
             const title       = String(document.getElementById('capaModalTitle').value || '').trim();
