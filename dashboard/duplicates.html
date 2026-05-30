@@ -845,12 +845,20 @@
                     <label for="preflightInput" class="block text-xs font-medium text-gray-700 mb-1">Input (CSV or JSON)</label>
                     <textarea id="preflightInput" rows="10" placeholder="domain,company_name&#10;anb.com.sa,Arab National Bank&#10;bahri.sa,Bahri&#10;example.gov.sa,Example Authority"
                               class="w-full font-mono text-xs border rounded-lg px-3 py-2" data-testid="preflight-input"></textarea>
-                    <div class="flex items-center gap-2 mt-2">
+                    <div class="flex items-center gap-2 mt-2 flex-wrap">
                         <button data-on-click="runPreflight" id="preflightRunBtn" data-testid="button-preflight-run" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Check</button>
+                        <!-- Excel upload: picks an .xlsx, the server parses it,
+                             the rows land in the textarea above so the operator
+                             can still inspect / edit before clicking Check. -->
+                        <button data-on-click="triggerPreflightExcelUpload" id="preflightUploadBtn" data-testid="button-preflight-upload" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">📄 Upload Excel</button>
+                        <input type="file" id="preflightExcelInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" data-on-change="handlePreflightExcelChosen" data-testid="input-preflight-excel" />
                         <button data-on-click="loadPreflightSample" id="preflightSampleBtn" data-testid="button-preflight-sample" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Load sample</button>
                         <button data-on-click="clearPreflight" id="preflightClearBtn" data-testid="button-preflight-clear" class="px-3 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700">Clear</button>
                         <span id="preflightParsedCount" class="ml-auto text-xs text-gray-500"></span>
                     </div>
+                    <p class="text-[11px] text-gray-500 mt-1">
+                        Excel file must contain at least one column named <code>domain</code>, <code>website</code>, <code>url</code>, or <code>email</code>. Optional: <code>company_name</code>. First worksheet only. Max 10&nbsp;MB.
+                    </p>
                 </div>
 
                 <!-- Summary -->
@@ -5080,6 +5088,69 @@
             const sample = 'domain,company_name\nanb.com.sa,Arab National Bank\nbahri.sa,Bahri\nawqaf.gov.sa,General Authority of Awqaf\nnewco.example.com,Brand New Co\n';
             document.getElementById('preflightInput').value = sample;
             document.getElementById('preflightParsedCount').textContent = '';
+        }
+
+        // Excel upload — fires hidden file input. handlePreflightExcelChosen
+        // (bound via data-on-change on the input) does the actual upload +
+        // textarea fill. Two-step pattern so the operator can review what
+        // came out of the workbook before clicking Check.
+        function triggerPreflightExcelUpload() {
+            const input = document.getElementById('preflightExcelInput');
+            if (input) input.click();
+        }
+
+        async function handlePreflightExcelChosen(event) {
+            const input = event && event.target ? event.target : document.getElementById('preflightExcelInput');
+            const file = input && input.files && input.files[0];
+            if (!file) return;
+
+            const countSpan = document.getElementById('preflightParsedCount');
+            const uploadBtn = document.getElementById('preflightUploadBtn');
+            const originalBtnText = uploadBtn ? uploadBtn.textContent : '';
+            if (uploadBtn) {
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = '⏳ Parsing…';
+            }
+            if (countSpan) countSpan.textContent = '';
+
+            try {
+                const fd = new FormData();
+                fd.append('file', file, file.name || 'upload.xlsx');
+                const res = await fetch('/api/duplicates/preflight/parse-excel', {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'include',
+                });
+                let body = null;
+                try { body = await res.json(); } catch { body = null; }
+                if (!res.ok || !body || body.success === false) {
+                    const errMsg = (body && (body.error || body.detail)) || ('Upload failed: HTTP ' + res.status);
+                    if (body && Array.isArray(body.detected_headers)) {
+                        alert(errMsg + '\n\nHeaders found in row ' + (body.header_row || 1) + ':\n  ' + body.detected_headers.join(', '));
+                    } else {
+                        alert(errMsg);
+                    }
+                    return;
+                }
+
+                // Fill the textarea with the server-emitted CSV so the operator
+                // can still inspect / edit before clicking Check.
+                const ta = document.getElementById('preflightInput');
+                if (ta) ta.value = body.csv || '';
+                if (countSpan) {
+                    countSpan.textContent = '✓ Parsed ' + body.count + ' row(s) from "' + (body.file_name || file.name) + '" — click Check to run preflight.';
+                    countSpan.className = 'ml-auto text-xs text-emerald-700 font-medium';
+                }
+            } catch (e) {
+                alert('Upload failed: ' + ((e && e.message) || String(e)));
+            } finally {
+                if (uploadBtn) {
+                    uploadBtn.disabled = false;
+                    uploadBtn.textContent = originalBtnText || '📄 Upload Excel';
+                }
+                // Reset the input so the same file can be re-uploaded after edits.
+                if (input) input.value = '';
+            }
         }
 
         function clearPreflight() {

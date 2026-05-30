@@ -4367,6 +4367,197 @@ export const duplicateRadarRoutes = [
     // Pre-import duplicate check for marketing batches (dashboard-facing).
     // Body: { rows: [{ domain?, email?, company_name?, phone?, ref? }, ...], max_check? }
     // Returns per-row verdict (block | review | warn | duplicate | pass) plus summary.
+    // Parse an uploaded Excel (.xlsx) workbook on the operator's behalf
+    // and return the rows in the same shape /api/duplicates/preflight
+    // expects. Keeps the existing 'paste CSV/JSON' workflow intact —
+    // this endpoint is just a convenience so ops can drag the source
+    // file from their inbox/Drive instead of converting it by hand.
+    //
+    //   POST /api/duplicates/preflight/parse-excel
+    //     multipart/form-data with one field 'file' (the .xlsx)
+    //   Returns: { rows: [{ domain, company_name }], csv: "...", count: N }
+    //
+    // Header detection is case-insensitive and tolerates 'Domain' /
+    // 'Company' / 'Company Name' / 'Email' (domain extracted from
+    // email when no domain column is present). Empty rows are dropped.
+    // First worksheet only; we don't infer across sheets.
+    path: "/api/duplicates/preflight/parse-excel",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          // Accept either multipart upload or raw arrayBuffer body.
+          let buffer: Buffer | null = null;
+          let fileName = "upload.xlsx";
+          const contentType = c.req.header("content-type") || "";
+          if (contentType.startsWith("multipart/form-data")) {
+            const form = await c.req.parseBody();
+            const file = (form as any).file;
+            if (!file || typeof file === "string") {
+              return c.json(
+                { error: "Send the workbook as a multipart 'file' field." },
+                400,
+              );
+            }
+            fileName = (file as any).name || fileName;
+            const ab = await (file as any).arrayBuffer();
+            buffer = Buffer.from(ab);
+          } else {
+            const ab = await c.req.arrayBuffer();
+            buffer = Buffer.from(ab);
+          }
+
+          if (!buffer || buffer.length === 0) {
+            return c.json({ error: "Empty upload." }, 400);
+          }
+          if (buffer.length > 10 * 1024 * 1024) {
+            return c.json(
+              { error: "Workbook too large — 10 MB cap." },
+              413,
+            );
+          }
+
+          const ExcelJS = await import("exceljs");
+          const wb = new (ExcelJS as any).Workbook();
+          try {
+            await wb.xlsx.load(buffer);
+          } catch (parseErr: any) {
+            return c.json(
+              {
+                error:
+                  "Could not parse as .xlsx — make sure the file isn't .xls / .csv / password-protected.",
+                detail: parseErr?.message || String(parseErr),
+              },
+              400,
+            );
+          }
+
+          const ws = wb.worksheets?.[0];
+          if (!ws) {
+            return c.json({ error: "Workbook has no worksheets." }, 400);
+          }
+
+          // Find header row — first non-empty row.
+          let headerRowIdx = 1;
+          for (let i = 1; i <= ws.rowCount; i++) {
+            const r = ws.getRow(i);
+            if (r.values && Array.isArray(r.values) && r.values.some((v: any) => v != null && String(v).trim() !== "")) {
+              headerRowIdx = i;
+              break;
+            }
+          }
+          const headerRow = ws.getRow(headerRowIdx);
+          const headers: string[] = [];
+          const headerValues = headerRow.values as any[];
+          // exceljs row.values is 1-indexed; index 0 is undefined
+          for (let i = 1; i < headerValues.length; i++) {
+            headers.push(
+              headerValues[i] == null ? "" : String(headerValues[i]).trim().toLowerCase(),
+            );
+          }
+
+          function findCol(...needles: string[]): number {
+            for (const n of needles) {
+              const idx = headers.indexOf(n.toLowerCase());
+              if (idx >= 0) return idx;
+            }
+            return -1;
+          }
+          const domainIdx = findCol("domain", "website", "url");
+          const companyIdx = findCol("company_name", "company name", "company", "name", "account name");
+          const emailIdx = findCol("email", "email_address", "email address");
+
+          if (domainIdx < 0 && emailIdx < 0) {
+            return c.json(
+              {
+                error:
+                  "Workbook is missing required column. Need at least one of: 'domain', 'website', 'url', or 'email'.",
+                detected_headers: headers,
+              },
+              400,
+            );
+          }
+
+          // Read data rows
+          const rows: { domain: string; company_name: string }[] = [];
+          for (let i = headerRowIdx + 1; i <= ws.rowCount; i++) {
+            const r = ws.getRow(i);
+            const rv = r.values as any[];
+            if (!rv || !Array.isArray(rv)) continue;
+            // Skip empty rows
+            const nonEmpty = rv.some((v: any) => v != null && String(v).trim() !== "");
+            if (!nonEmpty) continue;
+
+            let domain = "";
+            if (domainIdx >= 0 && rv[domainIdx + 1] != null) {
+              domain = String(rv[domainIdx + 1]).trim();
+            }
+            if (!domain && emailIdx >= 0 && rv[emailIdx + 1] != null) {
+              const e = String(rv[emailIdx + 1]).trim();
+              const at = e.lastIndexOf("@");
+              if (at > 0 && at < e.length - 1) domain = e.slice(at + 1);
+            }
+            // Strip leading https:// www. and trailing / from domain
+            domain = domain
+              .replace(/^https?:\/\//i, "")
+              .replace(/^www\./i, "")
+              .replace(/\/.*$/, "")
+              .trim()
+              .toLowerCase();
+
+            let companyName = "";
+            if (companyIdx >= 0 && rv[companyIdx + 1] != null) {
+              companyName = String(rv[companyIdx + 1]).trim();
+            }
+
+            if (!domain) continue;
+            rows.push({ domain, company_name: companyName });
+          }
+
+          if (rows.length === 0) {
+            return c.json(
+              {
+                error: "No rows with a domain/email found after the header.",
+                detected_headers: headers,
+                header_row: headerRowIdx,
+              },
+              400,
+            );
+          }
+
+          // Build a CSV the operator can see / re-edit in the textarea
+          const csvLines = ["domain,company_name"];
+          for (const r of rows) {
+            const safeCompany =
+              r.company_name.includes(",") || r.company_name.includes('"')
+                ? `"${r.company_name.replace(/"/g, '""')}"`
+                : r.company_name;
+            csvLines.push(`${r.domain},${safeCompany}`);
+          }
+
+          return c.json({
+            success: true,
+            count: rows.length,
+            rows,
+            csv: csvLines.join("\n"),
+            file_name: fileName,
+            detected_headers: headers,
+            header_row: headerRowIdx,
+          });
+        } catch (error: any) {
+          logger.error("Error parsing preflight Excel:", error);
+          return c.json(
+            { error: "An internal error occurred parsing the workbook." },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/preflight",
     method: "POST" as const,
     createHandler: async () => {
