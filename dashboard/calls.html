@@ -953,141 +953,145 @@
                 </div>
             </div>
 
-            <!-- Embedded Scorecard Management panel — merged in from the
-                 standalone Scorecards tab so evaluators can see, edit, swap,
-                 or create scorecards without leaving this view. Collapsed by
-                 default to keep the call-evaluation work area uncluttered. -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-                <button type="button" data-on-click="toggleScorecardPanel" class="w-full px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition" aria-expanded="false" aria-controls="embedded-scorecard-panel" id="embedded-scorecard-toggle">
-                    <div class="flex items-center gap-3 text-start">
-                        <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-purple-100 text-purple-700">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                        </span>
-                        <div>
-                            <div class="text-sm font-semibold text-gray-900">Active Scorecard</div>
-                            <div class="text-xs text-gray-600" id="embedded-scorecard-summary">Loading active scorecard…</div>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-500" id="embedded-scorecard-action-hint">Click to manage</span>
-                        <svg class="w-4 h-4 text-gray-400 transition-transform" id="embedded-scorecard-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                    </div>
-                </button>
-                <div id="embedded-scorecard-panel" class="hidden border-t border-gray-100 px-6 py-5 bg-gray-50">
-                    <div class="flex items-center justify-between mb-4">
-                        <h4 class="text-sm font-semibold text-gray-900">SDR Evaluation Scorecards</h4>
-                        <button data-on-click="showCreateScorecardModal" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition flex items-center gap-1.5">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                            Create / Edit Scorecard
-                        </button>
-                    </div>
-                    <!-- The scorecards-list and AI Training Feedback move
-                         into this embedded panel; the original Scorecards
-                         tab is now hidden. Same DOM ids preserved so existing
-                         JS handlers (loadScorecards, activateScorecard,
-                         showCreateScorecardModal) keep working unchanged. -->
-                    <div id="scorecards-list" class="bg-white rounded-lg border border-gray-100 divide-y">
-                        <div class="p-6 text-center text-gray-400 text-xs">Loading scorecards…</div>
-                    </div>
-                    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Medium #3 — AI Training Feedback panel.
-                             Reads from sdr_evaluation_reviews (the canonical
-                             correction signal added in #6 + #6 v1.1). Shows
-                             reviewed count, manager approval rate, the
-                             Adjusted/Disagreed breakdown, and a top-5 list
-                             of attributes managers most often override —
-                             actionable signal for prompt tuning.
-                             IDs are suffixed -embedded to avoid colliding
-                             with the deprecated #content-scorecards block. -->
-                        <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-200 p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <h5 class="text-xs font-semibold text-purple-900">AI Training Feedback</h5>
-                                <span class="text-[10px] text-purple-600" title="Source: sdr_evaluation_reviews from the Manager Review workflow">via manager reviews</span>
-                            </div>
-                            <div class="grid grid-cols-3 gap-2 mb-3">
-                                <div class="bg-white rounded border border-purple-100 p-2 text-center">
-                                    <div class="text-[10px] text-gray-500">Reviewed</div>
-                                    <div class="text-lg font-semibold text-purple-900" id="stat-reviewed-embedded">0</div>
-                                </div>
-                                <div class="bg-white rounded border border-purple-100 p-2 text-center">
-                                    <div class="text-[10px] text-gray-500">Approval rate</div>
-                                    <div class="text-lg font-semibold text-green-600" id="stat-accuracy-embedded">--</div>
-                                </div>
-                                <div class="bg-white rounded border border-purple-100 p-2 text-center">
-                                    <div class="text-[10px] text-gray-500">Corrections</div>
-                                    <div class="text-lg font-semibold text-amber-600" id="stat-corrections-embedded">0</div>
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between text-[11px] text-purple-800 mb-2 px-1">
-                                <span title="Manager accepted AI score as-is">✓ <span id="stat-approved-embedded">0</span> approved</span>
-                                <span title="Manager edited per-attribute scores">✎ <span id="stat-adjusted-embedded">0</span> adjusted</span>
-                                <span title="Manager flagged AI evaluation as wrong">✗ <span id="stat-disagreed-embedded">0</span> disagreed</span>
-                            </div>
-                            <div class="bg-white rounded border border-purple-100 p-2">
-                                <div class="text-[10px] text-gray-500 mb-1">Top attributes managers override</div>
-                                <ol id="stat-top-corrected-embedded" class="text-[11px] text-gray-700 space-y-0.5 list-decimal list-inside">
-                                    <li class="text-gray-400 italic list-none">No corrections yet — managers haven't adjusted any AI evaluations.</li>
-                                </ol>
-                            </div>
-                        </div>
-                        <div class="bg-white rounded-lg border border-gray-100 p-4">
-                            <h5 class="text-xs font-semibold mb-2">Quick Guide</h5>
-                            <ol class="text-xs text-gray-600 space-y-1 list-decimal list-inside">
-                                <li>Create a scorecard with evaluation attributes</li>
-                                <li>Define dimensions: People, Process, Governance</li>
-                                <li>Set severity levels &amp; evaluation logic</li>
-                                <li>Activate the scorecard so AI uses it on new calls</li>
-                            </ol>
-                        </div>
-                    </div>
+            <!-- Tier-1 SDR Eval cleanup (2026-05-30):
+                 The full Active Scorecard banner + collapsible management
+                 panel used to live here. Both were duplicates of what
+                 Admin Settings → Evaluation Scorecard already owns (the
+                 same dimension weights, attribute editor, activate
+                 toggle). They were eating hero space on a reviewer
+                 workflow surface for an admin concern.
+
+                 What's left here is a one-line breadcrumb so reviewers
+                 still know which scorecard is grading them, plus a
+                 deep-link to the canonical management page. The
+                 #embedded-scorecard-summary id is preserved so
+                 loadActiveSDRScorecardSummary() (line ~7159) keeps
+                 filling the version string unchanged.
+
+                 The hidden #scorecards-list + AI Training Feedback
+                 widget keep their DOM ids in a screen-reader-hidden
+                 stub block below so loadScorecards() and the
+                 training-feedback hydration calls don't throw
+                 "element not found" errors when they fire on tab
+                 load. They get cleaned up properly in Tier 2 when we
+                 also migrate the training feedback widget into
+                 admin.html. -->
+            <div class="mb-4 flex items-center justify-between gap-3 flex-wrap text-xs text-gray-600 px-1">
+                <div class="flex items-center gap-2 min-w-0">
+                    <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    <span class="truncate">Scoring with <span id="embedded-scorecard-summary" class="font-medium text-gray-800">Loading active scorecard…</span></span>
                 </div>
+                <a href="/admin.html?tab=scorecard" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium whitespace-nowrap inline-flex items-center gap-1" data-testid="link-manage-scorecard">
+                    Manage <span aria-hidden="true">→</span>
+                </a>
             </div>
+            <!-- Hidden stub for legacy hydration calls. loadScorecards()
+                 + the AI Training Feedback widget look up these ids on
+                 every SDR-eval-tab activation; deleting them outright
+                 throws getElementById-null TypeErrors. Hidden via the
+                 [hidden] attribute + .hidden class (belt + braces) so
+                 the layout reclaims the space. -->
+            <div id="embedded-scorecard-panel" class="hidden" hidden>
+                <div id="scorecards-list"></div>
+                <span id="stat-reviewed-embedded">0</span>
+                <span id="stat-accuracy-embedded">--</span>
+                <span id="stat-corrections-embedded">0</span>
+                <span id="stat-approved-embedded">0</span>
+                <span id="stat-adjusted-embedded">0</span>
+                <span id="stat-disagreed-embedded">0</span>
+                <ol id="stat-top-corrected-embedded"></ol>
+            </div>
+            <!-- Tier-1 SDR Eval cleanup (2026-05-30):
+                 Queue flipped to the WIDE column (lg:col-span-2). Reviewers
+                 need horizontal room for: agent · contact · score · age ·
+                 reviewer-state · 3 inline action buttons. The right pane
+                 used to host a duplicate scorecard form — now it's a slim
+                 helper showing triage explainer + the last call opened
+                 so reviewers don't lose their place when they click
+                 "Open" to deep-dive.
+
+                 Clicking a queue row now calls viewCall(callId) directly
+                 — same Call Details modal the View button opens — making
+                 the SDR Eval tab a pure queue/workflow surface instead of
+                 a viewer-duplicate. -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-1">
+                <div class="lg:col-span-2">
                     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div class="px-6 py-4 border-b border-gray-100">
-                            <h3 class="text-lg font-semibold" data-i18n="calls.sec_select_call">Select Call to Evaluate</h3>
+                        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+                            <h3 class="text-lg font-semibold" data-i18n="calls.sec_select_call">Evaluation Queue</h3>
+                            <span class="text-xs text-gray-500" id="eval-queue-count">— calls</span>
+                        </div>
+                        <!-- Triage chips. Filter the queue without leaving
+                             the tab. The "Mine" chip uses the logged-in
+                             user's email; the rest are cross-team
+                             slices most useful to the QA manager rotation.
+                             Active chip gets a darker styling, inactive
+                             chips show counts in parens. -->
+                        <div class="px-6 pt-4 pb-2 flex items-center gap-2 flex-wrap" id="eval-triage-chips" data-testid="eval-triage-chips">
+                            <button type="button" data-on-click="setEvalTriage" data-args="[&quot;all&quot;]" data-triage="all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white" data-testid="chip-triage-all">All</button>
+                            <button type="button" data-on-click="setEvalTriage" data-args="[&quot;needs-review&quot;]" data-triage="needs-review" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-testid="chip-triage-needs-review">Needs Review <span class="opacity-60" data-triage-count="needs-review">0</span></button>
+                            <button type="button" data-on-click="setEvalTriage" data-args="[&quot;qa-pending&quot;]" data-triage="qa-pending" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-testid="chip-triage-qa-pending">QA Pending <span class="opacity-60" data-triage-count="qa-pending">0</span></button>
+                            <button type="button" data-on-click="setEvalTriage" data-args="[&quot;failed-old&quot;]" data-triage="failed-old" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-testid="chip-triage-failed-old" title="Calls scored under 60% with no reviewer state, older than 14 days">Failed &gt; 14d <span class="opacity-60" data-triage-count="failed-old">0</span></button>
+                            <button type="button" data-on-click="setEvalTriage" data-args="[&quot;mine&quot;]" data-triage="mine" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" data-testid="chip-triage-mine" title="Calls where you (the logged-in reviewer) have already submitted a review">Mine <span class="opacity-60" data-triage-count="mine">0</span></button>
                         </div>
                         <div class="p-4">
                             <div class="mb-4">
-                                <input type="text" id="eval-search" placeholder="Search by agent or contact..." 
-                                       class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                                <input type="text" id="eval-search" placeholder="Search by agent or contact..."
+                                       class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
                                        data-on-keyup="searchCallsForEval">
                             </div>
-                            <div id="eval-calls-list" class="space-y-2 max-h-96 overflow-y-auto">
+                            <div id="eval-calls-list" class="space-y-2 max-h-[36rem] overflow-y-auto">
                                 <p class="text-gray-500 text-sm p-2">Loading calls...</p>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <div class="lg:col-span-2">
+
+                <div class="lg:col-span-1">
+                    <!-- Slim helper pane. Replaces the duplicate scorecard
+                         form that used to live here. Three jobs:
+                           1. Quick recap of what each triage chip means
+                           2. Last-opened recap so reviewers don't lose
+                              context when they click "Open" → close
+                              the deep-dive modal → come back here.
+                           3. Eventual home for the SDR coaching plan
+                              widget when the user selects an SDR (Tier 2).
+                         eval-call-info + eval-crm-link ids preserved for
+                         legacy callers; both are hidden until something
+                         populates them. -->
                     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-emerald-500 to-emerald-600">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="flex-1 min-w-0">
-                                    <h3 class="text-lg font-semibold text-white">SDR Evaluation Form</h3>
-                                    <p class="text-sm text-white/80" id="eval-call-info">Select a call to begin evaluation</p>
-                                </div>
-                                <!-- CRM linkage badge — surfaces whether this
-                                     call is mapped to a Zoho Lead/Deal, and
-                                     by which signal (phone vs same-day same-
-                                     agent activity). Re-link button visible
-                                     when nothing is mapped yet. -->
-                                <div id="eval-crm-link" class="text-xs text-white/90 text-end hidden"></div>
-                            </div>
+                        <div class="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                            <h3 class="text-sm font-semibold text-gray-900">Workflow</h3>
                         </div>
-                        <div id="eval-form-container" class="p-6">
-                            <div class="text-center py-12 text-gray-400">
-                                <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-                                </svg>
-                                <p>Select a call from the list to begin the SDR evaluation</p>
+                        <div class="p-5 space-y-4">
+                            <div>
+                                <h4 class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Triage shortcuts</h4>
+                                <dl class="text-xs text-gray-600 space-y-1.5">
+                                    <div class="flex justify-between gap-2"><dt class="font-medium text-gray-700">Needs Review</dt><dd>AI-scored, no human review yet</dd></div>
+                                    <div class="flex justify-between gap-2"><dt class="font-medium text-gray-700">QA Pending</dt><dd>Status = qa_review_pending</dd></div>
+                                    <div class="flex justify-between gap-2"><dt class="font-medium text-gray-700">Failed &gt; 14d</dt><dd>Score &lt; 60% &amp; aging</dd></div>
+                                    <div class="flex justify-between gap-2"><dt class="font-medium text-gray-700">Mine</dt><dd>You already reviewed</dd></div>
+                                </dl>
+                            </div>
+                            <div class="border-t pt-3" id="eval-last-opened-wrapper" hidden>
+                                <h4 class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Last opened</h4>
+                                <div id="eval-last-opened" class="text-xs text-gray-700"></div>
+                            </div>
+                            <div class="border-t pt-3 text-[11px] text-gray-500">
+                                <span id="eval-call-info" class="hidden"></span>
+                                <span id="eval-crm-link" class="hidden"></span>
+                                <p class="leading-relaxed">Click any row to open the full Call Details — recording, transcript, CRM, scorecard, and approve/disagree actions all in one modal. The queue here stays in sync.</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+            <!-- Hidden stub for legacy form-rendering code paths
+                 (renderEvalForm + renderAIEvalResults still query this id).
+                 The right-pane scorecard form has been retired in favour
+                 of viewCall(); this stub absorbs any leftover writes so
+                 the page doesn't throw getElementById-null TypeErrors. -->
+            <div id="eval-form-container" class="hidden" hidden></div>
         </div>
 
         <!-- Deprecation gate. The .hidden class + the [hidden] attribute
@@ -2311,6 +2315,17 @@
                 // when available, so the two tabs are always in sync.
                 try { loadCallsForEval(); }
                 catch (e) { console.error('loadCallsForEval (tab switch) failed:', e); }
+                // Tier-1 SDR Eval cleanup (2026-05-30): fetch the
+                // logged-in reviewer's email so the "Mine" triage chip
+                // resolves without the user having to click anything.
+                // One-shot — guarded by ensureEvalReviewerIdentity.
+                try {
+                    if (typeof ensureEvalReviewerIdentity === 'function') {
+                        ensureEvalReviewerIdentity()
+                            .then(() => { if (typeof updateEvalTriageCounts === 'function') updateEvalTriageCounts(); })
+                            .catch(() => {});
+                    }
+                } catch (e) { console.error('ensureEvalReviewerIdentity failed:', e); }
             }
             if (tab === 'coaching') {
                 try { reloadCoachingPlans(); }
@@ -5198,11 +5213,29 @@
             // in-modal display is gone.
             const legacyFootnote = '';
 
+            // Tier-1 SDR Eval cleanup (2026-05-30): provenance chip.
+            // Every scorecard rendering should know which rubric (name
+            // + version) produced it, so audits + post-hoc drift
+            // analysis can tell v2.0.0 results from v2.1.0 results.
+            // The chip links to the canonical management surface so
+            // operators can answer "what does this rubric actually
+            // measure?" in one click.
+            const versionLabel = evaluation.scorecard_version
+                ? `v${escapeHtml(String(evaluation.scorecard_version))}`
+                : '';
+            const scorecardName = escapeHtml(evaluation.scorecard_name || '');
+            const provenanceChip = (scorecardName || versionLabel)
+                ? `<a href="/admin.html?tab=scorecard" class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-100" title="Scored against this rubric — click to open the scorecard editor" data-testid="chip-scorecard-provenance">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    Scored against: ${scorecardName}${versionLabel ? ` <span class="font-mono">${versionLabel}</span>` : ''}
+                </a>`
+                : '';
+
             slot.innerHTML = `
                 <div class="border-t pt-6 mt-2">
-                    <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                         <h4 class="font-semibold text-gray-900">${escapeHtml(WalaPlusI18n.t('dyn.calls.sdr_scorecard') || 'SDR Scorecard')}</h4>
-                        <span class="text-[11px] text-gray-400">${escapeHtml(evaluation.scorecard_name || '')}</span>
+                        ${provenanceChip}
                     </div>
                     ${legacyFootnote}
                     <div class="bg-gradient-to-r ${scoreColor} rounded-xl p-4 text-white mb-3">
@@ -6603,14 +6636,125 @@
             }
         }
 
+        // Tier-1 SDR Eval cleanup (2026-05-30):
+        // Triage state + identity. evalTriage is the active chip
+        // ("all" | "needs-review" | "qa-pending" | "failed-old" | "mine").
+        // evalCurrentUserEmail is fetched once on tab activation so the
+        // "Mine" filter doesn't need a per-render API call.
+        let evalTriage = 'all';
+        let evalCurrentUserEmail = null;
+
+        // One-shot fetch of the logged-in reviewer's email. Runs on tab
+        // activation so "Mine" works. Soft-fails — if /api/auth/me 404s
+        // (legacy session) we just treat the filter as "show nothing"
+        // rather than throwing.
+        async function ensureEvalReviewerIdentity() {
+            if (evalCurrentUserEmail !== null) return;
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                if (!res.ok) { evalCurrentUserEmail = ''; return; }
+                const data = await res.json();
+                evalCurrentUserEmail = String(data?.email || data?.user?.email || '').toLowerCase();
+            } catch (e) {
+                evalCurrentUserEmail = '';
+            }
+        }
+
+        // Days between now and a call_date string. Returns null when the
+        // date is missing or unparseable. Used for the age pill + the
+        // "Failed > 14d" triage chip.
+        function evalDaysSince(callDate) {
+            if (!callDate) return null;
+            const t = new Date(callDate).getTime();
+            if (!Number.isFinite(t)) return null;
+            return Math.max(0, Math.floor((Date.now() - t) / 86400000));
+        }
+
+        // Triage predicate. Returns true if the call belongs in the
+        // currently-selected chip's slice. Order matters — fast checks
+        // (status) before slow ones (score parsing). "Mine" requires the
+        // identity fetch to have completed; otherwise it shows nothing.
+        function evalMatchesTriage(call, triage) {
+            if (triage === 'all') return true;
+            if (triage === 'needs-review') {
+                // Has an AI score, has not yet been QA-reviewed.
+                const raw = call.sdr_overall_score ?? call.overall_score ?? call.scorecard_score;
+                const hasScore = raw !== null && raw !== undefined && raw !== '';
+                return hasScore && call.status !== 'qa_reviewed' && call.status !== 'qa_review_pending';
+            }
+            if (triage === 'qa-pending') {
+                return call.status === 'qa_review_pending';
+            }
+            if (triage === 'failed-old') {
+                const raw = call.sdr_overall_score ?? call.overall_score ?? call.scorecard_score;
+                const n = Number(raw);
+                if (!Number.isFinite(n) || n >= 60) return false;
+                const age = evalDaysSince(call.call_date);
+                return age !== null && age > 14;
+            }
+            if (triage === 'mine') {
+                if (!evalCurrentUserEmail) return false;
+                const reviewer = String(call.latest_reviewer_email || call.reviewer_email || '').toLowerCase();
+                return reviewer === evalCurrentUserEmail;
+            }
+            return true;
+        }
+
+        // Combine search box + active triage chip. Centralised so every
+        // path (chip click, search keyup, post-action re-render) applies
+        // the same filter stack in the same order.
+        function filterCallsByTriage(calls) {
+            const search = (document.getElementById('eval-search')?.value || '').toLowerCase();
+            return (calls || []).filter(c => {
+                if (!evalMatchesTriage(c, evalTriage)) return false;
+                if (!search) return true;
+                return (c.agent_name || '').toLowerCase().includes(search)
+                    || (c.agent_email || '').toLowerCase().includes(search)
+                    || (c.contact_name || '').toLowerCase().includes(search);
+            });
+        }
+
+        // Chip click handler — wired up via data-on-click in the markup.
+        // Swaps the active chip styling, then re-renders the queue
+        // through the central filter pipeline. Recomputes counts so the
+        // dimmed numbers on every chip stay accurate after each click.
+        function setEvalTriage(key) {
+            evalTriage = key;
+            const chips = document.querySelectorAll('#eval-triage-chips button[data-triage]');
+            chips.forEach(btn => {
+                const t = btn.getAttribute('data-triage');
+                if (t === key) {
+                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white';
+                } else {
+                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200';
+                }
+            });
+            // Active chip swallows its own count so the styling stays
+            // clean; the inactive chips keep their count span. Recompose
+            // the active label so it doesn't read "All 12" with stale
+            // counts when the user clicks through chips quickly.
+            updateEvalTriageCounts();
+            renderEvalCallsList(filterCallsByTriage(callsForEval));
+        }
+
+        // Update the dimmed count next to each chip label. Runs after
+        // every render so adding a review (which flips a call out of
+        // "Needs Review" into "Mine") updates the chip math in place.
+        function updateEvalTriageCounts() {
+            const tally = { 'needs-review': 0, 'qa-pending': 0, 'failed-old': 0, 'mine': 0 };
+            for (const c of (callsForEval || [])) {
+                for (const k of Object.keys(tally)) {
+                    if (evalMatchesTriage(c, k)) tally[k]++;
+                }
+            }
+            document.querySelectorAll('#eval-triage-chips [data-triage-count]').forEach(el => {
+                const k = el.getAttribute('data-triage-count');
+                if (tally[k] !== undefined) el.textContent = String(tally[k]);
+            });
+        }
+
         function searchCallsForEval() {
-            const search = document.getElementById('eval-search').value.toLowerCase();
-            const filtered = callsForEval.filter(c => 
-                (c.agent_name || '').toLowerCase().includes(search) ||
-                (c.agent_email || '').toLowerCase().includes(search) ||
-                (c.contact_name || '').toLowerCase().includes(search)
-            );
-            renderEvalCallsList(filtered);
+            renderEvalCallsList(filterCallsByTriage(callsForEval));
         }
 
         // Quick Win #2 — show the AI scorecard score (when present) on each
@@ -6717,59 +6861,221 @@
             }
         }
 
+        // Tier-1 SDR Eval cleanup (2026-05-30):
+        // Dense queue row. Was: agent + contact + date + score + source.
+        // Now: agent + contact + score + age pill + reviewer-state pill +
+        // inline Approve/Disagree/Open buttons. Designed so a reviewer
+        // can scan 20 rows in ~10 seconds and clear most through inline
+        // Approve without ever opening the modal.
+        //
+        // Reviewer state heuristic (no per-row API calls needed):
+        //   call.status === 'qa_reviewed'        → ✓ Reviewed (green)
+        //   call.status === 'qa_review_pending'  → ⏳ QA Pending (amber)
+        //   call.status === 'evaluated'          → · Awaiting (gray)
+        //   else                                  → pipeline state (gray)
+        //
+        // Age pill: today / Nd. Turns red when age > 14d AND status is
+        // qa_review_pending — the "this is slipping" signal.
         function renderEvalCallsList(calls) {
             const container = document.getElementById('eval-calls-list');
-            if (calls.length === 0) {
-                container.innerHTML = `<p class="text-gray-500 text-sm p-2">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_calls_short'))}</p>`;
+            const countEl = document.getElementById('eval-queue-count');
+            if (countEl) {
+                const total = (callsForEval || []).length;
+                const shown = (calls || []).length;
+                countEl.textContent = shown === total
+                    ? `${total} call${total === 1 ? '' : 's'}`
+                    : `${shown} of ${total}`;
+            }
+            if (!calls || calls.length === 0) {
+                container.innerHTML = `<p class="text-gray-500 text-sm p-4 text-center">${evalTriage === 'all'
+                    ? escapeHtml(WalaPlusI18n.t('dyn.calls.no_calls_short'))
+                    : 'No calls match this triage filter — try <strong>All</strong> or clear the search.'}</p>`;
+                updateEvalTriageCounts();
                 return;
             }
-            container.innerHTML = calls.map(call => `
-                <div class="p-3 rounded-lg border cursor-pointer hover:bg-blue-50 transition ${selectedEvalCall?.id === call.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}" data-on-click="selectCallForEval" data-args="[${call.id}]">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="font-medium text-sm">${escapeHtml(call.agent_name || call.agent_email)}</div>
-                            <div class="text-xs text-gray-500">${escapeHtml(call.contact_name || WalaPlusI18n.t('dyn.calls.unknown'))}</div>
-                        </div>
-                        <div class="text-end flex flex-col items-end gap-1">
-                            <div class="text-xs text-gray-400">${escapeHtml(_fd(call.call_date))}</div>
-                            <div class="flex items-center gap-1">
+
+            container.innerHTML = calls.map(call => {
+                const isSel = selectedEvalCall?.id === call.id;
+                const agent = escapeHtml(call.agent_name || call.agent_email || '—');
+                const contact = escapeHtml(call.contact_name || call.contact_phone || WalaPlusI18n.t('dyn.calls.unknown'));
+                const age = evalDaysSince(call.call_date);
+                let agePill = '';
+                if (age !== null) {
+                    const isStale = age > 14 && call.status === 'qa_review_pending';
+                    const cls = isStale ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600';
+                    const label = age === 0 ? 'today' : `${age}d`;
+                    agePill = `<span class="px-1.5 py-0.5 text-[10px] rounded ${cls}" title="${age} day(s) since the call">${label}</span>`;
+                }
+                // Reviewer-state pill. The status column on call_records
+                // is the canonical signal — fed by both the AI eval
+                // worker (sets evaluated/qa_review_pending) and the
+                // manager review endpoint (sets qa_reviewed).
+                let statePill = '';
+                if (call.status === 'qa_reviewed') {
+                    statePill = '<span class="px-1.5 py-0.5 text-[10px] rounded bg-green-100 text-green-700" title="A QA reviewer approved or adjusted this evaluation">✓ Reviewed</span>';
+                } else if (call.status === 'qa_review_pending') {
+                    statePill = '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-700" title="AI flagged this for manual review">⏳ QA Pending</span>';
+                } else if (call.status === 'evaluated') {
+                    statePill = '<span class="px-1.5 py-0.5 text-[10px] rounded bg-gray-100 text-gray-600" title="AI-scored, no reviewer action yet">· Awaiting</span>';
+                } else {
+                    statePill = `<span class="px-1.5 py-0.5 text-[10px] rounded bg-gray-100 text-gray-500" title="Pipeline state — handled by the worker, not the reviewer">· ${escapeHtml(call.status || '—')}</span>`;
+                }
+                // Inline actions. Approve fires the POST inline (no
+                // modal hop). Disagree routes through the View modal
+                // because it needs a reason text input. Open is the
+                // explicit "deep-dive" button.
+                // event.stopPropagation() on each so clicking the
+                // button doesn't ALSO fire the row's selectCallForEval.
+                const hasScore = (call.sdr_overall_score ?? call.overall_score ?? call.scorecard_score) != null;
+                const canApprove = hasScore && call.status !== 'qa_reviewed';
+                const approveBtn = canApprove
+                    ? `<button type="button" data-on-click="inlineApproveCall" data-args="[${call.id}]" data-pass-event="true" class="px-2 py-1 text-[11px] rounded bg-green-50 hover:bg-green-100 text-green-700 border border-green-200" title="Approve the AI score as-is" data-testid="btn-eval-approve-${call.id}">✓ Approve</button>`
+                    : '';
+                const disagreeBtn = hasScore
+                    ? `<button type="button" data-on-click="inlineDisagreeCall" data-args="[${call.id}]" data-pass-event="true" class="px-2 py-1 text-[11px] rounded bg-red-50 hover:bg-red-100 text-red-700 border border-red-200" title="Open the modal to record a disagreement reason" data-testid="btn-eval-disagree-${call.id}">✗ Disagree</button>`
+                    : '';
+                const openBtn = `<button type="button" data-on-click="selectCallForEval" data-args="[${call.id}]" data-pass-event="true" class="px-2 py-1 text-[11px] rounded bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200" title="Open the full Call Details modal" data-testid="btn-eval-open-${call.id}">Open →</button>`;
+
+                return `
+                <div class="p-3 rounded-lg border cursor-pointer hover:bg-blue-50 transition ${isSel ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}" data-on-click="selectCallForEval" data-args="[${call.id}]" data-testid="eval-row-${call.id}">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0 flex-1">
+                            <div class="font-medium text-sm text-gray-900 truncate">${agent}</div>
+                            <div class="text-xs text-gray-500 truncate">${contact}</div>
+                            <div class="mt-1.5 flex items-center gap-1 flex-wrap">
                                 ${evalScoreBadge(call)}
-                                <span class="px-1.5 py-0.5 text-xs rounded ${call.source === 'manual' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}">${escapeHtml(call.source)}</span>
+                                ${agePill}
+                                ${statePill}
+                                <span class="px-1.5 py-0.5 text-[10px] rounded ${call.source === 'manual' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}">${escapeHtml(call.source || '—')}</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                            <div class="text-[10px] text-gray-400 whitespace-nowrap">${escapeHtml(_fd(call.call_date))}</div>
+                            <div class="flex items-center gap-1 flex-wrap justify-end">
+                                ${approveBtn}
+                                ${disagreeBtn}
+                                ${openBtn}
                             </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
+            updateEvalTriageCounts();
+        }
+
+        // Inline Approve — fires POST /api/calls/:id/sdr-evaluation/review
+        // straight from the queue. No modal, no follow-up screen. The
+        // call_record's status flips to qa_reviewed via the existing
+        // endpoint logic, then we patch the cached row + re-render so
+        // the reviewer-state pill turns green immediately and the chip
+        // counts update.
+        async function inlineApproveCall(callId, event) {
+            if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+            const btn = event && event.target;
+            if (btn) { btn.disabled = true; btn.textContent = '…'; }
+            try {
+                const res = await fetch(`/api/calls/${callId}/sdr-evaluation/review`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ review_status: 'approved', review_notes: null }),
+                });
+                if (res.status === 401 || res.status === 403) {
+                    alert('Not authorized to review evaluations. Quality reviewer or admin role required.');
+                    return;
+                }
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    alert('Approve failed: ' + (body.error || ('HTTP ' + res.status)));
+                    return;
+                }
+                // Patch the in-memory row so the queue re-render shows
+                // the new state without a round-trip. The backend
+                // endpoint sets call_records.status = 'qa_reviewed';
+                // mirror that locally.
+                const cached = (callsForEval || []).find(c => c.id === callId);
+                if (cached) cached.status = 'qa_reviewed';
+                renderEvalCallsList(filterCallsByTriage(callsForEval));
+            } catch (e) {
+                alert('Approve threw: ' + ((e && e.message) || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '✓ Approve'; }
+            }
+        }
+
+        // Inline Disagree — routes through the View modal because
+        // disagreement requires a reason note. Tier 2 will let us
+        // capture the reason inline (prompt + POST), but for MVP the
+        // modal's existing Disagree workflow is the source of truth.
+        async function inlineDisagreeCall(callId, event) {
+            if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+            await selectCallForEval(callId);
         }
 
         let currentSDREvaluation = null;
-        
+
+        // Tier-1 SDR Eval cleanup (2026-05-30):
+        // Used to fetch the call, populate a duplicate scorecard form on
+        // the right pane, then re-fetch any stored AI evaluation and
+        // overwrite the form again — all of it was a near-clone of what
+        // viewCall() renders inside the Call Details modal.
+        //
+        // Now: click a row → open the View modal (the single source of
+        // truth) → stash the call into selectedEvalCall so the existing
+        // Approve / Disagree / QA-check workflows still know which call
+        // they're acting on → update the "Last opened" recap in the
+        // right-side workflow pane so reviewers don't lose context when
+        // they close the modal.
         async function selectCallForEval(callId) {
             try {
-                const res = await fetch(`/api/calls/${callId}`);
-                const data = await res.json();
-                selectedEvalCall = data.record;
-                
-                document.getElementById('eval-call-info').textContent = `${selectedEvalCall.agent_name || selectedEvalCall.agent_email} - ${selectedEvalCall.contact_name || WalaPlusI18n.t('dyn.calls.unknown_contact')}`;
-                renderEvalCrmLinkBadge(selectedEvalCall);
-                renderEvalCallsList(callsForEval);
-                
-                // Try to fetch existing SDR evaluation
-                try {
-                    const evalRes = await fetch(`/api/calls/${callId}/sdr-evaluation`);
-                    const evalData = await evalRes.json();
-                    if (evalData.success && evalData.evaluation) {
-                        currentSDREvaluation = evalData.evaluation;
-                        renderAIEvalResults(currentSDREvaluation, data.transcript);
-                        return;
-                    }
-                } catch (e) { /* No existing evaluation */ }
-                
-                currentSDREvaluation = null;
-                renderEvalForm(selectedEvalCall, data.qa_score, data.transcript);
+                // Look up the row from the in-memory queue first so we
+                // can paint the "Last opened" recap immediately, even
+                // before the API responds. Fall back to the API record
+                // when the call isn't in the queue cache (rare).
+                const cached = (callsForEval || []).find(c => c.id === callId);
+                if (cached) {
+                    selectedEvalCall = cached;
+                    updateEvalLastOpenedRecap(cached);
+                }
+
+                // Open the canonical Call Details modal. viewCall() does
+                // the full fetch (record + analysis + transcript +
+                // compliance + stored SDR eval) and renders everything
+                // — recording, transcript, scorecard, CRM, activity —
+                // in one place. No more duplicate rendering on this tab.
+                if (typeof viewCall === 'function') {
+                    await viewCall(callId);
+                }
+
+                // Re-render the queue so the selected row picks up its
+                // highlight + the reviewer-state pill (if the modal
+                // produced a new review). Cheap — pure in-memory work.
+                renderEvalCallsList(filterCallsByTriage(callsForEval));
             } catch (error) {
                 console.error('Error selecting call for eval:', error);
             }
+        }
+
+        // Paint the "Last opened" mini-recap in the right-side workflow
+        // pane. Visible only after the first click so the empty state
+        // doesn't carry a stale row from a previous session.
+        function updateEvalLastOpenedRecap(call) {
+            const wrap = document.getElementById('eval-last-opened-wrapper');
+            const slot = document.getElementById('eval-last-opened');
+            if (!wrap || !slot || !call) return;
+            const agent = call.agent_name || call.agent_email || '—';
+            const contact = call.contact_name || call.contact_phone || '—';
+            const when = call.call_date ? _fd(call.call_date) : '';
+            const score = (call.sdr_overall_score ?? call.overall_score);
+            const scoreStr = (score === null || score === undefined || isNaN(Number(score)))
+                ? ''
+                : `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono ${Number(score) >= 80 ? 'bg-green-100 text-green-700' : Number(score) >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">${Math.round(Number(score))}%</span>`;
+            slot.innerHTML = `
+                <div class="font-medium text-gray-800">${escapeHtml(agent)}${scoreStr}</div>
+                <div class="text-gray-500 truncate">${escapeHtml(contact)}</div>
+                ${when ? `<div class="text-[10px] text-gray-400 mt-0.5">${escapeHtml(when)}</div>` : ''}
+                <button type="button" data-on-click="selectCallForEval" data-args="[${call.id}]" class="mt-2 text-xs text-indigo-600 hover:text-indigo-800">Re-open →</button>`;
+            wrap.hidden = false;
         }
 
         function renderEvalForm(call, existingScore, transcript) {
