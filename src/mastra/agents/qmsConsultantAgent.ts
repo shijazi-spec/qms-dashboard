@@ -239,12 +239,19 @@ export const qmsConsultantAgent = new Agent({
   // Use the Chat Completions adapter explicitly (`openai.chat(...)`). In
   // @ai-sdk/openai v3.x, the bare `openai("gpt-4o")` call returns the
   // Responses-API model (provider: "openai.responses",
-  // constructor: OpenAIResponsesLanguageModel) — verified at runtime. That
-  // model is rejected by Mastra's stream()/streamLegacy() under AI SDK v4
-  // with: "Agent ... is using AI SDK v4 model (openai.responses:gpt-4o)
-  // which is not compatible with stream()". Only `openai.chat("gpt-4o")`
-  // gives the Chat Completions adapter (provider: "openai.chat") that
-  // streamLegacy() in src/mastra/routes/consultantRoutes.ts can drive.
+  // constructor: OpenAIResponsesLanguageModel) — verified at runtime —
+  // which Mastra rejects. Only `openai.chat("gpt-4o")` gives the Chat
+  // Completions adapter that the route handlers drive.
+  //
+  // The Mastra method polarity has flipped between V2/V4 several times
+  // across SDK upgrades — sometimes the adapter returns a V4 (legacy)
+  // model and the routes need .generateLegacy()/.streamLegacy(), other
+  // times it returns a V2 (modern) model and the routes need
+  // .generate()/.stream(). The current setting (2026-05-30) is V2 →
+  // .generate()/.stream(). consultantRoutes.ts carries the live notes
+  // on each call site; if the bubble surfaces a "V2 models are not
+  // supported for *Legacy" or "V4 models are not compatible with
+  // stream()" error again, flip both call sites together.
   model: openai.chat("gpt-4o"),
 
   // Tools: read-only tools pass through unchanged; write-tools are wrapped

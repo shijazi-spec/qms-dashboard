@@ -427,14 +427,16 @@ export const consultantRoutes = [
                         threadId: resolvedThreadId,
                       },
                       () =>
-                        // 2026-05-30 fix — precedence flipped again. The .chat()
-                        // adapter on the agent now produces a V4 (AI SDK v4)
-                        // model class, and Mastra's .generate() rejects it
-                        // with the same v4/stream() error pattern reported
-                        // on the consultant page. Switch back to
-                        // .generateLegacy() to match the V4 shape. Mirrors
-                        // the .streamLegacy() call in the SSE handler below.
-                        agent.generateLegacy(message, {
+                        // 2026-05-30 fix — polarity flipped AGAIN. The chat
+                        // adapter is now producing a V2 (AI SDK v5) model
+                        // class, and Mastra's .generateLegacy() rejects it
+                        // with: "V2 models are not supported for
+                        // generateLegacy. Please use generate instead."
+                        // Surfaced on the consultant page as a server-label
+                        // error bubble. Switching back to .generate() to
+                        // match the V2 shape; mirrors the .stream() call in
+                        // the SSE handler below.
+                        agent.generate(message, {
                           threadId: resolvedThreadId,
                           resourceId,
                           abortSignal: controller.signal,
@@ -583,19 +585,17 @@ export const consultantRoutes = [
                   threadId: resolvedThreadId,
                 },
                 () =>
-                  // 2026-05-30 fix — the precedence flipped AGAIN. After the
-                  // latest @ai-sdk/openai / @mastra/core upgrade, the .chat()
-                  // adapter returns a V4 (AI SDK v4) model class. Mastra's
-                  // .stream() rejects v4 with: "Agent ... is using AI SDK v4
-                  // model (openai.chat:gpt-4o) which is not compatible with
-                  // stream(). Please use AI SDK v5 models or call the
-                  // streamLegacy() method instead." Switching to
-                  // .streamLegacy() to match the V4 model produced by
-                  // openai.chat("gpt-4o") in qmsConsultantAgent.ts. If a
+                  // 2026-05-30 fix — polarity flipped AGAIN. After the
+                  // latest @ai-sdk/openai / @mastra/core upgrade, openai.chat()
+                  // is producing a V2 (AI SDK v5) model class. Mastra's
+                  // .streamLegacy() rejects v2 with: "V2 models are not
+                  // supported for streamLegacy. Please use stream instead."
+                  // Switching to .stream() to match the V2 model produced
+                  // by openai.chat("gpt-4o") in qmsConsultantAgent.ts. If a
                   // future upgrade flips this back, the bubble names the
                   // exact failure mode thanks to the details-surfacing
                   // patch in 2a9654a.
-                  agent.streamLegacy(message, {
+                  agent.stream(message, {
                     threadId: resolvedThreadId,
                     resourceId,
                     abortSignal: controller.signal,
@@ -1236,11 +1236,11 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
                 }),
               },
               async () =>
-                // 2026-05-30 fix — mirror the precedence flip on the chat
-                // and SSE handlers above. The .chat() model class is V4 now,
-                // so use .generateLegacy(). If the model spec later returns
-                // to V5/V2 we'll swap back; the error bubble names which.
-                (await agent.generateLegacy(scanPrompt, {
+                // 2026-05-30 fix — mirror the polarity flip on the chat
+                // and SSE handlers above. The openai.chat() model class is
+                // V2 (AI SDK v5) now, so use .generate(). The error bubble
+                // surfaces the exact failure mode if this flips again.
+                (await agent.generate(scanPrompt, {
                   threadId: `scan-${Date.now()}`,
                   resourceId: "system-scanner",
                   abortSignal: scanController.signal,
