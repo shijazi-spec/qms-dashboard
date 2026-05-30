@@ -962,8 +962,9 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportAccountHints" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of exactly the Account-Hint rows shown below, in the current order and status filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300">🔍 Run Scan</button>
+                <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400 me-2">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;account-hints&quot;]" data-testid="button-open-capa-account-hints" title="Open a corrective-action record (CAPA) on one of the account-hint rows below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
 
             <!-- Table -->
@@ -6189,6 +6190,51 @@
             };
         }
 
+        // Account Hint row → CAPA. The hint is a radar suggestion that an
+        // orphan deal should be linked to a specific Account. Opening a
+        // CAPA here formalises the "fix this Account_Name field in Zoho"
+        // work for the Quality inbox. source_type 'account_hint',
+        // source_id = hint DB id (stable across renders).
+        function accountHintPayloadFor(h) {
+            if (!h || !h.id) return null;
+            const conf = Number(h.confidence || 0);
+            const status = String(h.status || 'pending').toLowerCase();
+            // Only pending hints carry real urgency — applied / dismissed
+            // CAPAs are retrospective so default to observation.
+            const sev = status !== 'pending' ? 'observation'
+                      : conf >= 80 ? 'major'
+                      : conf >= 60 ? 'minor'
+                      : 'observation';
+            const dealLabel = h.deal_company_name || h.deal_account_name || h.deal_zoho_id || ('deal #' + h.id);
+            const suggested = h.suggested_account_name || h.suggested_domain || '—';
+            const description = [
+                'Account-Hint id: ' + h.id,
+                'Status: ' + status,
+                'Confidence: ' + conf + '%',
+                '',
+                'Deal: ' + dealLabel + (h.deal_zoho_id ? ' (Zoho id ' + h.deal_zoho_id + ')' : ''),
+                'Current Account_Name on the deal: ' + (h.deal_account_name || '— missing —'),
+                'Suggested Account: ' + suggested + (h.suggested_account_zoho_id ? ' (Zoho id ' + h.suggested_account_zoho_id + ')' : ''),
+                'Suggested domain: ' + (h.suggested_domain || '—'),
+                'Evidence contact: ' + (h.evidence_contact_email || '—') + (h.evidence_contact_zoho_id ? ' (Zoho id ' + h.evidence_contact_zoho_id + ')' : ''),
+                '',
+                'Recommended action: open the deal in Zoho and set Account_Name',
+                'to the suggested Account above. Next radar sync will auto-',
+                'reclassify the hint as Applied.',
+                '',
+                'Opened manually from the Duplicate Radar → Account Hints tab.',
+            ].join('\n');
+            return {
+                sourceType:  'account_hint',
+                sourceId:    'account_hint:' + h.id,
+                sourceLabel: dealLabel + ' → ' + suggested,
+                title:       'Account-Hint — fix Account_Name on ' + dealLabel,
+                description,
+                severity:    sev,
+                targetDays:  7,
+            };
+        }
+
         // Owner Accountability row → CAPA. Used to escalate a rep carrying a
         // high duplicate-debt load: source_type 'owner_accountability',
         // source_id = email (the stable per-owner key). Severity climbs with
@@ -6401,6 +6447,27 @@
             'deals':    () => _recordTabPickerOptions('deals'),
             'contacts': () => _recordTabPickerOptions('contacts'),
             'accounts': () => _recordTabPickerOptions('accounts'),
+            'account-hints': () => {
+                // window._accountHintsData is the cache renderAccountHints
+                // populates; we read it directly so the picker mirrors the
+                // current status-filter view (Pending / Applied / Dismissed).
+                const data = window._accountHintsData;
+                if (!data || !Array.isArray(data.hints) || data.hints.length === 0) return [];
+                return data.hints
+                    .map(h => {
+                        const p = accountHintPayloadFor(h);
+                        if (!p) return null;
+                        const dealLabel = h.deal_company_name || h.deal_account_name || h.deal_zoho_id || ('deal #' + h.id);
+                        const suggested = h.suggested_account_name || h.suggested_domain || '—';
+                        const conf = Number(h.confidence || 0);
+                        const status = (h.status || 'pending').toUpperCase();
+                        return {
+                            label: '[' + status + ' · ' + conf + '%] ' + dealLabel + ' → ' + suggested,
+                            payload: p,
+                        };
+                    })
+                    .filter(Boolean);
+            },
             'owners': () => {
                 // _ownersCache is the script-scope array renderOwners() fills
                 // when the Owner Accountability tab loads. Reads it directly
@@ -6482,6 +6549,7 @@
                 'deals':        'Deal Duplicates',
                 'contacts':     'Contact Duplicates',
                 'accounts':     'Account Duplicates',
+                'account-hints': 'Account Hints',
                 'owners':       'Owner Accountability',
             };
             const tabLabel = tabLabelMap[tabKey] || tabKey;
