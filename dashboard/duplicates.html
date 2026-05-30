@@ -1068,22 +1068,18 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead id="csLifecycleTableHead" class="bg-gray-50">
                         <tr>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;severity&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="severity">Severity <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;account&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="account">Account <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;domain&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="domain">Domain <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;phase&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="phase">Phase <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">CS Owner</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Customer Since</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Renewal Date</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Churn Date</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="ExtID (Admin) — Zoho custom field. Set the API name via the DUPLICATE_RADAR_FIELD_EXT_ID env var if your tenant uses a non-default field name.">ExtID (Admin)</th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;days&quot;]" class="cs-lifecycle-sort px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="days">Days since modified <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="violation">Violation <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
-                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;message&quot;]" class="cs-lifecycle-sort px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="message">Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;severity&quot;]" class="cs-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="severity">Severity <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;account&quot;]" class="cs-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="account" title="Account name (top line) and domain (bottom line, mono).">Account / Domain <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;phase&quot;]" class="cs-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="phase">Phase <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">CS Owner</th>
+                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase" title="Three CS lifecycle dates stacked: Since (Customer Since) / Renew (Renewal Date) / Churn (Churn Date).">Lifecycle Dates</th>
+                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap" title="ExtID (Admin) — Zoho custom field. Set the API name via the DUPLICATE_RADAR_FIELD_EXT_ID env var if your tenant uses a non-default field name.">ExtID</th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;days&quot;]" class="cs-lifecycle-sort px-2 py-2 text-end text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" data-sort-key="days" title="Days since the deal was last modified in Zoho.">Idle (d) <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
+                            <th scope="col" data-on-click="sortCsLifecycle" data-args="[&quot;violation&quot;]" class="cs-lifecycle-sort px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none" data-sort-key="violation" title="Violation pills (top) and the human-readable explanation message (below). Click to sort by worst violation code.">Violation / Message <span class="cs-lifecycle-sort-indicator opacity-30">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody id="csLifecycleTable" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
+                        <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -5979,7 +5975,7 @@
             const body = document.getElementById('csLifecycleTable');
             const allViolations = data.violations || [];
             if (allViolations.length === 0) {
-                body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">No violations detected. CS is compliant for the current filter.</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No violations detected. CS is compliant for the current filter.</td></tr>';
                 _refreshCsLifecyclePhaseOptions([]);
                 return;
             }
@@ -6001,7 +5997,7 @@
             const sorted = sortCsLifecycleRows(filtered, window._csLifecycleSort.key, window._csLifecycleSort.dir);
 
             if (sorted.length === 0) {
-                body.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500">No CS deals in the selected phase. Pick a different phase or clear the filter.</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No CS deals in the selected phase. Pick a different phase or clear the filter.</td></tr>';
                 return;
             }
 
@@ -6023,19 +6019,39 @@
                 const countSuffix = g.violations.length > 1
                     ? ' <span class="text-[10px] text-gray-500">(' + g.violations.length + ')</span>'
                     : '';
+                // ── Compact-layout helpers ────────────────────────────────
+                // Account + Domain stacked into one cell. Domain in mono
+                // font and 10px so it reads as a secondary label.
+                const accountDomainCell =
+                    '<div class="text-xs text-gray-800 leading-tight">' + accountCell + '</div>'
+                    + '<div class="text-[10px] font-mono text-gray-500 leading-tight">' + escapeHtml(g.domain || '—') + '</div>';
+                // Three lifecycle dates stacked with mini labels. Same
+                // pattern as the Created column on the duplicate tabs.
+                const fmtDate = (d) => (d == null || d === '') ? '—' : escapeHtml(String(d));
+                const datesCell =
+                    '<div class="text-[10px] leading-tight text-gray-600 whitespace-nowrap">'
+                    +   '<span class="text-gray-400">Since:</span> ' + fmtDate(g.customer_since)
+                    + '</div>'
+                    + '<div class="text-[10px] leading-tight text-gray-600 whitespace-nowrap">'
+                    +   '<span class="text-gray-400">Renew:</span> ' + fmtDate(g.renewal_date)
+                    + '</div>'
+                    + '<div class="text-[10px] leading-tight text-gray-600 whitespace-nowrap">'
+                    +   '<span class="text-gray-400">Churn:</span> ' + fmtDate(g.churn_date)
+                    + '</div>';
+                // Violation pills + message stacked into one cell so we
+                // drop the dedicated Message column entirely.
+                const violationCell =
+                    '<div class="flex flex-wrap gap-1 mb-1">' + violationPills + '</div>'
+                    + '<div class="text-[11px] text-gray-700 leading-snug">' + messageStack + '</div>';
                 return '<tr class="hover:bg-gray-50 align-top">'
-                    + '<td class="px-3 py-2 whitespace-nowrap">' + csLifeSeverityBadge(g.worst_severity) + countSuffix + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-800">' + accountCell + '</td>'
-                    + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(g.domain || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(g.current_phase || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(g.cs_owner_name || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs whitespace-nowrap text-gray-600">' + escapeHtml(g.customer_since || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs whitespace-nowrap text-gray-600">' + escapeHtml(g.renewal_date || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs whitespace-nowrap text-gray-600">' + escapeHtml(g.churn_date || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-start font-mono text-gray-700 whitespace-nowrap">' + escapeHtml(g.ext_id == null || g.ext_id === '' ? '—' : String(g.ext_id)) + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-end text-gray-600">' + (g.days_since_modified == null ? '—' : g.days_since_modified) + '</td>'
-                    + '<td class="px-3 py-2 text-xs"><div class="flex flex-wrap gap-1">' + violationPills + '</div></td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-700">' + messageStack + '</td>'
+                    + '<td class="px-2 py-2 whitespace-nowrap">' + csLifeSeverityBadge(g.worst_severity) + countSuffix + '</td>'
+                    + '<td class="px-2 py-2">' + accountDomainCell + '</td>'
+                    + '<td class="px-2 py-2 text-xs text-gray-800 whitespace-nowrap">' + escapeHtml(g.current_phase || '—') + '</td>'
+                    + '<td class="px-2 py-2 text-xs text-gray-700">' + escapeHtml(g.cs_owner_name || '—') + '</td>'
+                    + '<td class="px-2 py-2">' + datesCell + '</td>'
+                    + '<td class="px-2 py-2 text-[11px] font-mono text-gray-700 whitespace-nowrap">' + escapeHtml(g.ext_id == null || g.ext_id === '' ? '—' : String(g.ext_id)) + '</td>'
+                    + '<td class="px-2 py-2 text-xs text-end text-gray-600 whitespace-nowrap">' + (g.days_since_modified == null ? '—' : g.days_since_modified) + '</td>'
+                    + '<td class="px-2 py-2">' + violationCell + '</td>'
                     + '</tr>';
             }).join('');
         }
