@@ -942,18 +942,30 @@ export const callIntelligenceRoutes = [
 
           const { phonesShareSubscriberNumber, extractCallPhoneCandidates } =
             await import("../../utils/callLeadPhoneMatch");
+          const { JUNK_LEAD_STATUSES_LOWER } = await import(
+            "../../utils/sdrCallLinking"
+          );
 
-          // Candidates: phone-derived links only. linked_via='activity'
-          // is excluded (phone mismatch is expected there). Legacy NULL
-          // linked_via is included because the buggy matcher predates the
-          // column.
+          // Candidates: every linked row, INCLUDING linked_via='activity'.
+          // 2026-05-30 — widened from phone-only to all-links because the
+          // activity-fallback path was silently linking calls to Junk /
+          // Lost / Disqualified Leads (the SDR's same-day CRM activity
+          // sat on the junked record). The sweep now performs TWO checks
+          // per row:
+          //   1. Junk-status check — if the parent Lead is now junked,
+          //      clear regardless of how the link was made.
+          //   2. Phone-overlap check — same 9-digit rule as before, only
+          //      applied when linked_via is NOT 'activity' (activity
+          //      links are not phone-derived, so a phone mismatch there
+          //      is expected and not a defect).
+          // Legacy NULL linked_via is included because the historic
+          // buggy matcher predates the column.
           const candidatesRes = await callIntelligencePool.query(
             `
             SELECT id, call_id, lead_id, deal_id, linked_via, metadata,
                    agent_email, agent_name, call_date
             FROM call_records
             WHERE (lead_id IS NOT NULL OR deal_id IS NOT NULL)
-              AND linked_via IS DISTINCT FROM 'activity'
               AND id > $2
             ORDER BY id ASC
             LIMIT $1
@@ -962,20 +974,27 @@ export const callIntelligenceRoutes = [
           );
           const candidates = candidatesRes.rows;
 
-          // Read the parent record's phone from Zoho. Leads carry
-          // Phone/Mobile directly; Deals rarely have a usable phone, so a
-          // missing Deal phone is treated as "can't verify" → kept.
-          const readZohoPhone = async (
+          // Read the parent record's phone AND Lead_Status from Zoho in
+          // a single fetch — both verifications need the same record,
+          // so combining saves one Zoho RPS budget hit per candidate.
+          // Leads carry Phone/Mobile + Lead_Status directly; Deals get
+          // an empty status (we don't junk-check Deals — see comment in
+          // findCrmRecordsByAgentActivity).
+          const readZohoRecord = async (
             module: "Leads" | "Deals",
             recordId: string,
-          ): Promise<{ phone: string | null; found: boolean }> => {
+          ): Promise<{
+            phone: string | null;
+            status: string | null;
+            found: boolean;
+          }> => {
             try {
               const rows = await fetchZohoRecords(module, {
                 criteria: `id:equals:${recordId}`,
                 perPage: 1,
               });
               const r: any = rows[0];
-              if (!r) return { phone: null, found: false };
+              if (!r) return { phone: null, status: null, found: false };
               const d = r.data || {};
               const raw =
                 (typeof d.Phone === "object" && d.Phone?.name) ||
@@ -983,14 +1002,21 @@ export const callIntelligenceRoutes = [
                 (typeof d.Mobile === "object" && d.Mobile?.name) ||
                 d.Mobile ||
                 "";
-              return { phone: String(raw || "").trim() || null, found: true };
+              const status = module === "Leads"
+                ? String(d.Lead_Status || "").trim() || null
+                : null;
+              return {
+                phone: String(raw || "").trim() || null,
+                status,
+                found: true,
+              };
             } catch (err: any) {
               logger?.warn("[audit-crm-links] zoho read failed", {
                 module,
                 recordId,
                 error: err?.message,
               });
-              return { phone: null, found: false };
+              return { phone: null, status: null, found: false };
             }
           };
 
@@ -1010,6 +1036,7 @@ export const callIntelligenceRoutes = [
             call_phones: string[];
           }> = [];
           let mismatched = 0;
+          let junkCleared = 0; // 2026-05-30 — separate tally for status-driven clears
           let cleared = 0;
           let relinked = 0;
           let kept = 0;
@@ -1020,18 +1047,68 @@ export const callIntelligenceRoutes = [
                 ? "Leads"
                 : "Deals";
               const recordId = String(rec.lead_id || rec.deal_id);
+              const linkedVia = rec.linked_via || null;
               const callPhones = extractCallPhoneCandidates(rec) || [];
+
+              const {
+                phone: zohoPhone,
+                status: zohoStatus,
+                found,
+              } = await readZohoRecord(module, recordId);
+
+              // Junk-status check — runs FIRST and covers both phone-
+              // linked and activity-linked rows. If the Lead is junked
+              // we don't care how it got linked, the link is wrong.
+              if (
+                found &&
+                module === "Leads" &&
+                zohoStatus &&
+                JUNK_LEAD_STATUSES_LOWER.has(zohoStatus.toLowerCase())
+              ) {
+                junkCleared++;
+                if (samples.length < 10) {
+                  samples.push({
+                    id: rec.id,
+                    module,
+                    record_id: recordId,
+                    zoho_phone: zohoPhone,
+                    call_phones: callPhones,
+                  });
+                }
+                if (dryRun) continue;
+                await clearCallRecordCrmLink(rec.id);
+                cleared++;
+
+                if (relink) {
+                  const out = await autoLinkCallAndCompliance(
+                    {
+                      id: rec.id,
+                      agent_email: rec.agent_email ?? null,
+                      agent_name: rec.agent_name ?? null,
+                      call_date: rec.call_date,
+                      metadata: rec.metadata,
+                    },
+                    { logger, logTag: "link-audit-junk" },
+                  );
+                  if (out.linked) relinked++;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 200));
+                continue;
+              }
+
+              // Activity-linked rows skip the phone-overlap check —
+              // they were never matched by phone, so a phone mismatch
+              // there is expected and not a defect.
+              if (linkedVia === "activity") {
+                kept++;
+                continue;
+              }
 
               // No call-side phone → can't verify by phone; keep as-is.
               if (callPhones.length === 0) {
                 kept++;
                 continue;
               }
-
-              const { phone: zohoPhone, found } = await readZohoPhone(
-                module,
-                recordId,
-              );
               // Couldn't read / no phone on the Zoho record → can't prove
               // a mismatch; keep conservatively.
               if (!found || !zohoPhone) {
@@ -1047,7 +1124,7 @@ export const callIntelligenceRoutes = [
                 continue;
               }
 
-              // Confirmed mismatch.
+              // Confirmed phone mismatch.
               mismatched++;
               if (samples.length < 10) {
                 samples.push({
@@ -1088,6 +1165,7 @@ export const callIntelligenceRoutes = [
             dry_run: dryRun,
             scanned: candidates.length,
             mismatched,
+            junk_cleared: junkCleared, // 2026-05-30 — junk-status sweep tally
             cleared,
             relinked,
             kept,

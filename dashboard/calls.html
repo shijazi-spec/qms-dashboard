@@ -2949,7 +2949,7 @@
             _auditLinksInFlight = true;
             btn.disabled = true;
             btn.classList.add('opacity-60', 'cursor-not-allowed');
-            const totals = { scanned: 0, mismatched: 0, cleared: 0, relinked: 0, kept: 0, errors: 0 };
+            const totals = { scanned: 0, mismatched: 0, junkCleared: 0, cleared: 0, relinked: 0, kept: 0, errors: 0 };
             try {
                 let hasMore = true;
                 let pass = 0;
@@ -2974,6 +2974,7 @@
                     const data = await res.json();
                     totals.scanned += data.scanned || 0;
                     totals.mismatched += data.mismatched || 0;
+                    totals.junkCleared += data.junk_cleared || 0;
                     totals.cleared += data.cleared || 0;
                     totals.relinked += data.relinked || 0;
                     totals.kept += data.kept || 0;
@@ -2987,6 +2988,7 @@
                     `Link audit complete:\n` +
                     `• ${totals.scanned} links checked\n` +
                     `• ${totals.mismatched} phone mismatches found\n` +
+                    `• ${totals.junkCleared} Junk/Lost Lead links found\n` +
                     `• ${totals.cleared} wrong links cleared\n` +
                     `• ${totals.relinked} re-linked to a correct record\n` +
                     `• ${totals.kept} valid links kept\n` +

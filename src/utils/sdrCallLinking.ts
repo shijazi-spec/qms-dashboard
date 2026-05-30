@@ -632,8 +632,43 @@ export async function findCrmRecordsByAgentActivity(
     }),
   );
 
-  return { matches: hydrated, scanned_activities: scanned, errors };
+  // 2026-05-30 — junk-lead guard on the activity fallback.
+  // Without this filter, calls were silently auto-linked to Junk /
+  // Bogus / Lost Leads whenever the SDR's only same-day CRM activity
+  // landed on a disqualified record (the user kept seeing the call
+  // attached to a Lead whose Phone="11" because the call's only
+  // matchable signal was activity, and the activity sat on the junked
+  // record). Same shape as the existing phone-match path which never
+  // had this problem because junk Leads usually have junk phones
+  // (sub-9-digit) and got rejected by MIN_PHONE_OVERLAP_DIGITS.
+  //
+  // Statuses sourced from observed Zoho Lead_Status values; safe to
+  // extend if ops surfaces more. We intentionally do NOT filter Deals
+  // by stage here — a Closed-Lost Deal is still a valid record to link
+  // a coaching/post-mortem call to.
+  const filtered = hydrated.filter((m) => {
+    if (m.module !== "Leads") return true;
+    const status = String((m as any).status || "").trim().toLowerCase();
+    return !JUNK_LEAD_STATUSES_LOWER.has(status);
+  });
+
+  return { matches: filtered, scanned_activities: scanned, errors };
 }
+
+// Lead_Status values that disqualify a Lead from being an auto-link
+// target via the activity-based fallback. Lower-cased so the membership
+// check is locale-stable. Exported so the audit sweep + any future
+// dashboard surface can reuse the same definition.
+export const JUNK_LEAD_STATUSES: ReadonlyArray<string> = [
+  "Junk Lead",
+  "Bogus Lead",
+  "Lost Lead",
+  "Not Qualified",
+  "Disqualified",
+];
+export const JUNK_LEAD_STATUSES_LOWER: ReadonlySet<string> = new Set(
+  JUNK_LEAD_STATUSES.map((s) => s.toLowerCase()),
+);
 
 /**
  * Attempt to auto-link a call to a CRM record by phone. Tries Leads AND
