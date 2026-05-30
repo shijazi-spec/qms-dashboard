@@ -1077,6 +1077,13 @@ function buildClusterFilterClause(
         end_date?: string;
         hide_hierarchies?: boolean;
         layouts?: string[];
+        /**
+         * Per-owner drill: keep clusters that contain at least one
+         * record owned by this email (case-insensitive). Wired into
+         * the Owners tab on /duplicates so clicking an owner row
+         * opens a modal listing the clusters they're carrying.
+         */
+        owner_email?: string;
       }
     | undefined,
   startIndex: number,
@@ -1114,6 +1121,19 @@ function buildClusterFilterClause(
     )`;
     params.push(filters.layouts);
   }
+  // Owner filter: case-insensitive match against duplicate_records.owner_email.
+  // A cluster qualifies when ANY of its records is owned by this person —
+  // this matches how the Owners table aggregates total_records / dups
+  // (it counts every record an owner is named on, regardless of who owns
+  // the other records in the same cluster).
+  if (filters?.owner_email && filters.owner_email.trim()) {
+    clause += ` AND EXISTS (
+      SELECT 1 FROM duplicate_records dr
+       WHERE dr.cluster_id = duplicate_clusters.id
+         AND LOWER(dr.owner_email) = LOWER($${paramIndex++})
+    )`;
+    params.push(filters.owner_email.trim());
+  }
   return { clause, params, nextIndex: paramIndex };
 }
 
@@ -1138,6 +1158,7 @@ export async function getAllClusters(filters?: {
   end_date?: string;
   hide_hierarchies?: boolean;
   layouts?: string[];
+  owner_email?: string;
   sort?: string;
   dir?: string;
 }): Promise<Array<DuplicateCluster & { domain_count?: number }>> {
@@ -1197,6 +1218,7 @@ export async function getClusterCount(filters?: {
   end_date?: string;
   hide_hierarchies?: boolean;
   layouts?: string[];
+  owner_email?: string;
 }): Promise<number> {
   const { clause, params } = buildClusterFilterClause(filters, 1);
   const query =

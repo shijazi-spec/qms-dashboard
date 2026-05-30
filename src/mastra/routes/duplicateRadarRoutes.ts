@@ -952,6 +952,13 @@ export const duplicateRadarRoutes = [
                 .filter(Boolean)
             : undefined;
 
+          // owner_email filter: powers the per-owner drill modal on
+          // the Owners tab. Click an owner row → modal opens →
+          // fetches /api/duplicates/clusters?owner_email=<email> →
+          // server returns only clusters where at least one record
+          // is owned by that email (case-insensitive match).
+          const owner_email = url.searchParams.get("owner_email") || undefined;
+
           const sort = url.searchParams.get("sort") || undefined;
           const dir = url.searchParams.get("dir") || undefined;
 
@@ -962,6 +969,7 @@ export const duplicateRadarRoutes = [
             end_date,
             hide_hierarchies: !include_hierarchies,
             layouts,
+            owner_email,
           };
 
           const [clusters, total] = await Promise.all([
@@ -4469,6 +4477,13 @@ export const duplicateRadarRoutes = [
           const domainIdx = findCol("domain", "website", "url");
           const companyIdx = findCol("company_name", "company name", "company", "name", "account name");
           const emailIdx = findCol("email", "email_address", "email address");
+          // NEW — capture the rich dedup signals for multi-signal matching
+          // (Tier 1 #2 recommendation from the 2026-05-30 review). The
+          // preflight engine already accepts these on PreflightInputRow;
+          // wiring them in here means the engine can use email + phone
+          // for cross-Zoho matching instead of falling back to domain-only.
+          const mobileIdx = findCol("mobile_phone", "mobile phone", "mobile", "cell", "cell phone");
+          const corporatePhoneIdx = findCol("corporate_phone", "corporate phone", "phone", "work phone", "office phone");
 
           if (domainIdx < 0 && emailIdx < 0) {
             return c.json(
@@ -4481,8 +4496,19 @@ export const duplicateRadarRoutes = [
             );
           }
 
-          // Read data rows
-          const rows: { domain: string; company_name: string }[] = [];
+          // Read data rows. Each row tracks both the parsed identifier set
+          // (for preflight) and the FULL original row indexed by header
+          // (so the UI can later export PASS rows back out with all 32+
+          // original columns intact — that's the Tier 1 #3 workflow win).
+          interface ParsedRow {
+            domain: string;
+            email: string;
+            phone: string;
+            company_name: string;
+            original_row: Record<string, any>;
+            source_row_number: number;
+          }
+          const rows: ParsedRow[] = [];
           for (let i = headerRowIdx + 1; i <= ws.rowCount; i++) {
             const r = ws.getRow(i);
             const rv = r.values as any[];
@@ -4495,10 +4521,13 @@ export const duplicateRadarRoutes = [
             if (domainIdx >= 0 && rv[domainIdx + 1] != null) {
               domain = String(rv[domainIdx + 1]).trim();
             }
-            if (!domain && emailIdx >= 0 && rv[emailIdx + 1] != null) {
-              const e = String(rv[emailIdx + 1]).trim();
-              const at = e.lastIndexOf("@");
-              if (at > 0 && at < e.length - 1) domain = e.slice(at + 1);
+            let email = "";
+            if (emailIdx >= 0 && rv[emailIdx + 1] != null) {
+              email = String(rv[emailIdx + 1]).trim();
+            }
+            if (!domain && email) {
+              const at = email.lastIndexOf("@");
+              if (at > 0 && at < email.length - 1) domain = email.slice(at + 1);
             }
             // Strip leading https:// www. and trailing / from domain
             domain = domain
@@ -4512,9 +4541,42 @@ export const duplicateRadarRoutes = [
             if (companyIdx >= 0 && rv[companyIdx + 1] != null) {
               companyName = String(rv[companyIdx + 1]).trim();
             }
+            let mobile = "";
+            if (mobileIdx >= 0 && rv[mobileIdx + 1] != null) {
+              // Excel sometimes stores phones with a leading apostrophe to
+              // force text format (e.g., "'+966 11 464 1611") — strip it.
+              mobile = String(rv[mobileIdx + 1]).replace(/^'/, "").trim();
+            }
+            let corporatePhone = "";
+            if (corporatePhoneIdx >= 0 && rv[corporatePhoneIdx + 1] != null) {
+              corporatePhone = String(rv[corporatePhoneIdx + 1]).replace(/^'/, "").trim();
+            }
+            // Combined phone for preflight matching — mobile preferred,
+            // corporate as fallback.
+            const phone = mobile || corporatePhone;
 
             if (!domain) continue;
-            rows.push({ domain, company_name: companyName });
+
+            // Reconstruct the full original row keyed by header so the
+            // export step can write the operator's original columns back
+            // out (including First Name, Title, Industry, Annual Revenue,
+            // etc. that preflight itself ignores).
+            const originalRow: Record<string, any> = {};
+            const fullHeaderValues = headerRow.values as any[];
+            for (let h = 1; h < fullHeaderValues.length; h++) {
+              const headerLabel =
+                fullHeaderValues[h] == null ? `col_${h}` : String(fullHeaderValues[h]);
+              originalRow[headerLabel] = rv[h] == null ? "" : String(rv[h]);
+            }
+
+            rows.push({
+              domain,
+              email,
+              phone,
+              company_name: companyName,
+              original_row: originalRow,
+              source_row_number: i,
+            });
           }
 
           if (rows.length === 0) {
@@ -4528,24 +4590,76 @@ export const duplicateRadarRoutes = [
             );
           }
 
-          // Build a CSV the operator can see / re-edit in the textarea
-          const csvLines = ["domain,company_name"];
+          // Within-file dedup detection (Tier 1 #1 recommendation). Same
+          // domain appearing twice within an uploaded list is the most
+          // common operator mistake when merging multiple lead sources —
+          // catching it here saves Zoho cleanup later. Flag by domain
+          // first (strongest signal), then by email as a separate axis
+          // (catches "two contacts at the same company" which is
+          // legitimate vs "same exact email twice" which is not).
+          const seenDomain = new Map<string, number[]>();
+          const seenEmail = new Map<string, number[]>();
+          for (let idx = 0; idx < rows.length; idx++) {
+            const r = rows[idx];
+            if (r.domain) {
+              const existing = seenDomain.get(r.domain) || [];
+              existing.push(idx);
+              seenDomain.set(r.domain, existing);
+            }
+            if (r.email) {
+              const e = r.email.toLowerCase();
+              const existing = seenEmail.get(e) || [];
+              existing.push(idx);
+              seenEmail.set(e, existing);
+            }
+          }
+          const domainDuplicateGroups = Array.from(seenDomain.entries())
+            .filter(([, indices]) => indices.length > 1)
+            .map(([domain, indices]) => ({ domain, row_indices: indices, count: indices.length }));
+          const emailDuplicateGroups = Array.from(seenEmail.entries())
+            .filter(([, indices]) => indices.length > 1)
+            .map(([email, indices]) => ({ email, row_indices: indices, count: indices.length }));
+          const intraFileDuplicateRowCount =
+            domainDuplicateGroups.reduce((acc, g) => acc + (g.count - 1), 0);
+
+          // Build a CSV the operator can see / re-edit in the textarea.
+          // Includes the dedup signals the engine can now use.
+          const csvLines = ["domain,company_name,email,phone"];
           for (const r of rows) {
-            const safeCompany =
-              r.company_name.includes(",") || r.company_name.includes('"')
-                ? `"${r.company_name.replace(/"/g, '""')}"`
-                : r.company_name;
-            csvLines.push(`${r.domain},${safeCompany}`);
+            const quote = (s: string) =>
+              s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+            csvLines.push(
+              `${r.domain},${quote(r.company_name)},${quote(r.email)},${quote(r.phone)}`,
+            );
           }
 
           return c.json({
             success: true,
             count: rows.length,
-            rows,
+            // Strip the original_row from the rows that go to the preflight
+            // engine (it doesn't need 32 columns of overhead). Keep
+            // original_rows as a SEPARATE field, parallel-indexed, so the
+            // UI can store them client-side for the export step later.
+            rows: rows.map((r) => ({
+              domain: r.domain,
+              email: r.email,
+              phone: r.phone,
+              company_name: r.company_name,
+            })),
+            original_rows: rows.map((r) => r.original_row),
+            source_row_numbers: rows.map((r) => r.source_row_number),
             csv: csvLines.join("\n"),
             file_name: fileName,
             detected_headers: headers,
             header_row: headerRowIdx,
+            // Within-file dedup result. UI surfaces a "Internal duplicates"
+            // badge so the operator sees the issue before clicking Check.
+            intra_file_duplicates: {
+              by_domain_groups: domainDuplicateGroups.length,
+              by_domain_rows: intraFileDuplicateRowCount,
+              by_email_groups: emailDuplicateGroups.length,
+              groups: domainDuplicateGroups.slice(0, 20), // cap preview at 20 groups
+            },
           });
         } catch (error: any) {
           logger.error("Error parsing preflight Excel:", error);

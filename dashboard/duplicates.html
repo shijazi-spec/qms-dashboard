@@ -854,6 +854,10 @@
                         <input type="file" id="preflightExcelInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" data-on-change="handlePreflightExcelChosen" data-testid="input-preflight-excel" />
                         <button data-on-click="loadPreflightSample" id="preflightSampleBtn" data-testid="button-preflight-sample" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Load sample</button>
                         <button data-on-click="clearPreflight" id="preflightClearBtn" data-testid="button-preflight-clear" class="px-3 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700">Clear</button>
+                        <!-- Shown only after a preflight run on an uploaded
+                             Excel — exports PASS rows back out with the
+                             operator's original column structure intact. -->
+                        <button data-on-click="downloadPreflightPassRows" id="preflightExportPassBtn" data-testid="button-preflight-export-pass" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">⬇ Download PASS rows</button>
                         <span id="preflightParsedCount" class="ml-auto text-xs text-gray-500"></span>
                     </div>
                     <p class="text-[11px] text-gray-500 mt-1">
@@ -1218,6 +1222,30 @@
                 </div>
                 <div id="listModalBody" class="p-5 overflow-y-auto flex-1">
                     <div class="text-center text-gray-400 py-8">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Per-owner cluster drill modal. Opened by clicking an owner's
+             name on the Owners tab. Fetches /api/duplicates/clusters
+             with owner_email filter and renders the cluster list with
+             title, module, records, primary, high-conf badge, waste,
+             status, and an [Open] button that hands off to the existing
+             cluster detail modal (openClusterById). -->
+        <div id="ownerClustersModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center" data-testid="modal-owner-clusters">
+            <div class="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[85vh] flex flex-col">
+                <div class="p-5 border-b flex justify-between items-center">
+                    <div>
+                        <h2 id="ownerClustersTitle" class="text-xl font-bold text-gray-900">Owner Clusters</h2>
+                        <p id="ownerClustersSubtitle" class="text-xs text-gray-500 mt-1"></p>
+                    </div>
+                    <button data-on-click="closeOwnerClusters" data-testid="button-close-owner-clusters" class="text-gray-400 hover:text-gray-700 text-2xl leading-none" aria-label="Close">&times;</button>
+                </div>
+                <div class="p-5 overflow-y-auto flex-1">
+                    <!-- Summary strip — populated by renderOwnerClustersSummary. -->
+                    <div id="ownerClustersSummary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4"></div>
+                    <!-- Cluster list — table-shaped on md+, stacked on mobile. -->
+                    <div id="ownerClustersList"></div>
                 </div>
             </div>
         </div>
@@ -3236,7 +3264,12 @@
                 return `
                 <tr data-testid="row-owner-${escAttr(o.owner_name)}" data-owner-row data-owner-key="${rowKey}" data-owner-name="${escAttr(o.owner_name || '')}" data-owner-team="${escAttr(o.team || 'Unassigned')}" data-owner-email="${escAttr(o.owner_email || '')}">
                     <td class="px-4 py-3 text-sm"><input type="checkbox" class="owner-row-checkbox" data-on-change="syncOwnersSelectionState" data-testid="checkbox-owner-${escAttr(o.owner_name)}" aria-label="Select ${escAttr(o.owner_name || '')}" /></td>
-                    <td class="px-6 py-3 text-sm font-medium">${escapeHtml(o.owner_name)}</td>
+                    <td class="px-6 py-3 text-sm font-medium">
+                        <button data-on-click="openOwnerClusters"
+                                data-args='${escAttr(JSON.stringify([o.owner_email || '', o.owner_name || '']))}'
+                                title="View duplicate clusters owned by ${escAttr(o.owner_name)}"
+                                class="text-indigo-700 hover:text-indigo-900 hover:underline text-start font-medium">${escapeHtml(o.owner_name)}</button>
+                    </td>
                     <td class="px-6 py-3 text-sm"><span class="px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">${escapeHtml(o.team || 'Unassigned')}</span></td>
                     <td class="px-6 py-3 text-sm text-gray-500">${escapeHtml(o.owner_email || '-')}</td>
                     <td class="px-6 py-3 text-sm">${o.total_records}</td>
@@ -3250,6 +3283,202 @@
             // Re-apply any active filter and refresh select-all/count chrome.
             filterOwnersTable();
             syncOwnersSelectionState();
+        }
+
+        // ===================================================================
+        //   Per-owner cluster drill modal
+        //
+        //   Click owner name on the Owners tab → modal opens listing
+        //   every duplicate cluster the person is named on (owner_email
+        //   match on any record in the cluster, case-insensitive). Fed
+        //   by /api/duplicates/clusters?owner_email=<email>&limit=200.
+        //
+        //   The cluster row's [Open] button hands off to the existing
+        //   cluster-detail modal (openCluster) so all the existing
+        //   resolve / merge / split actions still work — no duplicated
+        //   UI surface.
+        // ===================================================================
+
+        let _ownerClustersCache = null;
+
+        async function openOwnerClusters(ownerEmail, ownerName) {
+            const modal = document.getElementById('ownerClustersModal');
+            const title = document.getElementById('ownerClustersTitle');
+            const subtitle = document.getElementById('ownerClustersSubtitle');
+            const summary = document.getElementById('ownerClustersSummary');
+            const list = document.getElementById('ownerClustersList');
+            if (!modal) return;
+
+            // Reset modal chrome and show a clear loading state. Each
+            // re-open of the modal must NOT leak the previous owner's
+            // data while the new fetch is in flight.
+            if (title) title.textContent = ownerName || ownerEmail || 'Owner clusters';
+            if (subtitle) subtitle.textContent = ownerEmail || '';
+            if (summary) summary.innerHTML = '';
+            if (list) list.innerHTML = '<div class="text-center text-gray-400 py-8">Loading…</div>';
+            modal.classList.remove('hidden');
+
+            if (!ownerEmail) {
+                if (list) list.innerHTML = '<div class="text-center text-gray-500 py-8">No email on this owner row — can\'t filter clusters by owner.</div>';
+                return;
+            }
+
+            try {
+                const qs = new URLSearchParams();
+                qs.set('owner_email', ownerEmail);
+                qs.set('limit', '200');
+                // Include hierarchies in the drill: the user is auditing
+                // one specific owner, so a "1 account + N contacts" parent
+                // is exactly the kind of thing they want to see.
+                qs.set('include_hierarchies', 'true');
+                const res = await fetch('/api/duplicates/clusters?' + qs.toString(), { credentials: 'same-origin' });
+                if (!res.ok) {
+                    throw new Error('HTTP ' + res.status);
+                }
+                const data = await res.json();
+                _ownerClustersCache = { owner_email: ownerEmail, owner_name: ownerName, data };
+                renderOwnerClustersSummary(data);
+                renderOwnerClustersList(data);
+            } catch (err) {
+                console.error('[OwnerClusters] load failed:', err);
+                if (list) list.innerHTML = '<div class="text-center text-red-600 py-8">Couldn\'t load this owner\'s clusters. Try again.</div>';
+            }
+        }
+
+        function renderOwnerClustersSummary(data) {
+            const summary = document.getElementById('ownerClustersSummary');
+            if (!summary) return;
+            const clusters = Array.isArray(data?.clusters) ? data.clusters : [];
+            const total = clusters.length;
+            const highConf = clusters.filter(c => c.confidence_level === 'high').length;
+            const active = clusters.filter(c => (c.status || 'active') === 'active').length;
+            const wasteSum = clusters.reduce((s, c) => s + (Number(c.estimated_pipeline_value) || 0), 0);
+            const card = (label, value, colorCls) => `
+                <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                    <div class="text-xs text-gray-500">${escapeHtml(label)}</div>
+                    <div class="text-xl font-bold ${colorCls}">${value}</div>
+                </div>`;
+            summary.innerHTML = [
+                card('Clusters', _fn(total), 'text-gray-900'),
+                card('High-confidence', _fn(highConf), 'text-red-700'),
+                card('Active (unresolved)', _fn(active), 'text-amber-700'),
+                card('Exposure', typeof formatCurrency === 'function' ? formatCurrency(wasteSum) : ('SAR ' + _fn(wasteSum)), 'text-indigo-700'),
+            ].join('');
+        }
+
+        function renderOwnerClustersList(data) {
+            const list = document.getElementById('ownerClustersList');
+            if (!list) return;
+            const clusters = Array.isArray(data?.clusters) ? data.clusters : [];
+            if (clusters.length === 0) {
+                list.innerHTML = '<div class="text-center text-gray-500 py-8">This owner has no duplicate clusters in the current scan.</div>';
+                return;
+            }
+
+            // Choose the "primary" module label for the cluster row by
+            // picking whichever total_* count is largest. The cluster
+            // can span multiple modules; this is just the headline.
+            const headlineModule = (c) => {
+                const counts = [
+                    { label: 'Accounts', n: c.total_accounts || 0 },
+                    { label: 'Deals', n: c.total_deals || 0 },
+                    { label: 'Leads', n: c.total_leads || 0 },
+                    { label: 'Contacts', n: c.total_contacts || 0 },
+                ].filter(x => x.n > 0).sort((a, b) => b.n - a.n);
+                return counts.length > 0 ? `${counts[0].label} (${counts[0].n})` : '—';
+            };
+
+            const statusBadge = (status) => {
+                const s = (status || 'active').toLowerCase();
+                const cls = s === 'resolved'
+                    ? 'bg-green-100 text-green-800'
+                    : s === 'ignored'
+                        ? 'bg-gray-200 text-gray-700'
+                        : 'bg-amber-100 text-amber-800';
+                return `<span class="px-2 py-0.5 rounded text-xs font-medium ${cls}">${escapeHtml(s)}</span>`;
+            };
+
+            const confBadge = (level, score) => {
+                const lvl = (level || 'low').toLowerCase();
+                const cls = lvl === 'high'
+                    ? 'bg-red-100 text-red-800'
+                    : lvl === 'medium'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-gray-100 text-gray-600';
+                const pct = Number.isFinite(Number(score))
+                    ? ` ${Math.round(Number(score) * 100)}%`
+                    : '';
+                return `<span class="px-2 py-0.5 rounded text-xs font-medium ${cls}">${escapeHtml(lvl)}${pct}</span>`;
+            };
+
+            const rows = clusters.map(c => {
+                const company = c.company_name || c.company_name_arabic || c.domain || '—';
+                const waste = typeof formatCurrency === 'function'
+                    ? formatCurrency(c.estimated_pipeline_value || 0)
+                    : ('SAR ' + _fn(c.estimated_pipeline_value || 0));
+                return `
+                <tr class="border-b last:border-b-0 hover:bg-gray-50">
+                    <td class="px-3 py-2 text-sm font-medium text-gray-900">${escapeHtml(company)}</td>
+                    <td class="px-3 py-2 text-xs text-gray-500">${escapeHtml(c.domain || '—')}</td>
+                    <td class="px-3 py-2 text-sm text-gray-700">${escapeHtml(headlineModule(c))}</td>
+                    <td class="px-3 py-2 text-sm text-gray-700">${_fn(c.total_records || 0)}</td>
+                    <td class="px-3 py-2 text-sm">${confBadge(c.confidence_level, c.confidence_score)}</td>
+                    <td class="px-3 py-2 text-sm text-gray-700">${waste}</td>
+                    <td class="px-3 py-2 text-sm">${statusBadge(c.status)}</td>
+                    <td class="px-3 py-2 text-end">
+                        <button data-on-click="openClusterFromOwner"
+                                data-args='${escAttr(JSON.stringify([c.id]))}'
+                                class="px-2 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-700 text-white">Open</button>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            list.innerHTML = `
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Module (headline)</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Records</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Exposure</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-3 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">${rows}</tbody>
+                    </table>
+                </div>`;
+        }
+
+        function closeOwnerClusters() {
+            const modal = document.getElementById('ownerClustersModal');
+            if (modal) modal.classList.add('hidden');
+            _ownerClustersCache = null;
+        }
+
+        /**
+         * Hand-off to the existing cluster-detail modal so all the
+         * resolve / merge / split actions on /duplicates#clusters
+         * continue to work without duplicating UI here. Closes this
+         * modal first so the cluster modal sits on the same z-50
+         * stack rather than stacking on top.
+         */
+        function openClusterFromOwner(clusterId) {
+            closeOwnerClusters();
+            // openCluster is the page's existing cluster-detail loader
+            // (binds the cluster modal). We test for it on the chance
+            // a future refactor renames it.
+            if (typeof window.openCluster === 'function') {
+                window.openCluster(clusterId);
+            } else if (typeof window.openClusterById === 'function') {
+                window.openClusterById(clusterId);
+            } else {
+                console.warn('[OwnerClusters] No openCluster handler found; falling back to URL hash.');
+                window.location.hash = '#cluster-' + encodeURIComponent(String(clusterId));
+            }
         }
 
         // Hide rows that don't match the owner/role/email filter input.
@@ -5099,6 +5328,15 @@
             if (input) input.click();
         }
 
+        // Stores the operator's full original-row data between upload and
+        // export. Keyed by domain so we can reconstruct rows per verdict
+        // after the preflight check completes. Indexed-parallel to the
+        // engine's response rows (which only see domain/email/phone).
+        let preflightLastUpload = null; // { fileName, headers, originalRows: [], sourceRowNumbers: [] }
+        // Stores the most recent preflight response so the export step
+        // knows which rows are PASS. Cleared by clearPreflight().
+        let preflightLastResult = null;
+
         async function handlePreflightExcelChosen(event) {
             const input = event && event.target ? event.target : document.getElementById('preflightExcelInput');
             const file = input && input.files && input.files[0];
@@ -5133,13 +5371,34 @@
                     return;
                 }
 
+                // Stash the original-row data for the export step. The
+                // engine itself never sees these — we keep them in browser
+                // memory so the "Download PASS rows" button can write out
+                // a CSV that preserves the operator's full column set.
+                preflightLastUpload = {
+                    fileName: body.file_name || file.name || 'upload.xlsx',
+                    originalRows: Array.isArray(body.original_rows) ? body.original_rows : [],
+                    sourceRowNumbers: Array.isArray(body.source_row_numbers) ? body.source_row_numbers : [],
+                };
+
                 // Fill the textarea with the server-emitted CSV so the operator
                 // can still inspect / edit before clicking Check.
                 const ta = document.getElementById('preflightInput');
                 if (ta) ta.value = body.csv || '';
+
+                // Surface within-file dedup result. If we found same-domain
+                // duplicates inside the upload itself, flag it BEFORE the
+                // operator hits Check — saves a Zoho cleanup later.
+                const dupInfo = body.intra_file_duplicates || {};
+                const dupDomainRows = dupInfo.by_domain_rows || 0;
+                let dupNote = '';
+                if (dupDomainRows > 0) {
+                    dupNote = ' · ⚠ ' + dupDomainRows + ' within-file duplicate row(s) across ' + (dupInfo.by_domain_groups || 0) + ' domain(s)';
+                }
+
                 if (countSpan) {
-                    countSpan.textContent = '✓ Parsed ' + body.count + ' row(s) from "' + (body.file_name || file.name) + '" — click Check to run preflight.';
-                    countSpan.className = 'ml-auto text-xs text-emerald-700 font-medium';
+                    countSpan.textContent = '✓ Parsed ' + body.count + ' row(s) from "' + preflightLastUpload.fileName + '"' + dupNote + ' — click Check to run preflight.';
+                    countSpan.className = 'ml-auto text-xs ' + (dupDomainRows > 0 ? 'text-amber-700' : 'text-emerald-700') + ' font-medium';
                 }
             } catch (e) {
                 alert('Upload failed: ' + ((e && e.message) || String(e)));
@@ -5153,6 +5412,71 @@
             }
         }
 
+        // Download PASS rows as a Zoho-ready CSV, preserving the operator's
+        // original column structure (not just domain+company). Filters
+        // against the last preflight result so they get only the
+        // import-safe leads, ready to drop into Zoho's bulk-lead-import
+        // wizard. Collapses what used to be a 4-step manual filter into
+        // one click. Tier 1 #3 recommendation.
+        async function downloadPreflightPassRows() {
+            if (!preflightLastUpload || !preflightLastUpload.originalRows || preflightLastUpload.originalRows.length === 0) {
+                alert('Upload an Excel file first, then click Check.');
+                return;
+            }
+            if (!preflightLastResult || !preflightLastResult.rows) {
+                alert('Run the preflight Check first to know which rows are safe to import.');
+                return;
+            }
+
+            const passIndexSet = new Set();
+            for (const r of preflightLastResult.rows) {
+                if (r && r.verdict === 'pass' && typeof r.row_index === 'number') {
+                    passIndexSet.add(r.row_index);
+                }
+            }
+            if (passIndexSet.size === 0) {
+                alert('No PASS rows in the last preflight result — nothing to export.');
+                return;
+            }
+
+            // Build CSV from the original column structure. Use the first
+            // row's keys as the header order (all rows share the same
+            // headers because they came from one workbook).
+            const passRows = preflightLastUpload.originalRows.filter((_, idx) => passIndexSet.has(idx));
+            if (passRows.length === 0) {
+                alert('No matching original rows found for the PASS verdicts.');
+                return;
+            }
+            const headerKeys = Object.keys(passRows[0]);
+            const quote = (v) => {
+                const s = v == null ? '' : String(v);
+                return s.includes(',') || s.includes('"') || s.includes('\n')
+                    ? '"' + s.replace(/"/g, '""') + '"'
+                    : s;
+            };
+            const lines = [headerKeys.map(quote).join(',')];
+            for (const r of passRows) {
+                lines.push(headerKeys.map(k => quote(r[k])).join(','));
+            }
+            const csvBlob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+
+            // Build a sensible filename from the original — e.g.
+            //   "2000 Sales Leads Patch 2-leads (Mawsool).xlsx"
+            //   → "2000 Sales Leads Patch 2-leads (Mawsool)__PASS__1009.csv"
+            const baseName = (preflightLastUpload.fileName || 'upload.xlsx').replace(/\.[^.]+$/, '');
+            const outName = baseName + '__PASS__' + passRows.length + '.csv';
+
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(csvBlob);
+            a.download = outName;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                URL.revokeObjectURL(a.href);
+                a.remove();
+            }, 100);
+        }
+
         function clearPreflight() {
             document.getElementById('preflightInput').value = '';
             document.getElementById('preflightParsedCount').textContent = '';
@@ -5163,6 +5487,12 @@
                 if (el) el.textContent = '—';
             });
             document.getElementById('preflightArrBlocked').textContent = '—';
+            // Reset both upload + result so the export button hides and a
+            // subsequent paste-only run doesn't try to export stale data.
+            preflightLastUpload = null;
+            preflightLastResult = null;
+            const exportBtn = document.getElementById('preflightExportPassBtn');
+            if (exportBtn) exportBtn.classList.add('hidden');
         }
 
         async function runPreflight() {
@@ -5196,7 +5526,23 @@
                     throw new Error('HTTP ' + res.status + ': ' + txt);
                 }
                 const data = await res.json();
+                preflightLastResult = data; // stash for "Download PASS rows"
                 renderPreflight(data);
+                // Show the export button only when we have an upload
+                // backing the result (typed-in CSV runs don't benefit
+                // from "preserve original columns" since there's nothing
+                // extra to preserve).
+                const exportBtn = document.getElementById('preflightExportPassBtn');
+                if (exportBtn) {
+                    const passCount = (data && data.summary && typeof data.summary.pass === 'number')
+                        ? data.summary.pass : 0;
+                    if (preflightLastUpload && passCount > 0) {
+                        exportBtn.classList.remove('hidden');
+                        exportBtn.textContent = '⬇ Download ' + passCount + ' PASS row(s) as CSV';
+                    } else {
+                        exportBtn.classList.add('hidden');
+                    }
+                }
             } catch (e) {
                 alert('Preflight failed: ' + (e.message || e));
             } finally {
