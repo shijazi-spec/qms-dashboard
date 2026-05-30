@@ -628,6 +628,70 @@ export async function fetchZohoRecordById(
   );
 }
 
+/**
+ * Fetch records from a parent record's related list. Wraps the
+ * /crm/v2/{parentModule}/{parentId}/{relatedListName} endpoint.
+ *
+ * Used by the Contact → Deal walk in sdrCallLinking to catch Deals
+ * where the Contact participates only via "Contact Roles" (Zoho's
+ * many-to-many junction), not as the primary Contact_Name. The
+ * criteria search `(Contact_Name:equals:...)` returns only primary-
+ * Contact Deals; this related-list endpoint returns the union of
+ * primary + Contact-Roles relationships.
+ *
+ * Returns the same ZohoCRMRecord shape as fetchZohoRecords so the
+ * caller can dealToMatch / leadToMatch the output uniformly.
+ * Empty array on 204 / missing related list (no records).
+ */
+export async function fetchZohoRelatedRecords(
+  parentModule: string,
+  parentId: string,
+  relatedListName: string,
+  params: { perPage?: number } = {}
+): Promise<ZohoCRMRecord[]> {
+  const queryParams = new URLSearchParams();
+  if (params.perPage) queryParams.set('per_page', params.perPage.toString());
+
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/${parentModule}/${encodeURIComponent(parentId)}/${encodeURIComponent(relatedListName)}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+      return fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    async (response) => {
+      // 204 = empty related list, 404 = parent record missing.
+      // Treat both as "no related records" — callers handle that
+      // gracefully (they fall through to the next match path).
+      if (response.status === 204 || response.status === 404) return [];
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(`Zoho related-list error: ${parentModule}/${parentId}/${relatedListName} → ${response.status} - ${error.message || response.statusText}`);
+      }
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      let data: any;
+      try { data = JSON.parse(text); }
+      catch {
+        logger.warn(`⚠️ [ZohoCRM] Non-JSON related-list response on ${parentModule}/${parentId}/${relatedListName}`);
+        return [];
+      }
+      return (data.data || []).map((record: any) => ({
+        id: record.id,
+        module: relatedListName,
+        owner: record.Owner?.name || record.Owner?.id,
+        createdTime: record.Created_Time,
+        modifiedTime: record.Modified_Time,
+        data: record,
+      }));
+    }
+  );
+}
+
 export interface ZohoChangelogRow {
   audited_time?: string;
   field?: { api_name?: string; display_label?: string };

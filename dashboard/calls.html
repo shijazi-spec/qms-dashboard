@@ -3764,16 +3764,27 @@
             // When the linker found a record via the same-day same-agent
             // activity fallback (not by phone digits) we tag the badge so
             // managers can spot the lower-confidence match at a glance.
+            // 2026-05-30 — phone_via_contact gets its own subtle tag so
+            // operators can tell a "phone hit on a Contact → walked to
+            // that Contact's Deal" link apart from a direct phone-on-
+            // Deal hit. Still high-confidence (it IS phone-derived), so
+            // we use indigo/green (not the yellow activity colour) but
+            // suffix with " ↗" + a tooltip naming the Contact.
             const viaActivity = call.linked_via === 'activity';
-            const viaSuffix = viaActivity ? ' (via activity)' : '';
+            const viaContact = call.linked_via === 'phone_via_contact';
+            const viaSuffix = viaActivity
+                ? ' (via activity)'
+                : viaContact
+                    ? ' (via Contact)'
+                    : '';
             if (call.deal_id) {
-                tagLabel = viaActivity ? 'Deal ★' : 'Deal';
+                tagLabel = viaActivity ? 'Deal ★' : viaContact ? 'Deal ↗' : 'Deal';
                 tagClasses = viaActivity
                     ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
                     : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200';
                 tagTitle = `Deal match for ${rawPhone}${viaSuffix} — open in Zoho`;
             } else if (call.lead_id) {
-                tagLabel = viaActivity ? 'Lead ★' : 'Lead';
+                tagLabel = viaActivity ? 'Lead ★' : viaContact ? 'Lead ↗' : 'Lead';
                 tagClasses = viaActivity
                     ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
                     : 'bg-green-100 text-green-800 hover:bg-green-200';
@@ -6803,13 +6814,21 @@
         }
 
         // Renders the CRM linkage indicator in the SDR Evaluation header.
-        // Three states:
-        //   • Linked + phone match     → green/indigo badge, click opens
-        //                                 the Zoho Lead/Deal record.
-        //   • Linked + activity match  → yellow ★ badge ("via activity")
-        //                                 because confidence is lower.
-        //   • Not linked               → "Not linked — Search CRM | Re-run
-        //                                 matcher" pair.
+        // Four states:
+        //   • Linked + direct phone match    → blue/indigo badge, click
+        //                                       opens the Zoho Lead/Deal
+        //                                       record.
+        //   • Linked + via-Contact walk      → blue badge with " ↗ "
+        //                                       suffix + "via Contact"
+        //                                       subline. Same confidence
+        //                                       as direct phone (the walk
+        //                                       still required a 9-digit
+        //                                       phone hit on the Contact).
+        //   • Linked + activity match        → yellow ★ badge ("via
+        //                                       activity") because
+        //                                       confidence is lower.
+        //   • Not linked                     → "Not linked — Search CRM |
+        //                                       Re-run matcher" pair.
         function renderEvalCrmLinkBadge(call) {
             const el = document.getElementById('eval-crm-link');
             if (!el || !call) return;
@@ -6820,6 +6839,7 @@
                 ? `https://crm.zoho.com/crm/org766568398/search?searchword=${encodeURIComponent(phoneForSearch)}&searchWordKeyType=phone`
                 : null;
             const viaActivity = call.linked_via === 'activity';
+            const viaContact = call.linked_via === 'phone_via_contact';
             if (call.lead_id || call.deal_id) {
                 const isLead = !!call.lead_id;
                 const recordUrl = isLead
@@ -6829,13 +6849,15 @@
                 const badgeClass = viaActivity
                     ? 'bg-yellow-100 text-yellow-900 border-yellow-300'
                     : 'bg-white/90 text-blue-800 border-white';
+                const suffix = viaActivity ? ' ★' : viaContact ? ' ↗' : '';
                 el.innerHTML = `
                     <div class="flex flex-col items-end gap-1">
                         <a href="${recordUrl}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2 py-1 rounded border ${badgeClass} font-medium text-[11px]" title="Open ${moduleLabel} in Zoho CRM">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                            ${escapeHtml(moduleLabel)}${viaActivity ? ' ★' : ''}
+                            ${escapeHtml(moduleLabel)}${suffix}
                         </a>
                         ${viaActivity ? `<span class="text-[10px] text-white/80" title="Linked because this agent logged a CRM activity on this Lead/Deal on the same day — verify the link is correct.">via same-day activity</span>` : ''}
+                        ${viaContact ? `<span class="text-[10px] text-white/80" title="Phone matched a Contact, which is linked to this Deal. Common pattern for converted Leads where the phone migrated from Lead → Contact + Deal.">via linked Contact</span>` : ''}
                     </div>
                 `;
             } else {
@@ -6864,7 +6886,11 @@
                     selectedEvalCall.deal_id = data.deal_id || null;
                     selectedEvalCall.linked_via = data.linked_via || null;
                     renderEvalCrmLinkBadge(selectedEvalCall);
-                    const via = data.linked_via === 'activity' ? ' (via same-day agent activity)' : '';
+                    const via = data.linked_via === 'activity'
+                        ? ' (via same-day agent activity)'
+                        : data.linked_via === 'phone_via_contact'
+                            ? ` (via linked Contact${data.picked_match?.via_contact_name ? ': ' + data.picked_match.via_contact_name : ''})`
+                            : '';
                     alert(`Linked to ${data.picked_module}: ${data.picked_match?.display_name || data.lead_id || data.deal_id}${via}`);
                 } else if (data.reason === 'ambiguous') {
                     alert(`Multiple candidate matches (${data.matches_count}) — needs manual review in CRM.`);

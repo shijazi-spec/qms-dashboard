@@ -29,6 +29,7 @@ import {
   fetchZohoRecords,
   searchZohoRecords,
   searchZohoRecordsByWord,
+  fetchZohoRelatedRecords,
 } from "./zohoCRM";
 import { normalizePhoneDigits } from "./callMcpReconciliation";
 import {
@@ -50,6 +51,16 @@ export interface CrmPhoneMatch {
   display_name?: string;
   /** For Deals: current Stage. For Leads: Lead_Status. */
   status?: string;
+  /**
+   * Annotation written when this match came via the Phone → Contact →
+   * Deal walk (Phase A2 in findCrmRecordByPhone). The orchestrator
+   * (autoLinkCallToCrm) reads this to write linked_via='phone_via_contact'
+   * instead of plain 'phone' so the audit trail records *why* a Deal
+   * with no phone field of its own got matched. Set to the Contact's
+   * Zoho id; via_contact_name is the operator-facing label.
+   */
+  via_contact_id?: string;
+  via_contact_name?: string;
 }
 
 function readLeadPhone(r: ZohoCRMRecord): string {
@@ -296,38 +307,102 @@ export async function findCrmRecordByPhone(
           normalized_query,
         );
       });
+      // 2026-05-30 — annotate every Contact-walked match with the
+      // Contact's id + display name so the orchestrator can write
+      // linked_via='phone_via_contact' (instead of plain 'phone') and
+      // the UI can show a "via Contact: …" tooltip on the badge.
+      const annotateMatch = (
+        m: CrmPhoneMatch,
+        c: ZohoCRMRecord,
+      ): CrmPhoneMatch => {
+        const cd = c.data || {};
+        const cName =
+          (typeof cd.Full_Name === "object" && cd.Full_Name?.name) ||
+          cd.Full_Name ||
+          cd.Last_Name ||
+          undefined;
+        return {
+          ...m,
+          via_contact_id: c.id,
+          via_contact_name: cName ? String(cName) : undefined,
+          // Annotate the match so downstream diagnostics can see the
+          // phone we DID find (on the Contact) instead of the empty
+          // string readDealPhone yields for Contact-linked Deals.
+          phone:
+            m.phone ||
+            String(
+              (typeof cd.Phone === "object" && cd.Phone?.name) ||
+                cd.Phone ||
+                cd.Mobile ||
+                "",
+            ),
+        };
+      };
+
       for (const c of realContactMatches) {
+        // Primary Contact lookup: Deals where Contact_Name equals this
+        // Contact (one-to-one primary relationship — most Deals).
+        let primaryDeals: ZohoCRMRecord[] = [];
         try {
-          const deals = await searchZohoRecords(
+          primaryDeals = await searchZohoRecords(
             "Deals",
             `(Contact_Name:equals:${c.id})`,
           );
-          for (const d of deals) {
-            if (!matches.some((m) => m.module === "Deals" && m.id === d.id)) {
-              const m = dealToMatch(d);
-              // Annotate the match so downstream diagnostics can see the
-              // phone we DID find (on the Contact) instead of the empty
-              // string readDealPhone yields for Contact-linked Deals.
-              if (!m.phone) {
-                const cd = c.data || {};
-                m.phone = String(
-                  (typeof cd.Phone === "object" && cd.Phone?.name) ||
-                    cd.Phone ||
-                    cd.Mobile ||
-                    "",
-                );
-              }
-              matches.push(m);
-            }
-          }
         } catch (err: any) {
           logger.warn(
-            "[sdrCallLinking] Contact→Deal criteria search failed; skipping contact",
+            "[sdrCallLinking] Contact→Deal criteria search failed; trying related-list",
             {
               contactId: c.id,
               error: err?.message || String(err),
             },
           );
+        }
+
+        // 2026-05-30 — Contact Roles fallback (Phase A2-bis).
+        //
+        // The criteria search above only finds Deals whose PRIMARY
+        // Contact_Name is this Contact. It misses Deals where the
+        // Contact participates only via "Contact Roles" (Zoho's
+        // many-to-many junction object — stakeholder lists, decision-
+        // makers, etc.). The related-list endpoint
+        // /crm/v2/Contacts/{id}/Deals returns the union of both, so
+        // we hit it when the criteria search produced 0 results.
+        //
+        // Cost: one extra Zoho call per Contact ONLY when primary search
+        // missed. Indexed related-list endpoint, cheap.
+        let dealsForContact = primaryDeals;
+        if (primaryDeals.length === 0) {
+          try {
+            const related = await fetchZohoRelatedRecords(
+              "Contacts",
+              c.id,
+              "Deals",
+            );
+            if (related.length > 0) {
+              dealsForContact = related;
+              logger.info(
+                "[sdrCallLinking] Contact→Deal related-list hit (Contact Roles)",
+                {
+                  contactId: c.id,
+                  dealCount: related.length,
+                },
+              );
+            }
+          } catch (err: any) {
+            logger.warn(
+              "[sdrCallLinking] Contact→Deal related-list fetch failed; skipping contact",
+              {
+                contactId: c.id,
+                error: err?.message || String(err),
+              },
+            );
+          }
+        }
+
+        for (const d of dealsForContact) {
+          if (!matches.some((m) => m.module === "Deals" && m.id === d.id)) {
+            matches.push(annotateMatch(dealToMatch(d), c));
+          }
         }
       }
       if (matches.length > 0) {
@@ -408,11 +483,20 @@ export interface AutoLinkResult {
   scanned_deals: number;
   scanned_activities?: number;
   /**
-   * How the link was decided. "phone" = phone digit match against
-   * Leads/Deals. "activity" = fallback heuristic that finds Leads/Deals
-   * the same agent touched in CRM on the same day as the call.
+   * How the link was decided.
+   *   "phone"              — phone digit match directly against
+   *                          Leads/Deals (the Lead's Phone or
+   *                          the Deal's denormalised Phone field).
+   *   "phone_via_contact"  — Phase A2 walk: phone hit on a Contact,
+   *                          then linked to that Contact's Deal
+   *                          (either primary Contact_Name or via
+   *                          Contact Roles related list).
+   *   "activity"           — fallback heuristic that finds Leads/Deals
+   *                          the same agent touched in CRM on the same
+   *                          day as the call.
+   * Mirror the DB column union in callIntelligenceDb.updateCallRecordLinkedVia.
    */
-  linked_via?: "phone" | "activity" | null;
+  linked_via?: "phone" | "phone_via_contact" | "activity" | null;
   reason:
     | "linked"
     | "no_phone"
@@ -740,6 +824,14 @@ export async function autoLinkCallToCrm(
 
     if (preferred.length === 1) {
       const match = preferred[0];
+      // 2026-05-30 — when findCrmRecordByPhone produced this match by
+      // walking Phone → Contact → Deal (the via_contact_id annotation
+      // is set on the match), tag the link as 'phone_via_contact' so
+      // the audit trail records *why* a Deal with no phone field got
+      // picked. Otherwise fall back to plain 'phone'.
+      const linkedViaTag: "phone" | "phone_via_contact" = match.via_contact_id
+        ? "phone_via_contact"
+        : "phone";
       try {
         if (match.module === "Deals") {
           await persistDealId(callRecordId, match.id);
@@ -756,7 +848,7 @@ export async function autoLinkCallToCrm(
           matches_count: 1,
           scanned_leads: result.scanned_leads,
           scanned_deals: result.scanned_deals,
-          linked_via: "phone",
+          linked_via: linkedViaTag,
           reason: "persist_failed",
           attempted_phone: phone,
         };
@@ -770,7 +862,7 @@ export async function autoLinkCallToCrm(
         matches_count: 1,
         scanned_leads: result.scanned_leads,
         scanned_deals: result.scanned_deals,
-        linked_via: "phone",
+        linked_via: linkedViaTag,
         reason: "linked",
         attempted_phone: phone,
       };
