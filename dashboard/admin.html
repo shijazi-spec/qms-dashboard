@@ -2322,6 +2322,22 @@
                         }
                     });
                 }
+                // Tier-1 SDR Eval cleanup (2026-05-30): honor a ?tab=
+                // query param on page load so other pages can deep-link
+                // to a specific Admin Settings tab. The SDR Evaluation
+                // tab uses this to send reviewers from the "Manage →"
+                // breadcrumb directly into the scorecard editor instead
+                // of duplicating the management UI on the workflow tab.
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    const requested = params.get('tab');
+                    const allowed = ['documents', 'scorecard', 'settings', 'audit', 'rate-limits'];
+                    if (requested && allowed.includes(requested) && typeof switchTab === 'function') {
+                        switchTab(requested);
+                    }
+                } catch (e) {
+                    console.error('admin tab deep-link failed:', e);
+                }
             });
 
             let rateLimitRefreshTimer = null;
