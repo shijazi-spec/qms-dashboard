@@ -3287,8 +3287,66 @@
         let _ownersSortKey = 'estimated_waste_value';
         let _ownersSortDir = 'desc';
 
+        // Merge rows that share the same email address. The server side
+        // builds the per-owner aggregates from the modified-by name on each
+        // record, so a single rep with two name spellings in CRM
+        // ("Naif Almutari" + "Naif Almutairi" on naif@walaplus.com,
+        // "Mohammed Ghanem" × 2 on m.ghanem@walaplus.com, etc.) gets
+        // double-counted. We re-aggregate client-side by lowercased email
+        // and combine the names into one row so the scorecard reads as
+        // intended ("this email = this person's debt"). Rows with no email
+        // are passed through unchanged — without a shared key there's
+        // nothing to merge them on.
+        function _mergeOwnersByEmail(owners) {
+            const out = [];
+            const byEmail = new Map();
+            for (const o of owners || []) {
+                const emailKey = String(o.owner_email || '').trim().toLowerCase();
+                if (!emailKey) { out.push({ ...o, merged_count: 1 }); continue; }
+                const existing = byEmail.get(emailKey);
+                if (!existing) {
+                    byEmail.set(emailKey, {
+                        ...o,
+                        _name_set: new Set([o.owner_name || '—']),
+                        _team_set: new Set([o.team || 'Unassigned']),
+                        merged_count: 1,
+                    });
+                    continue;
+                }
+                existing.merged_count += 1;
+                existing._name_set.add(o.owner_name || '—');
+                existing._team_set.add(o.team || 'Unassigned');
+                existing.total_records             = Number(existing.total_records || 0)             + Number(o.total_records || 0);
+                existing.duplicate_records         = Number(existing.duplicate_records || 0)         + Number(o.duplicate_records || 0);
+                existing.high_confidence_duplicates = Number(existing.high_confidence_duplicates || 0) + Number(o.high_confidence_duplicates || 0);
+                existing.estimated_waste_value     = Number(existing.estimated_waste_value || 0)     + Number(o.estimated_waste_value || 0);
+            }
+            for (const merged of byEmail.values()) {
+                // Combine names + teams. Distinct values are joined with
+                // " / "; if everything matches we keep the single value.
+                merged.owner_name = Array.from(merged._name_set).filter(Boolean).join(' / ') || '—';
+                merged.team       = Array.from(merged._team_set).filter(Boolean).join(' / ') || 'Unassigned';
+                // Recompute the dup-rate against the merged totals; round
+                // to one decimal to match the server-side formatting.
+                const tot = Number(merged.total_records || 0);
+                const dup = Number(merged.duplicate_records || 0);
+                merged.duplicate_rate = tot > 0 ? Math.round((dup / tot) * 1000) / 10 : 0;
+                // Re-derive RAG from the new rate using the same thresholds
+                // the server applies (≥50% red, ≥25% amber, else green).
+                merged.rag_status = merged.duplicate_rate >= 50 ? 'red'
+                                  : merged.duplicate_rate >= 25 ? 'amber'
+                                  : 'green';
+                delete merged._name_set;
+                delete merged._team_set;
+                out.push(merged);
+            }
+            return out;
+        }
+
         function renderOwners(owners) {
-            _ownersCache = Array.isArray(owners) ? owners.slice() : [];
+            // Re-aggregate same-email rows BEFORE caching so every consumer
+            // (sort, filter, export, picker) sees the merged view.
+            _ownersCache = _mergeOwnersByEmail(Array.isArray(owners) ? owners : []);
             applyOwnersSort();
             updateOwnersSortIndicators();
             // Advanced Filter — apply against owner_name (the typical
@@ -3311,6 +3369,13 @@
                 // statuses since any row showing up here at all has
                 // duplicate debt > 0.
                 const ragClass = ['green','amber','red'].includes(o.rag_status) ? o.rag_status : 'red';
+                // Merged-rows chip — shown when the email aggregator
+                // combined ≥2 server rows. Hover-title spells out which
+                // name spellings were folded together so the operator
+                // knows what's behind the merged metric.
+                const mergedBadge = (o.merged_count && o.merged_count > 1)
+                    ? `<span class="ms-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800" title="Combined ${o.merged_count} CRM owner rows that share this email — names: ${escAttr(o.owner_name)}">merged ×${o.merged_count}</span>`
+                    : '';
                 return `
                 <tr data-testid="row-owner-${escAttr(o.owner_name)}" data-owner-row data-owner-key="${rowKey}" data-owner-name="${escAttr(o.owner_name || '')}" data-owner-team="${escAttr(o.team || 'Unassigned')}" data-owner-email="${escAttr(o.owner_email || '')}">
                     <td class="px-4 py-3 text-sm"><input type="checkbox" class="owner-row-checkbox" data-on-change="syncOwnersSelectionState" data-testid="checkbox-owner-${escAttr(o.owner_name)}" aria-label="Select ${escAttr(o.owner_name || '')}" /></td>
@@ -3319,6 +3384,7 @@
                                 data-args='${escAttr(JSON.stringify([o.owner_email || '', o.owner_name || '']))}'
                                 title="View duplicate clusters owned by ${escAttr(o.owner_name)}"
                                 class="text-indigo-700 hover:text-indigo-900 hover:underline text-start font-medium">${escapeHtml(o.owner_name)}</button>
+                        ${mergedBadge}
                     </td>
                     <td class="px-6 py-3 text-sm"><span class="px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">${escapeHtml(o.team || 'Unassigned')}</span></td>
                     <td class="px-6 py-3 text-sm text-gray-500">${escapeHtml(o.owner_email || '-')}</td>
