@@ -4646,11 +4646,46 @@ export const duplicateRadarRoutes = [
             return c.json({ error: "Workbook has no worksheets." }, 400);
           }
 
+          // Defensive coercion — exceljs cell values come in many shapes:
+          //   - primitive (string / number / boolean / Date)
+          //   - { text } for hyperlinks / shared strings
+          //   - { richText: [{ text, font }, ...] } for formatted cells
+          //   - { result, formula } for formula cells
+          //   - { error } for #N/A / #REF! / etc.
+          // The historic code called String(v) directly, which produced
+          // "[object Object]" for the structured shapes and silently
+          // poisoned header detection. cellToString below normalises every
+          // shape into the plain-text the operator would see in Excel.
+          function cellToString(v: any): string {
+            if (v == null) return "";
+            if (typeof v === "string") return v;
+            if (typeof v === "number" || typeof v === "boolean") return String(v);
+            if (v instanceof Date) return v.toISOString();
+            if (typeof v === "object") {
+              if (typeof v.text === "string") return v.text;
+              if (Array.isArray(v.richText)) {
+                return v.richText.map((p: any) => p?.text ?? "").join("");
+              }
+              if (v.result != null) return cellToString(v.result);
+              if (v.error != null) return String(v.error);
+              if (typeof v.hyperlink === "string") return v.hyperlink;
+            }
+            return String(v);
+          }
+          // Cap the iteration at a sane upper bound — exceljs sometimes
+          // reports ws.rowCount = 1,048,576 (Excel's max) for files that
+          // really only have 50 rows but carry stray formatting in the
+          // empty range. Without the cap we'd burn minutes walking
+          // millions of empty rows.
+          const MAX_ROWS = 50000;
+          const lastRow = Math.min(ws.rowCount || 0, MAX_ROWS);
+
           // Find header row — first non-empty row.
           let headerRowIdx = 1;
-          for (let i = 1; i <= ws.rowCount; i++) {
+          for (let i = 1; i <= lastRow; i++) {
             const r = ws.getRow(i);
-            if (r.values && Array.isArray(r.values) && r.values.some((v: any) => v != null && String(v).trim() !== "")) {
+            const rv = r.values;
+            if (Array.isArray(rv) && rv.some((v: any) => cellToString(v).trim() !== "")) {
               headerRowIdx = i;
               break;
             }
@@ -4660,9 +4695,7 @@ export const duplicateRadarRoutes = [
           const headerValues = headerRow.values as any[];
           // exceljs row.values is 1-indexed; index 0 is undefined
           for (let i = 1; i < headerValues.length; i++) {
-            headers.push(
-              headerValues[i] == null ? "" : String(headerValues[i]).trim().toLowerCase(),
-            );
+            headers.push(cellToString(headerValues[i]).trim().toLowerCase());
           }
 
           function findCol(...needles: string[]): number {
@@ -4707,74 +4740,85 @@ export const duplicateRadarRoutes = [
             source_row_number: number;
           }
           const rows: ParsedRow[] = [];
-          for (let i = headerRowIdx + 1; i <= ws.rowCount; i++) {
-            const r = ws.getRow(i);
-            const rv = r.values as any[];
-            if (!rv || !Array.isArray(rv)) continue;
-            // Skip empty rows
-            const nonEmpty = rv.some((v: any) => v != null && String(v).trim() !== "");
-            if (!nonEmpty) continue;
+          let skippedRows = 0;
+          for (let i = headerRowIdx + 1; i <= lastRow; i++) {
+            try {
+              const r = ws.getRow(i);
+              const rv = r.values as any[];
+              if (!rv || !Array.isArray(rv)) continue;
+              // Skip empty rows
+              const nonEmpty = rv.some((v: any) => cellToString(v).trim() !== "");
+              if (!nonEmpty) continue;
 
-            let domain = "";
-            if (domainIdx >= 0 && rv[domainIdx + 1] != null) {
-              domain = String(rv[domainIdx + 1]).trim();
-            }
-            let email = "";
-            if (emailIdx >= 0 && rv[emailIdx + 1] != null) {
-              email = String(rv[emailIdx + 1]).trim();
-            }
-            if (!domain && email) {
-              const at = email.lastIndexOf("@");
-              if (at > 0 && at < email.length - 1) domain = email.slice(at + 1);
-            }
-            // Strip leading https:// www. and trailing / from domain
-            domain = domain
-              .replace(/^https?:\/\//i, "")
-              .replace(/^www\./i, "")
-              .replace(/\/.*$/, "")
-              .trim()
-              .toLowerCase();
+              let domain = "";
+              if (domainIdx >= 0) {
+                domain = cellToString(rv[domainIdx + 1]).trim();
+              }
+              let email = "";
+              if (emailIdx >= 0) {
+                email = cellToString(rv[emailIdx + 1]).trim();
+              }
+              if (!domain && email) {
+                const at = email.lastIndexOf("@");
+                if (at > 0 && at < email.length - 1) domain = email.slice(at + 1);
+              }
+              // Strip leading https:// www. and trailing / from domain
+              domain = domain
+                .replace(/^https?:\/\//i, "")
+                .replace(/^www\./i, "")
+                .replace(/\/.*$/, "")
+                .trim()
+                .toLowerCase();
 
-            let companyName = "";
-            if (companyIdx >= 0 && rv[companyIdx + 1] != null) {
-              companyName = String(rv[companyIdx + 1]).trim();
-            }
-            let mobile = "";
-            if (mobileIdx >= 0 && rv[mobileIdx + 1] != null) {
-              // Excel sometimes stores phones with a leading apostrophe to
-              // force text format (e.g., "'+966 11 464 1611") — strip it.
-              mobile = String(rv[mobileIdx + 1]).replace(/^'/, "").trim();
-            }
-            let corporatePhone = "";
-            if (corporatePhoneIdx >= 0 && rv[corporatePhoneIdx + 1] != null) {
-              corporatePhone = String(rv[corporatePhoneIdx + 1]).replace(/^'/, "").trim();
-            }
-            // Combined phone for preflight matching — mobile preferred,
-            // corporate as fallback.
-            const phone = mobile || corporatePhone;
+              let companyName = "";
+              if (companyIdx >= 0) {
+                companyName = cellToString(rv[companyIdx + 1]).trim();
+              }
+              let mobile = "";
+              if (mobileIdx >= 0) {
+                // Excel sometimes stores phones with a leading apostrophe to
+                // force text format (e.g., "'+966 11 464 1611") — strip it.
+                mobile = cellToString(rv[mobileIdx + 1]).replace(/^'/, "").trim();
+              }
+              let corporatePhone = "";
+              if (corporatePhoneIdx >= 0) {
+                corporatePhone = cellToString(rv[corporatePhoneIdx + 1]).replace(/^'/, "").trim();
+              }
+              // Combined phone for preflight matching — mobile preferred,
+              // corporate as fallback.
+              const phone = mobile || corporatePhone;
 
-            if (!domain) continue;
+              if (!domain) continue;
 
-            // Reconstruct the full original row keyed by header so the
-            // export step can write the operator's original columns back
-            // out (including First Name, Title, Industry, Annual Revenue,
-            // etc. that preflight itself ignores).
-            const originalRow: Record<string, any> = {};
-            const fullHeaderValues = headerRow.values as any[];
-            for (let h = 1; h < fullHeaderValues.length; h++) {
-              const headerLabel =
-                fullHeaderValues[h] == null ? `col_${h}` : String(fullHeaderValues[h]);
-              originalRow[headerLabel] = rv[h] == null ? "" : String(rv[h]);
+              // Reconstruct the full original row keyed by header so the
+              // export step can write the operator's original columns back
+              // out (including First Name, Title, Industry, Annual Revenue,
+              // etc. that preflight itself ignores).
+              const originalRow: Record<string, any> = {};
+              const fullHeaderValues = headerRow.values as any[];
+              for (let h = 1; h < fullHeaderValues.length; h++) {
+                const headerLabel = cellToString(fullHeaderValues[h]) || `col_${h}`;
+                originalRow[headerLabel] = cellToString(rv[h]);
+              }
+
+              rows.push({
+                domain,
+                email,
+                phone,
+                company_name: companyName,
+                original_row: originalRow,
+                source_row_number: i,
+              });
+            } catch (rowErr: any) {
+              // Don't let one corrupted row sink the whole upload —
+              // log it server-side and keep scanning. The skipped count is
+              // returned to the UI so the operator knows.
+              skippedRows++;
+              logger.warn("[preflight/parse-excel] skipped row", {
+                row: i,
+                error: rowErr instanceof Error ? rowErr.message : String(rowErr),
+              });
             }
-
-            rows.push({
-              domain,
-              email,
-              phone,
-              company_name: companyName,
-              original_row: originalRow,
-              source_row_number: i,
-            });
           }
 
           if (rows.length === 0) {
@@ -4834,6 +4878,7 @@ export const duplicateRadarRoutes = [
           return c.json({
             success: true,
             count: rows.length,
+            skipped_rows: skippedRows,
             // Strip the original_row from the rows that go to the preflight
             // engine (it doesn't need 32 columns of overhead). Keep
             // original_rows as a SEPARATE field, parallel-indexed, so the
@@ -4860,9 +4905,28 @@ export const duplicateRadarRoutes = [
             },
           });
         } catch (error: any) {
+          // Surface the real reason instead of an opaque 500 — without this
+          // the operator sees "internal error" and has no path forward. The
+          // most common cases here are: an unsupported cell type (date/
+          // hyperlink/formula error that exceljs can't coerce), an
+          // unexpectedly-shaped row, a header containing non-string content,
+          // or a worksheet with a wildly wrong rowCount (Excel sometimes
+          // reports millions of empty rows). All three are fixable once the
+          // operator knows what to look for.
           logger.error("Error parsing preflight Excel:", error);
+          const errName = error instanceof Error ? error.name : "Error";
+          const errMsg  = error instanceof Error ? error.message : String(error);
+          const detail  = `${errName}: ${errMsg}`;
           return c.json(
-            { error: "An internal error occurred parsing the workbook." },
+            {
+              error:
+                "Failed to parse the workbook — " + detail +
+                ". If the file opens cleanly in Excel, try re-saving it as " +
+                "a fresh .xlsx (File → Save As → Excel Workbook) so any " +
+                "legacy formatting metadata is dropped, then upload again.",
+              detail,
+              error_type: errName,
+            },
             500,
           );
         }

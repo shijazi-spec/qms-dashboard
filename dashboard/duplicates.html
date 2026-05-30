@@ -5605,8 +5605,10 @@
                 }
 
                 if (countSpan) {
-                    countSpan.textContent = '✓ Parsed ' + body.count + ' row(s) from "' + preflightLastUpload.fileName + '"' + dupNote + ' — click Check to run preflight.';
-                    countSpan.className = 'ml-auto text-xs ' + (dupDomainRows > 0 ? 'text-amber-700' : 'text-emerald-700') + ' font-medium';
+                    const skipped = Number(body.skipped_rows || 0);
+                    const skipNote = skipped > 0 ? ' · ⚠ ' + skipped + ' row(s) skipped (unreadable cells)' : '';
+                    countSpan.textContent = '✓ Parsed ' + body.count + ' row(s) from "' + preflightLastUpload.fileName + '"' + dupNote + skipNote + ' — click Check to run preflight.';
+                    countSpan.className = 'ml-auto text-xs ' + ((dupDomainRows > 0 || skipped > 0) ? 'text-amber-700' : 'text-emerald-700') + ' font-medium';
                 }
             } catch (e) {
                 alert('Upload failed: ' + ((e && e.message) || String(e)));
