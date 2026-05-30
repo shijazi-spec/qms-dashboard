@@ -1369,6 +1369,16 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  // 2026-05-30 — Retry auto-link sweep on every unlinked call row.
+  // Same role set as the other operator-driven bulk sweeps. Admin
+  // verification is also enforced by verifyAdminKey() inside the
+  // handler itself (defense-in-depth), so this rule is the minimum
+  // gate needed for the dashboard button to reach the handler.
+  {
+    pattern: /^\/api\/calls\/retry-unlinked-auto-link$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
   {
     // Read-only Zoho activities reader (Replit's contribution) — Lead/Deal scoped
     pattern: /^\/api\/zoho\/activities\/(Leads|Deals|leads|deals)\/\d+$/,

@@ -349,6 +349,15 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             <span id="auditLinksBtnLabel">Audit CRM Links</span>
                         </button>
+                        <!-- 2026-05-30 — Retry auto-link on already-uploaded
+                             calls that are still unlinked. Picks up the new
+                             Contact → Deal walk + Contact Roles fallback +
+                             junk-Lead filter without waiting for the boot-
+                             time Pass 3 backfill. -->
+                        <button id="btn-retry-unlinked" data-on-click="retryUnlinkedAutoLink" class="text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="Re-run auto-link on every call that has a phone but no Lead/Deal yet. Picks up newly-supported match paths (Contact→Deal walk, Contact Roles, junk-Lead filter) without waiting for next Replit boot. Idempotent — already-linked rows are skipped.">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                            <span id="retryUnlinkedBtnLabel">Retry Auto-Link</span>
+                        </button>
                     </div>
                 </div>
                 <!-- Diagnostic banner: explains the gap between "analyzed"
@@ -3003,6 +3012,89 @@
                 btn.disabled = false;
                 btn.classList.remove('opacity-60', 'cursor-not-allowed');
                 if (lbl) lbl.textContent = 'Audit CRM Links';
+            }
+        }
+
+        // ===================================================================
+        // Retry auto-link driver (2026-05-30). Loops the new
+        // POST /api/calls/retry-unlinked-auto-link endpoint in 50-row
+        // chunks until has_more=false. Each call_records row that
+        // has a phone (contact_phone OR metadata.contact_phone) but
+        // no Lead/Deal yet gets a fresh autoLinkCallAndCompliance
+        // run — picking up:
+        //   • Phone → Contact → Deal walk (primary Contact_Name)
+        //   • Contact Roles fallback (multi-contact Deals)
+        //   • Junk-Lead status filter on activity fallback
+        // Idempotent: rows linked on this run drop out of the
+        // candidate set on the next page, no duplicate writes.
+        // ===================================================================
+        let _retryUnlinkedInFlight = false;
+        async function retryUnlinkedAutoLink() {
+            if (_retryUnlinkedInFlight) return;
+            const btn = document.getElementById('btn-retry-unlinked');
+            const lbl = document.getElementById('retryUnlinkedBtnLabel');
+            if (!btn) return;
+            if (!confirm(
+                'Retry auto-link on every unlinked call?\n\n' +
+                'Re-runs the matcher on every uploaded call that has a phone ' +
+                'but no Lead/Deal yet. Picks up the new Contact → Deal walk + ' +
+                'Contact Roles fallback + Junk-Lead filter. Idempotent — ' +
+                'rows already linked are skipped.\n\n' +
+                'Will hit Zoho once per row (paced for the RPS budget).'
+            )) return;
+            _retryUnlinkedInFlight = true;
+            btn.disabled = true;
+            btn.classList.add('opacity-60', 'cursor-not-allowed');
+            const totals = { scanned: 0, linked: 0, ambiguous: 0, no_match: 0, no_phone: 0, errors: 0 };
+            try {
+                let hasMore = true;
+                let pass = 0;
+                let cursor = 0;
+                const MAX_PASSES = 100000;
+                while (hasMore && pass < MAX_PASSES) {
+                    pass++;
+                    if (lbl) lbl.textContent = `Retrying… ${totals.scanned} checked, ${totals.linked} linked`;
+                    const res = await fetch('/api/calls/retry-unlinked-auto-link', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ limit: 50, after_id: cursor }),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        alert(`Retry auto-link failed: ${err.error || res.statusText}`);
+                        break;
+                    }
+                    const data = await res.json();
+                    totals.scanned += data.scanned || 0;
+                    totals.linked += data.linked || 0;
+                    totals.ambiguous += data.ambiguous || 0;
+                    totals.no_match += data.no_match || 0;
+                    totals.no_phone += data.no_phone || 0;
+                    totals.errors += (data.errors || []).length;
+                    hasMore = !!data.has_more;
+                    if (typeof data.next_cursor === 'number') cursor = data.next_cursor;
+                    if (data.scanned === 0) break;
+                }
+                if (lbl) lbl.textContent = 'Retry Auto-Link';
+                alert(
+                    `Retry auto-link complete:\n` +
+                    `• ${totals.scanned} unlinked rows checked\n` +
+                    `• ${totals.linked} newly linked\n` +
+                    `• ${totals.ambiguous} ambiguous (multiple candidates — need manual review)\n` +
+                    `• ${totals.no_match} no match found\n` +
+                    `• ${totals.no_phone} skipped (no phone available)\n` +
+                    `• ${totals.errors} errors\n\n` +
+                    `Refreshing dashboard…`
+                );
+                await refreshData();
+            } catch (e) {
+                alert('Retry auto-link threw: ' + (e.message || e));
+            } finally {
+                _retryUnlinkedInFlight = false;
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-not-allowed');
+                if (lbl) lbl.textContent = 'Retry Auto-Link';
             }
         }
 

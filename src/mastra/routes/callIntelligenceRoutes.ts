@@ -1196,6 +1196,189 @@ export const callIntelligenceRoutes = [
       };
     },
   },
+  // ===================================================================
+  // POST /api/calls/retry-unlinked-auto-link  (admin-only)
+  //
+  // Re-run autoLinkCallToCrm on every call_records row that's still
+  // unlinked (lead_id IS NULL AND deal_id IS NULL). Same algorithm
+  // Pass 3 backfillAutoLinks uses at boot, just on-demand and
+  // paginated so the operator can sweep the whole table without
+  // waiting for a redeploy.
+  //
+  // Picks up newly-supported match paths automatically:
+  //   • Contact → Deal walk via primary Contact_Name (2026-05-29)
+  //   • Contact → Deal walk via Contact Roles related-list (2026-05-30)
+  //   • Junk-Lead status filter on activity fallback (2026-05-30)
+  //
+  // Body (all optional):
+  //   { limit?: number (default 50, max 200),
+  //     dry_run?: boolean,
+  //     after_id?: number  (cursor for next page) }
+  //
+  // Returns:
+  //   { scanned, linked, ambiguous, no_match, no_phone, errors[],
+  //     samples[], next_cursor, has_more, duration_ms }
+  // ===================================================================
+  {
+    path: "/api/calls/retry-unlinked-auto-link",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        const startedAt = Date.now();
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+
+          let body: any = {};
+          try {
+            const txt = await c.req.text();
+            if (txt && txt.trim()) body = JSON.parse(txt);
+          } catch {
+            body = {};
+          }
+          const limit = Math.min(Math.max(parseInt(body.limit) || 50, 1), 200);
+          const dryRun = body.dry_run === true;
+          // Same id-cursor pagination as audit-crm-links. ORDER BY id
+          // ASC guarantees forward progress: a freshly-linked row
+          // disappears from the candidates set on the next page, but
+          // the cursor still advances past its id.
+          const afterId = Number.isFinite(parseInt(body.after_id))
+            ? parseInt(body.after_id)
+            : 0;
+
+          const { callIntelligencePool, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          const { getZohoConnectionStatus } = await import(
+            "../../utils/zohoCRM"
+          );
+          const conn = getZohoConnectionStatus();
+          if (!conn.connected) {
+            return c.json(
+              { success: false, error: "zoho_not_connected" },
+              503,
+            );
+          }
+
+          // Same gate the backfill Pass 3 uses: row must have a phone
+          // somewhere (contact_phone column OR metadata.contact_phone),
+          // otherwise auto-link can't try anything. Including the
+          // metadata path because some legacy ingest paths only write
+          // the phone there. Audio-only rows with no phone at all are
+          // skipped — they can't match by phone and shouldn't fall
+          // through to activity-only linking (too lossy).
+          const candidatesRes = await callIntelligencePool.query(
+            `
+            SELECT id, agent_email, agent_name, call_date, created_at,
+                   metadata, contact_phone
+              FROM call_records
+             WHERE lead_id IS NULL
+               AND deal_id IS NULL
+               AND (
+                    (metadata->>'contact_phone') IS NOT NULL
+                 OR contact_phone IS NOT NULL
+               )
+               AND id > $2
+             ORDER BY id ASC
+             LIMIT $1
+            `,
+            [limit, afterId],
+          );
+          const candidates = candidatesRes.rows;
+
+          const { autoLinkCallAndCompliance } = await import(
+            "../../utils/callPostIngestPipeline"
+          );
+
+          const errors: Array<{ id: number; error: string }> = [];
+          const samples: Array<{
+            id: number;
+            linked_via: string | null;
+            picked_module: string | null;
+            record_id: string | null;
+          }> = [];
+          let linked = 0;
+          let ambiguous = 0;
+          let no_match = 0;
+          let no_phone = 0;
+
+          for (const row of candidates) {
+            if (dryRun) continue;
+            try {
+              const result = await autoLinkCallAndCompliance(
+                {
+                  id: row.id,
+                  agent_email: row.agent_email ?? null,
+                  agent_name: row.agent_name ?? null,
+                  call_date: row.call_date ?? row.created_at,
+                  metadata: row.metadata,
+                },
+                { logger, logTag: "retry-auto-link" },
+              );
+              if (result.linked) {
+                linked++;
+                if (samples.length < 10) {
+                  samples.push({
+                    id: row.id,
+                    linked_via: result.linked_via ?? null,
+                    picked_module: result.picked_module ?? null,
+                    record_id: result.lead_id ?? result.deal_id ?? null,
+                  });
+                }
+              } else if (result.reason === "ambiguous") {
+                ambiguous++;
+              } else if (result.reason === "no_phone") {
+                no_phone++;
+              } else {
+                no_match++;
+              }
+            } catch (err: any) {
+              errors.push({ id: row.id, error: err?.message || String(err) });
+            }
+            // Throttle: Zoho RPS budget. The walk may issue up to
+            // (1 search + 1 criteria + 1 related-list) per Contact +
+            // (1 leads search + 1 deals search) per phone. 200 ms
+            // pacing keeps a 50-row batch under the per-second cap.
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+
+          const result = {
+            success: true,
+            dry_run: dryRun,
+            scanned: candidates.length,
+            linked,
+            ambiguous,
+            no_match,
+            no_phone,
+            errors,
+            samples,
+            next_cursor:
+              candidates.length > 0
+                ? candidates[candidates.length - 1].id
+                : afterId,
+            has_more: candidates.length === limit,
+            duration_ms: Date.now() - startedAt,
+          };
+          logger?.info("🔗 [API] retry-unlinked-auto-link run complete", result);
+          return c.json(result);
+        } catch (error: any) {
+          safeLogger.error("[API] retry-unlinked-auto-link failed", {
+            error: error?.message,
+          });
+          return c.json(
+            {
+              success: false,
+              error: error?.message || "Retry auto-link failed",
+              duration_ms: Date.now() - startedAt,
+            },
+            500,
+          );
+        }
+      };
+    },
+  },
   // ROUTE RETIRED 2026-05-29: POST /api/calls/cleanup-no-audio
   // The "Delete legacy (no audio)" button was removed from the Call
   // Records toolbar per operator request — the historical bulk-upload
