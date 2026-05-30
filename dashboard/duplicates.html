@@ -538,7 +538,7 @@
                     <option value="status">Status</option>
                 </select>
                 <button id="clusterSortDir" data-on-click="toggleClusterSortDir" data-sort-dir="desc" data-testid="button-cluster-sort-dir" class="border rounded-lg px-3 py-2 text-sm font-mono hover:bg-gray-50" title="Toggle sort direction">↓</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;clusters&quot;]" data-testid="button-open-capa-clusters" title="Open a corrective-action record (CAPA) on one of the duplicate clusters currently shown. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;clusters&quot;]" data-testid="button-open-capa-clusters" title="Open a corrective-action record (CAPA) on one of the duplicate clusters currently shown. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
             <div id="clustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             <div id="clustersPagination" class="flex justify-center gap-3 mt-6"></div>
@@ -551,9 +551,9 @@
             </div>
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;lead&quot;]" data-pass-event="true" id="leadsExportBtn" data-testid="button-export-leads" title="Download a CSV of every Lead duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;leads&quot;]" data-testid="button-open-capa-leads" title="Open a corrective-action record (CAPA) on one of the lead-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;leads&quot;]" id="leadsZohoRefreshBtn" title="Pull live values from Zoho for every lead currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;leads&quot;]" id="leadsZohoRefreshBtn" title="Pull live values from Zoho for every lead currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">✅ Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">🔍 Run scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;leads&quot;]" data-testid="button-open-capa-leads" title="Open a corrective-action record (CAPA) on one of the lead-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -582,9 +582,9 @@
             </div>
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;deal&quot;]" data-pass-event="true" id="dealsExportBtn" data-testid="button-export-deals" title="Download a CSV of every Deal duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;deals&quot;]" id="dealsZohoRefreshBtn" title="Pull live values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deals" title="Open a corrective-action record (CAPA) on one of the deal-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;deals&quot;]" id="dealsZohoRefreshBtn" title="Pull live values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">✅ Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">🔍 Run scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deals" title="Open a corrective-action record (CAPA) on one of the deal-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -612,9 +612,9 @@
             </div>
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;contact&quot;]" data-pass-event="true" id="contactsExportBtn" data-testid="button-export-contacts" title="Download a CSV of every Contact duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;contacts&quot;]" data-testid="button-open-capa-contacts" title="Open a corrective-action record (CAPA) on one of the contact-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">✅ Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">🔍 Run scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;contacts&quot;]" data-testid="button-open-capa-contacts" title="Open a corrective-action record (CAPA) on one of the contact-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -642,9 +642,9 @@
             </div>
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;account&quot;]" data-pass-event="true" id="accountsExportBtn" data-testid="button-export-accounts" title="Download a CSV of every Account duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;accounts&quot;]" id="accountsZohoRefreshBtn" title="Pull live values from Zoho for every account currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;accounts&quot;]" data-testid="button-open-capa-accounts" title="Open a corrective-action record (CAPA) on one of the account-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
+                <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;accounts&quot;]" id="accountsZohoRefreshBtn" title="Pull live values from Zoho for every account currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">✅ Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">🔍 Run scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;accounts&quot;]" data-testid="button-open-capa-accounts" title="Open a corrective-action record (CAPA) on one of the account-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -709,9 +709,9 @@
                  miss — operators expect Export / Refresh / Run scan up top. -->
             <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
                 <button data-on-click="exportCrossModule" id="crossModuleExportBtn" data-testid="button-export-cross-module" title="Download a CSV of exactly the cross-module overlap clusters shown below, in the current order and pairing filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
-                <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;cross-module&quot;]" data-testid="button-open-capa-cross-module" title="Open a corrective-action record (CAPA) on one of the cross-module clusters below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
+                <button data-on-click="refreshCrossModuleFromZoho" id="crossModuleZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this cross-module view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">✅ Refresh from Zoho (live)</button>
+                <button data-on-click="scanZohoCRM" title="Re-run the full Zoho scan to rebuild cross-module overlaps and detect new ones. Requires admin key — same as the top-header Sync Now." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">🔍 Run scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;cross-module&quot;]" data-testid="button-open-capa-cross-module" title="Open a corrective-action record (CAPA) on one of the cross-module clusters below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
 
             <!-- Filter chips per pairing type -->
@@ -819,11 +819,11 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportCsOverlap" id="csOverlapExportBtn" data-testid="button-export-cs-overlap" title="Download a CSV of exactly the CS-overlap clusters shown below, in the current sort order and filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshCsOverlapFromZoho" id="csOverlapZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this CS Overlap view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
+                <button data-on-click="refreshCsOverlapFromZoho" id="csOverlapZohoRefreshBtn" title="Pull live values from Zoho for every record currently shown in this CS Overlap view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">✅ Refresh from Zoho (live)</button>
                 <button data-on-click="rescanCsOverlap" id="csOverlapScanBtn" data-testid="button-cs-overlap-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 me-2">
-                    Run scan
+                    🔍 Run scan
                 </button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;cs-overlap&quot;]" data-testid="button-open-capa-cs-overlap" title="Open a corrective-action record (CAPA) on one of the CS-Overlap clusters below. The CAPA goes to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;cs-overlap&quot;]" data-testid="button-open-capa-cs-overlap" title="Open a corrective-action record (CAPA) on one of the CS-Overlap clusters below. The CAPA goes to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
 
             <!-- Table -->
@@ -962,8 +962,8 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportAccountHints" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of exactly the Account-Hint rows shown below, in the current order and status filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Run scan</button>
+                <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">✅ Refresh from Zoho (live)</button>
+                <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">🔍 Run scan</button>
             </div>
 
             <!-- Table -->
@@ -1057,9 +1057,9 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportCsLifecycle" id="csLifeExportBtn" data-testid="button-export-cs-lifecycle" title="Download a CSV of exactly the CS-lifecycle violations shown below (incl. CS detail columns), in the current sort order and filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700 me-2">🔄 Refresh from Zoho (live)</button>
-                <button data-on-click="openCapaPicker" data-args="[&quot;cs-lifecycle&quot;]" data-testid="button-open-capa-cs-lifecycle" title="Open a corrective-action record (CAPA) on one of the deals below. The CAPA goes to the QMS CAPA inbox where Quality investigates and closes it." class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">🚩 Open CAPA</button>
-                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
+                <button data-on-click="refreshCsLifecycleFromZoho" id="csLifeZohoRefreshBtn" title="Pull live Phase / Company_Domain values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400 me-2">✅ Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 me-2">🔍 Run scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;cs-lifecycle&quot;]" data-testid="button-open-capa-cs-lifecycle" title="Open a corrective-action record (CAPA) on one of the deals below. The CAPA goes to the QMS CAPA inbox where Quality investigates and closes it." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
 
             <!-- Table -->
@@ -1109,8 +1109,9 @@
                 </div>
                 <div class="flex">
                     <button data-on-click="exportOwnersSelected" id="ownersExportBtn" data-testid="button-export-owners" title="Download a CSV of the rows you ticked in the table below. Tick the header checkbox to select every visible row." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                    <button data-on-click="refreshOwnersFromZoho" id="ownersZohoRefreshBtn" title="Reload the per-owner scorecard from the most recent CRM sync. For a full live re-pull of every record from Zoho, use the top-header Sync Now button." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">🔄 Refresh from Zoho (live)</button>
-                    <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">Run scan</button>
+                    <button data-on-click="refreshOwnersFromZoho" id="ownersZohoRefreshBtn" title="Reload the per-owner scorecard from the most recent CRM sync. For a full live re-pull of every record from Zoho, use the top-header Sync Now button." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">✅ Refresh from Zoho (live)</button>
+                    <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ms-2">🔍 Run scan</button>
+                    <button data-on-click="openCapaPicker" data-args="[&quot;owners&quot;]" data-testid="button-open-capa-owners" title="Open a corrective-action record (CAPA) on one of the owners below — typically used to escalate a rep carrying a high duplicate-debt load. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300 ms-2">🚩 Open CAPA</button>
                 </div>
             </div>
             <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -6188,6 +6189,45 @@
             };
         }
 
+        // Owner Accountability row → CAPA. Used to escalate a rep carrying a
+        // high duplicate-debt load: source_type 'owner_accountability',
+        // source_id = email (the stable per-owner key). Severity climbs with
+        // the rep's duplicate_rate.
+        function ownerPayloadFor(o) {
+            if (!o || (!o.owner_email && !o.owner_name)) return null;
+            const dupRate = Number(o.duplicate_rate || 0);
+            const sev = dupRate >= 50 ? 'major'
+                      : dupRate >= 25 ? 'minor'
+                      : 'observation';
+            const subject = o.owner_name || o.owner_email || 'unknown owner';
+            const waste = formatCurrency(Number(o.estimated_waste_value || 0));
+            const description = [
+                'Owner: ' + subject,
+                'Email: ' + (o.owner_email || '—'),
+                'Role / team: ' + (o.team || '—'),
+                'Total records owned: ' + (o.total_records || 0),
+                'Duplicate records: ' + (o.duplicate_records || 0) + ' (' + dupRate + '%)',
+                'High-confidence duplicates: ' + (o.high_confidence_duplicates || 0),
+                'Estimated waste value: ' + waste,
+                'RAG status: ' + (o.rag_status || '—'),
+                '',
+                'Use this CAPA to formalise the coaching / cleanup conversation',
+                'with this owner. Attach the per-owner CSV (Export CSV → tick',
+                'this row) so Quality has the full picture in the inbox.',
+                '',
+                'Opened manually from the Duplicate Radar → Owner Accountability tab.',
+            ].join('\n');
+            return {
+                sourceType:  'owner_accountability',
+                sourceId:    'owner:' + (o.owner_email || o.owner_name || '').toLowerCase(),
+                sourceLabel: subject + ' (' + (o.owner_email || '—') + ')',
+                title:       'CRM-hygiene CAPA — ' + subject + ' (' + dupRate + '% dup-rate)',
+                description,
+                severity:    sev,
+                targetDays:  14,
+            };
+        }
+
         // Record-tab duplicate group (leads / deals / contacts / accounts).
         // source_id anchored on the primary's Zoho ID so re-clicking the same
         // group hits the existing CAPA.
@@ -6361,6 +6401,26 @@
             'deals':    () => _recordTabPickerOptions('deals'),
             'contacts': () => _recordTabPickerOptions('contacts'),
             'accounts': () => _recordTabPickerOptions('accounts'),
+            'owners': () => {
+                // _ownersCache is the script-scope array renderOwners() fills
+                // when the Owner Accountability tab loads. Reads it directly
+                // so we mirror what's on screen (with current sort applied).
+                const list = Array.isArray(_ownersCache) ? _ownersCache : [];
+                if (list.length === 0) return [];
+                return list
+                    .map(o => {
+                        const p = ownerPayloadFor(o);
+                        if (!p) return null;
+                        const subject = o.owner_name || o.owner_email || 'unknown owner';
+                        const rag = (o.rag_status || '—').toUpperCase();
+                        const rate = Number(o.duplicate_rate || 0);
+                        return {
+                            label: '[' + rag + ' · ' + rate + '%] ' + subject + ' — ' + (o.duplicate_records || 0) + ' duplicates',
+                            payload: p,
+                        };
+                    })
+                    .filter(Boolean);
+            },
         };
 
         // Lead / Deal / Contact / Account Duplicates picker. The renderer
@@ -6422,6 +6482,7 @@
                 'deals':        'Deal Duplicates',
                 'contacts':     'Contact Duplicates',
                 'accounts':     'Account Duplicates',
+                'owners':       'Owner Accountability',
             };
             const tabLabel = tabLabelMap[tabKey] || tabKey;
             if (rows.length === 0) {
