@@ -147,10 +147,17 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Preflight Check
             </button>
-            <button data-on-click="showTab" data-args="[&quot;auto-capa-kpis&quot;]" id="tab-auto-capa-kpis" data-testid="tab-auto-capa-kpis" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="KPIs for auto-created CAPAs from the CS overlap + CS lifecycle pipelines">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                Auto-CAPA KPIs
-            </button>
+            <!-- Auto-CAPA KPIs tab retired 2026-05-30 per operator request.
+                 CAPAs are now opened manually from each actionable row via
+                 the "Open CAPA" button and tracked in the QMS CAPA inbox
+                 (where Quality works them). The auto-CAPA cron jobs are
+                 left in place but can be silenced by setting
+                   AUTO_CAPA_LIFECYCLE_ENABLED=false
+                   AUTO_CAPA_ON_BLOCK_ENABLED=false
+                 in Replit Secrets and republishing. The
+                 /api/duplicates/auto-capa/kpis endpoint stays so any
+                 script / future re-introduction can still call it. -->
+
             <button data-on-click="showTab" data-args="[&quot;owners&quot;]" id="tab-owners" data-testid="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
             <button data-on-click="showTab" data-args="[&quot;logs&quot;]" id="tab-logs" data-testid="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
             <button data-on-click="showTab" data-args="[&quot;search&quot;]" id="tab-search" data-testid="tab-search" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
@@ -1165,15 +1172,14 @@
                     <thead class="bg-gray-50">
                         <tr>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase w-10"><input type="checkbox" id="ownersSelectAll" data-on-change="toggleAllOwnersSelected" data-testid="checkbox-select-all-owners" aria-label="Select all visible owners" /></th>
-                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Role</th>
-                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
-                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Total Records</th>
-                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Duplicates</th>
-                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Dup Rate</th>
-                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">KPI Status</th>
-                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">High Conf.</th>
-                            <th scope="col" class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase">Waste Value</th>
+                            <th scope="col" data-on-click="sortOwnersBy" data-args='["owner_name"]' class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"><span>Owner</span> <span id="owners-sort-owner_name" class="text-gray-400"></span></th>
+                            <th scope="col" data-on-click="sortOwnersBy" data-args='["team"]' class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"><span>Role</span> <span id="owners-sort-team" class="text-gray-400"></span></th>
+                            <th scope="col" data-on-click="sortOwnersBy" data-args='["owner_email"]' class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"><span>Email</span> <span id="owners-sort-owner_email" class="text-gray-400"></span></th>
+                            <th scope="col" data-on-click="sortOwnersBy" data-args='["total_records"]' class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"><span>Total Records</span> <span id="owners-sort-total_records" class="text-gray-400"></span></th>
+                            <th scope="col" data-on-click="sortOwnersBy" data-args='["duplicate_records"]' class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"><span>Duplicates</span> <span id="owners-sort-duplicate_records" class="text-gray-400"></span></th>
+                            <th scope="col" data-on-click="sortOwnersBy" data-args='["duplicate_rate"]' class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"><span>Dup Rate</span> <span id="owners-sort-duplicate_rate" class="text-gray-400"></span></th>
+                            <th scope="col" data-on-click="sortOwnersBy" data-args='["high_confidence_duplicates"]' class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"><span>High Conf.</span> <span id="owners-sort-high_confidence_duplicates" class="text-gray-400"></span></th>
+                            <th scope="col" data-on-click="sortOwnersBy" data-args='["estimated_waste_value"]' class="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"><span>Waste Value</span> <span id="owners-sort-estimated_waste_value" class="text-gray-400"></span></th>
                         </tr>
                     </thead>
                     <tbody id="ownersTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -3255,12 +3261,31 @@
         // C3: Owner accountability with RAG status.
         // Owners are cached on window so the Export CSV button can build a
         // CSV from the currently selected rows without re-fetching.
+        //
+        // Sort state — applied client-side before each render. Default
+        // is waste-value DESC so the worst exposure rises to the top
+        // (previously the page was alphabetical; A Alsharif with 3 dups
+        // / SAR 0 sat above Abdullah Mubarak with 411 dups / SAR 107K).
+        // Sort key matches the property name on the owner row object,
+        // EXCEPT 'owner_name' / 'team' / 'owner_email' which are sorted
+        // case-insensitively as strings.
         let _ownersCache = [];
+        let _ownersSortKey = 'estimated_waste_value';
+        let _ownersSortDir = 'desc';
+
         function renderOwners(owners) {
             _ownersCache = Array.isArray(owners) ? owners.slice() : [];
+            applyOwnersSort();
+            updateOwnersSortIndicators();
             const tbody = document.getElementById('ownersTable');
             tbody.innerHTML = _ownersCache.map((o, idx) => {
                 const rowKey = encodeURIComponent(o.owner_name || `row-${idx}`);
+                // RAG class lives on the Dup Rate cell now (was a redundant
+                // separate KPI Status column showing the same threshold
+                // label for every row). Default to 'red' for unknown
+                // statuses since any row showing up here at all has
+                // duplicate debt > 0.
+                const ragClass = ['green','amber','red'].includes(o.rag_status) ? o.rag_status : 'red';
                 return `
                 <tr data-testid="row-owner-${escAttr(o.owner_name)}" data-owner-row data-owner-key="${rowKey}" data-owner-name="${escAttr(o.owner_name || '')}" data-owner-team="${escAttr(o.team || 'Unassigned')}" data-owner-email="${escAttr(o.owner_email || '')}">
                     <td class="px-4 py-3 text-sm"><input type="checkbox" class="owner-row-checkbox" data-on-change="syncOwnersSelectionState" data-testid="checkbox-owner-${escAttr(o.owner_name)}" aria-label="Select ${escAttr(o.owner_name || '')}" /></td>
@@ -3274,15 +3299,87 @@
                     <td class="px-6 py-3 text-sm text-gray-500">${escapeHtml(o.owner_email || '-')}</td>
                     <td class="px-6 py-3 text-sm">${o.total_records}</td>
                     <td class="px-6 py-3 text-sm font-medium">${o.duplicate_records}</td>
-                    <td class="px-6 py-3 text-sm font-bold">${_fn(o.duplicate_rate)}%</td>
-                    <td class="px-6 py-3 text-sm"><span class="rag-${['green','amber','red'].includes(o.rag_status)?o.rag_status:'red'} px-2 py-1 rounded text-xs font-medium">${escapeHtml(o.rag_status === 'green' ? WalaPlusI18n.t('dyn.duplicates.rag_green') : o.rag_status === 'amber' ? WalaPlusI18n.t('dyn.duplicates.rag_amber') : WalaPlusI18n.t('dyn.duplicates.rag_red'))}</span></td>
+                    <td class="px-6 py-3 text-sm"><span class="rag-${ragClass} px-2 py-1 rounded text-xs font-bold">${_fn(o.duplicate_rate)}%</span></td>
                     <td class="px-6 py-3 text-sm">${_fn(o.high_confidence_duplicates)}</td>
                     <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}</td>
                 </tr>`;
-            }).join('') || `<tr><td colspan="10" class="px-6 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_owner_data'))}</td></tr>`;
+            }).join('') || `<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_owner_data'))}</td></tr>`;
             // Re-apply any active filter and refresh select-all/count chrome.
             filterOwnersTable();
             syncOwnersSelectionState();
+        }
+
+        /**
+         * Sort the cached owners by `_ownersSortKey` in `_ownersSortDir`.
+         * String columns (owner_name / team / owner_email) get a
+         * case-insensitive compare; numeric columns coerce to Number.
+         * Stable: equal-key rows retain their pre-sort order, which is
+         * the order the server returned them in.
+         */
+        function applyOwnersSort() {
+            const key = _ownersSortKey;
+            const dir = _ownersSortDir === 'asc' ? 1 : -1;
+            const isStringColumn = ['owner_name', 'team', 'owner_email'].includes(key);
+            _ownersCache.sort((a, b) => {
+                const av = a[key];
+                const bv = b[key];
+                if (av == null && bv == null) return 0;
+                if (av == null) return 1; // nulls always sink to the bottom
+                if (bv == null) return -1;
+                if (isStringColumn) {
+                    return String(av).toLowerCase().localeCompare(String(bv).toLowerCase()) * dir;
+                }
+                const an = Number(av);
+                const bn = Number(bv);
+                if (Number.isNaN(an) && Number.isNaN(bn)) return 0;
+                if (Number.isNaN(an)) return 1;
+                if (Number.isNaN(bn)) return -1;
+                return (an - bn) * dir;
+            });
+        }
+
+        /**
+         * Click a column header → toggle direction if same key, otherwise
+         * pick a sensible default direction for the new key (DESC for
+         * numeric / impact columns, ASC for the text identity columns).
+         * Then re-render so the table reflects the new ordering.
+         */
+        function sortOwnersBy(key) {
+            if (!key) return;
+            if (key === _ownersSortKey) {
+                _ownersSortDir = _ownersSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                _ownersSortKey = key;
+                _ownersSortDir = ['owner_name', 'team', 'owner_email'].includes(key) ? 'asc' : 'desc';
+            }
+            // Re-render from the existing cache — no server round-trip.
+            renderOwners(_ownersCache);
+        }
+
+        /**
+         * Paint the ▲ / ▼ arrow on the active sort column's header span
+         * and blank out the others. Called by renderOwners so the header
+         * stays in sync after every sort/filter/data refresh.
+         */
+        function updateOwnersSortIndicators() {
+            const keys = [
+                'owner_name', 'team', 'owner_email', 'total_records',
+                'duplicate_records', 'duplicate_rate',
+                'high_confidence_duplicates', 'estimated_waste_value',
+            ];
+            keys.forEach(k => {
+                const el = document.getElementById('owners-sort-' + k);
+                if (!el) return;
+                if (k === _ownersSortKey) {
+                    el.textContent = _ownersSortDir === 'asc' ? '▲' : '▼';
+                    el.classList.remove('text-gray-400');
+                    el.classList.add('text-gray-700');
+                } else {
+                    el.textContent = '';
+                    el.classList.add('text-gray-400');
+                    el.classList.remove('text-gray-700');
+                }
+            });
         }
 
         // ===================================================================
