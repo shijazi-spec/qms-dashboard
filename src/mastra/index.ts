@@ -438,6 +438,22 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
     runs longer than the interval. Mirrors the CacheWarmer pattern above.
 */
 (function startScheduledJobFallback() {
+  // Operator escape hatch — set DISABLE_SCHEDULED_JOB_FALLBACK=true on a
+  // memory-tight host (Railway trial/Hobby, etc.) to skip the in-process
+  // cron fallback entirely. Each helper fans out parallel Zoho fetches
+  // (DuplicateRadar + QualityAudit + ConsultantScanner all pull 6 modules
+  // × CONCURRENCY=4 pages × 200 records, ~600MB+ resident at peak) which
+  // OOM-kills the process. When Inngest is wired up in front of this
+  // service, the fallback is redundant anyway.
+  if (
+    String(process.env.DISABLE_SCHEDULED_JOB_FALLBACK || "").toLowerCase() ===
+    "true"
+  ) {
+    safeLogger.info(
+      "⏭️  [ScheduledJobFallback] disabled via DISABLE_SCHEDULED_JOB_FALLBACK",
+    );
+    return;
+  }
   const g = globalThis as any;
   if (g.__walaplus_scheduledJobFallback) {
     clearTimeout(g.__walaplus_scheduledJobFallback.startTimer);

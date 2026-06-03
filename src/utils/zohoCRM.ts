@@ -459,8 +459,17 @@ export async function fetchAllZohoRecords(
   // records (~150 pages) this drops cold fetches from ~40s to ~10s. Each batch
   // stops the loop early if any page returns < perPage records (last page) or
   // 0 records (overshoot). Order is preserved because we slice by page index.
-  logger.info(`📊 [ZohoCRM] Fetching all ${module} records with parallel pagination...`);
-  const CONCURRENCY = 4;
+  // PERF / MEMORY: per-module page concurrency. Default 4 keeps cold fetches
+  // fast on a healthy host, but on memory-tight Railway tiers six module
+  // fetches × 4 concurrent pages × 200 records each can pin >600MB and
+  // OOM-kill the process. Set ZOHO_FETCH_CONCURRENCY=1 (or 2) on the
+  // server env to throttle without redeploying code.
+  const envConc = parseInt(process.env.ZOHO_FETCH_CONCURRENCY || "", 10);
+  const CONCURRENCY =
+    Number.isFinite(envConc) && envConc >= 1 && envConc <= 8 ? envConc : 4;
+  logger.info(
+    `📊 [ZohoCRM] Fetching all ${module} records with parallel pagination (CONCURRENCY=${CONCURRENCY})...`,
+  );
 
   const fetchPageWithRetry = async (pageNum: number): Promise<ZohoCRMRecord[]> => {
     let retries = 0;
