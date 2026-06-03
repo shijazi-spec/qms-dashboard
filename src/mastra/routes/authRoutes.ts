@@ -213,11 +213,26 @@ export const authRoutes = [
 
           const callbackUrl = getCallbackUrl();
 
+          // Scope differs by provider:
+          //   - Replit OIDC accepts (and quietly ignores when absent) the
+          //     `offline_access` scope for refresh tokens.
+          //   - Google REJECTS the bare `offline_access` scope as
+          //     invalid_scope (Error 400). To get a refresh token from
+          //     Google you use the `access_type=offline` parameter
+          //     instead. The QMS app doesn't currently rely on the
+          //     refresh token (sessions are 7-day JWTs in HttpOnly
+          //     cookies), so the simplest correct fix is to omit
+          //     `offline_access` on Google and skip `access_type` too.
+          const providerName = getAuthProviderName();
+          const scope =
+            providerName === "google"
+              ? "openid email profile"
+              : "openid email profile offline_access";
           const params = new URLSearchParams({
             client_id: getClientId(),
             redirect_uri: callbackUrl,
             response_type: "code",
-            scope: "openid email profile offline_access",
+            scope,
             state,
             nonce,
             code_challenge: codeChallenge,
@@ -229,7 +244,7 @@ export const authRoutes = [
           // OAuth consent screen's "User type: Internal" setting, this
           // makes it impossible for a personal @gmail.com account to
           // even start the sign-in flow. Skipped for non-Google providers.
-          if (getAuthProviderName() === "google") {
+          if (providerName === "google") {
             const allowedHd = process.env.OAUTH_HD || "walaplus.com";
             params.set("hd", allowedHd);
           }
