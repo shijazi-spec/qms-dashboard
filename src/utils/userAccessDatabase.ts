@@ -136,6 +136,13 @@ export async function upsertOidcUser(profile: {
   email: string;
   name: string;
   picture: string;
+  /**
+   * Which IdP the login came from — drives the audit trail
+   * (platform_users.auth_provider). Optional for back-compat with older
+   * callers that only ever ran on Replit; defaults to 'replit' when
+   * omitted.
+   */
+  authProvider?: "google" | "replit" | "other";
 }) {
   await ensureOidcAuthTables();
 
@@ -144,6 +151,11 @@ export async function upsertOidcUser(profile: {
   const isBootstrapAdmin = bootstrapEmails.has(
     safeProfile.email.toLowerCase(),
   );
+  // Default to 'replit' for back-compat: existing callers that don't
+  // pass authProvider keep their historic behaviour. New auth routes pass
+  // the inferred IdP name so post-migration logins are correctly
+  // attributed in the platform_users.auth_provider column.
+  const provider = profile.authProvider || "replit";
 
   const existing = await pool.query(
     "SELECT * FROM platform_users WHERE email = $1",
@@ -156,15 +168,16 @@ export async function upsertOidcUser(profile: {
     if (isBootstrapAdmin) {
       const result = await pool.query(
         `UPDATE platform_users
-         SET google_id = $1, full_name = $2, picture = $3, auth_provider = 'replit',
+         SET google_id = $1, full_name = $2, picture = $3, auth_provider = $4,
              role = 'admin', status = 'active',
              last_login_at = NOW(), login_count = login_count + 1, updated_at = NOW()
-         WHERE email = $4
+         WHERE email = $5
          RETURNING *`,
         [
           safeProfile.sub,
           safeProfile.name,
           safeProfile.picture,
+          provider,
           safeProfile.email,
         ],
       );
@@ -176,14 +189,15 @@ export async function upsertOidcUser(profile: {
     }
     const result = await pool.query(
       `UPDATE platform_users
-       SET google_id = $1, full_name = $2, picture = $3, auth_provider = 'replit',
+       SET google_id = $1, full_name = $2, picture = $3, auth_provider = $4,
            last_login_at = NOW(), login_count = login_count + 1, updated_at = NOW()
-       WHERE email = $4 AND status = 'active'
+       WHERE email = $5 AND status = 'active'
        RETURNING *`,
       [
         safeProfile.sub,
         safeProfile.name,
         safeProfile.picture,
+        provider,
         safeProfile.email,
       ],
     );
@@ -193,13 +207,14 @@ export async function upsertOidcUser(profile: {
     const status = isBootstrapAdmin ? "active" : "pending_approval";
     const result = await pool.query(
       `INSERT INTO platform_users (email, full_name, google_id, picture, auth_provider, team, role, status, mfa_enabled, login_count, last_login_at)
-       VALUES ($1, $2, $3, $4, 'replit', 'Other', $5, $6, false, 0, NOW())
+       VALUES ($1, $2, $3, $4, $5, 'Other', $6, $7, false, 0, NOW())
        RETURNING *`,
       [
         safeProfile.email,
         safeProfile.name,
         safeProfile.sub,
         safeProfile.picture,
+        provider,
         role,
         status,
       ],

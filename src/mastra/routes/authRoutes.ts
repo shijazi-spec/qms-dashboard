@@ -12,22 +12,89 @@ const SESSION_MAX_AGE = 7 * 24 * 60 * 60;
 
 let oidcConfig: client.Configuration | null = null;
 
+/**
+ * OIDC provider configuration — provider-agnostic.
+ *
+ * The QMS app started on Replit Auth (OIDC) and was migrated to support
+ * Google OAuth (also OIDC) when hosting moved to Railway. To keep one
+ * codebase that runs on either platform, every provider-specific value
+ * is read from env vars with Replit-style fallbacks:
+ *
+ *   OIDC_ISSUER_URL    — defaults to ISSUER_URL → https://replit.com/oidc
+ *                        For Google: https://accounts.google.com
+ *   OIDC_CLIENT_ID     — defaults to REPL_ID (Replit's auto-injected ID)
+ *                        For Google: the Web-client ID from Google Cloud Console
+ *   OIDC_CLIENT_SECRET — required for Google (no fallback). Replit's PKCE
+ *                        flow never required a secret; Google does.
+ *   PUBLIC_BASE_URL    — defaults to REPLIT_DOMAINS / REPLIT_DEV_DOMAIN.
+ *                        For Railway: the Railway-generated *.up.railway.app URL.
+ *
+ * Set the OIDC_* vars on Railway → falls through to Replit vars on Replit.
+ * One codebase, two deploy targets, no `if (env === 'railway')` branches.
+ */
+function getIssuerUrl(): string {
+  return (
+    process.env.OIDC_ISSUER_URL ||
+    process.env.ISSUER_URL ||
+    "https://replit.com/oidc"
+  );
+}
+
+function getClientId(): string {
+  const id = process.env.OIDC_CLIENT_ID || process.env.REPL_ID;
+  if (!id) {
+    throw new Error(
+      "OIDC client ID missing — set OIDC_CLIENT_ID (Google/other) or REPL_ID (Replit).",
+    );
+  }
+  return id;
+}
+
+function getClientSecret(): string | undefined {
+  // Replit OIDC uses PKCE with no client secret; Google requires both.
+  // Returning undefined when unset preserves the Replit flow exactly.
+  return process.env.OIDC_CLIENT_SECRET || undefined;
+}
+
 async function getOidcConfig(): Promise<client.Configuration> {
   if (!oidcConfig) {
-    oidcConfig = await client.discovery(
-      new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID!,
-    );
+    const secret = getClientSecret();
+    // The `openid-client` library's discovery() accepts an optional client
+    // secret as the third arg. For PKCE-only providers (Replit), omit it.
+    oidcConfig = secret
+      ? await client.discovery(new URL(getIssuerUrl()), getClientId(), secret)
+      : await client.discovery(new URL(getIssuerUrl()), getClientId());
   }
   return oidcConfig;
 }
 
 function getDomain(): string {
+  // PUBLIC_BASE_URL is the canonical, provider-neutral source. The
+  // REPLIT_* fallbacks are kept so the Replit deploy continues to work
+  // without anyone having to change Replit Secrets.
+  const explicit = process.env.PUBLIC_BASE_URL;
+  if (explicit) {
+    // Accept either bare host (qms.example.com) or full URL (https://qms.example.com)
+    return explicit.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  }
   return (
     process.env.REPLIT_DOMAINS?.split(",")[0] ||
     process.env.REPLIT_DEV_DOMAIN ||
     "localhost:5000"
   );
+}
+
+/**
+ * Provider name for audit logs / the platform_users.auth_provider column.
+ * Inferred from the issuer URL — accounts.google.com → 'google',
+ * replit.com → 'replit'. Used so the QMS audit trail correctly attributes
+ * each login to the actual IdP, not always "replit".
+ */
+function getAuthProviderName(): "google" | "replit" | "other" {
+  const issuer = getIssuerUrl().toLowerCase();
+  if (issuer.includes("google")) return "google";
+  if (issuer.includes("replit")) return "replit";
+  return "other";
 }
 
 function getCallbackUrl(): string {
@@ -147,7 +214,7 @@ export const authRoutes = [
           const callbackUrl = getCallbackUrl();
 
           const params = new URLSearchParams({
-            client_id: process.env.REPL_ID!,
+            client_id: getClientId(),
             redirect_uri: callbackUrl,
             response_type: "code",
             scope: "openid email profile offline_access",
@@ -157,6 +224,15 @@ export const authRoutes = [
             code_challenge_method: "S256",
             prompt: "login consent",
           });
+          // Google Workspace lock-down: hd=walaplus.com tells Google to
+          // only present accounts from this domain. Combined with the
+          // OAuth consent screen's "User type: Internal" setting, this
+          // makes it impossible for a personal @gmail.com account to
+          // even start the sign-in flow. Skipped for non-Google providers.
+          if (getAuthProviderName() === "google") {
+            const allowedHd = process.env.OAUTH_HD || "walaplus.com";
+            params.set("hd", allowedHd);
+          }
 
           const authUrl = `${config.serverMetadata().authorization_endpoint}?${params.toString()}`;
 
@@ -226,16 +302,22 @@ export const authRoutes = [
             callbackUrl,
           );
 
+          // Token exchange body. PKCE (code_verifier) is always sent.
+          // Google additionally requires client_secret; Replit doesn't.
+          const tokenBody: Record<string, string> = {
+            grant_type: "authorization_code",
+            code,
+            redirect_uri: callbackUrl,
+            client_id: getClientId(),
+            code_verifier: oauthData.verifier,
+          };
+          const clientSecret = getClientSecret();
+          if (clientSecret) tokenBody.client_secret = clientSecret;
+
           const tokenRes = await fetch(tokenEndpoint, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({
-              grant_type: "authorization_code",
-              code,
-              redirect_uri: callbackUrl,
-              client_id: process.env.REPL_ID!,
-              code_verifier: oauthData.verifier,
-            }),
+            body: new URLSearchParams(tokenBody),
           });
 
           const tokenData = (await tokenRes.json()) as any;
@@ -283,17 +365,43 @@ export const authRoutes = [
             return c.redirect("/login?error=no_email");
           }
 
-          const firstName = profile.first_name || "";
-          const lastName = profile.last_name || "";
-          const fullName =
-            [firstName, lastName].filter(Boolean).join(" ") || profile.email;
-          const picture = profile.profile_image_url || "";
+          // Belt + suspenders email-domain check for Google. The OAuth
+          // consent screen's "User type: Internal" + the hd= param on the
+          // auth URL already enforce walaplus.com membership at the IdP
+          // layer, but if either is ever misconfigured this catches it
+          // server-side so a stray Gmail account can't slip through.
+          const authProvider = getAuthProviderName();
+          if (authProvider === "google") {
+            const allowedDomain = (process.env.OAUTH_HD || "walaplus.com").toLowerCase();
+            const emailDomain = String(profile.email).split("@")[1]?.toLowerCase() || "";
+            if (emailDomain !== allowedDomain) {
+              logger.warn(
+                "[Auth] Rejecting non-allowed email domain:",
+                profile.email,
+                "(expected @" + allowedDomain + ")",
+              );
+              return c.redirect("/login?error=domain_not_allowed");
+            }
+          }
+
+          // Field-name fallbacks: Google uses given_name/family_name/picture,
+          // Replit uses first_name/last_name/profile_image_url. Some IdPs
+          // only emit `name` — that's the final fallback.
+          const firstName =
+            profile.given_name || profile.first_name || "";
+          const lastName =
+            profile.family_name || profile.last_name || "";
+          const composedName = [firstName, lastName].filter(Boolean).join(" ");
+          const fullName = composedName || profile.name || profile.email;
+          const picture =
+            profile.picture || profile.profile_image_url || "";
 
           const user = await upsertOidcUser({
             sub: profile.sub,
             email: profile.email as string,
             name: fullName,
             picture,
+            authProvider,
           });
 
           if (!user || user.status !== "active") {
@@ -478,12 +586,22 @@ export const authRoutes = [
           const config = await getOidcConfig();
           const domain = getDomain();
           const protocol = domain.includes("localhost") ? "http" : "https";
+          // buildEndSessionUrl requires the IdP to advertise an
+          // end_session_endpoint in its discovery doc. Google does NOT —
+          // when omitted, openid-client throws. Catch and fall back to a
+          // local-only logout so the user still gets logged out of our app
+          // even if the IdP refuses to participate. The cleared cookies
+          // above are the real logout; the redirect is just UX.
           const endSessionUrl = client.buildEndSessionUrl(config, {
-            client_id: process.env.REPL_ID!,
+            client_id: getClientId(),
             post_logout_redirect_uri: `${protocol}://${domain}`,
           });
           return c.redirect(endSessionUrl.href);
-        } catch {
+        } catch (logoutErr) {
+          logger.info(
+            "[Auth] IdP end-session not available, redirecting to local /login:",
+            logoutErr instanceof Error ? logoutErr.message : String(logoutErr),
+          );
           return c.redirect("/login");
         }
       };
