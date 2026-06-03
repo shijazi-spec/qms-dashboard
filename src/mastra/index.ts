@@ -338,6 +338,18 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
     (just before the 15-minute TTL expires). Failures are logged but never crash the process.
 */
 (function startCacheWarmer() {
+  // Operator escape hatch — set DISABLE_CACHE_WARMER=true on a small
+  // host (Railway trial, etc.) to skip the background pre-warm
+  // entirely. The warmer hits /api/agents/performance and
+  // /api/dashboard/layouts-breakdown every 15 minutes, which is
+  // helpful on a long-lived deploy but wasteful on a resource-tight
+  // one where the first user request can cold-fill the cache instead.
+  if (
+    String(process.env.DISABLE_CACHE_WARMER || "").toLowerCase() === "true"
+  ) {
+    safeLogger.info("⏭️  [CacheWarmer] disabled via DISABLE_CACHE_WARMER");
+    return;
+  }
   const g = globalThis as any;
   if (g.__walaplus_cacheWarmer) {
     clearTimeout(g.__walaplus_cacheWarmer.startTimer);

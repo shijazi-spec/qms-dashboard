@@ -2,4 +2,9 @@
 buildCommand = "npm run build"
 
 [deploy]
-startCommand = "node .mastra/output/index.mjs"
+# --max-old-space-size=4096 bumps Node's heap cap to 4 GB. Default is
+# ~512 MB which is too tight for Mastra + 23 Postgres pools + the AI
+# Consultant agent. Putting the flag directly on the start command is
+# more reliable than NODE_OPTIONS — some Railway runtime images don't
+# propagate NODE_OPTIONS into the child Node process consistently.
+startCommand = "node --max-old-space-size=4096 .mastra/output/index.mjs"
