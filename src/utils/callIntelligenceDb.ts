@@ -2005,6 +2005,277 @@ export async function getWeeklyReportRollup(
   };
 }
 
+// ===================================================================
+//  Weekly Report — per-agent drill (Slice 3 of Phase 1 Week 2-3)
+//
+//  Powers the inline drill panel that expands when a manager clicks
+//  a row on the Weekly Report leaderboard. Returns everything needed
+//  to decide whether/how to coach that agent in one request:
+//
+//    • top_failed_attributes: which scorecard attributes the agent
+//      failed most often inside the window (top 3, ordered by
+//      fail_count). Drives the "Khalid failed Objection Handling
+//      4 times this week" headline in the case study.
+//
+//    • recent_calls: last 5 calls in the window with id, date,
+//      score, and a critical-flag boolean so each row can link
+//      straight into the existing Call Details modal.
+//
+//    • trend_series: per-week avg score + call count over the
+//      most-recent 8 weeks, so the panel can draw a sparkline
+//      that shows whether the gap is improving or worsening.
+//
+//    • coaching_plans: any open plan (pending_delivery or
+//      awaiting_verification) for the agent. The Coaching Actions
+//      panel (Slice 5) wires Deliver/Dismiss from here, but the
+//      drill panel already shows "1 plan pending" with the
+//      attribute it covers.
+//
+//  Single endpoint instead of three round-trips: managers click and
+//  scan; latency on a per-agent drill matters more than for the
+//  weekly rollup which fires once per page load.
+// ===================================================================
+
+export interface AgentDrillData {
+  agent_email: string;
+  agent_name: string | null;
+  window: { start: string; end: string; label: string };
+  top_failed_attributes: Array<{
+    attribute_id: string;
+    attribute_name: string;
+    dimension: string;
+    fail_count: number;
+  }>;
+  recent_calls: Array<{
+    call_id: number;
+    call_date: string | null;
+    duration_seconds: number | null;
+    overall_score: number | null;
+    has_critical: boolean;
+  }>;
+  trend_series: Array<{
+    week_start: string;
+    avg_overall_score: number | null;
+    call_count: number;
+  }>;
+  coaching_plans: Array<{
+    id: number;
+    attribute_id: string;
+    attribute_name: string;
+    dimension: string | null;
+    fail_count: number;
+    status: string;
+    created_at: string | null;
+    follow_up_due_date: string | null;
+  }>;
+}
+
+export async function getAgentDrillData(
+  agentEmail: string,
+  options: { startDate?: Date; endDate?: Date } = {},
+): Promise<AgentDrillData | null> {
+  if (!agentEmail || !agentEmail.trim()) return null;
+
+  const endDate = options.endDate ?? new Date();
+  const startDate =
+    options.startDate ??
+    new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  // Lookup the human name once. Falls back to null if the agent has
+  // never set one — the UI shows the email in that case.
+  let agentName: string | null = null;
+  try {
+    const nameRes = await pool.query(
+      `SELECT agent_name FROM call_records
+        WHERE agent_email = $1 AND agent_name IS NOT NULL
+        ORDER BY call_date DESC LIMIT 1`,
+      [agentEmail],
+    );
+    agentName = nameRes.rows[0]?.agent_name ?? null;
+  } catch {
+    // Non-fatal — name lookup never blocks the drill.
+  }
+
+  // Top failed attributes — unroll attribute_evaluations JSONB and
+  // group by attribute. Wrapped in try/catch so a malformed JSONB row
+  // never 500s the whole drill response.
+  let topFailedAttributes: AgentDrillData["top_failed_attributes"] = [];
+  try {
+    const r = await pool.query(
+      `
+      SELECT
+        attr->>'attribute_id'   AS attribute_id,
+        attr->>'attribute_name' AS attribute_name,
+        attr->>'dimension'      AS dimension,
+        COUNT(*)::int           AS fail_count
+      FROM call_records cr
+      JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+      CROSS JOIN LATERAL jsonb_array_elements(
+        COALESCE(se.attribute_evaluations, '[]'::jsonb)
+      ) AS attr
+      WHERE cr.agent_email = $1
+        AND cr.call_date >= $2 AND cr.call_date < $3
+        AND attr->>'status' = 'FAIL'
+      GROUP BY attribute_id, attribute_name, dimension
+      ORDER BY fail_count DESC
+      LIMIT 3
+      `,
+      [agentEmail, startDate, endDate],
+    );
+    topFailedAttributes = r.rows.map((row: any) => ({
+      attribute_id: row.attribute_id || "",
+      attribute_name: row.attribute_name || row.attribute_id || "—",
+      dimension: row.dimension || "",
+      fail_count: parseInt(row.fail_count, 10) || 0,
+    }));
+  } catch (err) {
+    logger.warn("[AgentDrill] top_failed_attributes query failed:", err);
+  }
+
+  // Recent 5 calls in the window. Coalesces the canonical-score rule
+  // (manager-reviewed adjusted_overall_score wins over raw AI score).
+  let recentCalls: AgentDrillData["recent_calls"] = [];
+  try {
+    const r = await pool.query(
+      `
+      SELECT
+        cr.id,
+        cr.call_date,
+        cr.duration_seconds,
+        COALESCE(latest_review.adjusted_overall_score, se.overall_score) AS overall_score,
+        (se.critical_risks IS NOT NULL
+          AND jsonb_typeof(se.critical_risks) = 'array'
+          AND jsonb_array_length(se.critical_risks) > 0) AS has_critical
+      FROM call_records cr
+      LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+      LEFT JOIN LATERAL (
+        SELECT adjusted_overall_score
+        FROM sdr_evaluation_reviews sr
+        WHERE sr.evaluation_id = se.id
+          AND sr.adjusted_overall_score IS NOT NULL
+        ORDER BY sr.reviewed_at DESC LIMIT 1
+      ) latest_review ON TRUE
+      WHERE cr.agent_email = $1
+        AND cr.call_date >= $2 AND cr.call_date < $3
+      ORDER BY cr.call_date DESC NULLS LAST, cr.id DESC
+      LIMIT 5
+      `,
+      [agentEmail, startDate, endDate],
+    );
+    recentCalls = r.rows.map((row: any) => ({
+      call_id: row.id,
+      call_date: row.call_date
+        ? new Date(row.call_date).toISOString()
+        : null,
+      duration_seconds:
+        row.duration_seconds == null ? null : Number(row.duration_seconds),
+      overall_score:
+        row.overall_score == null
+          ? null
+          : Math.round(parseFloat(row.overall_score) * 10) / 10,
+      has_critical: row.has_critical === true,
+    }));
+  } catch (err) {
+    logger.warn("[AgentDrill] recent_calls query failed:", err);
+  }
+
+  // 8-week trend ending at the requested window end. Buckets by ISO
+  // week start (Monday in Postgres' date_trunc). Empty weeks are NOT
+  // synthesised here — the UI handles gaps by drawing a flat segment
+  // between samples, which is simpler than synthesising zero rows.
+  let trendSeries: AgentDrillData["trend_series"] = [];
+  try {
+    const trendStart = new Date(
+      endDate.getTime() - 8 * 7 * 24 * 60 * 60 * 1000,
+    );
+    const r = await pool.query(
+      `
+      SELECT
+        date_trunc('week', cr.call_date) AS week_start,
+        AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS avg_overall_score,
+        COUNT(DISTINCT se.id)::int AS call_count
+      FROM call_records cr
+      LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+      LEFT JOIN LATERAL (
+        SELECT adjusted_overall_score
+        FROM sdr_evaluation_reviews sr
+        WHERE sr.evaluation_id = se.id
+          AND sr.adjusted_overall_score IS NOT NULL
+        ORDER BY sr.reviewed_at DESC LIMIT 1
+      ) latest_review ON TRUE
+      WHERE cr.agent_email = $1
+        AND cr.call_date >= $2 AND cr.call_date < $3
+      GROUP BY week_start
+      ORDER BY week_start ASC
+      `,
+      [agentEmail, trendStart, endDate],
+    );
+    trendSeries = r.rows.map((row: any) => ({
+      week_start: row.week_start
+        ? new Date(row.week_start).toISOString().slice(0, 10)
+        : "",
+      avg_overall_score:
+        row.avg_overall_score == null
+          ? null
+          : Math.round(parseFloat(row.avg_overall_score) * 10) / 10,
+      call_count: parseInt(row.call_count, 10) || 0,
+    }));
+  } catch (err) {
+    logger.warn("[AgentDrill] trend_series query failed:", err);
+  }
+
+  // Open coaching plans (any non-resolved state). The list is bound
+  // to the agent regardless of the date window — if a plan was opened
+  // last month and is still pending delivery, it still belongs here.
+  let coachingPlans: AgentDrillData["coaching_plans"] = [];
+  try {
+    const r = await pool.query(
+      `
+      SELECT id, attribute_id, attribute_name, dimension, fail_count,
+             status, created_at, follow_up_due_date
+        FROM coaching_plans
+       WHERE agent_email = $1
+         AND status IN ('pending_delivery', 'awaiting_verification')
+       ORDER BY created_at DESC NULLS LAST, id DESC
+      `,
+      [agentEmail],
+    );
+    coachingPlans = r.rows.map((row: any) => ({
+      id: row.id,
+      attribute_id: row.attribute_id || "",
+      attribute_name: row.attribute_name || row.attribute_id || "—",
+      dimension: row.dimension || null,
+      fail_count: parseInt(row.fail_count, 10) || 0,
+      status: row.status,
+      created_at: row.created_at
+        ? new Date(row.created_at).toISOString()
+        : null,
+      follow_up_due_date: row.follow_up_due_date
+        ? new Date(row.follow_up_due_date).toISOString().slice(0, 10)
+        : null,
+    }));
+  } catch (err) {
+    logger.warn("[AgentDrill] coaching_plans query failed:", err);
+  }
+
+  const inclusiveEnd = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+  const label = `${formatRiyadhShortDate(startDate)} – ${formatRiyadhShortDate(inclusiveEnd)}`;
+
+  return {
+    agent_email: agentEmail,
+    agent_name: agentName,
+    window: {
+      start: formatRiyadhDate(startDate),
+      end: formatRiyadhDate(endDate),
+      label,
+    },
+    top_failed_attributes: topFailedAttributes,
+    recent_calls: recentCalls,
+    trend_series: trendSeries,
+    coaching_plans: coachingPlans,
+  };
+}
+
 export async function createOrUpdateQAScore(
   data: Omit<CallQAScore, "id" | "created_at">,
 ): Promise<CallQAScore> {

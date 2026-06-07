@@ -681,6 +681,76 @@ export const callIntelligenceRoutes = [
     },
   },
   {
+    // Weekly Report — per-agent drill (Slice 3 of Phase 1 Week 2-3).
+    // Backs the inline expand panel under each leaderboard row. One
+    // request returns everything the manager needs to decide whether
+    // to coach: top 3 failed attributes, last 5 calls (clickable to
+    // the existing Call Details modal), 8-week score trend, and any
+    // open coaching plans.
+    //
+    //   GET /api/calls/weekly-report/agent/:email
+    //       ?start=YYYY-MM-DD   (optional; defaults to 7 days back)
+    //       &end=YYYY-MM-DD     (optional; defaults to now)
+    //
+    // Email path-segment is decoded once before being passed through.
+    // Covered by the catch-all GET /api/calls RBAC rule.
+    path: "/api/calls/weekly-report/agent/:email",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const admin = await verifyCallAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const logger = mastra?.getLogger();
+
+          const rawEmail = c.req.param("email") || "";
+          const email = decodeURIComponent(rawEmail).trim();
+          if (!email) {
+            return c.json({ error: "agent email required" }, 400);
+          }
+
+          const { getAgentDrillData, initCallIntelligenceTables } =
+            await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          const parseDay = (s?: string): Date | undefined => {
+            if (!s) return undefined;
+            const d = new Date(s);
+            return isNaN(d.getTime()) ? undefined : d;
+          };
+
+          const startDate = parseDay(c.req.query("start"));
+          const endDate = parseDay(c.req.query("end"));
+
+          const drill = await getAgentDrillData(email, { startDate, endDate });
+          if (!drill) {
+            return c.json({ error: "agent not found" }, 404);
+          }
+
+          logger?.info("📊 [API] Agent drill fetched", {
+            agent: email,
+            window: drill.window.label,
+            failed_attrs: drill.top_failed_attributes.length,
+            recent_calls: drill.recent_calls.length,
+            trend_points: drill.trend_series.length,
+            plans: drill.coaching_plans.length,
+          });
+
+          return c.json(drill);
+        } catch (error: any) {
+          safeLogger.error("[API] weekly-report agent drill failed", {
+            message: error?.message,
+          });
+          return c.json(
+            { error: "Failed to fetch agent drill" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     // DMAIC Improve: bulk CRM-compliance backfill. The breakdown card in
     // the Overview tab was stuck at all-zeros because the 199 historical
     // calls were never auto-linked to a Zoho Lead/Deal (either Zoho was
