@@ -199,6 +199,7 @@
                     <svg id="filterChevron" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     Advanced Filters
                     <span id="activeFilterCount" class="hidden px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">0</span>
+                    <span class="text-[10px] font-normal text-gray-400 ms-1" title="Each tab keeps its own filter selection — switching tabs restores that tab's filters.">· per tab</span>
                 </button>
                 <div class="flex gap-2">
                     <button data-on-click="applyAdvancedFilters" data-testid="button-apply-filters" class="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Apply</button>
@@ -5195,11 +5196,29 @@
         }
 
         function showTab(tab) {
+            // Per-tab filter persistence: snapshot the OUTGOING tab's form
+            // BEFORE we swap classes, then restore the INCOMING tab's form
+            // AFTER the swap (when document.querySelector('.tab-active')
+            // resolves to the new tab). This is the only hook needed for
+            // Option A — independent filter state per tab. Wrapped in
+            // try/catch so a tab without the standard filter form (or a
+            // first-render race) doesn't crash the navigation.
+            try {
+                const __outgoingTab = _currentActiveTabId();
+                if (__outgoingTab && _filterAwareTabs.has(__outgoingTab) && __outgoingTab !== tab) {
+                    _snapshotFilterFormToTab(__outgoingTab);
+                }
+            } catch (e) { /* navigation must not depend on filter snapshot */ }
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('[id^="tab-"]').forEach(el => { el.classList.remove('tab-active'); el.classList.add('tab-inactive'); });
             document.getElementById('content-' + tab).classList.remove('hidden');
             document.getElementById('tab-' + tab).classList.remove('tab-inactive');
             document.getElementById('tab-' + tab).classList.add('tab-active');
+            try {
+                if (_filterAwareTabs.has(tab)) {
+                    _restoreFilterFormFromTab(tab);
+                }
+            } catch (e) { /* restore is non-essential; the form just stays as-is */ }
             // The post-merge guidance banner only makes sense on tabs that
             // actually expose the "Mark Resolved" cluster action (the cluster +
             // per-module duplicate tabs, including cross-module). Hide it
@@ -7248,7 +7267,99 @@
             return count;
         }
 
+        // ─── Per-tab Advanced Filters state (2026-06-08) ────────────────────
+        // Each tab in the Duplicate Radar (Domain Clusters, Lead/Deal/Contact/
+        // Account Duplicates, Cross-Module, CS Overlap, CS Lifecycle, Account
+        // Hints, Owners, Preflight Check, etc.) keeps its OWN filter selection
+        // — Module / Owner / Layout / Pipeline / Stage / Confidence / Domain /
+        // Date Range. Switching tabs snapshots the current form into the
+        // outgoing tab's slot, then restores the incoming tab's slot to the
+        // inputs. Empty slot = blank form. Each tab can therefore have a
+        // completely different filter spec, which is what makes the radar
+        // usable across heterogeneous workflows ("on the Deal tab I want
+        // Stage = Closed-Lost, on the Lead tab I want Layout = Marketplace").
+        //
+        // Persistence is in-memory only: a hard reload starts every tab
+        // fresh. Operators who want cross-session retention can use the
+        // browser bookmark URL — the underlying API endpoints still accept
+        // the same filter params, so a saved deep-link works regardless.
+        const _filterStateByTab = {};
+        const _filterAwareTabs = new Set([
+            'summary', 'clusters', 'leads', 'deals', 'contacts', 'accounts',
+            'cross-module', 'cs-overlap', 'cs-lifecycle', 'preflight',
+            'owners', 'logs', 'search', 'account-hints',
+        ]);
+
+        function _filterGetMultiValues(id) {
+            const el = document.getElementById(id);
+            if (!el) return [];
+            return Array.from(el.selectedOptions || []).map(o => o.value);
+        }
+        function _filterSetMultiValues(id, values) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const set = new Set(values || []);
+            Array.from(el.options || []).forEach(o => { o.selected = set.has(o.value); });
+        }
+        function _filterSetInputValue(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.value = value || '';
+        }
+
+        function _snapshotFilterFormToTab(tabId) {
+            if (!tabId) return;
+            _filterStateByTab[tabId] = {
+                module:     _filterGetMultiValues('filterModule'),
+                owner:      _filterGetMultiValues('filterOwner'),
+                layout:     _filterGetMultiValues('filterLayout'),
+                pipeline:   _filterGetMultiValues('filterPipeline'),
+                stage:      _filterGetMultiValues('filterStage'),
+                confidence: document.getElementById('filterConfidence')?.value || '',
+                domain:     document.getElementById('filterDomain')?.value || '',
+                dateFrom:   document.getElementById('filterDateFrom')?.value || '',
+                dateTo:     document.getElementById('filterDateTo')?.value || '',
+            };
+        }
+
+        function _restoreFilterFormFromTab(tabId) {
+            const s = _filterStateByTab[tabId] || null;
+            _filterSetMultiValues('filterModule',   s ? s.module   : []);
+            _filterSetMultiValues('filterOwner',    s ? s.owner    : []);
+            _filterSetMultiValues('filterLayout',   s ? s.layout   : []);
+            _filterSetMultiValues('filterPipeline', s ? s.pipeline : []);
+            _filterSetMultiValues('filterStage',    s ? s.stage    : []);
+            _filterSetInputValue('filterConfidence', s ? s.confidence : '');
+            _filterSetInputValue('filterDomain',     s ? s.domain     : '');
+            _filterSetInputValue('filterDateFrom',   s ? s.dateFrom   : '');
+            _filterSetInputValue('filterDateTo',     s ? s.dateTo     : '');
+            _refreshActiveFilterCountBadge();
+        }
+
+        function _currentActiveTabId() {
+            const el = document.querySelector('[id^="tab-"].tab-active');
+            return el ? el.id.replace(/^tab-/, '') : null;
+        }
+
+        function _refreshActiveFilterCountBadge() {
+            const count = countActiveFilters();
+            const badge = document.getElementById('activeFilterCount');
+            if (!badge) return;
+            if (count > 0) { badge.textContent = count; badge.classList.remove('hidden'); }
+            else            { badge.classList.add('hidden'); }
+        }
+
         async function applyAdvancedFilters() {
+            // Persist the active tab's current filter state BEFORE rendering
+            // so when the operator later toggles to another tab and back,
+            // their filters are still there. Snapshots are also taken on the
+            // showTab() boundary; this one is here so an Apply without a
+            // subsequent tab switch still captures the latest form state.
+            try {
+                const __activeTabAtApply = _currentActiveTabId();
+                if (__activeTabAtApply && _filterAwareTabs.has(__activeTabAtApply)) {
+                    _snapshotFilterFormToTab(__activeTabAtApply);
+                }
+            } catch (e) { /* non-fatal — form just won't persist on this apply */ }
             const count = countActiveFilters();
             const badge = document.getElementById('activeFilterCount');
             if (count > 0) {
@@ -7339,6 +7450,15 @@
             document.getElementById('filterDateFrom').value = '';
             document.getElementById('filterDateTo').value = '';
             document.getElementById('activeFilterCount').classList.add('hidden');
+            // Per-tab Clear All — only forget THIS tab's slot. Other tabs
+            // keep their own filter selections so a Clear on the Lead tab
+            // doesn't wipe Stage = Closed-Lost on the Deal tab.
+            try {
+                const __active = _currentActiveTabId();
+                if (__active && _filterStateByTab[__active]) {
+                    delete _filterStateByTab[__active];
+                }
+            } catch (e) { /* non-fatal */ }
             // Re-render the active tab via the same routing applyAdvancedFilters
             // uses so client-side-filtered tabs (CS Lifecycle / CS Overlap /
             // Cross-Module / Owners / Account Hints) show their full data
