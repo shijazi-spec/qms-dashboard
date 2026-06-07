@@ -322,6 +322,14 @@ async function _doInitCallIntelligenceTables(): Promise<void> {
       -- in the CRM Link cell. Same story — declared here for schema
       -- parity with the runtime ALTER at line ~659.
       linked_via VARCHAR(20),
+      -- 2026-06-07 — when linked_via='phone_via_contact', stash WHICH
+      -- Contact bridged the phone → Deal match. Surfaces in the
+      -- dashboard tooltip ("via Contact: a.alrashid@madfu.com.sa")
+      -- so an operator auditing a phone-less Deal can see the link
+      -- provenance without re-running the matcher. Runtime ALTER in
+      -- ensureViaContactColumns covers upgrades.
+      via_contact_id VARCHAR(64),
+      via_contact_name VARCHAR(255),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
@@ -737,9 +745,15 @@ export async function clearCallRecordCrmLink(
   await pool.query(`DELETE FROM call_compliance WHERE call_record_id = $1`, [
     id,
   ]);
+  // 2026-06-07 — also null the via_contact_* annotation so a cleared link
+  // doesn't leave stale "via Contact: …" tooltips on the row. The
+  // re-link step (if it runs) re-populates these when appropriate.
+  await ensureViaContactColumns();
   const result = await pool.query(
     `UPDATE call_records
-        SET lead_id = NULL, deal_id = NULL, linked_via = NULL, updated_at = NOW()
+        SET lead_id = NULL, deal_id = NULL, linked_via = NULL,
+            via_contact_id = NULL, via_contact_name = NULL,
+            updated_at = NOW()
       WHERE id = $1
       RETURNING *`,
     [id],
@@ -780,6 +794,45 @@ export async function updateCallRecordLinkedVia(
   await pool.query(
     `UPDATE call_records SET linked_via = $1, updated_at = NOW() WHERE id = $2`,
     [linkedVia, id],
+  );
+}
+
+// 2026-06-07 — when the Phone → Contact → Deal walk picks the link, also
+// stash WHICH Contact bridged the match. Surfaces in the dashboard
+// tooltip ("via Contact: a.alrashid@madfu.com.sa") so an operator can
+// audit a phone-less Deal at a glance without re-running the matcher.
+// Idempotent column adds — same pattern as linked_via above so existing
+// deploys don't need a manual migration.
+let _viaContactColumnsReady: Promise<void> | null = null;
+async function ensureViaContactColumns(): Promise<void> {
+  if (_viaContactColumnsReady) return _viaContactColumnsReady;
+  _viaContactColumnsReady = pool
+    .query(
+      `ALTER TABLE call_records
+         ADD COLUMN IF NOT EXISTS via_contact_id   VARCHAR(64),
+         ADD COLUMN IF NOT EXISTS via_contact_name VARCHAR(255)`,
+    )
+    .then(() => undefined)
+    .catch((err) => {
+      logger.warn("[CallDB] via_contact_* column add failed (will retry):", err);
+      _viaContactColumnsReady = null;
+    });
+  return _viaContactColumnsReady;
+}
+
+export async function updateCallRecordViaContact(
+  id: number,
+  contactId: string | null,
+  contactName: string | null,
+): Promise<void> {
+  await ensureViaContactColumns();
+  await pool.query(
+    `UPDATE call_records
+        SET via_contact_id = $1,
+            via_contact_name = $2,
+            updated_at = NOW()
+      WHERE id = $3`,
+    [contactId, contactName, id],
   );
 }
 
@@ -890,6 +943,8 @@ const CALL_RECORD_LIST_FALLBACK_COLUMNS = [
   "audio_blob_size",
   "audio_file_path",
   "linked_via",
+  "via_contact_id",
+  "via_contact_name",
   "created_at",
   "updated_at",
 ];
@@ -2561,6 +2616,17 @@ export interface SDRCallEvaluation {
   call_record_id: number;
   scorecard_id: number;
   scorecard_name: string;
+  /**
+   * Scorecard version at the time the evaluation was scored. Joined
+   * from quality_scorecards.version in getSDREvaluation so the Call
+   * Details modal's provenance chip can render
+   * "Scored against: WalaPlus SDR QA Scorecard v2.0.0" instead of just
+   * the name. Optional because saveSDREvaluation doesn't write it
+   * (only the FK + name) — the version is always re-read from the
+   * scorecards table at fetch time. May be undefined when the
+   * scorecard row no longer exists (e.g. it was deleted post-eval).
+   */
+  scorecard_version?: string;
   overall_score: number;
   dimension_scores: {
     people: number;
@@ -2701,8 +2767,15 @@ export async function getSDREvaluation(
 ): Promise<SDRCallEvaluation | null> {
   logger.info("📊 [CallDB] Fetching SDR evaluation", { callRecordId });
 
+  // 2026-06-07 — LEFT JOIN quality_scorecards so the provenance chip
+  // ("Scored against: <name> v<version>") can render the version
+  // without a second round-trip. LEFT JOIN tolerates a since-deleted
+  // scorecard row (scorecard_version comes back null in that case).
   const result = await pool.query(
-    `SELECT * FROM sdr_call_evaluations WHERE call_record_id = $1`,
+    `SELECT sce.*, qs.version AS scorecard_version
+       FROM sdr_call_evaluations sce
+       LEFT JOIN quality_scorecards qs ON qs.id = sce.scorecard_id
+      WHERE sce.call_record_id = $1`,
     [callRecordId],
   );
 
@@ -2715,6 +2788,7 @@ export async function getSDREvaluation(
     call_record_id: row.call_record_id,
     scorecard_id: row.scorecard_id,
     scorecard_name: row.scorecard_name,
+    scorecard_version: row.scorecard_version ?? undefined,
     overall_score: parseFloat(row.overall_score),
     dimension_scores: row.dimension_scores,
     attribute_evaluations: row.attribute_evaluations,

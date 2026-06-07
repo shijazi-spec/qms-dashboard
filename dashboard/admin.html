@@ -368,6 +368,47 @@
                         Loading scorecard information...
                     </div>
                 </div>
+
+                <!-- 2026-06-07 — AI Training Feedback panel. Relocated
+                     from the (now-deleted) SDR Evaluation right-pane form,
+                     since the data is admin-facing prompt-tuning signal,
+                     not reviewer workflow. Source: sdr_evaluation_reviews
+                     via /api/ai-training/stats — same endpoint the old
+                     SDR Eval panel used. Refreshes on Scorecard tab open. -->
+                <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl border border-purple-200 p-6">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-lg font-semibold text-purple-900">AI Training Feedback</h3>
+                            <p class="text-xs text-purple-700 mt-0.5">How often reviewers accept the AI score as-is — the canonical signal for prompt tuning.</p>
+                        </div>
+                        <span class="text-[10px] text-purple-600" title="Source: sdr_evaluation_reviews from the Manager Review workflow">via manager reviews</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3 mb-3">
+                        <div class="bg-white rounded-lg border border-purple-100 p-3 text-center">
+                            <div class="text-xs text-gray-500">Reviewed</div>
+                            <div class="text-2xl font-semibold text-purple-900" id="stat-reviewed-embedded">0</div>
+                        </div>
+                        <div class="bg-white rounded-lg border border-purple-100 p-3 text-center">
+                            <div class="text-xs text-gray-500">Approval rate</div>
+                            <div class="text-2xl font-semibold text-green-600" id="stat-accuracy-embedded">--</div>
+                        </div>
+                        <div class="bg-white rounded-lg border border-purple-100 p-3 text-center">
+                            <div class="text-xs text-gray-500">Corrections</div>
+                            <div class="text-2xl font-semibold text-amber-600" id="stat-corrections-embedded">0</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-purple-800 mb-3 px-1">
+                        <span title="Reviewer accepted AI score as-is">✓ <span id="stat-approved-embedded">0</span> approved</span>
+                        <span title="Reviewer edited per-attribute scores">✎ <span id="stat-adjusted-embedded">0</span> adjusted</span>
+                        <span title="Reviewer flagged AI evaluation as wrong">✗ <span id="stat-disagreed-embedded">0</span> disagreed</span>
+                    </div>
+                    <div class="bg-white rounded-lg border border-purple-100 p-3">
+                        <div class="text-xs text-gray-500 mb-1.5">Top attributes reviewers override</div>
+                        <ol id="stat-top-corrected-embedded" class="text-xs text-gray-700 space-y-0.5 list-decimal list-inside">
+                            <li class="text-gray-400 italic list-none">Loading…</li>
+                        </ol>
+                    </div>
+                </div>
             </div>
 
             <div id="content-settings" class="hidden fade-in">
@@ -1286,6 +1327,63 @@
                     startExportCacheAutoRefresh();
                 } else {
                     stopExportCacheAutoRefresh();
+                }
+                // 2026-06-07 — refresh AI Training Feedback when the
+                // operator opens the Scorecard tab. Fires once per
+                // activation; cheap (one /api/ai-training/stats call).
+                if (tab === "scorecard" && typeof loadAITrainingStats === "function") {
+                    try { loadAITrainingStats(); }
+                    catch (e) { console.error("loadAITrainingStats failed:", e); }
+                }
+            }
+
+            // 2026-06-07 — AI Training Feedback loader. Mirrors the one
+            // that lived in calls.html for the (now-deleted) SDR Eval
+            // right-pane panel. Source endpoint /api/ai-training/stats
+            // unchanged; this version simply renders into the admin-side
+            // widget instead of the (now-hidden) calls.html stubs.
+            function _aiStatsSetIfPresent(id, value) {
+                const el = document.getElementById(id);
+                if (el) el.textContent = value;
+            }
+            function _aiStatsFmt(n) {
+                const v = Number(n);
+                return Number.isFinite(v) ? v.toLocaleString() : "0";
+            }
+            async function loadAITrainingStats() {
+                try {
+                    const res = await fetch("/api/ai-training/stats");
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (!data || data.success === false) return;
+                    const s = data.stats || {};
+                    _aiStatsSetIfPresent("stat-reviewed-embedded", _aiStatsFmt(s.reviewed || 0));
+                    _aiStatsSetIfPresent(
+                        "stat-accuracy-embedded",
+                        s.reviewed > 0 ? `${_aiStatsFmt(s.accuracy || 0)}%` : "--",
+                    );
+                    _aiStatsSetIfPresent("stat-corrections-embedded", _aiStatsFmt(s.corrections || 0));
+                    _aiStatsSetIfPresent("stat-approved-embedded",  _aiStatsFmt(s.approved  || 0));
+                    _aiStatsSetIfPresent("stat-adjusted-embedded",  _aiStatsFmt(s.adjusted  || 0));
+                    _aiStatsSetIfPresent("stat-disagreed-embedded", _aiStatsFmt(s.disagreed || 0));
+
+                    const list = document.getElementById("stat-top-corrected-embedded");
+                    if (list) {
+                        const top = Array.isArray(s.top_corrected_attributes) ? s.top_corrected_attributes : [];
+                        const esc = (str) => String(str || "")
+                            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                        if (top.length === 0) {
+                            list.innerHTML = `<li class="text-gray-400 italic list-none">No corrections yet — reviewers haven't adjusted any AI evaluations.</li>`;
+                        } else {
+                            list.innerHTML = top.map(a => `
+                                <li><span class="text-gray-900">${esc(a.attribute_name || a.attribute_id || "")}</span>
+                                    <span class="text-amber-600 font-medium ms-1">×${_aiStatsFmt(a.adjustment_count || 0)}</span>
+                                </li>
+                            `).join("");
+                        }
+                    }
+                } catch {
+                    // Stats widget is non-critical — ignore fetch errors silently.
                 }
             }
 

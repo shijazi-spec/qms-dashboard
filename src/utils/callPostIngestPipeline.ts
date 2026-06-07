@@ -227,6 +227,27 @@ export async function autoLinkCallAndCompliance(
         }
       }
 
+      // 2026-06-07 — when the link came via the Phone → Contact → Deal
+      // walk, the picked_match carries the originating Contact's id +
+      // display name. Persist them so the dashboard tooltip can read
+      // "via Contact: a.alrashid@madfu.com.sa" instead of just "via
+      // linked Contact". Soft-fail like the linked_via write above.
+      const picked: any = linkResult.picked_match;
+      if (picked?.via_contact_id || picked?.via_contact_name) {
+        try {
+          const { updateCallRecordViaContact } = await import(
+            "./callIntelligenceDb"
+          );
+          await updateCallRecordViaContact(
+            callRecord.id!,
+            picked.via_contact_id || null,
+            picked.via_contact_name || null,
+          );
+        } catch {
+          // diagnostic field only — never fail the pipeline on this
+        }
+      }
+
       // Auto-trigger the CRM compliance check now that the call has
       // a Zoho Lead/Deal to score against, so the top-level Compliance
       // Rate KPI populates without manual action.
