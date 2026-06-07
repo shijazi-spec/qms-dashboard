@@ -1615,7 +1615,10 @@ const aiFeedbackDigestFunction = inngest.createFunction(
           type: "info",
           title: "Weekly AI Feedback Digest",
           message: messageWithTrend,
-          link: "/dashboard/admin.html",
+          // Was "/dashboard/admin.html" — Mastra has no route for that
+          // path so the link 404'd into the framework's default page.
+          // The admin shell is served from "/admin" (see staticPageRoutes).
+          link: "/admin",
           severity: "low",
         });
       } catch {}

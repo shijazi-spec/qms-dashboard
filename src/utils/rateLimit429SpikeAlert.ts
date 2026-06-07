@@ -523,13 +523,13 @@ recorded in the last 24 hours, crossing the configured threshold of
 <strong>${aggregate.totalSuppressed}</strong>.</p>
 <h3>Top offending IPs</h3>
 ${formatTopIpsHtml(aggregate.topIps)}
-<p>Open the <a href="/dashboard/admin.html">admin dashboard's Rate Limits tab</a>
+<p>Open the <a href="/admin">admin dashboard's Rate Limits tab</a>
 to inspect live counters and confirm the source.</p>`;
   const emailText =
     `24h rate-limit spike: ${aggregate.total429} events ` +
     `(threshold: ${threshold}, suppressed: ${aggregate.totalSuppressed}).\n\n` +
     `Top IPs:\n${formatTopIps(aggregate.topIps)}\n\n` +
-    `Open /dashboard/admin.html (Rate Limits tab) to inspect.`;
+    `Open /admin (Rate Limits tab) to inspect.`;
   let emailSent = false;
   try {
     emailSent = await sendEmail(emailSubject, emailHtml, emailText);
