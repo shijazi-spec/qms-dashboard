@@ -6,7 +6,19 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>Call Intelligence - WalaPlus Quality</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!--
+        Chart.js pinned to v4.4 with crossorigin. Was unpinned, which
+        is a real risk: when jsdelivr eventually serves a 5.x preview
+        with a different Chart API, renderAnalytics() will throw a
+        ReferenceError that the operator can't diagnose. Pinning to a
+        verified-stable version eliminates that whole failure class.
+        No inline onerror handler — CSP disallows it. The try/catch
+        in showTab() (bde5d82) catches a missing Chart cleanly.
+    -->
+    <script
+        src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
+        crossorigin="anonymous"
+    ></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         /* QMS Industry Standard Color Palette */
@@ -4715,9 +4727,17 @@
 
         function renderComplianceTable() {
             const tbody = document.getElementById('complianceTable');
+            // Hardened: if the table body is missing or the dataset
+            // wasn't populated yet, bail before the WalaPlusI18n.t lookup
+            // so the tab still shows its static markup.
+            if (!tbody) return;
+            const records = Array.isArray(complianceRecords) ? complianceRecords : [];
 
-            if (complianceRecords.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.calls.no_compliance'))}</td></tr>`;
+            if (records.length === 0) {
+                const emptyLabel = (window.WalaPlusI18n && WalaPlusI18n.t)
+                    ? WalaPlusI18n.t('dyn.calls.no_compliance')
+                    : 'No compliance records yet.';
+                tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">${escapeHtml(emptyLabel)}</td></tr>`;
                 return;
             }
 
@@ -4828,12 +4848,28 @@
         }
 
         function renderAnalytics() {
+            // Hardened: every external dependency the chart code needs
+            // is checked before we touch it so a missing canvas, missing
+            // Chart.js, or undefined analytics state can't poison the
+            // whole tab. Each check surfaces a console hint so DevTools
+            // can pinpoint the failure mode in seconds.
+            const sentimentCanvas = document.getElementById('sentimentChart');
+            const qaCanvas = document.getElementById('qaTrendChart');
+            if (typeof Chart !== 'function') {
+                console.warn('[renderAnalytics] Chart.js not loaded — Analytics charts will not render.');
+                return;
+            }
+            if (!sentimentCanvas || !qaCanvas) {
+                console.warn('[renderAnalytics] chart canvas elements missing from DOM.');
+                return;
+            }
             if (sentimentChart) sentimentChart.destroy();
             if (qaTrendChart) qaTrendChart.destroy();
             // Topic clusters lazy-load when the Analytics tab is opened.
             // Re-fired on every showTab('analytics') so the window-day
             // selector + the underlying data both stay fresh.
-            reloadTopicClusters();
+            try { reloadTopicClusters(); }
+            catch (e) { console.warn('[renderAnalytics] reloadTopicClusters failed (non-fatal):', e); }
 
             // Real sentiment distribution from call_analysis.sentiment_label.
             // Backend returns one row per label present in the data; we
@@ -4841,19 +4877,30 @@
             // always renders the same three segments even when one is zero.
             // Anything outside these three (e.g. 'unknown' for old rows)
             // folds into Neutral.
+            const analyticsSafe = (typeof analytics === 'object' && analytics) ? analytics : {};
             const sentimentBuckets = { positive: 0, neutral: 0, negative: 0 };
-            for (const row of (analytics.sentimentDistribution || [])) {
+            for (const row of (analyticsSafe.sentimentDistribution || [])) {
                 const label = (row && row.label) ? String(row.label).toLowerCase() : 'neutral';
                 if (label === 'positive') sentimentBuckets.positive += row.count || 0;
                 else if (label === 'negative') sentimentBuckets.negative += row.count || 0;
                 else sentimentBuckets.neutral += row.count || 0;
             }
             const sentimentTotal = sentimentBuckets.positive + sentimentBuckets.neutral + sentimentBuckets.negative;
-            const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');
+            const sentimentCtx = sentimentCanvas.getContext('2d');
+            // i18n labels resolved through a small helper that falls
+            // back to English if WalaPlusI18n isn't ready yet — the
+            // chart still draws instead of throwing on a t() call.
+            const _t = (key, fallback) => (window.WalaPlusI18n && WalaPlusI18n.t)
+                ? WalaPlusI18n.t(key)
+                : fallback;
             sentimentChart = new Chart(sentimentCtx, {
                 type: 'pie',
                 data: {
-                    labels: [WalaPlusI18n.t('dyn.calls.sentiment_positive'), WalaPlusI18n.t('dyn.calls.sentiment_neutral'), WalaPlusI18n.t('dyn.calls.sentiment_negative')],
+                    labels: [
+                        _t('dyn.calls.sentiment_positive', 'Positive'),
+                        _t('dyn.calls.sentiment_neutral', 'Neutral'),
+                        _t('dyn.calls.sentiment_negative', 'Negative'),
+                    ],
                     datasets: [{
                         data: sentimentTotal > 0
                             ? [sentimentBuckets.positive, sentimentBuckets.neutral, sentimentBuckets.negative]
@@ -4885,7 +4932,7 @@
             // still render an empty axis instead of leaving the canvas
             // blank, so the user sees the placeholder until evaluations
             // accrue.
-            const trend = analytics.qaScoreTrend || [];
+            const trend = analyticsSafe.qaScoreTrend || [];
             const trendLabels = trend.length > 0
                 ? trend.map(t => {
                     const d = new Date(t.week_start);
@@ -4893,15 +4940,15 @@
                         ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                         : t.week_start;
                 })
-                : [WalaPlusI18n.t('dyn.calls.week_n', { n: _fn(1) })];
+                : [_t('dyn.calls.week_n', `Week ${_fn(1)}`)];
             const trendData = trend.length > 0 ? trend.map(t => t.avg_score) : [0];
-            const qaTrendCtx = document.getElementById('qaTrendChart').getContext('2d');
+            const qaTrendCtx = qaCanvas.getContext('2d');
             qaTrendChart = new Chart(qaTrendCtx, {
                 type: 'line',
                 data: {
                     labels: trendLabels,
                     datasets: [{
-                        label: WalaPlusI18n.t('dyn.calls.avg_qa_score'),
+                        label: _t('dyn.calls.avg_qa_score', 'Avg QA Score'),
                         data: trendData,
                         borderColor: '#6366f1',
                         backgroundColor: 'rgba(99, 102, 241, 0.1)',
