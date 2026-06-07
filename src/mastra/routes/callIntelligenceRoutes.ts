@@ -1449,6 +1449,193 @@ export const callIntelligenceRoutes = [
       };
     },
   },
+  // ===================================================================
+  // POST /api/calls/backfill-via-contact-names  (admin-only)
+  //
+  // Historical phone_via_contact links predating 5031d0f have linked_via
+  // set correctly but null via_contact_id / via_contact_name (the columns
+  // didn't exist when the link was made). This endpoint sweeps those
+  // rows, re-derives the bridging Contact by reading the linked Deal's
+  // Contact_Name (the lookup the matcher would have picked first), and
+  // persists the contact details.
+  //
+  // Idempotent: rows already enriched (via_contact_id IS NOT NULL) are
+  // skipped. Re-running on an empty backlog is a no-op.
+  //
+  // Body: { limit?: 1..200 (default 50), dry_run?: bool, after_id?: number }
+  // Returns:
+  //   { scanned, enriched, skipped_no_contact, skipped_no_deal,
+  //     errors[], samples[], next_cursor, has_more, duration_ms }
+  // ===================================================================
+  {
+    path: "/api/calls/backfill-via-contact-names",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        const startedAt = Date.now();
+        try {
+          const admin = await verifyAdminKey(c);
+          if (!admin) return unauthorizedResponse(c);
+          const logger = mastra?.getLogger();
+
+          let body: any = {};
+          try {
+            const txt = await c.req.text();
+            if (txt && txt.trim()) body = JSON.parse(txt);
+          } catch {
+            body = {};
+          }
+          const limit = Math.min(Math.max(parseInt(body.limit) || 50, 1), 200);
+          const dryRun = body.dry_run === true;
+          const afterId = Number.isFinite(parseInt(body.after_id))
+            ? parseInt(body.after_id)
+            : 0;
+
+          const {
+            callIntelligencePool,
+            initCallIntelligenceTables,
+            updateCallRecordViaContact,
+          } = await import("../../utils/callIntelligenceDb");
+          await initCallIntelligenceTables();
+
+          const { fetchZohoRecords, getZohoConnectionStatus } = await import(
+            "../../utils/zohoCRM"
+          );
+          const conn = getZohoConnectionStatus();
+          if (!conn.connected) {
+            return c.json(
+              { success: false, error: "zoho_not_connected" },
+              503,
+            );
+          }
+
+          // Candidates: linked_via='phone_via_contact' AND missing
+          // via_contact_id. deal_id required because we re-derive the
+          // contact from the Deal's primary Contact_Name field. Older
+          // schemas may not have the via_contact_* columns yet, in
+          // which case the WHERE clause silently filters everything
+          // out — no-op exit.
+          const candidatesRes = await callIntelligencePool.query(
+            `
+            SELECT id, deal_id, lead_id
+              FROM call_records
+             WHERE linked_via = 'phone_via_contact'
+               AND deal_id IS NOT NULL
+               AND (via_contact_id IS NULL OR via_contact_id = '')
+               AND id > $2
+             ORDER BY id ASC
+             LIMIT $1
+            `,
+            [limit, afterId],
+          );
+          const candidates = candidatesRes.rows;
+
+          const errors: Array<{ id: number; error: string }> = [];
+          const samples: Array<{
+            id: number;
+            deal_id: string;
+            contact_id: string | null;
+            contact_name: string | null;
+          }> = [];
+          let enriched = 0;
+          let skipped_no_contact = 0;
+          let skipped_no_deal = 0;
+
+          for (const row of candidates) {
+            try {
+              // Pull the Deal's primary Contact_Name lookup. Returns
+              // { id, name } in standard Zoho payloads. If the Deal is
+              // missing or has no Contact_Name set, skip — there's
+              // nothing to enrich with.
+              const dealRows = await fetchZohoRecords("Deals", {
+                criteria: `id:equals:${row.deal_id}`,
+                perPage: 1,
+              });
+              const deal: any = dealRows[0];
+              if (!deal) {
+                skipped_no_deal++;
+                continue;
+              }
+              const d: any = deal.data || {};
+              const cn: any = d.Contact_Name;
+              const contactId: string | null =
+                cn && typeof cn === "object" ? cn.id || null : null;
+              const contactName: string | null =
+                cn && typeof cn === "object"
+                  ? cn.name || null
+                  : typeof cn === "string"
+                    ? cn
+                    : null;
+
+              if (!contactId && !contactName) {
+                skipped_no_contact++;
+                continue;
+              }
+
+              if (samples.length < 10) {
+                samples.push({
+                  id: row.id,
+                  deal_id: String(row.deal_id),
+                  contact_id: contactId,
+                  contact_name: contactName,
+                });
+              }
+
+              if (dryRun) {
+                enriched++;
+                continue;
+              }
+
+              await updateCallRecordViaContact(
+                row.id,
+                contactId,
+                contactName,
+              );
+              enriched++;
+            } catch (err: any) {
+              errors.push({ id: row.id, error: err?.message || String(err) });
+            }
+            // Throttle for Zoho's RPS budget.
+            await new Promise((resolve) => setTimeout(resolve, 150));
+          }
+
+          const result = {
+            success: true,
+            dry_run: dryRun,
+            scanned: candidates.length,
+            enriched,
+            skipped_no_contact,
+            skipped_no_deal,
+            errors,
+            samples,
+            next_cursor:
+              candidates.length > 0
+                ? candidates[candidates.length - 1].id
+                : afterId,
+            has_more: candidates.length === limit,
+            duration_ms: Date.now() - startedAt,
+          };
+          logger?.info(
+            "🔗 [API] backfill-via-contact-names run complete",
+            result,
+          );
+          return c.json(result);
+        } catch (error: any) {
+          safeLogger.error("[API] backfill-via-contact-names failed", {
+            error: error?.message,
+          });
+          return c.json(
+            {
+              success: false,
+              error: error?.message || "Via-contact backfill failed",
+              duration_ms: Date.now() - startedAt,
+            },
+            500,
+          );
+        }
+      };
+    },
+  },
   // ROUTE RETIRED 2026-05-29: POST /api/calls/cleanup-no-audio
   // The "Delete legacy (no audio)" button was removed from the Call
   // Records toolbar per operator request — the historical bulk-upload

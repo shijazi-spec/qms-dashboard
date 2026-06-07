@@ -3713,6 +3713,84 @@
         }
 
         // ===================================================================
+        // Backfill via_contact_name on historic phone_via_contact links
+        // (2026-06-08). Loops POST /api/calls/backfill-via-contact-names
+        // in 50-row chunks until has_more=false. For each row: reads the
+        // linked Deal's primary Contact_Name from Zoho and persists the
+        // contact id + display name on call_records. Existing badge
+        // tooltips on the dashboard pick up the new field on next
+        // refresh so historic Deal-via-Contact links read
+        // "via Contact: <name>" the same way newly-made ones do.
+        // Idempotent — already-enriched rows are skipped.
+        // ===================================================================
+        let _backfillViaContactInFlight = false;
+        async function backfillViaContactNames() {
+            if (_backfillViaContactInFlight) return;
+            const btn = document.getElementById('btn-backfill-via-contact');
+            const lbl = document.getElementById('backfillViaContactBtnLabel');
+            if (!btn) return;
+            if (!confirm(
+                'Backfill Contact names on historic phone_via_contact links?\n\n' +
+                'Reads the linked Deal\'s primary Contact_Name from Zoho ' +
+                'and writes via_contact_id + via_contact_name on the call ' +
+                'row. Idempotent — rows already enriched are skipped.\n\n' +
+                'One Zoho call per row (paced for the RPS budget).'
+            )) return;
+            _backfillViaContactInFlight = true;
+            btn.disabled = true;
+            btn.classList.add('opacity-60', 'cursor-not-allowed');
+            const totals = { scanned: 0, enriched: 0, skipped_no_contact: 0, skipped_no_deal: 0, errors: 0 };
+            try {
+                let hasMore = true;
+                let pass = 0;
+                let cursor = 0;
+                const MAX_PASSES = 100000;
+                while (hasMore && pass < MAX_PASSES) {
+                    pass++;
+                    if (lbl) lbl.textContent = `Backfilling… ${totals.scanned} checked, ${totals.enriched} enriched`;
+                    const res = await fetch('/api/calls/backfill-via-contact-names', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ limit: 50, after_id: cursor }),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        alert(`Backfill failed: ${err.error || res.statusText}`);
+                        break;
+                    }
+                    const data = await res.json();
+                    totals.scanned += data.scanned || 0;
+                    totals.enriched += data.enriched || 0;
+                    totals.skipped_no_contact += data.skipped_no_contact || 0;
+                    totals.skipped_no_deal += data.skipped_no_deal || 0;
+                    totals.errors += (data.errors || []).length;
+                    hasMore = !!data.has_more;
+                    if (typeof data.next_cursor === 'number') cursor = data.next_cursor;
+                    if (data.scanned === 0) break;
+                }
+                if (lbl) lbl.textContent = 'Backfill Contact Names';
+                alert(
+                    `Backfill complete:\n` +
+                    `• ${totals.scanned} historic phone_via_contact rows checked\n` +
+                    `• ${totals.enriched} rows enriched with Contact name\n` +
+                    `• ${totals.skipped_no_contact} skipped (Deal has no Contact_Name)\n` +
+                    `• ${totals.skipped_no_deal} skipped (linked Deal not found in Zoho)\n` +
+                    `• ${totals.errors} errors\n\n` +
+                    `Refreshing dashboard…`
+                );
+                await refreshData();
+            } catch (e) {
+                alert('Backfill threw: ' + (e.message || e));
+            } finally {
+                _backfillViaContactInFlight = false;
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-not-allowed');
+                if (lbl) lbl.textContent = 'Backfill Contact Names';
+            }
+        }
+
+        // ===================================================================
         //   Coaching Plans tab (DMAIC Improve P1)
         //   Reads from /api/coaching-plans and renders three buckets:
         //   Pending Delivery | Awaiting Verification | Resolved. Backend

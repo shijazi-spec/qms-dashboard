@@ -1379,6 +1379,13 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  // 2026-06-08 — Backfill via_contact_name on historic phone_via_contact
+  // links. Same role set + handler-side admin gate.
+  {
+    pattern: /^\/api\/calls\/backfill-via-contact-names$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
   {
     // Read-only Zoho activities reader (Replit's contribution) — Lead/Deal scoped
     pattern: /^\/api\/zoho\/activities\/(Leads|Deals|leads|deals)\/\d+$/,
