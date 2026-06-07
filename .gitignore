@@ -16,6 +16,11 @@ dist
 *.db
 *.db-*
 
+# SQL dumps / snapshots — never check in. Treat as backup artifacts and
+# park them outside the repo (e.g. a OneDrive backup folder). Tracked
+# dumps balloon the repo and make every clone slow.
+*.sql
+
 # Test outputs
 test-results/
 a11y-report.json
