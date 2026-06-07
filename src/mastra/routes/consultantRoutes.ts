@@ -41,6 +41,59 @@ interface AgentTextResult {
 }
 
 /**
+ * Robust text extractor for agent.generate() results.
+ *
+ * Background: this widget has flipped between "No response received"
+ * and working state at least four times across SDK upgrades because
+ * Mastra's response shape is not stable:
+ *
+ *   - V4 / generateLegacy()           → { text: string, ... }
+ *   - V2 / generate() + format=aisdk  → { text: string, ... }      (AI SDK v5 GenerateTextResult)
+ *   - V2 / generate() + format=mastra → MastraModelOutput { content: [...], ... } (DEFAULT)
+ *
+ * Each upgrade has silently changed which default applies. The old
+ * code read `response.text` directly, so any upgrade that returned
+ * the Mastra shape — where `text` is no longer a direct property —
+ * made the endpoint return `{ success: true, response: undefined }`
+ * and the widget rendered "No response received." with no error
+ * indication. This helper closes that gap by trying every known
+ * shape before giving up, so future polarity flips don't silently
+ * break the widget again.
+ *
+ * Order matters: we check the direct `.text` first because that's
+ * the AI SDK V5 / V4 shape we explicitly request via `format: 'aisdk'`
+ * below. Mastra-shape fallbacks come after.
+ */
+export function extractAgentText(result: unknown): string {
+  if (result == null || typeof result !== "object") return "";
+  const r = result as Record<string, unknown>;
+
+  // V4 / V5 / aisdk-format: { text: "..." }
+  if (typeof r.text === "string" && r.text) return r.text;
+
+  // Mastra format: { content: [{ type: 'text', text: "..." }, ...] }
+  if (Array.isArray(r.content)) {
+    const parts = r.content
+      .map((p: any) =>
+        typeof p?.text === "string" ? p.text : typeof p === "string" ? p : "",
+      )
+      .filter(Boolean);
+    if (parts.length) return parts.join("");
+  }
+
+  // Nested response wrapper some Mastra paths emit: { response: { text: "..." } }
+  if (r.response && typeof r.response === "object") {
+    const inner = (r.response as Record<string, unknown>).text;
+    if (typeof inner === "string" && inner) return inner;
+  }
+
+  // Tool-call only or empty completion — return empty string, NOT undefined,
+  // so the JSON serialiser doesn't drop the field and the widget renders
+  // something sensible ("No response" placeholder) instead of fallback path.
+  return "";
+}
+
+/**
  * Returns a per-user resource ID so each user's AI conversation history is
  * isolated in Mastra memory. Using the shared constant "consultant-session"
  * would let any role-qualified user read or append to another user's thread
@@ -427,19 +480,25 @@ export const consultantRoutes = [
                         threadId: resolvedThreadId,
                       },
                       () =>
-                        // 2026-05-30 fix — polarity flipped AGAIN. The chat
-                        // adapter is now producing a V2 (AI SDK v5) model
-                        // class, and Mastra's .generateLegacy() rejects it
-                        // with: "V2 models are not supported for
-                        // generateLegacy. Please use generate instead."
-                        // Surfaced on the consultant page as a server-label
-                        // error bubble. Switching back to .generate() to
-                        // match the V2 shape; mirrors the .stream() call in
-                        // the SSE handler below.
+                        // 2026-06-08 ROOT FIX — pin to aisdk format so the
+                        // returned shape is the AI SDK v5 GenerateTextResult
+                        // with a stable `text: string` property. The Mastra-
+                        // default 'mastra' format returns a MastraModelOutput
+                        // whose `text` is NOT a direct property, which was
+                        // silently breaking the widget ("No response
+                        // received." rendered with no error) every time the
+                        // V2/V4 polarity flipped. extractAgentText() above is
+                        // a belt-and-braces parser for the same problem so a
+                        // future Mastra upgrade can't silently regress this
+                        // again. See agent.generate() type signature in
+                        // node_modules/@mastra/core/dist/agent/agent.d.ts —
+                        // `format: 'aisdk'` is documented as the escape
+                        // hatch back to the AI-SDK-compatible shape.
                         agent.generate(message, {
                           threadId: resolvedThreadId,
                           resourceId,
                           abortSignal: controller.signal,
+                          format: "aisdk" as const,
                         }),
                     );
                     return res as AgentTextResult;
@@ -456,7 +515,11 @@ export const consultantRoutes = [
             return c.json({
               success: true,
               threadId: resolvedThreadId,
-              response: response.text,
+              // Defensive extraction — see extractAgentText() at top of
+              // file. Reads `.text` first (aisdk shape we pinned above),
+              // falls back to Mastra-shape `.content[].text` if a future
+              // upgrade flips the default again.
+              response: extractAgentText(response),
               callId: callId ?? undefined,
               messageId,
               // Surface the prompt revision active for THIS turn so the
@@ -585,20 +648,17 @@ export const consultantRoutes = [
                   threadId: resolvedThreadId,
                 },
                 () =>
-                  // 2026-05-30 fix — polarity flipped AGAIN. After the
-                  // latest @ai-sdk/openai / @mastra/core upgrade, openai.chat()
-                  // is producing a V2 (AI SDK v5) model class. Mastra's
-                  // .streamLegacy() rejects v2 with: "V2 models are not
-                  // supported for streamLegacy. Please use stream instead."
-                  // Switching to .stream() to match the V2 model produced
-                  // by openai.chat("gpt-4o") in qmsConsultantAgent.ts. If a
-                  // future upgrade flips this back, the bubble names the
-                  // exact failure mode thanks to the details-surfacing
-                  // patch in 2a9654a.
+                  // 2026-06-08 ROOT FIX — same as the generate() call site
+                  // above. Pinning format: 'aisdk' so stream() returns an
+                  // AISDKV5OutputStream with a stable .textStream async
+                  // iterable. Mastra's default 'mastra' format returns
+                  // MastraModelOutput, whose streaming interface has
+                  // changed between releases. Pin the contract.
                   agent.stream(message, {
                     threadId: resolvedThreadId,
                     resourceId,
                     abortSignal: controller.signal,
+                    format: "aisdk" as const,
                   }),
               ),
             );
@@ -1236,14 +1296,15 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
                 }),
               },
               async () =>
-                // 2026-05-30 fix — mirror the polarity flip on the chat
-                // and SSE handlers above. The openai.chat() model class is
-                // V2 (AI SDK v5) now, so use .generate(). The error bubble
-                // surfaces the exact failure mode if this flips again.
+                // 2026-06-08 ROOT FIX — same pinning as the chat / SSE
+                // handlers above. format: 'aisdk' guarantees the result
+                // exposes .text as a direct property. extractAgentText()
+                // is the safety net.
                 (await agent.generate(scanPrompt, {
                   threadId: `scan-${Date.now()}`,
                   resourceId: "system-scanner",
                   abortSignal: scanController.signal,
+                  format: "aisdk" as const,
                 })) as AgentTextResult,
             );
             scanResult = result;
@@ -1253,7 +1314,7 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
 
           return c.json({
             success: true,
-            summary: scanResult?.text ?? "",
+            summary: extractAgentText(scanResult),
           });
         } catch (error) {
           logger.error("[Consultant] Scan error:", error);
