@@ -2197,6 +2197,13 @@ export interface AgentDrillData {
     avg_overall_score: number | null;
     call_count: number;
   }>;
+  /**
+   * Number of ISO weeks the trend series covers. Scales with the
+   * requested window — fed by the UI's "{N}-week trend" label so it
+   * stays honest when the window is 7d (8 weeks) vs 90d (13 weeks)
+   * vs all-records (whatever it actually is).
+   */
+  trend_weeks: number;
   coaching_plans: Array<{
     id: number;
     attribute_id: string;
@@ -2318,15 +2325,24 @@ export async function getAgentDrillData(
     logger.warn("[AgentDrill] recent_calls query failed:", err);
   }
 
-  // 8-week trend ending at the requested window end. Buckets by ISO
-  // week start (Monday in Postgres' date_trunc). Empty weeks are NOT
-  // synthesised here — the UI handles gaps by drawing a flat segment
-  // between samples, which is simpler than synthesising zero rows.
+  // Trend window scales with the requested range so a "Last 90 days"
+  // filter doesn't still show only 8 weeks. Lookback = max(8 weeks,
+  // window length) so short windows (7d) still have meaningful
+  // historical context, and long windows (90d, all-records) get a
+  // proportionally longer trend. Buckets stay per-ISO-week (Monday)
+  // via date_trunc — short windows just see fewer buckets, not
+  // smaller ones. Empty weeks are NOT synthesised; the UI draws a
+  // flat segment between samples.
   let trendSeries: AgentDrillData["trend_series"] = [];
+  let trendWeeks = 8;
   try {
-    const trendStart = new Date(
-      endDate.getTime() - 8 * 7 * 24 * 60 * 60 * 1000,
+    const eightWeeksMs = 8 * 7 * 24 * 60 * 60 * 1000;
+    const windowMsForTrend = Math.max(
+      eightWeeksMs,
+      endDate.getTime() - startDate.getTime(),
     );
+    trendWeeks = Math.ceil(windowMsForTrend / (7 * 24 * 60 * 60 * 1000));
+    const trendStart = new Date(endDate.getTime() - windowMsForTrend);
     const r = await pool.query(
       `
       SELECT
@@ -2411,6 +2427,7 @@ export async function getAgentDrillData(
     top_failed_attributes: topFailedAttributes,
     recent_calls: recentCalls,
     trend_series: trendSeries,
+    trend_weeks: trendWeeks,
     coaching_plans: coachingPlans,
   };
 }
