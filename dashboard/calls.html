@@ -2207,14 +2207,39 @@
             });
 
             const tabBtn = document.getElementById(`tab-${tab}`);
-            tabBtn.classList.add('tab-active');
-            tabBtn.classList.remove('text-gray-600', 'hover:bg-gray-200');
+            // Guard the highlight set — if the tab button was renamed/
+            // removed, do NOT abort showTab. The content-X div is the
+            // important thing; the button can still be missing in dev.
+            if (tabBtn) {
+                tabBtn.classList.add('tab-active');
+                tabBtn.classList.remove('text-gray-600', 'hover:bg-gray-200');
+            }
 
-            document.getElementById(`content-${tab}`).classList.remove('hidden');
+            // Same guard for the content div. If content-X is missing,
+            // log + show a fallback message so the user sees SOMETHING
+            // instead of an empty page.
+            const contentEl = document.getElementById(`content-${tab}`);
+            if (contentEl) {
+                contentEl.classList.remove('hidden');
+            } else {
+                console.error(`[showTab] content-${tab} div not found in DOM`);
+            }
 
-            if (tab === 'calls') renderCallsTable();
-            if (tab === 'compliance') renderComplianceTable();
-            if (tab === 'analytics') renderAnalytics();
+            // Each render call is wrapped so a single failure can't
+            // poison subsequent dispatches. Previously these were
+            // unguarded — renderComplianceTable / renderAnalytics could
+            // throw (e.g. WalaPlusI18n not yet loaded, Chart.js missing,
+            // complianceRecords undefined) and the operator would see
+            // the tab highlight but no content beneath it.
+            try {
+                if (tab === 'calls') renderCallsTable();
+            } catch (e) { console.error('[showTab] renderCallsTable failed:', e); }
+            try {
+                if (tab === 'compliance') renderComplianceTable();
+            } catch (e) { console.error('[showTab] renderComplianceTable failed:', e); }
+            try {
+                if (tab === 'analytics') renderAnalytics();
+            } catch (e) { console.error('[showTab] renderAnalytics failed:', e); }
             // 'reconcile' (QMS Bridge) tab retired — its two operator
             // tools moved into the CRM Compliance tab. The
             // refreshMcpImportCatalog() bootstrap is gone with it.
@@ -2222,8 +2247,8 @@
             // line that needs to populate even before the user expands
             // the scorecard-management panel. Use the dedicated SDR
             // endpoint (cheap, one-row lookup) for the summary; the
-            // heavier loadScorecards() runs only when the panel actually
-            // opens (handled by toggleScorecardPanel).
+            // heavier loadScorecards() runs only when the scorecard
+            // management view actually opens.
             if (tab === 'evaluate' && typeof loadActiveSDRScorecardSummary === 'function') {
                 try { loadActiveSDRScorecardSummary(); }
                 catch (e) { console.error('loadActiveSDRScorecardSummary failed:', e); }
@@ -8230,6 +8255,26 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
+            }
+        }
+
+        // Manual poll trigger for a single batch job — backed by
+        // POST /api/calls/batch/jobs/:id/sync. Wired to the "↻ Sync now"
+        // button on each batch-job row (renderBatchJobRow). Restored after
+        // commit 3e81ba9 accidentally deleted it, which left that button
+        // pointing at an undefined function.
+        async function syncBatchJob(jobId) {
+            try {
+                const res = await fetch(`/api/calls/batch/jobs/${jobId}/sync`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    await refreshBatchPanel();
+                } else {
+                    alert(`Sync failed: ${data.error || 'unknown error'}`);
+                }
+            } catch (e) {
+                console.error('syncBatchJob error:', e);
+                alert(`Sync failed: ${e.message || e}`);
             }
         }
 
