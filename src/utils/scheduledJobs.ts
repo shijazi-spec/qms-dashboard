@@ -399,3 +399,79 @@ export async function runConsultantScannerIfStale(
     return { ran: false, ageHours };
   }
 }
+
+/**
+ * Weekly Supabase refresh — Replit Postgres → Supabase mirror.
+ *
+ * Pinned to Friday 23:00 Riyadh (= 20:00 UTC). The scheduledJobFallback
+ * loop ticks every 45 minutes; we let multiple ticks fall inside a 4-hour
+ * Friday window (19:00–23:00 UTC) to absorb timer drift, but the staleness
+ * gate (last successful run < 6 days ago) ensures only one fire actually
+ * runs the backup per week.
+ *
+ * Hard preconditions, all of which short-circuit silently if not met:
+ *   - SUPABASE_DATABASE_URL must be set (operator opt-in).
+ *   - Current UTC time must be Friday 19:00–23:00.
+ *   - Last successful backup must be > 144h (6 days) ago.
+ *
+ * Concurrency: the standard `inflight` flag in startScheduledJobFallback
+ * (src/mastra/index.ts) prevents overlapping ticks, so the backup never
+ * races itself.
+ */
+export async function runWeeklySupabaseRefreshIfStale(
+  maxAgeHours = 144, // 6 days — leaves a 1-day window for retries inside the same Friday
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  // Operator opt-in — until SUPABASE_DATABASE_URL is set, this is dead code.
+  if (!process.env.SUPABASE_DATABASE_URL) {
+    return { ran: false, ageHours: 0 };
+  }
+
+  // Day-of-week + hour gate. Friday = 5 in JS getUTCDay().
+  const now = new Date();
+  const dayUTC = now.getUTCDay();
+  const hourUTC = now.getUTCHours();
+  if (dayUTC !== 5 || hourUTC < 19 || hourUTC >= 23) {
+    return { ran: false, ageHours: 0 };
+  }
+
+  const pool = sharedPool;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scanner_run_log (
+      id SERIAL PRIMARY KEY,
+      scanner_name VARCHAR(100) NOT NULL,
+      ran_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      success BOOLEAN NOT NULL DEFAULT true,
+      summary JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_scanner_run_log_name_time ON scanner_run_log(scanner_name, ran_at DESC);
+  `);
+  const r = await pool.query<{ hours: number | null }>(
+    `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ran_at)))/3600 AS hours
+     FROM scanner_run_log WHERE scanner_name='weekly-supabase-refresh' AND success=true`,
+  );
+  const ageHours =
+    r.rows[0]?.hours == null ? Infinity : Number(r.rows[0].hours);
+  if (ageHours < maxAgeHours) {
+    return { ran: false, ageHours };
+  }
+
+  logger.info(
+    `[SupabaseBackup Fallback] Last refresh was ${ageHours === Infinity ? "never" : ageHours.toFixed(1) + "h ago"} (>= ${maxAgeHours}h) — running.`,
+  );
+  try {
+    const { runSupabaseRefresh } = await import("./supabaseBackup");
+    const result = await runSupabaseRefresh();
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, $2, $3)`,
+      ["weekly-supabase-refresh", result.errors.length === 0, JSON.stringify(result)],
+    );
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    logger.error("[SupabaseBackup Fallback] Refresh failed:", err);
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, false, $2)`,
+      ["weekly-supabase-refresh", JSON.stringify({ error: String(err) })],
+    );
+    return { ran: false, ageHours };
+  }
+}

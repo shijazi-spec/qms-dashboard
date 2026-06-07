@@ -482,6 +482,7 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
         runQualityAuditIfStale,
         runKPIAutoCalcIfStale,
         runCsOverlapScanIfStale,
+        runWeeklySupabaseRefreshIfStale,
       } = await import("../utils/scheduledJobs");
       const helpers: Array<{
         name: string;
@@ -493,6 +494,12 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
         { name: "QualityAudit", fn: () => runQualityAuditIfStale() },
         { name: "KPIAutoCalc", fn: () => runKPIAutoCalcIfStale() },
         { name: "CsOverlapScan", fn: () => runCsOverlapScanIfStale() },
+        // Opt-in via SUPABASE_DATABASE_URL. No-ops silently when unset, so
+        // it's safe to ship without any env work on Replit. See helper
+        // body for the Friday 19:00–23:00 UTC time gate (= Friday 22:00–02:00
+        // Riyadh). Last successful run is tracked in scanner_run_log under
+        // scanner_name='weekly-supabase-refresh'.
+        { name: "WeeklySupabaseRefresh", fn: () => runWeeklySupabaseRefreshIfStale() },
       ];
       for (const h of helpers) {
         try {
