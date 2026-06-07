@@ -3330,6 +3330,33 @@
         let _ownersSortKey = 'estimated_waste_value';
         let _ownersSortDir = 'desc';
 
+        // Reverse case of NAME_ALIASES (which handles "one person, multiple
+        // name spellings on one email"). This handles "one person, multiple
+        // emails": a rep tagged on several mailboxes across CRM (their own
+        // address + a shared/import mailbox like pipedrive@ or info@) gets
+        // split into 3 separate rows on Owner Accountability and looks like
+        // three different people. Maps alias-email → canonical-email so
+        // _mergeOwnersByEmail buckets them all under one owner.
+        //
+        // Maintenance: when adding an alias, double-check the source
+        // mailbox is actually used by ONLY that one rep — a shared mailbox
+        // legitimately tagged with multiple modifiers (e.g. an auto-mod
+        // account everyone uses) should NOT be aliased here, because it
+        // would erroneously fold every other rep's records into the
+        // alias target. The current entries cover Rayan Saleh's three
+        // tagged addresses; info@walaplus.com appears only with the
+        // "Rayan Saleh" name in this tenant's data, so it's safe to alias.
+        const EMAIL_ALIASES = {
+            'pipedrive@walaplus.com': 'rayan@walaplus.com',
+            'info@walaplus.com':      'rayan@walaplus.com',
+        };
+
+        function _canonicaliseOwnerEmail(rawEmail) {
+            const key = String(rawEmail || '').trim().toLowerCase();
+            if (!key) return '';
+            return EMAIL_ALIASES[key] || key;
+        }
+
         // Merge rows that share the same email address. The server side
         // builds the per-owner aggregates from the modified-by name on each
         // record, so a single rep with two name spellings in CRM
@@ -3340,18 +3367,33 @@
         // intended ("this email = this person's debt"). Rows with no email
         // are passed through unchanged — without a shared key there's
         // nothing to merge them on.
+        //
+        // 2026-06-07 — also normalise through EMAIL_ALIASES first so the
+        // reverse case (one person, multiple email addresses) collapses to
+        // a single row too.
         function _mergeOwnersByEmail(owners) {
             const out = [];
             const byEmail = new Map();
             for (const o of owners || []) {
-                const emailKey = String(o.owner_email || '').trim().toLowerCase();
+                const emailKey = _canonicaliseOwnerEmail(o.owner_email);
                 if (!emailKey) { out.push({ ...o, merged_count: 1 }); continue; }
                 const existing = byEmail.get(emailKey);
                 if (!existing) {
                     byEmail.set(emailKey, {
                         ...o,
+                        // Force the canonical email onto the merged row so the
+                        // display + sort + export show the real owner address,
+                        // not whichever alias arrived first (e.g. pipedrive@
+                        // first → row would otherwise display pipedrive@
+                        // instead of rayan@).
+                        owner_email: emailKey,
                         _name_set: new Set([o.owner_name || '—']),
                         _team_set: new Set([o.team || 'Unassigned']),
+                        _alias_email_set: new Set(
+                            String(o.owner_email || '').trim().toLowerCase() !== emailKey
+                                ? [String(o.owner_email || '').trim().toLowerCase()]
+                                : []
+                        ),
                         merged_count: 1,
                     });
                     continue;
@@ -3359,6 +3401,13 @@
                 existing.merged_count += 1;
                 existing._name_set.add(o.owner_name || '—');
                 existing._team_set.add(o.team || 'Unassigned');
+                // Track non-canonical addresses we folded in so we can show
+                // them in the row title attribute — useful when auditing
+                // why Rayan's "535 dups" suddenly includes pipedrive@ rows.
+                const lookedUp = String(o.owner_email || '').trim().toLowerCase();
+                if (lookedUp && lookedUp !== emailKey) {
+                    existing._alias_email_set.add(lookedUp);
+                }
                 existing.total_records             = Number(existing.total_records || 0)             + Number(o.total_records || 0);
                 existing.duplicate_records         = Number(existing.duplicate_records || 0)         + Number(o.duplicate_records || 0);
                 existing.high_confidence_duplicates = Number(existing.high_confidence_duplicates || 0) + Number(o.high_confidence_duplicates || 0);
@@ -3369,6 +3418,12 @@
                 // " / "; if everything matches we keep the single value.
                 merged.owner_name = Array.from(merged._name_set).filter(Boolean).join(' / ') || '—';
                 merged.team       = Array.from(merged._team_set).filter(Boolean).join(' / ') || 'Unassigned';
+                // Stash the folded alias addresses on the row so the
+                // renderer can expose them in a tooltip without changing
+                // the visible email column. Consumers that don't know
+                // about merged_alias_emails just ignore the field.
+                merged.merged_alias_emails = Array.from(merged._alias_email_set || []);
+                delete merged._alias_email_set;
                 // Recompute the dup-rate against the merged totals; round
                 // to one decimal to match the server-side formatting.
                 const tot = Number(merged.total_records || 0);
