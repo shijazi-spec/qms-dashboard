@@ -324,6 +324,13 @@
                     <div id="wr-error" class="hidden text-center text-red-600 py-6 text-sm">
                         <span data-i18n="calls.wr_error">Couldn't load the weekly report. Try again.</span>
                     </div>
+                    <!-- Slice 2: agent leaderboard rows. Populated by
+                         renderWeeklyReportLeaderboard from the .agents
+                         array on /api/calls/weekly-report. Server sorts
+                         by gap_to_target DESC so the worst-performing
+                         agents surface at the top of this table — same
+                         pattern as the Owners leaderboard on /duplicates. -->
+                    <div id="wr-leaderboard-rows" class="hidden"></div>
                 </div>
             </div>
 
@@ -2450,14 +2457,22 @@
                 const data = await res.json();
                 _weeklyReportData = data;
                 renderWeeklyReportSummary(data);
+                renderWeeklyReportLeaderboard(data);
                 if (loadingEl) loadingEl.classList.add('hidden');
+                const rowsEl = document.getElementById('wr-leaderboard-rows');
                 if ((data.agents || []).length === 0) {
                     if (emptyEl) emptyEl.classList.remove('hidden');
+                    if (rowsEl) rowsEl.classList.add('hidden');
+                } else {
+                    if (emptyEl) emptyEl.classList.add('hidden');
+                    if (rowsEl) rowsEl.classList.remove('hidden');
                 }
             } catch (err) {
                 console.error('[WeeklyReport] load failed:', err);
                 if (loadingEl) loadingEl.classList.add('hidden');
                 if (errorEl) errorEl.classList.remove('hidden');
+                const rowsEl = document.getElementById('wr-leaderboard-rows');
+                if (rowsEl) rowsEl.classList.add('hidden');
             }
         }
 
@@ -2520,6 +2535,131 @@
             set('wr-team-avg', fmtScore(t.avg_overall_score));
             set('wr-critical-fails', fmtNum(t.critical_fails));
             set('wr-plans-pending', fmtNum(t.coaching_plans_pending));
+        }
+
+        // ===================================================================
+        //   Weekly Report — Slice 2: Agent leaderboard
+        //
+        //   One row per agent from the .agents array. Server pre-sorts
+        //   by gap_to_target DESC so the worst-performing rows sit at
+        //   the top — matches the Owners leaderboard pattern over on
+        //   /duplicates. Each row shows:
+        //     • Agent name (clickable; Slice 3 wires the inline drill)
+        //     • Call count
+        //     • Avg score with trend arrow vs prior equal-length window
+        //       (↑/↓/→ from server's trend_direction)
+        //     • Compliance %
+        //     • Critical fail count
+        //     • Coaching plans pending delivery
+        //     • Expand chevron (Slice 3 will wire the inline drill)
+        //
+        //   Score and compliance cells get a RAG background colour so
+        //   the eye can scan the table at speed:
+        //     • Score:      green ≥75 (target), amber 60-74, red <60
+        //     • Compliance: green ≥90, amber 70-89, red <70
+        //   Numeric thresholds match COPC v2 conventions; tune later if
+        //   coaching shows the bands need adjusting.
+        // ===================================================================
+
+        function _wrScoreRagClass(score) {
+            if (score == null) return 'bg-gray-100 text-gray-500';
+            const n = Number(score);
+            if (!Number.isFinite(n)) return 'bg-gray-100 text-gray-500';
+            if (n >= 75) return 'bg-green-100 text-green-800';
+            if (n >= 60) return 'bg-amber-100 text-amber-800';
+            return 'bg-red-100 text-red-800';
+        }
+
+        function _wrComplianceRagClass(score) {
+            if (score == null) return 'bg-gray-100 text-gray-500';
+            const n = Number(score);
+            if (!Number.isFinite(n)) return 'bg-gray-100 text-gray-500';
+            if (n >= 90) return 'bg-green-100 text-green-800';
+            if (n >= 70) return 'bg-amber-100 text-amber-800';
+            return 'bg-red-100 text-red-800';
+        }
+
+        function _wrTrendBadge(direction) {
+            if (direction === 'up') {
+                return '<span class="text-green-600" title="Improving vs prior window">↑</span>';
+            }
+            if (direction === 'down') {
+                return '<span class="text-red-600" title="Declining vs prior window">↓</span>';
+            }
+            if (direction === 'flat') {
+                return '<span class="text-gray-400" title="Flat vs prior window">→</span>';
+            }
+            // null = no prior-window data (e.g. new agent or first window)
+            return '<span class="text-gray-300" title="No prior-window data">·</span>';
+        }
+
+        function renderWeeklyReportLeaderboard(data) {
+            const container = document.getElementById('wr-leaderboard-rows');
+            if (!container) return;
+            const agents = Array.isArray(data?.agents) ? data.agents : [];
+            if (agents.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const fmtNum = (n) => (n == null ? '--' : _fn(n));
+            const fmtScore = (n) => (n == null ? '--' : `${_fn(Number(n).toFixed(0))}%`);
+            const agentDisplay = (a) => a.agent_name || (a.agent_email ? a.agent_email.split('@')[0] : '—');
+
+            const rows = agents.map((a, idx) => {
+                const scoreCls = _wrScoreRagClass(a.avg_overall_score);
+                const compCls = _wrComplianceRagClass(a.avg_compliance_score);
+                const trend = _wrTrendBadge(a.trend_direction);
+                const planChip = a.coaching_plans_pending > 0
+                    ? `<span class="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">${_fn(a.coaching_plans_pending)} pending</span>`
+                    : (a.coaching_plans_awaiting_verification > 0
+                        ? `<span class="px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">${_fn(a.coaching_plans_awaiting_verification)} awaiting</span>`
+                        : '<span class="text-gray-400 text-xs">—</span>');
+                const criticalChip = a.critical_fails > 0
+                    ? `<span class="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">${_fn(a.critical_fails)}</span>`
+                    : '<span class="text-gray-400 text-xs">0</span>';
+                return `
+                <tr data-wr-agent-row data-agent-email="${escAttr(a.agent_email || '')}" data-agent-idx="${idx}" class="border-b last:border-b-0 hover:bg-gray-50">
+                    <td class="px-3 py-3 text-sm font-medium text-gray-900">
+                        ${escapeHtml(agentDisplay(a))}
+                        <div class="text-xs text-gray-500">${escapeHtml(a.agent_email || '')}</div>
+                    </td>
+                    <td class="px-3 py-3 text-sm text-gray-700 text-center">${_fn(a.call_count)}</td>
+                    <td class="px-3 py-3 text-sm">
+                        <span class="${scoreCls} px-2 py-1 rounded text-xs font-bold">${fmtScore(a.avg_overall_score)}</span>
+                        <span class="ms-1">${trend}</span>
+                    </td>
+                    <td class="px-3 py-3 text-sm">
+                        <span class="${compCls} px-2 py-1 rounded text-xs font-bold">${fmtScore(a.avg_compliance_score)}</span>
+                    </td>
+                    <td class="px-3 py-3 text-sm text-center">${criticalChip}</td>
+                    <td class="px-3 py-3 text-sm text-center">${planChip}</td>
+                    <td class="px-3 py-3 text-end">
+                        <!-- Chevron placeholder for Slice 3 (inline drill).
+                             Slice 3 will wire data-on-click="toggleWeeklyReportAgent"
+                             once the drill panel exists. -->
+                        <span class="text-gray-300 select-none" aria-hidden="true">▾</span>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_agent">Agent</th>
+                                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_calls">Calls</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_score">Avg score</th>
+                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_compliance">Compliance</th>
+                                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_critical">Critical</th>
+                                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_plans">Plans</th>
+                                <th class="px-3 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">${rows}</tbody>
+                    </table>
+                </div>`;
         }
 
         /**
