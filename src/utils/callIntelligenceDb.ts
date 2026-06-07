@@ -1754,17 +1754,35 @@ export interface WeeklyReportAgent {
   prior_avg_overall_score: number | null;
 }
 
+export interface WeeklyReportTotals {
+  total_calls: number;
+  total_evaluated: number;
+  avg_overall_score: number | null;
+  avg_compliance_score: number | null;
+  critical_fails: number;
+  /** Plans currently open for any agent (pending_delivery + awaiting_verification). */
+  coaching_plans_pending: number;
+  /** Plans created inside this window — drives "new this week" banner chip. */
+  new_coaching_plans: number;
+  active_agents: number;
+}
+
 export interface WeeklyReportRollup {
   window: { start: string; end: string; label: string };
   prior_window: { start: string; end: string };
-  totals: {
+  totals: WeeklyReportTotals;
+  /**
+   * Team totals for the equal-length prior window. Drives the WoW
+   * deltas on the Critical Fails banner (Slice 4). `new_coaching_plans`
+   * is omitted — it's a "this window" concept that doesn't have a
+   * prior-window equivalent worth comparing.
+   */
+  prior_totals: {
     total_calls: number;
     total_evaluated: number;
     avg_overall_score: number | null;
     avg_compliance_score: number | null;
     critical_fails: number;
-    coaching_plans_pending: number;
-    active_agents: number;
   };
   agents: WeeklyReportAgent[];
 }
@@ -1906,6 +1924,58 @@ export async function getWeeklyReportRollup(
     rows = [];
   }
 
+  // Prior-window team totals — drive the WoW deltas on the Critical
+  // Fails banner (Slice 4). Separate aggregate so the per-agent CTE
+  // above stays tight; this query is cheap and runs in parallel with
+  // the new-plan count below.
+  let priorTotalsRow: any = null;
+  let newCoachingPlansCount = 0;
+  try {
+    const [priorRes, newPlansRes] = await Promise.all([
+      pool.query(
+        `
+        SELECT
+          COUNT(DISTINCT cr.id) AS total_calls,
+          COUNT(DISTINCT se.id) AS total_evaluated,
+          AVG(COALESCE(latest_review.adjusted_overall_score, se.overall_score)) AS avg_overall_score,
+          AVG(cc.compliance_score) AS avg_compliance_score,
+          COUNT(DISTINCT CASE
+            WHEN se.critical_risks IS NOT NULL
+             AND jsonb_typeof(se.critical_risks) = 'array'
+             AND jsonb_array_length(se.critical_risks) > 0
+            THEN cr.id
+          END) AS critical_fails
+        FROM call_records cr
+        LEFT JOIN sdr_call_evaluations se ON se.call_record_id = cr.id
+        LEFT JOIN LATERAL (
+          SELECT adjusted_overall_score
+          FROM sdr_evaluation_reviews sr
+          WHERE sr.evaluation_id = se.id
+            AND sr.adjusted_overall_score IS NOT NULL
+          ORDER BY sr.reviewed_at DESC
+          LIMIT 1
+        ) latest_review ON TRUE
+        LEFT JOIN call_compliance cc ON cc.call_record_id = cr.id
+        WHERE cr.call_date >= $1 AND cr.call_date < $2
+          AND cr.agent_email IS NOT NULL
+        `,
+        [priorStartDate, priorEndDate],
+      ),
+      pool.query(
+        `
+        SELECT COUNT(*)::int AS new_plans
+          FROM coaching_plans
+         WHERE created_at >= $1 AND created_at < $2
+        `,
+        [startDate, endDate],
+      ),
+    ]);
+    priorTotalsRow = priorRes.rows[0] || null;
+    newCoachingPlansCount = newPlansRes.rows[0]?.new_plans || 0;
+  } catch (err) {
+    logger.warn("[WeeklyReport] prior totals / new plans query failed:", err);
+  }
+
   const agents: WeeklyReportAgent[] = rows.map((r) => {
     const avg = r.avg_overall_score === null ? null : parseFloat(r.avg_overall_score);
     const prior = r.prior_avg === null ? null : parseFloat(r.prior_avg);
@@ -1999,7 +2069,21 @@ export async function getWeeklyReportRollup(
       avg_compliance_score: teamAvgCompliance,
       critical_fails: totalCriticalFails,
       coaching_plans_pending: totalPlansPending,
+      new_coaching_plans: newCoachingPlansCount,
       active_agents: agents.length,
+    },
+    prior_totals: {
+      total_calls: parseInt(priorTotalsRow?.total_calls, 10) || 0,
+      total_evaluated: parseInt(priorTotalsRow?.total_evaluated, 10) || 0,
+      avg_overall_score:
+        priorTotalsRow?.avg_overall_score == null
+          ? null
+          : Math.round(parseFloat(priorTotalsRow.avg_overall_score) * 10) / 10,
+      avg_compliance_score:
+        priorTotalsRow?.avg_compliance_score == null
+          ? null
+          : Math.round(parseFloat(priorTotalsRow.avg_compliance_score) * 10) / 10,
+      critical_fails: parseInt(priorTotalsRow?.critical_fails, 10) || 0,
     },
     agents,
   };

@@ -239,6 +239,19 @@
                 banner in Slice 4. Backed by GET /api/calls/weekly-report.
             -->
             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
+                <!--
+                    Critical Fails banner (Slice 4). Sits at the very top
+                    of the Weekly Report card so it's the first thing the
+                    manager sees on Monday morning. Hidden when the window
+                    has zero notable issues; otherwise renders the chips
+                    that need attention (critical fails, new plans, WoW
+                    score / compliance deltas).
+
+                    Populated by renderWeeklyReportBanner() from
+                    /api/calls/weekly-report.totals + .prior_totals.
+                -->
+                <div id="wr-banner" class="hidden mb-4"></div>
+
                 <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
                     <div>
                         <h3 class="text-lg font-semibold" data-i18n="calls.sec_weekly_report">Weekly Report</h3>
@@ -2456,6 +2469,7 @@
                 }
                 const data = await res.json();
                 _weeklyReportData = data;
+                renderWeeklyReportBanner(data);
                 renderWeeklyReportSummary(data);
                 renderWeeklyReportLeaderboard(data);
                 if (loadingEl) loadingEl.classList.add('hidden');
@@ -2513,6 +2527,119 @@
                     return { start: toIso(start), end: toIso(now) };
                 }
             }
+        }
+
+        // ===================================================================
+        //   Weekly Report — Slice 4: Critical Fails banner
+        //
+        //   Renders at the top of the Weekly Report card. Hidden when the
+        //   current window has zero notable issues; otherwise surfaces:
+        //     • Critical fails count (red, urgent)
+        //     • New coaching plans created in window (amber, action)
+        //     • Team avg score with WoW delta (▲/▼ + delta pts)
+        //     • Team avg compliance with WoW delta
+        //
+        //   The point isn't to duplicate the summary strip below — it's to
+        //   give the manager a 1-second "do I need to act this week?"
+        //   read before they scan the leaderboard.
+        // ===================================================================
+
+        function _wrDeltaChip(label, current, prior, suffix) {
+            if (current == null || prior == null) {
+                return '';
+            }
+            const delta = Number(current) - Number(prior);
+            if (Math.abs(delta) < 0.05) {
+                // Effectively flat — surface the level only, no arrow.
+                return `
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">
+                        <span class="font-medium">${escapeHtml(label)}</span>
+                        <span>${_fn(Number(current).toFixed(0))}${suffix || ''}</span>
+                        <span class="text-gray-400">→</span>
+                    </span>`;
+            }
+            const isUp = delta > 0;
+            const cls = isUp
+                ? 'bg-green-50 text-green-800 border border-green-100'
+                : 'bg-red-50 text-red-800 border border-red-100';
+            const arrow = isUp ? '▲' : '▼';
+            const sign = isUp ? '+' : '';
+            return `
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${cls}">
+                    <span class="font-medium">${escapeHtml(label)}</span>
+                    <span>${_fn(Number(current).toFixed(0))}${suffix || ''}</span>
+                    <span>${arrow}</span>
+                    <span class="text-xs">${sign}${_fn(delta.toFixed(1))}${suffix || ''}</span>
+                </span>`;
+        }
+
+        function renderWeeklyReportBanner(data) {
+            const banner = document.getElementById('wr-banner');
+            if (!banner) return;
+            const t = data?.totals || {};
+            const prior = data?.prior_totals || {};
+            const critical = Number(t.critical_fails) || 0;
+            const newPlans = Number(t.new_coaching_plans) || 0;
+            const pending = Number(t.coaching_plans_pending) || 0;
+            const stalePending = Math.max(0, pending - newPlans);
+
+            const chips = [];
+            // Critical fails — always shown if > 0, suppressed otherwise so
+            // the banner stays clean during quiet weeks.
+            if (critical > 0) {
+                chips.push(`
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-50 text-red-800 border border-red-200">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <span class="font-medium">${_fn(critical)} critical fail${critical === 1 ? '' : 's'}</span>
+                    </span>`);
+            }
+            // New plans — coaching trigger fired inside this window. The
+            // manager owes a delivery conversation on each.
+            if (newPlans > 0) {
+                chips.push(`
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-amber-50 text-amber-800 border border-amber-200">
+                        <span class="font-medium">${_fn(newPlans)} new coaching plan${newPlans === 1 ? '' : 's'}</span>
+                    </span>`);
+            }
+            // Plans that have been pending from BEFORE this window — these
+            // are the "stale" ones that need a nudge (Slice 5).
+            if (stalePending > 0) {
+                chips.push(`
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-amber-50 text-amber-700 border border-amber-100">
+                        <span>${_fn(stalePending)} stale plan${stalePending === 1 ? '' : 's'}</span>
+                    </span>`);
+            }
+            // WoW deltas — only surface if there's at least one prior data
+            // point to compare against (avoids "Team avg 71% → N/A").
+            chips.push(_wrDeltaChip('Team avg', t.avg_overall_score, prior.avg_overall_score, '%'));
+            chips.push(_wrDeltaChip('Compliance', t.avg_compliance_score, prior.avg_compliance_score, '%'));
+
+            const visibleChips = chips.filter(Boolean);
+            if (visibleChips.length === 0) {
+                banner.classList.add('hidden');
+                banner.innerHTML = '';
+                return;
+            }
+
+            // Container style is keyed off whether there's a "must act"
+            // signal (critical fails or new plans). Red border when yes,
+            // soft gray when it's just informational deltas.
+            const isUrgent = critical > 0 || newPlans > 0;
+            const containerCls = isUrgent
+                ? 'p-3 rounded-lg bg-red-50 border border-red-200'
+                : 'p-3 rounded-lg bg-gray-50 border border-gray-200';
+            const labelCls = isUrgent ? 'text-red-800' : 'text-gray-700';
+
+            banner.classList.remove('hidden');
+            banner.innerHTML = `
+                <div class="${containerCls}">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-sm font-semibold ${labelCls}">This week:</span>
+                        ${visibleChips.join(' ')}
+                    </div>
+                </div>`;
         }
 
         function renderWeeklyReportSummary(data) {
