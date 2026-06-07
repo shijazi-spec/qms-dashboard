@@ -8227,22 +8227,9 @@
             } catch (e) {
                 console.error('submitBatchEvaluation error:', e);
                 alert(`Batch submit failed: ${e.message || e}`);
-            const willOpen = panel.classList.contains('hidden');
-            if (willOpen) {
-                panel.classList.remove('hidden');
-                if (chevron) chevron.style.transform = 'rotate(180deg)';
-                if (toggle) toggle.setAttribute('aria-expanded', 'true');
-                if (hint) hint.textContent = 'Click to collapse';
-                // Lazy-load scorecards the first time the panel opens so the
-                // list inside is populated. loadScorecards is idempotent.
-                if (typeof loadScorecards === 'function') {
-                    try { loadScorecards(); } catch (e) { console.error('loadScorecards failed:', e); }
-                }
-            } else {
-                panel.classList.add('hidden');
-                if (chevron) chevron.style.transform = 'rotate(0deg)';
-                if (toggle) toggle.setAttribute('aria-expanded', 'false');
-                if (hint) hint.textContent = 'Click to manage';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
             }
         }
 
@@ -9126,6 +9113,27 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        call_record_id: callId,
+                        evaluation_id: evaluationId,
+                        feedback_type: feedbackType,
+                        details: details,
+                        submitted_by: 'admin@walaplus.com'
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadAITrainingStats();
+                    return true;
+                }
+            } catch (error) {
+                console.error('Error submitting feedback:', error);
+            }
+            return false;
+        }
+
+        function renderAIFeedbackButtons(callId, evaluationId) {
+            return `
+                <div class="mt-4 pt-4 border-t border-gray-100">
                     <p class="text-sm font-medium text-gray-700 mb-3">${escapeHtml(WalaPlusI18n.t('dyn.calls.rate_ai_acc'))}</p>
                     <div class="flex gap-2">
                         <button data-on-click="rateAIEvaluation" data-args="[${callId},${evaluationId},&quot;accurate&quot;]" class="flex-1 px-3 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm transition flex items-center justify-center gap-1">
