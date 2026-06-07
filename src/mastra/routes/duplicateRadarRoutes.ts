@@ -128,6 +128,7 @@ import {
 } from "../../utils/zohoCRM";
 
 import { logger } from "../../utils/logger";
+import { buildAccountMergePlan } from "../../utils/duplicateMergePlanner";
 // Default to fetching the entire module so duplicate detection reflects the
 // real CRM. Set DUPLICATE_SCAN_LIMIT to a positive integer to re-cap (useful
 // for staging or when Zoho daily-credit budget is tight). An unset, blank,
@@ -1026,6 +1027,58 @@ export const duplicateRadarRoutes = [
           });
         } catch (error: any) {
           logger.error("Error fetching cluster:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Phase 1 — Agentic Duplicate Resolution: PROPOSE a non-destructive merge
+    // plan for an Accounts cluster. READ-ONLY: builds the plan in memory and
+    // returns it; performs NO writes to Zoho or the radar DB. Gated on the
+    // read-level duplicate-radar role (same as the cluster detail view) — the
+    // destructive /execute path (separate, admin-gated) will consume the plan.
+    // Response: { success, plan } — see MergePlan in duplicateMergePlanner.ts.
+    path: "/api/duplicates/clusters/:id/plan",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          const cluster = await getClusterById(id);
+          if (!cluster) return c.json({ error: "Cluster not found" }, 404);
+
+          const records = await getRecordsByClusterId(id);
+          const accountCount = records.filter(
+            (r) => r.record_type === "account",
+          ).length;
+          if (accountCount < 2) {
+            return c.json(
+              {
+                error:
+                  "Phase 1 plans Accounts clusters with 2+ Account records.",
+                account_record_count: accountCount,
+              },
+              400,
+            );
+          }
+
+          const generatedBy =
+            (user as any)?.email || (user as any)?.role || "duplicate-radar";
+          const plan = buildAccountMergePlan(id, records, {
+            tagName: "Duplicate-Delete",
+            generatedBy,
+            generatedAt: new Date().toISOString(),
+          });
+
+          return c.json({ success: true, plan });
+        } catch (error: any) {
+          logger.error("Error building merge plan:", error);
           return c.json({ error: "An internal error occurred" }, 500);
         }
       };
@@ -4626,8 +4679,18 @@ export const duplicateRadarRoutes = [
             );
           }
 
-          const ExcelJS = await import("exceljs");
-          const wb = new (ExcelJS as any).Workbook();
+          // 2026-06-08 ROOT FIX — exceljs is a CommonJS module; dynamic
+          // `await import("exceljs")` returns the ESM wrapper
+          // `{ default: ... }`, so the constructor is at
+          // .default.Workbook, NOT .Workbook directly. The old code hit
+          // `new (ExcelJS as any).Workbook()` which was undefined →
+          // TypeError: ExcelJS.Workbook is not a constructor (visible to
+          // operators uploading a workbook on the preflight check page).
+          // Same fix as documentTextExtractor.ts:219 which has been
+          // working correctly.
+          const ExcelJSMod: any = await import("exceljs");
+          const ExcelJS = ExcelJSMod.default ?? ExcelJSMod;
+          const wb = new ExcelJS.Workbook();
           try {
             await wb.xlsx.load(buffer);
           } catch (parseErr: any) {

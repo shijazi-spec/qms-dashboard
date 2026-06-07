@@ -4145,6 +4145,24 @@
                 </div>`;
             }
 
+            // Phase 1 — Agentic Duplicate Resolution: non-destructive "Preview
+            // Merge Plan" for Accounts clusters (2+ account records). Calls the
+            // read-only /plan endpoint and renders the proposed survivor, field
+            // migrations, conflicts, and which duplicates would be tagged
+            // Duplicate-Delete. No writes happen here — pure preview.
+            if (_typeCounts.account >= 2) {
+                html += `<div class="border-t pt-4 mt-4" data-testid="section-merge-plan">
+                    <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-700">AI Merge Plan (preview)</h4>
+                            <p class="text-xs text-gray-500">Proposes a survivor and field migrations, and flags duplicates with <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code>. Read-only — nothing is written to Zoho.</p>
+                        </div>
+                        <button data-on-click="previewMergePlan" data-args="[${cluster.id}]" data-testid="button-preview-merge-plan-${cluster.id}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview Merge Plan</button>
+                    </div>
+                    <div id="mergePlanPanel" class="text-sm"></div>
+                </div>`;
+            }
+
             // R10: snapshots section. Empty placeholder rendered with the
             // modal; the async loadClusterSnapshots() fetch populates it
             // after the main modal content is in place so the modal doesn't
@@ -4378,6 +4396,78 @@
             } catch (e) {
                 alert('Network error during split.');
             }
+        }
+
+        // ── Phase 1 Agentic Duplicate Resolution — read-only plan preview ──────
+        // Invoked via data-on-click="previewMergePlan". POSTs the read-only
+        // /plan endpoint and renders the proposed merge plan into #mergePlanPanel.
+        // Performs NO writes; the destructive execute path is built separately.
+        async function previewMergePlan(clusterId) {
+            const panel = document.getElementById('mergePlanPanel');
+            if (!panel) return;
+            panel.innerHTML = '<div class="py-4 text-gray-400">Building plan…</div>';
+            let res, data;
+            try {
+                res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/plan', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                });
+            } catch (e) {
+                panel.innerHTML = '<div class="py-3 text-red-600 text-sm">Failed to reach server: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                return;
+            }
+            try { data = await res.json(); } catch (_) { data = null; }
+            if (!res.ok || !data || !data.plan) {
+                const msg = (data && data.error) ? data.error : ('Server returned ' + (res ? res.status : '—'));
+                panel.innerHTML = '<div class="py-3 text-amber-700 text-sm">' + escapeHtml(msg) + '</div>';
+                return;
+            }
+            panel.innerHTML = __renderMergePlan(data.plan);
+        }
+
+        function __renderMergePlan(plan) {
+            const esc = (v) => escapeHtml(v === null || v === undefined || v === '' ? '—' : String(v));
+
+            const recRows = (plan.records || []).map(r =>
+                '<tr class="border-t">' +
+                '<td class="px-3 py-2">' + (r.isMaster
+                    ? '<span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 text-xs font-semibold">SURVIVOR</span>'
+                    : '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs font-medium">Duplicate-Delete</span>') + '</td>' +
+                '<td class="px-3 py-2">' + esc(r.name) + '</td>' +
+                '<td class="px-3 py-2 font-mono text-xs text-gray-600">' + esc(r.zohoId) + '</td>' +
+                '<td class="px-3 py-2 text-end">' + Math.round((r.completeness || 0) * 100) + '%</td>' +
+                '<td class="px-3 py-2 text-xs text-gray-500">' + esc(r.owner) + '</td>' +
+                '</tr>'
+            ).join('');
+
+            const decRows = (plan.fieldDecisions || []).map(d => {
+                const tone = d.action === 'fill' ? 'bg-green-50' : 'bg-amber-50';
+                const badge = d.action === 'fill'
+                    ? '<span class="px-2 py-0.5 rounded bg-green-100 text-green-800 text-xs font-medium">FILL</span>'
+                    : '<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs font-medium">CONFLICT</span>';
+                const alts = (d.alternatives || []).map(a => esc(a.recordName) + ': ' + esc(a.value)).join(' · ');
+                return '<tr class="border-t ' + tone + '">' +
+                    '<td class="px-3 py-2 font-medium">' + esc(d.label) + '</td>' +
+                    '<td class="px-3 py-2">' + badge + '</td>' +
+                    '<td class="px-3 py-2">' + esc(d.chosenValue) + '</td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-500">' + esc(d.reason) + (alts ? '<div class="mt-1 text-gray-400">alt: ' + alts + '</div>' : '') + '</td>' +
+                    '</tr>';
+            }).join('');
+
+            const warns = (plan.warnings || []).length
+                ? '<ul class="list-disc ms-5 mt-1 space-y-1 text-amber-800">' + plan.warnings.map(w => '<li>' + esc(w) + '</li>').join('') + '</ul>'
+                : '<span class="text-gray-400">None</span>';
+
+            return '' +
+                '<div class="rounded-lg border border-purple-200 bg-purple-50 p-3 mb-3 text-sm text-purple-900" data-testid="merge-plan-rationale">' + esc(plan.rationale) + '</div>' +
+                '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">Survivor</span><div class="font-semibold">' + esc(plan.masterName) + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
+                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th><th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
+                '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Field migrations &amp; conflicts (' + (plan.fieldDecisions || []).length + ')</div>' +
+                (decRows
+                    ? '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Field</th><th class="px-3 py-2 text-start">Action</th><th class="px-3 py-2 text-start">Value kept</th><th class="px-3 py-2 text-start">Why</th></tr></thead><tbody>' + decRows + '</tbody></table></div>'
+                    : '<div class="text-gray-400 text-sm mb-4">No field changes needed — survivor already holds all values.</div>') +
+                '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Warnings</div><div class="text-sm mb-2">' + warns + '</div>' +
+                '<div class="text-xs text-gray-400">Generated ' + esc(plan.generatedAt) + ' · by ' + esc(plan.generatedBy) + ' · Read-only preview — no Zoho writes performed.</div>';
         }
 
         async function resolveClusterAction(clusterId, action) {
