@@ -458,6 +458,97 @@ const WalaPlusNav = {
     this.applyTheme(next);
   },
 
+  /**
+   * Detect which deployment we're on so the header can flag standby
+   * vs primary at a glance — important now that we run both Replit
+   * (primary) and Railway (standby/failover) simultaneously and ops
+   * keeps confusing one's screenshots for the other.
+   *
+   * Mapping (hostname-based, no env vars or API call needed):
+   *   *.replit.app   → 'primary'  (current main platform)
+   *   *.railway.app  → 'standby'  (kept warm in case Replit breaks)
+   *   else           → 'dev'      (localhost, IDE preview, custom domain)
+   *
+   * Returns 'dev' on any non-recognised host so the badge stays
+   * silent during local development.
+   */
+  getEnvRole() {
+    try {
+      const h = (window.location.hostname || '').toLowerCase();
+      if (h.indexOf('replit.app') !== -1)  return 'primary';
+      if (h.indexOf('railway.app') !== -1) return 'standby';
+      return 'dev';
+    } catch (e) {
+      return 'dev';
+    }
+  },
+
+  /**
+   * Inject the env badge into the nav header (next to #lastUpdated) +
+   * paint a small standby warning banner above the page when we're on
+   * the Railway failover. Banner is dismissable per session but
+   * remembers the choice in sessionStorage so it doesn't keep nagging
+   * after the operator has acknowledged it.
+   *
+   * No-ops on 'dev' so the localhost screenshots stay clean.
+   */
+  applyEnvBadge() {
+    const role = this.getEnvRole();
+    try { document.body.setAttribute('data-env-role', role); } catch (e) { /* SSR-style guard */ }
+    if (role === 'dev') return;
+
+    const PILL = {
+      primary: {
+        text: 'PRIMARY',
+        title: 'Replit deployment — main platform. Writes from this env are the source of truth.',
+        cls:   'bg-emerald-100 text-emerald-700 border-emerald-200',
+      },
+      standby: {
+        text: 'STANDBY',
+        title: 'Railway deployment — kept warm in case Replit breaks. Avoid writes here unless Replit is down; this DB does not replicate back.',
+        cls:   'bg-amber-100 text-amber-800 border-amber-200',
+      },
+    }[role];
+    if (!PILL) return;
+
+    // Pill next to the Last-Updated label in the header. Inserted via
+    // querySelector so it doesn't matter which dashboard page we're on
+    // — every page renders the same nav header via render().
+    try {
+      const anchor = document.getElementById('lastUpdated');
+      if (anchor && !document.getElementById('wp-env-pill')) {
+        const pill = document.createElement('span');
+        pill.id = 'wp-env-pill';
+        pill.className = 'inline-flex items-center px-2 py-0.5 me-2 rounded-full text-[10px] font-semibold border ' + PILL.cls;
+        pill.title = PILL.title;
+        pill.textContent = PILL.text;
+        anchor.parentNode.insertBefore(pill, anchor);
+      }
+    } catch (e) { /* DOM not ready; render() will retry on next tick */ }
+
+    // Standby-only: top-of-page warning banner. Yellow strip so a
+    // screenshot of Railway looks visibly different from Replit at a
+    // glance. Operators can dismiss for the rest of the tab session.
+    if (role === 'standby') {
+      try {
+        if (sessionStorage.getItem('wp-standby-banner-dismissed') === '1') return;
+      } catch (e) { /* ignore quota/private-mode errors */ }
+      if (document.getElementById('wp-env-banner')) return;
+      const bar = document.createElement('div');
+      bar.id = 'wp-env-banner';
+      bar.setAttribute('role', 'status');
+      bar.className = 'w-full bg-amber-50 border-b border-amber-200 text-amber-900 text-xs px-4 py-2 flex items-center justify-between gap-3';
+      bar.innerHTML = '<span><strong>Standby environment.</strong> This is the Railway failover — main platform is <a href="https://qms-dashboard.replit.app/" target="_blank" rel="noopener" class="underline font-semibold">qms-dashboard.replit.app</a>. Changes you make here do not replicate back to Replit.</span><button type="button" aria-label="Dismiss" id="wp-env-banner-dismiss" class="text-amber-700 hover:text-amber-900 font-bold text-sm">×</button>';
+      document.body.insertBefore(bar, document.body.firstChild);
+      try {
+        document.getElementById('wp-env-banner-dismiss').addEventListener('click', () => {
+          bar.remove();
+          try { sessionStorage.setItem('wp-standby-banner-dismissed', '1'); } catch (e) { /* ignore */ }
+        });
+      } catch (e) { /* event binding failed — banner just stays */ }
+    }
+  },
+
   init(currentPageId) {
     this.currentPage = currentPageId;
     // Apply persisted theme BEFORE any DOM rendering so the page never flashes.
@@ -479,6 +570,11 @@ const WalaPlusNav = {
       // include the script tag. The helper is idempotent and self-guards
       // against double-init.
       this._ensureTableSortLoaded();
+      // Env badge in the header + standby warning banner. Hostname-
+      // detection-based so the dashboard can flag Replit (primary) vs
+      // Railway (standby/failover) at a glance without any env-var
+      // plumbing. No-op on localhost / IDE preview.
+      this.applyEnvBadge();
     };
     if (window.WalaPlusI18n) {
       window.WalaPlusI18n.init().then(doInit);
