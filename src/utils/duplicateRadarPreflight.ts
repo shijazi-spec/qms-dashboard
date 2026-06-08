@@ -54,6 +54,20 @@ export interface PreflightResultRow {
   owners: string[];
   reason: string;
   suggested_action: string;
+  /**
+   * Per-module record counts on the matched cluster — null on PASS rows
+   * (no cluster) and on tenants where the cluster aggregation hasn't
+   * populated the counts yet. Surfaces in the dashboard as a compact
+   * "Leads N · Deals N · Contacts N · Accounts N" column so the operator
+   * can scan multi-module exposure without opening every row.
+   */
+  module_counts: {
+    leads: number;
+    deals: number;
+    contacts: number;
+    accounts: number;
+    total: number;
+  } | null;
 }
 
 export interface PreflightSummary {
@@ -161,6 +175,7 @@ export function classifyPreflightRows(input: {
         owners: [],
         reason: "no_domain_resolved",
         suggested_action: SUGGESTED_ACTIONS.pass,
+        module_counts: null,
       });
       summary.pass++;
       continue;
@@ -180,6 +195,7 @@ export function classifyPreflightRows(input: {
         owners: [],
         reason: VERDICT_REASONS.pass,
         suggested_action: SUGGESTED_ACTIONS.pass,
+        module_counts: null,
       });
       summary.pass++;
       continue;
@@ -199,6 +215,22 @@ export function classifyPreflightRows(input: {
           : Number.parseFloat(String(c.arr_exposure)) || 0;
     if (verdict === "block" && arr) arrBlocked += arr;
 
+    // 2026-06-08 — surface per-module counts so the dashboard can show
+    // "Leads(N) · Deals(N) · Contacts(N) · Accounts(N)" in a single
+    // column. Counts come straight from duplicate_clusters via the
+    // already-existing SELECT in runPreflight; we just pass them
+    // through. Defensive parseInt for tenants where the columns store
+    // numeric strings instead of integers (Postgres BIGINT path).
+    const _n = (v: unknown): number => {
+      if (v === null || v === undefined) return 0;
+      const parsed = typeof v === "number" ? v : parseInt(String(v), 10);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const leadsN    = _n(c.total_leads);
+    const dealsN    = _n(c.total_deals);
+    const contactsN = _n(c.total_contacts);
+    const accountsN = _n(c.total_accounts);
+
     summary[verdict]++;
     out.push({
       row_index: i,
@@ -214,6 +246,13 @@ export function classifyPreflightRows(input: {
       owners: extractOwners(c.owners_involved),
       reason: VERDICT_REASONS[verdict],
       suggested_action: SUGGESTED_ACTIONS[verdict],
+      module_counts: {
+        leads: leadsN,
+        deals: dealsN,
+        contacts: contactsN,
+        accounts: accountsN,
+        total: leadsN + dealsN + contactsN + accountsN,
+      },
     });
   }
 
