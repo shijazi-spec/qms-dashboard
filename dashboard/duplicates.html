@@ -6271,6 +6271,13 @@
                         churn_date: v.churn_date,
                         health: v.health,
                         ext_id: v.ext_id,
+                        // 2026-06-08 — propagate layout / stage / pipeline so
+                        // the Advanced Filter (Layout / Stage / Pipeline multi-
+                        // selects) can match against the group object. Backend
+                        // surfaces these on every CsLifecycleViolationRow now.
+                        layout: v.layout || null,
+                        stage: v.stage || null,
+                        pipeline: v.pipeline || null,
                         violations: [],
                     });
                 }
@@ -6434,9 +6441,16 @@
             // customer_since / renewal_date / churn_date (deal is "in
             // window" if any lifecycle date sits inside the range).
             filtered = filtered.filter(g => rowMatchesAdvancedFilter(g, {
-                ownerField:  'cs_owner_name',
-                domainField: 'domain',
-                dateFields:  ['customer_since', 'renewal_date', 'churn_date'],
+                ownerField:    'cs_owner_name',
+                domainField:   'domain',
+                dateFields:    ['customer_since', 'renewal_date', 'churn_date'],
+                // 2026-06-08 — wire Layout / Stage / Pipeline filters
+                // explicitly. Backend now surfaces these from the underlying
+                // Zoho Deal's raw_data; groupCsLifecycleByDeal propagates
+                // them onto each group.
+                layoutField:   'layout',
+                stageField:    'stage',
+                pipelineField: 'pipeline',
             }));
 
             const sorted = sortCsLifecycleRows(filtered, window._csLifecycleSort.key, window._csLifecycleSort.dir);

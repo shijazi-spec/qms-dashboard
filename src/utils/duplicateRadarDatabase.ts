@@ -4823,6 +4823,16 @@ export interface CsLifecycleViolationRow {
   // dashboard UI; Health stays on the row so existing CSV exports and
   // any future consumer keep both signals available.
   ext_id: string | null;
+  // 2026-06-08 — surface the underlying Zoho Deal's Layout name + Stage
+  // value on the row so the dashboard's Advanced Filters (Layout /
+  // Stage / Pipeline multi-selects) can actually narrow the CS
+  // Lifecycle violation list. Without these, selecting Layout=WalaPlus
+  // or Stage=Agreement Signed on this tab had no visible effect — the
+  // client-side rowMatchesAdvancedFilter() had no field to match
+  // against. Pulled from raw_data inside scanCsLifecycleViolations.
+  layout: string | null;
+  stage: string | null;
+  pipeline: string | null;
   violation: CsViolation;
 }
 
@@ -4906,6 +4916,24 @@ export async function scanCsLifecycleViolations(opts: {
         row.account_name ||
         null;
 
+      // 2026-06-08 — pull Layout / Stage / Pipeline straight off the
+      // Zoho raw_data so the dashboard's Advanced Filters can match
+      // against them. Layout in Zoho is an object { id, name }; Stage
+      // and Pipeline are plain strings. Defensive .toString() in case
+      // a tenant has the field with an unexpected shape.
+      const rawDeal: any = (row.raw_data as any) ?? {};
+      const _readObjOrStr = (v: any): string | null => {
+        if (v == null) return null;
+        if (typeof v === "string") return v.trim() || null;
+        if (typeof v === "object" && typeof v.name === "string") {
+          return v.name.trim() || null;
+        }
+        return null;
+      };
+      const dealLayout = _readObjOrStr(rawDeal.Layout);
+      const dealStage = _readObjOrStr(rawDeal.Stage);
+      const dealPipeline = _readObjOrStr(rawDeal.Pipeline);
+
       violations.push({
         record_id: row.id,
         cluster_id: row.cluster_id ?? null,
@@ -4920,6 +4948,9 @@ export async function scanCsLifecycleViolations(opts: {
         churn_date: fmtDate(detail.churn_date),
         health: detail.health ?? null,
         ext_id: detail.ext_id ?? null,
+        layout: dealLayout,
+        stage: dealStage,
+        pipeline: dealPipeline,
         violation: v,
       });
     }
