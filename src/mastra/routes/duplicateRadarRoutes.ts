@@ -128,7 +128,18 @@ import {
 } from "../../utils/zohoCRM";
 
 import { logger } from "../../utils/logger";
-import { buildAccountMergePlan } from "../../utils/duplicateMergePlanner";
+import {
+  buildMergePlan,
+  MODULE_RECORD_TYPE,
+  type CrmModule,
+} from "../../utils/duplicateMergePlanner";
+
+const AGENTIC_MODULES: CrmModule[] = ["Accounts", "Leads", "Deals", "Contacts"];
+/** Parse + validate the `module` field from a request body; defaults Accounts. */
+function parseAgenticModule(body: any): CrmModule {
+  const m = typeof body?.module === "string" ? body.module : "Accounts";
+  return (AGENTIC_MODULES as string[]).includes(m) ? (m as CrmModule) : "Accounts";
+}
 import { executeMergePlan } from "../../utils/duplicateMergeExecutor";
 import {
   recordResolutionEvent,
@@ -1060,21 +1071,23 @@ export const duplicateRadarRoutes = [
           if (!cluster) return c.json({ error: "Cluster not found" }, 404);
 
           const records = await getRecordsByClusterId(id);
-          const accountCount = records.filter(
-            (r) => r.record_type === "account",
+          const body = await c.req.json().catch(() => ({}));
+          const module = parseAgenticModule(body);
+          const recordType = MODULE_RECORD_TYPE[module];
+          const moduleCount = records.filter(
+            (r) => r.record_type === recordType,
           ).length;
-          if (accountCount < 2) {
+          if (moduleCount < 2) {
             return c.json(
               {
-                error:
-                  "Phase 1 plans Accounts clusters with 2+ Account records.",
-                account_record_count: accountCount,
+                error: `This cluster has fewer than 2 ${module} records to plan a merge.`,
+                module,
+                module_record_count: moduleCount,
               },
               400,
             );
           }
 
-          const body = await c.req.json().catch(() => ({}));
           const includeZohoIds = Array.isArray(body?.record_zoho_ids)
             ? body.record_zoho_ids.filter((x: any) => typeof x === "string")
             : null;
@@ -1087,7 +1100,7 @@ export const duplicateRadarRoutes = [
             (user as any)?.email || (user as any)?.role || "duplicate-radar";
           let plan;
           try {
-            plan = buildAccountMergePlan(id, records, {
+            plan = buildMergePlan(module, id, records, {
               tagName: "Duplicate-Delete",
               generatedBy,
               generatedAt: new Date().toISOString(),
@@ -1152,15 +1165,17 @@ export const duplicateRadarRoutes = [
           }
 
           const records = await getRecordsByClusterId(id);
-          const accountCount = records.filter(
-            (r) => r.record_type === "account",
+          const module = parseAgenticModule(body);
+          const recordType = MODULE_RECORD_TYPE[module];
+          const moduleCount = records.filter(
+            (r) => r.record_type === recordType,
           ).length;
-          if (accountCount < 2) {
+          if (moduleCount < 2) {
             return c.json(
               {
-                error:
-                  "Phase 1 resolves Accounts clusters with 2+ Account records.",
-                account_record_count: accountCount,
+                error: `This cluster has fewer than 2 ${module} records to resolve.`,
+                module,
+                module_record_count: moduleCount,
               },
               400,
             );
@@ -1168,7 +1183,7 @@ export const duplicateRadarRoutes = [
 
           let plan;
           try {
-            plan = buildAccountMergePlan(id, records, {
+            plan = buildMergePlan(module, id, records, {
               tagName: "Duplicate-Delete",
               generatedBy:
                 (sessionUser as any)?.email ||
@@ -1182,12 +1197,12 @@ export const duplicateRadarRoutes = [
             return c.json({ error: e?.message || "Could not build plan" }, 400);
           }
 
-          // Cross-module clusters: Agentic handles Accounts only, so it must
-          // NOT close the whole cluster (the Leads/Deals/Contacts still need
-          // the manual Mark-Resolved cross-module link/close). Only pure-
-          // Accounts clusters are fully resolved by an Apply.
+          // Multi-module clusters: Agentic resolves ONE module, so it must NOT
+          // close the whole cluster — other modules' records still need their
+          // own resolution (manual Mark-Resolved or a separate Agentic run).
+          // Only a single-module cluster is fully resolved by one Apply.
           const isCrossModule = records.some(
-            (r) => r.record_type && r.record_type !== "account",
+            (r) => r.record_type && r.record_type !== recordType,
           );
           const report = await executeMergePlan(plan, {
             performedBy:
@@ -1204,7 +1219,7 @@ export const duplicateRadarRoutes = [
           // default (rebuilt without the override). Best-effort, never blocks.
           try {
             const proposedMasterZohoId = masterZohoId
-              ? buildAccountMergePlan(id, records, {
+              ? buildMergePlan(module, id, records, {
                   tagName: "Duplicate-Delete",
                   includeZohoIds,
                 }).masterZohoId
@@ -1304,21 +1319,24 @@ export const duplicateRadarRoutes = [
           if (!cluster) return c.json({ error: "Cluster not found" }, 404);
 
           const records = await getRecordsByClusterId(id);
-          const accountCount = records.filter(
-            (r) => r.record_type === "account",
+          const body = await c.req.json().catch(() => ({}));
+          const module = parseAgenticModule(body);
+          const recordType = MODULE_RECORD_TYPE[module];
+          const moduleCount = records.filter(
+            (r) => r.record_type === recordType,
           ).length;
-          if (accountCount < 2) {
+          if (moduleCount < 2) {
             return c.json(
               {
-                error:
-                  "Phase 1 reviews Accounts clusters with 2+ Account records.",
-                account_record_count: accountCount,
+                error: `This cluster has fewer than 2 ${module} records to review.`,
+                module,
+                module_record_count: moduleCount,
               },
               400,
             );
           }
 
-          const plan = buildAccountMergePlan(id, records, {
+          const plan = buildMergePlan(module, id, records, {
             tagName: "Duplicate-Delete",
             generatedBy: (user as any)?.email || "duplicate-radar",
             generatedAt: new Date().toISOString(),

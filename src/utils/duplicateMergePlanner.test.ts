@@ -9,7 +9,10 @@
  * Wired:  auto-discovered by tests/runIntegrationTests.ts
  */
 
-import { buildAccountMergePlan } from "./duplicateMergePlanner";
+import {
+  buildAccountMergePlan,
+  buildMergePlan,
+} from "./duplicateMergePlanner";
 import type { DuplicateRecord } from "./duplicateRadarDatabase";
 
 let passed = 0;
@@ -217,6 +220,62 @@ assert(
     badForce.warnings.some((w) => /not in the selected merge set/i.test(w)),
   "invalid forced master falls back to the auto-pick with a warning",
 );
+
+console.log("multi-module (Leads / Deals / Contacts)");
+const lead1 = rec({
+  id: 30,
+  zoho_record_id: "L1",
+  record_type: "lead",
+  record_name: "Sam",
+  // Most complete (3 fields) but NO Phone → Phone should gap-fill from L2.
+  raw_data: { Last_Name: "Sam", Company: "Acme", Email: "s@a.com" },
+});
+const lead2 = rec({
+  id: 31,
+  zoho_record_id: "L2",
+  record_type: "lead",
+  record_name: "Sam",
+  raw_data: { Last_Name: "Sam", Phone: "0501234567" },
+});
+const leadPlan = buildMergePlan("Leads", 20, [lead1, lead2]);
+assert(leadPlan.module === "Leads", "Leads plan carries module=Leads");
+assert(leadPlan.masterZohoId === "L1", "Leads survivor = most-complete lead");
+assert(
+  leadPlan.duplicateZohoIds.length === 1 && leadPlan.duplicateZohoIds[0] === "L2",
+  "Leads plan tags the other lead",
+);
+assert(
+  leadPlan.fieldDecisions.some((d) => d.field === "Phone" && d.action === "fill"),
+  "Leads plan migrates lead fields (Phone gap-fill from L2)",
+);
+
+const deal1 = rec({
+  id: 40,
+  zoho_record_id: "D1",
+  record_type: "deal",
+  record_name: "Big Deal",
+  raw_data: { Deal_Name: "Big Deal", Amount: 100, Stage: "Won" },
+});
+const deal2 = rec({
+  id: 41,
+  zoho_record_id: "D2",
+  record_type: "deal",
+  record_name: "Big Deal",
+  raw_data: { Deal_Name: "Big Deal" },
+});
+const dealPlan = buildMergePlan("Deals", 21, [deal1, deal2]);
+assert(
+  dealPlan.module === "Deals" && dealPlan.masterZohoId === "D1",
+  "Deals plan carries module + most-complete survivor",
+);
+
+let threwMod = false;
+try {
+  buildMergePlan("Leads", 22, [recA, recB]);
+} catch {
+  threwMod = true;
+}
+assert(threwMod, "Leads plan over an Accounts-only cluster throws (no lead records)");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

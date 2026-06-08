@@ -4225,21 +4225,31 @@
             // read-only /plan endpoint and renders the proposed survivor, field
             // migrations, conflicts, and which duplicates would be tagged
             // Duplicate-Delete. No writes happen here — pure preview.
-            if (_typeCounts.account >= 2) {
-                html += `<div class="border-t-2 border-purple-200 pt-4 mt-4" data-testid="section-merge-plan">
+            // One Agentic Resolution section per module present with >=2
+            // records. Each resolves its own module independently (same
+            // migrate-then-tag model); on multi-module clusters each section
+            // leaves the cluster open for the other modules.
+            const _agenticModules = [
+                { module: 'Accounts', type: 'account', label: 'Accounts' },
+                { module: 'Leads', type: 'lead', label: 'Leads' },
+                { module: 'Deals', type: 'deal', label: 'Deals' },
+                { module: 'Contacts', type: 'contact', label: 'Contacts' },
+            ].filter(m => (_typeCounts[m.type] || 0) >= 2);
+            for (const am of _agenticModules) {
+                html += `<div class="border-t-2 border-purple-200 pt-4 mt-4" data-testid="section-merge-plan-${am.module}">
                     <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
                         <div>
                             <h4 class="text-sm font-bold text-purple-800 flex items-center gap-2">
                                 <span class="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[10px] font-bold uppercase tracking-wide">AI</span>
-                                Agentic Resolution
-                                <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-medium">${_typeCounts.account} accounts</span>
+                                Agentic Resolution — ${escapeHtml(am.label)}
+                                <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-medium">${_fn(_typeCounts[am.type])} ${escapeHtml(am.label.toLowerCase())}</span>
                             </h4>
-                            <p class="text-xs text-gray-500">Proposes a survivor, migrates winning fields, reparents Deals/Contacts/Notes, and flags duplicates with <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code> for the admin. Preview first — then dry-run or apply. The platform never deletes.</p>
+                            <p class="text-xs text-gray-500">Proposes a survivor, migrates winning fields, reparents related records + notes, and flags duplicates with <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code> for the admin. Preview first — then dry-run or apply. The platform never deletes.</p>
                         </div>
-                        <button data-on-click="previewMergePlan" data-args="[${cluster.id}]" data-testid="button-preview-merge-plan-${cluster.id}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview Merge Plan</button>
+                        <button data-on-click="previewMergePlan" data-args='["${am.module}",${cluster.id}]' data-testid="button-preview-merge-plan-${am.module}-${cluster.id}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview ${escapeHtml(am.label)} Plan</button>
                     </div>
-                    ${is_cross_module ? `<div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900" data-testid="banner-agentic-cross-module"><strong>Cross-module cluster:</strong> Agentic Resolution handles the <strong>Accounts only</strong>. Applying migrates &amp; tags the duplicate accounts but <strong>leaves the cluster open</strong> — use <strong>Mark Resolved</strong> above to link/close the Leads/Deals/Contacts. Don't run both expecting one to finish the other.</div>` : ''}
-                    <div id="mergePlanPanel" class="text-sm"></div>
+                    ${is_cross_module ? `<div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900"><strong>Multi-module cluster:</strong> this resolves <strong>${escapeHtml(am.label)} only</strong> and <strong>leaves the cluster open</strong> for the other modules — finish them via their own Agentic section or <strong>Mark Resolved</strong>. The platform never deletes.</div>` : ''}
+                    <div id="mergePlanPanel-${am.module}" class="text-sm"></div>
                 </div>`;
             }
 
@@ -4502,19 +4512,26 @@
         // Invoked via data-on-click="previewMergePlan". POSTs the read-only
         // /plan endpoint and renders the proposed merge plan into #mergePlanPanel.
         // Performs NO writes; the destructive execute path is built separately.
-        async function previewMergePlan(clusterId) {
-            const panel = document.getElementById('mergePlanPanel');
+        // Per-module plan state: { [module]: { selected, master } }. Keyed by
+        // module so one cluster modal can host several module sections at once.
+        window.__planState = window.__planState || {};
+        function _planSt(module) {
+            window.__planState[module] = window.__planState[module] || { selected: null, master: null };
+            return window.__planState[module];
+        }
+        async function previewMergePlan(module, clusterId) {
+            const panel = document.getElementById('mergePlanPanel-' + module);
             if (!panel) return;
-            // Reset the merge-set selection + forced survivor on a new cluster.
+            // Reset all module selections when previewing a different cluster.
             if (window.__planClusterId !== clusterId) {
-                window.__planSelected = null;
-                window.__planMaster = null;
+                window.__planState = {};
+                window.__planClusterId = clusterId;
             }
-            window.__planClusterId = clusterId;
+            const st = _planSt(module);
             panel.innerHTML = '<div class="py-4 text-gray-400">Building plan…</div>';
-            const reqBody = {};
-            if (Array.isArray(window.__planSelected)) reqBody.record_zoho_ids = window.__planSelected;
-            if (window.__planMaster) reqBody.master_zoho_id = window.__planMaster;
+            const reqBody = { module: module };
+            if (Array.isArray(st.selected)) reqBody.record_zoho_ids = st.selected;
+            if (st.master) reqBody.master_zoho_id = st.master;
             let res, data;
             try {
                 res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/plan', {
@@ -4535,61 +4552,63 @@
             }
             // Sync selection state to what the plan actually included, so the
             // checkboxes and subsequent dry-run/apply stay consistent.
-            window.__planSelected = (data.plan.records || []).filter(r => r.included && r.zohoId).map(r => r.zohoId);
+            st.selected = (data.plan.records || []).filter(r => r.included && r.zohoId).map(r => r.zohoId);
             panel.innerHTML = __renderMergePlan(data.plan);
         }
 
-        // Toggle one account in/out of the merge set, then re-preview. Enforces
+        // Toggle one record in/out of the merge set, then re-preview. Enforces
         // at least 2 selected — you can't merge fewer than two records.
-        function toggleMergeRecord(zohoId) {
-            const sel = new Set(Array.isArray(window.__planSelected) ? window.__planSelected : []);
+        function toggleMergeRecord(module, zohoId) {
+            const st = _planSt(module);
+            const sel = new Set(Array.isArray(st.selected) ? st.selected : []);
             const key = String(zohoId);
             if (sel.has(key)) sel.delete(key); else sel.add(key);
             if (sel.size < 2) {
-                alert('Select at least 2 accounts to merge.');
-                if (window.__planClusterId) previewMergePlan(window.__planClusterId);
+                alert('Select at least 2 records to merge.');
+                previewMergePlan(module, window.__planClusterId);
                 return;
             }
             // If the operator unticked the record they'd forced as survivor,
             // drop the override so the agent re-picks among the remaining set.
-            if (!sel.has(key) && window.__planMaster === key) window.__planMaster = null;
-            window.__planSelected = Array.from(sel);
-            previewMergePlan(window.__planClusterId);
+            if (!sel.has(key) && st.master === key) st.master = null;
+            st.selected = Array.from(sel);
+            previewMergePlan(module, window.__planClusterId);
         }
 
         // Force a specific record to be the survivor (overrides the auto-pick).
         // Ensures it's part of the merge set, then re-previews.
-        function setMergeSurvivor(zohoId) {
+        function setMergeSurvivor(module, zohoId) {
+            const st = _planSt(module);
             const key = String(zohoId);
-            window.__planMaster = key;
-            if (Array.isArray(window.__planSelected) && !window.__planSelected.includes(key)) {
-                window.__planSelected.push(key);
-            }
-            if (window.__planClusterId) previewMergePlan(window.__planClusterId);
+            st.master = key;
+            if (Array.isArray(st.selected) && !st.selected.includes(key)) st.selected.push(key);
+            previewMergePlan(module, window.__planClusterId);
         }
 
         // ── Agentic Resolution — execute (dry-run / apply) ────────────────────
         // dryRunMergePlan: POST /execute with no confirm → server performs NO
         // writes but enumerates exactly what a real run would do.
-        async function dryRunMergePlan(clusterId) {
-            await _runMergeExec(clusterId, { dry_run: true, record_zoho_ids: window.__planSelected || undefined, master_zoho_id: window.__planMaster || undefined }, false);
+        async function dryRunMergePlan(module, clusterId) {
+            const st = _planSt(module);
+            await _runMergeExec(module, clusterId, { module: module, dry_run: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined }, false);
         }
         // applyMergePlan: explicit confirm → POST /execute with confirm:true →
         // real Zoho writes (migrate fields, reparent, tag, stamp, resolve).
-        async function applyMergePlan(clusterId) {
+        async function applyMergePlan(module, clusterId) {
             const ok = window.confirm(
-                'Apply this merge in Zoho?\n\n' +
+                'Apply this ' + module + ' merge in Zoho?\n\n' +
                 '• Winning field values are written onto the survivor.\n' +
-                '• Deals/Contacts/Notes are reparented to the survivor.\n' +
+                '• Related records + notes are reparented to the survivor.\n' +
                 '• Duplicates are tagged "Duplicate-Delete" for the admin.\n' +
                 '• Nothing is deleted by the platform.\n\n' +
                 'This writes to production Zoho.'
             );
             if (!ok) return;
-            await _runMergeExec(clusterId, { confirm: true, record_zoho_ids: window.__planSelected || undefined, master_zoho_id: window.__planMaster || undefined }, true);
+            const st = _planSt(module);
+            await _runMergeExec(module, clusterId, { module: module, confirm: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined }, true);
         }
-        async function _runMergeExec(clusterId, body, isApply) {
-            const panel = document.getElementById('mergeExecPanel');
+        async function _runMergeExec(module, clusterId, body, isApply) {
+            const panel = document.getElementById('mergeExecPanel-' + module);
             if (!panel) return;
             panel.innerHTML = '<div class="py-3 text-gray-400">' + (isApply ? 'Applying in Zoho…' : 'Running dry-run…') + '</div>';
             let res, data;
@@ -4652,7 +4671,7 @@
             const recRows = (plan.records || []).map(r => {
                 const included = r.included !== false;
                 const makeSurvivorBtn = (included && !r.isMaster && r.zohoId)
-                    ? ' <button data-on-click="setMergeSurvivor" data-args=\'["' + esc(r.zohoId) + '"]\' class="ms-1 text-[11px] text-indigo-600 hover:underline cursor-pointer" title="Make this the surviving record">★ make survivor</button>'
+                    ? ' <button data-on-click="setMergeSurvivor" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '"]\' class="ms-1 text-[11px] text-indigo-600 hover:underline cursor-pointer" title="Make this the surviving record">★ make survivor</button>'
                     : '';
                 const outcome = !included
                     ? '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-500 text-xs font-medium">Excluded</span>'
@@ -4660,7 +4679,7 @@
                         ? '<span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 text-xs font-semibold">SURVIVOR</span>'
                         : '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs font-medium">Duplicate-Delete</span>' + makeSurvivorBtn);
                 const cb = r.zohoId
-                    ? '<input type="checkbox" data-on-click="toggleMergeRecord" data-args=\'["' + esc(r.zohoId) + '"]\'' + (included ? ' checked' : '') + ' class="cursor-pointer w-4 h-4" title="Include this account in the merge">'
+                    ? '<input type="checkbox" data-on-click="toggleMergeRecord" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '"]\'' + (included ? ' checked' : '') + ' class="cursor-pointer w-4 h-4" title="Include this record in the merge">'
                     : '<span class="text-gray-300" title="No Zoho id — cannot be merged">—</span>';
                 return '<tr class="border-t' + (included ? '' : ' opacity-50') + '">' +
                     '<td class="px-3 py-2 text-center">' + cb + '</td>' +
@@ -4702,11 +4721,11 @@
                     : '<div class="text-gray-400 text-sm mb-4">No field changes needed — survivor already holds all values.</div>') +
                 '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Warnings</div><div class="text-sm mb-3">' + warns + '</div>' +
                 '<div class="flex flex-wrap items-center gap-2 border-t pt-3">' +
-                    '<button data-on-click="dryRunMergePlan" data-args="[' + plan.clusterId + ']" data-testid="button-dryrun-merge-' + plan.clusterId + '" class="px-3 py-2 bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-lg text-sm font-medium">Dry-run (no writes)</button>' +
-                    '<button data-on-click="applyMergePlan" data-args="[' + plan.clusterId + ']" data-testid="button-apply-merge-' + plan.clusterId + '" class="px-4 py-2 bg-purple-700 text-white hover:bg-purple-800 rounded-lg text-sm font-semibold">⚡ Apply in Zoho</button>' +
+                    '<button data-on-click="dryRunMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-dryrun-merge-' + plan.module + '-' + plan.clusterId + '" class="px-3 py-2 bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-lg text-sm font-medium">Dry-run (no writes)</button>' +
+                    '<button data-on-click="applyMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-apply-merge-' + plan.module + '-' + plan.clusterId + '" class="px-4 py-2 bg-purple-700 text-white hover:bg-purple-800 rounded-lg text-sm font-semibold">⚡ Apply in Zoho</button>' +
                     '<span class="text-xs text-gray-400">Apply migrates fields, reparents Deals/Contacts/Notes, and tags duplicates <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code>. No deletions.</span>' +
                 '</div>' +
-                '<div id="mergeExecPanel" class="text-sm mt-3"></div>' +
+                '<div id="mergeExecPanel-' + esc(plan.module) + '" class="text-sm mt-3"></div>' +
                 '<div class="text-xs text-gray-400 mt-2">Generated ' + esc(plan.generatedAt) + ' · by ' + esc(plan.generatedBy) + '</div>';
         }
 

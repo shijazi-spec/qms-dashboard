@@ -20,6 +20,25 @@
 
 import type { DuplicateRecord } from "./duplicateRadarDatabase";
 
+/** CRM modules the agentic resolver supports. */
+export type CrmModule = "Accounts" | "Leads" | "Deals" | "Contacts";
+
+/** duplicate_records.record_type value for each module. */
+export const MODULE_RECORD_TYPE: Record<CrmModule, string> = {
+  Accounts: "account",
+  Leads: "lead",
+  Deals: "deal",
+  Contacts: "contact",
+};
+
+/** Singular human label per module. */
+const MODULE_LABEL: Record<CrmModule, string> = {
+  Accounts: "Account",
+  Leads: "Lead",
+  Deals: "Deal",
+  Contacts: "Contact",
+};
+
 // ── Output types ───────────────────────────────────────────────────────────
 
 export type MergeFieldAction = "fill" | "conflict";
@@ -61,7 +80,7 @@ export interface MergePlanRecordSummary {
 
 export interface MergePlan {
   clusterId: number;
-  module: "Accounts";
+  module: CrmModule;
   /** Phase 1 mechanism — migrate fields to master, tag duplicates for admin. */
   method: "migrate_tag";
   tagName: string;
@@ -96,36 +115,53 @@ interface FieldSpec {
   fallback?: (r: DuplicateRecord) => unknown;
 }
 
-const ACCOUNT_FIELDS: FieldSpec[] = [
-  {
-    zoho: "Account_Name",
-    label: "Account Name",
-    fallback: (r) => r.record_name || r.company_name,
-  },
-  { zoho: "Phone", label: "Phone", fallback: (r) => r.phone },
-  { zoho: "Website", label: "Website", fallback: (r) => r.website || r.domain },
-  { zoho: "Industry", label: "Industry", fallback: (r) => r.industry },
-  { zoho: "Employees", label: "Employees", fallback: (r) => r.no_of_employees },
-  { zoho: "Billing_Country", label: "Country", fallback: (r) => r.country },
-  { zoho: "Billing_State", label: "Region / State", fallback: (r) => r.region },
-  {
-    zoho: "Account_Type",
-    label: "Account Type",
-    fallback: (r) => r.account_type,
-  },
-  {
-    zoho: "CR_Number",
-    label: "CR Number",
-    custom: true,
-    fallback: (r) => r.cr_number,
-  },
-  {
-    zoho: "VAT_Number",
-    label: "VAT Number",
-    custom: true,
-    fallback: (r) => r.vat_number,
-  },
-];
+// Per-module field catalogues. Standard Zoho API field names; if your org
+// renamed a standard field or you want custom fields migrated, adjust here.
+// `custom: true` fields are flagged to the operator as API-name assumptions.
+const MODULE_FIELDS: Record<CrmModule, FieldSpec[]> = {
+  Accounts: [
+    { zoho: "Account_Name", label: "Account Name", fallback: (r) => r.record_name || r.company_name },
+    { zoho: "Phone", label: "Phone", fallback: (r) => r.phone },
+    { zoho: "Website", label: "Website", fallback: (r) => r.website || r.domain },
+    { zoho: "Industry", label: "Industry", fallback: (r) => r.industry },
+    { zoho: "Employees", label: "Employees", fallback: (r) => r.no_of_employees },
+    { zoho: "Billing_Country", label: "Country", fallback: (r) => r.country },
+    { zoho: "Billing_State", label: "Region / State", fallback: (r) => r.region },
+    { zoho: "Account_Type", label: "Account Type", fallback: (r) => r.account_type },
+    { zoho: "CR_Number", label: "CR Number", custom: true, fallback: (r) => r.cr_number },
+    { zoho: "VAT_Number", label: "VAT Number", custom: true, fallback: (r) => r.vat_number },
+  ],
+  Leads: [
+    { zoho: "Last_Name", label: "Name", fallback: (r) => r.record_name },
+    { zoho: "Company", label: "Company", fallback: (r) => r.company_name },
+    { zoho: "Email", label: "Email", fallback: (r) => r.email },
+    { zoho: "Phone", label: "Phone", fallback: (r) => r.phone },
+    { zoho: "Mobile", label: "Mobile", fallback: (r) => r.mobile },
+    { zoho: "Lead_Status", label: "Lead Status", fallback: (r) => r.status },
+    { zoho: "Lead_Source", label: "Source", fallback: (r) => r.source },
+    { zoho: "Industry", label: "Industry", fallback: (r) => r.industry },
+    { zoho: "Website", label: "Website", fallback: (r) => r.website || r.domain },
+  ],
+  Deals: [
+    { zoho: "Deal_Name", label: "Deal Name", fallback: (r) => r.record_name },
+    { zoho: "Amount", label: "Amount", fallback: (r) => r.deal_value },
+    { zoho: "Stage", label: "Stage", fallback: (r) => r.stage },
+    { zoho: "Pipeline", label: "Pipeline", fallback: (r) => r.pipeline },
+    { zoho: "Closing_Date", label: "Closing Date" },
+    { zoho: "Account_Name", label: "Account", fallback: (r) => r.account_name },
+    { zoho: "Contact_Name", label: "Contact", fallback: (r) => r.contact_name },
+    { zoho: "Lead_Source", label: "Source", fallback: (r) => r.source },
+  ],
+  Contacts: [
+    { zoho: "Last_Name", label: "Name", fallback: (r) => r.record_name },
+    { zoho: "Email", label: "Email", fallback: (r) => r.email },
+    { zoho: "Phone", label: "Phone", fallback: (r) => r.phone },
+    { zoho: "Mobile", label: "Mobile", fallback: (r) => r.mobile },
+    { zoho: "Account_Name", label: "Account", fallback: (r) => r.account_name },
+    { zoho: "Title", label: "Title", fallback: (r) => r.title },
+    { zoho: "Lead_Source", label: "Source", fallback: (r) => r.source },
+  ],
+};
 
 // ── Value helpers ────────────────────────────────────────────────────────────
 
@@ -175,10 +211,11 @@ function modifiedMs(r: DuplicateRecord): number {
   return t === Number.POSITIVE_INFINITY ? 0 : t; // unknown = oldest mod for "freshest"
 }
 
-function completeness(r: DuplicateRecord): number {
+function completeness(r: DuplicateRecord, fields: FieldSpec[]): number {
+  if (!fields.length) return 0;
   let filled = 0;
-  for (const f of ACCOUNT_FIELDS) if (fieldValue(r, f) !== null) filled++;
-  return filled / ACCOUNT_FIELDS.length;
+  for (const f of fields) if (fieldValue(r, f) !== null) filled++;
+  return filled / fields.length;
 }
 
 function recName(r: DuplicateRecord): string {
@@ -218,10 +255,13 @@ function sameScalar(
 // Deterministic priority: most-complete → oldest (canonical original) →
 // has an owner → lowest db id (stable).
 
-function pickMaster(records: DuplicateRecord[]): DuplicateRecord {
+function pickMaster(
+  records: DuplicateRecord[],
+  fields: FieldSpec[],
+): DuplicateRecord {
   return [...records].sort((a, b) => {
-    const ca = completeness(a);
-    const cb = completeness(b);
+    const ca = completeness(a, fields);
+    const cb = completeness(b, fields);
     if (cb !== ca) return cb - ca;
     const da = dateMs(a.created_date);
     const db = dateMs(b.created_date);
@@ -233,8 +273,8 @@ function pickMaster(records: DuplicateRecord[]): DuplicateRecord {
   })[0];
 }
 
-function masterReasonText(master: DuplicateRecord): string {
-  const pct = Math.round(completeness(master) * 100);
+function masterReasonText(master: DuplicateRecord, fields: FieldSpec[]): string {
+  const pct = Math.round(completeness(master, fields) * 100);
   const created = isoOrNull(master.created_date);
   const bits = [`most complete (${pct}% of tracked fields populated)`];
   if (created) bits.push(`oldest record (created ${created.slice(0, 10)})`);
@@ -265,33 +305,39 @@ export interface BuildPlanOptions {
 }
 
 /**
- * Build a non-destructive merge plan for an Accounts cluster.
- * Throws if there are fewer than 2 account-type records (nothing to merge).
+ * Build a non-destructive merge plan for a cluster, scoped to one CRM module
+ * (Accounts / Leads / Deals / Contacts). Same migrate-then-tag model for every
+ * module — only the field catalogue and record_type differ. Throws if there are
+ * fewer than 2 records of that module's type (nothing to merge).
  */
-export function buildAccountMergePlan(
+export function buildMergePlan(
+  module: CrmModule,
   clusterId: number,
   allRecords: DuplicateRecord[],
   opts: BuildPlanOptions = {},
 ): MergePlan {
+  const fields = MODULE_FIELDS[module];
+  const recordType = MODULE_RECORD_TYPE[module];
+  const label = MODULE_LABEL[module];
   const tagName = opts.tagName || "Duplicate-Delete";
   const warnings: string[] = [];
 
-  const nonAccount = allRecords.filter((r) => r.record_type !== "account");
-  if (nonAccount.length > 0) {
+  const nonTarget = allRecords.filter((r) => r.record_type !== recordType);
+  if (nonTarget.length > 0) {
     warnings.push(
-      `${nonAccount.length} non-Account record(s) in this cluster are ignored — Phase 1 resolves Accounts only.`,
+      `${nonTarget.length} non-${label} record(s) in this cluster are ignored — this plan resolves ${module} only.`,
     );
   }
 
-  const records = allRecords.filter((r) => r.record_type === "account");
+  const records = allRecords.filter((r) => r.record_type === recordType);
   if (records.length < 2) {
     throw new Error(
-      `Cluster ${clusterId} has ${records.length} Account record(s); need at least 2 to plan a merge.`,
+      `Cluster ${clusterId} has ${records.length} ${label} record(s); need at least 2 to plan a merge.`,
     );
   }
 
-  // Operator may select a subset of accounts to merge (>=2). Records left out
-  // of the selection are untouched (rendered as "Excluded" in the plan).
+  // Operator may select a subset to merge (>=2). Records left out of the
+  // selection are untouched (rendered as "Excluded" in the plan).
   const sel = (opts.includeZohoIds || []).filter(Boolean);
   const selSet = new Set(sel);
   const mergeSet =
@@ -300,12 +346,12 @@ export function buildAccountMergePlan(
       : records;
   if (sel.length > 0 && mergeSet.length < 2) {
     throw new Error(
-      `Select at least 2 Account records to merge (selected ${mergeSet.length}).`,
+      `Select at least 2 ${label} records to merge (selected ${mergeSet.length}).`,
     );
   }
   if (sel.length > 0 && mergeSet.length < records.length) {
     warnings.push(
-      `${records.length - mergeSet.length} account(s) excluded from this merge by the operator — left untouched.`,
+      `${records.length - mergeSet.length} ${label.toLowerCase()}(s) excluded from this merge by the operator — left untouched.`,
     );
   }
 
@@ -318,7 +364,7 @@ export function buildAccountMergePlan(
       `Requested master ${opts.masterZohoId} is not in the selected merge set — using the recommended survivor instead.`,
     );
   }
-  const master = overridden || pickMaster(mergeSet);
+  const master = overridden || pickMaster(mergeSet, fields);
   const duplicates = mergeSet.filter((r) => r !== master);
 
   // Field decisions — gap-fills + conflicts only (keeps are omitted as noise).
@@ -327,7 +373,7 @@ export function buildAccountMergePlan(
   let conflictCount = 0;
   let usesCustomField = false;
 
-  for (const f of ACCOUNT_FIELDS) {
+  for (const f of fields) {
     const masterVal = fieldValue(master, f);
     const dupVals = duplicates
       .map((d) => ({
@@ -417,7 +463,7 @@ export function buildAccountMergePlan(
     name: recName(r),
     isMaster: r === master,
     included: mergeSet.includes(r),
-    completeness: Math.round(completeness(r) * 100) / 100,
+    completeness: Math.round(completeness(r, fields) * 100) / 100,
     createdDate: isoOrNull(r.created_date),
     modifiedDate: isoOrNull(r.modified_date),
     owner: r.owner_name || r.owner_email || null,
@@ -426,8 +472,8 @@ export function buildAccountMergePlan(
   }));
 
   const masterReason = overridden
-    ? `Operator-selected survivor — ${Math.round(completeness(master) * 100)}% of tracked fields populated`
-    : masterReasonText(master);
+    ? `Operator-selected survivor — ${Math.round(completeness(master, fields) * 100)}% of tracked fields populated`
+    : masterReasonText(master, fields);
   const rationale =
     `Proposed survivor: "${recName(master)}"` +
     (master.zoho_record_id ? ` (${master.zoho_record_id})` : "") +
@@ -437,7 +483,7 @@ export function buildAccountMergePlan(
 
   return {
     clusterId,
-    module: "Accounts",
+    module,
     method: "migrate_tag",
     tagName,
     masterZohoId: master.zoho_record_id ?? null,
@@ -453,4 +499,13 @@ export function buildAccountMergePlan(
     generatedBy: opts.generatedBy || "duplicate-radar",
     generatedAt: opts.generatedAt ?? null,
   };
+}
+
+/** Back-compat convenience wrapper — Accounts merge plan. */
+export function buildAccountMergePlan(
+  clusterId: number,
+  allRecords: DuplicateRecord[],
+  opts: BuildPlanOptions = {},
+): MergePlan {
+  return buildMergePlan("Accounts", clusterId, allRecords, opts);
 }

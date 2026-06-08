@@ -20,7 +20,7 @@
  *     reliable move for them, so they stay until the admin deletes the record.
  */
 
-import type { MergePlan } from "./duplicateMergePlanner";
+import type { MergePlan, CrmModule } from "./duplicateMergePlanner";
 import {
   updateZohoRecord,
   fetchZohoRelatedRecords,
@@ -64,6 +64,27 @@ export interface ExecuteOptions {
 }
 
 const ACTIVITY_LISTS = ["Tasks", "Calls", "Events"];
+
+// Per-module reparenting: which related lists to repoint onto the survivor and
+// via which lookup field. Notes are always copied (handled separately);
+// activities/attachments are enumerated only (no reliable Zoho v2 move).
+//   Accounts: child Deals + Contacts repoint their Account_Name lookup.
+//   Contacts: related Deals repoint their Contact_Name lookup.
+//   Leads / Deals: no lookup children to repoint (Notes copy only).
+const MODULE_REPARENT: Record<
+  CrmModule,
+  Array<{ list: string; module: string; lookup: string; bucket: "deals" | "contacts" }>
+> = {
+  Accounts: [
+    { list: "Deals", module: "Deals", lookup: "Account_Name", bucket: "deals" },
+    { list: "Contacts", module: "Contacts", lookup: "Account_Name", bucket: "contacts" },
+  ],
+  Contacts: [
+    { list: "Deals", module: "Deals", lookup: "Contact_Name", bucket: "deals" },
+  ],
+  Leads: [],
+  Deals: [],
+};
 
 export async function executeMergePlan(
   plan: MergePlan,
@@ -130,40 +151,25 @@ export async function executeMergePlan(
 
   // 2) Reparent each duplicate's related records onto the survivor.
   for (const dupId of dups) {
-    // Deals — repoint the Account_Name lookup (clean move).
-    try {
-      const deals = await fetchZohoRelatedRecords(module, dupId, "Deals", { perPage: 200 });
-      for (const d of deals) {
-        if (!dryRun) {
-          try {
-            await updateZohoRecord("Deals", d.id, { Account_Name: { id: masterId } });
-          } catch (e) {
-            fail("reparent-deal", e, d.id);
-            continue;
+    // Module-specific lookup children (Accounts→Deals/Contacts via Account_Name;
+    // Contacts→Deals via Contact_Name; Leads/Deals→none). Repoint the lookup.
+    for (const rp of MODULE_REPARENT[module]) {
+      try {
+        const children = await fetchZohoRelatedRecords(module, dupId, rp.list, { perPage: 200 });
+        for (const ch of children) {
+          if (!dryRun) {
+            try {
+              await updateZohoRecord(rp.module, ch.id, { [rp.lookup]: { id: masterId } });
+            } catch (e) {
+              fail("reparent-" + rp.list.toLowerCase(), e, ch.id);
+              continue;
+            }
           }
+          report.reparented[rp.bucket]++;
         }
-        report.reparented.deals++;
+      } catch (e) {
+        fail("fetch-" + rp.list.toLowerCase(), e, dupId);
       }
-    } catch (e) {
-      fail("fetch-deals", e, dupId);
-    }
-
-    // Contacts — repoint the Account_Name lookup (clean move).
-    try {
-      const contacts = await fetchZohoRelatedRecords(module, dupId, "Contacts", { perPage: 200 });
-      for (const ct of contacts) {
-        if (!dryRun) {
-          try {
-            await updateZohoRecord("Contacts", ct.id, { Account_Name: { id: masterId } });
-          } catch (e) {
-            fail("reparent-contact", e, ct.id);
-            continue;
-          }
-        }
-        report.reparented.contacts++;
-      }
-    } catch (e) {
-      fail("fetch-contacts", e, dupId);
     }
 
     // Notes — Zoho v2 cannot move a note's parent, so copy onto the survivor.
