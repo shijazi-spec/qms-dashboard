@@ -464,6 +464,36 @@ export async function initDuplicateRadarTables(): Promise<void> {
 }
 
 async function _doInitDuplicateRadarTables(): Promise<void> {
+  // Agentic-resolution learning store — created at BOOT (here) so it exists in
+  // both dev and prod. If it were only created lazily on first use, the dev↔prod
+  // schema diff at deploy time keeps proposing to DROP it from prod. DDL mirrors
+  // ensureTable() in duplicateResolutionLearning.ts (which stays as a runtime
+  // safety net). Keep the two in sync.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS duplicate_resolution_feedback (
+      id SERIAL PRIMARY KEY,
+      cluster_id INTEGER,
+      event_type VARCHAR(32) NOT NULL,
+      proposed_master_zoho_id VARCHAR(100),
+      chosen_master_zoho_id VARCHAR(100),
+      master_overridden BOOLEAN DEFAULT FALSE,
+      fields_migrated INTEGER DEFAULT 0,
+      duplicates_tagged INTEGER DEFAULT 0,
+      reparented INTEGER DEFAULT 0,
+      errors INTEGER DEFAULT 0,
+      plan_json JSONB,
+      report_json JSONB,
+      performed_by VARCHAR(255),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_dup_res_feedback_cluster ON duplicate_resolution_feedback(cluster_id);`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_dup_res_feedback_created ON duplicate_resolution_feedback(created_at DESC);`,
+  );
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_clusters (
       id SERIAL PRIMARY KEY,
