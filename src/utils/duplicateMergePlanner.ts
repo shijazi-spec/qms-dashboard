@@ -47,6 +47,8 @@ export interface MergePlanRecordSummary {
   zohoId: string | null;
   name: string;
   isMaster: boolean;
+  /** Whether this record is in the merge set (false = operator-excluded, untouched). */
+  included: boolean;
   /** 0..1 fraction of tracked Account fields that are populated. */
   completeness: number;
   createdDate: string | null;
@@ -254,6 +256,12 @@ export interface BuildPlanOptions {
    * the cluster (falls back to the automatic choice).
    */
   masterZohoId?: string | null;
+  /**
+   * Operator-selected subset of account zoho_record_ids to merge (must be >=2).
+   * Records not in the selection are left untouched (shown as "Excluded").
+   * Omitted/empty = merge all accounts in the cluster.
+   */
+  includeZohoIds?: string[] | null;
 }
 
 /**
@@ -282,17 +290,36 @@ export function buildAccountMergePlan(
     );
   }
 
+  // Operator may select a subset of accounts to merge (>=2). Records left out
+  // of the selection are untouched (rendered as "Excluded" in the plan).
+  const sel = (opts.includeZohoIds || []).filter(Boolean);
+  const selSet = new Set(sel);
+  const mergeSet =
+    sel.length > 0
+      ? records.filter((r) => r.zoho_record_id && selSet.has(r.zoho_record_id))
+      : records;
+  if (sel.length > 0 && mergeSet.length < 2) {
+    throw new Error(
+      `Select at least 2 Account records to merge (selected ${mergeSet.length}).`,
+    );
+  }
+  if (sel.length > 0 && mergeSet.length < records.length) {
+    warnings.push(
+      `${records.length - mergeSet.length} account(s) excluded from this merge by the operator — left untouched.`,
+    );
+  }
+
   const overridden =
     opts.masterZohoId != null
-      ? records.find((r) => r.zoho_record_id === opts.masterZohoId)
+      ? mergeSet.find((r) => r.zoho_record_id === opts.masterZohoId)
       : undefined;
   if (opts.masterZohoId != null && !overridden) {
     warnings.push(
-      `Requested master ${opts.masterZohoId} is not an Account record in this cluster — using the recommended survivor instead.`,
+      `Requested master ${opts.masterZohoId} is not in the selected merge set — using the recommended survivor instead.`,
     );
   }
-  const master = overridden || pickMaster(records);
-  const duplicates = records.filter((r) => r !== master);
+  const master = overridden || pickMaster(mergeSet);
+  const duplicates = mergeSet.filter((r) => r !== master);
 
   // Field decisions — gap-fills + conflicts only (keeps are omitted as noise).
   const fieldDecisions: MergeFieldDecision[] = [];
@@ -389,6 +416,7 @@ export function buildAccountMergePlan(
     zohoId: r.zoho_record_id ?? null,
     name: recName(r),
     isMaster: r === master,
+    included: mergeSet.includes(r),
     completeness: Math.round(completeness(r) * 100) / 100,
     createdDate: isoOrNull(r.created_date),
     modifiedDate: isoOrNull(r.modified_date),

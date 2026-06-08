@@ -1074,13 +1074,29 @@ export const duplicateRadarRoutes = [
             );
           }
 
+          const body = await c.req.json().catch(() => ({}));
+          const includeZohoIds = Array.isArray(body?.record_zoho_ids)
+            ? body.record_zoho_ids.filter((x: any) => typeof x === "string")
+            : null;
+          const masterZohoId =
+            typeof body?.master_zoho_id === "string"
+              ? body.master_zoho_id
+              : null;
+
           const generatedBy =
             (user as any)?.email || (user as any)?.role || "duplicate-radar";
-          const plan = buildAccountMergePlan(id, records, {
-            tagName: "Duplicate-Delete",
-            generatedBy,
-            generatedAt: new Date().toISOString(),
-          });
+          let plan;
+          try {
+            plan = buildAccountMergePlan(id, records, {
+              tagName: "Duplicate-Delete",
+              generatedBy,
+              generatedAt: new Date().toISOString(),
+              includeZohoIds,
+              masterZohoId,
+            });
+          } catch (e: any) {
+            return c.json({ error: e?.message || "Could not build plan" }, 400);
+          }
 
           return c.json({ success: true, plan });
         } catch (error: any) {
@@ -1120,6 +1136,9 @@ export const duplicateRadarRoutes = [
             typeof body?.master_zoho_id === "string"
               ? body.master_zoho_id
               : null;
+          const includeZohoIds = Array.isArray(body?.record_zoho_ids)
+            ? body.record_zoho_ids.filter((x: any) => typeof x === "string")
+            : null;
 
           const cluster = await getClusterById(id);
           if (!cluster) return c.json({ error: "Cluster not found" }, 404);
@@ -1147,15 +1166,21 @@ export const duplicateRadarRoutes = [
             );
           }
 
-          const plan = buildAccountMergePlan(id, records, {
-            tagName: "Duplicate-Delete",
-            generatedBy:
-              (sessionUser as any)?.email ||
-              (sessionUser as any)?.role ||
-              "duplicate-radar",
-            generatedAt: new Date().toISOString(),
-            masterZohoId,
-          });
+          let plan;
+          try {
+            plan = buildAccountMergePlan(id, records, {
+              tagName: "Duplicate-Delete",
+              generatedBy:
+                (sessionUser as any)?.email ||
+                (sessionUser as any)?.role ||
+                "duplicate-radar",
+              generatedAt: new Date().toISOString(),
+              masterZohoId,
+              includeZohoIds,
+            });
+          } catch (e: any) {
+            return c.json({ error: e?.message || "Could not build plan" }, 400);
+          }
 
           const report = await executeMergePlan(plan, {
             performedBy:
@@ -1171,8 +1196,10 @@ export const duplicateRadarRoutes = [
           // default (rebuilt without the override). Best-effort, never blocks.
           try {
             const proposedMasterZohoId = masterZohoId
-              ? buildAccountMergePlan(id, records, { tagName: "Duplicate-Delete" })
-                  .masterZohoId
+              ? buildAccountMergePlan(id, records, {
+                  tagName: "Duplicate-Delete",
+                  includeZohoIds,
+                }).masterZohoId
               : plan.masterZohoId;
             await recordResolutionEvent({
               clusterId: id,

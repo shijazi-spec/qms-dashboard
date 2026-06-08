@@ -4504,12 +4504,19 @@
         async function previewMergePlan(clusterId) {
             const panel = document.getElementById('mergePlanPanel');
             if (!panel) return;
+            // Reset the merge-set selection when previewing a different cluster.
+            if (window.__planClusterId !== clusterId) window.__planSelected = null;
+            window.__planClusterId = clusterId;
             panel.innerHTML = '<div class="py-4 text-gray-400">Building plan…</div>';
+            const reqBody = {};
+            if (Array.isArray(window.__planSelected)) reqBody.record_zoho_ids = window.__planSelected;
             let res, data;
             try {
                 res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/plan', {
                     method: 'POST',
                     credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(reqBody),
                 });
             } catch (e) {
                 panel.innerHTML = '<div class="py-3 text-red-600 text-sm">Failed to reach server: ' + escapeHtml(String(e && e.message || e)) + '</div>';
@@ -4521,14 +4528,32 @@
                 panel.innerHTML = '<div class="py-3 text-amber-700 text-sm">' + escapeHtml(msg) + '</div>';
                 return;
             }
+            // Sync selection state to what the plan actually included, so the
+            // checkboxes and subsequent dry-run/apply stay consistent.
+            window.__planSelected = (data.plan.records || []).filter(r => r.included && r.zohoId).map(r => r.zohoId);
             panel.innerHTML = __renderMergePlan(data.plan);
+        }
+
+        // Toggle one account in/out of the merge set, then re-preview. Enforces
+        // at least 2 selected — you can't merge fewer than two records.
+        function toggleMergeRecord(zohoId) {
+            const sel = new Set(Array.isArray(window.__planSelected) ? window.__planSelected : []);
+            const key = String(zohoId);
+            if (sel.has(key)) sel.delete(key); else sel.add(key);
+            if (sel.size < 2) {
+                alert('Select at least 2 accounts to merge.');
+                if (window.__planClusterId) previewMergePlan(window.__planClusterId);
+                return;
+            }
+            window.__planSelected = Array.from(sel);
+            previewMergePlan(window.__planClusterId);
         }
 
         // ── Agentic Resolution — execute (dry-run / apply) ────────────────────
         // dryRunMergePlan: POST /execute with no confirm → server performs NO
         // writes but enumerates exactly what a real run would do.
         async function dryRunMergePlan(clusterId) {
-            await _runMergeExec(clusterId, { dry_run: true }, false);
+            await _runMergeExec(clusterId, { dry_run: true, record_zoho_ids: window.__planSelected || undefined }, false);
         }
         // applyMergePlan: explicit confirm → POST /execute with confirm:true →
         // real Zoho writes (migrate fields, reparent, tag, stamp, resolve).
@@ -4542,7 +4567,7 @@
                 'This writes to production Zoho.'
             );
             if (!ok) return;
-            await _runMergeExec(clusterId, { confirm: true }, true);
+            await _runMergeExec(clusterId, { confirm: true, record_zoho_ids: window.__planSelected || undefined }, true);
         }
         async function _runMergeExec(clusterId, body, isApply) {
             const panel = document.getElementById('mergeExecPanel');
@@ -4605,18 +4630,26 @@
         function __renderMergePlan(plan) {
             const esc = (v) => escapeHtml(v === null || v === undefined || v === '' ? '—' : String(v));
 
-            const recRows = (plan.records || []).map(r =>
-                '<tr class="border-t">' +
-                '<td class="px-3 py-2">' + (r.isMaster
-                    ? '<span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 text-xs font-semibold">SURVIVOR</span>'
-                    : '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs font-medium">Duplicate-Delete</span>') + '</td>' +
-                '<td class="px-3 py-2">' + esc(r.name) + '</td>' +
-                '<td class="px-3 py-2 font-mono text-xs text-gray-600">' + esc(r.zohoId) + '</td>' +
-                '<td class="px-3 py-2 text-end">' + Math.round((r.completeness || 0) * 100) + '%</td>' +
-                '<td class="px-3 py-2 text-xs text-gray-500">' + esc(r.owner) + '</td>' +
-                '<td class="px-3 py-2 text-xs text-gray-700">' + esc(r.layout) + '</td>' +
-                '</tr>'
-            ).join('');
+            const recRows = (plan.records || []).map(r => {
+                const included = r.included !== false;
+                const outcome = !included
+                    ? '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-500 text-xs font-medium">Excluded</span>'
+                    : (r.isMaster
+                        ? '<span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 text-xs font-semibold">SURVIVOR</span>'
+                        : '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs font-medium">Duplicate-Delete</span>');
+                const cb = r.zohoId
+                    ? '<input type="checkbox" data-on-click="toggleMergeRecord" data-args=\'["' + esc(r.zohoId) + '"]\'' + (included ? ' checked' : '') + ' class="cursor-pointer w-4 h-4" title="Include this account in the merge">'
+                    : '<span class="text-gray-300" title="No Zoho id — cannot be merged">—</span>';
+                return '<tr class="border-t' + (included ? '' : ' opacity-50') + '">' +
+                    '<td class="px-3 py-2 text-center">' + cb + '</td>' +
+                    '<td class="px-3 py-2">' + outcome + '</td>' +
+                    '<td class="px-3 py-2">' + esc(r.name) + '</td>' +
+                    '<td class="px-3 py-2 font-mono text-xs text-gray-600">' + esc(r.zohoId) + '</td>' +
+                    '<td class="px-3 py-2 text-end">' + Math.round((r.completeness || 0) * 100) + '%</td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-500">' + esc(r.owner) + '</td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-700">' + esc(r.layout) + '</td>' +
+                    '</tr>';
+            }).join('');
 
             const decRows = (plan.fieldDecisions || []).map(d => {
                 const tone = d.action === 'fill' ? 'bg-green-50' : 'bg-amber-50';
@@ -4639,7 +4672,8 @@
             return '' +
                 '<div class="rounded-lg border border-purple-200 bg-purple-50 p-3 mb-3 text-sm text-purple-900" data-testid="merge-plan-rationale">' + esc(plan.rationale) + '</div>' +
                 '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">Survivor</span><div class="font-semibold">' + esc(plan.masterName) + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
-                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th><th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
+                '<div class="text-xs text-gray-500 mb-1">Tick the accounts to merge — at least 2. Unticked accounts are excluded and left untouched.</div>' +
+                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Merge</th><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th><th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
                 '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Field migrations &amp; conflicts (' + (plan.fieldDecisions || []).length + ')</div>' +
                 (decRows
                     ? '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Field</th><th class="px-3 py-2 text-start">Action</th><th class="px-3 py-2 text-start">Value kept</th><th class="px-3 py-2 text-start">Why</th></tr></thead><tbody>' + decRows + '</tbody></table></div>'

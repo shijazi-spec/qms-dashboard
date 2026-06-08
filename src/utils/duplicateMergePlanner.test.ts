@@ -176,5 +176,33 @@ assert(
   "lead record is never tagged in an Accounts plan",
 );
 
+console.log("subset selection (includeZohoIds)");
+const recC = rec({
+  id: 20,
+  zoho_record_id: "ZC",
+  record_name: "Acme Branch",
+  raw_data: { Account_Name: "Acme Branch", Website: "c.com" },
+});
+const subset = buildAccountMergePlan(11, [recA, recB, recC], {
+  includeZohoIds: ["ZA", "ZB"],
+});
+assert(subset.records.length === 3, "all 3 accounts still listed in summary");
+assert(
+  subset.records.filter((r) => r.included).length === 2,
+  "only the 2 selected accounts are in the merge set",
+);
+const cSummary = subset.records.find((r) => r.zohoId === "ZC");
+assert(!!cSummary && cSummary.included === false, "unselected account is included=false");
+assert(!subset.duplicateZohoIds.includes("ZC"), "excluded account is never tagged");
+assert(["ZA", "ZB"].includes(subset.masterZohoId || ""), "survivor is chosen from the selected set");
+
+let threwSel = false;
+try {
+  buildAccountMergePlan(12, [recA, recB, recC], { includeZohoIds: ["ZA"] });
+} catch {
+  threwSel = true;
+}
+assert(threwSel, "throws when fewer than 2 accounts are selected");
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
