@@ -41,6 +41,127 @@ interface AgentTextResult {
 }
 
 /**
+ * Adaptive method selection — the FINAL fix to the recurring AI Consultant
+ * regression.
+ *
+ * Background. The widget has alternated between working and broken at
+ * least FIVE times across SDK upgrades because Mastra rejects one of
+ * generate/stream OR generateLegacy/streamLegacy depending on whether
+ * openai.chat("gpt-4o") at startup produces a V4-shaped or V2/V5-shaped
+ * model class. The two error messages that have appeared at different
+ * times:
+ *
+ *   V4 model + generate()       → "AI SDK v4 model not compatible with
+ *                                  stream(). Please use AI SDK v5 models
+ *                                  or call the streamLegacy() method"
+ *   V2 model + generateLegacy() → "V2 models are not supported for
+ *                                  generateLegacy. Please use generate"
+ *
+ * Every previous "root fix" pinned ONE polarity in code, then the next
+ * `@mastra/core` or `@ai-sdk/openai` bump flipped it and broke the
+ * widget again. Operators have re-patched this five times.
+ *
+ * This implementation TRIES one polarity, catches the specific
+ * incompatibility error, and self-corrects to the other. The choice is
+ * cached so subsequent requests skip the failed attempt. On a Mastra
+ * upgrade that flips the polarity, the next failing request flips the
+ * cache automatically — no manual patch needed.
+ *
+ * The detector is matched against the literal error strings the two
+ * Mastra paths emit (exact text from their throw sites). Wrong match =
+ * we re-throw and the outer route handler logs it. Right match = we
+ * flip the cache and retry exactly once.
+ */
+type AgentMethodPolarity = "modern" | "legacy" | "unknown";
+let _generateMethodCache: AgentMethodPolarity = "unknown";
+let _streamMethodCache: AgentMethodPolarity = "unknown";
+
+function _isV4ModelError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /AI SDK v4 model.*not compatible with (stream|generate)\(\)|call the (stream|generate)Legacy\(\) method/i.test(
+    msg,
+  );
+}
+function _isV2ModelLegacyError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /V2 models? (?:are|is) not supported for (stream|generate)Legacy/i.test(
+    msg,
+  );
+}
+
+/**
+ * Call agent.generate() OR agent.generateLegacy() adaptively. Cached
+ * choice survives between requests; only the FIRST request after a
+ * Mastra polarity flip pays the retry cost.
+ */
+async function agentGenerateAdaptive(
+  agent: any,
+  message: string,
+  options: Record<string, unknown>,
+): Promise<unknown> {
+  // Order of attempts: cached choice first; if unknown, try modern first
+  // (the SDK roadmap is heading toward V5, so this picks the long-term
+  // winner on a fresh deploy).
+  const tryModern = async () =>
+    agent.generate(message, options as any);
+  const tryLegacy = async () =>
+    agent.generateLegacy(message, options as any);
+  const order =
+    _generateMethodCache === "legacy"
+      ? [tryLegacy, tryModern]
+      : [tryModern, tryLegacy];
+  let lastErr: unknown;
+  for (let i = 0; i < order.length; i++) {
+    try {
+      const result = await order[i]!();
+      _generateMethodCache = order[i] === tryLegacy ? "legacy" : "modern";
+      return result;
+    } catch (err) {
+      lastErr = err;
+      const isFlippable = _isV4ModelError(err) || _isV2ModelLegacyError(err);
+      // Only retry on the recognized polarity errors; everything else
+      // (rate limit, OOM, RBAC, etc.) bubbles up immediately.
+      if (!isFlippable) throw err;
+      // Flip the cache and continue to the next attempt.
+      _generateMethodCache =
+        order[i] === tryModern ? "legacy" : "modern";
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Same adaptive selector for agent.stream() / agent.streamLegacy().
+ */
+async function agentStreamAdaptive(
+  agent: any,
+  message: string,
+  options: Record<string, unknown>,
+): Promise<unknown> {
+  const tryModern = async () => agent.stream(message, options as any);
+  const tryLegacy = async () =>
+    agent.streamLegacy(message, options as any);
+  const order =
+    _streamMethodCache === "legacy"
+      ? [tryLegacy, tryModern]
+      : [tryModern, tryLegacy];
+  let lastErr: unknown;
+  for (let i = 0; i < order.length; i++) {
+    try {
+      const result = await order[i]!();
+      _streamMethodCache = order[i] === tryLegacy ? "legacy" : "modern";
+      return result;
+    } catch (err) {
+      lastErr = err;
+      const isFlippable = _isV4ModelError(err) || _isV2ModelLegacyError(err);
+      if (!isFlippable) throw err;
+      _streamMethodCache = order[i] === tryModern ? "legacy" : "modern";
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * Robust text extractor for agent.generate() results.
  *
  * Background: this widget has flipped between "No response received"
@@ -526,25 +647,15 @@ export const consultantRoutes = [
                         threadId: resolvedThreadId,
                       },
                       () =>
-                        // 2026-06-08 ROOT FIX — pin to aisdk format so the
-                        // returned shape is the AI SDK v5 GenerateTextResult
-                        // with a stable `text: string` property. The Mastra-
-                        // default 'mastra' format returns a MastraModelOutput
-                        // whose `text` is NOT a direct property, which was
-                        // silently breaking the widget ("No response
-                        // received." rendered with no error) every time the
-                        // V2/V4 polarity flipped. extractAgentText() above is
-                        // a belt-and-braces parser for the same problem so a
-                        // future Mastra upgrade can't silently regress this
-                        // again. See agent.generate() type signature in
-                        // node_modules/@mastra/core/dist/agent/agent.d.ts —
-                        // `format: 'aisdk'` is documented as the escape
-                        // hatch back to the AI-SDK-compatible shape.
-                        agent.generate(message, {
+                        // 2026-06-08 ADAPTIVE FIX — use agentGenerateAdaptive
+                        // which tries generate() and generateLegacy()
+                        // in turn, caching whichever one Mastra accepts
+                        // for the current model class. Stops the V4/V2
+                        // flip-flop regression at the root.
+                        agentGenerateAdaptive(agent, message, {
                           threadId: resolvedThreadId,
                           resourceId,
                           abortSignal: controller.signal,
-                          format: "aisdk" as const,
                         }),
                     );
                     return res as AgentTextResult;
@@ -709,18 +820,17 @@ export const consultantRoutes = [
                   threadId: resolvedThreadId,
                 },
                 () =>
-                  // 2026-06-08 ROOT FIX — same as the generate() call site
-                  // above. Pinning format: 'aisdk' so stream() returns an
-                  // AISDKV5OutputStream with a stable .textStream async
-                  // iterable. Mastra's default 'mastra' format returns
-                  // MastraModelOutput, whose streaming interface has
-                  // changed between releases. Pin the contract.
-                  agent.stream(message, {
+                  // 2026-06-08 ADAPTIVE FIX — agentStreamAdaptive picks
+                  // stream() vs streamLegacy() based on what the model
+                  // class actually supports. Caches the right choice.
+                  // Cast: the inferred Promise<unknown> conflicts with
+                  // span.run's typed inner signature; runtime shape is
+                  // the same — a stream object with .textStream / .text.
+                  agentStreamAdaptive(agent, message, {
                     threadId: resolvedThreadId,
                     resourceId,
                     abortSignal: controller.signal,
-                    format: "aisdk" as const,
-                  }),
+                  }) as Promise<any>,
               ),
             );
           } catch (streamInitErr) {
@@ -1402,15 +1512,13 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
                 }),
               },
               async () =>
-                // 2026-06-08 ROOT FIX — same pinning as the chat / SSE
-                // handlers above. format: 'aisdk' guarantees the result
-                // exposes .text as a direct property. extractAgentText()
-                // is the safety net.
-                (await agent.generate(scanPrompt, {
+                // 2026-06-08 ADAPTIVE FIX — same wrapper as /chat and
+                // /chat/stream above. Stops the polarity flip-flop from
+                // breaking the scan endpoint independently.
+                (await agentGenerateAdaptive(agent, scanPrompt, {
                   threadId: `scan-${Date.now()}`,
                   resourceId: "system-scanner",
                   abortSignal: scanController.signal,
-                  format: "aisdk" as const,
                 })) as AgentTextResult,
             );
             scanResult = result;
