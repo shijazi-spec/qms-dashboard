@@ -4001,9 +4001,12 @@
                 { key: 'contact', label: 'Contacts', cls: 'bg-teal-100 text-teal-800',     testid: 'badge-type-contacts' },
                 { key: 'account', label: 'Accounts', cls: 'bg-indigo-100 text-indigo-800', testid: 'badge-type-accounts' },
             ];
-            const _typeChips = _typeChipMeta
+            // Clickable type chips — clicking one filters the comparison table
+            // below to that record type; "All" resets. CSP-safe data-on-click.
+            const _allChip = `<button type="button" data-on-click="filterClusterComparison" data-args='["all"]' data-cluster-chip="all" data-testid="badge-type-all" class="cluster-type-chip px-2.5 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-800 cursor-pointer hover:ring-2 hover:ring-gray-400" title="Show all record types in the comparison below">All: ${_fn(records.length)}</button>`;
+            const _typeChips = _allChip + _typeChipMeta
                 .filter(m => _typeCounts[m.key] > 0)
-                .map(m => `<span data-testid="${m.testid}" class="px-2.5 py-1 rounded-full text-xs font-medium ${m.cls}" title="${_fn(_typeCounts[m.key])} ${escapeHtml(m.label.toLowerCase())} in this cluster">${escapeHtml(m.label)}: ${_fn(_typeCounts[m.key])}</span>`)
+                .map(m => `<button type="button" data-on-click="filterClusterComparison" data-args='["${m.key}"]' data-cluster-chip="${m.key}" data-testid="${m.testid}" class="cluster-type-chip px-2.5 py-1 rounded-full text-xs font-medium ${m.cls} cursor-pointer hover:ring-2 hover:ring-gray-400" title="Show only ${escapeHtml(m.label.toLowerCase())} in the comparison below">${escapeHtml(m.label)}: ${_fn(_typeCounts[m.key])}</button>`)
                 .join('');
 
             let html = `<div class="mb-4 flex flex-wrap gap-2 items-center">
@@ -4054,10 +4057,10 @@
             }
 
             // Side-by-side comparison table
-            html += `<div class="overflow-x-auto mb-6"><table class="min-w-full text-sm border"><thead class="bg-gray-50"><tr>
+            html += `<div id="clusterComparison" class="overflow-x-auto mb-6"><table class="min-w-full text-sm border"><thead class="bg-gray-50"><tr>
                 <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500">${WalaPlusI18n.t('dyn.duplicates.col_field')}</th>`;
             records.forEach((r, i) => {
-                html += `<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 border-l">${r.is_primary ? '★ ' : ''}${WalaPlusI18n.t('dyn.duplicates.record_n_header', { n: _fn(i+1) })} (${escapeHtml(r.record_type)})</th>`;
+                html += `<th scope="col" data-rc-type="${escAttr(r.record_type || '')}" class="px-3 py-2 text-start text-xs font-medium text-gray-500 border-l">${r.is_primary ? '★ ' : ''}${WalaPlusI18n.t('dyn.duplicates.record_n_header', { n: _fn(i+1) })} (${escapeHtml(r.record_type)})</th>`;
             });
             html += '</tr></thead><tbody>';
 
@@ -4092,7 +4095,7 @@
                 html += `<tr class="border-t"><td class="px-3 py-2 font-medium text-gray-600">${f.label}</td>`;
                 records.forEach(r => {
                     const val = f.render ? f.render(r[f.key], r) : escapeHtml(r[f.key] || '-');
-                    html += `<td class="px-3 py-2 border-l">${val}</td>`;
+                    html += `<td data-rc-type="${escAttr(r.record_type || '')}" class="px-3 py-2 border-l">${val}</td>`;
                 });
                 html += '</tr>';
             });
@@ -4106,11 +4109,11 @@
                     const typeTag = r.record_type
                         ? `<span class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 uppercase tracking-wide">${escapeHtml(r.record_type)}</span>`
                         : '';
-                    html += `<td class="px-3 py-2 border-l"><span class="${actionClass} px-2 py-1 rounded text-xs font-bold">${escapeHtml(rec.action_type).toUpperCase()}</span>${typeTag}<div class="text-xs text-gray-500 mt-1">${escapeHtml(rec.recommendation)}</div>`;
+                    html += `<td data-rc-type="${escAttr(r.record_type || '')}" class="px-3 py-2 border-l"><span class="${actionClass} px-2 py-1 rounded text-xs font-bold">${escapeHtml(rec.action_type).toUpperCase()}</span>${typeTag}<div class="text-xs text-gray-500 mt-1">${escapeHtml(rec.recommendation)}</div>`;
                     if (rec.reasons?.length) html += `<div class="text-xs text-gray-400 mt-1">${rec.reasons.map(reason => escapeHtml(reason)).join(', ')}</div>`;
                     html += '</td>';
                 } else {
-                    html += '<td class="px-3 py-2 border-l text-gray-400">-</td>';
+                    html += `<td data-rc-type="${escAttr(r.record_type || '')}" class="px-3 py-2 border-l text-gray-400">-</td>`;
                 }
             });
             html += '</tr></tbody></table></div>';
@@ -4403,6 +4406,26 @@
             } catch (e) {
                 alert('Network error during split.');
             }
+        }
+
+        // Type-chip filter for the cluster comparison matrix. Each record
+        // column is tagged data-rc-type; clicking a chip hides every column
+        // whose type != selected (the "Field" label column has no data-rc-type,
+        // so it always stays). "all" shows everything. CSP-safe (no inline JS).
+        function filterClusterComparison(type) {
+            const root = document.getElementById('clusterComparison');
+            if (root) {
+                root.querySelectorAll('[data-rc-type]').forEach(el => {
+                    const hide = type && type !== 'all' && el.getAttribute('data-rc-type') !== type;
+                    el.classList.toggle('hidden', hide);
+                });
+            }
+            document.querySelectorAll('[data-cluster-chip]').forEach(chip => {
+                const active = chip.getAttribute('data-cluster-chip') === (type || 'all');
+                chip.classList.toggle('ring-2', active);
+                chip.classList.toggle('ring-purple-600', active);
+                chip.classList.toggle('font-bold', active);
+            });
         }
 
         // ── Phase 1 Agentic Duplicate Resolution — read-only plan preview ──────
