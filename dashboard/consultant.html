@@ -1278,7 +1278,19 @@
                 scanPct.textContent = '100%';
                 scanLabel.textContent = window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.scan_complete') : 'Scan complete!';
 
-                if (!response.ok) throw new Error('Scan returned ' + response.status);
+                // 2026-06-08 — read body before throwing so the real server
+                // error surfaces in the bubble instead of "Scan returned 500"
+                // with zero diagnostic. Pairs with backend fix that now
+                // returns { error, details, errorClass } on 5xx.
+                if (!response.ok) {
+                    var serverBody = null;
+                    try { serverBody = await response.json(); } catch (_) {}
+                    var serverMsg = (serverBody && (serverBody.details || serverBody.error)) || ('HTTP ' + response.status);
+                    var failErr = new Error(serverMsg);
+                    failErr.serverBody = serverBody;
+                    failErr.httpStatus = response.status;
+                    throw failErr;
+                }
 
                 var data = await response.json();
                 var bubble = createAssistantMessage();
@@ -1297,7 +1309,12 @@
                 scanFill.style.background = '#ef4444';
                 scanLabel.textContent = 'Scan failed';
                 var bubble = createAssistantMessage();
-                bubble.innerHTML = renderMarkdown('**Scan Failed:** Unable to complete the platform scan. ' + escapeHtml(err.message));
+                // Append the error class line so the operator can copy-paste
+                // a meaningful failure mode into a bug report.
+                var detailLine = err.serverBody && err.serverBody.errorClass
+                    ? '\n\n_Error class:_ `' + escapeHtml(err.serverBody.errorClass) + '`'
+                    : '';
+                bubble.innerHTML = renderMarkdown('**Scan Failed:** ' + escapeHtml(err.message || 'Unable to complete the platform scan.') + detailLine);
                 addRetryButton(bubble);
                 setTimeout(function() { scanArea.classList.add('hidden'); scanFill.style.background = ''; }, 3000);
             } finally {
