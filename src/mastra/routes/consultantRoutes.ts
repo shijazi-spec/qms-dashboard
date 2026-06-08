@@ -45,33 +45,70 @@ interface AgentTextResult {
  *
  * Background: this widget has flipped between "No response received"
  * and working state at least four times across SDK upgrades because
- * Mastra's response shape is not stable:
+ * Mastra's response shape is not stable. As of 2026-06-08 we know of
+ * at least SIX different runtime shapes that can come back from
+ * `await agent.generate(message, { format: 'aisdk' })`:
  *
- *   - V4 / generateLegacy()           → { text: string, ... }
- *   - V2 / generate() + format=aisdk  → { text: string, ... }      (AI SDK v5 GenerateTextResult)
- *   - V2 / generate() + format=mastra → MastraModelOutput { content: [...], ... } (DEFAULT)
+ *   1. V4 / generateLegacy()              → { text: string, ... }
+ *   2. V2 / generate() + format=aisdk     → { text: string, ... }     (aisdk getFullOutput resolved)
+ *   3. V2 / generate() + format=mastra    → MastraModelOutput { content: [...], ... } (DEFAULT)
+ *   4. NEW (2026-06-08): generate() returns the *stream object itself*
+ *      with `text` as a `Promise<string>` getter — Mastra silently dropped
+ *      the deprecated `format` option in some build paths, so the result
+ *      is the unresolved AISDKV5OutputStream / MastraModelOutput where
+ *      both `.text` and `.textStream` are getters on the live stream.
+ *   5. Wrapped result { response: { text: '...' } } (older mastra-format)
+ *   6. Plain string (shouldn't happen but some test paths emit this)
  *
- * Each upgrade has silently changed which default applies. The old
- * code read `response.text` directly, so any upgrade that returned
- * the Mastra shape — where `text` is no longer a direct property —
- * made the endpoint return `{ success: true, response: undefined }`
- * and the widget rendered "No response received." with no error
- * indication. This helper closes that gap by trying every known
- * shape before giving up, so future polarity flips don't silently
- * break the widget again.
+ * Each upgrade has silently changed which default applies. We MUST
+ * handle the Promise-text shape (#4) — that one returns `undefined`
+ * to a sync extractor and is exactly what's causing the
+ * "No response received." regression on the live deployment today.
  *
- * Order matters: we check the direct `.text` first because that's
- * the AI SDK V5 / V4 shape we explicitly request via `format: 'aisdk'`
- * below. Mastra-shape fallbacks come after.
+ * Helper is async so we can await Promise-text getters. The two call
+ * sites (chat + scan) are already async, so awaiting here is free.
  */
-export function extractAgentText(result: unknown): string {
-  if (result == null || typeof result !== "object") return "";
+export async function extractAgentText(result: unknown): Promise<string> {
+  if (result == null) return "";
+  // Shape #6 — plain string.
+  if (typeof result === "string") return result;
+  if (typeof result !== "object") return "";
   const r = result as Record<string, unknown>;
 
-  // V4 / V5 / aisdk-format: { text: "..." }
-  if (typeof r.text === "string" && r.text) return r.text;
+  // Shape #1, #2, #6: direct .text property. If it's a Promise (shape #4),
+  // await it. If it's a non-empty string, return it. Anything else, fall
+  // through to the next attempt.
+  const rawText = r.text;
+  if (rawText != null) {
+    if (typeof rawText === "string" && rawText) return rawText;
+    // Promise getter — exercise it.
+    if (
+      typeof (rawText as any)?.then === "function" ||
+      typeof rawText === "object"
+    ) {
+      try {
+        const awaited = await Promise.resolve(rawText as any);
+        if (typeof awaited === "string" && awaited) return awaited;
+      } catch {
+        /* fall through */
+      }
+    }
+  }
 
-  // Mastra format: { content: [{ type: 'text', text: "..." }, ...] }
+  // Shape #4 specifically — getFullOutput() exists as a method, call it.
+  if (typeof (r as any).getFullOutput === "function") {
+    try {
+      const full = await (r as any).getFullOutput();
+      if (full && typeof full === "object") {
+        const t = (full as Record<string, unknown>).text;
+        if (typeof t === "string" && t) return t;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  // Shape #3 (mastra): { content: [{ type: 'text', text: '...' }, ...] }
   if (Array.isArray(r.content)) {
     const parts = r.content
       .map((p: any) =>
@@ -81,15 +118,24 @@ export function extractAgentText(result: unknown): string {
     if (parts.length) return parts.join("");
   }
 
-  // Nested response wrapper some Mastra paths emit: { response: { text: "..." } }
+  // Shape #5 (older mastra): { response: { text: '...' } }
   if (r.response && typeof r.response === "object") {
     const inner = (r.response as Record<string, unknown>).text;
     if (typeof inner === "string" && inner) return inner;
+    if (
+      typeof (inner as any)?.then === "function" ||
+      typeof inner === "object"
+    ) {
+      try {
+        const awaited = await Promise.resolve(inner as any);
+        if (typeof awaited === "string" && awaited) return awaited;
+      } catch {
+        /* fall through */
+      }
+    }
   }
 
-  // Tool-call only or empty completion — return empty string, NOT undefined,
-  // so the JSON serialiser doesn't drop the field and the widget renders
-  // something sensible ("No response" placeholder) instead of fallback path.
+  // Tool-call only or empty completion — return empty string, NOT undefined.
   return "";
 }
 
@@ -512,14 +558,29 @@ export const consultantRoutes = [
               resourceId,
               response,
             );
+            // Defensive extraction — see extractAgentText() at top of
+            // file. Helper is async because some Mastra shapes return
+            // text as a Promise getter on the live stream object. If
+            // the result is genuinely empty we LOG it loud so the next
+            // outage debugs faster instead of showing a silent "No
+            // response received." in the widget.
+            const extractedText = await extractAgentText(response);
+            if (!extractedText) {
+              logger.warn(
+                "[Consultant] /chat extracted empty text — shape mismatch",
+                {
+                  shapeKeys: response && typeof response === "object"
+                    ? Object.keys(response as unknown as Record<string, unknown>)
+                    : typeof response,
+                },
+              );
+            }
             return c.json({
               success: true,
               threadId: resolvedThreadId,
-              // Defensive extraction — see extractAgentText() at top of
-              // file. Reads `.text` first (aisdk shape we pinned above),
-              // falls back to Mastra-shape `.content[].text` if a future
-              // upgrade flips the default again.
-              response: extractAgentText(response),
+              response:
+                extractedText ||
+                "(The assistant returned an empty response. Try rephrasing your question, or check the server logs.)",
               callId: callId ?? undefined,
               messageId,
               // Surface the prompt revision active for THIS turn so the
@@ -709,13 +770,58 @@ export const consultantRoutes = [
                 // parent_call_id ALS context is visible to tools invoked
                 // during streaming (tools execute lazily as chunks flow).
                 await span.run(async () => {
-                  for await (const chunk of stream.textStream) {
-                    firstChunkSeen = true;
-                    streamController.enqueue(
-                      encoder.encode(
-                        `data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`,
-                      ),
+                  // 2026-06-08 — Mastra's `.textStream` is sometimes a
+                  // ReadableStream<string> (AISDKV5OutputStream / aisdk
+                  // format) and sometimes a different async iterable
+                  // (MastraModelOutput). Both support for-await-of on
+                  // modern Node, but a missing/undefined textStream
+                  // (which we've seen on certain Mastra builds when
+                  // format: 'aisdk' is silently dropped) would throw a
+                  // TypeError that the widget surfaces as "Stream error
+                  // 500". Guard against that — if textStream isn't
+                  // iterable, fall through to the .text getter (which
+                  // is a Promise) and emit a single chunk so the user
+                  // still gets the response.
+                  const ts: any = (stream as any)?.textStream;
+                  const isIterable =
+                    ts != null &&
+                    (typeof ts[Symbol.asyncIterator] === "function" ||
+                      typeof ts[Symbol.iterator] === "function" ||
+                      typeof ts.getReader === "function");
+                  if (isIterable) {
+                    for await (const chunk of ts) {
+                      firstChunkSeen = true;
+                      streamController.enqueue(
+                        encoder.encode(
+                          `data: ${JSON.stringify({ text: chunk, threadId: resolvedThreadId })}\n\n`,
+                        ),
+                      );
+                    }
+                  } else {
+                    // Fallback: resolve .text (Promise<string>) and
+                    // emit as a single SSE frame. Slower (no progressive
+                    // UX) but correct — beats a 500 error bubble.
+                    const txt = await Promise.resolve(
+                      (stream as any)?.text ?? "",
                     );
+                    if (typeof txt === "string" && txt) {
+                      firstChunkSeen = true;
+                      streamController.enqueue(
+                        encoder.encode(
+                          `data: ${JSON.stringify({ text: txt, threadId: resolvedThreadId })}\n\n`,
+                        ),
+                      );
+                    } else {
+                      safeLogger.warn(
+                        "[Consultant] stream had neither textStream nor text — empty response",
+                        {
+                          streamKeys:
+                            stream && typeof stream === "object"
+                              ? Object.keys(stream as Record<string, unknown>)
+                              : typeof stream,
+                        },
+                      );
+                    }
                   }
                 });
                 // Surface callId on the final frame so clients can attach
@@ -1314,7 +1420,7 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
 
           return c.json({
             success: true,
-            summary: extractAgentText(scanResult),
+            summary: await extractAgentText(scanResult),
           });
         } catch (error) {
           logger.error("[Consultant] Scan error:", error);
