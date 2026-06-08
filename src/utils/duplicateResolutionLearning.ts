@@ -208,3 +208,60 @@ export async function getResolutionLearnings(): Promise<ResolutionLearnings> {
     return empty;
   }
 }
+
+export interface ResolutionActivityRow {
+  id: number;
+  clusterId: number;
+  eventType: string;
+  proposedMaster: string | null;
+  chosenMaster: string | null;
+  masterOverridden: boolean;
+  fieldsMigrated: number;
+  duplicatesTagged: number;
+  reparented: number;
+  errors: number;
+  performedBy: string | null;
+  at: string | null;
+}
+
+/**
+ * Chronological log of every agent resolution action (preview / dry-run /
+ * apply) — powers the "Agent Activity" section in the Logs tab. Returns [] on
+ * any error so the Logs tab never breaks.
+ */
+export async function getResolutionActivity(
+  limit = 100,
+): Promise<ResolutionActivityRow[]> {
+  try {
+    await ensureTable();
+    const lim = Math.min(Math.max(Number(limit) || 100, 1), 500);
+    const r = await pool.query(
+      `SELECT id, cluster_id, event_type, proposed_master_zoho_id,
+              chosen_master_zoho_id, master_overridden, fields_migrated,
+              duplicates_tagged, reparented, errors, performed_by, created_at
+         FROM duplicate_resolution_feedback
+        ORDER BY created_at DESC
+        LIMIT $1`,
+      [lim],
+    );
+    return r.rows.map((row: any) => ({
+      id: row.id,
+      clusterId: row.cluster_id,
+      eventType: row.event_type,
+      proposedMaster: row.proposed_master_zoho_id,
+      chosenMaster: row.chosen_master_zoho_id,
+      masterOverridden: !!row.master_overridden,
+      fieldsMigrated: row.fields_migrated ?? 0,
+      duplicatesTagged: row.duplicates_tagged ?? 0,
+      reparented: row.reparented ?? 0,
+      errors: row.errors ?? 0,
+      performedBy: row.performed_by,
+      at: row.created_at ? new Date(row.created_at).toISOString() : null,
+    }));
+  } catch (e) {
+    logger.warn("[dup-resolution-learning] getResolutionActivity failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return [];
+  }
+}

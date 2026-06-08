@@ -1166,6 +1166,33 @@
                     <tbody id="logsTable" class="bg-white divide-y divide-gray-200"></tbody>
                 </table>
             </div>
+
+            <!-- Agentic Resolution activity — audit trail of every AI agent
+                 action (preview / dry-run / apply), sourced from
+                 /api/duplicates/resolution-activity. -->
+            <div class="mt-6">
+                <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 text-sm text-purple-900">
+                    <strong>🤖 Agent Activity.</strong> Every preview, dry-run and apply the AI Duplicate Resolution agent performed — the survivor it kept, what it migrated/tagged/reparented, who ran it, and any errors. This is the audit trail of all AI-driven changes.
+                </div>
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">When</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Action</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Cluster</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Survivor (Zoho ID)</th>
+                                <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Fields</th>
+                                <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Tagged</th>
+                                <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Reparented</th>
+                                <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Errors</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">By</th>
+                            </tr>
+                        </thead>
+                        <tbody id="agentActivityTable" class="bg-white divide-y divide-gray-200"><tr><td colspan="9" class="px-6 py-4 text-center text-gray-400">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <!-- Generic "View All" list modal — used by Top Signals + Top Inflation cards -->
@@ -3916,6 +3943,48 @@
             }).join('') || `<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.no_scan_logs'))}</td></tr>`;
         }
 
+        // Agent Activity Log — every AI Duplicate Resolution action from
+        // /api/duplicates/resolution-activity. Rendered in the Logs tab.
+        async function loadAgentActivity() {
+            const tbody = document.getElementById('agentActivityTable');
+            if (!tbody) return;
+            let data;
+            try {
+                const res = await fetch('/api/duplicates/resolution-activity?limit=100', { credentials: 'same-origin' });
+                data = await res.json();
+            } catch (_) { data = null; }
+            renderAgentActivity((data && data.activity) || []);
+        }
+        function renderAgentActivity(rows) {
+            const tbody = document.getElementById('agentActivityTable');
+            if (!tbody) return;
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="px-6 py-4 text-center text-gray-400">No AI resolution activity yet — it appears here as soon as the agent previews, dry-runs, or applies a merge.</td></tr>';
+                return;
+            }
+            const actionBadge = (t) => {
+                const cls = t === 'applied' ? 'bg-green-100 text-green-800' : t === 'dry_run' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700';
+                const label = t === 'dry_run' ? 'Dry-run' : t === 'applied' ? 'Applied' : 'Preview';
+                return '<span class="px-2 py-0.5 rounded text-xs font-medium ' + cls + '">' + escapeHtml(label) + '</span>';
+            };
+            tbody.innerHTML = rows.map(r => {
+                const survivor = '<span class="font-mono text-xs text-gray-700">' + escapeHtml(r.chosenMaster || '—') + '</span>' +
+                    (r.masterOverridden ? ' <span class="text-amber-600 text-xs">(overridden)</span>' : '');
+                const errCls = (r.errors > 0) ? 'text-red-700 font-medium' : 'text-gray-500';
+                return '<tr>' +
+                    '<td class="px-4 py-3 text-sm text-gray-500">' + formatDate(r.at) + '</td>' +
+                    '<td class="px-4 py-3 text-sm">' + actionBadge(r.eventType) + '</td>' +
+                    '<td class="px-4 py-3 text-sm"><span class="text-blue-600 hover:underline cursor-pointer" data-on-click="showClusterDetails" data-args="[' + Number(r.clusterId) + ']">#' + Number(r.clusterId) + '</span></td>' +
+                    '<td class="px-4 py-3 text-sm">' + survivor + '</td>' +
+                    '<td class="px-4 py-3 text-sm text-end">' + (r.fieldsMigrated || 0) + '</td>' +
+                    '<td class="px-4 py-3 text-sm text-end">' + (r.duplicatesTagged || 0) + '</td>' +
+                    '<td class="px-4 py-3 text-sm text-end">' + (r.reparented || 0) + '</td>' +
+                    '<td class="px-4 py-3 text-sm text-end ' + errCls + '">' + (r.errors || 0) + '</td>' +
+                    '<td class="px-4 py-3 text-sm text-gray-600">' + escapeHtml(r.performedBy || '—') + '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
         // D2: Enhanced cluster modal with side-by-side comparison + AI recommendations
         async function showClusterDetails(id) {
             document.getElementById('clusterModal').classList.remove('hidden');
@@ -5355,6 +5424,7 @@
             if (tab === 'cs-overlap') loadCsOverlap(window._csOverlapFilter || 'all');
             if (tab === 'cs-lifecycle') loadCsLifecycle(window._csLifecycleFilter || 'all');
             if (tab === 'account-hints') loadAccountHints();
+            if (tab === 'logs') loadAgentActivity();
             // The Domain Clusters + 4 record tabs are expensive list queries;
             // load each one ONLY on first visit per refresh cycle. This is
             // the change that keeps the page under the 100 reads/min limit.

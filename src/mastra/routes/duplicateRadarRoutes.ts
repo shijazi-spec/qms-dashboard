@@ -133,6 +133,7 @@ import { executeMergePlan } from "../../utils/duplicateMergeExecutor";
 import {
   recordResolutionEvent,
   getResolutionLearnings,
+  getResolutionActivity,
 } from "../../utils/duplicateResolutionLearning";
 // Default to fetching the entire module so duplicate detection reflects the
 // real CRM. Set DUPLICATE_SCAN_LIMIT to a positive integer to re-cap (useful
@@ -1219,6 +1220,30 @@ export const duplicateRadarRoutes = [
           return c.json({ success: true, learnings });
         } catch (error: any) {
           logger.error("Error fetching resolution learnings:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Agentic Resolution — chronological activity log (read-only). Powers the
+    // "Agent Activity" section in the Logs tab: every preview/dry-run/apply the
+    // agent performed, who ran it, what changed, and any errors.
+    path: "/api/duplicates/resolution-activity",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const limit = parseInt(url.searchParams.get("limit") || "100");
+          const activity = await getResolutionActivity(
+            Number.isFinite(limit) ? limit : 100,
+          );
+          return c.json({ success: true, activity });
+        } catch (error: any) {
+          logger.error("Error fetching resolution activity:", error);
           return c.json({ error: "An internal error occurred" }, 500);
         }
       };
