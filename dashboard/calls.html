@@ -2237,6 +2237,35 @@
                 ? 'YES'
                 : 'NO';
 
+            // Phase-2 diagnostic: walk the immediate children to find ones
+            // that are visually invisible despite the parent being shown.
+            // This is what catches "div is block, but every child is
+            // display:none / opacity:0 / clipped to height:0".
+            let invisibleChildren = 0;
+            let firstChildSummary = '—';
+            let firstChildRect = '—';
+            if (contentEl) {
+                const kids = Array.from(contentEl.children);
+                kids.forEach((kid) => {
+                    const cs = window.getComputedStyle(kid);
+                    if (
+                        cs.display === 'none' ||
+                        cs.visibility === 'hidden' ||
+                        parseFloat(cs.opacity || '1') === 0 ||
+                        (kid.offsetHeight === 0 && kid.offsetWidth === 0)
+                    ) {
+                        invisibleChildren++;
+                    }
+                });
+                if (kids[0]) {
+                    const first = kids[0];
+                    const cs = window.getComputedStyle(first);
+                    firstChildSummary = `<${first.tagName.toLowerCase()}> display=${cs.display} opacity=${cs.opacity} visibility=${cs.visibility}`;
+                    const rect = first.getBoundingClientRect();
+                    firstChildRect = `w=${Math.round(rect.width)} h=${Math.round(rect.height)} top=${Math.round(rect.top)}`;
+                }
+            }
+
             // Colour-grade by health. Green = looks fine; amber = looks
             // suspicious; red = definitely broken (no div / no children).
             const healthy = found && childCount > 0 && display !== 'none';
@@ -2263,16 +2292,21 @@
                 <div>computed display: <strong>${escapeHtml(display)}</strong></div>
                 <div>has .hidden class: <strong>${isHidden}</strong></div>
                 <div>refreshData() reached: <strong>${refreshDataDone}</strong></div>
+                <div class="mt-1 pt-1 border-t border-current border-opacity-20">
+                    <div>invisible children: <strong>${invisibleChildren} / ${childCount}</strong></div>
+                    <div>1st child: <strong>${escapeHtml(firstChildSummary)}</strong></div>
+                    <div>1st child rect: <strong>${escapeHtml(firstChildRect)}</strong></div>
+                </div>
                 <div class="mt-1 text-[10px] opacity-70">Set WR_TAB_DIAGNOSTIC=false in console to hide.</div>`;
             document.body.appendChild(badge);
 
-            // Auto-dismiss after 8 seconds so the badge doesn't camp
-            // the corner forever. The user can still screenshot it
-            // within that window.
+            // Auto-dismiss after 30 seconds (bumped from 8s) so the user
+            // has plenty of time to screenshot the badge — especially
+            // useful when chasing the second-tier children diagnostics.
             setTimeout(() => {
                 const stale = document.getElementById('wr-tab-diag');
                 if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
-            }, 8000);
+            }, 30000);
         }
 
         function dismissTabDiagnostic() {
