@@ -4505,12 +4505,16 @@
         async function previewMergePlan(clusterId) {
             const panel = document.getElementById('mergePlanPanel');
             if (!panel) return;
-            // Reset the merge-set selection when previewing a different cluster.
-            if (window.__planClusterId !== clusterId) window.__planSelected = null;
+            // Reset the merge-set selection + forced survivor on a new cluster.
+            if (window.__planClusterId !== clusterId) {
+                window.__planSelected = null;
+                window.__planMaster = null;
+            }
             window.__planClusterId = clusterId;
             panel.innerHTML = '<div class="py-4 text-gray-400">Building plan…</div>';
             const reqBody = {};
             if (Array.isArray(window.__planSelected)) reqBody.record_zoho_ids = window.__planSelected;
+            if (window.__planMaster) reqBody.master_zoho_id = window.__planMaster;
             let res, data;
             try {
                 res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/plan', {
@@ -4546,15 +4550,29 @@
                 if (window.__planClusterId) previewMergePlan(window.__planClusterId);
                 return;
             }
+            // If the operator unticked the record they'd forced as survivor,
+            // drop the override so the agent re-picks among the remaining set.
+            if (!sel.has(key) && window.__planMaster === key) window.__planMaster = null;
             window.__planSelected = Array.from(sel);
             previewMergePlan(window.__planClusterId);
+        }
+
+        // Force a specific record to be the survivor (overrides the auto-pick).
+        // Ensures it's part of the merge set, then re-previews.
+        function setMergeSurvivor(zohoId) {
+            const key = String(zohoId);
+            window.__planMaster = key;
+            if (Array.isArray(window.__planSelected) && !window.__planSelected.includes(key)) {
+                window.__planSelected.push(key);
+            }
+            if (window.__planClusterId) previewMergePlan(window.__planClusterId);
         }
 
         // ── Agentic Resolution — execute (dry-run / apply) ────────────────────
         // dryRunMergePlan: POST /execute with no confirm → server performs NO
         // writes but enumerates exactly what a real run would do.
         async function dryRunMergePlan(clusterId) {
-            await _runMergeExec(clusterId, { dry_run: true, record_zoho_ids: window.__planSelected || undefined }, false);
+            await _runMergeExec(clusterId, { dry_run: true, record_zoho_ids: window.__planSelected || undefined, master_zoho_id: window.__planMaster || undefined }, false);
         }
         // applyMergePlan: explicit confirm → POST /execute with confirm:true →
         // real Zoho writes (migrate fields, reparent, tag, stamp, resolve).
@@ -4568,7 +4586,7 @@
                 'This writes to production Zoho.'
             );
             if (!ok) return;
-            await _runMergeExec(clusterId, { confirm: true, record_zoho_ids: window.__planSelected || undefined }, true);
+            await _runMergeExec(clusterId, { confirm: true, record_zoho_ids: window.__planSelected || undefined, master_zoho_id: window.__planMaster || undefined }, true);
         }
         async function _runMergeExec(clusterId, body, isApply) {
             const panel = document.getElementById('mergeExecPanel');
@@ -4633,11 +4651,14 @@
 
             const recRows = (plan.records || []).map(r => {
                 const included = r.included !== false;
+                const makeSurvivorBtn = (included && !r.isMaster && r.zohoId)
+                    ? ' <button data-on-click="setMergeSurvivor" data-args=\'["' + esc(r.zohoId) + '"]\' class="ms-1 text-[11px] text-indigo-600 hover:underline cursor-pointer" title="Make this the surviving record">★ make survivor</button>'
+                    : '';
                 const outcome = !included
                     ? '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-500 text-xs font-medium">Excluded</span>'
                     : (r.isMaster
                         ? '<span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 text-xs font-semibold">SURVIVOR</span>'
-                        : '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs font-medium">Duplicate-Delete</span>');
+                        : '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs font-medium">Duplicate-Delete</span>' + makeSurvivorBtn);
                 const cb = r.zohoId
                     ? '<input type="checkbox" data-on-click="toggleMergeRecord" data-args=\'["' + esc(r.zohoId) + '"]\'' + (included ? ' checked' : '') + ' class="cursor-pointer w-4 h-4" title="Include this account in the merge">'
                     : '<span class="text-gray-300" title="No Zoho id — cannot be merged">—</span>';

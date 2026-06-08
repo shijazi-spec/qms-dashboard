@@ -425,7 +425,9 @@ export function buildAccountMergePlan(
     hasZohoId: !!r.zoho_record_id,
   }));
 
-  const masterReason = masterReasonText(master);
+  const masterReason = overridden
+    ? `Operator-selected survivor — ${Math.round(completeness(master) * 100)}% of tracked fields populated`
+    : masterReasonText(master);
   const rationale =
     `Proposed survivor: "${recName(master)}"` +
     (master.zoho_record_id ? ` (${master.zoho_record_id})` : "") +

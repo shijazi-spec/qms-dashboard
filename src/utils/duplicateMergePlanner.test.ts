@@ -204,5 +204,19 @@ try {
 }
 assert(threwSel, "throws when fewer than 2 accounts are selected");
 
+console.log("survivor override (masterZohoId)");
+const forced = buildAccountMergePlan(13, [recA, recB], { masterZohoId: "ZB" });
+assert(forced.masterZohoId === "ZB", "operator-forced survivor is honoured");
+assert(
+  /operator-selected/i.test(forced.masterReason),
+  "forced survivor reason notes it was operator-selected (not 'most complete')",
+);
+const badForce = buildAccountMergePlan(14, [recA, recB], { masterZohoId: "NOPE" });
+assert(
+  badForce.masterZohoId === "ZA" &&
+    badForce.warnings.some((w) => /not in the selected merge set/i.test(w)),
+  "invalid forced master falls back to the auto-pick with a warning",
+);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
