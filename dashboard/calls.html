@@ -2211,6 +2211,75 @@
             }
         }
 
+        /**
+         * Diagnostic badge — renders a visible report card after a tab
+         * switch so users can screenshot the failure state instead of
+         * fishing in DevTools. Self-removes on the next switch + auto-
+         * hides after 8s. Set `window.WR_TAB_DIAGNOSTIC = false` in the
+         * console to suppress permanently after the issue is fixed.
+         */
+        function _wrTabDiagnostic(tab, contentEl) {
+            // Remove any previous badge so only one shows at a time.
+            const prev = document.getElementById('wr-tab-diag');
+            if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+
+            const found = !!contentEl;
+            const childCount = contentEl ? contentEl.children.length : 0;
+            const innerLen = contentEl ? (contentEl.innerHTML || '').length : 0;
+            const display = contentEl
+                ? (window.getComputedStyle(contentEl).display || 'unknown')
+                : '—';
+            const isHidden = contentEl
+                ? contentEl.classList.contains('hidden')
+                : 'N/A';
+            const refreshDataDone = typeof analytics === 'object' && analytics
+                && (analytics.totalCalls != null || analytics.analyzedCalls != null)
+                ? 'YES'
+                : 'NO';
+
+            // Colour-grade by health. Green = looks fine; amber = looks
+            // suspicious; red = definitely broken (no div / no children).
+            const healthy = found && childCount > 0 && display !== 'none';
+            const colorCls = !found || childCount === 0
+                ? 'bg-red-50 border-red-300 text-red-900'
+                : (display === 'none'
+                    ? 'bg-amber-50 border-amber-300 text-amber-900'
+                    : 'bg-green-50 border-green-300 text-green-900');
+
+            const badge = document.createElement('div');
+            badge.id = 'wr-tab-diag';
+            badge.setAttribute('data-style', 'position:fixed;bottom:16px;right:16px;z-index:9999;max-width:380px');
+            badge.className = `${colorCls} border rounded-lg shadow-lg p-3 text-xs font-mono leading-tight`;
+            badge.innerHTML = `
+                <div class="flex items-start justify-between gap-2 mb-1">
+                    <div class="font-semibold">Tab diagnostic — <span class="font-mono">${escapeHtml(String(tab))}</span></div>
+                    <button type="button"
+                            data-on-click="dismissTabDiagnostic"
+                            class="text-xs opacity-60 hover:opacity-100">×</button>
+                </div>
+                <div>content-${escapeHtml(String(tab))} found: <strong>${found ? 'YES' : 'NO'}</strong></div>
+                <div>children: <strong>${childCount}</strong></div>
+                <div>innerHTML size: <strong>${innerLen}</strong></div>
+                <div>computed display: <strong>${escapeHtml(display)}</strong></div>
+                <div>has .hidden class: <strong>${isHidden}</strong></div>
+                <div>refreshData() reached: <strong>${refreshDataDone}</strong></div>
+                <div class="mt-1 text-[10px] opacity-70">Set WR_TAB_DIAGNOSTIC=false in console to hide.</div>`;
+            document.body.appendChild(badge);
+
+            // Auto-dismiss after 8 seconds so the badge doesn't camp
+            // the corner forever. The user can still screenshot it
+            // within that window.
+            setTimeout(() => {
+                const stale = document.getElementById('wr-tab-diag');
+                if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+            }, 8000);
+        }
+
+        function dismissTabDiagnostic() {
+            const el = document.getElementById('wr-tab-diag');
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+        }
+
         function showTab(tab) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('[id^="tab-"]').forEach(btn => {
@@ -2235,6 +2304,23 @@
                 contentEl.classList.remove('hidden');
             } else {
                 console.error(`[showTab] content-${tab} div not found in DOM`);
+            }
+
+            // In-page diagnostic — fires on every tab switch and renders a
+            // visible badge with the live state of the content container.
+            // If a user reports "the tab is blank" we can read off:
+            //   • whether the div exists
+            //   • how many child elements it has
+            //   • whether the computed style is display:none
+            //   • whether the inner HTML was wiped at runtime
+            // The badge is removed on the next tab switch + hides itself
+            // after 8s so it doesn't permanently clutter the UI. To
+            // suppress it once we have the answer, set
+            //   window.WR_TAB_DIAGNOSTIC = false
+            // in the console.
+            if (window.WR_TAB_DIAGNOSTIC !== false) {
+                try { _wrTabDiagnostic(tab, contentEl); }
+                catch (e) { console.warn('[showTab] diagnostic failed:', e); }
             }
 
             // Each render call is wrapped so a single failure can't
