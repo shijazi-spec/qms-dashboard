@@ -7250,8 +7250,21 @@
         // server-side query via buildFilterParams() — both paths read the
         // same panel controls so the operator sees one consistent state.
         function getAdvancedFilterSpec() {
+            // 2026-06-08 ROOT FIX — module/layout/pipeline/stage were on the
+            // form UI since day one but never made it into the spec, so the
+            // matcher silently ignored them and operators saw "no effect"
+            // when they picked Layout=WalaPlus or Stage=Closed-Lost in any
+            // tab. Adding them here + the matching branch in
+            // rowMatchesAdvancedFilter below closes the bug for every
+            // client-side-filtered tab in one place (Cross-Module, CS
+            // Overlap, CS Lifecycle, Account Hints, Owners, Domain
+            // Clusters — they all read this spec).
             return {
                 owners:     getSelectedValues('filterOwner').map(s => String(s || '').toLowerCase()),
+                modules:    getSelectedValues('filterModule').map(s => String(s || '').toLowerCase()),
+                layouts:    getSelectedValues('filterLayout').map(s => String(s || '').toLowerCase()),
+                pipelines:  getSelectedValues('filterPipeline').map(s => String(s || '').toLowerCase()),
+                stages:     getSelectedValues('filterStage').map(s => String(s || '').toLowerCase()),
                 domain:     (document.getElementById('filterDomain').value || '').toLowerCase().trim(),
                 confidence: document.getElementById('filterConfidence').value || '',
                 dateFrom:   document.getElementById('filterDateFrom').value || '',
@@ -7259,18 +7272,95 @@
             };
         }
 
-        // mapping: { ownerField?, domainField?, dateField?|dateFields?[],
-        //            confidenceField? } — names on the row to check.
+        // 2026-06-08 — Field-name fallback lists for the four multi-select
+        // dimensions added below. Each tab's row shape uses different
+        // field names (modules_present[] on cross-module vs. record_type
+        // on owners, layout on clusters vs. layout_name on CS Lifecycle,
+        // pipeline_lifecycle_state on CS Overlap vs. plain stage on
+        // Deals). Rather than make every renderer specify exact fields
+        // (which is what made the previous version silently no-op when a
+        // mapping was missing), we try a list of likely field names per
+        // dimension and use the first one that's actually present on
+        // the row. If NONE of the fallback fields exist on the row, the
+        // dimension is skipped for that row (don't filter to zero) — so
+        // a Layout filter doesn't accidentally hide an Owners-tab row
+        // that genuinely has no layout concept.
+        const _ADV_FILTER_FALLBACKS = {
+            module:   ['record_type', 'module', 'Module', 'module_name'],
+            layout:   ['layout', 'Layout', 'layout_name', 'Layout_Name', 'pipeline_layout', 'pipeline_layout_name'],
+            pipeline: ['pipeline', 'Pipeline', 'pipeline_name', 'Pipeline_Name'],
+            stage:    ['stage', 'Stage', 'stage_name', 'Stage_Name', 'pipeline_lifecycle_state', 'lifecycle_state', 'lifecycle_phase'],
+        };
+
+        // For a single dimension, return the row's value across explicit
+        // mapping field + every fallback name. Used to handle rows whose
+        // module is in an array (cross-module's modules_present[]).
+        function _advFilterRowValues(row, mappingField, fallbackKey) {
+            const out = [];
+            const push = (raw) => {
+                if (raw == null) return;
+                if (Array.isArray(raw)) {
+                    for (const x of raw) if (x != null) out.push(String(x).toLowerCase());
+                } else {
+                    out.push(String(raw).toLowerCase());
+                }
+            };
+            if (mappingField && row[mappingField] !== undefined) push(row[mappingField]);
+            for (const f of (_ADV_FILTER_FALLBACKS[fallbackKey] || [])) {
+                if (row[f] !== undefined) push(row[f]);
+            }
+            return out;
+        }
+
+        // Generic multi-select dimension check. Selected values are
+        // lower-cased; we accept either an exact equality OR substring
+        // hit, because some Zoho fields carry "Done Q4-2025 / Paid" or
+        // similar composites that the operator picks the leaf of.
+        function _advFilterMatchMulti(selected, rowValues) {
+            if (!selected || !selected.length) return true;       // no filter on this dim
+            if (!rowValues || !rowValues.length) return true;     // row has no concept of this dim → skip
+            return rowValues.some(v => selected.some(sel => sel && (v === sel || v.includes(sel))));
+        }
+
+        // mapping: {
+        //   ownerField?, domainField?, dateField?|dateFields?[],
+        //   confidenceField?,
+        //   moduleField?, layoutField?, pipelineField?, stageField?
+        // } — names on the row to check.
         // Returns true if the row should survive the filter. Missing
         // mappings short-circuit that dimension as "matches" so a tab can
         // opt-out of any dim that doesn't apply (e.g. Owners tab has no
-        // domain field).
+        // domain field). For the four new multi-select dimensions
+        // (module/layout/pipeline/stage) we additionally try a small
+        // list of common field names so most tabs Just Work without
+        // touching the renderer's mapping.
         function rowMatchesAdvancedFilter(row, mapping, spec) {
             const s = spec || getAdvancedFilterSpec();
             // Owner — case-insensitive substring against any selected name.
             if (s.owners && s.owners.length > 0 && mapping.ownerField) {
                 const v = String(row[mapping.ownerField] || '').toLowerCase();
                 if (!s.owners.some(o => o && v.includes(o))) return false;
+            }
+            // Module — multi-select. Matches against record_type / module
+            // by default (and any explicit mapping.moduleField on top).
+            if (s.modules && s.modules.length > 0) {
+                const vals = _advFilterRowValues(row, mapping.moduleField, 'module');
+                if (!_advFilterMatchMulti(s.modules, vals)) return false;
+            }
+            // Layout — multi-select. Matches against layout / layout_name etc.
+            if (s.layouts && s.layouts.length > 0) {
+                const vals = _advFilterRowValues(row, mapping.layoutField, 'layout');
+                if (!_advFilterMatchMulti(s.layouts, vals)) return false;
+            }
+            // Pipeline — multi-select.
+            if (s.pipelines && s.pipelines.length > 0) {
+                const vals = _advFilterRowValues(row, mapping.pipelineField, 'pipeline');
+                if (!_advFilterMatchMulti(s.pipelines, vals)) return false;
+            }
+            // Stage — multi-select.
+            if (s.stages && s.stages.length > 0) {
+                const vals = _advFilterRowValues(row, mapping.stageField, 'stage');
+                if (!_advFilterMatchMulti(s.stages, vals)) return false;
             }
             // Domain — case-insensitive substring (so 'acme' matches both
             // acme.com and shop.acme.com).
