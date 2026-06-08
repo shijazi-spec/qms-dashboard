@@ -4545,6 +4545,7 @@
                 '<td class="px-3 py-2 font-mono text-xs text-gray-600">' + esc(r.zohoId) + '</td>' +
                 '<td class="px-3 py-2 text-end">' + Math.round((r.completeness || 0) * 100) + '%</td>' +
                 '<td class="px-3 py-2 text-xs text-gray-500">' + esc(r.owner) + '</td>' +
+                '<td class="px-3 py-2 text-xs text-gray-700">' + esc(r.layout) + '</td>' +
                 '</tr>'
             ).join('');
 
@@ -4569,7 +4570,7 @@
             return '' +
                 '<div class="rounded-lg border border-purple-200 bg-purple-50 p-3 mb-3 text-sm text-purple-900" data-testid="merge-plan-rationale">' + esc(plan.rationale) + '</div>' +
                 '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">Survivor</span><div class="font-semibold">' + esc(plan.masterName) + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
-                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th><th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
+                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th><th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
                 '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Field migrations &amp; conflicts (' + (plan.fieldDecisions || []).length + ')</div>' +
                 (decRows
                     ? '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Field</th><th class="px-3 py-2 text-start">Action</th><th class="px-3 py-2 text-start">Value kept</th><th class="px-3 py-2 text-start">Why</th></tr></thead><tbody>' + decRows + '</tbody></table></div>'

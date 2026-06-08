@@ -52,6 +52,8 @@ export interface MergePlanRecordSummary {
   createdDate: string | null;
   modifiedDate: string | null;
   owner: string | null;
+  /** Zoho Layout / account category (e.g. "Corporate Accounts", "Partner Accounts"). Informational. */
+  layout: string | null;
   hasZohoId: boolean;
 }
 
@@ -190,6 +192,16 @@ function isoOrNull(d: Date | string | null | undefined): string | null {
   if (!d) return null;
   const t = new Date(d);
   return Number.isNaN(t.getTime()) ? null : t.toISOString();
+}
+
+// Zoho Layout (account category, e.g. "Corporate Accounts" / "Partner
+// Accounts"). Surfaced in the plan as INFO only — a layout difference between
+// records is legitimate (corporate B2B/B2C vs merchant partner), NOT a merge
+// conflict, so it is deliberately kept out of ACCOUNT_FIELDS / conflict logic.
+function layoutOf(r: DuplicateRecord): string | null {
+  const v = normalize(rawVal(r, "Layout"));
+  if (v !== null) return String(v);
+  return r.layout_name || null;
 }
 
 function sameScalar(
@@ -381,6 +393,7 @@ export function buildAccountMergePlan(
     createdDate: isoOrNull(r.created_date),
     modifiedDate: isoOrNull(r.modified_date),
     owner: r.owner_name || r.owner_email || null,
+    layout: layoutOf(r),
     hasZohoId: !!r.zoho_record_id,
   }));
 
