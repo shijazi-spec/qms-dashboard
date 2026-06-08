@@ -917,14 +917,16 @@
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Verdict</th>
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="How many existing CRM records the matched cluster contains, broken down by module">Records</th>
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Reason</th>
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">CS Phase</th>
                             <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">ARR</th>
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Suggested action</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="Open the cluster detail in the Duplicate Radar — see every underlying record, modules touched, ARR exposure, owners">View</th>
                         </tr>
                     </thead>
                     <tbody id="preflightResultTable" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>
+                        <tr><td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -5927,7 +5929,7 @@
             document.getElementById('preflightInput').value = '';
             document.getElementById('preflightParsedCount').textContent = '';
             const body = document.getElementById('preflightResultTable');
-            body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>';
+            body.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>';
             ['Block','Review','Warn','Dup','Pass'].forEach(k => {
                 const el = document.getElementById('preflightSum' + k);
                 if (el) el.textContent = '—';
@@ -7104,6 +7106,40 @@
                 + escapeHtml(name) + '</a>';
         }
 
+        // 2026-06-08 — Compact per-module breakdown of the matched cluster.
+        // Shows only modules that have a non-zero count so PASS rows render
+        // an em-dash (no cluster → no counts), and a BLOCK row with
+        // contacts but no deals reads "Leads 5 · Contacts 8" instead of a
+        // noisy "Leads 5 · Deals 0 · Contacts 8 · Accounts 0".
+        function _preflightModulesCell(counts) {
+            if (!counts || !counts.total) return '<span class="text-gray-400">—</span>';
+            const parts = [];
+            if (counts.leads)    parts.push('<span class="text-gray-700">Leads <span class="font-mono font-medium">' + _fn(counts.leads) + '</span></span>');
+            if (counts.deals)    parts.push('<span class="text-gray-700">Deals <span class="font-mono font-medium">' + _fn(counts.deals) + '</span></span>');
+            if (counts.contacts) parts.push('<span class="text-gray-700">Contacts <span class="font-mono font-medium">' + _fn(counts.contacts) + '</span></span>');
+            if (counts.accounts) parts.push('<span class="text-gray-700">Accounts <span class="font-mono font-medium">' + _fn(counts.accounts) + '</span></span>');
+            if (parts.length === 0) return '<span class="text-gray-400">—</span>';
+            return '<span class="text-[11px] whitespace-nowrap"'
+                + ' title="' + escAttr(_fn(counts.total) + ' total records in this cluster across ' + parts.length + ' module(s)') + '">'
+                + parts.join(' <span class="text-gray-300">·</span> ')
+                + '</span>';
+        }
+
+        // 2026-06-08 — Per-row "View" button that opens the cluster detail
+        // modal inside the radar (same modal the Domain Clusters tab uses).
+        // Lets the operator drill into every underlying record without
+        // leaving the preflight context. PASS rows have no cluster_id, so
+        // the cell is blank — keeps the column read clean.
+        function _preflightViewCell(clusterId) {
+            if (!clusterId) return '';
+            return '<button type="button"'
+                + ' data-on-click="showClusterDetails" data-args="[' + clusterId + ']"'
+                + ' class="px-2 py-0.5 text-[11px] rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"'
+                + ' title="Open this cluster in the radar — every record, module, owner, ARR"'
+                + ' data-testid="btn-preflight-view-cluster-' + clusterId + '">'
+                + 'View →</button>';
+        }
+
         function renderPreflight(data) {
             const s = data.summary || {};
             document.getElementById('preflightSumBlock').textContent  = s.block  || 0;
@@ -7116,7 +7152,7 @@
             const body = document.getElementById('preflightResultTable');
             const rows = data.rows || [];
             if (rows.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No rows processed.</td></tr>';
+                body.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">No rows processed.</td></tr>';
                 return;
             }
             body.innerHTML = rows.map(r => {
@@ -7132,10 +7168,12 @@
                     + '<td class="px-3 py-2 whitespace-nowrap">' + preflightVerdictBadge(r.verdict, r.reason) + '</td>'
                     + '<td class="px-3 py-2 text-xs font-mono">' + _preflightDomainCell(r.input.domain) + '</td>'
                     + '<td class="px-3 py-2 text-xs">' + _preflightCompanyCell(r.input.company_name) + '</td>'
+                    + '<td class="px-3 py-2">' + _preflightModulesCell(r.module_counts) + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-600">' + reasonCell + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.lifecycle_state)) + '</td>'
                     + '<td class="px-3 py-2 text-xs text-end font-medium">' + (r.arr_exposure ? formatCurrency(r.arr_exposure) : '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(r.suggested_action || '') + '</td>'
+                    + '<td class="px-3 py-2 whitespace-nowrap">' + _preflightViewCell(r.cluster_id) + '</td>'
                     + '</tr>';
             }).join('');
         }
