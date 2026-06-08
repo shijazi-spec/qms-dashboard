@@ -7064,6 +7064,46 @@
         }
         window.submitOpenCapa = submitOpenCapa;
 
+        // 2026-06-08 — Build a Zoho global-search deep-link for a given term.
+        // Operators want to jump from a preflight verdict row straight into
+        // the actual Lead/Deal/Contact/Account in CRM to verify the match
+        // by hand. Zoho's search-by-keyword endpoint takes the term as
+        // ?searchword= and surfaces every module that hits, which is the
+        // right entry point when we don't have the exact record id (the
+        // preflight engine carries the cluster id, not the per-record id —
+        // the cluster may span multiple Zoho records). The org id is fixed
+        // for this tenant; lifted from renderCrmLinkCell in calls.html to
+        // keep the deep-link prefix consistent across pages.
+        function _zohoSearchUrl(term) {
+            const t = String(term || '').trim();
+            if (!t) return null;
+            return 'https://crm.zoho.com/crm/org766568398/search?searchword=' + encodeURIComponent(t);
+        }
+
+        function _preflightDomainCell(domain) {
+            if (!domain) return '<span class="text-gray-400">—</span>';
+            const url = _zohoSearchUrl(domain);
+            if (!url) return escapeHtml(domain);
+            // The arrow ↗ is the standard "opens in new tab / leaves the
+            // dashboard" affordance used throughout the radar (see also the
+            // Deal ↗ badge in calls.html). Title gives the operator the
+            // full destination on hover.
+            return '<a href="' + escAttr(url) + '" target="_blank" rel="noopener"'
+                + ' class="text-indigo-600 hover:text-indigo-800 underline decoration-dotted"'
+                + ' title="Open Zoho CRM search for ' + escAttr(domain) + '">'
+                + escapeHtml(domain) + ' <span class="text-[10px] text-gray-400" aria-hidden="true">↗</span></a>';
+        }
+
+        function _preflightCompanyCell(name) {
+            if (!name) return '<span class="text-gray-400">—</span>';
+            const url = _zohoSearchUrl(name);
+            if (!url) return escapeHtml(name);
+            return '<a href="' + escAttr(url) + '" target="_blank" rel="noopener"'
+                + ' class="text-indigo-700 hover:text-indigo-900"'
+                + ' title="Open Zoho CRM search for ' + escAttr(name) + '">'
+                + escapeHtml(name) + '</a>';
+        }
+
         function renderPreflight(data) {
             const s = data.summary || {};
             document.getElementById('preflightSumBlock').textContent  = s.block  || 0;
@@ -7090,8 +7130,8 @@
                 return '<tr class="hover:bg-gray-50">'
                     + '<td class="px-3 py-2 text-xs text-gray-500">' + (r.row_index + 1) + '</td>'
                     + '<td class="px-3 py-2 whitespace-nowrap">' + preflightVerdictBadge(r.verdict, r.reason) + '</td>'
-                    + '<td class="px-3 py-2 text-xs font-mono text-gray-700">' + escapeHtml(r.input.domain || '—') + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(r.input.company_name || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-xs font-mono">' + _preflightDomainCell(r.input.domain) + '</td>'
+                    + '<td class="px-3 py-2 text-xs">' + _preflightCompanyCell(r.input.company_name) + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-600">' + reasonCell + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.lifecycle_state)) + '</td>'
                     + '<td class="px-3 py-2 text-xs text-end font-medium">' + (r.arr_exposure ? formatCurrency(r.arr_exposure) : '—') + '</td>'
