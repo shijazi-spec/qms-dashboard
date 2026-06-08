@@ -130,6 +130,10 @@ import {
 import { logger } from "../../utils/logger";
 import { buildAccountMergePlan } from "../../utils/duplicateMergePlanner";
 import { executeMergePlan } from "../../utils/duplicateMergeExecutor";
+import {
+  recordResolutionEvent,
+  getResolutionLearnings,
+} from "../../utils/duplicateResolutionLearning";
 // Default to fetching the entire module so duplicate detection reflects the
 // real CRM. Set DUPLICATE_SCAN_LIMIT to a positive integer to re-cap (useful
 // for staging or when Zoho daily-credit budget is tight). An unset, blank,
@@ -1160,6 +1164,35 @@ export const duplicateRadarRoutes = [
             dryRun,
           });
 
+          // Learning loop — record what the agent proposed vs. what the
+          // operator chose + the outcome, so the agent learns the org's real
+          // preferences over time. Proposed survivor = the planner's unbiased
+          // default (rebuilt without the override). Best-effort, never blocks.
+          try {
+            const proposedMasterZohoId = masterZohoId
+              ? buildAccountMergePlan(id, records, { tagName: "Duplicate-Delete" })
+                  .masterZohoId
+              : plan.masterZohoId;
+            await recordResolutionEvent({
+              clusterId: id,
+              eventType: dryRun ? "dry_run" : "applied",
+              proposedMasterZohoId,
+              chosenMasterZohoId: plan.masterZohoId,
+              fieldsMigrated: report.fieldsMigrated.length,
+              duplicatesTagged: report.taggedRecordIds.length,
+              reparented:
+                report.reparented.deals +
+                report.reparented.contacts +
+                report.reparented.notes,
+              errors: report.errors.length,
+              plan,
+              report,
+              performedBy: (sessionUser as any)?.email || "admin",
+            });
+          } catch {
+            /* learning capture is non-fatal */
+          }
+
           return c.json({ success: true, dryRun, plan, report });
         } catch (error: any) {
           logger.error("Error executing merge plan:", error);
@@ -1167,6 +1200,133 @@ export const duplicateRadarRoutes = [
             { success: false, error: error?.message || "An internal error occurred" },
             500,
           );
+        }
+      };
+    },
+  },
+  {
+    // Agentic Resolution — learned signals (read-only). Surfaces what the
+    // agent has learned from platform data + operator actions: override rate,
+    // apply/dry-run volume, recent corrections, plain-English guidance.
+    path: "/api/duplicates/resolution-learnings",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const learnings = await getResolutionLearnings();
+          return c.json({ success: true, learnings });
+        } catch (error: any) {
+          logger.error("Error fetching resolution learnings:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Agentic Resolution — LLM reviewer. READ-ONLY: builds the deterministic
+    // plan + learnings briefing server-side and asks the duplicateResolution
+    // Agent for a concise verdict/confidence/risks narrative. No writes; the
+    // LLM only reasons over the briefing (it never authors data decisions).
+    path: "/api/duplicates/clusters/:id/agent-review",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          const cluster = await getClusterById(id);
+          if (!cluster) return c.json({ error: "Cluster not found" }, 404);
+
+          const records = await getRecordsByClusterId(id);
+          const accountCount = records.filter(
+            (r) => r.record_type === "account",
+          ).length;
+          if (accountCount < 2) {
+            return c.json(
+              {
+                error:
+                  "Phase 1 reviews Accounts clusters with 2+ Account records.",
+                account_record_count: accountCount,
+              },
+              400,
+            );
+          }
+
+          const plan = buildAccountMergePlan(id, records, {
+            tagName: "Duplicate-Delete",
+            generatedBy: (user as any)?.email || "duplicate-radar",
+            generatedAt: new Date().toISOString(),
+          });
+          const learnings = await getResolutionLearnings();
+
+          // Deterministic briefing — the LLM narrates over this, never edits it.
+          const fieldLines = plan.fieldDecisions
+            .map(
+              (d) =>
+                `- ${d.label}: ${d.action.toUpperCase()} → "${d.chosenValue ?? "—"}" (${d.reason})`,
+            )
+            .join("\n");
+          const briefing =
+            `MERGE BRIEFING — cluster ${id}\n` +
+            `Survivor: ${plan.masterName} (${plan.masterZohoId ?? "no-zoho-id"}) — ${plan.masterReason}\n` +
+            `Duplicates to tag "${plan.tagName}": ${plan.duplicateZohoIds.length} (${plan.duplicateZohoIds.join(", ") || "none"})\n` +
+            `Field decisions (${plan.fieldDecisions.length}):\n${fieldLines || "- none"}\n` +
+            `Warnings:\n${(plan.warnings.map((w) => "- " + w).join("\n")) || "- none"}\n\n` +
+            `ORG LEARNINGS\n` +
+            `- Resolutions so far: ${learnings.totalEvents} (applied ${learnings.applied}, dry-run ${learnings.dryRuns})\n` +
+            `- Master override rate: ${Math.round(learnings.masterOverrideRate * 100)}%\n` +
+            `- Guidance: ${learnings.guidance.join(" ")}\n\n` +
+            `Produce your reviewer recommendation now.`;
+
+          let recommendation = "";
+          try {
+            const { mastra } = await import("../index");
+            const agent = (mastra as any)?.getAgent?.(
+              "duplicateResolutionAgent",
+            );
+            if (agent) {
+              const out = await agent.generate(briefing, { maxSteps: 1 });
+              recommendation =
+                (out && (out.text || out.content)) ||
+                (typeof out === "string" ? out : "");
+            }
+          } catch (agentErr: any) {
+            logger.warn("agent-review generate failed; returning plan only", {
+              error: agentErr?.message || String(agentErr),
+            });
+          }
+
+          // Capture the review as a 'preview' learning signal (best-effort).
+          try {
+            await recordResolutionEvent({
+              clusterId: id,
+              eventType: "preview",
+              proposedMasterZohoId: plan.masterZohoId,
+              chosenMasterZohoId: plan.masterZohoId,
+              plan,
+              performedBy: (user as any)?.email || "reviewer",
+            });
+          } catch {
+            /* non-fatal */
+          }
+
+          return c.json({
+            success: true,
+            recommendation:
+              recommendation ||
+              "AI reviewer unavailable — see the deterministic plan and warnings.",
+            plan,
+            learnings,
+          });
+        } catch (error: any) {
+          logger.error("Error in agent-review:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
         }
       };
     },

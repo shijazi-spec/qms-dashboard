@@ -9,6 +9,7 @@ import { registerCronTrigger } from "../triggers/cronTriggers";
 import { registerSlackConsultantRatingRoutes } from "../triggers/slackConsultantRatingTrigger";
 import { qualitySpecialistAgent } from "./agents/qualitySpecialistAgent";
 import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
+import { duplicateResolutionAgent } from "./agents/duplicateResolutionAgent";
 import { qualityAuditWorkflow } from "./workflows/qualityAuditWorkflow";
 
 import { evaluateSdrGovernanceTool } from "./tools/sdrGovernanceTool";
@@ -167,7 +168,7 @@ class ProductionPinoLogger extends MastraLogger {
 export const mastra = new Mastra({
   storage: sharedPostgresStorage,
   workflows: { qualityAuditWorkflow },
-  agents: { qualitySpecialistAgent, qmsConsultantAgent },
+  agents: { qualitySpecialistAgent, qmsConsultantAgent, duplicateResolutionAgent },
   mcpServers: {
     allTools: new MCPServer({
       name: "allTools",
