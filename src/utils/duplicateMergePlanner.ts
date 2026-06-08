@@ -236,6 +236,12 @@ export interface BuildPlanOptions {
   generatedBy?: string;
   /** ISO timestamp; the route passes new Date().toISOString(). */
   generatedAt?: string | null;
+  /**
+   * Operator override: force this zoho_record_id to be the survivor instead of
+   * the deterministic pick. Ignored if it doesn't match an Account record in
+   * the cluster (falls back to the automatic choice).
+   */
+  masterZohoId?: string | null;
 }
 
 /**
@@ -264,7 +270,16 @@ export function buildAccountMergePlan(
     );
   }
 
-  const master = pickMaster(records);
+  const overridden =
+    opts.masterZohoId != null
+      ? records.find((r) => r.zoho_record_id === opts.masterZohoId)
+      : undefined;
+  if (opts.masterZohoId != null && !overridden) {
+    warnings.push(
+      `Requested master ${opts.masterZohoId} is not an Account record in this cluster — using the recommended survivor instead.`,
+    );
+  }
+  const master = overridden || pickMaster(records);
   const duplicates = records.filter((r) => r !== master);
 
   // Field decisions — gap-fills + conflicts only (keeps are omitted as noise).

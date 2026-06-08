@@ -4154,11 +4154,15 @@
             // migrations, conflicts, and which duplicates would be tagged
             // Duplicate-Delete. No writes happen here — pure preview.
             if (_typeCounts.account >= 2) {
-                html += `<div class="border-t pt-4 mt-4" data-testid="section-merge-plan">
+                html += `<div class="border-t-2 border-purple-200 pt-4 mt-4" data-testid="section-merge-plan">
                     <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
                         <div>
-                            <h4 class="text-sm font-semibold text-gray-700">AI Merge Plan (preview)</h4>
-                            <p class="text-xs text-gray-500">Proposes a survivor and field migrations, and flags duplicates with <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code>. Read-only — nothing is written to Zoho.</p>
+                            <h4 class="text-sm font-bold text-purple-800 flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[10px] font-bold uppercase tracking-wide">AI</span>
+                                Agentic Resolution
+                                <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-medium">${_typeCounts.account} accounts</span>
+                            </h4>
+                            <p class="text-xs text-gray-500">Proposes a survivor, migrates winning fields, reparents Deals/Contacts/Notes, and flags duplicates with <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code> for the admin. Preview first — then dry-run or apply. The platform never deletes.</p>
                         </div>
                         <button data-on-click="previewMergePlan" data-args="[${cluster.id}]" data-testid="button-preview-merge-plan-${cluster.id}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview Merge Plan</button>
                     </div>
@@ -4428,6 +4432,84 @@
             panel.innerHTML = __renderMergePlan(data.plan);
         }
 
+        // ── Agentic Resolution — execute (dry-run / apply) ────────────────────
+        // dryRunMergePlan: POST /execute with no confirm → server performs NO
+        // writes but enumerates exactly what a real run would do.
+        async function dryRunMergePlan(clusterId) {
+            await _runMergeExec(clusterId, { dry_run: true }, false);
+        }
+        // applyMergePlan: explicit confirm → POST /execute with confirm:true →
+        // real Zoho writes (migrate fields, reparent, tag, stamp, resolve).
+        async function applyMergePlan(clusterId) {
+            const ok = window.confirm(
+                'Apply this merge in Zoho?\n\n' +
+                '• Winning field values are written onto the survivor.\n' +
+                '• Deals/Contacts/Notes are reparented to the survivor.\n' +
+                '• Duplicates are tagged "Duplicate-Delete" for the admin.\n' +
+                '• Nothing is deleted by the platform.\n\n' +
+                'This writes to production Zoho.'
+            );
+            if (!ok) return;
+            await _runMergeExec(clusterId, { confirm: true }, true);
+        }
+        async function _runMergeExec(clusterId, body, isApply) {
+            const panel = document.getElementById('mergeExecPanel');
+            if (!panel) return;
+            panel.innerHTML = '<div class="py-3 text-gray-400">' + (isApply ? 'Applying in Zoho…' : 'Running dry-run…') + '</div>';
+            let res, data;
+            try {
+                res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/execute', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body || {}),
+                });
+            } catch (e) {
+                panel.innerHTML = '<div class="py-3 text-red-600 text-sm">Failed to reach server: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                return;
+            }
+            try { data = await res.json(); } catch (_) { data = null; }
+            if (!res.ok || !data || !data.report) {
+                const msg = (data && data.error) ? data.error : ('Server returned ' + (res ? res.status : '—'));
+                panel.innerHTML = '<div class="py-3 text-amber-700 text-sm">' + escapeHtml(msg) + '</div>';
+                return;
+            }
+            panel.innerHTML = __renderExecReport(data.report);
+            // After a successful real apply, refresh the cluster list so the
+            // now-resolved cluster drops out of the active view.
+            if (isApply && data.report && data.report.clusterResolved && typeof refreshData === 'function') {
+                try { refreshData(); } catch (_) { /* non-fatal */ }
+            }
+        }
+        function __renderExecReport(rep) {
+            const esc = (v) => escapeHtml(v === null || v === undefined || v === '' ? '—' : String(v));
+            const banner = rep.dryRun
+                ? '<div class="rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-sm p-2 mb-2">Dry-run — no changes were written to Zoho. This is what a real apply would do.</div>'
+                : (rep.errors && rep.errors.length
+                    ? '<div class="rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-sm p-2 mb-2">Applied with ' + rep.errors.length + ' error(s) — see below.</div>'
+                    : '<div class="rounded-lg bg-green-50 border border-green-300 text-green-900 text-sm p-2 mb-2">Applied successfully in Zoho.</div>');
+            const fields = (rep.fieldsMigrated || []).length
+                ? (rep.fieldsMigrated || []).map(f => esc(f.field) + '=' + esc(f.value)).join(', ')
+                : 'none';
+            const errs = (rep.errors || []).length
+                ? '<div class="text-xs uppercase tracking-wide text-gray-500 mt-2 mb-1">Errors</div><ul class="list-disc ms-5 text-red-700 text-sm">' +
+                    rep.errors.map(e => '<li>' + esc(e.step) + (e.recordId ? ' [' + esc(e.recordId) + ']' : '') + ': ' + esc(e.message) + '</li>').join('') + '</ul>'
+                : '';
+            const warns = (rep.warnings || []).length
+                ? '<div class="text-xs uppercase tracking-wide text-gray-500 mt-2 mb-1">Warnings</div><ul class="list-disc ms-5 text-amber-800 text-sm">' +
+                    rep.warnings.map(w => '<li>' + esc(w) + '</li>').join('') + '</ul>'
+                : '';
+            return banner +
+                '<div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">' +
+                '<div class="text-gray-500">Fields migrated</div><div>' + fields + '</div>' +
+                '<div class="text-gray-500">Reparented</div><div>' + (rep.reparented ? (rep.reparented.deals + ' deals · ' + rep.reparented.contacts + ' contacts · ' + rep.reparented.notes + ' notes') : '—') + '</div>' +
+                '<div class="text-gray-500">Left on duplicate</div><div>' + (rep.leftOnDuplicate ? (rep.leftOnDuplicate.activities + ' activities · ' + rep.leftOnDuplicate.attachments + ' attachments') : '—') + '</div>' +
+                '<div class="text-gray-500">Tagged Duplicate-Delete</div><div>' + ((rep.taggedRecordIds || []).length) + ' record(s)</div>' +
+                '<div class="text-gray-500">Notes stamped</div><div>' + esc(rep.notesStamped) + '</div>' +
+                '<div class="text-gray-500">Cluster resolved</div><div>' + (rep.clusterResolved ? 'yes' : (rep.dryRun ? 'no (dry-run)' : 'no')) + '</div>' +
+                '</div>' + warns + errs;
+        }
+
         function __renderMergePlan(plan) {
             const esc = (v) => escapeHtml(v === null || v === undefined || v === '' ? '—' : String(v));
 
@@ -4469,8 +4551,14 @@
                 (decRows
                     ? '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Field</th><th class="px-3 py-2 text-start">Action</th><th class="px-3 py-2 text-start">Value kept</th><th class="px-3 py-2 text-start">Why</th></tr></thead><tbody>' + decRows + '</tbody></table></div>'
                     : '<div class="text-gray-400 text-sm mb-4">No field changes needed — survivor already holds all values.</div>') +
-                '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Warnings</div><div class="text-sm mb-2">' + warns + '</div>' +
-                '<div class="text-xs text-gray-400">Generated ' + esc(plan.generatedAt) + ' · by ' + esc(plan.generatedBy) + ' · Read-only preview — no Zoho writes performed.</div>';
+                '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Warnings</div><div class="text-sm mb-3">' + warns + '</div>' +
+                '<div class="flex flex-wrap items-center gap-2 border-t pt-3">' +
+                    '<button data-on-click="dryRunMergePlan" data-args="[' + plan.clusterId + ']" data-testid="button-dryrun-merge-' + plan.clusterId + '" class="px-3 py-2 bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-lg text-sm font-medium">Dry-run (no writes)</button>' +
+                    '<button data-on-click="applyMergePlan" data-args="[' + plan.clusterId + ']" data-testid="button-apply-merge-' + plan.clusterId + '" class="px-4 py-2 bg-purple-700 text-white hover:bg-purple-800 rounded-lg text-sm font-semibold">⚡ Apply in Zoho</button>' +
+                    '<span class="text-xs text-gray-400">Apply migrates fields, reparents Deals/Contacts/Notes, and tags duplicates <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code>. No deletions.</span>' +
+                '</div>' +
+                '<div id="mergeExecPanel" class="text-sm mt-3"></div>' +
+                '<div class="text-xs text-gray-400 mt-2">Generated ' + esc(plan.generatedAt) + ' · by ' + esc(plan.generatedBy) + '</div>';
         }
 
         async function resolveClusterAction(clusterId, action) {

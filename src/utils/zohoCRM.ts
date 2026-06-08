@@ -1568,3 +1568,106 @@ export async function deleteZohoRecord(
     }
   );
 }
+
+/**
+ * Apply one or more existing tags to one or more records (Zoho v2
+ * `actions/add_tags`). Runs under module write/update scope. The tag's COLOUR
+ * is a one-time admin setup on the tag definition (Setup → Tags); this only
+ * applies an existing tag by name. Used by the agentic duplicate resolver to
+ * flag duplicates with `Duplicate-Delete` for the Zoho admin to remove.
+ * Returns Zoho's per-record result array.
+ */
+export async function addZohoTags(
+  module: string,
+  recordIds: string[],
+  tagNames: string[],
+): Promise<any> {
+  const ids = recordIds.filter(Boolean).join(',');
+  const tags = tagNames.filter(Boolean).map(encodeURIComponent).join(',');
+  logger.info(`🏷️ [ZohoCRM] Adding tags [${tagNames.join(', ')}] to ${recordIds.length} ${module} record(s)`);
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/${module}/actions/add_tags?ids=${ids}&tag_names=${tags}`;
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Zoho-oauthtoken ${config.accessToken}` },
+      });
+    },
+    async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        logger.error('❌ [ZohoCRM] Failed to add tags', { error });
+        throw new Error(`Zoho add_tags error: ${response.status} - ${error.message || response.statusText}`);
+      }
+      const data = await response.json().catch(() => ({}));
+      logger.info('✅ [ZohoCRM] Tags added');
+      return data.data || data;
+    },
+  );
+}
+
+/** Remove tags from records (Zoho v2 `actions/remove_tags`) — rollback for addZohoTags. */
+export async function removeZohoTags(
+  module: string,
+  recordIds: string[],
+  tagNames: string[],
+): Promise<any> {
+  const ids = recordIds.filter(Boolean).join(',');
+  const tags = tagNames.filter(Boolean).map(encodeURIComponent).join(',');
+  logger.info(`🏷️ [ZohoCRM] Removing tags [${tagNames.join(', ')}] from ${recordIds.length} ${module} record(s)`);
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/${module}/actions/remove_tags?ids=${ids}&tag_names=${tags}`;
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Zoho-oauthtoken ${config.accessToken}` },
+      });
+    },
+    async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        logger.error('❌ [ZohoCRM] Failed to remove tags', { error });
+        throw new Error(`Zoho remove_tags error: ${response.status} - ${error.message || response.statusText}`);
+      }
+      const data = await response.json().catch(() => ({}));
+      return data.data || data;
+    },
+  );
+}
+
+/**
+ * Create a Note attached to a parent record (generic version of
+ * updateZohoRecordNotes). Used to (a) stamp audit context on records and
+ * (b) copy a duplicate's notes onto the surviving master during reparenting
+ * (Zoho v2 cannot move a note's parent, so we re-create it).
+ */
+export async function addZohoNote(
+  module: string,
+  recordId: string,
+  title: string,
+  content: string,
+): Promise<boolean> {
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/${module}/${recordId}/Notes`;
+      return fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: [{ Note_Title: title.slice(0, 120), Note_Content: content }],
+        }),
+      });
+    },
+    async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        logger.error('❌ [ZohoCRM] Failed to add note', { error });
+        throw new Error(`Zoho note error: ${response.status} - ${error.message || response.statusText}`);
+      }
+      return true;
+    },
+  );
+}

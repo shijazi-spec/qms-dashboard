@@ -129,6 +129,7 @@ import {
 
 import { logger } from "../../utils/logger";
 import { buildAccountMergePlan } from "../../utils/duplicateMergePlanner";
+import { executeMergePlan } from "../../utils/duplicateMergeExecutor";
 // Default to fetching the entire module so duplicate detection reflects the
 // real CRM. Set DUPLICATE_SCAN_LIMIT to a positive integer to re-cap (useful
 // for staging or when Zoho daily-credit budget is tight). An unset, blank,
@@ -1080,6 +1081,92 @@ export const duplicateRadarRoutes = [
         } catch (error: any) {
           logger.error("Error building merge plan:", error);
           return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Phase 1 — Agentic Duplicate Resolution: EXECUTE a merge plan.
+    // Migrates winning fields onto the survivor, reparents Deals/Contacts/Notes,
+    // tags duplicates `Duplicate-Delete`, stamps audit notes, and resolves the
+    // cluster. The platform NEVER deletes. DESTRUCTIVE → requireAdminOrKey.
+    //
+    // Body: { confirm?: boolean, dry_run?: boolean, master_zoho_id?: string }
+    //   - dry-run is the default; a real write requires confirm === true.
+    //   - master_zoho_id lets the operator override the survivor.
+    // The plan is rebuilt server-side from live records (the client plan is
+    // never trusted) and re-validated before execution.
+    path: "/api/duplicates/clusters/:id/execute",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          const body = await c.req.json().catch(() => ({}));
+          const dryRun = body?.confirm !== true || body?.dry_run === true;
+          const masterZohoId =
+            typeof body?.master_zoho_id === "string"
+              ? body.master_zoho_id
+              : null;
+
+          const cluster = await getClusterById(id);
+          if (!cluster) return c.json({ error: "Cluster not found" }, 404);
+          if (cluster.status !== "active") {
+            return c.json(
+              {
+                error: `Cluster is already '${cluster.status}'. Only active clusters can be resolved.`,
+              },
+              409,
+            );
+          }
+
+          const records = await getRecordsByClusterId(id);
+          const accountCount = records.filter(
+            (r) => r.record_type === "account",
+          ).length;
+          if (accountCount < 2) {
+            return c.json(
+              {
+                error:
+                  "Phase 1 resolves Accounts clusters with 2+ Account records.",
+                account_record_count: accountCount,
+              },
+              400,
+            );
+          }
+
+          const plan = buildAccountMergePlan(id, records, {
+            tagName: "Duplicate-Delete",
+            generatedBy:
+              (sessionUser as any)?.email ||
+              (sessionUser as any)?.role ||
+              "duplicate-radar",
+            generatedAt: new Date().toISOString(),
+            masterZohoId,
+          });
+
+          const report = await executeMergePlan(plan, {
+            performedBy:
+              (sessionUser as any)?.email ||
+              (sessionUser as any)?.role ||
+              "admin",
+            dryRun,
+          });
+
+          return c.json({ success: true, dryRun, plan, report });
+        } catch (error: any) {
+          logger.error("Error executing merge plan:", error);
+          return c.json(
+            { success: false, error: error?.message || "An internal error occurred" },
+            500,
+          );
         }
       };
     },
