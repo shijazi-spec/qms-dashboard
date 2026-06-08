@@ -1532,7 +1532,21 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
           });
         } catch (error) {
           logger.error("[Consultant] Scan error:", error);
-          return c.json({ error: "Failed to run platform scan" }, 500);
+          // 2026-06-08 — surface the actual error message + class back to
+          // the client. The old code returned only a generic 500 with no
+          // details, so the dashboard rendered "Scan returned 500" with
+          // zero diagnostic. /chat has been surfacing `details` for
+          // months — the scan handler was overlooked.
+          return c.json(
+            {
+              error: "Failed to run platform scan",
+              details:
+                error instanceof Error ? error.message : String(error ?? ""),
+              errorClass:
+                error instanceof Error ? error.constructor.name : "Unknown",
+            },
+            500,
+          );
         }
       };
     },
