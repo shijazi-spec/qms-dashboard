@@ -52,6 +52,15 @@ export interface ExecuteOptions {
   performedBy: string;
   /** Default true — must be explicitly set false (operator confirm) to write. */
   dryRun?: boolean;
+  /**
+   * Whether to mark the whole cluster resolved after the Account writes.
+   * Default true. Set FALSE for cross-module clusters — Agentic Resolution
+   * touches Accounts only, so closing the cluster would skip the cross-module
+   * link/close step the manual "Mark Resolved" flow performs and drop the
+   * cluster from the active list prematurely. Leaving it open preserves that
+   * follow-up.
+   */
+  closeCluster?: boolean;
 }
 
 const ACTIVITY_LISTS = ["Tasks", "Calls", "Events"];
@@ -241,8 +250,12 @@ export async function executeMergePlan(
     report.notesStamped = 1 + dups.length; // dry-run: would stamp survivor + each dup
   }
 
-  // 5) Mark the survivor primary + resolve the cluster internally.
-  if (!dryRun) {
+  // 5) Mark the survivor primary + resolve the cluster internally — but ONLY
+  // when this run is allowed to close it. For cross-module clusters
+  // closeCluster is false, so the cluster stays active for the cross-module
+  // link/close step (manual "Mark Resolved"); Agentic only handles Accounts.
+  const closeCluster = opts.closeCluster !== false;
+  if (!dryRun && closeCluster) {
     try {
       if (typeof plan.masterDbId === "number") {
         await markPrimaryRecord(plan.clusterId, plan.masterDbId);
@@ -258,6 +271,10 @@ export async function executeMergePlan(
     } catch (e) {
       fail("resolve-cluster", e);
     }
+  } else if (!dryRun && !closeCluster) {
+    report.warnings.push(
+      "Cross-module cluster: duplicate Accounts were migrated & tagged, but the cluster was left OPEN — link/close the Leads/Deals/Contacts via Mark Resolved to finish it.",
+    );
   }
 
   logger.info(

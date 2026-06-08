@@ -1182,12 +1182,20 @@ export const duplicateRadarRoutes = [
             return c.json({ error: e?.message || "Could not build plan" }, 400);
           }
 
+          // Cross-module clusters: Agentic handles Accounts only, so it must
+          // NOT close the whole cluster (the Leads/Deals/Contacts still need
+          // the manual Mark-Resolved cross-module link/close). Only pure-
+          // Accounts clusters are fully resolved by an Apply.
+          const isCrossModule = records.some(
+            (r) => r.record_type && r.record_type !== "account",
+          );
           const report = await executeMergePlan(plan, {
             performedBy:
               (sessionUser as any)?.email ||
               (sessionUser as any)?.role ||
               "admin",
             dryRun,
+            closeCluster: !isCrossModule,
           });
 
           // Learning loop — record what the agent proposed vs. what the

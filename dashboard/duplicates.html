@@ -4238,6 +4238,7 @@
                         </div>
                         <button data-on-click="previewMergePlan" data-args="[${cluster.id}]" data-testid="button-preview-merge-plan-${cluster.id}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview Merge Plan</button>
                     </div>
+                    ${is_cross_module ? `<div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900" data-testid="banner-agentic-cross-module"><strong>Cross-module cluster:</strong> Agentic Resolution handles the <strong>Accounts only</strong>. Applying migrates &amp; tags the duplicate accounts but <strong>leaves the cluster open</strong> — use <strong>Mark Resolved</strong> above to link/close the Leads/Deals/Contacts. Don't run both expecting one to finish the other.</div>` : ''}
                     <div id="mergePlanPanel" class="text-sm"></div>
                 </div>`;
             }
