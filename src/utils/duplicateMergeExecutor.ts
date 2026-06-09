@@ -40,6 +40,8 @@ export interface ExecuteReport {
   master: { zohoId: string | null; name: string };
   fieldsMigrated: Array<{ field: string; value: string | number | null }>;
   reparented: { deals: number; contacts: number; notes: number };
+  /** Account the survivor was linked to via Account_Name (Contacts/Deals), or null. */
+  linkedToAccount: string | null;
   leftOnDuplicate: { activities: number; attachments: number };
   taggedRecordIds: string[];
   notesStamped: number;
@@ -102,6 +104,7 @@ export async function executeMergePlan(
     master: { zohoId: masterId, name: plan.masterName },
     fieldsMigrated: [],
     reparented: { deals: 0, contacts: 0, notes: 0 },
+    linkedToAccount: null,
     leftOnDuplicate: { activities: 0, attachments: 0 },
     taggedRecordIds: [],
     notesStamped: 0,
@@ -145,6 +148,21 @@ export async function executeMergePlan(
         await updateZohoRecord(module, masterId, updates);
       } catch (e) {
         fail("migrate-fields", e, masterId);
+      }
+    }
+  }
+
+  // 1b) Cross-module link — set the survivor's Account_Name (Contacts/Deals
+  // only), so the kept record sits under the cluster's Account in Zoho.
+  if (plan.linkAccountZohoId && (module === "Contacts" || module === "Deals")) {
+    report.linkedToAccount = plan.linkAccountZohoId;
+    if (!dryRun) {
+      try {
+        await updateZohoRecord(module, masterId, {
+          Account_Name: { id: plan.linkAccountZohoId },
+        });
+      } catch (e) {
+        fail("link-account", e, masterId);
       }
     }
   }

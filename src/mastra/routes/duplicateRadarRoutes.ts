@@ -1095,6 +1095,12 @@ export const duplicateRadarRoutes = [
             typeof body?.master_zoho_id === "string"
               ? body.master_zoho_id
               : null;
+          const linkAccountZohoId =
+            body && "link_account_zoho_id" in body
+              ? typeof body.link_account_zoho_id === "string"
+                ? body.link_account_zoho_id
+                : ""
+              : undefined;
 
           const generatedBy =
             (user as any)?.email || (user as any)?.role || "duplicate-radar";
@@ -1106,6 +1112,7 @@ export const duplicateRadarRoutes = [
               generatedAt: new Date().toISOString(),
               includeZohoIds,
               masterZohoId,
+              linkAccountZohoId,
             });
           } catch (e: any) {
             return c.json({ error: e?.message || "Could not build plan" }, 400);
@@ -1152,6 +1159,12 @@ export const duplicateRadarRoutes = [
           const includeZohoIds = Array.isArray(body?.record_zoho_ids)
             ? body.record_zoho_ids.filter((x: any) => typeof x === "string")
             : null;
+          const linkAccountZohoId =
+            body && "link_account_zoho_id" in body
+              ? typeof body.link_account_zoho_id === "string"
+                ? body.link_account_zoho_id
+                : ""
+              : undefined;
 
           const cluster = await getClusterById(id);
           if (!cluster) return c.json({ error: "Cluster not found" }, 404);
@@ -1192,6 +1205,7 @@ export const duplicateRadarRoutes = [
               generatedAt: new Date().toISOString(),
               masterZohoId,
               includeZohoIds,
+              linkAccountZohoId,
             });
           } catch (e: any) {
             return c.json({ error: e?.message || "Could not build plan" }, 400);

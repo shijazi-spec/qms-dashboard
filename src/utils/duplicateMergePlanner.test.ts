@@ -277,5 +277,47 @@ try {
 }
 assert(threwMod, "Leads plan over an Accounts-only cluster throws (no lead records)");
 
+console.log("link survivor to account (Contacts/Deals)");
+const acctForLink = rec({
+  id: 50,
+  zoho_record_id: "ACC1",
+  record_type: "account",
+  record_name: "Acme Corp",
+  is_primary: true,
+});
+const c1 = rec({
+  id: 51,
+  zoho_record_id: "C1",
+  record_type: "contact",
+  record_name: "Khalil",
+  raw_data: { Last_Name: "Khalil", Email: "k@a.com", Phone: "1" },
+});
+const c2 = rec({
+  id: 52,
+  zoho_record_id: "C2",
+  record_type: "contact",
+  record_name: "Khalil",
+  raw_data: { Last_Name: "Khalil" },
+});
+const contactPlan = buildMergePlan("Contacts", 30, [acctForLink, c1, c2]);
+assert(
+  contactPlan.accountCandidates.some((a) => a.zohoId === "ACC1"),
+  "Contacts plan surfaces the cluster account as a link candidate",
+);
+assert(
+  contactPlan.linkAccountZohoId === "ACC1",
+  "Contacts plan defaults the link to the primary account",
+);
+const noLink = buildMergePlan("Contacts", 31, [acctForLink, c1, c2], {
+  linkAccountZohoId: "",
+});
+assert(noLink.linkAccountZohoId === null, "explicit empty link target = don't link");
+const acctPlanNoLink = buildMergePlan("Accounts", 32, [recA, recB]);
+assert(
+  acctPlanNoLink.accountCandidates.length === 0 &&
+    acctPlanNoLink.linkAccountZohoId === null,
+  "Accounts plan has no account-link option",
+);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
