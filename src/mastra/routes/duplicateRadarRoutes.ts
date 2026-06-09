@@ -150,6 +150,8 @@ import {
 } from "../../utils/duplicateResolutionLearning";
 import {
   runAutonomousResolution,
+  runResolutionForCluster,
+  undoClusterResolution,
   getResolutionRunConfig,
 } from "../../utils/duplicateResolutionRunner";
 import {
@@ -890,6 +892,47 @@ export const duplicateRadarRoutes = [
               : undefined;
           const summary = await runAutonomousResolution({ modeOverride });
           return c.json({ ok: true, summary });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Re-do: re-run the resolution for one cluster (Agent Activity log).
+    path: "/api/duplicates/autonomous/run-cluster/:id",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+          const summary = await runResolutionForCluster(id);
+          return c.json({ ok: true, summary });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Undo: remove the agent's Duplicate-Delete tags + reopen the cluster.
+    path: "/api/duplicates/autonomous/undo/:id",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+          const result = await undoClusterResolution(
+            id,
+            (user as any)?.email || "duplicate-radar",
+          );
+          return c.json(result, result.ok ? 200 : 400);
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

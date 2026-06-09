@@ -1187,9 +1187,10 @@
                                 <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Reparented</th>
                                 <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Errors</th>
                                 <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">By</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="agentActivityTable" class="bg-white divide-y divide-gray-200"><tr><td colspan="9" class="px-6 py-4 text-center text-gray-400">Loading…</td></tr></tbody>
+                        <tbody id="agentActivityTable" class="bg-white divide-y divide-gray-200"><tr><td colspan="10" class="px-6 py-4 text-center text-gray-400">Loading…</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -4001,7 +4002,7 @@
             const tbody = document.getElementById('agentActivityTable');
             if (!tbody) return;
             if (!rows.length) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-6 py-4 text-center text-gray-400">No AI resolution activity yet — it appears here as soon as the agent previews, dry-runs, or applies a merge.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="px-6 py-4 text-center text-gray-400">No AI resolution activity yet — it appears here as soon as the agent previews, dry-runs, or applies a merge.</td></tr>';
                 return;
             }
             const actionBadge = (t) => {
@@ -4023,8 +4024,41 @@
                     '<td class="px-4 py-3 text-sm text-end">' + (r.reparented || 0) + '</td>' +
                     '<td class="px-4 py-3 text-sm text-end ' + errCls + '">' + (r.errors || 0) + '</td>' +
                     '<td class="px-4 py-3 text-sm text-gray-600">' + escapeHtml(r.performedBy || '—') + '</td>' +
+                    '<td class="px-4 py-3 text-sm whitespace-nowrap">' +
+                        '<button data-on-click="redoResolution" data-args="[' + Number(r.clusterId) + ']" class="text-indigo-600 hover:underline text-xs" title="Re-run the resolution for this cluster now">↻ Re-do</button>' +
+                        (r.eventType === 'applied'
+                            ? ' <button data-on-click="undoResolution" data-args="[' + Number(r.clusterId) + ']" class="ms-2 text-red-600 hover:underline text-xs" title="Remove the Duplicate-Delete tags and reopen the cluster">⤺ Undo</button>'
+                            : '') +
+                    '</td>' +
                     '</tr>';
             }).join('');
+        }
+
+        // Re-do: re-run the agent on one cluster now.
+        async function redoResolution(clusterId) {
+            if (!confirm('Re-run the autonomous resolution for cluster #' + clusterId + ' now?')) return;
+            try {
+                const res = await fetch('/api/duplicates/autonomous/run-cluster/' + clusterId, {
+                    method: 'POST', credentials: 'same-origin'
+                });
+                const data = await res.json();
+                const s = (data && data.summary) || {};
+                alert('Re-do complete for #' + clusterId + ': applied ' + (s.applied || 0) + ', queued ' + (s.queued || 0) + ', errors ' + (s.errors || 0) + '.');
+                loadAgentActivity();
+            } catch (e) { alert('Re-do failed: ' + e); }
+        }
+
+        // Undo: remove the agent's Duplicate-Delete tags + reopen the cluster.
+        async function undoResolution(clusterId) {
+            if (!confirm('Undo the last apply on cluster #' + clusterId + '?\n\nThis removes the Duplicate-Delete tags and reopens the cluster. Gap-filled survivor fields are kept (they only filled blanks).')) return;
+            try {
+                const res = await fetch('/api/duplicates/autonomous/undo/' + clusterId, {
+                    method: 'POST', credentials: 'same-origin'
+                });
+                const data = await res.json();
+                alert((data && data.message) || (data && data.ok ? 'Undone.' : 'Undo failed.'));
+                loadAgentActivity();
+            } catch (e) { alert('Undo failed: ' + e); }
         }
 
         // D2: Enhanced cluster modal with side-by-side comparison + AI recommendations

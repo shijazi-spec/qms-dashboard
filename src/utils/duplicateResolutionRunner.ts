@@ -26,6 +26,10 @@ import {
   getAllClusters,
   getRecordsByClusterId,
   getClusterMixedSignal,
+  getClusterById,
+  captureClusterSnapshot,
+  updateClusterStatus,
+  pool,
   type DuplicateCluster,
   type DuplicateRecord,
 } from "./duplicateRadarDatabase";
@@ -41,7 +45,7 @@ import { evaluateRules } from "./duplicateResolutionRules";
 import { recordResolutionEvent } from "./duplicateResolutionLearning";
 import { snapshotGrades } from "./duplicateResolutionGrades";
 import { enqueuePendingAction, initAIApprovalTable } from "./aiApprovalDatabase";
-import { fetchRecordAttachments } from "./zohoCRM";
+import { fetchRecordAttachments, removeZohoTags } from "./zohoCRM";
 import { logger } from "./logger";
 
 /**
@@ -279,61 +283,7 @@ export async function runAutonomousResolution(
     });
 
     for (const cluster of clusters) {
-      const clusterId = cluster.id;
-      if (clusterId == null) continue;
-      summary.clustersScanned++;
-
-      let records: DuplicateRecord[];
-      try {
-        records = await getRecordsByClusterId(clusterId);
-      } catch (e) {
-        summary.errors++;
-        summary.items.push({
-          clusterId,
-          module: "Accounts",
-          verdict: "escalate",
-          ruleOverride: null,
-          reasons: ["could not load cluster records"],
-          action: "error",
-          detail: e instanceof Error ? e.message : String(e),
-        });
-        continue;
-      }
-
-      // Which modules have ≥2 records of their record type?
-      const byType = new Map<string, DuplicateRecord[]>();
-      for (const r of records) {
-        const arr = byType.get(r.record_type) || [];
-        arr.push(r);
-        byType.set(r.record_type, arr);
-      }
-
-      let mixed = { domains: [] as string[], phones: [] as string[] };
-      try {
-        const m = await getClusterMixedSignal(clusterId);
-        mixed = { domains: m.domains, phones: m.phones };
-      } catch {
-        /* non-fatal */
-      }
-
-      for (const [recordType, moduleRecords] of byType.entries()) {
-        const module = RECORD_TYPE_TO_MODULE[recordType];
-        if (!module || moduleRecords.length < 2) continue;
-
-        await processModule({
-          cluster,
-          clusterId,
-          module,
-          allRecords: records,
-          moduleRecords,
-          mixed,
-          nowMs,
-          mode,
-          writesAllowed,
-          policyCfg,
-          summary,
-        });
-      }
+      await processCluster({ cluster, nowMs, mode, writesAllowed, policyCfg, summary });
     }
 
     // Learning-curve snapshot every tick (best-effort).
@@ -354,6 +304,190 @@ export async function runAutonomousResolution(
     errors: summary.errors,
   });
   return summary;
+}
+
+/**
+ * Re-do: re-run the resolution for ONE cluster now (Agent Activity log action).
+ * Honours the same mode/kill-switch as the scheduled tick.
+ */
+export async function runResolutionForCluster(
+  clusterId: number,
+  opts: { now?: number; modeOverride?: ResolutionMode } = {},
+): Promise<ResolutionRunSummary> {
+  const startedAt = new Date().toISOString();
+  const nowMs = opts.now ?? Date.now();
+  const cfg = getResolutionRunConfig();
+  const mode = opts.modeOverride ?? cfg.mode;
+  const policyCfg = getResolutionPolicyConfig();
+  const writesAllowed = cfg.enabled && (mode === "assisted" || mode === "autonomous");
+
+  const summary: ResolutionRunSummary = {
+    startedAt,
+    finishedAt: startedAt,
+    mode,
+    enabled: cfg.enabled,
+    clustersScanned: 0,
+    plansBuilt: 0,
+    applied: 0,
+    queued: 0,
+    errors: 0,
+    items: [],
+  };
+  try {
+    await initAIApprovalTable().catch(() => {});
+    const cluster = await getClusterById(clusterId);
+    if (!cluster) {
+      summary.errors++;
+      summary.items.push({
+        clusterId,
+        module: "Accounts",
+        verdict: "escalate",
+        ruleOverride: null,
+        reasons: ["cluster not found"],
+        action: "error",
+      });
+    } else {
+      await processCluster({ cluster, nowMs, mode, writesAllowed, policyCfg, summary });
+    }
+  } catch (e) {
+    summary.errors++;
+    logger.error("[dup-resolution-runner] run-cluster failed", {
+      clusterId,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+  summary.finishedAt = new Date().toISOString();
+  return summary;
+}
+
+/**
+ * Undo the agent's last apply on a cluster: remove the Duplicate-Delete tags it
+ * placed and reopen the cluster for review. Field gap-fills onto the survivor
+ * are left in place — they only filled blanks (non-destructive). Reverses the
+ * one consequential, irreversible-by-others signal (the admin delete-tag).
+ */
+export async function undoClusterResolution(
+  clusterId: number,
+  performedBy = AGENT_PERFORMED_BY,
+): Promise<{ ok: boolean; untagged: number; module: string | null; message: string }> {
+  try {
+    const r = await pool.query(
+      `SELECT plan_json, report_json
+         FROM duplicate_resolution_feedback
+        WHERE cluster_id = $1 AND event_type = 'applied'
+        ORDER BY created_at DESC LIMIT 1`,
+      [clusterId],
+    );
+    if (!r.rows.length) {
+      return { ok: false, untagged: 0, module: null, message: "No applied action found for this cluster." };
+    }
+    const plan = r.rows[0].plan_json
+      ? typeof r.rows[0].plan_json === "string"
+        ? JSON.parse(r.rows[0].plan_json)
+        : r.rows[0].plan_json
+      : {};
+    const report = r.rows[0].report_json
+      ? typeof r.rows[0].report_json === "string"
+        ? JSON.parse(r.rows[0].report_json)
+        : r.rows[0].report_json
+      : {};
+    const module: string = plan.module || "Accounts";
+    const taggedIds: string[] = (report.taggedRecordIds || plan.duplicateZohoIds || []).filter(
+      Boolean,
+    );
+    let untagged = 0;
+    if (taggedIds.length) {
+      await removeZohoTags(module, taggedIds, ["Duplicate-Delete"]);
+      untagged = taggedIds.length;
+    }
+    await updateClusterStatus(clusterId, "active").catch(() => {});
+    await recordResolutionEvent({
+      clusterId,
+      eventType: "dry_run", // closest available type; performedBy marks it an UNDO
+      plan,
+      performedBy: `UNDO by ${performedBy}`,
+    }).catch(() => {});
+    logger.info("[dup-resolution-runner] undo complete", { clusterId, module, untagged });
+    return {
+      ok: true,
+      untagged,
+      module,
+      message: `Removed the Duplicate-Delete tag from ${untagged} record(s) and reopened cluster #${clusterId}. Survivor gap-fills were kept (they only filled blanks).`,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      untagged: 0,
+      module: null,
+      message: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/** Process every module-present in one cluster. Shared by the full tick and
+ *  the single-cluster Re-do path. Mutates `summary` in place. */
+async function processCluster(ctx: {
+  cluster: DuplicateCluster;
+  nowMs: number;
+  mode: ResolutionMode;
+  writesAllowed: boolean;
+  policyCfg: ReturnType<typeof getResolutionPolicyConfig>;
+  summary: ResolutionRunSummary;
+}): Promise<void> {
+  const { cluster, nowMs, mode, writesAllowed, policyCfg, summary } = ctx;
+  const clusterId = cluster.id;
+  if (clusterId == null) return;
+  summary.clustersScanned++;
+
+  let records: DuplicateRecord[];
+  try {
+    records = await getRecordsByClusterId(clusterId);
+  } catch (e) {
+    summary.errors++;
+    summary.items.push({
+      clusterId,
+      module: "Accounts",
+      verdict: "escalate",
+      ruleOverride: null,
+      reasons: ["could not load cluster records"],
+      action: "error",
+      detail: e instanceof Error ? e.message : String(e),
+    });
+    return;
+  }
+
+  const byType = new Map<string, DuplicateRecord[]>();
+  for (const r of records) {
+    const arr = byType.get(r.record_type) || [];
+    arr.push(r);
+    byType.set(r.record_type, arr);
+  }
+
+  let mixed = { domains: [] as string[], phones: [] as string[] };
+  try {
+    const m = await getClusterMixedSignal(clusterId);
+    mixed = { domains: m.domains, phones: m.phones };
+  } catch {
+    /* non-fatal */
+  }
+
+  for (const [recordType, moduleRecords] of byType.entries()) {
+    const module = RECORD_TYPE_TO_MODULE[recordType];
+    if (!module || moduleRecords.length < 2) continue;
+    await processModule({
+      cluster,
+      clusterId,
+      module,
+      allRecords: records,
+      moduleRecords,
+      mixed,
+      nowMs,
+      mode,
+      writesAllowed,
+      policyCfg,
+      summary,
+    });
+  }
 }
 
 async function processModule(ctx: {
@@ -459,6 +593,11 @@ async function processModule(ctx: {
   // AUTO + writes allowed → apply for real (on behalf of Sarah).
   if (verdict === "auto" && writesAllowed) {
     try {
+      // Forensic snapshot BEFORE any write so Undo / audit can reconstruct
+      // the pre-merge state.
+      await captureClusterSnapshot(clusterId, AGENT_PERFORMED_BY, "pre_agent_apply").catch(
+        () => null,
+      );
       const report = await executeMergePlan(plan, {
         performedBy: AGENT_PERFORMED_BY,
         dryRun: false,

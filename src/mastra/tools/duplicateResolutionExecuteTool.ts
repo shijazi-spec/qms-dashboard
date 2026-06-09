@@ -17,6 +17,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { executeMergePlan } from "../../utils/duplicateMergeExecutor";
 import { recordResolutionEvent } from "../../utils/duplicateResolutionLearning";
+import { captureClusterSnapshot } from "../../utils/duplicateRadarDatabase";
 import { withApprovalGate } from "../../utils/withApprovalGate";
 import { AGENT_PERFORMED_BY } from "../../utils/duplicateResolutionRunner";
 import type { MergePlan } from "../../utils/duplicateMergePlanner";
@@ -47,6 +48,10 @@ export const duplicateResolutionExecuteTool = createTool({
       return { success: false, error: "No merge plan in approval payload." };
     }
     try {
+      // Forensic snapshot before any write (Undo / audit).
+      await captureClusterSnapshot(plan.clusterId, AGENT_PERFORMED_BY, "pre_agent_apply").catch(
+        () => null,
+      );
       const report = await executeMergePlan(plan, {
         performedBy: AGENT_PERFORMED_BY,
         dryRun: false,
