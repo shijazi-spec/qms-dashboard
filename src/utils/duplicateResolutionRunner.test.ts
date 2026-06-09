@@ -85,6 +85,11 @@ assert(clean.distinctLayouts === 1, "single layout counted once");
 assert(clean.isCrossModule === false, "single record type → not cross-module");
 assert(clean.anyMissingZohoId === false, "all have zoho ids");
 assert(Math.round(clean.minDaysSinceModified) === 159, "days-since-modified computed from nowMs");
+assert(clean.duplicatesWithAttachments === 0, "attachments default to 0 when not provided");
+assert(
+  buildResolutionRiskInput(args({ duplicatesWithAttachments: 2 })).duplicatesWithAttachments === 2,
+  "attachment count flows through when provided",
+);
 
 console.log("derived red-flags");
 assert(

@@ -41,7 +41,38 @@ import { evaluateRules } from "./duplicateResolutionRules";
 import { recordResolutionEvent } from "./duplicateResolutionLearning";
 import { snapshotGrades } from "./duplicateResolutionGrades";
 import { enqueuePendingAction, initAIApprovalTable } from "./aiApprovalDatabase";
+import { fetchRecordAttachments } from "./zohoCRM";
 import { logger } from "./logger";
+
+/**
+ * Count how many of the to-be-tagged duplicates carry ≥1 Zoho attachment.
+ * Bounded: called ONLY for clusters the agent would otherwise auto-apply.
+ * Any failure is treated conservatively as "has attachments" so a Zoho hiccup
+ * never green-lights a merge that might drop evidence. `module` is the Zoho
+ * module name (Accounts/Leads/Deals/Contacts), which the attachments API wants.
+ */
+async function countDuplicatesWithAttachments(
+  module: CrmModule,
+  duplicateZohoIds: string[],
+): Promise<number> {
+  let withFiles = 0;
+  for (const id of duplicateZohoIds) {
+    if (!id) continue;
+    try {
+      const atts = await fetchRecordAttachments(module, id);
+      if (atts && atts.length > 0) withFiles++;
+    } catch (e) {
+      // Conservative: if we can't verify, assume evidence may exist → block auto.
+      withFiles++;
+      logger.warn("[dup-resolution-runner] attachment check failed (treating as has-files)", {
+        module,
+        recordId: id,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+  return withFiles;
+}
 
 export type ResolutionMode = "shadow" | "assisted" | "autonomous";
 
@@ -102,6 +133,8 @@ export interface BuildRiskInputArgs {
   mixed: { domains: string[]; phones: string[] };
   /** Epoch ms — injectable for tests. */
   nowMs: number;
+  /** Count of to-be-tagged duplicates carrying Zoho attachments (default 0). */
+  duplicatesWithAttachments?: number;
 }
 
 export function buildResolutionRiskInput(args: BuildRiskInputArgs): ResolutionRiskInput {
@@ -151,6 +184,7 @@ export function buildResolutionRiskInput(args: BuildRiskInputArgs): ResolutionRi
     anyActiveDealStage:
       module === "Deals" && moduleRecords.some((r) => isActiveStage(r.stage)),
     isCrossModule: presentTypes > 1,
+    duplicatesWithAttachments: args.duplicatesWithAttachments ?? 0,
   };
 }
 
@@ -370,7 +404,7 @@ async function processModule(ctx: {
     return;
   }
 
-  const riskInput = buildResolutionRiskInput({
+  let riskInput = buildResolutionRiskInput({
     module,
     cluster,
     moduleRecords,
@@ -386,6 +420,18 @@ async function processModule(ctx: {
     alwaysLink: false,
     ruleIds: [] as number[],
   }));
+
+  // Evidence-protection check is a Zoho call, so run it ONLY for clusters that
+  // would otherwise auto-apply (and aren't already rule-blocked). If any
+  // to-be-tagged duplicate carries attachments, the gate escalates — we never
+  // auto-merge away a record that might hold a signed contract/NDA.
+  let firstPass = evaluateResolutionRisk(riskInput, policyCfg);
+  if (ruleResult.override !== "escalate" && firstPass.verdict === "auto") {
+    const dupAttach = await countDuplicatesWithAttachments(module, plan.duplicateZohoIds);
+    if (dupAttach > 0) {
+      riskInput = { ...riskInput, duplicatesWithAttachments: dupAttach };
+    }
+  }
 
   const gate: ResolutionRiskVerdict = evaluateResolutionRisk(riskInput, policyCfg);
   const verdict: "auto" | "escalate" = ruleResult.override ?? gate.verdict;

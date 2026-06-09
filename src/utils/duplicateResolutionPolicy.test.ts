@@ -42,6 +42,7 @@ function clean(partial: Partial<ResolutionRiskInput> = {}): ResolutionRiskInput 
     minDaysSinceModified: 90,
     anyActiveDealStage: false,
     isCrossModule: false,
+    duplicatesWithAttachments: 0,
     ...partial,
   };
 }
@@ -71,6 +72,7 @@ const flags: Array<[string, Partial<ResolutionRiskInput>, RegExp]> = [
   ["verification failed", { verificationFailed: true }, /verification/i],
   ["custom field assumption", { hasCustomFieldAssumption: true }, /custom field/i],
   ["hollow master", { masterCompleteness: 0.2 }, /complete/i],
+  ["duplicate has attachments", { duplicatesWithAttachments: 1 }, /attachment|evidence/i],
 ];
 for (const [name, patch, rx] of flags) {
   const v = evaluateResolutionRisk(clean(patch), cfg);

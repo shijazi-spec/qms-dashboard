@@ -125,6 +125,8 @@ import {
   fetchAllZohoRecords,
   fetchDeletedZohoRecords,
   fetchZohoRecordById,
+  fetchRecordAttachments,
+  removeZohoTags,
 } from "../../utils/zohoCRM";
 
 import { logger } from "../../utils/logger";
@@ -978,6 +980,43 @@ export const duplicateRadarRoutes = [
           const body = await c.req.json().catch(() => ({}));
           const ok = await setResolutionRuleEnabled(id, body?.enabled !== false);
           return c.json({ ok });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Per-record attachment counts for a cluster (the 📎 chip in the merge
+    // modal + evidence-safety signal). ?module=Accounts|Leads|Deals|Contacts.
+    path: "/api/duplicates/clusters/:id/attachments",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+          const module = parseAgenticModule({ module: c.req.query("module") });
+          const recordType = MODULE_RECORD_TYPE[module];
+          const records = await getRecordsByClusterId(id);
+          const ids = records
+            .filter((r) => r.record_type === recordType && r.zoho_record_id)
+            .map((r) => r.zoho_record_id as string)
+            .slice(0, 25); // bound the Zoho calls
+          const counts: Record<string, number> = {};
+          await Promise.all(
+            ids.map(async (zid) => {
+              try {
+                const atts = await fetchRecordAttachments(module, zid);
+                counts[zid] = Array.isArray(atts) ? atts.length : 0;
+              } catch {
+                counts[zid] = -1; // unknown (Zoho error) — UI shows a neutral dash
+              }
+            }),
+          );
+          return c.json({ module, counts });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

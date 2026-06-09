@@ -46,6 +46,14 @@ export interface ResolutionRiskInput {
   anyActiveDealStage: boolean;
   /** cluster spans more than this module's record type. */
   isCrossModule: boolean;
+  /**
+   * Count of duplicate records (the ones that would be tagged Duplicate-Delete)
+   * that carry ≥1 Zoho attachment. ANY > 0 forces escalate — auto-merging a
+   * record with files risks losing audit evidence (signed contracts, NDAs…).
+   * The runner only populates this for clusters it would otherwise auto-apply
+   * (bounded Zoho calls); defaults 0 elsewhere.
+   */
+  duplicatesWithAttachments: number;
 }
 
 export interface ResolutionRiskVerdict {
@@ -170,6 +178,11 @@ export function evaluateResolutionRisk(
   if (input.masterCompleteness < cfg.minMasterCompleteness) {
     reasons.push(
       `Survivor is only ${Math.round(input.masterCompleteness * 100)}% complete (< ${Math.round(cfg.minMasterCompleteness * 100)}%).`,
+    );
+  }
+  if (input.duplicatesWithAttachments > 0) {
+    reasons.push(
+      `${input.duplicatesWithAttachments} duplicate(s) carry Zoho attachments — escalating to protect audit evidence (ISO 9001 §7.5).`,
     );
   }
 

@@ -4612,6 +4612,32 @@
             // checkboxes and subsequent dry-run/apply stay consistent.
             st.selected = (data.plan.records || []).filter(r => r.included && r.zohoId).map(r => r.zohoId);
             panel.innerHTML = __renderMergePlan(data.plan);
+            loadAttachmentChips(data.plan.module, data.plan.clusterId);
+        }
+
+        // Lazily fill the 📎 column with per-record attachment counts. A record
+        // with files is a strong "keep this one" signal — and the autonomous
+        // agent refuses to auto-merge a duplicate that carries attachments.
+        async function loadAttachmentChips(module, clusterId) {
+            try {
+                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/attachments?module=' + encodeURIComponent(module), { credentials: 'same-origin' });
+                if (!res.ok) return;
+                const data = await res.json();
+                const counts = (data && data.counts) || {};
+                Object.keys(counts).forEach(function (zohoId) {
+                    const el = document.getElementById('att-' + module + '-' + zohoId);
+                    if (!el) return;
+                    const n = counts[zohoId] | 0;
+                    if (n > 0) {
+                        el.textContent = '📎 ' + n;
+                        el.className = 'text-xs font-semibold text-amber-700';
+                        el.title = n + ' attachment(s) — evidence on this record';
+                    } else {
+                        el.textContent = '—';
+                        el.className = 'text-xs text-gray-300';
+                    }
+                });
+            } catch (_) { /* non-fatal */ }
         }
 
         // Toggle one record in/out of the merge set, then re-preview. Enforces
@@ -4768,6 +4794,7 @@
                     '<td class="px-3 py-2">' + outcome + '</td>' +
                     '<td class="px-3 py-2">' + esc(r.name) + '</td>' +
                     '<td class="px-3 py-2 font-mono text-xs text-gray-600">' + esc(r.zohoId) + '</td>' +
+                    '<td class="px-3 py-2 text-center">' + (r.zohoId ? '<span id="att-' + esc(plan.module) + '-' + esc(r.zohoId) + '" class="text-xs text-gray-400" title="Attachments on this record">…</span>' : '<span class="text-gray-300">—</span>') + '</td>' +
                     '<td class="px-3 py-2 text-end">' + Math.round((r.completeness || 0) * 100) + '%</td>' +
                     '<td class="px-3 py-2 text-xs text-gray-500">' + esc(r.owner) + '</td>' +
                     '<td class="px-3 py-2 text-xs text-gray-700">' + esc(r.layout) + '</td>' +
@@ -4797,7 +4824,7 @@
                 '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">Survivor</span><div class="font-semibold">' + esc(plan.masterName) + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
                 linkControl +
                 '<div class="text-xs text-gray-500 mb-1">Tick the accounts to merge — at least 2. Unticked accounts are excluded and left untouched.</div>' +
-                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Merge</th><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th><th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
+                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Merge</th><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th><th class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th><th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
                 '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Field migrations &amp; conflicts (' + (plan.fieldDecisions || []).length + ')</div>' +
                 (decRows
                     ? '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Field</th><th class="px-3 py-2 text-start">Action</th><th class="px-3 py-2 text-start">Value kept</th><th class="px-3 py-2 text-start">Why</th></tr></thead><tbody>' + decRows + '</tbody></table></div>'
