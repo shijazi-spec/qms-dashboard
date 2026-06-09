@@ -75,6 +75,14 @@ export interface MergePlanRecordSummary {
   owner: string | null;
   /** Zoho Layout / account category (e.g. "Corporate Accounts", "Partner Accounts"). Informational. */
   layout: string | null;
+  /**
+   * Zoho Account_Name (parent Account) when the record has one. Surfaced in
+   * the Contacts merge modal in place of the 📎 attachments chip — for
+   * Contacts the parent-Account context is the more useful merge-decision
+   * signal (which company does each duplicate belong to?). Null for records
+   * with no Account_Name (e.g. orphan Contacts, all Accounts/Leads).
+   */
+  accountName: string | null;
   hasZohoId: boolean;
 }
 
@@ -245,6 +253,16 @@ function layoutOf(r: DuplicateRecord): string | null {
   const v = normalize(rawVal(r, "Layout"));
   if (v !== null) return String(v);
   return r.layout_name || null;
+}
+
+// Zoho Account_Name (the parent Account a Contact/Deal is linked to). normalize()
+// already unwraps the Zoho lookup shape `{ name, id }` to the display name.
+// Falls back to the denormalised `account_name` column when raw_data is empty
+// (older / pre-sync rows). Returns null when the record has no parent Account.
+function accountNameOf(r: DuplicateRecord): string | null {
+  const v = normalize(rawVal(r, "Account_Name"));
+  if (v !== null) return String(v);
+  return r.account_name || null;
 }
 
 function sameScalar(
@@ -508,6 +526,7 @@ export function buildMergePlan(
     modifiedDate: isoOrNull(r.modified_date),
     owner: r.owner_name || r.owner_email || null,
     layout: layoutOf(r),
+    accountName: accountNameOf(r),
     hasZohoId: !!r.zoho_record_id,
   }));
 
