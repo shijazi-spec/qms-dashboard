@@ -263,12 +263,12 @@
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="icon-14"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
                         ${fullView}
                     </a>
-                    <button data-on-click="aiWidgetClose" aria-label="Close AI Consultant chat" data-testid="button-close-widget">
+                    <button data-on-click="aiWidgetClose" aria-label="Close GRQ Assistant chat" data-testid="button-close-widget">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="icon-18" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
             </div>
-            <div id="ai-widget-messages" role="log" aria-live="polite" aria-label="AI Consultant conversation" aria-relevant="additions">
+            <div id="ai-widget-messages" role="log" aria-live="polite" aria-label="GRQ Assistant conversation" aria-relevant="additions">
                 <div id="ai-widget-welcome">
                     <h4 data-i18n="consultant.widget_welcome_title">${welcomeTitle}</h4>
                     <p data-i18n="consultant.widget_welcome_sub">${welcomeSub}</p>
@@ -295,7 +295,7 @@
                 </button>
             </div>
         </div>
-        <button id="ai-widget-btn" aria-label="Open AI Consultant chat" aria-expanded="false" aria-controls="ai-widget-panel" data-testid="button-ai-consultant">
+        <button id="ai-widget-btn" aria-label="Open GRQ Assistant chat" aria-expanded="false" aria-controls="ai-widget-panel" data-testid="button-ai-consultant">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
         </button>
         `;
@@ -314,7 +314,7 @@
     function setWidgetOpen(open) {
         isOpen = open;
         btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        btn.setAttribute('aria-label', isOpen ? 'Close AI Consultant chat' : 'Open AI Consultant chat');
+        btn.setAttribute('aria-label', isOpen ? 'Close GRQ Assistant chat' : 'Open GRQ Assistant chat');
         if (isOpen) {
             panel.classList.add('open');
             panel.setAttribute('aria-hidden', 'false');
@@ -423,7 +423,7 @@
         if (header) {
             var svgEl = header.querySelector('svg');
             var svgHTML = svgEl ? svgEl.outerHTML : '';
-            header.innerHTML = svgHTML + ' ' + _t('consultant.widget_title', 'AI QMS Consultant');
+            header.innerHTML = svgHTML + ' ' + _t('consultant.widget_title', 'GRQ Assistant');
         }
         var expandLink = widget.querySelector('.widget-expand-link');
         if (expandLink) {
@@ -432,7 +432,7 @@
             expandLink.innerHTML = svgHTML2 + ' ' + _t('consultant.full_view', 'Full view');
         }
         var wTitle = widget.querySelector('#ai-widget-welcome h4');
-        if (wTitle) wTitle.textContent = _t('consultant.widget_welcome_title', 'WalaPlus QMS Consultant');
+        if (wTitle) wTitle.textContent = _t('consultant.widget_welcome_title', 'GRQ Assistant');
         var wSub = widget.querySelector('#ai-widget-welcome p');
         if (wSub) wSub.textContent = _t('consultant.widget_welcome_sub', 'Ask about quality management, compliance, CRM data hygiene, or SOPs.');
         var qBtnSpecs = [
@@ -781,7 +781,7 @@
                     }
                 } catch (fallbackErr) {
                     bubble = widgetCreateAI();
-                    bubble.innerHTML = '<span class="aiw-error-text">Unable to reach AI Consultant. Please try again.</span>';
+                    bubble.innerHTML = '<span class="aiw-error-text">Unable to reach GRQ Assistant. Please try again.</span>';
                 }
             } else if (bubble && fullText.trim()) {
                 fullText += '\n\n---\n*Response interrupted.*';

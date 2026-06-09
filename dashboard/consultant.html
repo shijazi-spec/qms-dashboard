@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <title>AI Consultant - WalaPlus Enterprise</title>
+    <title>GRQ Assistant - WalaPlus Enterprise</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -283,7 +283,7 @@
                     <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                 </div>
                 <div>
-                    <h1 class="text-sm font-semibold text-gray-800" data-i18n="consultant.title">QMS AI Consultant</h1>
+                    <h1 class="text-sm font-semibold text-gray-800" data-i18n="consultant.title">GRQ Assistant</h1>
                     <p class="text-xs text-gray-500" data-i18n="consultant.subtitle">Powered by WalaPlus Intelligence</p>
                 </div>
                 <div class="ms-auto flex items-center gap-2">
@@ -314,7 +314,7 @@
                         <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg">
                             <svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a2.25 2.25 0 01-1.59.659H9.06a2.25 2.25 0 01-1.59-.659L5 14.5m14 0V5.846a2.25 2.25 0 00-1.357-2.067l-.543-.235a24.156 24.156 0 00-10.2 0l-.543.235A2.25 2.25 0 005 5.846V14.5"/></svg>
                         </div>
-                        <h2 class="text-lg font-semibold text-gray-800 mb-1" data-i18n="consultant.welcome_title">QMS AI Consultant</h2>
+                        <h2 class="text-lg font-semibold text-gray-800 mb-1" data-i18n="consultant.welcome_title">GRQ Assistant</h2>
                         <p class="text-sm text-gray-500 leading-relaxed mb-4" data-i18n="consultant.welcome_subtitle">Your intelligent quality management advisor — ready to help with compliance, risks, KPIs, audits, and more.</p>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto" id="welcomeCards">
@@ -348,7 +348,7 @@
             <div class="p-4 bg-white border-t border-gray-200 chat-input-area">
                 <form id="chatForm" class="flex items-end gap-3">
                     <div class="flex-1 relative">
-                        <textarea id="chatInput" rows="1" placeholder="Ask the AI Consultant anything about your QMS..." data-i18n-placeholder="consultant.input_placeholder" class="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 pe-12 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow chat-input-cap"></textarea>
+                        <textarea id="chatInput" rows="1" placeholder="Ask the GRQ Assistant anything about your QMS..." data-i18n-placeholder="consultant.input_placeholder" class="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 pe-12 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow chat-input-cap"></textarea>
                     </div>
                     <button type="submit" id="sendBtn" aria-label="Send message" class="shrink-0 w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors" disabled>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 0l-7 7m7-7l7 7"/></svg>
@@ -1123,7 +1123,7 @@
                         if (fallback.status === 401 || fallback.status === 403) {
                             bubble = createAssistantMessage();
                             bubble.innerHTML = renderMarkdown(
-                                '**Not authorized.** Your account does not have access to the AI Consultant. '
+                                '**Not authorized.** Your account does not have access to the GRQ Assistant. '
                                 + 'Ask an admin to grant a consultant-eligible role.'
                             );
                             return;
@@ -1160,15 +1160,15 @@
                             var label    = data && data.error;
                             var errClass = data && (data.errorClass || '');
                             if (detail) {
-                                respText = '**AI Consultant error:** ' + detail
+                                respText = '**GRQ Assistant error:** ' + detail
                                     + (errClass ? ' _(' + errClass + ')_' : '')
                                     + (label && label !== detail ? '\n\n_Server label:_ ' + label : '');
                             } else if (label) {
-                                respText = '**AI Consultant error:** ' + label
+                                respText = '**GRQ Assistant error:** ' + label
                                     + (errClass ? ' _(' + errClass + ')_' : '')
                                     + '\n\nNo `details` field on the server response — check the server log for the underlying exception, or open DevTools → Network → /api/consultant/chat → Response.';
                             } else if (!fallback.ok) {
-                                respText = '**AI Consultant error (HTTP ' + fallback.status + ').** '
+                                respText = '**GRQ Assistant error (HTTP ' + fallback.status + ').** '
                                     + 'The agent did not return a response. Check the server logs '
                                     + 'or DevTools → Network → ' + (fallback.url ? fallback.url.split('/').pop() : 'chat')
                                     + ' for the underlying cause.';
@@ -1200,7 +1200,7 @@
                     } catch (fallbackErr) {
                         try { console.error('[Consultant] fallback fetch threw:', fallbackErr); } catch (_) {}
                         bubble = createAssistantMessage();
-                        bubble.innerHTML = renderMarkdown('**Connection Error:** Unable to reach the AI Consultant. Please check your connection and try again. (' + escapeHtml(String(fallbackErr && fallbackErr.message || fallbackErr)) + ')');
+                        bubble.innerHTML = renderMarkdown('**Connection Error:** Unable to reach the GRQ Assistant. Please check your connection and try again. (' + escapeHtml(String(fallbackErr && fallbackErr.message || fallbackErr)) + ')');
                         addRetryButton(bubble);
                     }
                 } else if (bubble) {
@@ -1650,11 +1650,11 @@
 
         function exportChat() {
             if (!chatMessages.length) { alert(window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.no_messages_export') : 'No messages to export.'); return; }
-            var md = '# QMS AI Consultant - Chat Export\n';
+            var md = '# GRQ Assistant - Chat Export\n';
             md += '**Date:** ' + new Date().toLocaleString() + '\n';
             md += '**Thread:** ' + (threadId || 'N/A') + '\n\n---\n\n';
             chatMessages.forEach(function(m) {
-                var prefix = m.role === 'user' ? '**You**' : '**AI Consultant**';
+                var prefix = m.role === 'user' ? '**You**' : '**GRQ Assistant**';
                 md += prefix + ' (' + new Date(m.time).toLocaleTimeString() + '):\n\n' + m.content + '\n\n---\n\n';
             });
 
@@ -1676,7 +1676,7 @@
                         '<div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg">' +
                             '<svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a2.25 2.25 0 01-1.59.659H9.06a2.25 2.25 0 01-1.59-.659L5 14.5m14 0V5.846a2.25 2.25 0 00-1.357-2.067l-.543-.235a24.156 24.156 0 00-10.2 0l-.543.235A2.25 2.25 0 005 5.846V14.5"/></svg>' +
                         '</div>' +
-                        '<h2 class="text-lg font-semibold text-gray-800 mb-1">QMS AI Consultant</h2>' +
+                        '<h2 class="text-lg font-semibold text-gray-800 mb-1">GRQ Assistant</h2>' +
                     '<p class="text-sm text-gray-500 leading-relaxed mb-4">Your intelligent quality management advisor — ready to help with compliance, risks, KPIs, audits, and more.</p>' +
                     '</div>' +
                 '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto">' +
