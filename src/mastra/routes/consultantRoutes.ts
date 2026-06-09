@@ -99,35 +99,35 @@ async function agentGenerateAdaptive(
   message: string,
   options: Record<string, unknown>,
 ): Promise<unknown> {
-  // Order of attempts: cached choice first; if unknown, try modern first
-  // (the SDK roadmap is heading toward V5, so this picks the long-term
-  // winner on a fresh deploy).
-  const tryModern = async () =>
-    agent.generate(message, options as any);
-  const tryLegacy = async () =>
-    agent.generateLegacy(message, options as any);
-  const order =
-    _generateMethodCache === "legacy"
-      ? [tryLegacy, tryModern]
-      : [tryModern, tryLegacy];
-  let lastErr: unknown;
-  for (let i = 0; i < order.length; i++) {
+  // Pass a proper messages array (matches the known-good qualityAuditWorkflow
+  // call) rather than a bare string — some Mastra builds mis-route a raw
+  // string into a legacy path.
+  const msgs = [{ role: "user", content: message }];
+  try {
+    const r = await agent.generate(msgs, options as any);
+    _generateMethodCache = "modern";
+    return r;
+  } catch (modernErr) {
+    // Any non-polarity error (tool schema, OpenAI auth/quota, RBAC, etc.) is
+    // the REAL cause — surface it directly instead of masking it with a
+    // misleading legacy retry.
+    if (!_isV4ModelError(modernErr)) throw modernErr;
     try {
-      const result = await order[i]!();
-      _generateMethodCache = order[i] === tryLegacy ? "legacy" : "modern";
-      return result;
-    } catch (err) {
-      lastErr = err;
-      const isFlippable = _isV4ModelError(err) || _isV2ModelLegacyError(err);
-      // Only retry on the recognized polarity errors; everything else
-      // (rate limit, OOM, RBAC, etc.) bubbles up immediately.
-      if (!isFlippable) throw err;
-      // Flip the cache and continue to the next attempt.
-      _generateMethodCache =
-        order[i] === tryModern ? "legacy" : "modern";
+      const r = await agent.generateLegacy(msgs, options as any);
+      _generateMethodCache = "legacy";
+      return r;
+    } catch (legacyErr) {
+      if (_isV2ModelLegacyError(legacyErr)) {
+        throw new Error(
+          "AI SDK/core version mismatch: generate() reports a v4-spec model while " +
+            "generateLegacy() reports a v2-spec model — @ai-sdk/openai and @mastra/core " +
+            "are incompatible (pin a compatible pair). modern: " +
+            (modernErr instanceof Error ? modernErr.message : String(modernErr)),
+        );
+      }
+      throw modernErr; // surface the meaningful (modern) error
     }
   }
-  throw lastErr;
 }
 
 /**
@@ -138,27 +138,29 @@ async function agentStreamAdaptive(
   message: string,
   options: Record<string, unknown>,
 ): Promise<unknown> {
-  const tryModern = async () => agent.stream(message, options as any);
-  const tryLegacy = async () =>
-    agent.streamLegacy(message, options as any);
-  const order =
-    _streamMethodCache === "legacy"
-      ? [tryLegacy, tryModern]
-      : [tryModern, tryLegacy];
-  let lastErr: unknown;
-  for (let i = 0; i < order.length; i++) {
+  const msgs = [{ role: "user", content: message }];
+  try {
+    const r = await agent.stream(msgs, options as any);
+    _streamMethodCache = "modern";
+    return r;
+  } catch (modernErr) {
+    if (!_isV4ModelError(modernErr)) throw modernErr;
     try {
-      const result = await order[i]!();
-      _streamMethodCache = order[i] === tryLegacy ? "legacy" : "modern";
-      return result;
-    } catch (err) {
-      lastErr = err;
-      const isFlippable = _isV4ModelError(err) || _isV2ModelLegacyError(err);
-      if (!isFlippable) throw err;
-      _streamMethodCache = order[i] === tryModern ? "legacy" : "modern";
+      const r = await agent.streamLegacy(msgs, options as any);
+      _streamMethodCache = "legacy";
+      return r;
+    } catch (legacyErr) {
+      if (_isV2ModelLegacyError(legacyErr)) {
+        throw new Error(
+          "AI SDK/core version mismatch: stream() reports a v4-spec model while " +
+            "streamLegacy() reports a v2-spec model — @ai-sdk/openai and @mastra/core " +
+            "are incompatible (pin a compatible pair). modern: " +
+            (modernErr instanceof Error ? modernErr.message : String(modernErr)),
+        );
+      }
+      throw modernErr;
     }
   }
-  throw lastErr;
 }
 
 /**
