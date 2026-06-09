@@ -93,6 +93,26 @@ export function isResolutionSlackConfigured(): boolean {
   return !!process.env.SLACK_BOT_TOKEN && !!getResolutionSlackChannel();
 }
 
+/** Resolve the public base URL: explicit env first, else Replit's domain. */
+function publicBaseUrl(): string {
+  const explicit = (process.env.PUBLIC_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (explicit) return explicit;
+  const replit = (process.env.REPLIT_DOMAINS || "").split(",")[0]?.trim();
+  return replit ? `https://${replit}` : "";
+}
+
+/**
+ * Slack mrkdwn for the screen link. Only emits a `<url|text>` hyperlink when we
+ * have a real https base — otherwise plain text, so we never render a broken
+ * `</autonomous-resolution|…>` when no base URL is configured.
+ */
+function resolutionScreenLink(): string {
+  const base = publicBaseUrl();
+  return base
+    ? `<${base}/autonomous-resolution|Open the Autonomous Resolution screen>`
+    : "Open it: Quality → Autonomous Resolution.";
+}
+
 /**
  * Per-tick ping to the private resolution Slack channel. No-op unless
  * SLACK_BOT_TOKEN is set (the bot must be a member of the channel). Stays quiet
@@ -106,8 +126,6 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
     if (summary.clustersScanned === 0) return;
     if (summary.applied === 0 && summary.queued === 0 && summary.errors === 0) return;
 
-    const base = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
-    const link = `${base}/autonomous-resolution`;
     const icon = summary.errors > 0 ? "🔴" : summary.queued > 0 ? "🟡" : "🟢";
     const text =
       `${icon} *Autonomous Resolution — ${summary.mode} run* ` +
@@ -115,7 +133,7 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
       `\nScanned ${summary.clustersScanned} · applied ${summary.applied} · ` +
       `queued ${summary.queued} · errors ${summary.errors}` +
       (summary.queued > 0 ? `\n${summary.queued} item(s) need your call.` : "") +
-      `\n<${link}|Open the Autonomous Resolution screen>`;
+      `\n${resolutionScreenLink()}`;
 
     const { WebClient } = await import("@slack/web-api");
     await new WebClient(token).chat.postMessage({ channel, text });
@@ -140,15 +158,13 @@ export async function sendResolutionSlackTest(
   if (!token) return { ok: false, channel, error: "SLACK_BOT_TOKEN is not set." };
   if (!channel) return { ok: false, channel: null, error: "No resolution Slack channel configured." };
   try {
-    const base = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
-    const link = `${base}/autonomous-resolution`;
     const { WebClient } = await import("@slack/web-api");
     await new WebClient(token).chat.postMessage({
       channel,
       text:
         `✅ *Autonomous Resolution — test ping*\n` +
         `Channel wiring confirmed by ${triggeredBy}. You'll get a summary here after each 6h run.` +
-        `\n<${link}|Open the Autonomous Resolution screen>`,
+        `\n${resolutionScreenLink()}`,
     });
     return { ok: true, channel };
   } catch (e) {
