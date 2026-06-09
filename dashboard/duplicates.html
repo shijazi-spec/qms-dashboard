@@ -2942,6 +2942,11 @@
             const chips = summary.sharedKeys.length
                 ? summary.sharedKeys.map(s => `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${s.color}" title="All ${summary.count} ${moduleLabel} in this group share this ${s.label}: ${escapeHtml(String(s.value))}">${s.k} ${escapeHtml(s.label)}</span>`).join(' ')
                 : `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Members of this group are linked through chained matches (e.g. A shares email with B, B shares phone with C)">🔗 chained match</span>`;
+            const _aiMod = moduleLabel.charAt(0).toUpperCase() + moduleLabel.slice(1);
+            const _aiCid = summary.primary && summary.primary.cluster_id;
+            const aiBtn = _aiCid
+                ? `<button data-on-click="resolveGroupWithAI" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-resolve-ai-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700" title="Open AI Agentic Resolution for this group's cluster">🔍 Resolve with AI</button>`
+                : '';
             return `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${gid}"]' data-testid="row-dup-group-${gid}">
                 <td class="px-4 py-3 text-sm" colspan="${colspan}">
                     <div class="flex items-center gap-2 flex-wrap">
@@ -2949,7 +2954,7 @@
                         <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
                         <span class="text-xs text-gray-500">${summary.count} duplicate ${moduleLabel}</span>
                         <span class="flex flex-wrap gap-1">${chips}</span>
-                        <span class="ms-auto text-xs text-gray-500">Click to expand</span>
+                        <span class="ms-auto flex items-center gap-2">${aiBtn}<span class="text-xs text-gray-500">Click to expand</span></span>
                     </div>
                 </td>
             </tr>`;
@@ -3108,6 +3113,10 @@
                     : '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Members of this group are linked through chained matches (e.g. A shares email with B, B shares phone with C)">🔗 chained match</span>';
 
                 const _gid = 'leads-' + gIdx;
+                const _leadCid = summary.primary && summary.primary.cluster_id;
+                const _leadAiBtn = _leadCid
+                    ? `<button data-on-click="resolveGroupWithAI" data-args='["Leads",${_leadCid}]' data-testid="btn-resolve-ai-${_gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700" title="Open AI Agentic Resolution for this group's cluster">🔍 Resolve with AI</button>`
+                    : '';
                 rows += `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${_gid}"]' data-testid="row-dup-group-${_gid}">
                     <td class="px-4 py-3 text-sm" colspan="8">
                         <div class="flex items-center gap-2 flex-wrap">
@@ -3115,7 +3124,7 @@
                             <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
                             <span class="text-xs text-gray-500">${summary.count} duplicate leads</span>
                             <span class="flex flex-wrap gap-1">${chips}</span>
-                            <span class="ms-auto text-xs text-gray-500">Click to expand</span>
+                            <span class="ms-auto flex items-center gap-2">${_leadAiBtn}<span class="text-xs text-gray-500">Click to expand</span></span>
                         </div>
                     </td>
                 </tr>`;
@@ -4552,6 +4561,21 @@
             window.__planState[module] = window.__planState[module] || { selected: null, master: null };
             return window.__planState[module];
         }
+        // From a per-module tab group's "🔍 Resolve with AI" button: open the
+        // group's cluster modal and auto-preview that module's Agentic plan.
+        // The cluster may hold more records than the on-page group — use the
+        // plan's checkboxes to pick exactly which to merge.
+        async function resolveGroupWithAI(module, clusterId) {
+            if (!clusterId) {
+                alert('This group has no cluster id yet — run a scan first, then try again.');
+                return;
+            }
+            try { await showClusterDetails(clusterId); } catch (_) { /* modal still opens */ }
+            // Modal now has an "Agentic Resolution — <module>" section
+            // (#mergePlanPanel-<module>) when the cluster has >=2 of that module.
+            try { await previewMergePlan(module, clusterId); } catch (_) { /* user can click Preview */ }
+        }
+
         async function previewMergePlan(module, clusterId) {
             const panel = document.getElementById('mergePlanPanel-' + module);
             if (!panel) return;
