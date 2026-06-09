@@ -649,6 +649,18 @@
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;accounts&quot;]" data-testid="button-open-capa-accounts" title="Open a corrective-action record (CAPA) on one of the account-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
+            <!-- AI-status chips — toggle which slice of clusters is in the list.
+                 active            (default) = untouched clusters, no merge_action yet
+                 tagged_pending    = already AI-applied, waiting for Zoho admin delete
+                 resolved          = cluster status='resolved'
+                 all               = no status filter -->
+            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="accounts">
+                <span class="text-xs text-gray-500 me-1">AI status:</span>
+                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;active&quot;]" id="aiChip-accounts-active" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-900 text-white" title="Untouched active clusters — no Apply has been pressed for them yet">Untouched</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;tagged_pending&quot;]" id="aiChip-accounts-tagged_pending" class="px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200" title="Apply was run on these clusters — the duplicates are tagged Duplicate-Delete in Zoho but the admin has not physically deleted them yet, so they keep re-appearing on the next scan.">🤖 AI-Applied · pending Zoho admin delete</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;resolved&quot;]" id="aiChip-accounts-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Cluster was marked resolved — the radar considers it done">✅ Resolved</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;all&quot;]" id="aiChip-accounts-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
+            </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -2703,6 +2715,33 @@
                 + html + '</td></tr>';
         }
 
+        // Per-tab AI-status chip state. Default 'active' = untouched clusters
+        // (no merge_action yet). The chip set lets the operator toggle to
+        // tagged-pending / resolved / all without leaving the tab.
+        window._aiStatusByTab = window._aiStatusByTab || {};
+        function setAiStatus(tab, status) {
+            window._aiStatusByTab[tab] = status;
+            // Repaint the chip row so the active one is highlighted.
+            ['active','tagged_pending','resolved','all'].forEach(s => {
+                const el = document.getElementById('aiChip-' + tab + '-' + s);
+                if (!el) return;
+                const isActive = s === status;
+                const palette = {
+                    active:         { on: 'bg-gray-900 text-white',           off: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
+                    tagged_pending: { on: 'bg-amber-600 text-white',          off: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
+                    resolved:       { on: 'bg-emerald-600 text-white',        off: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
+                    all:            { on: 'bg-gray-700 text-white',           off: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
+                };
+                el.className = 'px-3 py-1 text-xs font-semibold rounded-full ' + (isActive ? palette[s].on : palette[s].off);
+            });
+            // Reload the tab with the new filter. Re-enter loadRecordTab for
+            // module tabs; the per-tab cache is invalidated by the param change.
+            window._loadedTabs && window._loadedTabs.delete(tab);
+            if (['leads','deals','contacts','accounts'].includes(tab)) {
+                loadRecordTab(tab, 0);
+            }
+        }
+
         async function loadRecordTab(type, page = 0) {
             recordPages[type] = page;
             // Per-tab Advanced Filters: the same filter selections (owner,
@@ -2943,14 +2982,37 @@
         }
 
         // Yellow collapsible group-header row.
-        function _dupGroupHeaderRow(gid, summary, colspan, moduleLabel) {
+        function _dupGroupHeaderRow(gid, summary, colspan, moduleLabel, clusterMeta) {
             const chips = summary.sharedKeys.length
                 ? summary.sharedKeys.map(s => `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${s.color}" title="All ${summary.count} ${moduleLabel} in this group share this ${s.label}: ${escapeHtml(String(s.value))}">${s.k} ${escapeHtml(s.label)}</span>`).join(' ')
                 : `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Members of this group are linked through chained matches (e.g. A shares email with B, B shares phone with C)">🔗 chained match</span>`;
             const _aiMod = moduleLabel.charAt(0).toUpperCase() + moduleLabel.slice(1);
             const _aiCid = summary.primary && summary.primary.cluster_id;
+            // AI-state badge — visible at-a-glance so the operator can tell
+            // which clusters were already AI-applied (and are just waiting
+            // for the Zoho admin to physically delete the tagged records)
+            // vs. truly untouched. Comes from the new merge_action sidecar
+            // on the list endpoint.
+            const aiState = clusterMeta && clusterMeta.ai_state;
+            const tagged = (clusterMeta && Number(clusterMeta.tagged_records || 0)) || 0;
+            const lastAt = clusterMeta && clusterMeta.last_merge_at
+                ? new Date(clusterMeta.last_merge_at).toLocaleDateString()
+                : '';
+            let aiStateBadge = '';
+            if (aiState === 'tagged_pending_delete') {
+                aiStateBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Apply was already run on this cluster${lastAt ? ' (' + lastAt + ')' : ''}. ${tagged} duplicate(s) carry the Duplicate-Delete tag in Zoho — the cluster keeps re-appearing here on every scan until the Zoho admin physically deletes those tagged records.">🤖 AI-Applied · ${tagged} pending Zoho delete</span>`;
+            } else if (aiState === 'resolved') {
+                aiStateBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300" title="Cluster status='resolved' — marked done from the merge plan or the Mark Resolved button.">✅ Resolved</span>`;
+            }
+            // Button label clarified: "🔍 Open AI Plan" instead of
+            // "🔍 Resolve with AI" — the original wording made operators
+            // believe one click would auto-apply, when it actually only
+            // opens the merge plan preview.
+            const aiBtnLabel = aiState === 'tagged_pending_delete'
+                ? '🔁 Re-open AI Plan'
+                : '🔍 Open AI Plan';
             const aiBtn = _aiCid
-                ? `<button data-on-click="resolveGroupWithAI" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-resolve-ai-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700" title="Open AI Agentic Resolution for this group's cluster">🔍 Resolve with AI</button>`
+                ? `<button data-on-click="resolveGroupWithAI" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-resolve-ai-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700" title="Open the AI merge-plan modal. You still need to click Apply in Zoho inside the modal to actually tag duplicates.">${aiBtnLabel}</button>`
                 : '';
             return `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${gid}"]' data-testid="row-dup-group-${gid}">
                 <td class="px-4 py-3 text-sm" colspan="${colspan}">
@@ -2959,6 +3021,7 @@
                         <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
                         <span class="text-xs text-gray-500">${summary.count} duplicate ${moduleLabel}</span>
                         <span class="flex flex-wrap gap-1">${chips}</span>
+                        ${aiStateBadge}
                         <span class="ms-auto flex items-center gap-2">${aiBtn}<span class="text-xs text-gray-500">Click to expand</span></span>
                     </div>
                 </td>
@@ -3035,7 +3098,11 @@
             // Flatten the page so we can count duplicate names/emails/phones/IDs
             // across every lead currently shown.
             const allLeads = [];
-            for (const g of groups) for (const r of (g.leads || [])) allLeads.push(r);
+            const clusterMetaById = {};
+            for (const g of groups) {
+                if (g.cluster && g.cluster.id != null) clusterMetaById[g.cluster.id] = g.cluster;
+                for (const r of (g.leads || [])) allLeads.push(r);
+            }
 
             // Counts per match-key so each row can show 👤/📧/📞/🆔 badges.
             // OR rule: a row is a duplicate if ANY of name, email, phone, or
@@ -3205,7 +3272,11 @@
         function renderDealRows(groups) {
             const tbody = document.getElementById('dealsTable');
             const items = [];
-            for (const g of groups) for (const r of (g.deals || [])) items.push(r);
+            const clusterMetaById = {};
+            for (const g of groups) {
+                if (g.cluster && g.cluster.id != null) clusterMetaById[g.cluster.id] = g.cluster;
+                for (const r of (g.deals || [])) items.push(r);
+            }
 
             const accountIdOf = r => {
                 const raw = r && r.raw_data ? r.raw_data : {};
@@ -3230,7 +3301,8 @@
             groupList.forEach((idxs, gIdx) => {
                 const gid = 'deals-' + gIdx;
                 const summary = _dupGroupSummary(items, idxs, extractors, keyDefs);
-                rows += _dupGroupHeaderRow(gid, summary, 7, 'deals');
+                const cmeta = (summary.primary && clusterMetaById[summary.primary.cluster_id]) || null;
+                rows += _dupGroupHeaderRow(gid, summary, 7, 'deals', cmeta);
 
                 idxs.forEach(i => {
                     const r = items[i];
@@ -3261,7 +3333,11 @@
         function renderContactRows(groups) {
             const tbody = document.getElementById('contactsTable');
             const items = [];
-            for (const g of groups) for (const r of (g.contacts || [])) items.push(r);
+            const clusterMetaById = {};
+            for (const g of groups) {
+                if (g.cluster && g.cluster.id != null) clusterMetaById[g.cluster.id] = g.cluster;
+                for (const r of (g.contacts || [])) items.push(r);
+            }
 
             const contactPhone = r => r.phone || (r.raw_data && (r.raw_data.Phone || r.raw_data.Mobile || r.raw_data.Home_Phone)) || '';
             const extractors = {
@@ -3283,7 +3359,8 @@
             groupList.forEach((idxs, gIdx) => {
                 const gid = 'contacts-' + gIdx;
                 const summary = _dupGroupSummary(items, idxs, extractors, keyDefs);
-                rows += _dupGroupHeaderRow(gid, summary, 7, 'contacts');
+                const cmeta = (summary.primary && clusterMetaById[summary.primary.cluster_id]) || null;
+                rows += _dupGroupHeaderRow(gid, summary, 7, 'contacts', cmeta);
 
                 idxs.forEach(i => {
                     const r = items[i];
@@ -3326,7 +3403,15 @@
         function renderAccountRows(groups) {
             const tbody = document.getElementById('accountsTable');
             const items = [];
-            for (const g of groups) for (const r of (g.accounts || [])) items.push(r);
+            // Build cluster-meta lookup so _dupGroupHeaderRow can render the
+            // AI-state badge ("🤖 AI-Applied · N pending Zoho delete" vs
+            // "✅ Resolved" vs default).
+            const clusterMetaById = {};
+            for (const g of groups) {
+                if (g.cluster && g.cluster.id != null) clusterMetaById[g.cluster.id] = g.cluster;
+                for (const r of (g.accounts || [])) items.push(r);
+            }
+            window._clusterMetaByIdForTab = clusterMetaById;
 
             const websiteOf = r => {
                 const raw = r && r.raw_data ? r.raw_data : {};
@@ -3353,7 +3438,8 @@
             groupList.forEach((idxs, gIdx) => {
                 const gid = 'accounts-' + gIdx;
                 const summary = _dupGroupSummary(items, idxs, extractors, keyDefs);
-                rows += _dupGroupHeaderRow(gid, summary, 8, 'accounts');
+                const cmeta = (summary.primary && clusterMetaById[summary.primary.cluster_id]) || null;
+                rows += _dupGroupHeaderRow(gid, summary, 8, 'accounts', cmeta);
 
                 idxs.forEach(i => {
                     const r = items[i];
@@ -4366,7 +4452,7 @@
                         <div class="flex items-center gap-2 flex-wrap">
                             <button data-on-click="recheckCluster" data-args='[${cluster.id}]' data-testid="button-recheck-cluster-${cluster.id}" class="px-3 py-2 bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 rounded-lg text-sm font-medium" title="Re-fetch every record in this cluster from Zoho fresh — confirms the post-merge state (Account_Name, Duplicate-Delete tag, still-alive vs. deleted) without waiting for the next 6h scan.">🔁 Re-check cluster</button>
                             <button data-on-click="verifyTaggedRecords" data-args='[${cluster.id}]' data-testid="button-verify-tags-${cluster.id}" class="px-3 py-2 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg text-sm font-medium" title="Re-query Zoho for every record this cluster has tagged Duplicate-Delete — shows how many the admin has actually deleted vs. still pending.">✅ Verify tags in Zoho</button>
-                            <button data-on-click="previewMergePlan" data-args='["${am.module}",${cluster.id}]' data-testid="button-preview-merge-plan-${am.module}-${cluster.id}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview ${escapeHtml(am.label)} Plan</button>
+                            <button data-on-click="previewMergePlan" data-args='["${am.module}",${cluster.id}]' data-testid="button-preview-merge-plan-${am.module}-${cluster.id}" title="Loads the AI merge plan into the panel below. You still need to click Apply in Zoho inside the plan to actually tag duplicates." class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview ${escapeHtml(am.label)} Plan <span class="text-[10px] font-normal opacity-80">(then Apply inside)</span></button>
                         </div>
                     </div>
                     <div id="recheckPanel-${cluster.id}" class="text-sm mb-2"></div>
@@ -5911,6 +5997,9 @@
         }
 
         function showTab(tab) {
+            // Track which tab the user is on — buildFilterParams() reads this
+            // to look up the per-tab AI-status chip selection.
+            window._currentTab = tab;
             // Per-tab filter persistence: snapshot the OUTGOING tab's form
             // BEFORE we swap classes, then restore the INCOMING tab's form
             // AFTER the swap (when document.querySelector('.tab-active')
@@ -8228,6 +8317,10 @@
             if (from) params.set('start_date', from);
             const to = document.getElementById('filterDateTo').value;
             if (to) params.set('end_date', to);
+            // AI-status chip — per-tab state, read from the per-tab AI chip.
+            // Defaults to 'active' so untouched clusters land in the list.
+            const aiStatus = window._aiStatusByTab && window._aiStatusByTab[window._currentTab];
+            if (aiStatus && aiStatus !== 'active') params.set('ai_status', aiStatus);
             return params;
         }
 

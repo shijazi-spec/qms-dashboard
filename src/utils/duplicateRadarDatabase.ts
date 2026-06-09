@@ -3641,6 +3641,7 @@ export async function getDuplicateRecordsByType(
     stages?: string[];
     confidence_level?: string;
     domain?: string;
+    ai_status?: string;
   },
 ): Promise<{ groups: any[]; total: number }> {
   const countField =
@@ -3695,6 +3696,30 @@ export async function getDuplicateRecordsByType(
   const limit = options?.limit || 50;
   const offset = options?.offset || 0;
 
+  // AI-status filter — visualises the "this cluster was already AI-applied
+  // and is now waiting for the Zoho admin to physically delete the tagged
+  // duplicates" state. Default 'active' keeps the legacy view (untouched
+  // active clusters). 'tagged_pending' = active cluster that has at least
+  // one merge_action against it. 'resolved' = cluster status='resolved'.
+  // 'all' = no filter.
+  const aiStatus = ((options as any)?.ai_status as string) || "active";
+  let statusFilter = "AND dc.status = 'active'";
+  let mergeActionFilter = "";
+  if (aiStatus === "tagged_pending") {
+    statusFilter = "AND dc.status = 'active'";
+    mergeActionFilter =
+      " AND EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved'))";
+  } else if (aiStatus === "resolved") {
+    statusFilter = "AND dc.status = 'resolved'";
+  } else if (aiStatus === "all") {
+    statusFilter = "";
+  } else if (aiStatus === "active") {
+    // Untouched active — exclude clusters with prior merge actions.
+    statusFilter = "AND dc.status = 'active'";
+    mergeActionFilter =
+      " AND NOT EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved'))";
+  }
+
   // ── Paginate by CLUSTER, not by record. ────────────────────────────────
   //
   // This view groups records into duplicate clusters, so the unit of
@@ -3710,7 +3735,7 @@ export async function getDuplicateRecordsByType(
     `
     SELECT dc.id
     FROM duplicate_clusters dc
-    WHERE dc.${countField} > 1 AND dc.status = 'active'
+    WHERE dc.${countField} > 1 ${statusFilter}${mergeActionFilter}
       AND EXISTS (
         SELECT 1 FROM duplicate_records dr
         WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
@@ -3727,7 +3752,7 @@ export async function getDuplicateRecordsByType(
     `
     SELECT COUNT(*) as total
     FROM duplicate_clusters dc
-    WHERE dc.${countField} > 1 AND dc.status = 'active'
+    WHERE dc.${countField} > 1 ${statusFilter}${mergeActionFilter}
       AND EXISTS (
         SELECT 1 FROM duplicate_records dr
         WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
@@ -3813,6 +3838,52 @@ export async function getDuplicateRecordsByType(
     }
     grouped[cid][recordType + "s"].push(row);
     grouped[cid].duplicate_count++;
+  }
+
+  // Sidecar — per-cluster AI-status. Powers the new "🤖 Already AI-applied,
+  // pending Zoho admin delete" badge on each cluster header so the operator
+  // can tell apart untouched / tagged / fully-resolved clusters without
+  // opening each one. One query per page (≤ ~50 clusters), aggregated by id.
+  if (clusterIds.length > 0) {
+    const statusRows = await pool.query(
+      `SELECT dc.id, dc.status,
+              COALESCE(ma.action_count, 0)        AS merge_action_count,
+              COALESCE(ma.tagged_records, 0)      AS tagged_records,
+              ma.last_merge_at
+         FROM duplicate_clusters dc
+         LEFT JOIN (
+           SELECT cluster_id,
+                  COUNT(*) AS action_count,
+                  SUM(jsonb_array_length(merged_record_ids)) AS tagged_records,
+                  MAX(created_at) AS last_merge_at
+             FROM duplicate_merge_actions
+            WHERE action_type IN ('resolve','module_resolved')
+            GROUP BY cluster_id
+         ) ma ON ma.cluster_id = dc.id
+        WHERE dc.id = ANY($1::int[])`,
+      [clusterIds],
+    );
+    const byId = new Map<number, any>();
+    for (const r of statusRows.rows) {
+      byId.set(r.id, r);
+    }
+    for (const cid of clusterIds) {
+      const meta = byId.get(cid);
+      if (!meta || !grouped[cid]) continue;
+      const taggedCount = Number(meta.tagged_records || 0);
+      const actionCount = Number(meta.merge_action_count || 0);
+      const aiState =
+        meta.status === "resolved"
+          ? "resolved"
+          : actionCount > 0
+            ? "tagged_pending_delete"
+            : "untouched";
+      grouped[cid].cluster.ai_state = aiState;
+      grouped[cid].cluster.merge_action_count = actionCount;
+      grouped[cid].cluster.tagged_records = taggedCount;
+      grouped[cid].cluster.last_merge_at = meta.last_merge_at || null;
+      grouped[cid].cluster.cluster_status = meta.status;
+    }
   }
 
   return {
