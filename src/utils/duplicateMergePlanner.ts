@@ -108,6 +108,15 @@ export interface MergePlan {
   accountCandidates: { zohoId: string; name: string }[];
   /** Account the survivor's Account_Name will be set to on apply (null = no link). */
   linkAccountZohoId: string | null;
+  /**
+   * Cascade-only Zoho IDs (Contacts merge): records that should receive the
+   * Account_Name cascade BUT are NOT tagged Duplicate-Delete because they
+   * failed the ≥2-attribute strict rule against the survivor. They appear
+   * as "Excluded" in the plan; the executor adds them to its Account_Name
+   * cascade so every contact in the cluster lands under the surviving
+   * Account, but no Duplicate-Delete tag is applied.
+   */
+  cascadeOnlyZohoIds: string[];
   generatedBy: string;
   /** ISO timestamp; stamped by the caller (route), null if not provided. */
   generatedAt: string | null;
@@ -403,7 +412,71 @@ export function buildMergePlan(
     );
   }
   const master = overridden || pickMaster(mergeSet, fields);
-  const duplicates = mergeSet.filter((r) => r !== master);
+  let duplicates = mergeSet.filter((r) => r !== master);
+
+  // ── HARD RULE for Contacts ──────────────────────────────────────────────
+  // Two contacts can only be tagged Duplicate-Delete of each other when they
+  // share AT LEAST 2 of {lower(email), normalized phone, lower(record_name)}.
+  // Sharing only a parent Account or company name is NOT duplicate evidence
+  // — that's what the Account_Name cascade is for (everyone in the cluster
+  // gets re-pointed to the surviving Account regardless). A non-matching
+  // contact stays in the cluster but is moved to "softExcluded": rendered
+  // as Excluded in the plan, untouched in Zoho.
+  //
+  // Reason: Sarah Hijazi (2026-06-10) — the previous behaviour was tagging
+  // genuinely different people who happened to sit in the same cluster.
+  // See feedback-contact-merge-rule.md.
+  const contactSoftExcluded: typeof duplicates = [];
+  if (module === "Contacts" && duplicates.length > 0) {
+    const masterEmail = (master.email || "").trim().toLowerCase();
+    const masterPhone = (master.phone_normalized || "").trim();
+    const masterName = (master.record_name || "").trim().toLowerCase();
+    const passesStrict = (r: DuplicateRecord): boolean => {
+      let matches = 0;
+      const rEmail = (r.email || "").trim().toLowerCase();
+      const rPhone = (r.phone_normalized || "").trim();
+      const rName = (r.record_name || "").trim().toLowerCase();
+      if (masterEmail && rEmail && masterEmail === rEmail) matches++;
+      if (masterPhone && rPhone && masterPhone === rPhone) matches++;
+      if (masterName && rName && masterName === rName) matches++;
+      return matches >= 2;
+    };
+    const keep: typeof duplicates = [];
+    for (const r of duplicates) {
+      if (passesStrict(r)) keep.push(r);
+      else contactSoftExcluded.push(r);
+    }
+    duplicates = keep;
+    if (contactSoftExcluded.length > 0) {
+      const names = contactSoftExcluded
+        .slice(0, 5)
+        .map((r) => recName(r))
+        .join(", ");
+      const more =
+        contactSoftExcluded.length > 5
+          ? ` (+${contactSoftExcluded.length - 5} more)`
+          : "";
+      warnings.push(
+        `${contactSoftExcluded.length} contact(s) left UNTAGGED — they share fewer than 2 identity attributes (email/phone/name) with "${recName(master)}" and are NOT duplicates of it: ${names}${more}. Account_Name cascade will still re-point them to the surviving Account when a link target is chosen.`,
+      );
+    }
+    if (duplicates.length === 0) {
+      warnings.push(
+        `Cascade-only plan — no genuine contact duplicates of "${recName(master)}" in this cluster. Apply will set Account_Name on every contact but tag none.`,
+      );
+    }
+    // Pull soft-excluded contacts out of mergeSet so the UI renders them
+    // as "Excluded" (untouched) instead of "Duplicate-Delete". The
+    // Account_Name cascade still covers them via plan.cascadeOnlyZohoIds
+    // (added to the executor below).
+    if (contactSoftExcluded.length > 0) {
+      const excluded = new Set(contactSoftExcluded);
+      // mergeSet is a plain array; rebuild it without the soft-excluded set.
+      for (let i = mergeSet.length - 1; i >= 0; i--) {
+        if (excluded.has(mergeSet[i])) mergeSet.splice(i, 1);
+      }
+    }
+  }
 
   // Cross-module link: accounts in the cluster the survivor can be linked to
   // (Contacts / Deals set their Account_Name lookup). Surfaced for the UI; the
@@ -533,6 +606,12 @@ export function buildMergePlan(
   const duplicateDbIds = duplicates
     .map((d) => d.id)
     .filter((x): x is number => typeof x === "number");
+  // Cascade-only ids — soft-excluded Contacts that should still receive the
+  // Account_Name cascade but never the Duplicate-Delete tag. Stays an empty
+  // array for every other module.
+  const cascadeOnlyZohoIds = contactSoftExcluded
+    .map((r) => r.zoho_record_id)
+    .filter((x): x is string => typeof x === "string" && x.length > 0);
 
   const records_summary: MergePlanRecordSummary[] = records.map((r) => ({
     dbId: r.id ?? null,
@@ -576,6 +655,7 @@ export function buildMergePlan(
     records: records_summary,
     accountCandidates,
     linkAccountZohoId,
+    cascadeOnlyZohoIds,
     generatedBy: opts.generatedBy || "duplicate-radar",
     generatedAt: opts.generatedAt ?? null,
   };
