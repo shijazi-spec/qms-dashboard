@@ -94,6 +94,7 @@ import {
   bulkResolve,
   getMergeHistory,
   getTaggedRecordDbIdsByCluster,
+  bulkSplitContactClustersByStrictRule,
   markPrimaryRecord,
   getOwnerAccountability,
   getPacketSettings,
@@ -1230,6 +1231,158 @@ export const duplicateRadarRoutes = [
             errors,
             byRecord,
           });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // One-shot cleanup: apply the ≥2-attribute Contact rule retroactively
+    // to every existing active Contacts cluster. Splits each cluster's
+    // sub-components into their own clusters so today's "7 SLB employees"
+    // mass clusters drop off the dashboard. DESTRUCTIVE (rewrites cluster_id
+    // on duplicate_records rows) → admin only. Defaults to dry-run.
+    //   POST /api/duplicates/bulk-split-contacts
+    //   Body: { confirm?: boolean, limit?: number }
+    //     confirm !== true → dry-run that returns the plan + counts
+    //     limit (default 500, max 5000) bounds clusters touched per call
+    path: "/api/duplicates/bulk-split-contacts",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          const body = await c.req.json().catch(() => ({}));
+          const dryRun = body?.confirm !== true;
+          const limit = Number.isFinite(body?.limit)
+            ? Math.max(1, Math.min(5000, Number(body.limit)))
+            : 500;
+          const performedBy =
+            (sessionUser as any)?.email ||
+            (sessionUser as any)?.role ||
+            "admin";
+          const result = await bulkSplitContactClustersByStrictRule({
+            dryRun,
+            limit,
+            performedBy,
+          });
+          return c.json({ success: true, ...result });
+        } catch (e: any) {
+          logger.error("[bulk-split-contacts] failed:", e);
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Per-cluster re-check: for every record currently in the cluster,
+    // re-fetch from Zoho and report its live state — does the record still
+    // exist? what's its current Account_Name? what tags? Used right after
+    // an Apply to confirm the migrate-tag-cascade chain actually landed in
+    // Zoho without needing to wait for the next 6h scan.
+    //   GET /api/duplicates/clusters/:id/recheck
+    path: "/api/duplicates/clusters/:id/recheck",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          const records = await getRecordsByClusterId(id);
+          const RECORD_TYPE_TO_MODULE: Record<string, string> = {
+            lead: "Leads",
+            deal: "Deals",
+            contact: "Contacts",
+            account: "Accounts",
+          };
+          // Bound the fan-out — clusters with hundreds of records would
+          // otherwise burn our Zoho quota in one click.
+          const targets = records
+            .filter((r) => r.zoho_record_id)
+            .slice(0, 50);
+          const truncated = records.length > targets.length;
+
+          const out = await Promise.all(
+            targets.map(async (r) => {
+              const moduleName =
+                r.zoho_module ||
+                RECORD_TYPE_TO_MODULE[r.record_type as string];
+              const zohoId = r.zoho_record_id as string;
+              if (!moduleName) {
+                return {
+                  dbId: r.id,
+                  zohoId,
+                  module: null,
+                  name: r.record_name || null,
+                  recordType: r.record_type,
+                  isPrimary: !!r.is_primary,
+                  status: "no-module" as const,
+                };
+              }
+              try {
+                const live = await fetchZohoRecordById(moduleName, zohoId);
+                if (live === null) {
+                  return {
+                    dbId: r.id,
+                    zohoId,
+                    module: moduleName,
+                    name: r.record_name || null,
+                    recordType: r.record_type,
+                    isPrimary: !!r.is_primary,
+                    status: "deleted" as const,
+                  };
+                }
+                const data = (live.data as Record<string, any>) || {};
+                const tagList: string[] = Array.isArray(data.Tag)
+                  ? data.Tag.map((t: any) => String(t?.name || t || "")).filter(Boolean)
+                  : [];
+                const accountName =
+                  data.Account_Name?.name || data.account_name || null;
+                return {
+                  dbId: r.id,
+                  zohoId,
+                  module: moduleName,
+                  name: r.record_name || null,
+                  recordType: r.record_type,
+                  isPrimary: !!r.is_primary,
+                  status: "alive" as const,
+                  hasDuplicateDeleteTag: tagList.some((t) =>
+                    /duplicate.?delete/i.test(t),
+                  ),
+                  tags: tagList,
+                  currentAccountName: accountName,
+                };
+              } catch (e: any) {
+                return {
+                  dbId: r.id,
+                  zohoId,
+                  module: moduleName,
+                  name: r.record_name || null,
+                  recordType: r.record_type,
+                  isPrimary: !!r.is_primary,
+                  status: "error" as const,
+                  error: e?.message || String(e),
+                };
+              }
+            }),
+          );
+          const tally = {
+            total: out.length,
+            alive: out.filter((x) => x.status === "alive").length,
+            deleted: out.filter((x) => x.status === "deleted").length,
+            errors: out.filter((x) => x.status === "error").length,
+            tagged: out.filter(
+              (x: any) => x.status === "alive" && x.hasDuplicateDeleteTag,
+            ).length,
+          };
+          return c.json({ ...tally, truncated, totalInCluster: records.length, byRecord: out });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

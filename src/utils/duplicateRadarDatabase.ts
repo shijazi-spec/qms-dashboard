@@ -2282,6 +2282,201 @@ async function clusterHasConflictingDomain(
 }
 
 /**
+ * One-shot cleanup: scan every existing Contacts cluster and retroactively
+ * apply the ≥2-attribute strict rule. Contacts that fail the gate are split
+ * into per-record stub clusters so the dashboard stops surfacing the
+ * "7 SLB employees" false positives detected before the gate existed.
+ *
+ * Algorithm per cluster:
+ *   1. Collect contact records (email, phone_normalized, lower record_name).
+ *   2. Union-find: contacts A,B unite when they share ≥2 of the 3 keys.
+ *   3. Whichever connected component is largest stays in the cluster.
+ *   4. Every other component (and every singleton) gets split out via
+ *      splitRecordsIntoNewClusterInTx — same code path as the manual
+ *      split, so audit trail / primary-flag invariants are preserved.
+ *
+ * Returns per-cluster counts. dryRun=true returns the plan without writing.
+ */
+export async function bulkSplitContactClustersByStrictRule(opts: {
+  dryRun?: boolean;
+  performedBy: string;
+  /** Hard cap on clusters processed in one call (default 500). */
+  limit?: number;
+}): Promise<{
+  dryRun: boolean;
+  clustersInspected: number;
+  clustersSplit: number;
+  recordsMoved: number;
+  newClustersCreated: number;
+  perCluster: Array<{
+    cluster_id: number;
+    contacts: number;
+    components: number;
+    largest_kept: number;
+    split_out: number;
+  }>;
+}> {
+  const dryRun = opts.dryRun !== false; // default safe: dry-run
+  const limit = Math.max(1, Math.min(opts.limit || 500, 5000));
+
+  // Source list: any cluster with ≥2 contacts. resolve()-d clusters are
+  // skipped — historical merges already chose a survivor and we shouldn't
+  // retroactively unpick that decision.
+  const clusters = await pool.query(
+    `SELECT dc.id, dc.company_name
+       FROM duplicate_clusters dc
+      WHERE dc.status = 'active'
+        AND (
+          SELECT COUNT(*) FROM duplicate_records dr
+           WHERE dr.cluster_id = dc.id AND dr.record_type = 'contact'
+        ) >= 2
+      ORDER BY dc.id ASC
+      LIMIT $1`,
+    [limit],
+  );
+
+  const perCluster: Array<{
+    cluster_id: number;
+    contacts: number;
+    components: number;
+    largest_kept: number;
+    split_out: number;
+  }> = [];
+  let clustersSplit = 0;
+  let recordsMoved = 0;
+  let newClustersCreated = 0;
+
+  for (const cl of clusters.rows) {
+    const recs = await pool.query(
+      `SELECT id, email, phone_normalized, LOWER(record_name) AS lname, record_name
+         FROM duplicate_records
+        WHERE cluster_id = $1 AND record_type = 'contact'`,
+      [cl.id],
+    );
+    const contacts = recs.rows;
+    if (contacts.length < 2) continue;
+
+    // Union-find — contacts A,B unite iff ≥2 of {email,phone,name} match.
+    const parent = new Map<number, number>();
+    const find = (x: number): number => {
+      let r = x;
+      while (parent.get(r) !== r) {
+        const p = parent.get(r) as number;
+        parent.set(r, parent.get(p) as number); // path compression
+        r = parent.get(r) as number;
+      }
+      return r;
+    };
+    const union = (a: number, b: number) => {
+      const ra = find(a),
+        rb = find(b);
+      if (ra !== rb) parent.set(ra, rb);
+    };
+    for (const c of contacts) parent.set(c.id, c.id);
+    for (let i = 0; i < contacts.length; i++) {
+      for (let j = i + 1; j < contacts.length; j++) {
+        const a = contacts[i],
+          b = contacts[j];
+        let matches = 0;
+        if (a.email && b.email && String(a.email).toLowerCase() === String(b.email).toLowerCase())
+          matches++;
+        if (a.phone_normalized && b.phone_normalized && a.phone_normalized === b.phone_normalized)
+          matches++;
+        if (a.lname && b.lname && a.lname === b.lname) matches++;
+        if (matches >= 2) union(a.id, b.id);
+      }
+    }
+
+    // Group by root → components
+    const components = new Map<number, number[]>();
+    for (const c of contacts) {
+      const root = find(c.id);
+      if (!components.has(root)) components.set(root, []);
+      components.get(root)!.push(c.id);
+    }
+    const componentList = Array.from(components.values()).sort(
+      (a, b) => b.length - a.length,
+    );
+    // If everything is one component, nothing to split — the cluster is
+    // already consistent with the strict rule (everyone really IS a dup).
+    if (componentList.length <= 1) {
+      perCluster.push({
+        cluster_id: cl.id,
+        contacts: contacts.length,
+        components: 1,
+        largest_kept: contacts.length,
+        split_out: 0,
+      });
+      continue;
+    }
+
+    // Largest component stays in cluster; rest get split. Use real names
+    // for the new cluster seed so the audit trail is readable.
+    const [, ...toSplit] = componentList;
+    let splitCountForCluster = 0;
+    for (const recordIds of toSplit) {
+      const firstRow = contacts.find((r) => r.id === recordIds[0]);
+      const seedName =
+        firstRow?.record_name ||
+        `Split from cluster ${cl.id} — ${recordIds.length} contact(s)`;
+      if (!dryRun) {
+        try {
+          const split = await splitRecordsIntoNewCluster(cl.id, recordIds, {
+            company_name: seedName,
+          });
+          // record audit-log via duplicate_merge_actions so the Logs tab
+          // surfaces the cleanup — action_type='split' so it doesn't
+          // count toward the "tagged for delete" set in getTaggedRecordDbIdsByCluster.
+          await pool.query(
+            `INSERT INTO duplicate_merge_actions
+              (cluster_id, primary_record_id, merged_record_ids, action_type, performed_by, notes)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              split.new_cluster_id,
+              recordIds[0],
+              JSON.stringify(recordIds),
+              "split",
+              opts.performedBy,
+              `Bulk-split: ≥2-attribute rule cleanup. Moved ${recordIds.length} contact(s) from cluster #${cl.id}.`,
+            ],
+          );
+          recordsMoved += recordIds.length;
+          newClustersCreated++;
+          splitCountForCluster += recordIds.length;
+        } catch (e) {
+          // Skip clusters that fail (e.g. concurrent move) — keep going.
+          logger.warn(
+            `[bulk-split-contacts] cluster ${cl.id} split skipped: ${(e as Error).message}`,
+          );
+        }
+      } else {
+        // dry-run accounting
+        recordsMoved += recordIds.length;
+        newClustersCreated++;
+        splitCountForCluster += recordIds.length;
+      }
+    }
+    if (splitCountForCluster > 0) clustersSplit++;
+    perCluster.push({
+      cluster_id: cl.id,
+      contacts: contacts.length,
+      components: componentList.length,
+      largest_kept: componentList[0].length,
+      split_out: splitCountForCluster,
+    });
+  }
+
+  return {
+    dryRun,
+    clustersInspected: clusters.rows.length,
+    clustersSplit,
+    recordsMoved,
+    newClustersCreated,
+    perCluster,
+  };
+}
+
+/**
  * Strict-match path for Contact records: two contacts are duplicates of each
  * other ONLY when they share AT LEAST 2 of {email, normalized phone, lower
  * record_name}. Sharing only the parent company / domain is not enough —
