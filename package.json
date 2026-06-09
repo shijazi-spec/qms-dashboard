@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.65",
+    "@ai-sdk/openai-v5": "npm:@ai-sdk/openai@2.0.53",
     "@inngest/realtime": "^0.4.6",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@mastra/core": "^0.24.9",

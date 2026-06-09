@@ -1,7 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai-v5";
 import { createHash } from "crypto";
 import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
 

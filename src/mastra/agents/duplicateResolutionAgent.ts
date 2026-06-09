@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai-v5";
 import {
   getOpenAIApiKey,
   getOpenAIBaseUrl,
