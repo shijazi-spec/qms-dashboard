@@ -625,7 +625,7 @@
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Why this contact was flagged. OR rule: 👤 same name · 📧 same email · 📞 same phone · 🆔 same Zoho CRM ID">Dup signal</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Phone</th>
-                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Layout</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Sourced from the Zoho Contacts → Contact Type field (Customer / Prospect / Vendor / Partner / …) — the Layout column on this tab provided almost no signal because most contacts share the Standard layout.">Contact Type</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Created</th>
                         </tr>
@@ -3297,7 +3297,11 @@
                         : '<td class="px-4 py-3 text-sm text-gray-400">-</td>';
                     const ownerCell = `<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name || '-')}</td>`;
 
-                    rows += `<tr data-dup-group="${gid}" class="hidden bg-white">${identity}${signalCell}${emailCell}${phoneCell}${_dupLayoutCell(r)}${ownerCell}${_dupCreatedCell(r)}</tr>`;
+                    // Contact-only swap: use _dupContactTypeCell instead
+                    // of _dupLayoutCell so the column reads the Contacts
+                    // module's "Contact Type" field (Customer / Prospect /
+                    // …) rather than the near-always-"Standard" Layout.
+                    rows += `<tr data-dup-group="${gid}" class="hidden bg-white">${identity}${signalCell}${emailCell}${phoneCell}${_dupContactTypeCell(r)}${ownerCell}${_dupCreatedCell(r)}</tr>`;
                 });
             });
             tbody.innerHTML = rows || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No duplicate contacts detected on this page — every contact has a unique name, email, phone, and CRM ID.</td></tr>`;
