@@ -122,7 +122,7 @@ export async function computeModuleMetrics(
          COUNT(*) FILTER (WHERE event_type IN ('applied','dry_run'))::int AS decisions,
          COUNT(*) FILTER (WHERE event_type = 'applied')::int AS applied,
          COUNT(*) FILTER (WHERE master_overridden)::int AS overrides,
-         COUNT(*) FILTER (WHERE event_type = 'applied' AND COALESCE(performed_by,'') ILIKE '%agent%')::int AS auto_applied
+         COUNT(*) FILTER (WHERE event_type = 'applied' AND (COALESCE(performed_by,'') ILIKE '%GRQ Assistant%' OR COALESCE(performed_by,'') ILIKE '%Autonomous Agent%'))::int AS auto_applied
        FROM duplicate_resolution_feedback
        WHERE created_at > NOW() - ($2 || ' days')::interval
          AND plan_json->>'module' = $1`,

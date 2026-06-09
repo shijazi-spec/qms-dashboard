@@ -173,7 +173,7 @@ export async function sendResolutionSlackTest(
 }
 
 export const AGENT_PERFORMED_BY =
-  "QMS Autonomous Agent (on behalf of Sarah Hijazi)";
+  "GRQ Assistant (on behalf of Sarah Hijazi)";
 
 const RECORD_TYPE_TO_MODULE: Record<string, CrmModule> = {
   account: "Accounts",

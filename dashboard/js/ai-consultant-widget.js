@@ -241,9 +241,9 @@
 
     // Build translated widget HTML — called once at init and again after i18n loads
     function buildWidgetHTML() {
-        var widgetTitle    = _t('consultant.widget_title',       'AI QMS Consultant');
+        var widgetTitle    = _t('consultant.widget_title',       'GRQ Assistant');
         var fullView       = _t('consultant.full_view',          'Full view');
-        var welcomeTitle   = _t('consultant.widget_welcome_title','WalaPlus QMS Consultant');
+        var welcomeTitle   = _t('consultant.widget_welcome_title','GRQ Assistant');
         var welcomeSub     = _t('consultant.widget_welcome_sub', 'Ask about quality management, compliance, CRM data hygiene, or SOPs.');
         var qQuality       = _t('consultant.quick_quality',      'Quality Score');
         var qCompliance    = _t('consultant.quick_compliance',   'Compliance');
@@ -327,6 +327,11 @@
     }
 
     window._closeAIWidget = function() { setWidgetOpen(false); };
+    // Opened by the global header 🤖 GRQ Assistant button (WalaPlusNav.openAssistant).
+    window._openAIWidget = function() {
+        setWidgetOpen(true);
+        widgetLoadThreadHistory();
+    };
 
     /**
      * Re-hydrate the widget transcript from the server when the user

@@ -119,7 +119,7 @@ export const duplicateResolutionAssistantTool = createTool({
           caseSignature,
           decision,
           scope: "pattern",
-          createdBy: "ai-consultant (on behalf of Sarah Hijazi)",
+          createdBy: "GRQ Assistant (on behalf of Sarah Hijazi)",
         });
         if (id == null) {
           return { success: false, summary: "", error: "Could not save the rule." };

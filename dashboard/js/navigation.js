@@ -123,7 +123,6 @@ const WalaPlusNav = {
         { label: 'Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Call Evaluation', href: '/calls', icon: 'phone', id: 'calls' },
         { label: 'Duplicates Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' },
-        { label: 'Autonomous Resolution', href: '/autonomous-resolution', icon: 'duplicate', id: 'autonomous-resolution' },
         // Audit Reports: this is the existing Integrated QMS dashboard
         // (URL kept as /qms for backward compatibility) — the page houses
         // CAPA / Nonconformance / coaching workflows so it lives under
@@ -219,6 +218,7 @@ const WalaPlusNav = {
         // AI Consultant pinned to the top of Tools per user request — it is
         // the most-used item in this group and is open to all roles.
         { label: 'AI Consultant', href: '/consultant', icon: 'brain', id: 'consultant' },
+        { label: 'GRQ Assistant', href: '/autonomous-resolution', icon: 'duplicate', id: 'autonomous-resolution' },
         { label: 'Data Migration Engine', href: '/migration', icon: 'database', id: 'migration', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] },
         { label: 'Infographic Generator', href: '/infographic', icon: 'document', id: 'infographic', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] }
       ]
@@ -688,6 +688,36 @@ const WalaPlusNav = {
     document.head.appendChild(s);
   },
 
+  // Opens the GRQ Assistant chat (the global AI Consultant widget, branded
+  // GRQ Assistant). If the floating widget isn't mounted on this page, load it
+  // on demand (it self-mounts as a synchronous IIFE), then open it. On the full
+  // /consultant page (where the widget intentionally doesn't mount) just go
+  // there.
+  openAssistant() {
+    if (typeof window._openAIWidget === 'function') {
+      window._openAIWidget();
+      return;
+    }
+    if (window.location.pathname.indexOf('consultant') !== -1) {
+      window.location.href = '/consultant';
+      return;
+    }
+    var openWhenReady = function (tries) {
+      if (typeof window._openAIWidget === 'function') { window._openAIWidget(); return; }
+      if (tries > 0) { setTimeout(function () { openWhenReady(tries - 1); }, 50); return; }
+      window.location.href = '/consultant';
+    };
+    var existing = document.querySelector('script[data-walaplus-consultant-widget]');
+    if (existing) { openWhenReady(20); return; }
+    var s = document.createElement('script');
+    s.src = '/js/ai-consultant-widget.js?v=1';
+    s.async = true;
+    s.setAttribute('data-walaplus-consultant-widget', '1');
+    s.onload = function () { openWhenReady(20); };
+    s.onerror = function () { window.location.href = '/consultant'; };
+    document.head.appendChild(s);
+  },
+
   refreshDashboard() {
     // Visual feedback so the user knows the click registered. Without
     // this the button looked dead on pages whose custom refresh runs
@@ -1040,6 +1070,9 @@ const WalaPlusNav = {
         </div>
         <div class="flex items-center space-x-2">
           <span id="lastUpdated" class="wp-tagline text-xs text-gray-600"></span>
+          <button data-on-click="WalaPlusNav.openAssistant" class="relative p-1.5 rounded-lg hover:bg-gray-100 transition text-lg leading-none" aria-label="Open GRQ Assistant" title="GRQ Assistant" data-testid="button-grq-assistant">
+            <span aria-hidden="true">🤖</span>
+          </button>
           <button data-on-click="WalaPlusNav.refreshDashboard" class="wp-desktop-only bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition items-center space-x-1 text-sm" aria-label="Refresh dashboard" data-testid="button-refresh">
             <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             <span data-i18n="nav.refresh">${this._t('nav.refresh')}</span>
