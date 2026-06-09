@@ -5,6 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "mastra dev",
+    "prebuild": "node -e \"require('fs').rmSync('.mastra/output',{recursive:true,force:true})\"",
     "build": "mastra build",
     "check": "tsc",
     "check:tests": "tsc -p tsconfig.tests.json",
