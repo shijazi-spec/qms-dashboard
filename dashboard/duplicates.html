@@ -4359,8 +4359,12 @@
                             </h4>
                             <p class="text-xs text-gray-500">Proposes a survivor, migrates winning fields, reparents related records + notes, and flags duplicates with <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code> for the admin. Preview first — then dry-run or apply. The platform never deletes.</p>
                         </div>
-                        <button data-on-click="previewMergePlan" data-args='["${am.module}",${cluster.id}]' data-testid="button-preview-merge-plan-${am.module}-${cluster.id}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview ${escapeHtml(am.label)} Plan</button>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button data-on-click="verifyTaggedRecords" data-args='[${cluster.id}]' data-testid="button-verify-tags-${cluster.id}" class="px-3 py-2 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg text-sm font-medium" title="Re-query Zoho for every record this cluster has tagged Duplicate-Delete — shows how many the admin has actually deleted vs. still pending.">✅ Verify tags in Zoho</button>
+                            <button data-on-click="previewMergePlan" data-args='["${am.module}",${cluster.id}]' data-testid="button-preview-merge-plan-${am.module}-${cluster.id}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview ${escapeHtml(am.label)} Plan</button>
+                        </div>
                     </div>
+                    <div id="verifyTagsPanel-${cluster.id}" class="text-sm mb-2"></div>
                     ${is_cross_module ? `<div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900"><strong>Multi-module cluster:</strong> this resolves <strong>${escapeHtml(am.label)} only</strong> and <strong>leaves the cluster open</strong> for the other modules — finish them via their own Agentic section or <strong>Mark Resolved</strong>. The platform never deletes.</div>` : ''}
                     <div id="mergePlanPanel-${am.module}" class="text-sm"></div>
                 </div>`;
@@ -4700,6 +4704,91 @@
             if (data.plan.module !== 'Contacts') {
                 loadAttachmentChips(data.plan.module, data.plan.clusterId);
             }
+            // Reparent preview — Accounts/Contacts merges repoint child
+            // Deals/Contacts onto the survivor. Fetch the count separately
+            // so the plan render isn't blocked on Zoho calls.
+            if (data.plan.module === 'Accounts' || data.plan.module === 'Contacts') {
+                loadReparentPreview(data.plan.module, data.plan.clusterId);
+            }
+        }
+
+        // Verify Tags — re-query Zoho for every record this cluster has
+        // tagged Duplicate-Delete (via prior Apply / Agentic runs). Renders
+        // a small status panel in #verifyTagsPanel-<clusterId> with totals
+        // + per-record alive/deleted badges, plus clickable Zoho links so
+        // the user can chase down anything still pending admin delete.
+        async function verifyTaggedRecords(clusterId) {
+            const panel = document.getElementById('verifyTagsPanel-' + clusterId);
+            if (!panel) return;
+            panel.innerHTML = '<div class="py-2 text-emerald-700 text-xs">Verifying tags in Zoho…</div>';
+            let res, data;
+            try {
+                res = await fetch('/api/duplicates/clusters/' + clusterId + '/verify-tags', { credentials: 'same-origin' });
+                data = await res.json().catch(() => null);
+            } catch (e) {
+                panel.innerHTML = '<div class="py-2 text-red-600 text-xs">Failed to reach server: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                return;
+            }
+            if (!res.ok || !data) {
+                panel.innerHTML = '<div class="py-2 text-amber-700 text-xs">' + escapeHtml((data && data.error) || ('Server returned ' + res.status)) + '</div>';
+                return;
+            }
+            if (data.message) {
+                panel.innerHTML = '<div class="py-2 px-3 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600">' + escapeHtml(data.message) + '</div>';
+                return;
+            }
+            const tone = (data.alive === 0) ? 'emerald'
+                       : (data.deleted === 0) ? 'amber'
+                       : 'indigo';
+            const header = '<div class="px-3 py-2 rounded-lg bg-' + tone + '-50 border border-' + tone + '-200 text-xs mb-2">'
+                + '<strong class="text-' + tone + '-800">' + data.deleted + ' of ' + data.total + ' tagged records have been deleted in Zoho.</strong>'
+                + (data.alive ? ' <span class="text-' + tone + '-700">' + data.alive + ' still pending admin delete.</span>' : '')
+                + (data.errors ? ' <span class="text-amber-700">' + data.errors + ' could not be verified (Zoho error).</span>' : '')
+                + '</div>';
+            const rows = (data.byRecord || []).map(function (r) {
+                const badge = r.status === 'deleted'
+                    ? '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px] font-semibold">DELETED</span>'
+                    : r.status === 'alive'
+                        ? '<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[11px] font-semibold">PENDING</span>'
+                        : r.status === 'no-zoho-id'
+                            ? '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-semibold">NO ZOHO ID</span>'
+                            : '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[11px] font-semibold">ERROR</span>';
+                const tab = r.module === 'Deals' ? 'Potentials' : r.module;
+                const link = (r.zohoId && tab) ? zohoLink(r.zohoId, tab) : '<span class="text-gray-400">—</span>';
+                return '<tr class="border-t border-gray-100"><td class="px-2 py-1">' + badge + '</td>'
+                    + '<td class="px-2 py-1 text-gray-700">' + escapeHtml(r.name || '—') + '</td>'
+                    + '<td class="px-2 py-1 text-xs text-gray-500">' + escapeHtml(r.module || '—') + '</td>'
+                    + '<td class="px-2 py-1">' + link + '</td>'
+                    + (r.error ? '<td class="px-2 py-1 text-[11px] text-red-600">' + escapeHtml(r.error) + '</td>' : '<td class="px-2 py-1"></td>')
+                    + '</tr>';
+            }).join('');
+            panel.innerHTML = header + (rows
+                ? '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr><th class="px-2 py-1 text-start font-medium text-gray-600">Status</th><th class="px-2 py-1 text-start font-medium text-gray-600">Record</th><th class="px-2 py-1 text-start font-medium text-gray-600">Module</th><th class="px-2 py-1 text-start font-medium text-gray-600">Zoho</th><th class="px-2 py-1 text-start font-medium text-gray-600">Note</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+                : '');
+        }
+
+        // Fill the "Will reparent: X Deals · Y Contacts" line in the merge
+        // plan. Called AFTER __renderMergePlan paints — fans out to Zoho
+        // related lists, then updates the placeholder span. Best-effort:
+        // a Zoho rate-limit or 5xx leaves the placeholder as "…" rather
+        // than blocking the dry-run / apply flow.
+        async function loadReparentPreview(module, clusterId) {
+            const slot = document.getElementById('reparent-preview-' + module);
+            if (!slot) return;
+            try {
+                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/reparent-preview?module=' + encodeURIComponent(module), { credentials: 'same-origin' });
+                if (!res.ok) { slot.textContent = '—'; return; }
+                const data = await res.json();
+                const parts = [];
+                if (typeof data.deals === 'number' && data.deals > 0) parts.push(data.deals + ' Deal' + (data.deals === 1 ? '' : 's'));
+                if (typeof data.contacts === 'number' && data.contacts > 0) parts.push(data.contacts + ' Contact' + (data.contacts === 1 ? '' : 's'));
+                const trailer = (data.scope === 'truncated')
+                    ? ' <span class="text-amber-700">(sampled ' + data.duplicatesInspected + '/' + data.duplicatesTotal + ' dups)</span>'
+                    : '';
+                slot.innerHTML = parts.length
+                    ? '<span class="text-indigo-700 font-medium">' + parts.join(' · ') + '</span> will be repointed onto the survivor' + trailer
+                    : '<span class="text-gray-500">No related Deals or Contacts to reparent.</span>';
+            } catch (_) { slot.textContent = '—'; }
         }
 
         // Lazily fill the 📎 column with per-record attachment counts. A record
@@ -4931,9 +5020,16 @@
             const survivorIdLink = plan.masterZohoId
                 ? ' <span class="ms-1">' + zohoLink(plan.masterZohoId, survivorTab) + '</span>'
                 : '';
+            // Reparent-preview slot — lazily filled by loadReparentPreview
+            // after Zoho returns. Only Accounts/Contacts merges have child
+            // records to repoint; the slot stays empty otherwise.
+            const reparentSlot = (plan.module === 'Accounts' || plan.module === 'Contacts')
+                ? '<div class="mb-3 p-2 rounded-lg border border-indigo-100 bg-indigo-50 text-xs text-indigo-900"><span class="uppercase tracking-wide text-indigo-700 font-semibold">Cascade to survivor</span> · <span id="reparent-preview-' + esc(plan.module) + '">Checking Zoho related records…</span></div>'
+                : '';
             return '' +
                 '<div class="rounded-lg border border-purple-200 bg-purple-50 p-3 mb-3 text-sm text-purple-900" data-testid="merge-plan-rationale">' + esc(plan.rationale) + '</div>' +
                 '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">Survivor</span><div class="font-semibold">' + esc(plan.masterName) + survivorIdLink + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
+                reparentSlot +
                 linkControl +
                 '<div class="text-xs text-gray-500 mb-1">Tick the accounts to merge — at least 2. Unticked accounts are excluded and left untouched.</div>' +
                 '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Merge</th><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th>' + (isContacts ? '<th class="px-3 py-2 text-start" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">Account</th>' : '<th class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th>') + '<th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
