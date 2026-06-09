@@ -616,7 +616,9 @@
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;contacts&quot;]" data-testid="button-open-capa-contacts" title="Open a corrective-action record (CAPA) on one of the contact-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                <button data-on-click="bulkSplitContacts" id="bulkSplitContactsBtn" data-testid="button-bulk-split-contacts" title="One-shot cleanup of historical false-positive Contact clusters (e.g. the 7 SLB employees that were lumped together). Applies the ≥2-attribute rule retroactively. Dry-run first, then confirm." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-violet-200 text-violet-900 hover:bg-violet-300">🧹 Bulk-split bad clusters</button>
             </div>
+            <div id="bulkSplitContactsPanel" class="text-xs mb-2"></div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -4360,10 +4362,12 @@
                             <p class="text-xs text-gray-500">Proposes a survivor, migrates winning fields, reparents related records + notes, and flags duplicates with <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code> for the admin. Preview first — then dry-run or apply. The platform never deletes.</p>
                         </div>
                         <div class="flex items-center gap-2 flex-wrap">
+                            <button data-on-click="recheckCluster" data-args='[${cluster.id}]' data-testid="button-recheck-cluster-${cluster.id}" class="px-3 py-2 bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 rounded-lg text-sm font-medium" title="Re-fetch every record in this cluster from Zoho fresh — confirms the post-merge state (Account_Name, Duplicate-Delete tag, still-alive vs. deleted) without waiting for the next 6h scan.">🔁 Re-check cluster</button>
                             <button data-on-click="verifyTaggedRecords" data-args='[${cluster.id}]' data-testid="button-verify-tags-${cluster.id}" class="px-3 py-2 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg text-sm font-medium" title="Re-query Zoho for every record this cluster has tagged Duplicate-Delete — shows how many the admin has actually deleted vs. still pending.">✅ Verify tags in Zoho</button>
                             <button data-on-click="previewMergePlan" data-args='["${am.module}",${cluster.id}]' data-testid="button-preview-merge-plan-${am.module}-${cluster.id}" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview ${escapeHtml(am.label)} Plan</button>
                         </div>
                     </div>
+                    <div id="recheckPanel-${cluster.id}" class="text-sm mb-2"></div>
                     <div id="verifyTagsPanel-${cluster.id}" class="text-sm mb-2"></div>
                     ${is_cross_module ? `<div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900"><strong>Multi-module cluster:</strong> this resolves <strong>${escapeHtml(am.label)} only</strong> and <strong>leaves the cluster open</strong> for the other modules — finish them via their own Agentic section or <strong>Mark Resolved</strong>. The platform never deletes.</div>` : ''}
                     <div id="mergePlanPanel-${am.module}" class="text-sm"></div>
@@ -4710,6 +4714,139 @@
             if (data.plan.module === 'Accounts' || data.plan.module === 'Contacts') {
                 loadReparentPreview(data.plan.module, data.plan.clusterId);
             }
+        }
+
+        // Bulk-split bad Contact clusters — one-shot cleanup that applies
+        // the ≥2-attribute rule retroactively to today's already-bad
+        // clusters. Always runs DRY-RUN first; only after the user accepts
+        // the preview does a second call with confirm=true write to the DB.
+        // Idempotent on re-run: clusters already split won't change again.
+        async function bulkSplitContacts() {
+            const panel = document.getElementById('bulkSplitContactsPanel');
+            const btn = document.getElementById('bulkSplitContactsBtn');
+            if (btn) btn.disabled = true;
+            panel.innerHTML = '<div class="text-violet-700">Computing dry-run plan…</div>';
+
+            const callApi = async (confirmFlag) => {
+                const res = await fetch('/api/duplicates/bulk-split-contacts', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ confirm: !!confirmFlag, limit: 500 }),
+                });
+                const j = await res.json().catch(() => null);
+                return { ok: res.ok, status: res.status, data: j };
+            };
+
+            let preview;
+            try {
+                preview = await callApi(false);
+            } catch (e) {
+                panel.innerHTML = '<div class="text-red-600">Failed to reach server: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            if (!preview.ok || !preview.data) {
+                panel.innerHTML = '<div class="text-amber-700">' + escapeHtml((preview.data && preview.data.error) || ('Server returned ' + preview.status)) + '</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            const p = preview.data;
+            if (p.clustersSplit === 0) {
+                panel.innerHTML = '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800">Nothing to split — every active Contact cluster already passes the ≥2-attribute rule.</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            const examples = (p.perCluster || []).filter(r => r.split_out > 0).slice(0, 5).map(r =>
+                'Cluster #' + r.cluster_id + ': ' + r.contacts + ' contacts → ' + r.components + ' groups (split out ' + r.split_out + ')'
+            ).join('<br>');
+            const planMsg = 'DRY-RUN plan:\\n\\n'
+                + '• ' + p.clustersInspected + ' contact cluster(s) inspected\\n'
+                + '• ' + p.clustersSplit + ' will be split\\n'
+                + '• ' + p.recordsMoved + ' contact record(s) will move\\n'
+                + '• ' + p.newClustersCreated + ' new cluster(s) will be created\\n\\n'
+                + 'Apply for real?';
+            panel.innerHTML = '<div class="px-3 py-2 rounded bg-violet-50 border border-violet-200 text-violet-900">'
+                + '<strong>Dry-run:</strong> ' + p.clustersSplit + ' cluster(s) would split · ' + p.recordsMoved + ' contact(s) would move · ' + p.newClustersCreated + ' new cluster(s).<br>'
+                + '<span class="text-xs text-violet-700">' + examples + (p.perCluster.filter(r => r.split_out > 0).length > 5 ? '<br>…' : '') + '</span>'
+                + '</div>';
+            const confirmed = window.confirm(planMsg);
+            if (!confirmed) { if (btn) btn.disabled = false; return; }
+            panel.innerHTML += '<div class="text-violet-700 mt-1">Applying…</div>';
+            let live;
+            try { live = await callApi(true); }
+            catch (e) {
+                panel.innerHTML += '<div class="text-red-600">Apply failed: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            if (!live.ok || !live.data) {
+                panel.innerHTML += '<div class="text-amber-700">Apply: ' + escapeHtml((live.data && live.data.error) || ('Server returned ' + live.status)) + '</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            const l = live.data;
+            panel.innerHTML += '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 mt-1">'
+                + '<strong>Done.</strong> Split ' + l.clustersSplit + ' cluster(s), moved ' + l.recordsMoved + ' contact(s), created ' + l.newClustersCreated + ' new cluster(s). Refresh the page to see the updated lists.'
+                + '</div>';
+            if (btn) btn.disabled = false;
+        }
+
+        // Re-check Cluster — for every record currently in the cluster,
+        // re-fetch from Zoho fresh and report live state per row. Confirms
+        // the post-merge cascade actually landed (Account_Name on every
+        // contact, Duplicate-Delete tag on every duplicate) without waiting
+        // for the next 6h scan.
+        async function recheckCluster(clusterId) {
+            const panel = document.getElementById('recheckPanel-' + clusterId);
+            if (!panel) return;
+            panel.innerHTML = '<div class="py-2 text-blue-700 text-xs">Re-fetching every record in this cluster from Zoho…</div>';
+            let res, data;
+            try {
+                res = await fetch('/api/duplicates/clusters/' + clusterId + '/recheck', { credentials: 'same-origin' });
+                data = await res.json().catch(() => null);
+            } catch (e) {
+                panel.innerHTML = '<div class="py-2 text-red-600 text-xs">Failed to reach server: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                return;
+            }
+            if (!res.ok || !data) {
+                panel.innerHTML = '<div class="py-2 text-amber-700 text-xs">' + escapeHtml((data && data.error) || ('Server returned ' + res.status)) + '</div>';
+                return;
+            }
+            const headerTone = data.deleted > 0 ? 'blue' : (data.errors ? 'amber' : 'emerald');
+            const truncNote = data.truncated ? ' <span class="text-amber-700">(showing first ' + data.total + ' of ' + data.totalInCluster + ')</span>' : '';
+            const header = '<div class="px-3 py-2 rounded-lg bg-' + headerTone + '-50 border border-' + headerTone + '-200 text-xs mb-2">'
+                + '<strong class="text-' + headerTone + '-800">Re-check:</strong> '
+                + data.alive + ' alive · '
+                + data.deleted + ' deleted · '
+                + data.tagged + ' carry Duplicate-Delete tag'
+                + (data.errors ? ' · ' + data.errors + ' Zoho error(s)' : '')
+                + truncNote
+                + '</div>';
+            const rows = (data.byRecord || []).map(function (r) {
+                const statusBadge = r.status === 'alive'
+                    ? (r.hasDuplicateDeleteTag ? '<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[11px] font-semibold">ALIVE · TAGGED</span>' : '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px] font-semibold">ALIVE</span>')
+                    : r.status === 'deleted'
+                        ? '<span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[11px] font-semibold">DELETED</span>'
+                        : r.status === 'error'
+                            ? '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[11px] font-semibold">ERROR</span>'
+                            : '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-semibold">NO ZOHO</span>';
+                const primaryBadge = r.isPrimary ? ' <span class="text-emerald-700 text-[11px] font-semibold">★ SURVIVOR</span>' : '';
+                const tab = r.module === 'Deals' ? 'Potentials' : r.module;
+                const link = (r.zohoId && tab) ? zohoLink(r.zohoId, tab) : '<span class="text-gray-400">—</span>';
+                const acctCell = r.status === 'alive'
+                    ? '<td class="px-2 py-1 text-xs text-gray-700" title="Current Zoho Account_Name (post-merge)">' + escapeHtml(r.currentAccountName || '—') + '</td>'
+                    : '<td class="px-2 py-1 text-gray-300">—</td>';
+                return '<tr class="border-t border-gray-100"><td class="px-2 py-1">' + statusBadge + primaryBadge + '</td>'
+                    + '<td class="px-2 py-1 text-gray-700">' + escapeHtml(r.name || '—') + '</td>'
+                    + '<td class="px-2 py-1 text-xs text-gray-500">' + escapeHtml(r.module || '—') + '</td>'
+                    + '<td class="px-2 py-1">' + link + '</td>'
+                    + acctCell
+                    + '</tr>';
+            }).join('');
+            panel.innerHTML = header + (rows
+                ? '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr><th class="px-2 py-1 text-start font-medium text-gray-600">Status</th><th class="px-2 py-1 text-start font-medium text-gray-600">Record</th><th class="px-2 py-1 text-start font-medium text-gray-600">Module</th><th class="px-2 py-1 text-start font-medium text-gray-600">Zoho</th><th class="px-2 py-1 text-start font-medium text-gray-600">Account (now)</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+                : '');
         }
 
         // Verify Tags — re-query Zoho for every record this cluster has
