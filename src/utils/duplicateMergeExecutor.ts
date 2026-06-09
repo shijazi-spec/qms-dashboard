@@ -154,12 +154,14 @@ export async function executeMergePlan(
   }
 
   // 1b) Cross-module link — set Account_Name on the survivor AND on every
-  // duplicate in the cluster (Contacts / Deals only). Tagging a contact for
-  // deletion does not erase it from Zoho; the admin reviews each tagged
-  // record before flipping the delete switch and needs to see the right
-  // parent Account on every row, not just the one that survives. Failures
-  // on a duplicate are tracked but do not abort — the survivor link is the
-  // load-bearing write.
+  // contact in the cluster (Contacts / Deals only). Three groups: the
+  // survivor, the duplicates (which will also be tagged Duplicate-Delete),
+  // and the "cascade-only" set (Contacts soft-excluded by the strict ≥2-
+  // attribute rule — they are NOT duplicates of the survivor but they
+  // still belong to the surviving Account). Tagging a contact for deletion
+  // doesn't erase it from Zoho; the admin reviews each tagged record before
+  // flipping the delete switch and needs to see the right parent Account on
+  // every row. Failures on a single record are tracked but do not abort.
   if (plan.linkAccountZohoId && (module === "Contacts" || module === "Deals")) {
     report.linkedToAccount = plan.linkAccountZohoId;
     if (!dryRun) {
@@ -177,6 +179,16 @@ export async function executeMergePlan(
           });
         } catch (e) {
           fail("link-account-duplicate", e, dupId);
+        }
+      }
+      // Cascade-only: NOT tagged, just re-pointed under the surviving Account.
+      for (const cascadeId of plan.cascadeOnlyZohoIds || []) {
+        try {
+          await updateZohoRecord(module, cascadeId, {
+            Account_Name: { id: plan.linkAccountZohoId },
+          });
+        } catch (e) {
+          fail("link-account-cascade-only", e, cascadeId);
         }
       }
     }
