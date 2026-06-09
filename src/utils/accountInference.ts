@@ -38,6 +38,7 @@ import {
   extractDomain,
   isPlaceholderName,
 } from "./duplicateRadarDatabase";
+import { updateZohoRecord } from "./zohoCRM";
 import { logger } from "./logger";
 
 const PLACEHOLDER_CLUSTER_DOMAIN = "_placeholder.cluster";
@@ -441,4 +442,209 @@ export async function setHintStatus(
     [hintId, status],
   );
   return res.rows.length > 0;
+}
+
+/**
+ * AI-resolve a single Account-Hint row: write the suggested Account_Name
+ * directly onto the Zoho Deal, then mark the hint applied. Refuses to act
+ * when confidence is below the threshold (default 70%) so low-signal hints
+ * still go through the human Applied / Dismiss flow. Returns a structured
+ * report the route surfaces back to the dashboard.
+ *
+ * Attribution mirrors the autonomous resolver — "GRQ Assistant (on behalf
+ * of …)" — so the activity log treats this as agent work.
+ */
+export async function aiResolveAccountHint(
+  hintId: number,
+  performedBy: string,
+  opts: { minConfidence?: number } = {},
+): Promise<{
+  success: boolean;
+  hintId: number;
+  dealZohoId?: string | null;
+  accountZohoId?: string | null;
+  confidence?: number;
+  error?: string;
+  reason?: string;
+}> {
+  const minConfidence = opts.minConfidence ?? 70;
+
+  // Read the hint with its current join state so we have the latest deal +
+  // suggested account ids (listAccountInferenceHints joins; we do the same
+  // here to keep the surface narrow).
+  const res = await pool.query(
+    `SELECT h.id, h.status, h.confidence,
+            d.zoho_record_id AS deal_zoho_id,
+            a.zoho_record_id AS suggested_account_zoho_id,
+            a.record_name    AS suggested_account_name
+       FROM account_inference_hints h
+       JOIN duplicate_records d ON d.id = h.deal_record_id
+       JOIN duplicate_records a ON a.id = h.suggested_account_record_id
+      WHERE h.id = $1
+      LIMIT 1`,
+    [hintId],
+  );
+  const row = res.rows[0];
+  if (!row) {
+    return { success: false, hintId, error: "Hint not found" };
+  }
+  if (row.status !== "pending") {
+    return {
+      success: false,
+      hintId,
+      reason: `Hint is already '${row.status}' — nothing to do.`,
+    };
+  }
+  const confidence = Number(row.confidence || 0);
+  if (confidence < minConfidence) {
+    return {
+      success: false,
+      hintId,
+      confidence,
+      reason: `Confidence ${confidence}% is below the auto-apply threshold (${minConfidence}%). Review and use Applied / Dismiss manually.`,
+    };
+  }
+  const dealZohoId = row.deal_zoho_id as string | null;
+  const accountZohoId = row.suggested_account_zoho_id as string | null;
+  if (!dealZohoId || !accountZohoId) {
+    return {
+      success: false,
+      hintId,
+      dealZohoId,
+      accountZohoId,
+      error:
+        "Missing deal_zoho_id or suggested_account_zoho_id — sync likely incomplete; retry after the next scan.",
+    };
+  }
+
+  try {
+    await updateZohoRecord("Deals", dealZohoId, {
+      Account_Name: { id: accountZohoId },
+    });
+  } catch (e: any) {
+    return {
+      success: false,
+      hintId,
+      dealZohoId,
+      accountZohoId,
+      confidence,
+      error: e?.message || String(e),
+    };
+  }
+
+  // Mark the row applied so the chip count moves immediately; the next
+  // scan will retire the row entirely once Zoho propagates the Account_Name.
+  await pool.query(
+    `UPDATE account_inference_hints
+        SET status = 'applied',
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1`,
+    [hintId],
+  );
+  logger.info(
+    `[accountInference] AI-resolved hint #${hintId}: Deal ${dealZohoId} → Account ${accountZohoId} (${row.suggested_account_name}; confidence ${confidence}%; by ${performedBy})`,
+  );
+  return {
+    success: true,
+    hintId,
+    dealZohoId,
+    accountZohoId,
+    confidence,
+  };
+}
+
+/**
+ * Bulk AI-resolve every pending hint at-or-above the confidence threshold.
+ * Sequential to keep Zoho call rate under the per-account ceiling. Caps
+ * the run at `limit` (default 200) so a runaway is recoverable; the user
+ * re-clicks the button to continue. Each per-row result lands in the
+ * report so the UI can surface partial-success + per-deal errors.
+ */
+export async function aiResolveAllAccountHints(
+  performedBy: string,
+  opts: { minConfidence?: number; limit?: number } = {},
+): Promise<{
+  inspected: number;
+  resolved: number;
+  refused: number;
+  errors: number;
+  perHint: Array<{
+    hintId: number;
+    status: "resolved" | "refused" | "error";
+    dealZohoId?: string | null;
+    accountZohoId?: string | null;
+    reason?: string;
+    error?: string;
+  }>;
+}> {
+  const minConfidence = opts.minConfidence ?? 70;
+  const limit = Math.max(1, Math.min(opts.limit || 200, 1000));
+
+  const candidates = await pool.query(
+    `SELECT id FROM account_inference_hints
+      WHERE status = 'pending' AND confidence >= $1
+      ORDER BY confidence DESC, id ASC
+      LIMIT $2`,
+    [minConfidence, limit],
+  );
+
+  const report = {
+    inspected: candidates.rows.length,
+    resolved: 0,
+    refused: 0,
+    errors: 0,
+    perHint: [] as Array<{
+      hintId: number;
+      status: "resolved" | "refused" | "error";
+      dealZohoId?: string | null;
+      accountZohoId?: string | null;
+      reason?: string;
+      error?: string;
+    }>,
+  };
+
+  for (const c of candidates.rows) {
+    try {
+      const r = await aiResolveAccountHint(c.id, performedBy, {
+        minConfidence,
+      });
+      if (r.success) {
+        report.resolved++;
+        report.perHint.push({
+          hintId: r.hintId,
+          status: "resolved",
+          dealZohoId: r.dealZohoId,
+          accountZohoId: r.accountZohoId,
+        });
+      } else if (r.error) {
+        report.errors++;
+        report.perHint.push({
+          hintId: r.hintId,
+          status: "error",
+          dealZohoId: r.dealZohoId,
+          accountZohoId: r.accountZohoId,
+          error: r.error,
+        });
+      } else {
+        report.refused++;
+        report.perHint.push({
+          hintId: r.hintId,
+          status: "refused",
+          reason: r.reason,
+        });
+      }
+    } catch (e: any) {
+      report.errors++;
+      report.perHint.push({
+        hintId: c.id,
+        status: "error",
+        error: e?.message || String(e),
+      });
+    }
+  }
+
+  logger.info(
+    `[accountInference] Bulk AI-resolve: inspected=${report.inspected} resolved=${report.resolved} refused=${report.refused} errors=${report.errors} (by ${performedBy})`,
+  );
+  return report;
 }

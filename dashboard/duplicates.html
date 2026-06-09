@@ -971,8 +971,10 @@
                 <button data-on-click="exportAccountHints" id="accountHintsExportBtn" data-testid="button-export-account-hints" title="Download a CSV of exactly the Account-Hint rows shown below, in the current order and status filter." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
                 <button data-on-click="refreshAccountHintsFromZoho" id="accountHintsZohoRefreshBtn" title="Pull live values from Zoho for every deal / suggested account / contact shown in this view." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400 me-2">🔃 Refresh from Zoho (live)</button>
                 <button data-on-click="runAccountHintsScan" id="accountHintsScanBtn" data-testid="button-account-hints-scan" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
+                <button data-on-click="resolveAllAccountHintsWithAi" id="accountHintsAiResolveAllBtn" data-testid="button-account-hints-ai-resolve-all" title="Loop every pending hint with confidence ≥70% and write the suggested Account_Name on each Zoho Deal automatically. Below threshold rows stay pending for manual review." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700 me-2">🤖 Resolve all (≥70%) with AI</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;account-hints&quot;]" data-testid="button-open-capa-account-hints" title="Open a corrective-action record (CAPA) on one of the account-hint rows below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
+            <div id="accountHintsAiResolveAllPanel" class="text-xs mb-2"></div>
 
             <!-- Table -->
             <div class="bg-white rounded-lg shadow overflow-x-auto">
@@ -6089,8 +6091,17 @@
                     : escapeHtml(h.evidence_contact_email || '—');
                 const conf = Number(h.confidence || 0);
                 const confColor = conf >= 80 ? 'text-emerald-700' : conf >= 60 ? 'text-amber-700' : 'text-gray-600';
+                // High-confidence rows (≥70%) get the 🤖 Resolve with AI
+                // button — one click writes Account_Name on the Zoho Deal
+                // and flips the hint to Applied. Below the threshold, only
+                // the manual Applied / Dismiss path is exposed so the user
+                // doesn't accidentally auto-apply a low-signal guess.
+                const aiEligible = h.status === 'pending' && Number(h.confidence || 0) >= 70;
                 const actions = h.status === 'pending'
-                    ? '<button data-on-click="markAccountHintApplied" data-args="[' + h.id + ']" class="px-2 py-1 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700" title="I fixed the Zoho record — mark applied">Applied</button>'
+                    ? (aiEligible
+                        ? '<button data-on-click="resolveAccountHintWithAi" data-args="[' + h.id + ']" class="px-2 py-1 rounded bg-purple-600 text-white text-xs hover:bg-purple-700 me-1" title="Write the suggested Account_Name on the Zoho Deal automatically — confidence ≥70%, attributed to GRQ Assistant.">🤖 Resolve with AI</button>'
+                        : '')
+                    + '<button data-on-click="markAccountHintApplied" data-args="[' + h.id + ']" class="px-2 py-1 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700" title="I fixed the Zoho record — mark applied">Applied</button>'
                     + ' <button data-on-click="dismissAccountHint" data-args="[' + h.id + ']" class="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs hover:bg-gray-300" title="This suggestion is wrong">Dismiss</button>'
                     : '<span class="text-xs text-gray-400 capitalize">' + escapeHtml(h.status) + '</span>';
                 return '<tr class="hover:bg-gray-50">'
@@ -6174,6 +6185,79 @@
         }
         function markAccountHintApplied(id) { return setAccountHintStatus(id, 'applied'); }
         function dismissAccountHint(id)     { return setAccountHintStatus(id, 'dismissed'); }
+
+        // Bulk version: loop every pending hint ≥70% confidence and let
+        // the backend write Account_Name on each Zoho Deal. Confirmation
+        // dialog first (this is a Zoho write, not a local-only flag).
+        async function resolveAllAccountHintsWithAi() {
+            const btn = document.getElementById('accountHintsAiResolveAllBtn');
+            const panel = document.getElementById('accountHintsAiResolveAllPanel');
+            if (!btn || !panel) return;
+            const hintsList = (window._accountHintsData && window._accountHintsData.hints) || [];
+            const pendingTotal = hintsList.filter(h => h.status === 'pending' && Number(h.confidence || 0) >= 70).length;
+            const ok = window.confirm('AI-resolve every pending hint with confidence ≥70% (' + (pendingTotal || 'all') + ' rows)? Each one writes Account_Name on the Zoho Deal and flips the hint to Applied. This is a real Zoho write, attributed to GRQ Assistant.');
+            if (!ok) return;
+            btn.disabled = true;
+            const original = btn.textContent;
+            btn.textContent = 'Resolving…';
+            panel.innerHTML = '<div class="px-3 py-2 rounded bg-purple-50 border border-purple-200 text-purple-800">Looping through Zoho Deals…</div>';
+            try {
+                const res = await fetch('/api/duplicates/account-hints/resolve-all-with-ai', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const data = await res.json().catch(() => null);
+                if (!res.ok || !data) {
+                    panel.innerHTML = '<div class="px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-800">' + escapeHtml((data && data.error) || ('Server returned ' + res.status)) + '</div>';
+                    return;
+                }
+                const tone = data.errors === 0 && data.resolved > 0 ? 'emerald'
+                           : data.errors > 0 ? 'amber'
+                           : 'gray';
+                panel.innerHTML = '<div class="px-3 py-2 rounded bg-' + tone + '-50 border border-' + tone + '-200 text-' + tone + '-800">'
+                    + '<strong>Done.</strong> Resolved ' + data.resolved + ' of ' + data.inspected
+                    + (data.refused ? ' · ' + data.refused + ' refused (below threshold)' : '')
+                    + (data.errors ? ' · <span class="text-amber-700">' + data.errors + ' Zoho error(s)</span>' : '')
+                    + '. Reloading list…</div>';
+                await loadAccountHints();
+            } catch (e) {
+                panel.innerHTML = '<div class="px-3 py-2 rounded bg-red-50 border border-red-200 text-red-800">Failed: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+            }
+        }
+
+        // One-click AI resolve: POST to the new endpoint, the backend
+        // writes Account_Name on the Zoho Deal + marks the hint applied.
+        // We optimistically show "Resolving…" then reload the table so the
+        // row moves from Pending → Applied. Refuses inline for sub-threshold
+        // confidence (the backend gates at 70% by default) — the reason
+        // surfaces back as `reason` and we show it as a toast.
+        async function resolveAccountHintWithAi(id) {
+            try {
+                const res = await fetch('/api/duplicates/account-hints/' + id + '/resolve-with-ai', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const data = await res.json().catch(() => null);
+                if (!res.ok) {
+                    alert('AI resolve failed: ' + ((data && (data.error || data.reason)) || ('HTTP ' + res.status)));
+                    return;
+                }
+                if (data && data.success === false) {
+                    alert(data.reason || data.error || 'AI resolve refused.');
+                    return;
+                }
+                await loadAccountHints();
+            } catch (e) {
+                alert('AI resolve failed: ' + (e && e.message ? e.message : e));
+            }
+        }
 
         // ─── CS-pipeline overlap loaders ─────────────────────────────────────
         window._csOverlapFilter = 'all';

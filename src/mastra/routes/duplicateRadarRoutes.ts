@@ -5474,6 +5474,103 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // AI-resolve a single Account-Hint: write the suggested Account_Name
+    // directly onto the Zoho Deal record and mark the hint applied. Refuses
+    // when confidence is below the threshold (default 70%); the operator
+    // can still use the manual Applied / Dismiss buttons for low-signal
+    // rows. DESTRUCTIVE (writes to Zoho) → requireAdminOrKey.
+    //   POST /api/duplicates/account-hints/:id/resolve-with-ai
+    //   Body: { minConfidence?: number }
+    path: "/api/duplicates/account-hints/:id/resolve-with-ai",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid hint id" }, 400);
+          let body: { minConfidence?: number } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          const performedBy =
+            (sessionUser as any)?.email ||
+            (sessionUser as any)?.role ||
+            "admin";
+          const attribution = `GRQ Assistant (on behalf of ${performedBy})`;
+          const { aiResolveAccountHint } = await import(
+            "../../utils/accountInference"
+          );
+          const result = await aiResolveAccountHint(id, attribution, {
+            minConfidence: Number.isFinite(body.minConfidence)
+              ? Number(body.minConfidence)
+              : undefined,
+          });
+          // Map domain-level "won't apply" cases to 200s (so the UI can
+          // render the reason inline) and real failures to 500.
+          if (!result.success && result.error) {
+            return c.json({ ...result }, 500);
+          }
+          return c.json({ ...result });
+        } catch (error: any) {
+          logger.error("Error AI-resolving account-hint:", error);
+          return c.json({ error: error?.message || String(error) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Bulk AI-resolve every pending Account Hint at-or-above the confidence
+    // threshold. Same per-row logic as the single-id endpoint above, but
+    // looped — useful when the user has hundreds of high-confidence hints
+    // pending. DESTRUCTIVE (writes to Zoho) → requireAdminOrKey.
+    //   POST /api/duplicates/account-hints/resolve-all-with-ai
+    //   Body: { minConfidence?: number, limit?: number }
+    path: "/api/duplicates/account-hints/resolve-all-with-ai",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          let body: { minConfidence?: number; limit?: number } = {};
+          try {
+            body = (await c.req.json()) || {};
+          } catch {
+            body = {};
+          }
+          const performedBy =
+            (sessionUser as any)?.email ||
+            (sessionUser as any)?.role ||
+            "admin";
+          const attribution = `GRQ Assistant (on behalf of ${performedBy})`;
+          const { aiResolveAllAccountHints } = await import(
+            "../../utils/accountInference"
+          );
+          const report = await aiResolveAllAccountHints(attribution, {
+            minConfidence: Number.isFinite(body.minConfidence)
+              ? Number(body.minConfidence)
+              : undefined,
+            limit: Number.isFinite(body.limit)
+              ? Number(body.limit)
+              : undefined,
+          });
+          return c.json({ success: true, ...report });
+        } catch (error: any) {
+          logger.error("Error bulk AI-resolving account-hints:", error);
+          return c.json({ error: error?.message || String(error) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Mark a hint as dismissed (sales reviewed and rejected) or applied
     // (sales fixed the Zoho Account_Name and the next sync will reclassify).
     // Body: { status: "dismissed" | "applied" }
