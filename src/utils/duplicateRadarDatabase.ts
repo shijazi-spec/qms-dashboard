@@ -494,6 +494,49 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_dup_res_feedback_created ON duplicate_resolution_feedback(created_at DESC);`,
   );
 
+  // Autonomous-resolution learning RULES (mirrors ensureResolutionRulesTable in
+  // duplicateResolutionRules.ts) — boot-created so dev & prod match.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS duplicate_resolution_rules (
+      id SERIAL PRIMARY KEY,
+      module VARCHAR(32) NOT NULL,
+      case_signature JSONB NOT NULL,
+      decision VARCHAR(32) NOT NULL,
+      scope VARCHAR(16) NOT NULL DEFAULT 'pattern',
+      cluster_id INTEGER,
+      created_by VARCHAR(255),
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      last_used_at TIMESTAMP
+    );
+  `);
+  await pool
+    .query(
+      `CREATE INDEX IF NOT EXISTS idx_dup_res_rules_module ON duplicate_resolution_rules(module) WHERE enabled = TRUE;`,
+    )
+    .catch(() => {});
+
+  // Autonomous-resolution competence GRADE LOG (mirrors ensureGradeLogTable in
+  // duplicateResolutionGrades.ts) — boot-created so dev & prod match.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS duplicate_resolution_grade_log (
+      id SERIAL PRIMARY KEY,
+      module VARCHAR(32) NOT NULL,
+      grade INTEGER NOT NULL,
+      grade_label VARCHAR(48),
+      metrics_json JSONB,
+      promoted BOOLEAN NOT NULL DEFAULT FALSE,
+      note TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+  await pool
+    .query(
+      `CREATE INDEX IF NOT EXISTS idx_dup_res_grade_log_module_time ON duplicate_resolution_grade_log(module, created_at DESC);`,
+    )
+    .catch(() => {});
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_clusters (
       id SERIAL PRIMARY KEY,
