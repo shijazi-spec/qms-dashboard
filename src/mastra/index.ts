@@ -11,6 +11,7 @@ import { qualitySpecialistAgent } from "./agents/qualitySpecialistAgent";
 import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
 import { duplicateResolutionAgent } from "./agents/duplicateResolutionAgent";
 import { qualityAuditWorkflow } from "./workflows/qualityAuditWorkflow";
+import { duplicateResolutionWorkflow } from "./workflows/duplicateResolutionWorkflow";
 
 import { evaluateSdrGovernanceTool } from "./tools/sdrGovernanceTool";
 import { reconcileCallTool } from "./tools/callReconciliationTool";
@@ -135,6 +136,16 @@ registerCronTrigger({
   workflow: qualityAuditWorkflow,
 });
 
+// Autonomous Duplicate Resolution — every 6 hours, 30 min AFTER the
+// duplicate-radar auto-sync (`0 */6 * * *`) so it works on fresh clusters.
+// Gated internally by AUTONOMOUS_RESOLUTION_ENABLED / _MODE (default: shadow,
+// writes nothing). See src/utils/duplicateResolutionRunner.ts.
+registerCronTrigger({
+  cronExpression:
+    process.env.AUTONOMOUS_RESOLUTION_CRON_EXPRESSION || "30 */6 * * *",
+  workflow: duplicateResolutionWorkflow,
+});
+
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
 
@@ -167,7 +178,7 @@ class ProductionPinoLogger extends MastraLogger {
 
 export const mastra = new Mastra({
   storage: sharedPostgresStorage,
-  workflows: { qualityAuditWorkflow },
+  workflows: { qualityAuditWorkflow, duplicateResolutionWorkflow },
   agents: { qualitySpecialistAgent, qmsConsultantAgent, duplicateResolutionAgent },
   mcpServers: {
     allTools: new MCPServer({
@@ -484,6 +495,7 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
         runKPIAutoCalcIfStale,
         runCsOverlapScanIfStale,
         runWeeklySupabaseRefreshIfStale,
+        runAutonomousResolutionIfStale,
       } = await import("../utils/scheduledJobs");
       const helpers: Array<{
         name: string;
@@ -495,6 +507,9 @@ if (Object.keys(mastra.getWorkflows()).length > 1) {
         { name: "QualityAudit", fn: () => runQualityAuditIfStale() },
         { name: "KPIAutoCalc", fn: () => runKPIAutoCalcIfStale() },
         { name: "CsOverlapScan", fn: () => runCsOverlapScanIfStale() },
+        // Autonomous Duplicate Resolution — 6h fallback. Internally gated by
+        // AUTONOMOUS_RESOLUTION_ENABLED/_MODE (default shadow → no Zoho writes).
+        { name: "AutonomousResolution", fn: () => runAutonomousResolutionIfStale() },
         // Opt-in via SUPABASE_DATABASE_URL. No-ops silently when unset, so
         // it's safe to ship without any env work on Replit. See helper
         // body for the Friday 19:00–23:00 UTC time gate (= Friday 22:00–02:00

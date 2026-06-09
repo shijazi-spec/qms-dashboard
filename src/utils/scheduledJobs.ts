@@ -401,6 +401,60 @@ export async function runConsultantScannerIfStale(
 }
 
 /**
+ * Autonomous Duplicate Resolution — in-process fallback for the 6h cron.
+ *
+ * Mirror of `runConsultantScannerIfStale`. Runs the same orchestration core as
+ * the Inngest workflow (`runAutonomousResolution`) when the last successful run
+ * is ≥ maxAgeHours old, so the agent keeps ticking on hosts where Inngest isn't
+ * driving it. The runner is itself gated by AUTONOMOUS_RESOLUTION_ENABLED/_MODE
+ * (default shadow → writes nothing), so this fallback is safe to ship as-is.
+ * Last run tracked in scanner_run_log under 'autonomous-resolution'.
+ */
+export async function runAutonomousResolutionIfStale(
+  maxAgeHours = 6,
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  const pool = sharedPool;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scanner_run_log (
+      id SERIAL PRIMARY KEY,
+      scanner_name VARCHAR(100) NOT NULL,
+      ran_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      success BOOLEAN NOT NULL DEFAULT true,
+      summary JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_scanner_run_log_name_time ON scanner_run_log(scanner_name, ran_at DESC);
+  `);
+  const r = await pool.query<{ hours: number | null }>(
+    `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ran_at)))/3600 AS hours
+     FROM scanner_run_log WHERE scanner_name='autonomous-resolution' AND success=true`,
+  );
+  const ageHours =
+    r.rows[0]?.hours == null ? Infinity : Number(r.rows[0].hours);
+  if (ageHours < maxAgeHours) {
+    return { ran: false, ageHours };
+  }
+  logger.info(
+    `[AutoResolution Fallback] Last run was ${ageHours === Infinity ? "never" : ageHours.toFixed(1) + "h ago"} (>= ${maxAgeHours}h); running tick.`,
+  );
+  try {
+    const { runAutonomousResolution } = await import("./duplicateResolutionRunner");
+    const result = await runAutonomousResolution();
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, $2, $3)`,
+      ["autonomous-resolution", result.errors === 0, JSON.stringify(result)],
+    );
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    logger.error("[AutoResolution Fallback] Tick failed:", err);
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, false, $2)`,
+      ["autonomous-resolution", JSON.stringify({ error: String(err) })],
+    );
+    return { ran: false, ageHours };
+  }
+}
+
+/**
  * Weekly Supabase refresh — Replit Postgres → Supabase mirror.
  *
  * Pinned to Friday 23:00 Riyadh (= 20:00 UTC). The scheduledJobFallback
