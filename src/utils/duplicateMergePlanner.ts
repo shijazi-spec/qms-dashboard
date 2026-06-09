@@ -330,6 +330,16 @@ export interface BuildPlanOptions {
    * undefined = default to the cluster's primary/sole account if any.
    */
   linkAccountZohoId?: string | null;
+  /**
+   * DB ids of Account records that have ALREADY been tagged Duplicate-Delete
+   * by a prior Accounts merge on this cluster. They are filtered out of
+   * accountCandidates so the LINK SURVIVOR TO ACCOUNT picker only shows alive
+   * Accounts (the surviving record from a previous Accounts merge, or
+   * Accounts not yet resolved). Without this, the operator would see zombie
+   * buttons for the SLB / Slb duplicates they already merged into the
+   * "Schlumberger (SLB)" survivor.
+   */
+  taggedAccountDbIds?: number[];
 }
 
 /**
@@ -399,9 +409,18 @@ export function buildMergePlan(
   // (Contacts / Deals set their Account_Name lookup). Surfaced for the UI; the
   // executor applies it on apply when an account is chosen.
   const canLinkAccount = module === "Contacts" || module === "Deals";
+  const taggedAccountSet = new Set<number>(opts.taggedAccountDbIds || []);
   const accountCandidates = canLinkAccount
     ? allRecords
-        .filter((r) => r.record_type === "account" && r.zoho_record_id)
+        .filter(
+          (r) =>
+            r.record_type === "account" &&
+            r.zoho_record_id &&
+            // Drop Accounts that were tagged Duplicate-Delete by a prior
+            // Accounts merge on this cluster — they're zombies in Zoho and
+            // must not appear as link targets.
+            (r.id == null || !taggedAccountSet.has(r.id)),
+        )
         .map((r) => ({
           zohoId: r.zoho_record_id as string,
           name: r.record_name || r.company_name || (r.zoho_record_id as string),

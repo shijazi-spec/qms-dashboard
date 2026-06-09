@@ -93,6 +93,7 @@ import {
   resolveCluster,
   bulkResolve,
   getMergeHistory,
+  getTaggedRecordDbIdsByCluster,
   markPrimaryRecord,
   getOwnerAccountability,
   getPacketSettings,
@@ -1384,6 +1385,16 @@ export const duplicateRadarRoutes = [
 
           const generatedBy =
             (user as any)?.email || (user as any)?.role || "duplicate-radar";
+          // Records already tagged Duplicate-Delete by a prior Apply on this
+          // same cluster — the planner uses these to drop zombie Accounts
+          // from LINK SURVIVOR TO ACCOUNT. Best-effort: if the read fails,
+          // we just show the full list (no worse than before this feature).
+          let taggedAccountDbIds: number[] = [];
+          try {
+            taggedAccountDbIds = await getTaggedRecordDbIdsByCluster(id);
+          } catch (_) {
+            /* non-fatal — fall back to unfiltered candidates */
+          }
           let plan;
           try {
             plan = buildMergePlan(module, id, records, {
@@ -1393,6 +1404,7 @@ export const duplicateRadarRoutes = [
               includeZohoIds,
               masterZohoId,
               linkAccountZohoId,
+              taggedAccountDbIds,
             });
           } catch (e: any) {
             return c.json({ error: e?.message || "Could not build plan" }, 400);
@@ -1474,6 +1486,12 @@ export const duplicateRadarRoutes = [
             );
           }
 
+          let taggedAccountDbIdsExec: number[] = [];
+          try {
+            taggedAccountDbIdsExec = await getTaggedRecordDbIdsByCluster(id);
+          } catch (_) {
+            /* non-fatal */
+          }
           let plan;
           try {
             plan = buildMergePlan(module, id, records, {
@@ -1486,6 +1504,7 @@ export const duplicateRadarRoutes = [
               masterZohoId,
               includeZohoIds,
               linkAccountZohoId,
+              taggedAccountDbIds: taggedAccountDbIdsExec,
             });
           } catch (e: any) {
             return c.json({ error: e?.message || "Could not build plan" }, 400);

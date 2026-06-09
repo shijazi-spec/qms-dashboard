@@ -4551,7 +4551,18 @@
                 : '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>'
                     + ['Zoho ID','Type','Name','Company','Owner','Status/Stage','Primary'].map(h => `<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">${escapeHtml(h)}</th>`).join('')
                     + '</tr></thead><tbody>'
-                    + records.map(r => `<tr class="border-t border-gray-100"><td class="px-2 py-1 font-mono text-gray-700">${escapeHtml(r.zoho_record_id || '—')}</td><td class="px-2 py-1">${escapeHtml(r.record_type || '—')}</td><td class="px-2 py-1">${escapeHtml(r.record_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.company_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.owner_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.status || r.stage || '—')}</td><td class="px-2 py-1">${r.is_primary ? '<span class="text-green-700 font-medium">Yes</span>' : '<span class="text-gray-400">No</span>'}</td></tr>`).join('')
+                    + records.map(r => {
+                        const rt = (r.record_type || '').toLowerCase();
+                        const tab = rt === 'lead' ? 'Leads'
+                                  : rt === 'deal' ? 'Potentials'
+                                  : rt === 'contact' ? 'Contacts'
+                                  : rt === 'account' ? 'Accounts'
+                                  : null;
+                        const idCell = (r.zoho_record_id && tab)
+                            ? `<td class="px-2 py-1">${zohoLink(r.zoho_record_id, tab)}</td>`
+                            : `<td class="px-2 py-1 font-mono text-gray-400">${escapeHtml(r.zoho_record_id || '—')}</td>`;
+                        return `<tr class="border-t border-gray-100">${idCell}<td class="px-2 py-1">${escapeHtml(r.record_type || '—')}</td><td class="px-2 py-1">${escapeHtml(r.record_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.company_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.owner_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.status || r.stage || '—')}</td><td class="px-2 py-1">${r.is_primary ? '<span class="text-green-700 font-medium">Yes</span>' : '<span class="text-gray-400">No</span>'}</td></tr>`;
+                    }).join('')
                     + '</tbody></table></div>';
             body.innerHTML = meta + clusterFacts + '<h4 class="text-sm font-semibold text-gray-700 mb-2">Records (frozen)</h4>' + rowsHtml;
         }
@@ -4876,11 +4887,18 @@
                 const midCell = isContacts
                     ? '<td class="px-3 py-2 text-xs text-gray-700" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">' + esc(r.accountName) + '</td>'
                     : '<td class="px-3 py-2 text-center">' + (r.zohoId ? '<span id="att-' + esc(plan.module) + '-' + esc(r.zohoId) + '" class="text-xs text-gray-400" title="Attachments on this record">…</span>' : '<span class="text-gray-300">—</span>') + '</td>';
+                // Make the Zoho ID clickable — every CRM id in the platform
+                // should jump straight to that Zoho record. The merge modal
+                // was the worst offender (id was monospaced plain text).
+                const zohoTab = plan.module === 'Deals' ? 'Potentials' : plan.module;
+                const idCell = r.zohoId
+                    ? '<td class="px-3 py-2">' + zohoLink(r.zohoId, zohoTab) + '</td>'
+                    : '<td class="px-3 py-2 text-gray-300 text-xs">—</td>';
                 return '<tr class="border-t' + (included ? '' : ' opacity-50') + '">' +
                     '<td class="px-3 py-2 text-center">' + cb + '</td>' +
                     '<td class="px-3 py-2">' + outcome + '</td>' +
                     '<td class="px-3 py-2">' + esc(r.name) + '</td>' +
-                    '<td class="px-3 py-2 font-mono text-xs text-gray-600">' + esc(r.zohoId) + '</td>' +
+                    idCell +
                     midCell +
                     '<td class="px-3 py-2 text-end">' + Math.round((r.completeness || 0) * 100) + '%</td>' +
                     '<td class="px-3 py-2 text-xs text-gray-500">' + esc(r.owner) + '</td>' +
@@ -4906,9 +4924,16 @@
                 ? '<ul class="list-disc ms-5 mt-1 space-y-1 text-amber-800">' + plan.warnings.map(w => '<li>' + esc(w) + '</li>').join('') + '</ul>'
                 : '<span class="text-gray-400">None</span>';
 
+            // Survivor headline — render the master Zoho id as a clickable
+            // CRM link so the operator can open the surviving record in one
+            // click instead of copying the id and pasting it into Zoho.
+            const survivorTab = plan.module === 'Deals' ? 'Potentials' : plan.module;
+            const survivorIdLink = plan.masterZohoId
+                ? ' <span class="ms-1">' + zohoLink(plan.masterZohoId, survivorTab) + '</span>'
+                : '';
             return '' +
                 '<div class="rounded-lg border border-purple-200 bg-purple-50 p-3 mb-3 text-sm text-purple-900" data-testid="merge-plan-rationale">' + esc(plan.rationale) + '</div>' +
-                '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">Survivor</span><div class="font-semibold">' + esc(plan.masterName) + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
+                '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">Survivor</span><div class="font-semibold">' + esc(plan.masterName) + survivorIdLink + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
                 linkControl +
                 '<div class="text-xs text-gray-500 mb-1">Tick the accounts to merge — at least 2. Unticked accounts are excluded and left untouched.</div>' +
                 '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Merge</th><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th>' + (isContacts ? '<th class="px-3 py-2 text-start" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">Account</th>' : '<th class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th>') + '<th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
