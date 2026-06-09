@@ -127,6 +127,7 @@ import {
   fetchDeletedZohoRecords,
   fetchZohoRecordById,
   fetchRecordAttachments,
+  fetchZohoRelatedRecords,
   removeZohoTags,
 } from "../../utils/zohoCRM";
 
@@ -342,6 +343,11 @@ async function processModule(
         data.domain || undefined,
         data.phone || undefined,
         data.email || undefined,
+        // Pass recordType + recordName so contacts route to the strict
+        // ≥2-attribute path; every other module keeps the legacy
+        // company-name clustering behaviour verbatim.
+        recordType,
+        data.recordName,
       );
 
       await upsertRecord({
@@ -1083,6 +1089,232 @@ export const duplicateRadarRoutes = [
             }),
           );
           return c.json({ module, counts });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Post-merge verification — re-query Zoho for every record this cluster
+    // has tagged Duplicate-Delete (via prior merge_actions). Reports how many
+    // the admin has actually deleted vs. still pending. Closes the "did the
+    // tag-and-delete handoff actually happen?" visibility gap.
+    //   GET /api/duplicates/clusters/:id/verify-tags
+    // Response: { total, deleted, alive, errors, byRecord: [{zohoId, module, status}] }
+    path: "/api/duplicates/clusters/:id/verify-tags",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+
+          const { pool } = await import("../../utils/duplicateRadarDatabase");
+          // Union of every merged_record_ids the cluster has accumulated —
+          // closing 'resolve' AND partial 'module_resolved' actions both
+          // count, so cross-module clusters with multiple module Applies
+          // verify end-to-end on a single call.
+          const acts = await pool.query(
+            `SELECT merged_record_ids FROM duplicate_merge_actions
+              WHERE cluster_id = $1
+                AND action_type IN ('resolve', 'module_resolved')`,
+            [id],
+          );
+          const dbIdSet = new Set<number>();
+          for (const r of acts.rows) {
+            const raw = r.merged_record_ids;
+            const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
+            if (Array.isArray(arr)) {
+              for (const v of arr) {
+                const n = typeof v === "number" ? v : parseInt(String(v), 10);
+                if (Number.isFinite(n)) dbIdSet.add(n);
+              }
+            }
+          }
+          if (dbIdSet.size === 0) {
+            return c.json({
+              total: 0,
+              deleted: 0,
+              alive: 0,
+              errors: 0,
+              byRecord: [],
+              message: "No tagged duplicates on this cluster yet — run Apply first.",
+            });
+          }
+
+          // Resolve db ids → (zoho_record_id, zoho_module). Bound to ≤50
+          // ids per call so a runaway merge_action history can't pin us in
+          // a 5-minute Zoho fan-out.
+          const dbIds = Array.from(dbIdSet).slice(0, 50);
+          const recs = await pool.query(
+            `SELECT id, zoho_record_id, zoho_module, record_type, record_name
+               FROM duplicate_records
+              WHERE id = ANY($1::int[])`,
+            [dbIds],
+          );
+          const RECORD_TYPE_TO_MODULE: Record<string, string> = {
+            lead: "Leads",
+            deal: "Deals",
+            contact: "Contacts",
+            account: "Accounts",
+          };
+          const byRecord: Array<{
+            dbId: number;
+            zohoId: string | null;
+            module: string | null;
+            name: string | null;
+            status: "deleted" | "alive" | "no-zoho-id" | "error";
+            error?: string;
+          }> = [];
+          let deleted = 0,
+            alive = 0,
+            errors = 0;
+          await Promise.all(
+            recs.rows.map(async (row: any) => {
+              const zohoId = row.zoho_record_id || null;
+              const moduleName =
+                row.zoho_module ||
+                RECORD_TYPE_TO_MODULE[row.record_type as string] ||
+                null;
+              if (!zohoId || !moduleName) {
+                byRecord.push({
+                  dbId: row.id,
+                  zohoId,
+                  module: moduleName,
+                  name: row.record_name || null,
+                  status: "no-zoho-id",
+                });
+                return;
+              }
+              try {
+                const live = await fetchZohoRecordById(moduleName, zohoId);
+                if (live === null) {
+                  deleted++;
+                  byRecord.push({
+                    dbId: row.id,
+                    zohoId,
+                    module: moduleName,
+                    name: row.record_name || null,
+                    status: "deleted",
+                  });
+                } else {
+                  alive++;
+                  byRecord.push({
+                    dbId: row.id,
+                    zohoId,
+                    module: moduleName,
+                    name: row.record_name || null,
+                    status: "alive",
+                  });
+                }
+              } catch (e: any) {
+                errors++;
+                byRecord.push({
+                  dbId: row.id,
+                  zohoId,
+                  module: moduleName,
+                  name: row.record_name || null,
+                  status: "error",
+                  error: e?.message || String(e),
+                });
+              }
+            }),
+          );
+          return c.json({
+            total: byRecord.length,
+            deleted,
+            alive,
+            errors,
+            byRecord,
+          });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Reparent preview — for an Accounts (or Contacts) merge plan, count
+    // the child Deals / Contacts the executor will repoint onto the
+    // survivor. The number already lands in the execute report; this
+    // endpoint surfaces it BEFORE Apply so the merge modal can render
+    // "Will reparent: X Deals · Y Contacts" up front.
+    //   GET /api/duplicates/clusters/:id/reparent-preview?module=Accounts
+    path: "/api/duplicates/clusters/:id/reparent-preview",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+          const module = parseAgenticModule({ module: c.req.query("module") });
+          // Only Accounts (→ Deals + Contacts) and Contacts (→ Deals) have
+          // related-list children worth previewing. Leads / Deals have none.
+          if (module !== "Accounts" && module !== "Contacts") {
+            return c.json({ module, deals: 0, contacts: 0, scope: "n/a" });
+          }
+          const recordType = MODULE_RECORD_TYPE[module];
+          const records = await getRecordsByClusterId(id);
+          // Survivor = the most-complete record (auto-pick) unless the
+          // operator overrode it. The preview counts cover all NON-survivor
+          // records — same set the executor would walk.
+          const sameModuleRecords = records.filter(
+            (r) => r.record_type === recordType && r.zoho_record_id,
+          );
+          if (sameModuleRecords.length < 2) {
+            return c.json({ module, deals: 0, contacts: 0, scope: "no-dups" });
+          }
+          // Pick the primary as the assumed survivor (matches planner's
+          // default master selection well enough for a preview).
+          const survivor =
+            sameModuleRecords.find((r) => r.is_primary) ||
+            sameModuleRecords[0];
+          const dups = sameModuleRecords.filter(
+            (r) => r.zoho_record_id !== survivor.zoho_record_id,
+          );
+
+          // Same list shape as duplicateMergeExecutor.MODULE_REPARENT.
+          const REPARENT_LISTS: Array<{
+            list: string;
+            bucket: "deals" | "contacts";
+          }> =
+            module === "Accounts"
+              ? [
+                  { list: "Deals", bucket: "deals" },
+                  { list: "Contacts", bucket: "contacts" },
+                ]
+              : [{ list: "Deals", bucket: "deals" }];
+
+          const counts = { deals: 0, contacts: 0 };
+          for (const dup of dups.slice(0, 25)) {
+            // Bound the fan-out: 25 dups × 2 lists = 50 Zoho calls max.
+            for (const rp of REPARENT_LISTS) {
+              try {
+                const children = await fetchZohoRelatedRecords(
+                  module,
+                  dup.zoho_record_id as string,
+                  rp.list,
+                  { perPage: 200 },
+                );
+                counts[rp.bucket] += Array.isArray(children) ? children.length : 0;
+              } catch {
+                /* best-effort — partial preview is better than no preview */
+              }
+            }
+          }
+          return c.json({
+            module,
+            deals: counts.deals,
+            contacts: counts.contacts,
+            scope: dups.length > 25 ? "truncated" : "complete",
+            duplicatesInspected: Math.min(dups.length, 25),
+            duplicatesTotal: dups.length,
+          });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

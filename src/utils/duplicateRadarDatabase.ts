@@ -2281,13 +2281,127 @@ async function clusterHasConflictingDomain(
   return false;
 }
 
+/**
+ * Strict-match path for Contact records: two contacts are duplicates of each
+ * other ONLY when they share AT LEAST 2 of {email, normalized phone, lower
+ * record_name}. Sharing only the parent company / domain is not enough —
+ * seven different employees at "Schlumberger" are seven different people,
+ * not seven duplicates. Returns the existing cluster on a strict match, or
+ * `null` when no contact in any cluster meets the bar (the caller then
+ * creates a fresh single-record cluster for this contact).
+ *
+ * Cheap by design — one indexed scan over duplicate_records filtered on
+ * record_type='contact' + an OR over the three identity columns, then a
+ * per-row tally in JS. Only candidates that have at least ONE matching
+ * field come back, so the worst case is a few rows.
+ */
+export async function findContactClusterByStrictMatch(
+  recordName: string | undefined,
+  email: string | undefined,
+  phone: string | undefined,
+): Promise<DuplicateCluster | null> {
+  const normalizedEmail = (email || "").trim().toLowerCase();
+  const normalizedPhone = phone ? normalizePhone(phone) : "";
+  // Compare on the trimmed lowercased full name. Two contacts sharing only
+  // a last name ("Smith") would single-attribute match and still fall short
+  // of the ≥2 gate, so this stays a strong-but-not-absolute signal.
+  const normalizedName = (recordName || "").trim().toLowerCase();
+
+  // Need at least one identity field to even bother with the lookup.
+  if (!normalizedEmail && !normalizedPhone && !normalizedName) return null;
+
+  const candidates = await pool.query(
+    `SELECT cluster_id, email, phone_normalized, LOWER(record_name) AS lname
+       FROM duplicate_records
+      WHERE record_type = 'contact'
+        AND (
+          ($1 <> '' AND LOWER(email) = $1)
+          OR ($2 <> '' AND phone_normalized = $2)
+          OR ($3 <> '' AND LOWER(record_name) = $3)
+        )
+      LIMIT 200`,
+    [normalizedEmail, normalizedPhone, normalizedName],
+  );
+
+  for (const row of candidates.rows) {
+    let matches = 0;
+    if (
+      normalizedEmail &&
+      row.email &&
+      String(row.email).toLowerCase() === normalizedEmail
+    )
+      matches++;
+    if (
+      normalizedPhone &&
+      row.phone_normalized &&
+      row.phone_normalized === normalizedPhone
+    )
+      matches++;
+    if (normalizedName && row.lname && row.lname === normalizedName) matches++;
+    if (matches >= 2) {
+      const cluster = await pool.query(
+        "SELECT * FROM duplicate_clusters WHERE id = $1",
+        [row.cluster_id],
+      );
+      if (cluster.rows[0]) return cluster.rows[0];
+    }
+  }
+  return null;
+}
+
 // B4: Fuzzy match using pg_trgm similarity() with fallback
 export async function findOrCreateClusterByCompany(
   companyName: string,
   domain?: string,
   phone?: string,
   email?: string,
+  // recordType + recordName are CONTACT-ONLY signals — when both are passed
+  // and recordType === 'contact', the function delegates to the strict-match
+  // path (≥2 of email/phone/name) instead of fusing on company / domain. For
+  // every other module (Accounts / Leads / Deals) the legacy company-based
+  // path is preserved verbatim — two records at the same company genuinely
+  // are duplicates when the module is "Accounts".
+  recordType?: "lead" | "deal" | "contact" | "account",
+  recordName?: string,
 ): Promise<DuplicateCluster> {
+  // CONTACTS: bypass the company-name / domain branches and require ≥2
+  // strict-match attributes (email / phone / name). Two contacts sharing
+  // only "Schlumberger" are NOT duplicates — they're two different
+  // employees. On no strict match, fall through to creating a fresh
+  // single-record cluster (size 1 → invisible to the duplicates list).
+  if (recordType === "contact") {
+    const strict = await findContactClusterByStrictMatch(
+      recordName,
+      email,
+      phone,
+    );
+    if (strict) return strict;
+    // Build a per-contact stub cluster. Domain stays distinct so two stubs
+    // never collide; the contact still gets a duplicate_records row so the
+    // owner-accountability / coverage queries keep working.
+    const stubDomain =
+      `contact:${(email || phone || recordName || "anon").toLowerCase().replace(/\s+/g, "-")}.solo`;
+    const existingStub = await pool.query(
+      "SELECT * FROM duplicate_clusters WHERE domain = $1 LIMIT 1",
+      [stubDomain],
+    );
+    if (existingStub.rows[0]) return existingStub.rows[0];
+    return await createCluster({
+      domain: stubDomain,
+      company_name: recordName || companyName || "Single contact",
+      total_leads: 0,
+      total_deals: 0,
+      total_contacts: 0,
+      total_accounts: 0,
+      total_records: 0,
+      confidence_level: "low",
+      confidence_score: 0,
+      owners_involved: [],
+      estimated_pipeline_value: 0,
+      status: "active",
+    });
+  }
+
   const normalizedName = normalizeCompanyName(companyName);
   const normalizedPhone = phone ? normalizePhone(phone) : "";
 
