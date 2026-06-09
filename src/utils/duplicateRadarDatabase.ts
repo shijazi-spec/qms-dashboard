@@ -2878,6 +2878,76 @@ export async function getMergeHistory(
   return result.rows;
 }
 
+/**
+ * Append a merge_action row WITHOUT closing the cluster. Used for cross-module
+ * clusters when a single-module Apply (e.g. Accounts) finishes — the merged
+ * Accounts are tagged Duplicate-Delete in Zoho but the cluster stays open so
+ * the operator can still resolve its Contacts/Deals/Leads. Without this log
+ * row there is no record of which Accounts were already merged, so the next
+ * Contact merge plan would surface the deleted SLB / Slb duplicates as link
+ * targets in LINK SURVIVOR TO ACCOUNT.
+ */
+export async function recordPartialMergeAction(
+  clusterId: number,
+  primaryRecordId: number | null,
+  mergedRecordIds: number[],
+  performedBy: string,
+  notes?: string,
+): Promise<MergeAction | null> {
+  const result = await pool.query(
+    `INSERT INTO duplicate_merge_actions
+       (cluster_id, primary_record_id, merged_record_ids, action_type, performed_by, notes)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [
+      clusterId,
+      primaryRecordId,
+      JSON.stringify(mergedRecordIds || []),
+      "module_resolved",
+      performedBy,
+      notes || null,
+    ],
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Union of merged_record_ids (db ids) across every merge_action recorded on
+ * the cluster — closing 'resolve' actions PLUS partial 'module_resolved'
+ * actions. The merge planner uses this to drop already-tagged Accounts from
+ * LINK SURVIVOR TO ACCOUNT in subsequent module Apply runs.
+ */
+export async function getTaggedRecordDbIdsByCluster(
+  clusterId: number,
+): Promise<number[]> {
+  const result = await pool.query(
+    `SELECT merged_record_ids FROM duplicate_merge_actions
+       WHERE cluster_id = $1
+         AND action_type IN ('resolve', 'module_resolved')`,
+    [clusterId],
+  );
+  const out = new Set<number>();
+  for (const row of result.rows) {
+    const raw = row.merged_record_ids;
+    // JSONB column — node-postgres parses to JS, but accept stringified as a
+    // belt-and-braces guard against schema drift / migration scripts.
+    let arr: unknown = raw;
+    if (typeof raw === "string") {
+      try {
+        arr = JSON.parse(raw);
+      } catch {
+        arr = [];
+      }
+    }
+    if (Array.isArray(arr)) {
+      for (const v of arr) {
+        const n = typeof v === "number" ? v : parseInt(String(v), 10);
+        if (Number.isFinite(n)) out.add(n);
+      }
+    }
+  }
+  return Array.from(out);
+}
+
 // C3: Enhanced owner accountability with RAG status against 2% KPI target.
 // dc.status = 'active' is REQUIRED for parity with the packet route — without
 // it, owners whose only clusters are archived/dismissed appear in the table

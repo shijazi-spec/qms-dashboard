@@ -31,6 +31,7 @@ import {
   captureClusterSnapshot,
   resolveCluster,
   markPrimaryRecord,
+  recordPartialMergeAction,
 } from "./duplicateRadarDatabase";
 import { logger } from "./logger";
 
@@ -152,8 +153,13 @@ export async function executeMergePlan(
     }
   }
 
-  // 1b) Cross-module link — set the survivor's Account_Name (Contacts/Deals
-  // only), so the kept record sits under the cluster's Account in Zoho.
+  // 1b) Cross-module link — set Account_Name on the survivor AND on every
+  // duplicate in the cluster (Contacts / Deals only). Tagging a contact for
+  // deletion does not erase it from Zoho; the admin reviews each tagged
+  // record before flipping the delete switch and needs to see the right
+  // parent Account on every row, not just the one that survives. Failures
+  // on a duplicate are tracked but do not abort — the survivor link is the
+  // load-bearing write.
   if (plan.linkAccountZohoId && (module === "Contacts" || module === "Deals")) {
     report.linkedToAccount = plan.linkAccountZohoId;
     if (!dryRun) {
@@ -163,6 +169,15 @@ export async function executeMergePlan(
         });
       } catch (e) {
         fail("link-account", e, masterId);
+      }
+      for (const dupId of dups) {
+        try {
+          await updateZohoRecord(module, dupId, {
+            Account_Name: { id: plan.linkAccountZohoId },
+          });
+        } catch (e) {
+          fail("link-account-duplicate", e, dupId);
+        }
       }
     }
   }
@@ -299,6 +314,25 @@ export async function executeMergePlan(
     report.warnings.push(
       "Cross-module cluster: duplicate Accounts were migrated & tagged, but the cluster was left OPEN — link/close the Leads/Deals/Contacts via Mark Resolved to finish it.",
     );
+    // Record the partial merge so subsequent same-cluster plans for the
+    // OTHER modules can filter out the just-tagged duplicates (else the
+    // LINK SURVIVOR TO ACCOUNT picker keeps showing zombie SLB / Slb
+    // buttons next to the real Schlumberger (SLB) survivor). Best-effort;
+    // a logging failure must not abort the Zoho writes already done.
+    try {
+      const dupDbIds = (plan.duplicateDbIds || []).filter(
+        (n): n is number => typeof n === "number",
+      );
+      await recordPartialMergeAction(
+        plan.clusterId,
+        typeof plan.masterDbId === "number" ? plan.masterDbId : null,
+        dupDbIds,
+        performedBy,
+        `Module merge (${module}): survivor=${masterId}; ${dups.length} duplicate(s) tagged ${plan.tagName}. Cluster left open for cross-module follow-up.`,
+      );
+    } catch (e) {
+      fail("record-partial-merge", e);
+    }
   }
 
   logger.info(
