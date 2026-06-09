@@ -314,6 +314,28 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     buildPreview: (p: any) => `${p?.severity ?? 'info'}: ${trim(p?.title, 100)}`,
   },
 
+  'duplicate-resolution-assistant': {
+    toolId: 'duplicate-resolution-assistant',
+    label: 'Duplicate-resolution assistant (status / rules / preview)',
+    riskLevel: 'low',
+    // Exempt: reads (status/grades/rules/plan-preview) + teaching a learning
+    // rule. The only write is to the agent's OWN routing rulebook
+    // (duplicate_resolution_rules) — it never touches Zoho and is fully
+    // reversible from the Rules view. The Zoho-writing path stays gated by
+    // the separate high-risk 'duplicate-resolution' policy.
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — read + own-rulebook write, no external side-effect',
+      'ISO 9001:2015 §10.3 (continual improvement — captures operator guidance)',
+    ],
+    entityType: 'duplicate_cluster',
+    buildPreview: (p: any) =>
+      `Action: ${p?.action ?? '—'}` +
+      (p?.module ? ` · ${p.module}` : '') +
+      (p?.clusterId ? ` · cluster #${p.clusterId}` : '') +
+      (p?.decision ? ` · ${p.decision}` : ''),
+  },
+
   // --- read-only platform queries / analytics ---
   'query-platform-data': {
     toolId: 'query-platform-data',

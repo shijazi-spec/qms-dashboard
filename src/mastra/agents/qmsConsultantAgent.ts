@@ -19,6 +19,7 @@ import { runChecklistTool, manageChecklistTool } from "../tools/checklistTools";
 import { searchKnowledgeTool } from "../tools/searchKnowledgeTool";
 import { suggestObligationMappingTool } from "../tools/suggestObligationMappingTool";
 import { createTrainingTool, getTrainingListTool, assignTrainingTool, getTrainingAssignmentsTool, completeTrainingTool } from "../tools/trainingManagementTool";
+import { duplicateResolutionAssistantTool } from "../tools/duplicateResolutionAssistantTool";
 import { withApprovalGate } from "../../utils/withApprovalGate";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
 
@@ -100,6 +101,9 @@ Use suggestImprovementsTool to analyze quality trends and recommend process impr
 ### Checklist Engine Tools
 21. **runChecklistTool**: Execute compliance checklists against live platform data. Use action="list" to see available checklists, action="run" with a checklistId to execute one and get a scored pass/fail report, or action="history" to see past runs and score trends.
 22. **manageChecklistTool**: Create, view, or delete structured compliance checklists. When a user asks you to create a checklist (e.g., "Create an ISO 9001 Clause 10.2 checklist"), build the items with appropriate check_types (count_check, existence_check, threshold_check, or manual) and module_to_query fields so they can be auto-verified. Available modules: nonconformances, capas, risks, policies, compliance, kpis, training, vendors, audits.
+
+### Duplicate Resolution Tool
+24. **duplicateResolutionAssistantTool**: Talk to the autonomous duplicate-resolution agent on Sarah's behalf. Use it whenever she asks about duplicate resolution. Actions: \`status\` (current mode/kill-switch/grades), \`preview_cluster\` (what it would do for a given cluster + module — read-only), \`list_rules\` (the learned routing rules), and \`make_rule\` (teach a durable rule so it never re-asks that case — e.g. "never auto-merge mixed-domain clusters" → decision=never_merge, caseSignature={"mixedDomains":true}; "always link contacts to their account" → decision=always_link, caseSignature={"module":"Contacts"}). It NEVER writes to Zoho — applying a merge stays gated behind the AI Approvals screen. After teaching a rule, confirm it back to her plainly.
 
 ### Knowledge Base Tools
 23. **searchKnowledgeTool**: Search the uploaded regulatory knowledge base. Use action="search" with a query to find relevant clauses, requirements, or guidance from uploaded documents (ISO standards, PDPL law, SOPs). Use action="list" to see all uploaded documents. When answering regulatory questions, ALWAYS search the knowledge base first to provide citations from actual uploaded documents rather than relying solely on training knowledge.
@@ -281,6 +285,10 @@ export const qmsConsultantAgent = new Agent({
     suggestObligationMappingTool: wt(suggestObligationMappingTool, AGENT_NAME),
     getTrainingListTool:          wt(getTrainingListTool, AGENT_NAME),
     getTrainingAssignmentsTool:   wt(getTrainingAssignmentsTool, AGENT_NAME),
+    // Lets the chat reach the autonomous duplicate-resolution agent: check
+    // status, preview a cluster, list/teach learning rules. Never writes to
+    // Zoho (policy-exempt; the gated 'duplicate-resolution' tool does writes).
+    duplicateResolutionAssistantTool: wt(duplicateResolutionAssistantTool, AGENT_NAME),
 
     // --- HIGH-risk write tools (gated) ---
     createNcTool:         wt(withApprovalGate(createNcTool),         AGENT_NAME),
