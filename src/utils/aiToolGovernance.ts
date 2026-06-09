@@ -261,6 +261,35 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     },
   },
 
+  'duplicate-resolution': {
+    toolId: 'duplicate-resolution',
+    label: 'Resolve duplicate cluster (migrate fields + tag duplicates)',
+    riskLevel: 'high',
+    requiresApproval: true,
+    complianceRefs: [
+      'ISO 9001:2015 §8.5.1 (Control of production and service provision)',
+      'ISO 9001:2015 §7.5 (Documented information)',
+      'ISO 27001 A.8.3 (Non-repudiation — acts on behalf of Sarah Hijazi)',
+      'PDPL (contact/lead personal data)',
+    ],
+    entityType: 'duplicate_cluster',
+    buildPreview: (p: any) => {
+      const plan = p?.plan ?? {};
+      const lines: string[] = [
+        `**Module:** ${p?.module ?? plan.module ?? 'n/a'}`,
+        `**Cluster:** #${p?.clusterId ?? plan.clusterId ?? 'n/a'}`,
+        `**Survivor:** ${trim(String(plan.masterName ?? 'n/a'), 120)}`,
+        `**Duplicates to tag:** ${Array.isArray(plan.duplicateZohoIds) ? plan.duplicateZohoIds.length : 0}`,
+        `**Field migrations:** ${Array.isArray(plan.fieldDecisions) ? plan.fieldDecisions.length : 0}`,
+      ];
+      if (plan.linkAccountZohoId) lines.push(`**Link to account:** ${trim(String(plan.linkAccountZohoId), 60)}`);
+      if (Array.isArray(p?.reasons) && p.reasons.length) {
+        lines.push(`**Why escalated:** ${trim(p.reasons.slice(0, 3).join('; '), 240)}`);
+      }
+      return lines.filter(Boolean).join('\n');
+    },
+  },
+
   // --- tools explicitly exempted from the gate ---
   //
   // Every entry below sets `requiresApproval: false` because the tool

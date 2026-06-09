@@ -146,6 +146,17 @@ import {
   getResolutionLearnings,
   getResolutionActivity,
 } from "../../utils/duplicateResolutionLearning";
+import {
+  runAutonomousResolution,
+  getResolutionRunConfig,
+} from "../../utils/duplicateResolutionRunner";
+import {
+  listResolutionRules,
+  recordResolutionRule,
+  setResolutionRuleEnabled,
+  type RuleDecision,
+} from "../../utils/duplicateResolutionRules";
+import { getGradeHistory } from "../../utils/duplicateResolutionGrades";
 // Default to fetching the entire module so duplicate detection reflects the
 // real CRM. Set DUPLICATE_SCAN_LIMIT to a positive integer to re-cap (useful
 // for staging or when Zoho daily-credit budget is tight). An unset, blank,
@@ -833,6 +844,146 @@ initDuplicateRadarTables().catch((err) => {
 });
 
 export const duplicateRadarRoutes = [
+  // ── Autonomous Resolution: status / manual run / grades / rules ─────────────
+  {
+    // Config + last run summary + current grades, for the status panel.
+    path: "/api/duplicates/autonomous/status",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const cfg = getResolutionRunConfig();
+          const grades = await getGradeHistory(undefined, 4 * 8).catch(() => []);
+          // Latest grade per module from the history (history is DESC).
+          const latestByModule: Record<string, any> = {};
+          for (const g of grades) {
+            if (!latestByModule[g.module]) latestByModule[g.module] = g;
+          }
+          return c.json({
+            config: cfg,
+            grades_latest: Object.values(latestByModule),
+            learnings: await getResolutionLearnings().catch(() => null),
+          });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Manual "Run now" — runs one full tick (respects mode/kill-switch).
+    path: "/api/duplicates/autonomous/run-now",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const modeOverride =
+            body?.mode === "shadow" || body?.mode === "assisted" || body?.mode === "autonomous"
+              ? body.mode
+              : undefined;
+          const summary = await runAutonomousResolution({ modeOverride });
+          return c.json({ ok: true, summary });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Learning-curve history for the chart. Optional ?module=Accounts.
+    path: "/api/duplicates/autonomous/grades",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const module = c.req.query("module") || undefined;
+          const history = await getGradeHistory(module, 300);
+          return c.json({ history });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // List learning rules (Rules view).
+    path: "/api/duplicates/autonomous/rules",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const includeDisabled = c.req.query("all") === "1";
+          const rules = await listResolutionRules(includeDisabled);
+          return c.json({ rules });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Create a learning rule ("Make this a rule" — don't re-ask similar cases).
+    path: "/api/duplicates/autonomous/rules",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const module = parseAgenticModule(body);
+          const decision = body?.decision as RuleDecision;
+          if (!["auto_approve", "never_merge", "always_link"].includes(decision)) {
+            return c.json({ error: "decision must be auto_approve | never_merge | always_link" }, 400);
+          }
+          const id = await recordResolutionRule({
+            module,
+            caseSignature:
+              body?.caseSignature && typeof body.caseSignature === "object"
+                ? body.caseSignature
+                : {},
+            decision,
+            scope: body?.clusterId ? "cluster" : "pattern",
+            clusterId: body?.clusterId ?? null,
+            createdBy: (user as any)?.email || "duplicate-radar",
+          });
+          if (id == null) return c.json({ error: "Could not create rule" }, 500);
+          return c.json({ ok: true, id });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Enable / disable a rule.
+    path: "/api/duplicates/autonomous/rules/:id",
+    method: "PATCH" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid rule id" }, 400);
+          const body = await c.req.json().catch(() => ({}));
+          const ok = await setResolutionRuleEnabled(id, body?.enabled !== false);
+          return c.json({ ok });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
   {
     path: "/duplicates",
     method: "GET" as const,

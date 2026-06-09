@@ -12,6 +12,9 @@ import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
 import { duplicateResolutionAgent } from "./agents/duplicateResolutionAgent";
 import { qualityAuditWorkflow } from "./workflows/qualityAuditWorkflow";
 import { duplicateResolutionWorkflow } from "./workflows/duplicateResolutionWorkflow";
+// Side-effect import: registers the gated "duplicate-resolution" execute tool in
+// the approval registry so approving a queued cluster actually applies it.
+import "./tools/duplicateResolutionExecuteTool";
 
 import { evaluateSdrGovernanceTool } from "./tools/sdrGovernanceTool";
 import { reconcileCallTool } from "./tools/callReconciliationTool";
