@@ -2977,6 +2977,35 @@
             return `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho layout">${escapeHtml(layoutName || '-')}</td>`;
         }
 
+        // 2026-06-09 — Contact-only variant of _dupLayoutCell. Reads the
+        // Zoho Contacts module's "Contact_Type" field instead of Layout
+        // because operators triaging contact dupes care about WHICH KIND
+        // of contact (Customer / Prospect / Vendor / Partner / etc.) far
+        // more than which UI layout was used. The Layout column on this
+        // tab was almost always "Standard" so it provided ~no signal
+        // during merge decisions. Per operator request: only the Contact
+        // Duplicates tab swaps this; Leads/Deals/Accounts still use the
+        // generic _dupLayoutCell above.
+        function _dupContactTypeCell(r) {
+            const raw = r && r.raw_data ? r.raw_data : {};
+            const ctRaw =
+                raw.Contact_Type ??
+                raw.contact_type ??
+                r.contact_type ??
+                null;
+            // Zoho returns the field as either a plain string or a
+            // {id, name, display_label} object depending on the field
+            // type + tenant config. Handle both shapes defensively.
+            let val = '';
+            if (typeof ctRaw === 'string') {
+                val = ctRaw;
+            } else if (ctRaw && typeof ctRaw === 'object') {
+                val = String(ctRaw.name || ctRaw.display_label || '');
+            }
+            val = (val || '').trim();
+            return `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho Contacts → Contact Type field">${escapeHtml(val || '-')}</td>`;
+        }
+
         function _dupCreatedCell(r) {
             const raw = r && r.raw_data ? r.raw_data : {};
             const creator = (raw.Created_By && raw.Created_By.name) || r.created_by_name || '';
@@ -4532,6 +4561,7 @@
             const reqBody = { module: module };
             if (Array.isArray(st.selected)) reqBody.record_zoho_ids = st.selected;
             if (st.master) reqBody.master_zoho_id = st.master;
+            if (st.linkAccount !== undefined) reqBody.link_account_zoho_id = st.linkAccount;
             let res, data;
             try {
                 res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/plan', {
@@ -4575,6 +4605,14 @@
             previewMergePlan(module, window.__planClusterId);
         }
 
+        // Link the survivor to a cluster Account (Contacts/Deals set Account_Name).
+        // "" = don't link. Re-previews so the choice persists into dry-run/apply.
+        function setMergeLinkAccount(module, zohoId) {
+            const st = _planSt(module);
+            st.linkAccount = String(zohoId);
+            previewMergePlan(module, window.__planClusterId);
+        }
+
         // Force a specific record to be the survivor (overrides the auto-pick).
         // Ensures it's part of the merge set, then re-previews.
         function setMergeSurvivor(module, zohoId) {
@@ -4590,7 +4628,7 @@
         // writes but enumerates exactly what a real run would do.
         async function dryRunMergePlan(module, clusterId) {
             const st = _planSt(module);
-            await _runMergeExec(module, clusterId, { module: module, dry_run: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined }, false);
+            await _runMergeExec(module, clusterId, { module: module, dry_run: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined, link_account_zoho_id: st.linkAccount }, false);
         }
         // applyMergePlan: explicit confirm → POST /execute with confirm:true →
         // real Zoho writes (migrate fields, reparent, tag, stamp, resolve).
@@ -4605,7 +4643,7 @@
             );
             if (!ok) return;
             const st = _planSt(module);
-            await _runMergeExec(module, clusterId, { module: module, confirm: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined }, true);
+            await _runMergeExec(module, clusterId, { module: module, confirm: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined, link_account_zoho_id: st.linkAccount }, true);
         }
         async function _runMergeExec(module, clusterId, body, isApply) {
             const panel = document.getElementById('mergeExecPanel-' + module);
@@ -4658,6 +4696,7 @@
                 '<div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">' +
                 '<div class="text-gray-500">Fields migrated</div><div>' + fields + '</div>' +
                 '<div class="text-gray-500">Reparented</div><div>' + (rep.reparented ? (rep.reparented.deals + ' deals · ' + rep.reparented.contacts + ' contacts · ' + rep.reparented.notes + ' notes') : '—') + '</div>' +
+                '<div class="text-gray-500">Linked to Account</div><div>' + (rep.linkedToAccount ? esc(rep.linkedToAccount) : 'no') + '</div>' +
                 '<div class="text-gray-500">Left on duplicate</div><div>' + (rep.leftOnDuplicate ? (rep.leftOnDuplicate.activities + ' activities · ' + rep.leftOnDuplicate.attachments + ' attachments') : '—') + '</div>' +
                 '<div class="text-gray-500">Tagged Duplicate-Delete</div><div>' + ((rep.taggedRecordIds || []).length) + ' record(s)</div>' +
                 '<div class="text-gray-500">Notes stamped</div><div>' + esc(rep.notesStamped) + '</div>' +
@@ -4667,6 +4706,21 @@
 
         function __renderMergePlan(plan) {
             const esc = (v) => escapeHtml(v === null || v === undefined || v === '' ? '—' : String(v));
+
+            // "Link survivor to Account" control — only when the cluster has
+            // account(s) and this is a Contacts/Deals plan. CSP-safe buttons.
+            const linkControl = (plan.accountCandidates && plan.accountCandidates.length)
+                ? '<div class="mb-3 p-2 rounded-lg border border-indigo-100 bg-indigo-50">' +
+                    '<div class="text-xs uppercase tracking-wide text-indigo-700 mb-1">Link survivor to Account</div>' +
+                    '<div class="flex flex-wrap gap-2 items-center">' +
+                        '<button data-on-click="setMergeLinkAccount" data-args=\'["' + esc(plan.module) + '",""]\' class="px-2 py-1 rounded text-xs ' + (!plan.linkAccountZohoId ? 'bg-gray-300 text-gray-900 font-semibold' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100') + '">Don\'t link</button>' +
+                        plan.accountCandidates.map(a =>
+                            '<button data-on-click="setMergeLinkAccount" data-args=\'["' + esc(plan.module) + '","' + esc(a.zohoId) + '"]\' class="px-2 py-1 rounded text-xs ' + (plan.linkAccountZohoId === a.zohoId ? 'bg-indigo-600 text-white font-semibold' : 'bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-100') + '">' + esc(a.name) + '</button>'
+                        ).join('') +
+                    '</div>' +
+                    '<div class="text-[11px] text-gray-500 mt-1">On apply, the surviving ' + (plan.module === 'Deals' ? 'deal' : 'contact') + ' gets its <code class="bg-white px-1 rounded">Account_Name</code> set to the chosen account.</div>' +
+                '</div>'
+                : '';
 
             const recRows = (plan.records || []).map(r => {
                 const included = r.included !== false;
@@ -4713,6 +4767,7 @@
             return '' +
                 '<div class="rounded-lg border border-purple-200 bg-purple-50 p-3 mb-3 text-sm text-purple-900" data-testid="merge-plan-rationale">' + esc(plan.rationale) + '</div>' +
                 '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">Survivor</span><div class="font-semibold">' + esc(plan.masterName) + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
+                linkControl +
                 '<div class="text-xs text-gray-500 mb-1">Tick the accounts to merge — at least 2. Unticked accounts are excluded and left untouched.</div>' +
                 '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Merge</th><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th><th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
                 '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Field migrations &amp; conflicts (' + (plan.fieldDecisions || []).length + ')</div>' +

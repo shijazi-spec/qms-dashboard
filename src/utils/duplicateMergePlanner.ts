@@ -96,6 +96,10 @@ export interface MergePlan {
   /** Deterministic, human-readable summary for the review panel. */
   rationale: string;
   records: MergePlanRecordSummary[];
+  /** Accounts in the cluster the survivor can be linked to (Contacts/Deals only). */
+  accountCandidates: { zohoId: string; name: string }[];
+  /** Account the survivor's Account_Name will be set to on apply (null = no link). */
+  linkAccountZohoId: string | null;
   generatedBy: string;
   /** ISO timestamp; stamped by the caller (route), null if not provided. */
   generatedAt: string | null;
@@ -302,6 +306,12 @@ export interface BuildPlanOptions {
    * Omitted/empty = merge all accounts in the cluster.
    */
   includeZohoIds?: string[] | null;
+  /**
+   * Link the survivor's Account_Name to this account (Contacts/Deals). A non-
+   * empty string = link to that account id; "" / null = explicitly don't link;
+   * undefined = default to the cluster's primary/sole account if any.
+   */
+  linkAccountZohoId?: string | null;
 }
 
 /**
@@ -366,6 +376,36 @@ export function buildMergePlan(
   }
   const master = overridden || pickMaster(mergeSet, fields);
   const duplicates = mergeSet.filter((r) => r !== master);
+
+  // Cross-module link: accounts in the cluster the survivor can be linked to
+  // (Contacts / Deals set their Account_Name lookup). Surfaced for the UI; the
+  // executor applies it on apply when an account is chosen.
+  const canLinkAccount = module === "Contacts" || module === "Deals";
+  const accountCandidates = canLinkAccount
+    ? allRecords
+        .filter((r) => r.record_type === "account" && r.zoho_record_id)
+        .map((r) => ({
+          zohoId: r.zoho_record_id as string,
+          name: r.record_name || r.company_name || (r.zoho_record_id as string),
+        }))
+    : [];
+  const suggestedAccount =
+    accountCandidates.find((a) =>
+      allRecords.some((r) => r.zoho_record_id === a.zohoId && r.is_primary),
+    )?.zohoId ||
+    (accountCandidates.length === 1 ? accountCandidates[0].zohoId : null);
+  let linkAccountZohoId: string | null;
+  if (opts.linkAccountZohoId === undefined) {
+    linkAccountZohoId = suggestedAccount; // default suggestion on first preview
+  } else if (!opts.linkAccountZohoId) {
+    linkAccountZohoId = null; // explicit "don't link"
+  } else {
+    linkAccountZohoId = accountCandidates.some(
+      (a) => a.zohoId === opts.linkAccountZohoId,
+    )
+      ? opts.linkAccountZohoId
+      : null;
+  }
 
   // Field decisions — gap-fills + conflicts only (keeps are omitted as noise).
   const fieldDecisions: MergeFieldDecision[] = [];
@@ -496,6 +536,8 @@ export function buildMergePlan(
     warnings,
     rationale,
     records: records_summary,
+    accountCandidates,
+    linkAccountZohoId,
     generatedBy: opts.generatedBy || "duplicate-radar",
     generatedAt: opts.generatedAt ?? null,
   };
