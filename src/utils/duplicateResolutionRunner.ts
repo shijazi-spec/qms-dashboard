@@ -126,6 +126,36 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
   }
 }
 
+/**
+ * Post a one-off test message to the resolution channel — powers the
+ * "Send test ping" button so the channel wiring can be confirmed on demand.
+ * Surfaces the exact Slack error (e.g. not_in_channel, invalid_auth) so the
+ * operator knows precisely what to fix.
+ */
+export async function sendResolutionSlackTest(
+  triggeredBy = "operator",
+): Promise<{ ok: boolean; channel: string | null; error?: string }> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  const channel = getResolutionSlackChannel();
+  if (!token) return { ok: false, channel, error: "SLACK_BOT_TOKEN is not set." };
+  if (!channel) return { ok: false, channel: null, error: "No resolution Slack channel configured." };
+  try {
+    const base = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+    const link = `${base}/autonomous-resolution`;
+    const { WebClient } = await import("@slack/web-api");
+    await new WebClient(token).chat.postMessage({
+      channel,
+      text:
+        `✅ *Autonomous Resolution — test ping*\n` +
+        `Channel wiring confirmed by ${triggeredBy}. You'll get a summary here after each 6h run.` +
+        `\n<${link}|Open the Autonomous Resolution screen>`,
+    });
+    return { ok: true, channel };
+  } catch (e) {
+    return { ok: false, channel, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export const AGENT_PERFORMED_BY =
   "QMS Autonomous Agent (on behalf of Sarah Hijazi)";
 

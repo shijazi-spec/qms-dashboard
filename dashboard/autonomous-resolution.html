@@ -43,6 +43,7 @@
             </div>
             <div class="flex items-center gap-2">
                 <button data-on-click="refreshAll" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+                <button data-on-click="testSlack" id="testSlackBtn" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">🔔 Send test ping</button>
                 <button data-on-click="runNow" id="runNowBtn" class="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">▶ Run now</button>
             </div>
         </header>
@@ -306,6 +307,28 @@
                     (it.detail ? '<span class="text-gray-400">— ' + esc(it.detail) + '</span>' : '') +
                     '</div>';
             }).join('');
+        }
+
+        async function testSlack() {
+            var btn = document.getElementById('testSlackBtn');
+            btn.disabled = true; btn.textContent = 'Sending…';
+            try {
+                var r = await fetch('/api/duplicates/autonomous/slack-test', {
+                    method: 'POST', credentials: 'same-origin'
+                });
+                var data = await r.json();
+                if (data && data.ok) {
+                    alert('✅ Test ping sent to the channel. Check grq-platform-assistant.');
+                } else {
+                    var hint = (data && /not_in_channel/.test(data.error || ''))
+                        ? '\n\nThe bot isn\'t a member of the channel — invite WalaPlus QMS to it.'
+                        : (data && /invalid_auth|not_authed|token/.test(data.error || ''))
+                            ? '\n\nSLACK_BOT_TOKEN looks missing or invalid.'
+                            : '';
+                    alert('⚠️ Could not send: ' + ((data && data.error) || 'unknown error') + hint);
+                }
+            } catch (e) { alert('Test failed: ' + e); }
+            finally { btn.disabled = false; btn.textContent = '🔔 Send test ping'; }
         }
 
         function refreshAll() { loadStatus(); loadGrades(); loadRules(); }

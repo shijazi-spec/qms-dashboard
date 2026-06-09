@@ -154,6 +154,7 @@ import {
   undoClusterResolution,
   getResolutionRunConfig,
   isResolutionSlackConfigured,
+  sendResolutionSlackTest,
 } from "../../utils/duplicateResolutionRunner";
 import {
   listResolutionRules,
@@ -874,6 +875,25 @@ export const duplicateRadarRoutes = [
           });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Send a one-off test ping to the resolution Slack channel.
+    path: "/api/duplicates/autonomous/slack-test",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const result = await sendResolutionSlackTest(
+            (user as any)?.email || "operator",
+          );
+          return c.json(result, result.ok ? 200 : 400);
+        } catch (e: any) {
+          return c.json({ ok: false, error: e?.message || String(e) }, 500);
         }
       };
     },
