@@ -5,8 +5,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "mastra dev",
-    "prebuild": "node -e \"require('fs').rmSync('.mastra/output',{recursive:true,force:true})\"",
-    "build": "mastra build",
+    "clean:mastra": "node -e \"require('fs').rmSync('.mastra/output',{recursive:true,force:true})\"",
+    "build": "npm run clean:mastra && mastra build",
     "check": "tsc",
     "check:tests": "tsc -p tsconfig.tests.json",
     "check:format": "prettier --check '**/*.ts'",
