@@ -54,10 +54,10 @@ export const duplicateResolutionAssistantTool = createTool({
       .optional()
       .describe("Rule decision (for make_rule)."),
     caseSignature: z
-      .record(z.any())
+      .string()
       .optional()
       .describe(
-        'For make_rule: the case pattern to match, e.g. {"mixedDomains":true} or {"layoutSplit":true} or {"module":"Contacts"}.',
+        'For make_rule: the case pattern to match, as a JSON object string, e.g. {"mixedDomains":true} or {"layoutSplit":true} or {"module":"Contacts"}.',
       ),
   }),
   outputSchema: z.object({
@@ -113,7 +113,17 @@ export const duplicateResolutionAssistantTool = createTool({
           };
         }
         const module = asModule((context as any)?.module);
-        const caseSignature = (context as any)?.caseSignature || {};
+        let caseSignature: Record<string, unknown> = {};
+        const rawSig = (context as any)?.caseSignature;
+        if (rawSig && typeof rawSig === "object") {
+          caseSignature = rawSig as Record<string, unknown>;
+        } else if (typeof rawSig === "string" && rawSig.trim()) {
+          try {
+            caseSignature = JSON.parse(rawSig);
+          } catch {
+            return { success: false, summary: "", error: "caseSignature must be a valid JSON object string." };
+          }
+        }
         const id = await recordResolutionRule({
           module,
           caseSignature,

@@ -774,7 +774,8 @@
                     var data = await fallback.json();
                     if (data.threadId) { threadId = data.threadId; sessionStorage.setItem('widget_consultant_threadId', threadId); }
                     bubble = widgetCreateAI();
-                    var respText = data.response || data.message || 'No response received.';
+                    var respText = data.response || data.message
+                        || (data.details ? ('⚠️ ' + data.details) : (data.error ? ('⚠️ ' + data.error) : 'No response received.'));
                     bubble.innerHTML = renderMarkdown(respText);
                     if (data.messageId && respText.trim()) {
                         widgetAttachFeedback(bubble, data.messageId, text, respText, data.promptVersion);
