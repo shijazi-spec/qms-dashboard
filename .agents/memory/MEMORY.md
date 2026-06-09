@@ -1,2 +1,3 @@
 - [Dev/prod DB parity](dev-prod-db-parity.md) — manual sync procedure (executeSql notebook) and nightly Inngest cron for prod→dev table mirroring; argv-limit and live-write gotchas
+- [Multi-workflow boot crashes](mastra-multi-workflow-boot.md) — adding a 2nd Mastra workflow/cron trips two boot guards (single-workflow throw + duplicate Inngest cron id) that exit before the port opens
 - [Duplicate Radar record-tab pagination](duplicate-radar-pagination.md) — record tabs must paginate by cluster (coarser display unit), not by row, or the tail of clusters is unreachable

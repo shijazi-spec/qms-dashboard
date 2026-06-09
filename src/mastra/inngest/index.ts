@@ -120,8 +120,18 @@ export function registerCronWorkflow(cronExpression: string, workflow: any) {
     workflowId: workflow?.id,
   });
 
+  // Each cron workflow needs a UNIQUE Inngest function id. Multiple workflows
+  // (e.g. quality-audit-workflow + duplicate-resolution-workflow) can each
+  // register a cron trigger; a shared hardcoded id collides at inngest.serve()
+  // ("Duplicate function ID") and crashes the server on boot. Derive a stable,
+  // deterministic id from the workflow id so it stays consistent across deploys.
+  const workflowId = workflow?.id
+    ? String(workflow.id)
+    : `wf-${inngestFunctions.length}`;
+  const cronFunctionId = `cron-trigger-${workflowId}`;
+
   const cronFunction = inngest.createFunction(
-    { id: "cron-trigger" },
+    { id: cronFunctionId },
     [{ event: "replit/cron.trigger" }, { cron: cronExpression }],
     async ({ event, step }) => {
       return await step.run("execute-cron-workflow", async () => {

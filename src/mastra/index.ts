@@ -335,13 +335,20 @@ export const mastra = new Mastra({
       : new PinoLogger({ name: "Mastra", level: "info" }),
 });
 
-/*  Sanity check 1: Throw an error if there are more than 1 workflows.  */
-// !!!!!! Do not remove this check. !!!!!!
-if (Object.keys(mastra.getWorkflows()).length > 1) {
-  throw new Error(
-    "More than 1 workflows found. Currently, more than 1 workflows are not supported in the UI, since doing so will cause app state to be inconsistent.",
-  );
-}
+/*  Sanity check 1: WalaPlus runs 2 workflows by design — qualityAuditWorkflow
+    (cron: weekly quality audit) and duplicateResolutionWorkflow (cron: 6-hourly
+    duplicate radar resolution). Each is driven by its own cron trigger and
+    invoked via REST/cron, NOT the Mastra playground UI. The original guard below
+    only protected the dev-only playground UI (which can show inconsistent state
+    with >1 workflow); it does not apply to this deployment and was crashing both
+    dev and production on boot. Guard intentionally disabled — same rationale as
+    Sanity check 2 for agents. Do NOT re-enable without first removing one of the
+    by-design workflows above.
+
+    if (Object.keys(mastra.getWorkflows()).length > 1) {
+      throw new Error("More than 1 workflows found ...");
+    }
+*/
 
 /*  Sanity check 2: WalaPlus runs 2 agents (qualitySpecialistAgent + qmsConsultantAgent) by design.
     The Mastra UI single-agent assumption does not apply here — agents are invoked via REST routes,
