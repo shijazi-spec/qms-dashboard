@@ -4683,7 +4683,12 @@
             // checkboxes and subsequent dry-run/apply stay consistent.
             st.selected = (data.plan.records || []).filter(r => r.included && r.zohoId).map(r => r.zohoId);
             panel.innerHTML = __renderMergePlan(data.plan);
-            loadAttachmentChips(data.plan.module, data.plan.clusterId);
+            // Contacts modal shows the parent Account in the middle column
+            // instead of the 📎 chips, so there are no per-row "att-…" spans
+            // to fill — skip the fetch to avoid a useless network round-trip.
+            if (data.plan.module !== 'Contacts') {
+                loadAttachmentChips(data.plan.module, data.plan.clusterId);
+            }
         }
 
         // Lazily fill the 📎 column with per-record attachment counts. A record
@@ -4831,6 +4836,13 @@
 
         function __renderMergePlan(plan) {
             const esc = (v) => escapeHtml(v === null || v === undefined || v === '' ? '—' : String(v));
+            // Contacts merge modal swaps the 📎 attachments chip for the parent
+            // Account name — operators have asked for that context (which company
+            // does each duplicate belong to?) since most contacts share the same
+            // "Standard" layout. Attachment safety still runs in the backend risk
+            // gate via /api/duplicates/clusters/:id/attachments — only the chip
+            // moves off the modal for Contacts.
+            const isContacts = plan.module === 'Contacts';
 
             // "Link survivor to Account" control — only when the cluster has
             // account(s) and this is a Contacts/Deals plan. CSP-safe buttons.
@@ -4860,12 +4872,16 @@
                 const cb = r.zohoId
                     ? '<input type="checkbox" data-on-click="toggleMergeRecord" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '"]\'' + (included ? ' checked' : '') + ' class="cursor-pointer w-4 h-4" title="Include this record in the merge">'
                     : '<span class="text-gray-300" title="No Zoho id — cannot be merged">—</span>';
+                // Middle cell: Account (Contacts) | 📎 attachments (other modules)
+                const midCell = isContacts
+                    ? '<td class="px-3 py-2 text-xs text-gray-700" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">' + esc(r.accountName) + '</td>'
+                    : '<td class="px-3 py-2 text-center">' + (r.zohoId ? '<span id="att-' + esc(plan.module) + '-' + esc(r.zohoId) + '" class="text-xs text-gray-400" title="Attachments on this record">…</span>' : '<span class="text-gray-300">—</span>') + '</td>';
                 return '<tr class="border-t' + (included ? '' : ' opacity-50') + '">' +
                     '<td class="px-3 py-2 text-center">' + cb + '</td>' +
                     '<td class="px-3 py-2">' + outcome + '</td>' +
                     '<td class="px-3 py-2">' + esc(r.name) + '</td>' +
                     '<td class="px-3 py-2 font-mono text-xs text-gray-600">' + esc(r.zohoId) + '</td>' +
-                    '<td class="px-3 py-2 text-center">' + (r.zohoId ? '<span id="att-' + esc(plan.module) + '-' + esc(r.zohoId) + '" class="text-xs text-gray-400" title="Attachments on this record">…</span>' : '<span class="text-gray-300">—</span>') + '</td>' +
+                    midCell +
                     '<td class="px-3 py-2 text-end">' + Math.round((r.completeness || 0) * 100) + '%</td>' +
                     '<td class="px-3 py-2 text-xs text-gray-500">' + esc(r.owner) + '</td>' +
                     '<td class="px-3 py-2 text-xs text-gray-700">' + esc(r.layout) + '</td>' +
@@ -4895,7 +4911,7 @@
                 '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">Survivor</span><div class="font-semibold">' + esc(plan.masterName) + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
                 linkControl +
                 '<div class="text-xs text-gray-500 mb-1">Tick the accounts to merge — at least 2. Unticked accounts are excluded and left untouched.</div>' +
-                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Merge</th><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th><th class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th><th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
+                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Merge</th><th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th>' + (isContacts ? '<th class="px-3 py-2 text-start" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">Account</th>' : '<th class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th>') + '<th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
                 '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Field migrations &amp; conflicts (' + (plan.fieldDecisions || []).length + ')</div>' +
                 (decRows
                     ? '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Field</th><th class="px-3 py-2 text-start">Action</th><th class="px-3 py-2 text-start">Value kept</th><th class="px-3 py-2 text-start">Why</th></tr></thead><tbody>' + decRows + '</tbody></table></div>'
