@@ -867,6 +867,12 @@ export const duplicateRadarRoutes = [
           }
           return c.json({
             config: cfg,
+            slack: {
+              configured: !!(
+                process.env.SLACK_BOT_TOKEN &&
+                process.env.AUTONOMOUS_RESOLUTION_SLACK_CHANNEL
+              ),
+            },
             grades_latest: Object.values(latestByModule),
             learnings: await getResolutionLearnings().catch(() => null),
           });

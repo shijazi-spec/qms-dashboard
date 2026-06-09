@@ -142,12 +142,17 @@
                 ? '<span class="pill grade-g3">writes ON</span>'
                 : '<span class="pill mode-shadow">kill-switch OFF (no writes)</span>';
             var l = data.learnings || {};
+            var slackOn = data.slack && data.slack.configured;
+            var slackTxt = slackOn
+                ? '<span class="pill grade-g3">channel connected</span>'
+                : '<span class="pill mode-shadow">not set</span>';
             var grid = document.getElementById('statusGrid');
             grid.innerHTML =
                 cell('Mode', '<span class="pill ' + esc(modeClass) + '">' + esc(cfg.mode || 'shadow') + '</span>') +
                 cell('Writes', enabledTxt) +
                 cell('Max clusters / tick', esc(cfg.maxClusters != null ? cfg.maxClusters : '—')) +
-                cell('Resolutions logged', esc(l.totalEvents != null ? l.totalEvents : '—'));
+                cell('Resolutions logged', esc(l.totalEvents != null ? l.totalEvents : '—')) +
+                cell('Slack ping', slackTxt);
             renderGradeCards(data.grades_latest || []);
         }
 

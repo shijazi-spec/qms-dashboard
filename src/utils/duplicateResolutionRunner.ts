@@ -80,6 +80,40 @@ async function countDuplicatesWithAttachments(
 
 export type ResolutionMode = "shadow" | "assisted" | "autonomous";
 
+/**
+ * Per-tick ping to the private resolution Slack channel (you + me + your
+ * manager). No-op unless BOTH SLACK_BOT_TOKEN and
+ * AUTONOMOUS_RESOLUTION_SLACK_CHANNEL are set (the bot must be a member of that
+ * channel). Stays quiet on empty ticks to avoid 6-hourly noise.
+ */
+async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void> {
+  try {
+    const token = process.env.SLACK_BOT_TOKEN;
+    const channel = process.env.AUTONOMOUS_RESOLUTION_SLACK_CHANNEL;
+    if (!token || !channel) return;
+    if (summary.clustersScanned === 0) return;
+    if (summary.applied === 0 && summary.queued === 0 && summary.errors === 0) return;
+
+    const base = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+    const link = `${base}/autonomous-resolution`;
+    const icon = summary.errors > 0 ? "🔴" : summary.queued > 0 ? "🟡" : "🟢";
+    const text =
+      `${icon} *Autonomous Resolution — ${summary.mode} run* ` +
+      (summary.enabled ? "" : "(shadow: no Zoho writes) ") +
+      `\nScanned ${summary.clustersScanned} · applied ${summary.applied} · ` +
+      `queued ${summary.queued} · errors ${summary.errors}` +
+      (summary.queued > 0 ? `\n${summary.queued} item(s) need your call.` : "") +
+      `\n<${link}|Open the Autonomous Resolution screen>`;
+
+    const { WebClient } = await import("@slack/web-api");
+    await new WebClient(token).chat.postMessage({ channel, text });
+  } catch (e) {
+    logger.warn("[dup-resolution-runner] slack ping failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
 export const AGENT_PERFORMED_BY =
   "QMS Autonomous Agent (on behalf of Sarah Hijazi)";
 
@@ -294,6 +328,8 @@ export async function runAutonomousResolution(
       error: e instanceof Error ? e.message : String(e),
     });
   }
+
+  await pingResolutionSlack(summary).catch(() => {});
 
   summary.finishedAt = new Date().toISOString();
   logger.info("[dup-resolution-runner] tick done", {
