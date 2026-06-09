@@ -153,6 +153,7 @@ import {
   runResolutionForCluster,
   undoClusterResolution,
   getResolutionRunConfig,
+  isResolutionSlackConfigured,
 } from "../../utils/duplicateResolutionRunner";
 import {
   listResolutionRules,
@@ -867,12 +868,7 @@ export const duplicateRadarRoutes = [
           }
           return c.json({
             config: cfg,
-            slack: {
-              configured: !!(
-                process.env.SLACK_BOT_TOKEN &&
-                process.env.AUTONOMOUS_RESOLUTION_SLACK_CHANNEL
-              ),
-            },
+            slack: { configured: isResolutionSlackConfigured() },
             grades_latest: Object.values(latestByModule),
             learnings: await getResolutionLearnings().catch(() => null),
           });

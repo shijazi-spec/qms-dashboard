@@ -81,15 +81,27 @@ async function countDuplicatesWithAttachments(
 export type ResolutionMode = "shadow" | "assisted" | "autonomous";
 
 /**
- * Per-tick ping to the private resolution Slack channel (you + me + your
- * manager). No-op unless BOTH SLACK_BOT_TOKEN and
- * AUTONOMOUS_RESOLUTION_SLACK_CHANNEL are set (the bot must be a member of that
- * channel). Stays quiet on empty ticks to avoid 6-hourly noise.
+ * The private resolution channel: #grq-platform-assistant (Sarah + the agent +
+ * her manager). Overridable via env if the channel ever moves. The QMS Slack
+ * bot must be a member of this channel and SLACK_BOT_TOKEN must be set.
+ */
+export const RESOLUTION_SLACK_CHANNEL_DEFAULT = "C0B93BCJFFV";
+export function getResolutionSlackChannel(): string {
+  return process.env.AUTONOMOUS_RESOLUTION_SLACK_CHANNEL || RESOLUTION_SLACK_CHANNEL_DEFAULT;
+}
+export function isResolutionSlackConfigured(): boolean {
+  return !!process.env.SLACK_BOT_TOKEN && !!getResolutionSlackChannel();
+}
+
+/**
+ * Per-tick ping to the private resolution Slack channel. No-op unless
+ * SLACK_BOT_TOKEN is set (the bot must be a member of the channel). Stays quiet
+ * on empty ticks to avoid 6-hourly noise.
  */
 async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void> {
   try {
     const token = process.env.SLACK_BOT_TOKEN;
-    const channel = process.env.AUTONOMOUS_RESOLUTION_SLACK_CHANNEL;
+    const channel = getResolutionSlackChannel();
     if (!token || !channel) return;
     if (summary.clustersScanned === 0) return;
     if (summary.applied === 0 && summary.queued === 0 && summary.errors === 0) return;
