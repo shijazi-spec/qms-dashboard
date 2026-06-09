@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Autonomous Resolution — WalaPlus Enterprise</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        html, body { font-family: 'Inter', 'Noto Sans Arabic', sans-serif; margin: 0; }
+        .grade-g1 { background: #f3f4f6; color: #374151; }
+        .grade-g2 { background: #dbeafe; color: #1e40af; }
+        .grade-g3 { background: #dcfce7; color: #166534; }
+        .grade-g4 { background: #fae8ff; color: #86198f; }
+        .mode-shadow     { background: #fef3c7; color: #92400e; }
+        .mode-assisted   { background: #dbeafe; color: #1e40af; }
+        .mode-autonomous { background: #dcfce7; color: #166534; }
+        .pill { display:inline-flex; align-items:center; padding:0.125rem 0.5rem; border-radius:9999px; font-size:0.75rem; font-weight:600; }
+        .chart-box { position: relative; height: 280px; }
+    </style>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="walaplus-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.5"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.WalaPlusNav) WalaPlusNav.init('autonomous-resolution');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+        <header class="flex items-start justify-between flex-wrap gap-3">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">🤖 Autonomous Duplicate Resolution</h1>
+                <p class="text-sm text-gray-600 mt-1">Runs every 6 hours, acts on behalf of Sarah Hijazi, escalates the doubtful 1% to the AI Approvals queue, and learns from every decision.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button data-on-click="refreshAll" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+                <button data-on-click="runNow" id="runNowBtn" class="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">▶ Run now</button>
+            </div>
+        </header>
+
+        <!-- Status panel -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-3">Status</h2>
+            <div id="statusGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="text-sm text-gray-500">Loading…</div>
+            </div>
+            <div id="runResult" class="mt-4 hidden text-sm"></div>
+        </section>
+
+        <!-- Competence grades -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-1">Competence grades</h2>
+            <p class="text-xs text-gray-500 mb-3">G1 Trainee → G2 Assistant → G3 Trusted → G4 Autonomous Specialist. A promotion is a recommendation — flipping the mode stays your call.</p>
+            <div id="gradesCards" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+        </section>
+
+        <!-- Learning curve -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold text-gray-900">Learning curve</h2>
+                <select id="curveModule" data-on-change="loadGrades" class="text-sm border border-gray-300 rounded-lg px-2 py-1">
+                    <option value="">All modules</option>
+                    <option value="Accounts">Accounts</option>
+                    <option value="Leads">Leads</option>
+                    <option value="Deals">Deals</option>
+                    <option value="Contacts">Contacts</option>
+                </select>
+            </div>
+            <div class="chart-box"><canvas id="curveChart"></canvas></div>
+            <div id="curveEmpty" class="hidden text-sm text-gray-500 mt-2">No grade snapshots yet — they accumulate as the agent runs.</div>
+        </section>
+
+        <!-- Learning rules -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-1">Learning rules</h2>
+            <p class="text-xs text-gray-500 mb-3">Your decisions become durable rules so the agent never re-asks the same kind of case.</p>
+
+            <div class="grid md:grid-cols-5 gap-2 items-end mb-4 p-3 bg-gray-50 rounded-lg">
+                <label class="text-xs text-gray-600">Module
+                    <select id="ruleModule" class="mt-1 w-full text-sm border border-gray-300 rounded-lg px-2 py-1">
+                        <option>Accounts</option><option>Leads</option><option>Deals</option><option>Contacts</option>
+                    </select>
+                </label>
+                <label class="text-xs text-gray-600">Decision
+                    <select id="ruleDecision" class="mt-1 w-full text-sm border border-gray-300 rounded-lg px-2 py-1">
+                        <option value="auto_approve">Auto-approve</option>
+                        <option value="never_merge">Never merge</option>
+                        <option value="always_link">Always link to account</option>
+                    </select>
+                </label>
+                <label class="text-xs text-gray-600 md:col-span-2">Case signature (JSON)
+                    <input id="ruleSignature" type="text" placeholder='{"layoutSplit":true}' class="mt-1 w-full text-sm border border-gray-300 rounded-lg px-2 py-1 font-mono" />
+                </label>
+                <button data-on-click="makeRule" class="px-3 py-2 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">+ Add rule</button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="text-left text-gray-500 border-b border-gray-200">
+                        <tr><th class="py-2 pr-3">Module</th><th class="py-2 pr-3">Decision</th><th class="py-2 pr-3">Signature</th><th class="py-2 pr-3">Used</th><th class="py-2 pr-3">Status</th><th class="py-2"></th></tr>
+                    </thead>
+                    <tbody id="rulesBody"><tr><td colspan="6" class="py-3 text-gray-500">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Last run items -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-3">Last run decisions</h2>
+            <div id="runItems" class="text-sm text-gray-500">Run the agent to see its per-cluster decisions here.</div>
+        </section>
+    </main>
+
+    <script>
+        var curveChart = null;
+
+        function esc(s) { return window.escAttr ? window.escAttr(s) : String(s == null ? '' : s); }
+
+        function gradeClass(g) { return 'grade-g' + (g || 1); }
+
+        async function getJSON(url) {
+            var r = await fetch(url, { credentials: 'same-origin' });
+            if (r.status === 401) { window.location.href = '/login'; return null; }
+            return r.json();
+        }
+
+        async function loadStatus() {
+            var data = await getJSON('/api/duplicates/autonomous/status');
+            if (!data) return;
+            var cfg = data.config || {};
+            var modeClass = 'mode-' + (cfg.mode || 'shadow');
+            var enabledTxt = cfg.enabled
+                ? '<span class="pill grade-g3">writes ON</span>'
+                : '<span class="pill mode-shadow">kill-switch OFF (no writes)</span>';
+            var l = data.learnings || {};
+            var grid = document.getElementById('statusGrid');
+            grid.innerHTML =
+                cell('Mode', '<span class="pill ' + esc(modeClass) + '">' + esc(cfg.mode || 'shadow') + '</span>') +
+                cell('Writes', enabledTxt) +
+                cell('Max clusters / tick', esc(cfg.maxClusters != null ? cfg.maxClusters : '—')) +
+                cell('Resolutions logged', esc(l.totalEvents != null ? l.totalEvents : '—'));
+            renderGradeCards(data.grades_latest || []);
+        }
+
+        function cell(label, valueHtml) {
+            return '<div class="bg-gray-50 rounded-lg p-3">' +
+                '<div class="text-xs text-gray-500">' + esc(label) + '</div>' +
+                '<div class="mt-1 font-semibold text-gray-900">' + valueHtml + '</div></div>';
+        }
+
+        function renderGradeCards(list) {
+            var box = document.getElementById('gradesCards');
+            var modules = ['Accounts', 'Leads', 'Deals', 'Contacts'];
+            var byMod = {};
+            list.forEach(function (g) { byMod[g.module] = g; });
+            box.innerHTML = modules.map(function (m) {
+                var g = byMod[m];
+                var grade = g ? g.grade : 1;
+                var label = g ? g.label : 'Trainee';
+                var metrics = (g && g.metrics) || {};
+                var agree = metrics.agreementRate != null ? Math.round(metrics.agreementRate * 100) + '%' : '—';
+                var dec = metrics.decisions != null ? metrics.decisions : 0;
+                return '<div class="rounded-lg border border-gray-200 p-3">' +
+                    '<div class="flex items-center justify-between">' +
+                    '<span class="font-medium text-gray-800">' + esc(m) + '</span>' +
+                    '<span class="pill ' + esc(gradeClass(grade)) + '">G' + esc(grade) + ' ' + esc(label) + '</span></div>' +
+                    '<div class="text-xs text-gray-500 mt-2">Agreement ' + esc(agree) + ' · ' + esc(dec) + ' decisions</div></div>';
+            }).join('');
+        }
+
+        async function loadGrades() {
+            var mod = document.getElementById('curveModule').value;
+            var url = '/api/duplicates/autonomous/grades' + (mod ? ('?module=' + encodeURIComponent(mod)) : '');
+            var data = await getJSON(url);
+            if (!data) return;
+            var hist = (data.history || []).slice().reverse(); // oldest → newest
+            var empty = document.getElementById('curveEmpty');
+            if (!hist.length) { empty.classList.remove('hidden'); if (curveChart) { curveChart.destroy(); curveChart = null; } return; }
+            empty.classList.add('hidden');
+
+            var modules = ['Accounts', 'Leads', 'Deals', 'Contacts'];
+            var colors = { Accounts: '#6366f1', Leads: '#f59e0b', Deals: '#10b981', Contacts: '#ec4899' };
+            var labels = hist.map(function (h) { return (h.at || '').slice(0, 10); });
+            var datasets = modules.map(function (m) {
+                return {
+                    label: m,
+                    data: hist.map(function (h) { return h.module === m ? h.grade : null; }),
+                    borderColor: colors[m], backgroundColor: colors[m],
+                    stepped: true, spanGaps: true, tension: 0
+                };
+            }).filter(function (d) { return d.data.some(function (v) { return v != null; }); });
+
+            var ctx = document.getElementById('curveChart');
+            if (curveChart) curveChart.destroy();
+            curveChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: labels, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { y: { min: 1, max: 4, ticks: { stepSize: 1, callback: function (v) { return 'G' + v; } } } },
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        async function loadRules() {
+            var data = await getJSON('/api/duplicates/autonomous/rules?all=1');
+            if (!data) return;
+            var body = document.getElementById('rulesBody');
+            var rules = data.rules || [];
+            if (!rules.length) { body.innerHTML = '<tr><td colspan="6" class="py-3 text-gray-500">No rules yet.</td></tr>'; return; }
+            body.innerHTML = rules.map(function (r) {
+                var sig = JSON.stringify(r.caseSignature || {});
+                var statusPill = r.enabled
+                    ? '<span class="pill grade-g3">enabled</span>'
+                    : '<span class="pill status-rejected mode-shadow">disabled</span>';
+                var toggleLabel = r.enabled ? 'Disable' : 'Enable';
+                return '<tr class="border-b border-gray-100">' +
+                    '<td class="py-2 pr-3">' + esc(r.module) + '</td>' +
+                    '<td class="py-2 pr-3 font-medium">' + esc(r.decision) + '</td>' +
+                    '<td class="py-2 pr-3 font-mono text-xs text-gray-600">' + esc(sig) + (r.scope === 'cluster' ? (' (cluster #' + esc(r.clusterId) + ')') : '') + '</td>' +
+                    '<td class="py-2 pr-3">' + esc(r.usageCount || 0) + '</td>' +
+                    '<td class="py-2 pr-3">' + statusPill + '</td>' +
+                    '<td class="py-2"><button data-on-click="toggleRule" data-args="[' + esc(r.id) + ',' + (!r.enabled) + ']" class="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50">' + toggleLabel + '</button></td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        async function makeRule() {
+            var module = document.getElementById('ruleModule').value;
+            var decision = document.getElementById('ruleDecision').value;
+            var sigRaw = document.getElementById('ruleSignature').value.trim();
+            var caseSignature = {};
+            if (sigRaw) {
+                try { caseSignature = JSON.parse(sigRaw); }
+                catch (e) { alert('Case signature must be valid JSON, e.g. {"layoutSplit":true}'); return; }
+            }
+            var r = await fetch('/api/duplicates/autonomous/rules', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ module: module, decision: decision, caseSignature: caseSignature })
+            });
+            var data = await r.json();
+            if (data && data.ok) { document.getElementById('ruleSignature').value = ''; loadRules(); }
+            else alert((data && data.error) || 'Could not create rule');
+        }
+
+        async function toggleRule(id, enabled) {
+            var r = await fetch('/api/duplicates/autonomous/rules/' + id, {
+                method: 'PATCH', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            });
+            await r.json().catch(function () {});
+            loadRules();
+        }
+
+        async function runNow() {
+            var btn = document.getElementById('runNowBtn');
+            btn.disabled = true; btn.textContent = 'Running…';
+            try {
+                var r = await fetch('/api/duplicates/autonomous/run-now', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                var data = await r.json();
+                var s = (data && data.summary) || {};
+                var rr = document.getElementById('runResult');
+                rr.classList.remove('hidden');
+                rr.innerHTML = '<span class="pill mode-assisted">Scanned ' + esc(s.clustersScanned || 0) + '</span> ' +
+                    '<span class="pill grade-g3">Applied ' + esc(s.applied || 0) + '</span> ' +
+                    '<span class="pill mode-shadow">Queued ' + esc(s.queued || 0) + '</span> ' +
+                    '<span class="pill ' + ((s.errors || 0) ? 'status-failed' : 'status-rejected') + '">Errors ' + esc(s.errors || 0) + '</span>';
+                renderRunItems(s.items || []);
+                loadStatus(); loadGrades();
+            } catch (e) {
+                alert('Run failed: ' + e);
+            } finally {
+                btn.disabled = false; btn.textContent = '▶ Run now';
+            }
+        }
+
+        function renderRunItems(items) {
+            var box = document.getElementById('runItems');
+            if (!items.length) { box.innerHTML = '<span class="text-gray-500">No actionable clusters this run.</span>'; return; }
+            box.innerHTML = items.slice(0, 100).map(function (it) {
+                var actClass = it.action === 'applied' ? 'grade-g3' : (it.action === 'error' ? 'status-failed' : 'mode-shadow');
+                return '<div class="flex items-start gap-2 py-1.5 border-b border-gray-100">' +
+                    '<span class="pill ' + esc(actClass) + '">' + esc(it.action) + '</span>' +
+                    '<span class="text-gray-800">' + esc(it.module) + ' #' + esc(it.clusterId) + '</span>' +
+                    '<span class="text-gray-500">' + esc((it.reasons || []).slice(0, 2).join('; ') || 'safe-tier') + '</span>' +
+                    (it.detail ? '<span class="text-gray-400">— ' + esc(it.detail) + '</span>' : '') +
+                    '</div>';
+            }).join('');
+        }
+
+        function refreshAll() { loadStatus(); loadGrades(); loadRules(); }
+
+        document.addEventListener('DOMContentLoaded', refreshAll);
+    </script>
+</body>
+</html>

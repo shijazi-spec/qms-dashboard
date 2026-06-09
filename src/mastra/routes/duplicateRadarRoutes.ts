@@ -1008,6 +1008,31 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // The in-platform Autonomous Resolution screen (status / grades / learning
+    // curve / rules / run-now). Auth is enforced by its API calls.
+    path: "/autonomous-resolution",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const possiblePaths = [
+            join(process.cwd(), "dashboard", "autonomous-resolution.html"),
+            "/home/runner/workspace/dashboard/autonomous-resolution.html",
+          ];
+          for (const p of possiblePaths) {
+            if (existsSync(p)) {
+              return c.html(readFileSync(p, "utf-8"));
+            }
+          }
+          return c.text("Autonomous Resolution screen not found", 404);
+        } catch (error) {
+          logger.error("Error serving Autonomous Resolution screen:", error);
+          return c.text("Error loading Autonomous Resolution screen", 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/summary",
     method: "GET" as const,
     createHandler: async () => {

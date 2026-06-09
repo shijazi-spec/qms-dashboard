@@ -123,6 +123,7 @@ const WalaPlusNav = {
         { label: 'Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Call Evaluation', href: '/calls', icon: 'phone', id: 'calls' },
         { label: 'Duplicates Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' },
+        { label: 'Autonomous Resolution', href: '/autonomous-resolution', icon: 'duplicate', id: 'autonomous-resolution' },
         // Audit Reports: this is the existing Integrated QMS dashboard
         // (URL kept as /qms for backward compatibility) — the page houses
         // CAPA / Nonconformance / coaching workflows so it lives under
