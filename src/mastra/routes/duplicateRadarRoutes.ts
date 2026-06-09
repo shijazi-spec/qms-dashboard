@@ -32,6 +32,7 @@ function parseRecordTabFilters(url: URL): {
   stages?: string[];
   confidence_level?: string;
   domain?: string;
+  ai_status?: string;
 } {
   const csv = (key: string): string[] | undefined => {
     const raw = url.searchParams.get(key);
@@ -42,6 +43,14 @@ function parseRecordTabFilters(url: URL): {
       .filter((v) => v.length > 0);
     return vals.length > 0 ? vals : undefined;
   };
+  // AI-status chip: active (untouched) | tagged_pending | resolved | all.
+  // Whitelist enforced server-side so the DB query can't see unknown values.
+  const rawAi = (url.searchParams.get("ai_status") || "").trim();
+  const ai_status = ["active", "tagged_pending", "resolved", "all"].includes(
+    rawAi,
+  )
+    ? rawAi
+    : undefined;
   return {
     start_date: url.searchParams.get("start_date") || undefined,
     end_date: url.searchParams.get("end_date") || undefined,
@@ -51,6 +60,7 @@ function parseRecordTabFilters(url: URL): {
     stages: csv("stages"),
     confidence_level: url.searchParams.get("confidence_level") || undefined,
     domain: url.searchParams.get("domain") || undefined,
+    ai_status,
   };
 }
 
