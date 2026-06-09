@@ -49,25 +49,25 @@ import { fetchRecordAttachments, removeZohoTags } from "./zohoCRM";
 import { logger } from "./logger";
 
 /**
- * Count how many of the to-be-tagged duplicates carry ≥1 Zoho attachment.
- * Bounded: called ONLY for clusters the agent would otherwise auto-apply.
- * Any failure is treated conservatively as "has attachments" so a Zoho hiccup
- * never green-lights a merge that might drop evidence. `module` is the Zoho
- * module name (Accounts/Leads/Deals/Contacts), which the attachments API wants.
+ * Inspect the to-be-tagged duplicates for Zoho attachments. Returns one entry
+ * per duplicate that carries evidence (count = -1 means "couldn't verify" — a
+ * Zoho error, treated conservatively as evidence-present so a hiccup never
+ * green-lights a merge that might drop a contract). Bounded: called ONLY for
+ * clusters the agent would otherwise auto-apply. `module` is the Zoho module
+ * name (Accounts/Leads/Deals/Contacts).
  */
-async function countDuplicatesWithAttachments(
+async function attachmentsOnDuplicates(
   module: CrmModule,
   duplicateZohoIds: string[],
-): Promise<number> {
-  let withFiles = 0;
+): Promise<Array<{ zohoId: string; count: number }>> {
+  const found: Array<{ zohoId: string; count: number }> = [];
   for (const id of duplicateZohoIds) {
     if (!id) continue;
     try {
       const atts = await fetchRecordAttachments(module, id);
-      if (atts && atts.length > 0) withFiles++;
+      if (atts && atts.length > 0) found.push({ zohoId: id, count: atts.length });
     } catch (e) {
-      // Conservative: if we can't verify, assume evidence may exist → block auto.
-      withFiles++;
+      found.push({ zohoId: id, count: -1 }); // unknown → conservative
       logger.warn("[dup-resolution-runner] attachment check failed (treating as has-files)", {
         module,
         recordId: id,
@@ -75,7 +75,7 @@ async function countDuplicatesWithAttachments(
       });
     }
   }
-  return withFiles;
+  return found;
 }
 
 export type ResolutionMode = "shadow" | "assisted" | "autonomous";
@@ -606,12 +606,26 @@ async function processModule(ctx: {
   // Evidence-protection check is a Zoho call, so run it ONLY for clusters that
   // would otherwise auto-apply (and aren't already rule-blocked). If any
   // to-be-tagged duplicate carries attachments, the gate escalates — we never
-  // auto-merge away a record that might hold a signed contract/NDA.
+  // auto-merge away a record that might hold a signed contract/NDA. When it
+  // fires, we name the evidence-holder and recommend keeping IT as the survivor
+  // (escalate-with-recommendation — the operator makes the final call).
+  let evidenceRecommendation: string | null = null;
   let firstPass = evaluateResolutionRisk(riskInput, policyCfg);
   if (ruleResult.override !== "escalate" && firstPass.verdict === "auto") {
-    const dupAttach = await countDuplicatesWithAttachments(module, plan.duplicateZohoIds);
-    if (dupAttach > 0) {
-      riskInput = { ...riskInput, duplicatesWithAttachments: dupAttach };
+    const dupAttach = await attachmentsOnDuplicates(module, plan.duplicateZohoIds);
+    if (dupAttach.length > 0) {
+      riskInput = { ...riskInput, duplicatesWithAttachments: dupAttach.length };
+      const nameOf = (zid: string) =>
+        plan.records.find((r) => r.zohoId === zid)?.name || zid;
+      // Strongest evidence-holder = highest known count (unknown counts sort last).
+      const strongest = [...dupAttach].sort(
+        (a, b) => (b.count < 0 ? 0 : b.count) - (a.count < 0 ? 0 : a.count),
+      )[0];
+      const cntTxt = strongest.count < 0 ? "attachments (count unverified)" : `${strongest.count} attachment(s)`;
+      evidenceRecommendation =
+        `Evidence on a to-be-deleted record: "${nameOf(strongest.zohoId)}" (${strongest.zohoId}) holds ${cntTxt}. ` +
+        `Recommend keeping THAT record as the survivor (or move its files first), then re-run. ` +
+        (dupAttach.length > 1 ? `${dupAttach.length} duplicates carry files — attachments are split, review carefully.` : "");
     }
   }
 
@@ -623,6 +637,7 @@ async function processModule(ctx: {
       : ruleResult.override === "escalate"
         ? [`blocked by learned rule(s) #${ruleResult.ruleIds.join(", #")}`, ...gate.reasons]
         : gate.reasons;
+  if (evidenceRecommendation) reasons.push(evidenceRecommendation);
 
   // Apply the always-link rule hint to the plan if present and unset.
   if (ruleResult.alwaysLink && !plan.linkAccountZohoId && plan.accountCandidates.length) {
@@ -701,9 +716,11 @@ async function processModule(ctx: {
         ruleOverride: ruleResult.override,
         reasons,
         recommendation:
-          verdict === "auto"
-            ? "Safe to apply — agent would auto-apply once autonomy is enabled."
-            : "Needs your call — escalated on the reasons listed.",
+          evidenceRecommendation
+            ? evidenceRecommendation
+            : verdict === "auto"
+              ? "Safe to apply — agent would auto-apply once autonomy is enabled."
+              : "Needs your call — escalated on the reasons listed.",
         features,
       },
       payloadPreview:

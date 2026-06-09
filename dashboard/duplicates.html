@@ -4116,6 +4116,7 @@
             // never silently sticks on the original "Loading…" placeholder.
             try {
                 __renderClusterDetailBody({ cluster, records, recommendations: recommendations || [], primary_type, is_cross_module, record_types, mixed_signal: window.__currentMixedSignal, recMap, id });
+                loadClusterDetailAttachmentChips(id, records);
             } catch (err) {
                 console.error('[clusterDetails] render failed', err);
                 document.getElementById('modalContent').innerHTML =
@@ -4126,6 +4127,42 @@
                     </div>`;
             }
             return;
+        }
+
+        // After the cluster-detail modal renders, decorate each record's Zoho
+        // link (data-testid="link-zoho-<id>") with a 📎 attachment count, so
+        // manual operators see evidence-richness when deciding the survivor —
+        // the same signal the autonomous agent reads. Bounded: one fetch per
+        // module present in the cluster.
+        async function loadClusterDetailAttachmentChips(clusterId, records) {
+            try {
+                const MOD = { lead: 'Leads', deal: 'Deals', contact: 'Contacts', account: 'Accounts' };
+                const modules = Array.from(new Set((records || [])
+                    .map(r => MOD[String(r.record_type || '').toLowerCase()])
+                    .filter(Boolean)));
+                const modal = document.getElementById('modalContent');
+                if (!modal || !modules.length) return;
+                for (const module of modules) {
+                    let counts = {};
+                    try {
+                        const res = await fetch('/api/duplicates/clusters/' + clusterId + '/attachments?module=' + encodeURIComponent(module), { credentials: 'same-origin' });
+                        if (!res.ok) continue;
+                        counts = ((await res.json()) || {}).counts || {};
+                    } catch (_) { continue; }
+                    Object.keys(counts).forEach(function (zid) {
+                        const n = counts[zid] | 0;
+                        if (n <= 0) return; // only badge records that actually carry files
+                        modal.querySelectorAll('a[data-testid="link-zoho-' + zid + '"]').forEach(function (a) {
+                            if (a.nextSibling && a.nextSibling.classList && a.nextSibling.classList.contains('att-chip')) return;
+                            const chip = document.createElement('span');
+                            chip.className = 'att-chip ms-1 text-xs font-semibold text-amber-700';
+                            chip.title = n + ' attachment(s) on this record — evidence';
+                            chip.textContent = '📎' + n;
+                            a.insertAdjacentElement('afterend', chip);
+                        });
+                    });
+                }
+            } catch (_) { /* non-fatal */ }
         }
 
         function __renderClusterDetailBody({ cluster, records, recommendations, primary_type, is_cross_module, record_types, mixed_signal, recMap, id }) {
