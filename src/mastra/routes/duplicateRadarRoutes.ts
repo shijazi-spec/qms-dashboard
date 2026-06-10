@@ -171,6 +171,7 @@ import {
   isResolutionSlackConfigured,
   sendResolutionSlackTest,
   notifyResolutionApplied,
+  getModuleResolutionBreakdown,
   type ResolutionMode,
 } from "../../utils/duplicateResolutionRunner";
 
@@ -905,6 +906,7 @@ export const duplicateRadarRoutes = [
             can_manage: canManage,
             slack: { configured: isResolutionSlackConfigured() },
             grades_latest: Object.values(latestByModule),
+            module_breakdown: await getModuleResolutionBreakdown().catch(() => []),
             learnings: await getResolutionLearnings().catch(() => null),
           });
         } catch (e: any) {

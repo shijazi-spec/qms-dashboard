@@ -73,6 +73,13 @@
             </div>
         </section>
 
+        <!-- Per-module breakdown -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-1">By module — duplicates: total · solved · remaining</h2>
+            <p class="text-xs text-gray-500 mb-3">Across all clusters: solved = in resolved clusters; remaining = still active.</p>
+            <div id="moduleBreakdown" class="space-y-2 text-sm"><div class="text-gray-500">Loading…</div></div>
+        </section>
+
         <!-- Competence grades -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <h2 class="text-lg font-semibold text-gray-900 mb-1">Competence grades</h2>
@@ -172,6 +179,38 @@
                 cell('Slack ping', slackTxt);
             renderGradeCards(data.grades_latest || []);
             renderModeControl(cfg, !!data.can_manage);
+            renderModuleBreakdown(data.module_breakdown || []);
+        }
+
+        // Per-module duplicate scoreboard: total · solved · remaining, with a bar.
+        function renderModuleBreakdown(rows) {
+            var box = document.getElementById('moduleBreakdown');
+            if (!box) return;
+            if (!rows.length || !rows.some(function (r) { return r.total > 0; })) {
+                box.innerHTML = '<div class="text-gray-500">No duplicates detected yet — run a sync on Duplicates Radar.</div>';
+                return;
+            }
+            box.innerHTML = rows.map(function (r) {
+                var total = r.total || 0;
+                var solved = r.solved || 0;
+                var rest = r.rest || 0;
+                var pct = total > 0 ? Math.round((solved / total) * 100) : 0;
+                return '<div class="rounded-lg border border-gray-200 p-3">' +
+                    '<div class="flex items-center justify-between">' +
+                        '<span class="font-medium text-gray-800">▸ ' + esc(r.module) + ' Duplicates</span>' +
+                        '<span class="text-xs text-gray-600">' + esc(total) + ' total · ' +
+                            '<span class="text-emerald-700 font-medium">' + esc(solved) + ' solved</span> · ' +
+                            '<span class="text-amber-700 font-medium">' + esc(rest) + ' remaining</span></span>' +
+                    '</div>' +
+                    '<div class="mt-2 h-2 w-full bg-gray-100 rounded-full overflow-hidden">' +
+                        '<div class="h-2 bg-emerald-500 rounded-full" data-w="' + esc(pct) + '"></div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+            // CSP-safe width set (no inline style attribute in the markup).
+            box.querySelectorAll('[data-w]').forEach(function (el) {
+                el.style.width = (parseInt(el.getAttribute('data-w'), 10) || 0) + '%';
+            });
         }
 
         // Admin-only operating-mode control. Promotes shadow → assisted →

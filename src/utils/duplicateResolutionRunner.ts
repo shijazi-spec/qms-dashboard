@@ -80,6 +80,52 @@ async function attachmentsOnDuplicates(
 
 export type ResolutionMode = "shadow" | "assisted" | "autonomous";
 
+export interface ModuleBreakdownRow {
+  module: CrmModule;
+  total: number;
+  solved: number;
+  rest: number;
+}
+
+/**
+ * Per-module duplicate scoreboard: total detected vs solved (in resolved
+ * clusters) vs remaining (still active). Drives the "By module" list on the
+ * screen and the Slack run summary. Best-effort → zeros on any error.
+ */
+export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow[]> {
+  const order: Array<{ rt: string; module: CrmModule }> = [
+    { rt: "lead", module: "Leads" },
+    { rt: "deal", module: "Deals" },
+    { rt: "contact", module: "Contacts" },
+    { rt: "account", module: "Accounts" },
+  ];
+  const base: Record<string, ModuleBreakdownRow> = {};
+  order.forEach((o) => (base[o.rt] = { module: o.module, total: 0, solved: 0, rest: 0 }));
+  try {
+    const r = await pool.query(
+      `SELECT dr.record_type AS rt,
+              COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE dc.status = 'resolved')::int AS solved,
+              COUNT(*) FILTER (WHERE dc.status = 'active')::int AS rest
+         FROM duplicate_records dr
+         JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+        GROUP BY dr.record_type`,
+    );
+    for (const row of r.rows) {
+      if (base[row.rt]) {
+        base[row.rt].total = Number(row.total || 0);
+        base[row.rt].solved = Number(row.solved || 0);
+        base[row.rt].rest = Number(row.rest || 0);
+      }
+    }
+  } catch (e) {
+    logger.warn("[dup-resolution-runner] module breakdown failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+  return order.map((o) => base[o.rt]);
+}
+
 /**
  * The private resolution channel: #grq-platform-assistant (Sarah + the agent +
  * her manager). Overridable via env if the channel ever moves. The QMS Slack
@@ -127,12 +173,23 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
     if (summary.applied === 0 && summary.queued === 0 && summary.errors === 0) return;
 
     const icon = summary.errors > 0 ? "🔴" : summary.queued > 0 ? "🟡" : "🟢";
+    let breakdownText = "";
+    try {
+      const rows = await getModuleResolutionBreakdown();
+      const lines = rows
+        .filter((b) => b.total > 0)
+        .map((b) => `›  *${b.module} Duplicates* — ${b.total} total · ${b.solved} solved · ${b.rest} left`);
+      if (lines.length) breakdownText = `\n\n*By module:*\n${lines.join("\n")}`;
+    } catch {
+      /* breakdown is best-effort */
+    }
     const text =
       `${icon} *Autonomous Resolution — ${summary.mode} run* ` +
       (summary.enabled ? "" : "(shadow: no Zoho writes) ") +
       `\nScanned ${summary.clustersScanned} · applied ${summary.applied} · ` +
       `queued ${summary.queued} · errors ${summary.errors}` +
       (summary.queued > 0 ? `\n${summary.queued} item(s) need your call.` : "") +
+      breakdownText +
       `\n${resolutionScreenLink()}`;
 
     const { WebClient } = await import("@slack/web-api");
