@@ -124,12 +124,14 @@ function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter
 //     Only / Distribution: All platform users (internal)"; it has no business
 //     being readable without a session. The handlers in sopRoutes.ts now
 //     enforce session-or-admin-key on their own as defense-in-depth.
-//   - `/test/slack`, `/webhooks/slack`, `/api/webhooks/slack` — defined in
-//     `src/triggers/slackTriggers.ts` but that module is never imported, so
-//     the routes don't exist. Stale entries were removed; if Slack triggers
-//     are ever wired up, the webhook + diagnostic routes must be re-evaluated
-//     for auth on a per-route basis (the diagnostic SSE route in particular
-//     opens DMs and posts messages to Slack — never make it public).
+//   - `/test/slack`, `/webhooks/slack`, `/api/webhooks/slack` — were removed
+//     when slackTriggers.ts was unimported. RE-ADDED 2026-06-10: the GRQ
+//     Assistant (Adam) two-way Slack chat wires registerSlackTrigger +
+//     registerGrqAssistantSlackRoutes in src/mastra/index.ts, so the webhook
+//     routes exist again and Slack needs unauthenticated access (see the
+//     Slack Events API webhook entry below). Per the per-route re-evaluation
+//     note: ONLY the POST webhook is public; the diagnostic SSE route
+//     `/test/slack` (opens DMs / posts to Slack) stays behind auth.
 //   - `/api/telemetry/pageview` — no such route exists in the codebase.
 export const PUBLIC_PATHS = [
   // ---- Auth flow (login, OIDC callback, logout) ----
@@ -183,6 +185,19 @@ export const PUBLIC_PATHS = [
 
   // ---- Accessibility statement (WCAG / regulator-facing public page) ----
   '/a11y',
+
+  // ---- Slack Events API webhook (GRQ Assistant / Adam two-way chat) ----
+  // Slack POSTs here for URL-verification (challenge) and every subscribed
+  // event. Slack is unauthenticated to our session model and does NOT follow
+  // redirects — so without this bypass the request hits checkPageAuth and
+  // gets a 302→/login, which Slack reports as "challenge_failed". The handler
+  // in src/triggers/slackTriggers.ts is self-defending: it echoes only the
+  // challenge, dedups event_id, and ignores bot_id messages (no reply loop).
+  // EXACT entries — these are the only Slack routes that may be public. The
+  // diagnostic SSE route `/test/slack` (which opens DMs / posts to Slack) is
+  // deliberately NOT listed and stays behind auth.
+  '/webhooks/slack/action',
+  '/api/webhooks/slack/action',
 ];
 
 const MASTRA_INTERNAL_PREFIXES = ['/api/workflows/', '/api/memory/'];
