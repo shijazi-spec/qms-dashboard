@@ -19,6 +19,19 @@
 
 import type { ApiRoute } from "@mastra/core/server";
 import { registerSlackTrigger, getClient } from "./slackTriggers";
+import { withAgentUserContext } from "../utils/withApprovalGate";
+
+// Role Adam runs AS when answering in Slack. The platform's data tools are
+// RBAC-gated by the caller's role (via withAgentUserContext); without a context
+// the role is "unknown" and every QMS query is denied — which is why Adam said
+// "role-based access restrictions" in Slack. Slack has no platform login, so we
+// run him at a FIXED role. Default = head_of_operations_quality (read access to
+// Risks/Policies/Audits/Compliance/KPIs/Vendors; NOT the admin-only NC/CAPA/
+// Training). EVERYONE in the (private) Slack channel inherits this access level
+// — Sarah's governance decision (2026-06-11). Override via SLACK_ADAM_ROLE.
+// Write tools stay approval-gated (autoApproveTier "never") so nothing executes
+// from Slack without landing in the platform AI Approvals queue.
+const SLACK_ADAM_ROLE = process.env.SLACK_ADAM_ROLE || "head_of_operations_quality";
 
 // Address-by-name trigger: "Adam" (the agent's name) or "GRQ", optionally greeted.
 const NAME_TRIGGER = /(^|\s)(hey\s+|hi\s+|hello\s+)?@?(adam|grq)(\s+assistant)?\b/i;
@@ -77,12 +90,27 @@ export function registerGrqAssistantSlackRoutes(): ApiRoute[] {
         let reply = "";
         try {
           // Per-channel memory so it's a continuous conversation; per-user
-          // resource keeps each person's context separate.
-          const res = await agent.generate([{ role: "user", content: q }], {
-            threadId: `slack-${channel}`,
-            resourceId: `slack-user-${event.user || channel}`,
-            maxSteps: 6,
-          });
+          // resource keeps each person's context separate. The
+          // withAgentUserContext wrapper threads a role into the tool layer so
+          // Adam's RBAC-gated platform-data tools actually return data (mirrors
+          // what the web /api/consultant/chat route does for a logged-in user).
+          const res = await withAgentUserContext(
+            {
+              user: {
+                userId: null,
+                email: `slack-${event.user || channel}`,
+                role: SLACK_ADAM_ROLE,
+                autoApproveTier: "never",
+              },
+              threadId: `slack-${channel}`,
+            },
+            () =>
+              agent.generate([{ role: "user", content: q }], {
+                threadId: `slack-${channel}`,
+                resourceId: `slack-user-${event.user || channel}`,
+                maxSteps: 6,
+              }),
+          );
           reply = (await extractAgentText(res)).trim();
         } catch (e: any) {
           reply = `Sorry — I hit an error answering that: ${e?.message || String(e)}`;
