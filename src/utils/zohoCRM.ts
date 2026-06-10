@@ -385,6 +385,14 @@ export async function fetchZohoRecords(
     criteria?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    /**
+     * ISO8601 timestamp. When set, sends the Zoho `If-Modified-Since` header so
+     * the LIST endpoint returns ONLY records modified at/after this time — the
+     * reliable incremental-sync mechanism (Zoho ignores `criteria` on the list
+     * endpoint, but honours this header). Zoho replies 304 when nothing changed,
+     * which we treat as an empty page.
+     */
+    ifModifiedSince?: string;
   } = {}
 ): Promise<ZohoCRMRecord[]> {
   const queryParams = new URLSearchParams();
@@ -394,19 +402,23 @@ export async function fetchZohoRecords(
   if (params.criteria) queryParams.set('criteria', params.criteria);
   if (params.sortBy) queryParams.set('sort_by', params.sortBy);
   if (params.sortOrder) queryParams.set('sort_order', params.sortOrder);
-  
+
   return makeZohoRequest(
     async (config) => {
       const url = `${config.apiDomain}/crm/v2/${module}?${queryParams.toString()}`;
-      return fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const headers: Record<string, string> = {
+        'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+        'Content-Type': 'application/json',
+      };
+      if (params.ifModifiedSince) {
+        headers['If-Modified-Since'] = params.ifModifiedSince;
+      }
+      return fetch(url, { method: 'GET', headers });
     },
     async (response) => {
+      // 304 Not Modified — incremental fetch with nothing changed for this
+      // page. Not an error; treat as an empty page so pagination stops cleanly.
+      if (response.status === 304) return [];
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(`Zoho CRM API error: ${response.status} - ${error.message || response.statusText}`);
@@ -445,6 +457,9 @@ export async function fetchAllZohoRecords(
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
     maxRecords?: number;
+    /** ISO8601 — incremental sync: only records modified at/after this time.
+     *  Forwarded to fetchZohoRecords as the `If-Modified-Since` header. */
+    ifModifiedSince?: string;
   } = {}
 ): Promise<ZohoCRMRecord[]> {
   const allRecords: ZohoCRMRecord[] = [];
@@ -483,6 +498,7 @@ export async function fetchAllZohoRecords(
         criteria: params.criteria,
         sortBy: params.sortBy,
         sortOrder: params.sortOrder,
+        ifModifiedSince: params.ifModifiedSince,
       });
       } catch (error: any) {
         if (error.message?.includes('204') || error.message?.includes('No Content')) {

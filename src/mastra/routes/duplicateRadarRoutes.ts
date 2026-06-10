@@ -313,6 +313,10 @@ async function processModule(
   recordType: "lead" | "deal" | "contact" | "account",
   clustersUpdated: Set<number>,
   extractRecord: (record: any) => ExtractedRecord,
+  // Incremental sync: when set (ISO8601), only records modified at/after this
+  // time are fetched from Zoho (via the If-Modified-Since header). undefined =
+  // full pull (first sync, or an explicit "Rebuild all").
+  ifModifiedSince?: string,
 ): Promise<{ count: number; written: number; skipped: number }> {
   let records: any[] = [];
   scanState.moduleStatuses[moduleName] = "fetching";
@@ -322,6 +326,7 @@ async function processModule(
     await upsertSyncState(moduleName, 0, "syncing");
     records = await fetchAllZohoRecords(moduleName, {
       maxRecords: SCAN_MAX_PER_MODULE,
+      ifModifiedSince,
     });
   } catch (e: any) {
     logger.error(`Error fetching ${moduleName}:`, e);
@@ -527,6 +532,10 @@ async function runDeletionDetection(clustersUpdated: Set<number>): Promise<{
 
 async function scanZohoCRMForDuplicates(
   detectionType: "manual" | "scheduled" | "interval-fallback" = "manual",
+  // When true, force a FULL rebuild (wipe + re-pull every record) instead of
+  // the default incremental (changed-records-only) sync. Wired to a "Rebuild
+  // all" control; routine syncs stay incremental and finish in ~1-2 min.
+  forceFull = false,
 ): Promise<{
   success: boolean;
   totalRecordsScanned: number;
@@ -561,20 +570,59 @@ async function scanZohoCRMForDuplicates(
   broadcastSSE("scan", { status: "started", timestamp: startTime });
 
   try {
-    scanState.progress = "Preparing incremental scan...";
+    // ── Decide FULL vs INCREMENTAL ───────────────────────────────────────
+    // Incremental = fetch only records modified since each module's last
+    // successful sync (Zoho If-Modified-Since header) and DON'T wipe existing
+    // data — updates land in place (upsertRecord is idempotent by Zoho id) and
+    // the deletion-detection pass purges merged/deleted rows. Requires a
+    // baseline for ALL four modules; the first-ever sync (no baseline) or an
+    // explicit "Rebuild all" (forceFull / DUPLICATE_SCAN_MODE=full) does a full
+    // pull. This is the fix for the ~30-min cold sync of 160k+ records: a
+    // normal day only changes a few hundred records, so incremental is seconds.
+    const SCAN_MODULES = ["Leads", "Deals", "Contacts", "Accounts"] as const;
+    const envFull = (process.env.DUPLICATE_SCAN_MODE || "incremental") === "full";
+    const baselines: Record<string, string | undefined> = {};
+    for (const m of SCAN_MODULES) {
+      const st = await getSyncState(m);
+      baselines[m] = st?.last_sync_at
+        ? new Date(st.last_sync_at).toISOString()
+        : undefined;
+    }
+    const haveAllBaselines = SCAN_MODULES.every((m) => !!baselines[m]);
+    const incremental = !forceFull && !envFull && haveAllBaselines;
+
+    // 10-min safety overlap so records modified mid-sync aren't missed
+    // (re-processing a handful is harmless — upsert is idempotent by Zoho id).
+    const sinceFor = (m: string): string | undefined => {
+      if (!incremental || !baselines[m]) return undefined;
+      return new Date(new Date(baselines[m]!).getTime() - 10 * 60 * 1000).toISOString();
+    };
+
+    scanState.progress = incremental
+      ? "Preparing incremental scan (changed records only)..."
+      : "Preparing full rebuild...";
     scanState.percentage = 5;
-    await clearAllDuplicateData();
+    logger.info(
+      `🔁 [DuplicateRadar] Scan mode: ${incremental ? "INCREMENTAL (changed-only)" : "FULL rebuild"}` +
+        (forceFull ? " [forced]" : ""),
+    );
+    // Full rebuild wipes first; incremental keeps existing data and updates it.
+    if (!incremental) {
+      await clearAllDuplicateData();
+    }
 
     const moduleBreakdown: any[] = [];
     let totalRecords = 0;
     const clustersUpdated = new Set<number>();
 
     // B3: Parallel module fetch
-    scanState.progress = "Fetching all modules from Zoho CRM in parallel...";
+    scanState.progress = incremental
+      ? "Fetching changed records from Zoho CRM..."
+      : "Fetching all modules from Zoho CRM in parallel...";
     scanState.percentage = 10;
     broadcastSSE("progress", {
       percentage: 10,
-      message: "Fetching all modules...",
+      message: incremental ? "Fetching changed records..." : "Fetching all modules...",
     });
 
     const [leadsResult, dealsResult, contactsResult, accountsResult] =
@@ -605,7 +653,7 @@ async function scanZohoCRMForDuplicates(
             industry: d.Industry || "",
             website: d.Website || "",
           };
-        }),
+        }, sinceFor("Leads")),
         processModule("Deals", "deal", clustersUpdated, (record) => {
           const d = record.data;
           return {
@@ -632,7 +680,7 @@ async function scanZohoCRMForDuplicates(
             contactName: d.Contact_Name?.name || "",
             accountName: d.Account_Name?.name || "",
           };
-        }),
+        }, sinceFor("Deals")),
         processModule("Contacts", "contact", clustersUpdated, (record) => {
           const d = record.data;
           return {
@@ -658,7 +706,7 @@ async function scanZohoCRMForDuplicates(
             accountName: d.Account_Name?.name || "",
             country: d.Mailing_Country || d.Other_Country || "",
           };
-        }),
+        }, sinceFor("Contacts")),
         processModule("Accounts", "account", clustersUpdated, (record) => {
           const d = record.data;
           const websiteRaw = d.Website || "";
@@ -692,7 +740,7 @@ async function scanZohoCRMForDuplicates(
             noOfEmployees: parseInt(d.Employees) || undefined,
             accountType: d.Account_Type || "",
           };
-        }),
+        }, sinceFor("Accounts")),
       ]);
 
     // Tasks pagination removed per platform-wide Tasks data removal.
@@ -2907,7 +2955,10 @@ export const duplicateRadarRoutes = [
           );
           await truncateAllDuplicateData();
 
-          scanZohoCRMForDuplicates("manual").catch((err) => {
+          // forceFull=true: we just wiped everything, so a full re-pull is
+          // mandatory — an incremental (changed-only) fetch here would leave
+          // the radar nearly empty.
+          scanZohoCRMForDuplicates("manual", true).catch((err) => {
             logger.error(
               "[DuplicateRadar] Background rebuild scan error:",
               err,
