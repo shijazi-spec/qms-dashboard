@@ -166,9 +166,20 @@ import {
   runResolutionForCluster,
   undoClusterResolution,
   getResolutionRunConfig,
+  resolveResolutionRunConfig,
+  setResolutionSetting,
   isResolutionSlackConfigured,
   sendResolutionSlackTest,
+  type ResolutionMode,
 } from "../../utils/duplicateResolutionRunner";
+
+// Management tier allowed to flip the agent's mode / kill switch (writes to Zoho).
+const AUTONOMOUS_RESOLUTION_MANAGE_ROLES = [
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+] as const;
 import {
   listResolutionRules,
   recordResolutionRule,
@@ -878,7 +889,10 @@ export const duplicateRadarRoutes = [
         try {
           const user = await requireDuplicateRadarAccess(c);
           if (!user) return unauthorizedResponse(c);
-          const cfg = getResolutionRunConfig();
+          const cfg = await resolveResolutionRunConfig();
+          const canManage = (AUTONOMOUS_RESOLUTION_MANAGE_ROLES as readonly string[]).includes(
+            (user as any)?.role,
+          );
           const grades = await getGradeHistory(undefined, 4 * 8).catch(() => []);
           // Latest grade per module from the history (history is DESC).
           const latestByModule: Record<string, any> = {};
@@ -887,10 +901,62 @@ export const duplicateRadarRoutes = [
           }
           return c.json({
             config: cfg,
+            can_manage: canManage,
             slack: { configured: isResolutionSlackConfigured() },
             grades_latest: Object.values(latestByModule),
             learnings: await getResolutionLearnings().catch(() => null),
           });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Admin-only: change the agent's mode / kill switch from inside the platform
+    // (DB override; applies on the next tick, no republish). Audit-logged.
+    path: "/api/duplicates/autonomous/mode",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRoleOrKey(c, [...AUTONOMOUS_RESOLUTION_MANAGE_ROLES]);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const patch: { enabled?: boolean; mode?: ResolutionMode } = {};
+          if (typeof body?.enabled === "boolean") patch.enabled = body.enabled;
+          if (["shadow", "assisted", "autonomous"].includes(body?.mode)) {
+            patch.mode = body.mode as ResolutionMode;
+          }
+          if (patch.enabled === undefined && patch.mode === undefined) {
+            return c.json({ error: "Provide `mode` (shadow|assisted|autonomous) and/or `enabled` (boolean)." }, 400);
+          }
+          const before = await resolveResolutionRunConfig();
+          const updated = await setResolutionSetting(
+            patch,
+            (user as any)?.email || "admin",
+          );
+          const after = await resolveResolutionRunConfig();
+          try {
+            const { logEvent } = await import("../../utils/eventLogsDatabase");
+            await logEvent({
+              userEmail: (user as any)?.email || undefined,
+              userRole: (user as any)?.role || undefined,
+              actionType: "AI_ACTION",
+              entityType: "SYSTEM",
+              entityId: "autonomous-resolution",
+              entityName: "Autonomous Resolution mode",
+              description:
+                `Autonomous Resolution changed: mode ${before.mode}→${after.mode}, ` +
+                `writes ${before.enabled ? "ON" : "OFF"}→${after.enabled ? "ON" : "OFF"}.`,
+              aiInvolved: true,
+              severity: after.enabled && after.mode !== "shadow" ? "WARNING" : "INFO",
+              module: "duplicate-radar",
+            });
+          } catch {
+            /* audit is best-effort */
+          }
+          return c.json({ ok: true, config: after, override: updated });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

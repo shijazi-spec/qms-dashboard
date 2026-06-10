@@ -537,6 +537,20 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     )
     .catch(() => {});
 
+  // In-platform autonomous-resolution mode/kill-switch override (single row).
+  // Boot-created in BOTH dev & prod so Replit's deploy schema-diff doesn't
+  // propose dropping a runtime-created table. See duplicateResolutionRunner.ts.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS autonomous_resolution_settings (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      enabled BOOLEAN,
+      mode VARCHAR(16),
+      updated_by VARCHAR(255),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      CONSTRAINT autonomous_resolution_settings_singleton CHECK (id = 1)
+    );
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_clusters (
       id SERIAL PRIMARY KEY,

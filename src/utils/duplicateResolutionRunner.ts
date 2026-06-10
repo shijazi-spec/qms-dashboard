@@ -189,6 +189,7 @@ export interface ResolutionRunConfig {
   maxClusters: number;
 }
 
+/** Env-only baseline (the deploy default). */
 export function getResolutionRunConfig(): ResolutionRunConfig {
   const mode = (process.env.AUTONOMOUS_RESOLUTION_MODE || "shadow").toLowerCase();
   const safeMode: ResolutionMode =
@@ -198,6 +199,104 @@ export function getResolutionRunConfig(): ResolutionRunConfig {
     enabled: process.env.AUTONOMOUS_RESOLUTION_ENABLED === "true",
     mode: safeMode,
     maxClusters: Number.isFinite(max) && max > 0 ? Math.floor(max) : 100,
+  };
+}
+
+// ── In-platform mode override (DB-backed; overlays the env baseline) ───────────
+// Lets an admin promote shadow → assisted → autonomous (and the kill switch)
+// from the dashboard WITHOUT editing Replit env / republishing — it takes effect
+// on the next tick. The agent never changes its own mode (segregation of duties).
+
+let _settingsReady = false;
+async function ensureResolutionSettingsTable(): Promise<void> {
+  if (_settingsReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS autonomous_resolution_settings (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      enabled BOOLEAN,
+      mode VARCHAR(16),
+      updated_by VARCHAR(255),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      CONSTRAINT autonomous_resolution_settings_singleton CHECK (id = 1)
+    );
+  `);
+  _settingsReady = true;
+}
+
+export interface ResolutionSettingOverride {
+  enabled: boolean | null;
+  mode: ResolutionMode | null;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+
+export async function getResolutionSettingOverride(): Promise<ResolutionSettingOverride | null> {
+  try {
+    await ensureResolutionSettingsTable();
+    const r = await pool.query(
+      `SELECT enabled, mode, updated_by, updated_at FROM autonomous_resolution_settings WHERE id = 1`,
+    );
+    if (!r.rows.length) return null;
+    const row = r.rows[0];
+    const mode =
+      row.mode === "shadow" || row.mode === "assisted" || row.mode === "autonomous"
+        ? (row.mode as ResolutionMode)
+        : null;
+    return {
+      enabled: row.enabled === null || row.enabled === undefined ? null : !!row.enabled,
+      mode,
+      updatedBy: row.updated_by ?? null,
+      updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    };
+  } catch (e) {
+    logger.warn("[dup-resolution-runner] getResolutionSettingOverride failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return null;
+  }
+}
+
+/** Persist an in-platform mode / kill-switch change. */
+export async function setResolutionSetting(
+  patch: { enabled?: boolean; mode?: ResolutionMode },
+  updatedBy: string,
+): Promise<ResolutionSettingOverride | null> {
+  await ensureResolutionSettingsTable();
+  const current = (await getResolutionSettingOverride()) || {
+    enabled: null,
+    mode: null,
+    updatedBy: null,
+    updatedAt: null,
+  };
+  const nextEnabled = patch.enabled === undefined ? current.enabled : patch.enabled;
+  const nextMode = patch.mode === undefined ? current.mode : patch.mode;
+  await pool.query(
+    `INSERT INTO autonomous_resolution_settings (id, enabled, mode, updated_by, updated_at)
+     VALUES (1, $1, $2, $3, NOW())
+     ON CONFLICT (id) DO UPDATE
+       SET enabled = EXCLUDED.enabled, mode = EXCLUDED.mode,
+           updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
+    [nextEnabled, nextMode, updatedBy],
+  );
+  return getResolutionSettingOverride();
+}
+
+/** Effective config = env baseline with the DB override applied per-field. */
+export async function resolveResolutionRunConfig(): Promise<
+  ResolutionRunConfig & { source: "env" | "override"; updatedBy: string | null; updatedAt: string | null }
+> {
+  const base = getResolutionRunConfig();
+  const ov = await getResolutionSettingOverride();
+  if (!ov || (ov.enabled === null && ov.mode === null)) {
+    return { ...base, source: "env", updatedBy: null, updatedAt: null };
+  }
+  return {
+    enabled: ov.enabled === null ? base.enabled : ov.enabled,
+    mode: ov.mode === null ? base.mode : ov.mode,
+    maxClusters: base.maxClusters,
+    source: "override",
+    updatedBy: ov.updatedBy,
+    updatedAt: ov.updatedAt,
   };
 }
 
@@ -343,7 +442,7 @@ export async function runAutonomousResolution(
 ): Promise<ResolutionRunSummary> {
   const startedAt = new Date().toISOString();
   const nowMs = opts.now ?? Date.now();
-  const cfg = getResolutionRunConfig();
+  const cfg = await resolveResolutionRunConfig();
   const mode = opts.modeOverride ?? cfg.mode;
   const policyCfg = getResolutionPolicyConfig();
 
@@ -410,7 +509,7 @@ export async function runResolutionForCluster(
 ): Promise<ResolutionRunSummary> {
   const startedAt = new Date().toISOString();
   const nowMs = opts.now ?? Date.now();
-  const cfg = getResolutionRunConfig();
+  const cfg = await resolveResolutionRunConfig();
   const mode = opts.modeOverride ?? cfg.mode;
   const policyCfg = getResolutionPolicyConfig();
   const writesAllowed = cfg.enabled && (mode === "assisted" || mode === "autonomous");

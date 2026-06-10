@@ -56,6 +56,21 @@
                 <div class="text-sm text-gray-500">Loading…</div>
             </div>
             <div id="runResult" class="mt-4 hidden text-sm"></div>
+
+            <!-- Admin-only mode control (populated by loadStatus when can_manage) -->
+            <div id="modeControl" class="hidden mt-5 pt-4 border-t border-gray-200">
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                        <div class="text-sm font-semibold text-gray-900">Operating mode</div>
+                        <div class="text-xs text-gray-500">shadow → assisted → autonomous. assisted/autonomous write to Zoho. Applies on the next tick — no republish.</div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div id="modeButtons" class="inline-flex rounded-lg border border-gray-300 overflow-hidden"></div>
+                        <button id="writesToggle" data-on-click="toggleWrites" class="px-3 py-2 text-sm rounded-lg border"></button>
+                    </div>
+                </div>
+                <div id="modeMeta" class="text-xs text-gray-400 mt-2"></div>
+            </div>
         </section>
 
         <!-- Competence grades -->
@@ -156,6 +171,69 @@
                 cell('Resolutions logged', esc(l.totalEvents != null ? l.totalEvents : '—')) +
                 cell('Slack ping', slackTxt);
             renderGradeCards(data.grades_latest || []);
+            renderModeControl(cfg, !!data.can_manage);
+        }
+
+        // Admin-only operating-mode control. Promotes shadow → assisted →
+        // autonomous (and the kill switch) from inside the platform.
+        var MODES = ['shadow', 'assisted', 'autonomous'];
+        function renderModeControl(cfg, canManage) {
+            var box = document.getElementById('modeControl');
+            if (!box) return;
+            if (!canManage) { box.classList.add('hidden'); return; }
+            box.classList.remove('hidden');
+            var current = cfg.mode || 'shadow';
+            document.getElementById('modeButtons').innerHTML = MODES.map(function (m) {
+                var active = m === current;
+                var cls = active
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50';
+                return '<button data-on-click="setMode" data-args="[' + esc(JSON.stringify(m)) + ']" ' +
+                    'class="px-3 py-2 text-sm border-r border-gray-300 last:border-r-0 ' + cls + '">' + esc(m) + '</button>';
+            }).join('');
+            var wt = document.getElementById('writesToggle');
+            if (cfg.enabled) {
+                wt.textContent = 'Writes ON — click to disable';
+                wt.className = 'px-3 py-2 text-sm rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
+            } else {
+                wt.textContent = 'Writes OFF (kill-switch) — click to enable';
+                wt.className = 'px-3 py-2 text-sm rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100';
+            }
+            var meta = document.getElementById('modeMeta');
+            meta.textContent = (cfg.source === 'override')
+                ? ('Set in-platform' + (cfg.updatedBy ? ' by ' + cfg.updatedBy : '') + (cfg.updatedAt ? ' · ' + new Date(cfg.updatedAt).toLocaleString() : ''))
+                : 'Using the deployment default (env). Changing it here overrides that on the next tick.';
+        }
+
+        async function postMode(patch, confirmMsg) {
+            if (confirmMsg && !confirm(confirmMsg)) { loadStatus(); return; }
+            try {
+                var r = await fetch('/api/duplicates/autonomous/mode', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(patch)
+                });
+                var data = await r.json();
+                if (!r.ok || !data.ok) { alert('Could not change mode: ' + ((data && data.error) || r.status)); }
+            } catch (e) { alert('Mode change failed: ' + e); }
+            loadStatus();
+        }
+
+        function setMode(mode) {
+            var msg = (mode === 'shadow')
+                ? null
+                : 'Switch the agent to "' + mode + '" mode?\n\nIn this mode it will AUTO-APPLY the safe tier to Zoho on your behalf (the doubtful 1% still queues for approval). Make sure writes are enabled for it to act.';
+            postMode({ mode: mode }, msg);
+        }
+
+        function toggleWrites() {
+            // Read current state from the button label.
+            var wt = document.getElementById('writesToggle');
+            var turningOn = /enable/i.test(wt.textContent);
+            var msg = turningOn
+                ? 'Enable writes? The agent will be allowed to apply merges to Zoho (per the current mode). The doubtful 1% still queues for your approval.'
+                : 'Disable writes (kill switch)? The agent will stop ALL Zoho writes immediately on the next tick.';
+            postMode({ enabled: turningOn }, msg);
         }
 
         function cell(label, valueHtml) {
