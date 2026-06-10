@@ -581,6 +581,75 @@ export const consultantRoutes = [
   },
 
   {
+    // Adam's persistent Working Memory for the requesting user — the durable
+    // "what Adam knows about me" profile that follows them across every chat
+    // (web + Slack). PDPL/ISO 27001: a user can only ever read THEIR OWN
+    // memory (namespaced by resourceId) and can clear it via the sibling
+    // /clear route. Returns the raw markdown so the page can render it.
+    path: "/api/consultant/memory",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const mastra = c.get("mastra");
+          const agent = mastra?.getAgent("qmsConsultantAgent");
+          const memory = agent ? await agent.getMemory?.() : null;
+          if (!memory) return c.json({ memory: "", enabled: false });
+
+          const resourceId = userResourceId(user.userId);
+          // Working memory is resource-scoped; threadId is required by the
+          // signature but the stored value is keyed by resourceId.
+          const content = await memory.getWorkingMemory({
+            threadId: `consultant-${user.userId}`,
+            resourceId,
+          });
+          return c.json({ memory: content || "", enabled: true });
+        } catch (error) {
+          logger.error("[Consultant] Working-memory fetch error:", error);
+          return c.json({ error: "Failed to fetch memory" }, 500);
+        }
+      };
+    },
+  },
+
+  {
+    // Clear what Adam remembers about the requesting user (PDPL right to
+    // erasure). Resets the resource-scoped working memory to empty so the
+    // next conversation starts fresh. Only ever affects the caller's own
+    // namespace.
+    path: "/api/consultant/memory/clear",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRole(c, CONSULTANT_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          const mastra = c.get("mastra");
+          const agent = mastra?.getAgent("qmsConsultantAgent");
+          const memory = agent ? await agent.getMemory?.() : null;
+          if (!memory) return c.json({ ok: true });
+
+          const resourceId = userResourceId(user.userId);
+          await memory.updateWorkingMemory({
+            threadId: `consultant-${user.userId}`,
+            resourceId,
+            workingMemory: "",
+          });
+          logger.info(`[Consultant] Working memory cleared for ${resourceId}`);
+          return c.json({ ok: true });
+        } catch (error) {
+          logger.error("[Consultant] Working-memory clear error:", error);
+          return c.json({ error: "Failed to clear memory" }, 500);
+        }
+      };
+    },
+  },
+
+  {
     path: "/api/consultant/chat",
     method: "POST" as const,
     createHandler: async () => {

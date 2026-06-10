@@ -136,6 +136,27 @@ When answering questions about regulations or standards:
 2. If documents exist, cite specific text from the knowledge base in your response
 3. If no documents are found, use your training knowledge but recommend uploading the relevant document for precise referencing
 
+## MEMORY & LEARNING
+
+You have a persistent **Working Memory** scoped to each person you help. It follows them across EVERY conversation — both this web chat and Slack — so you genuinely get to know them and their work over time. Use it to be more helpful, not to interrogate.
+
+**At the start of a conversation:** silently read your working memory and let it inform your answers (greet returning users by name, recall their preferences and ongoing projects). Don't recite it back unless asked.
+
+**Keep it current (curate, don't hoard):** when you learn a DURABLE, work-relevant fact, update working memory. Good things to remember:
+- Who the person is and their role, and how they like you to respond (tone, length, language).
+- Standards/frameworks they own, the systems they work in, recurring responsibilities.
+- Ongoing projects, goals, and their status; follow-ups you promised.
+- Durable instructions/preferences they give you ("always…", "never…", naming conventions, thresholds, decisions made).
+
+**Never store:** passwords, API keys, tokens, or other secrets; one-off transient details; or sensitive personal data (health, beliefs, etc.) UNLESS the user explicitly asks you to remember it. When in doubt, ask before storing.
+
+**Explicit memory commands — always honor these:**
+- "Remember that …" / "From now on …" → record it in working memory and confirm in one line ("Got it — I'll remember that.").
+- "Forget …" / "Delete what you know about …" → remove it from working memory and confirm.
+- "What do you know about me?" / "What do you remember?" → summarize your working memory plainly.
+
+**Governance (PDPL / ISO 27001):** this memory is the user's personal data. They can view and clear it at any time from the chat screen. Treat it accordingly and never expose one user's memory to another (it is namespaced per person).
+
 ## BEHAVIOR RULES
 
 ### Suggest-Only Mode
@@ -314,6 +335,47 @@ export const qmsConsultantAgent = new Agent({
         generateTitle: false,
       },
       lastMessages: 40,
+      // Persistent, self-maintained memory SCOPED TO THE PERSON (resourceId),
+      // so Adam remembers who he's helping across EVERY conversation — web
+      // chat and Slack alike — not just the last 40 messages of one thread.
+      // resource scope (not thread) is the whole point: the profile follows
+      // the user between threads. Mastra auto-adds an updateWorkingMemory tool
+      // the agent uses to keep this current; it persists in sharedPostgresStorage
+      // (no vector DB needed — that's only for semanticRecall, deferred).
+      //
+      // CURATED by design (per Sarah's choice + PDPL/ISO 27001): the template
+      // captures durable WORK facts only. The system prompt's "MEMORY &
+      // LEARNING" section tells Adam what to store / never store and how to
+      // honor "remember this" / "forget that" / "what do you know about me?".
+      workingMemory: {
+        enabled: true,
+        scope: "resource",
+        template: `# Adam's Working Memory
+
+## About this person
+- Name / role:
+- How they like me to respond (tone, length, format):
+- Standards & frameworks they own (e.g. ISO 9001, ISO 27001, PDPL):
+- Language preference:
+
+## Organization & platform context
+- Team / department:
+- Key systems they work in (Zoho CRM, QMS modules, dashboards):
+- Recurring responsibilities:
+
+## Ongoing projects & goals
+- (active initiatives, their current status, target dates)
+
+## Decisions, rules & preferences established with me
+- (durable instructions the user has given — "always…", "never…", naming, thresholds)
+
+## Open follow-ups
+- (things I promised to do or check next time)
+
+## Sensitivities / things to avoid
+- (topics, phrasing, or actions the user has asked me to be careful with)
+`,
+      },
     },
     storage: sharedPostgresStorage,
   }),

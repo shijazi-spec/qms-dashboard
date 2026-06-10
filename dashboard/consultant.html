@@ -258,6 +258,22 @@
                     </button>
                 </div>
 
+                <!-- What Adam Remembers (Working Memory) -->
+                <div class="mt-3 pt-3 border-t border-gray-200">
+                    <div class="flex items-center justify-between mb-2 sidebar-section-btn" data-on-click="toggleSection" data-args='["adamMemoryBox"]'>
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="consultant.memory_title">What Adam Remembers</span>
+                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </div>
+                    <div id="adamMemoryBox" class="mb-2">
+                        <p class="text-[11px] text-gray-400 mb-1" data-i18n="consultant.memory_hint">Durable notes Adam keeps about you across chats. Say "remember…" or "forget…" to change them.</p>
+                        <pre id="adamMemoryContent" class="text-[11px] leading-snug text-gray-600 whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded-lg p-2 max-h-48 overflow-y-auto">Loading…</pre>
+                        <div class="flex items-center gap-2 mt-1">
+                            <button data-on-click="loadAdamMemory" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium" data-i18n="consultant.memory_refresh">Refresh</button>
+                            <button data-on-click="clearAdamMemory" class="text-[10px] text-red-600 hover:text-red-800 font-medium" data-i18n="consultant.memory_clear">Clear memory</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Alerts Section -->
                 <div class="mt-3 pt-3 border-t border-gray-200">
                     <div class="flex items-center justify-between mb-2">
@@ -1739,6 +1755,38 @@
         window.toggleSidebar = toggleSidebar;
         window.exportChat = exportChat;
 
+        // ── What Adam Remembers (resource-scoped working memory) ──────────
+        async function loadAdamMemory() {
+            var el = document.getElementById('adamMemoryContent');
+            if (!el) return;
+            try {
+                var res = await fetch('/api/consultant/memory', { credentials: 'same-origin' });
+                var data = await res.json();
+                if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                var mem = (data && data.memory ? String(data.memory) : '').trim();
+                el.textContent = mem || "Adam hasn't noted anything about you yet. As you chat — or say \"remember…\" — durable notes will appear here.";
+            } catch (e) {
+                el.textContent = 'Could not load memory: ' + (e && e.message || e);
+            }
+        }
+        async function clearAdamMemory() {
+            var msg = (window.WalaPlusI18n ? window.WalaPlusI18n.t('consultant.memory_clear_confirm') : '') ||
+                'Clear everything Adam remembers about you? This cannot be undone.';
+            if (!confirm(msg)) return;
+            var el = document.getElementById('adamMemoryContent');
+            try {
+                var res = await fetch('/api/consultant/memory/clear', { method: 'POST', credentials: 'same-origin' });
+                var data = await res.json();
+                if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                if (el) el.textContent = 'Memory cleared.';
+                await loadAdamMemory();
+            } catch (e) {
+                if (el) el.textContent = 'Could not clear memory: ' + (e && e.message || e);
+            }
+        }
+        window.loadAdamMemory = loadAdamMemory;
+        window.clearAdamMemory = clearAdamMemory;
+
         async function loadChecklists() {
             try {
                 var res = await fetch('/api/checklists');
@@ -1871,6 +1919,7 @@
         updateAlertBadge();
         loadWelcomeData();
         loadThreadHistory();
+        loadAdamMemory();
 
         /**
          * Re-hydrate the chat transcript from the server when the user
