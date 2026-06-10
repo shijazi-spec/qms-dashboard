@@ -101,9 +101,16 @@ const RECORD_TYPE: Record<string, string> = {
 };
 
 /**
- * Compute competence metrics for one module from duplicate_resolution_feedback.
- * Approximation from currently-captured fields (override rate ⇒ agreement);
- * gets richer as the approval flow logs explicit approve/reject. Window in days.
+ * Compute competence metrics for one module from REAL human-validated decisions.
+ *
+ * A "decision" only counts when a human actually ruled on it — otherwise the
+ * agent would grade itself to G4 just by dry-running in shadow (nobody overrode
+ * the dry-runs ⇒ 0% override ⇒ false 100% agreement). So unreviewed previews/
+ * dry-runs are EXCLUDED; the grade is driven by:
+ *   AGREE    = approvals-queue approved/executed  +  applied-and-not-undone
+ *   DISAGREE = approvals-queue rejected           +  undos  +  survivor overrides
+ * Validated decisions = AGREE + DISAGREE. Zero validated ⇒ empty ⇒ G1 Trainee
+ * (honest: "you haven't validated anything yet"). Window in days.
  */
 export async function computeModuleMetrics(
   module: string,
@@ -117,27 +124,56 @@ export async function computeModuleMetrics(
     appliedCount: 0,
   };
   try {
+    // 1) Explicit verdicts from the AI Approvals queue (the shadow/assisted
+    //    review signal). Best-effort — table may be absent on a fresh deploy.
+    let queueApproved = 0;
+    let queueRejected = 0;
+    try {
+      const q = await pool.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE status IN ('approved','executed'))::int AS approved,
+           COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected
+         FROM ai_pending_actions
+         WHERE tool_id = 'duplicate-resolution'
+           AND created_at > NOW() - ($2 || ' days')::interval
+           AND payload->>'module' = $1`,
+        [module, String(windowDays)],
+      );
+      queueApproved = Number(q.rows[0]?.approved || 0);
+      queueRejected = Number(q.rows[0]?.rejected || 0);
+    } catch {
+      /* approvals table not present yet */
+    }
+
+    // 2) Real applies, undos, overrides from the resolution feedback log.
     const r = await pool.query(
       `SELECT
-         COUNT(*) FILTER (WHERE event_type IN ('applied','dry_run'))::int AS decisions,
-         COUNT(*) FILTER (WHERE event_type = 'applied')::int AS applied,
+         COUNT(*) FILTER (WHERE event_type = 'applied' AND COALESCE(performed_by,'') NOT ILIKE 'UNDO%')::int AS applied,
+         COUNT(*) FILTER (WHERE COALESCE(performed_by,'') ILIKE 'UNDO%')::int AS undos,
          COUNT(*) FILTER (WHERE master_overridden)::int AS overrides,
-         COUNT(*) FILTER (WHERE event_type = 'applied' AND (COALESCE(performed_by,'') ILIKE '%GRQ Assistant%' OR COALESCE(performed_by,'') ILIKE '%Autonomous Agent%'))::int AS auto_applied
+         COUNT(*) FILTER (WHERE event_type = 'applied' AND COALESCE(performed_by,'') NOT ILIKE 'UNDO%'
+                          AND (COALESCE(performed_by,'') ILIKE '%GRQ Assistant%' OR COALESCE(performed_by,'') ILIKE '%Autonomous Agent%'))::int AS auto_applied
        FROM duplicate_resolution_feedback
        WHERE created_at > NOW() - ($2 || ' days')::interval
          AND plan_json->>'module' = $1`,
       [module, String(windowDays)],
     );
     const row = r.rows[0] || {};
-    const decisions = Number(row.decisions || 0);
-    if (decisions === 0) return empty;
-    const overrides = Number(row.overrides || 0);
     const applied = Number(row.applied || 0);
-    const overrideRate = overrides / decisions;
+    const undos = Number(row.undos || 0);
+    const overrides = Number(row.overrides || 0);
+
+    // Applied-and-not-undone = tacit agreement (only relevant once writes are on).
+    const appliedKept = Math.max(0, applied - undos);
+    const agree = queueApproved + appliedKept;
+    const disagree = queueRejected + undos + overrides;
+    const validated = agree + disagree;
+    if (validated === 0) return empty; // nothing human-validated yet → G1 Trainee
+
     return {
-      decisions,
-      agreementRate: Math.max(0, 1 - overrideRate),
-      overrideRate,
+      decisions: validated,
+      agreementRate: agree / validated,
+      overrideRate: disagree / validated,
       autoShare: applied > 0 ? Number(row.auto_applied || 0) / applied : 0,
       appliedCount: applied,
     };
