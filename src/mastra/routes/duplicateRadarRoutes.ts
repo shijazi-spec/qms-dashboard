@@ -140,8 +140,6 @@ import {
   fetchRecordAttachments,
   fetchZohoRelatedRecords,
   removeZohoTags,
-  analyzeRecordHygiene,
-  DEFAULT_GOVERNANCE_RULES,
 } from "../../utils/zohoCRM";
 import {
   DEAL_COMPLIANCE_STAGES,
@@ -1607,9 +1605,12 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Deal-stage compliance (Sales SOP 7.5): deals in Proposal/Paid/Agreement
-    // Signed + their required-FIELD gaps (from analyzeRecordHygiene). Document
-    // (attachment) checks are loaded per-row via the doc-compliance endpoint.
+    // Deal-stage DOCUMENT compliance (Sales SOP 7.5.10): lists deals in
+    // Proposal/Paid/Agreement Signed + the documents each stage requires.
+    // Field/data-entry compliance is owned by the Quality Dashboard audit;
+    // this surface is purely the Zoho-Attachments layer. Per-deal document
+    // verification is loaded via the doc-compliance endpoint (lazy, bounds
+    // Zoho calls).
     path: "/api/duplicates/deal-compliance",
     method: "GET" as const,
     createHandler: async () => {
@@ -1631,20 +1632,9 @@ export const duplicateRadarRoutes = [
           } catch (e: any) {
             return c.json({ error: `Zoho fetch failed: ${e?.message || e}` }, 502);
           }
-          const dealRules = DEFAULT_GOVERNANCE_RULES.filter((r) => r.module === "Deals");
           const rows = deals.map((rec: any) => {
             const d = rec.data || {};
             const stage = d.Stage || "";
-            let fieldIssues: any[] = [];
-            try {
-              fieldIssues = analyzeRecordHygiene(rec, dealRules).map((i: any) => ({
-                field: i.fieldName,
-                description: i.description,
-                severity: i.severity,
-              }));
-            } catch {
-              /* hygiene best-effort */
-            }
             return {
               id: rec.id,
               name: d.Deal_Name || rec.id,
@@ -1653,15 +1643,13 @@ export const duplicateRadarRoutes = [
               amount: d.Amount ?? null,
               accountName:
                 (typeof d.Account_Name === "object" ? d.Account_Name?.name : d.Account_Name) || null,
-              fieldIssues,
               requiredDocs: requiredDocsForStage(stage).map((x) => ({ key: x.key, label: x.label })),
             };
           });
-          const byStage: Record<string, { total: number; fieldGaps: number }> = {};
+          const byStage: Record<string, { total: number }> = {};
           for (const r of rows) {
-            byStage[r.stage] = byStage[r.stage] || { total: 0, fieldGaps: 0 };
+            byStage[r.stage] = byStage[r.stage] || { total: 0 };
             byStage[r.stage].total++;
-            if (r.fieldIssues.length) byStage[r.stage].fieldGaps++;
           }
           return c.json({ total: rows.length, by_stage: byStage, deals: rows });
         } catch (e: any) {

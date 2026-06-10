@@ -504,20 +504,24 @@
         <!-- ═══ DEAL COMPLIANCE TAB (Sales SOP 7.5 — docs + fields) ═══ -->
         <div id="content-deal-compliance" class="tab-content hidden">
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-900">
-                <strong>Deal Compliance.</strong> Deals in <strong>Proposal</strong>, <strong>Paid</strong> and <strong>Agreement Signed</strong> must carry the required documents and mandatory fields per Sales SOP 7.5.
-                Proposal needs the financial offer (العرض المالي); Paid / Agreement Signed need the proposal, contract/PO, VAT certificate, Commercial Registration and National Address — plus the mandatory deal &amp; onboarding fields. Read-only — this flags gaps; Sales fixes them in Zoho.
+                <strong>Deal Compliance — Documents.</strong> Verifies the <strong>Zoho Attachments</strong> on deals in <strong>Proposal</strong>, <strong>Paid</strong> and <strong>Agreement Signed</strong> per Sales SOP 7.5.10:
+                Proposal needs the financial offer (العرض المالي); Paid / Agreement Signed need the proposal, contract/PO, VAT certificate, Commercial Registration and National Address.
+                <em>Field / data-entry compliance is on the <a href="/" class="underline font-medium">Quality Dashboard</a> audit — this surface checks the uploaded files.</em>
             </div>
             <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
                 <div id="dealComplianceSummary" class="text-sm text-gray-600">—</div>
-                <button data-on-click="loadDealCompliance" class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Reload</button>
+                <div class="flex items-center gap-2">
+                    <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" class="px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700">📎 Check all documents</button>
+                    <button data-on-click="loadDealCompliance" class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Reload</button>
+                </div>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead><tr class="text-xs text-gray-500 text-left border-b border-gray-200">
                         <th class="px-3 py-2">Deal</th><th class="px-3 py-2">Stage</th><th class="px-3 py-2">Owner</th>
-                        <th class="px-3 py-2 text-end">Amount</th><th class="px-3 py-2">Missing fields</th><th class="px-3 py-2">Documents</th>
+                        <th class="px-3 py-2 text-end">Amount</th><th class="px-3 py-2">Required documents</th>
                     </tr></thead>
-                    <tbody id="dealComplianceBody"><tr><td colspan="6" class="px-3 py-4 text-gray-500">Open this tab to load deals…</td></tr></tbody>
+                    <tbody id="dealComplianceBody"><tr><td colspan="5" class="px-3 py-4 text-gray-500">Open this tab to load deals…</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -6200,41 +6204,55 @@
             var body = document.getElementById('dealComplianceBody');
             var summary = document.getElementById('dealComplianceSummary');
             if (!body) return;
-            body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">Loading deals from Zoho…</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">Loading deals from Zoho…</td></tr>';
             var data;
             try {
                 var res = await fetch('/api/duplicates/deal-compliance', { credentials: 'same-origin' });
                 data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
-                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-amber-700">Could not load: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-amber-700">Could not load: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
                 return;
             }
             window._loadedTabs.add('deal-compliance');
             var deals = (data && data.deals) || [];
             var bs = (data && data.by_stage) || {};
             summary.innerHTML = (data.total || 0) + ' deal(s) in Proposal/Paid/Agreement Signed · ' +
-                Object.keys(bs).map(function (s) { return escapeHtml(s) + ': ' + bs[s].fieldGaps + '/' + bs[s].total + ' with field gaps'; }).join(' · ');
+                Object.keys(bs).map(function (s) { return escapeHtml(s) + ': ' + bs[s].total; }).join(' · ') +
+                ' · <span class="text-gray-400">click a row’s button (or “Check all”) to verify attachments</span>';
             if (!deals.length) {
-                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">No deals in these stages.</td></tr>';
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">No deals in these stages.</td></tr>';
                 return;
             }
             body.innerHTML = deals.map(function (d) {
-                var fields = (d.fieldIssues || []);
-                var fieldCell = fields.length
-                    ? fields.slice(0, 6).map(function (f) { return '<span class="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs mr-1 mb-1" title="' + escapeHtml(f.description || '') + '">' + escapeHtml(f.field) + '</span>'; }).join('')
-                    : '<span class="text-green-600 text-xs">✓ complete</span>';
+                var reqd = (d.requiredDocs || []).map(function (x) { return x.label; }).join(', ');
                 var docArgs = escapeHtml(JSON.stringify([String(d.id), String(d.stage)]));
-                return '<tr class="border-t border-gray-100 align-top">' +
+                return '<tr class="border-t border-gray-100 align-top" data-deal-id="' + escapeHtml(String(d.id)) + '" data-deal-stage="' + escapeHtml(String(d.stage)) + '">' +
                     '<td class="px-3 py-2 font-medium text-gray-800">' + escapeHtml(d.name) +
                         (d.accountName ? '<div class="text-xs text-gray-400">' + escapeHtml(d.accountName) + '</div>' : '') + '</td>' +
                     '<td class="px-3 py-2"><span class="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-xs">' + escapeHtml(d.stage) + '</span></td>' +
                     '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(d.owner) + '</td>' +
                     '<td class="px-3 py-2 text-end text-xs text-gray-700">' + (d.amount != null ? escapeHtml(String(d.amount)) : '—') + '</td>' +
-                    '<td class="px-3 py-2">' + fieldCell + '</td>' +
-                    '<td class="px-3 py-2"><span id="docs-' + escapeHtml(String(d.id)) + '"><button data-on-click="checkDealDocs" data-args=\'' + docArgs + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 Check documents</button></span></td>' +
+                    '<td class="px-3 py-2"><span id="docs-' + escapeHtml(String(d.id)) + '" title="Required: ' + escapeHtml(reqd) + '"><button data-on-click="checkDealDocs" data-args=\'' + docArgs + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 Check documents</button></span></td>' +
                     '</tr>';
             }).join('');
+        }
+
+        // Sequentially verify documents for every loaded deal (bounded, paced to
+        // respect Zoho rate limits). Documents is the whole point of this tab.
+        async function checkAllDealDocs() {
+            var btn = document.getElementById('checkAllDocsBtn');
+            var rows = Array.prototype.slice.call(document.querySelectorAll('#dealComplianceBody tr[data-deal-id]'));
+            if (!rows.length) return;
+            var cap = Math.min(rows.length, 200);
+            if (btn) { btn.disabled = true; }
+            for (var i = 0; i < cap; i++) {
+                if (btn) btn.textContent = 'Checking ' + (i + 1) + '/' + cap + '…';
+                var id = rows[i].getAttribute('data-deal-id');
+                var stage = rows[i].getAttribute('data-deal-stage');
+                await checkDealDocs(id, stage);
+            }
+            if (btn) { btn.disabled = false; btn.textContent = '📎 Check all documents'; }
         }
 
         // Lazily fetch a deal's Zoho attachments and show which required docs are present/missing.
