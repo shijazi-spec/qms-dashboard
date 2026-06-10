@@ -631,12 +631,25 @@ export function buildMergePlan(
   const masterReason = overridden
     ? `Operator-selected survivor — ${Math.round(completeness(master, fields) * 100)}% of tracked fields populated`
     : masterReasonText(master, fields);
-  const rationale =
-    `Proposed survivor: "${recName(master)}"` +
-    (master.zoho_record_id ? ` (${master.zoho_record_id})` : "") +
-    ` — ${masterReason}. ${duplicates.length} duplicate(s) would be tagged "${tagName}" for the Zoho admin to delete. ` +
-    `${fillCount} field(s) would be migrated onto the survivor; ${conflictCount} field conflict(s) flagged for review. ` +
-    `The platform deletes nothing — it only edits the survivor and tags the duplicates.`;
+  // LINK-ONLY rationale for Contacts (Sarah Hijazi 2026-06-10):
+  // when 0 contacts qualify as duplicates under the ≥2-attribute rule,
+  // the plan is "link cascade only" — no tagging happens. The rationale
+  // text must say that explicitly so chat/agent/log consumers don't read
+  // "0 duplicate(s) would be tagged" as a noisy merge proposal.
+  const linkOnlyMode =
+    module === "Contacts" &&
+    duplicates.length === 0 &&
+    cascadeOnlyZohoIds.length > 0;
+  const rationale = linkOnlyMode
+    ? `Link-only plan for "${recName(master)}"` +
+      (master.zoho_record_id ? ` (${master.zoho_record_id})` : "") +
+      `. ${cascadeOnlyZohoIds.length} other contact(s) in this cluster do NOT pairwise share ≥2 of {email, phone, name} with the survivor — they are different people at the same Account, not duplicates of each other. ` +
+      `On Apply, every contact's Account_Name is updated to the chosen Account. No record is tagged "${tagName}"; the platform deletes nothing.`
+    : `Proposed survivor: "${recName(master)}"` +
+      (master.zoho_record_id ? ` (${master.zoho_record_id})` : "") +
+      ` — ${masterReason}. ${duplicates.length} duplicate(s) would be tagged "${tagName}" for the Zoho admin to delete. ` +
+      `${fillCount} field(s) would be migrated onto the survivor; ${conflictCount} field conflict(s) flagged for review. ` +
+      `The platform deletes nothing — it only edits the survivor and tags the duplicates.`;
 
   return {
     clusterId,
