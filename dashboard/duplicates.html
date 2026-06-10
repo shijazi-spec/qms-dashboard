@@ -519,11 +519,14 @@
                 <div class="rounded-lg border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">Scanned (Zoho)</div><div id="dcCardScanned" class="text-2xl font-bold text-gray-900">—</div></div>
             </div>
             <div id="dealComplianceSummary" class="text-sm text-gray-600 mb-2">—</div>
-            <!-- 4-button toolbar (consistent with every other tab) -->
-            <div class="flex items-center gap-2 flex-wrap mb-3">
+            <!-- Toolbar — same right-aligned layout as Lead/Deal/Contact/Account
+                 Duplicates tabs. Sarah Hijazi (2026-06-10): match the other
+                 tabs + restore the "Check all documents" label on the
+                 docs-verification action so its purpose is obvious. -->
+            <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportDealCompliance" id="dcExportBtn" title="Download a CSV of the deals shown with their document status." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="loadDealCompliance" id="dcRefreshBtn" title="Re-fetch the deals in the selected stages from Zoho." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
-                <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" title="Fetch each deal's attachments and verify the required documents." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300">🔍 Run Scan</button>
+                <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" title="Fetch each deal's attachments and verify the required documents (financial offer, contract/PO, VAT, CR, National Address)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300">📎 Check all documents</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deal-compliance" title="Open a corrective-action record (CAPA) on a non-compliant deal. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
             <!-- In-tab Stage filter: tick the stages to check, then Apply (no need to leave the tab) -->
