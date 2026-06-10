@@ -1232,6 +1232,9 @@
                 hideTyping();
                 setInputState(false);
                 scrollToBottom();
+                // Keep the conversation in the persistent history after every
+                // exchange (not just on "New Chat"), so it's always recoverable.
+                try { saveChatToHistory(getThreadId(), chatMessages); } catch (e) {}
             }
         }
 
@@ -1445,9 +1448,16 @@
 
         function saveChatToHistory(tid, msgs) {
             try {
+                if (!tid || !msgs || !msgs.length) return;
                 var history = JSON.parse(localStorage.getItem('consultant_chat_history') || '[]');
+                // Upsert by threadId: keep ONE entry per conversation (no dupes),
+                // and preserve its original title if the current buffer has no
+                // user message (e.g. right after resuming a thread).
+                var existing = history.find(function(h) { return h.threadId === tid; });
                 var firstUserMsg = msgs.find(function(m) { return m.role === 'user'; });
-                var title = firstUserMsg ? firstUserMsg.content.substring(0, 50) : 'Chat';
+                var title = firstUserMsg ? firstUserMsg.content.substring(0, 50)
+                    : (existing ? existing.title : 'Chat');
+                history = history.filter(function(h) { return h.threadId !== tid; });
                 history.unshift({ threadId: tid, title: title, messages: msgs.length, time: new Date().toISOString() });
                 if (history.length > 20) history = history.slice(0, 20);
                 localStorage.setItem('consultant_chat_history', JSON.stringify(history));
@@ -1481,9 +1491,10 @@
             chatMessages = [];
             clearWelcome();
             messagesContainer.innerHTML = '';
-            var resumeBubble = createAssistantMessage();
-            resumeBubble.innerHTML = renderMarkdown('*Resumed previous conversation. I have context from our earlier discussion. How can I help?*');
             closeSidebarOnMobile();
+            // Render the ACTUAL past messages from the server (not a placeholder)
+            // so the old conversation is fully visible when reopened.
+            loadThreadHistory();
             chatInput.focus();
         };
 
