@@ -88,42 +88,47 @@ export interface ModuleBreakdownRow {
 }
 
 /**
- * Per-module duplicate scoreboard: total detected vs solved (in resolved
- * clusters) vs remaining (still active). Drives the "By module" list on the
+ * Per-module duplicate scoreboard counted in CLUSTERS (= the decisions to make,
+ * one per cluster), not raw records. total = clusters containing that module;
+ * solved = resolved; rest = still active. Drives the "By module" list on the
  * screen and the Slack run summary. Best-effort → zeros on any error.
  */
 export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow[]> {
-  const order: Array<{ rt: string; module: CrmModule }> = [
-    { rt: "lead", module: "Leads" },
-    { rt: "deal", module: "Deals" },
-    { rt: "contact", module: "Contacts" },
-    { rt: "account", module: "Accounts" },
+  const order: Array<{ col: string; module: CrmModule }> = [
+    { col: "total_leads", module: "Leads" },
+    { col: "total_deals", module: "Deals" },
+    { col: "total_contacts", module: "Contacts" },
+    { col: "total_accounts", module: "Accounts" },
   ];
-  const base: Record<string, ModuleBreakdownRow> = {};
-  order.forEach((o) => (base[o.rt] = { module: o.module, total: 0, solved: 0, rest: 0 }));
+  const rows: ModuleBreakdownRow[] = order.map((o) => ({
+    module: o.module,
+    total: 0,
+    solved: 0,
+    rest: 0,
+  }));
   try {
-    const r = await pool.query(
-      `SELECT dr.record_type AS rt,
-              COUNT(*)::int AS total,
-              COUNT(*) FILTER (WHERE dc.status = 'resolved')::int AS solved,
-              COUNT(*) FILTER (WHERE dc.status = 'active')::int AS rest
-         FROM duplicate_records dr
-         JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
-        GROUP BY dr.record_type`,
-    );
-    for (const row of r.rows) {
-      if (base[row.rt]) {
-        base[row.rt].total = Number(row.total || 0);
-        base[row.rt].solved = Number(row.solved || 0);
-        base[row.rt].rest = Number(row.rest || 0);
-      }
-    }
+    // One row, 12 counts: per module-column, clusters that include it, split by status.
+    const selects = order
+      .map(
+        (o) =>
+          `COUNT(*) FILTER (WHERE ${o.col} > 0)::int AS ${o.col}_t,
+           COUNT(*) FILTER (WHERE ${o.col} > 0 AND status='resolved')::int AS ${o.col}_s,
+           COUNT(*) FILTER (WHERE ${o.col} > 0 AND status='active')::int AS ${o.col}_r`,
+      )
+      .join(",\n");
+    const r = await pool.query(`SELECT ${selects} FROM duplicate_clusters`);
+    const row = r.rows[0] || {};
+    order.forEach((o, i) => {
+      rows[i].total = Number(row[`${o.col}_t`] || 0);
+      rows[i].solved = Number(row[`${o.col}_s`] || 0);
+      rows[i].rest = Number(row[`${o.col}_r`] || 0);
+    });
   } catch (e) {
     logger.warn("[dup-resolution-runner] module breakdown failed (non-fatal)", {
       error: e instanceof Error ? e.message : String(e),
     });
   }
-  return order.map((o) => base[o.rt]);
+  return rows;
 }
 
 /**
@@ -178,7 +183,7 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
       const rows = await getModuleResolutionBreakdown();
       const lines = rows
         .filter((b) => b.total > 0)
-        .map((b) => `›  *${b.module} Duplicates* — ${b.total} total · ${b.solved} solved · ${b.rest} left`);
+        .map((b) => `›  *${b.module} Duplicates* — ${b.total} clusters · ${b.solved} solved · ${b.rest} left`);
       if (lines.length) breakdownText = `\n\n*By module:*\n${lines.join("\n")}`;
     } catch {
       /* breakdown is best-effort */
