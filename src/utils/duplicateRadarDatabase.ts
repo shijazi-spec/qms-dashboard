@@ -260,6 +260,40 @@ export async function getClustersBySignal(
   return r.rows;
 }
 
+// Free-text search across clusters by company name (EN/AR/normalized) or
+// domain — powers the "show me everything on <X>" entity lookup so Adam can
+// flag that a looked-up company also has open duplicate clusters. Active
+// clusters with >1 record only; capped.
+export async function searchClustersByText(
+  query: string,
+  limit = 10,
+): Promise<any[]> {
+  const q = (query || "").trim();
+  if (!q) return [];
+  const like = `%${q}%`;
+  const cap = Math.max(1, Math.min(limit, 50));
+  const r = await pool.query(
+    `SELECT id, domain, company_name, company_name_arabic,
+            estimated_pipeline_value, total_records,
+            total_leads, total_deals, total_contacts, total_accounts,
+            confidence_score, confidence_level, status,
+            cs_overlap_verdict, pipeline_lifecycle_state, client_sector
+       FROM duplicate_clusters
+      WHERE total_records > 1
+        AND status = 'active'
+        AND (
+          company_name ILIKE $1
+          OR company_name_arabic ILIKE $1
+          OR company_name_normalized ILIKE $1
+          OR domain ILIKE $1
+        )
+      ORDER BY estimated_pipeline_value DESC NULLS LAST, total_records DESC
+      LIMIT $2`,
+    [like, cap],
+  );
+  return r.rows;
+}
+
 export function extractDomain(email: string): string | null {
   if (!email || typeof email !== "string") return null;
   const match = email

@@ -20,6 +20,7 @@ import { searchKnowledgeTool } from "../tools/searchKnowledgeTool";
 import { suggestObligationMappingTool } from "../tools/suggestObligationMappingTool";
 import { createTrainingTool, getTrainingListTool, assignTrainingTool, getTrainingAssignmentsTool, completeTrainingTool } from "../tools/trainingManagementTool";
 import { duplicateResolutionAssistantTool } from "../tools/duplicateResolutionAssistantTool";
+import { lookupEntityTool } from "../tools/lookupEntityTool";
 import { withApprovalGate } from "../../utils/withApprovalGate";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
 
@@ -101,6 +102,9 @@ Use suggestImprovementsTool to analyze quality trends and recommend process impr
 ### Checklist Engine Tools
 21. **runChecklistTool**: Execute compliance checklists against live platform data. Use action="list" to see available checklists, action="run" with a checklistId to execute one and get a scored pass/fail report, or action="history" to see past runs and score trends.
 22. **manageChecklistTool**: Create, view, or delete structured compliance checklists. When a user asks you to create a checklist (e.g., "Create an ISO 9001 Clause 10.2 checklist"), build the items with appropriate check_types (count_check, existence_check, threshold_check, or manual) and module_to_query fields so they can be auto-verified. Available modules: nonconformances, capas, risks, policies, compliance, kpis, training, vendors, audits.
+
+### CRM Entity Lookup Tool
+25. **lookupEntityTool**: "Show me everything we have on <X>." Given ANY identifier — a company name, a person's name, a domain, an email, or a phone number — it searches all four Zoho modules at once (Accounts, Deals, Contacts, Leads) via Zoho's indexed global search and also surfaces any matching duplicate clusters. Use it whenever the user asks for everything on a company/client/person, or pastes a domain/email/phone/name to look up. After it returns, present a clear per-module summary (counts + the key records: deal stages/amounts, contact emails/phones, lead statuses, account details) and call out any duplicate clusters found. PDPL: this surfaces contact PII — only share it with the authorized user who asked.
 
 ### Duplicate Resolution Tool
 24. **duplicateResolutionAssistantTool**: Talk to the autonomous duplicate-resolution agent on Sarah's behalf. Use it whenever she asks about duplicate resolution. Actions: \`status\` (current mode/kill-switch/grades), \`preview_cluster\` (what it would do for a given cluster + module — read-only), \`list_rules\` (the learned routing rules), and \`make_rule\` (teach a durable rule so it never re-asks that case — e.g. "never auto-merge mixed-domain clusters" → decision=never_merge, caseSignature={"mixedDomains":true}; "always link contacts to their account" → decision=always_link, caseSignature={"module":"Contacts"}). It NEVER writes to Zoho — applying a merge stays gated behind the AI Approvals screen. After teaching a rule, confirm it back to her plainly.
@@ -310,6 +314,10 @@ export const qmsConsultantAgent = new Agent({
     // status, preview a cluster, list/teach learning rules. Never writes to
     // Zoho (policy-exempt; the gated 'duplicate-resolution' tool does writes).
     duplicateResolutionAssistantTool: wt(duplicateResolutionAssistantTool, AGENT_NAME),
+    // "Show me everything on <company/person/domain/email/phone>" — searches
+    // all four Zoho modules (Accounts/Deals/Contacts/Leads) at once + surfaces
+    // matching duplicate clusters. Read-only.
+    lookupEntityTool:                 wt(lookupEntityTool, AGENT_NAME),
 
     // --- HIGH-risk write tools (gated) ---
     createNcTool:         wt(withApprovalGate(createNcTool),         AGENT_NAME),
