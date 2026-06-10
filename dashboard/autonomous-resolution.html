@@ -254,12 +254,22 @@
                 var metrics = (g && g.metrics) || {};
                 var agree = metrics.agreementRate != null ? Math.round(metrics.agreementRate * 100) + '%' : '—';
                 var dec = metrics.decisions != null ? metrics.decisions : 0;
+                var r = readiness(grade);
                 return '<div class="rounded-lg border border-gray-200 p-3">' +
                     '<div class="flex items-center justify-between">' +
                     '<span class="font-medium text-gray-800">' + esc(m) + '</span>' +
                     '<span class="pill ' + esc(gradeClass(grade)) + '">G' + esc(grade) + ' ' + esc(label) + '</span></div>' +
-                    '<div class="text-xs text-gray-500 mt-2">Agreement ' + esc(agree) + ' · ' + esc(dec) + ' decisions</div></div>';
+                    '<div class="text-xs text-gray-500 mt-2">Agreement ' + esc(agree) + ' · ' + esc(dec) + ' decisions</div>' +
+                    '<div class="mt-2"><span class="pill ' + esc(r.cls) + '" title="' + esc(r.hint) + '">' + esc(r.label) + '</span></div></div>';
             }).join('');
+        }
+
+        // Per-module "safe to promote" signal, mapped from the deterministic grade.
+        function readiness(grade) {
+            if (grade >= 4) return { label: '✅ Ready for autonomous', cls: 'grade-g4', hint: 'G4 sustained (agreement ≥96%, override ≤5%) — safe to run autonomously.' };
+            if (grade === 3) return { label: '✅ Ready for assisted', cls: 'grade-g3', hint: 'G3 Trusted (agreement ≥92%, override ≤10%) — comfortable leaving it in assisted daily.' };
+            if (grade === 2) return { label: '⏳ Watch in assisted', cls: 'mode-shadow', hint: 'G2 — agreeing well, but keep an eye on the Agent Activity log / Undos before trusting it unattended.' };
+            return { label: '🔒 Keep in shadow', cls: 'grade-g1', hint: 'G1 — not enough proven history yet (needs ≥20 decisions at high agreement). Let it run in shadow.' };
         }
 
         async function loadGrades() {
