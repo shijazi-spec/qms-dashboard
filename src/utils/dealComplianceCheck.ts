@@ -23,12 +23,17 @@ export interface RequiredDoc {
 }
 
 /** DEFAULT stages the tab checks when the operator hasn't picked any in the
- *  Stage filter. Only the stages that actually exist in this Zoho pipeline. The
- *  operator can widen/narrow this via the Advanced Filters → Stage selector. */
-export const DEAL_COMPLIANCE_STAGES = ["Proposal", "Agreement Signed"] as const;
+ *  in-tab Stage filter. These are the three the business cares about:
+ *  Proposal (financial offer) + Agreement Signed & Paid (full doc set).
+ *  NOTE: "Paid" is NOT a separate concern — it is the Agreement-Signed stage
+ *  re-labelled for backdated/migrated deals that missed the data earlier, so
+ *  it carries the SAME full-document requirement (see FULL_DOC_STAGES). The
+ *  operator can widen/narrow this via the in-tab Stage filter. */
+export const DEAL_COMPLIANCE_STAGES = ["Proposal", "Agreement Signed", "Paid"] as const;
 
 /** Closing/won stages that require the FULL document set (7.5.10). Covers the
- *  common Zoho variants so a selected closing stage still gets doc requirements. */
+ *  common Zoho variants so a selected closing stage still gets doc requirements.
+ *  "paid" == "agreement signed" here by business rule (backdated deals). */
 const FULL_DOC_STAGES = [
   "paid",
   "agreement signed",

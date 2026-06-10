@@ -1658,6 +1658,8 @@ export const duplicateRadarRoutes = [
               amount: d.Amount ?? null,
               accountName:
                 (typeof d.Account_Name === "object" ? d.Account_Name?.name : d.Account_Name) || null,
+              source: d.Lead_Source || "",
+              createdTime: d.Created_Time || "",
               requiredDocs: requiredDocsForStage(stage).map((x) => ({ key: x.key, label: x.label })),
             };
           });
