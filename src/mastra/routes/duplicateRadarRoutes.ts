@@ -1173,6 +1173,52 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Per-Account child-deal counts. Replaces the 📎 attachments chip in
+    // the Accounts merge modal — "which of these two Accounts has the
+    // bigger Deals book?" is a stronger survivor signal than attachment
+    // counts. Sarah Hijazi (2026-06-10): "instead of attachments here we
+    // can add the no. of deals that inside the account itself".
+    //   GET /api/duplicates/clusters/:id/deal-counts
+    //   Response: { counts: { <accountZohoId>: N, ... } }
+    //   -1 = Zoho error (UI renders a neutral dash, no crash).
+    path: "/api/duplicates/clusters/:id/deal-counts",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+          const records = await getRecordsByClusterId(id);
+          const accountIds = records
+            .filter((r) => r.record_type === "account" && r.zoho_record_id)
+            .map((r) => r.zoho_record_id as string)
+            .slice(0, 25); // bound the Zoho fan-out per click
+          const counts: Record<string, number> = {};
+          await Promise.all(
+            accountIds.map(async (zid) => {
+              try {
+                const deals = await fetchZohoRelatedRecords(
+                  "Accounts",
+                  zid,
+                  "Deals",
+                  { perPage: 200 },
+                );
+                counts[zid] = Array.isArray(deals) ? deals.length : 0;
+              } catch {
+                counts[zid] = -1;
+              }
+            }),
+          );
+          return c.json({ counts });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Post-merge verification — re-query Zoho for every record this cluster
     // has tagged Duplicate-Delete (via prior merge_actions). Reports how many
     // the admin has actually deleted vs. still pending. Closes the "did the

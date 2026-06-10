@@ -4790,10 +4790,14 @@
             // checkboxes and subsequent dry-run/apply stay consistent.
             st.selected = (data.plan.records || []).filter(r => r.included && r.zohoId).map(r => r.zohoId);
             panel.innerHTML = __renderMergePlan(data.plan);
-            // Contacts modal shows the parent Account in the middle column
-            // instead of the 📎 chips, so there are no per-row "att-…" spans
-            // to fill — skip the fetch to avoid a useless network round-trip.
-            if (data.plan.module !== 'Contacts') {
+            // Middle-column lazy fill — three flavours:
+            //   Contacts → "Account" column reads from the planner; no fetch.
+            //   Accounts → "Deals" count column → /deal-counts (more useful
+            //              survivor signal than 📎 attachments).
+            //   Leads / Deals → 📎 attachments (as before).
+            if (data.plan.module === 'Accounts') {
+                loadAccountDealCounts(data.plan.clusterId);
+            } else if (data.plan.module !== 'Contacts') {
                 loadAttachmentChips(data.plan.module, data.plan.clusterId);
             }
             // Reparent preview — Accounts/Contacts merges repoint child
@@ -5016,6 +5020,41 @@
             } catch (_) { slot.textContent = '—'; }
         }
 
+        // Lazily fill the "Deals" column on the Accounts merge modal with the
+        // child-Deal count for each Account (via Zoho related list). Sarah
+        // Hijazi (2026-06-10): "instead of attachments here we can add the
+        // no. of deals that inside the account itself" — the bigger Deals
+        // book is a stronger survivor signal than attachment counts for
+        // Accounts. Best-effort: a Zoho rate-limit / error leaves the cell
+        // as a neutral dash instead of blocking the plan.
+        async function loadAccountDealCounts(clusterId) {
+            try {
+                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/deal-counts', { credentials: 'same-origin' });
+                if (!res.ok) return;
+                const data = await res.json();
+                const counts = (data && data.counts) || {};
+                Object.keys(counts).forEach(function (zohoId) {
+                    const el = document.getElementById('dealcount-Accounts-' + zohoId);
+                    if (!el) return;
+                    const n = Number(counts[zohoId]);
+                    if (n < 0) {
+                        // -1 sentinel = Zoho error; neutral dash.
+                        el.textContent = '—';
+                        el.className = 'text-xs text-gray-300';
+                        el.title = 'Could not fetch Deals from Zoho.';
+                    } else if (n > 0) {
+                        el.textContent = '💼 ' + n;
+                        el.className = 'text-xs font-semibold text-indigo-700';
+                        el.title = n + ' Deal(s) linked to this Account in Zoho';
+                    } else {
+                        el.textContent = '0';
+                        el.className = 'text-xs text-gray-400';
+                        el.title = 'No Deals linked to this Account';
+                    }
+                });
+            } catch (_) { /* non-fatal */ }
+        }
+
         // Lazily fill the 📎 column with per-record attachment counts. A record
         // with files is a strong "keep this one" signal — and the autonomous
         // agent refuses to auto-merge a duplicate that carries attachments.
@@ -5227,10 +5266,19 @@
                 const cb = r.zohoId
                     ? '<input type="checkbox" data-on-click="toggleMergeRecord" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '"]\'' + (included ? ' checked' : '') + ' class="cursor-pointer w-4 h-4" title="' + (linkOnlyMode ? 'Include this contact in the link cascade' : 'Include this record in the merge') + '">'
                     : '<span class="text-gray-300" title="No Zoho id — cannot be ' + (linkOnlyMode ? 'linked' : 'merged') + '">—</span>';
-                // Middle cell: Account (Contacts) | 📎 attachments (other modules)
-                const midCell = isContacts
-                    ? '<td class="px-3 py-2 text-xs text-gray-700" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">' + esc(r.accountName) + '</td>'
-                    : '<td class="px-3 py-2 text-center">' + (r.zohoId ? '<span id="att-' + esc(plan.module) + '-' + esc(r.zohoId) + '" class="text-xs text-gray-400" title="Attachments on this record">…</span>' : '<span class="text-gray-300">—</span>') + '</td>';
+                // Middle cell — three flavours by module:
+                //   Contacts → "Account" (parent Account_Name)
+                //   Accounts → "Deals" (count of child Deals — stronger
+                //              survivor signal than attachment counts)
+                //   Leads / Deals → 📎 attachments
+                let midCell;
+                if (isContacts) {
+                    midCell = '<td class="px-3 py-2 text-xs text-gray-700" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">' + esc(r.accountName) + '</td>';
+                } else if (plan.module === 'Accounts') {
+                    midCell = '<td class="px-3 py-2 text-center">' + (r.zohoId ? '<span id="dealcount-Accounts-' + esc(r.zohoId) + '" class="text-xs text-gray-400" title="Number of Deals linked to this Account (Zoho related list)">…</span>' : '<span class="text-gray-300">—</span>') + '</td>';
+                } else {
+                    midCell = '<td class="px-3 py-2 text-center">' + (r.zohoId ? '<span id="att-' + esc(plan.module) + '-' + esc(r.zohoId) + '" class="text-xs text-gray-400" title="Attachments on this record">…</span>' : '<span class="text-gray-300">—</span>') + '</td>';
+                }
                 // Make the Zoho ID clickable — every CRM id in the platform
                 // should jump straight to that Zoho record. The merge modal
                 // was the worst offender (id was monospaced plain text).
@@ -5307,7 +5355,13 @@
                 reparentSlot +
                 linkControl +
                 instructionLine +
-                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500">' + mergeColHeader + '<th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th>' + (isContacts ? '<th class="px-3 py-2 text-start" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">Account</th>' : '<th class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th>') + '<th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
+                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500">' + mergeColHeader + '<th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th>' + (
+                    isContacts
+                        ? '<th class="px-3 py-2 text-start" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">Account</th>'
+                        : plan.module === 'Accounts'
+                            ? '<th class="px-3 py-2 text-center" title="Number of Deals linked to each Account in Zoho. Stronger survivor signal than attachment counts — the Account with the bigger Deals book is usually the one to keep.">Deals</th>'
+                            : '<th class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th>'
+                ) + '<th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
                 (linkOnlyMode
                     ? ''
                     : '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Field migrations &amp; conflicts (' + (plan.fieldDecisions || []).length + ')</div>' +
