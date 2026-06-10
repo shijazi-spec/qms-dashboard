@@ -341,12 +341,24 @@ export function registerSlackTrigger<
         type: triggerType,
         params: {
           channel: payload.event.channel,
-          channelDisplayName: payload.channel.name,
+          // Optional-chained: in PRIVATE channels (and any case where
+          // conversations.info fails for lack of groups:read), payload.channel
+          // is undefined. Reading `.name` directly would throw and 500 the
+          // whole request — so the bot would silently never reply in a private
+          // channel even though it's a member. The display name is non-essential.
+          channelDisplayName: payload.channel?.name ?? "",
         },
         payload,
       } as TriggerInfoSlackOnNewMessage);
 
-      await reactToMessage(payload.event.channel, payload.event.ts, result);
+      // Best-effort reaction emoji — must NOT throw after the handler already
+      // replied. A missing reactions:write scope would otherwise 500 the
+      // request, making Slack retry and the bot post duplicate answers.
+      try {
+        await reactToMessage(payload.event.channel, payload.event.ts, result);
+      } catch (reactErr) {
+        logger?.error("Slack reaction failed (non-fatal)", { error: format(reactErr) });
+      }
 
       return c.text("OK", 200);
     } catch (error) {
