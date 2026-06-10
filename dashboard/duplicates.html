@@ -4935,8 +4935,16 @@
             }
             const l = live.data;
             panel.innerHTML += '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 mt-1">'
-                + '<strong>Done.</strong> Split ' + l.clustersSplit + ' cluster(s), moved ' + l.recordsMoved + ' contact(s), created ' + l.newClustersCreated + ' new cluster(s). Refresh the page to see the updated lists.'
+                + '<strong>Done.</strong> Split ' + l.clustersSplit + ' cluster(s), moved ' + l.recordsMoved + ' contact(s), created ' + l.newClustersCreated + ' new cluster(s). Reloading list…'
                 + '</div>';
+            // Auto-reload the Contact Duplicates list so the operator sees
+            // the recompacted page immediately — no manual refresh needed.
+            try {
+                if (typeof loadRecordTab === 'function') {
+                    const currentPage = (typeof recordPages !== 'undefined' && recordPages.contacts) || 0;
+                    loadRecordTab('contacts', currentPage);
+                }
+            } catch (_) { /* non-fatal */ }
             if (btn) btn.disabled = false;
         }
 
@@ -5218,10 +5226,25 @@
                 return;
             }
             panel.innerHTML = __renderExecReport(data.report);
-            // After a successful real apply, refresh the cluster list so the
-            // now-resolved cluster drops out of the active view.
-            if (isApply && data.report && data.report.clusterResolved && typeof refreshData === 'function') {
-                try { refreshData(); } catch (_) { /* non-fatal */ }
+            // After a successful real apply, refresh the active tab so the
+            // page recompacts to 20 visible clusters — the just-applied
+            // cluster moves from "Untouched" to "AI-Applied · pending Zoho
+            // admin delete" (cross-module case) or "Resolved" (single-module
+            // case). Either way, with the default Untouched chip selected
+            // the cluster leaves the page and the backend slides the next
+            // cluster in to fill the slot. Reload the CURRENT tab (cheaper
+            // than refreshData's full-page reload) and preserve the page
+            // number so the operator stays at the same scroll position.
+            if (isApply && data.report && !data.report.dryRun) {
+                try {
+                    const tab = window._currentTab;
+                    if (['leads','deals','contacts','accounts'].includes(tab) && typeof loadRecordTab === 'function') {
+                        const currentPage = (typeof recordPages !== 'undefined' && recordPages[tab]) || 0;
+                        loadRecordTab(tab, currentPage);
+                    } else if (typeof refreshData === 'function') {
+                        refreshData();
+                    }
+                } catch (_) { /* non-fatal — operator can paginate manually */ }
             }
         }
         function __renderExecReport(rep) {
