@@ -2266,7 +2266,13 @@
         // the operator can change it in one place if they prefer denser
         // pages later. Smaller pages = lower viewport scroll burden +
         // faster server response on each click.
-        const RADAR_PAGE_SIZE = 20;
+        // Sarah Hijazi (2026-06-10): 10 clusters per page across every
+        // duplicate tab — denser pages were hard to scan. The constant is
+        // referenced by every per-tab loader (Domain Clusters, Lead /
+        // Deal / Contact / Account Duplicates, Cross-Module, the cluster
+        // list endpoint, owner drilldown), so flipping this number flips
+        // pagination everywhere consistently.
+        const RADAR_PAGE_SIZE = 10;
 
         // renderPagination(containerId, currentPage, totalPages, callback,
         //                  totalRecords?, unitLabel?)
