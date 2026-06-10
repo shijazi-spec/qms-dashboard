@@ -235,7 +235,7 @@ export async function sendResolutionSlackTest(
 }
 
 export const AGENT_PERFORMED_BY =
-  "GRQ Assistant (on behalf of Sarah Hijazi)";
+  "Adam — GRQ Assistant (on behalf of Sarah Hijazi)";
 
 /**
  * Twice-daily APPLY DIGEST posted to the resolution Slack channel — at 09:00
@@ -312,7 +312,7 @@ export async function postResolutionDigest(opts: {
         ? `📋 *Resolution digest — ${opts.label}* (last ${opts.sinceHours}h)\n` +
           `${totalApplies} merge(s) applied · ${tagged} tagged · ${fields} field(s) migrated` +
           (undos ? ` · ${undos} undone` : "") +
-          `\n  by GRQ Assistant: ${agentApplies} · by people: ${humanApplies}` +
+          `\n  by Adam (the agent): ${agentApplies} · by people: ${humanApplies}` +
           byModule
         : `📋 *Resolution digest — ${opts.label}* (last ${opts.sinceHours}h)\n` +
           `No merges applied in this window.`;

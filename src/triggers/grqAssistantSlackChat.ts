@@ -20,8 +20,8 @@
 import type { ApiRoute } from "@mastra/core/server";
 import { registerSlackTrigger, getClient } from "./slackTriggers";
 
-// Address-by-name trigger: "grq", "grq assistant", optionally greeted.
-const NAME_TRIGGER = /(^|\s)(hey\s+|hi\s+|hello\s+)?@?grq(\s+assistant)?\b/i;
+// Address-by-name trigger: "Adam" (the agent's name) or "GRQ", optionally greeted.
+const NAME_TRIGGER = /(^|\s)(hey\s+|hi\s+|hello\s+)?@?(adam|grq)(\s+assistant)?\b/i;
 
 /** Best-effort text extraction across Mastra's several result shapes. */
 async function extractAgentText(res: any): Promise<string> {
@@ -57,7 +57,7 @@ export function registerGrqAssistantSlackRoutes(): ApiRoute[] {
         // Strip the <@bot> mention token and a leading "GRQ"/greeting prefix.
         let q = rawText
           .replace(/<@[A-Z0-9]+>/gi, " ")
-          .replace(/^\s*(hey|hi|hello)?\s*@?grq(\s+assistant)?\s*[:,]?\s*/i, "")
+          .replace(/^\s*(hey|hi|hello)?\s*@?(adam|grq)(\s+assistant)?\s*[:,]?\s*/i, "")
           .trim();
         if (!q) q = "Hello";
 
