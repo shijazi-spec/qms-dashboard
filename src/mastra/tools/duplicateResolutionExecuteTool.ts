@@ -19,7 +19,7 @@ import { executeMergePlan } from "../../utils/duplicateMergeExecutor";
 import { recordResolutionEvent } from "../../utils/duplicateResolutionLearning";
 import { captureClusterSnapshot } from "../../utils/duplicateRadarDatabase";
 import { withApprovalGate } from "../../utils/withApprovalGate";
-import { AGENT_PERFORMED_BY, notifyResolutionApplied } from "../../utils/duplicateResolutionRunner";
+import { AGENT_PERFORMED_BY } from "../../utils/duplicateResolutionRunner";
 import type { MergePlan } from "../../utils/duplicateMergePlanner";
 
 export const duplicateResolutionExecuteTool = createTool({
@@ -71,10 +71,7 @@ export const duplicateResolutionExecuteTool = createTool({
         errors: report.errors.length,
         performedBy: AGENT_PERFORMED_BY,
       }).catch(() => {});
-      await notifyResolutionApplied(report, {
-        performedBy: AGENT_PERFORMED_BY,
-        module: String(plan.module || (context as any)?.module || ""),
-      }).catch(() => {});
+      // (Apply notifications are batched into the twice-daily Slack digest.)
       return {
         success: ok,
         clusterId: plan.clusterId,

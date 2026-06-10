@@ -506,6 +506,7 @@ export const mastra = new Mastra({
         runCsOverlapScanIfStale,
         runWeeklySupabaseRefreshIfStale,
         runAutonomousResolutionIfStale,
+        runResolutionDigestIfDue,
       } = await import("../utils/scheduledJobs");
       const helpers: Array<{
         name: string;
@@ -520,6 +521,8 @@ export const mastra = new Mastra({
         // Autonomous Duplicate Resolution — 6h fallback. Internally gated by
         // AUTONOMOUS_RESOLUTION_ENABLED/_MODE (default shadow → no Zoho writes).
         { name: "AutonomousResolution", fn: () => runAutonomousResolutionIfStale() },
+        // Twice-daily apply digest (09:00 / 17:00 KSA). No-ops outside those windows.
+        { name: "ResolutionDigest", fn: () => runResolutionDigestIfDue() },
         // Opt-in via SUPABASE_DATABASE_URL. No-ops silently when unset, so
         // it's safe to ship without any env work on Replit. See helper
         // body for the Friday 19:00–23:00 UTC time gate (= Friday 22:00–02:00

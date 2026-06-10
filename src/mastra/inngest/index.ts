@@ -421,6 +421,32 @@ const duplicateSyncFunction = inngest.createFunction(
 );
 inngestFunctions.push(duplicateSyncFunction);
 
+// Autonomous-Resolution apply DIGEST — twice daily to #grq-platform-assistant:
+// 09:00 KSA (start of day) and 17:00 KSA (end of day). KSA = UTC+3, no DST, so
+// 06:00 and 14:00 UTC. Batches all AI solves/migrations in the window into one
+// morning/evening summary (replaces the per-apply ping). The 9AM run looks back
+// 16h (since the prior 5PM), the 5PM run looks back 8h (since 9AM).
+const resolutionDigestFunction = inngest.createFunction(
+  { id: "autonomous-resolution-digest" },
+  { cron: process.env.AUTONOMOUS_RESOLUTION_DIGEST_CRON || "0 6,14 * * *" },
+  async ({ step }) => {
+    return await step.run("post-resolution-digest", async () => {
+      const { postResolutionDigest } = await import(
+        "../../utils/duplicateResolutionRunner"
+      );
+      const utcHour = new Date().getUTCHours();
+      const morning = utcHour < 12; // 06:00 UTC = 09:00 KSA
+      await postResolutionDigest({
+        label: morning ? "Start of day (9 AM KSA)" : "End of day (5 PM KSA)",
+        sinceHours: morning ? 16 : 8,
+      });
+      logger.info("[ResolutionDigest] posted", { morning, utcHour });
+      return { posted: true, morning };
+    });
+  },
+);
+inngestFunctions.push(resolutionDigestFunction);
+
 // Weekly Call Evaluation Digest — DECOMMISSIONED 2026-05-25.
 // Per scope amendments 3 (skip weekly digest) + 4 (Weekly Report is
 // in-dashboard only), this Inngest cron is unregistered. The function

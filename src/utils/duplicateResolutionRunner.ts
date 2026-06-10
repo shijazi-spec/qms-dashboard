@@ -34,7 +34,7 @@ import {
   type DuplicateRecord,
 } from "./duplicateRadarDatabase";
 import { buildMergePlan, type CrmModule, type MergePlan } from "./duplicateMergePlanner";
-import { executeMergePlan, type ExecuteReport } from "./duplicateMergeExecutor";
+import { executeMergePlan } from "./duplicateMergeExecutor";
 import {
   evaluateResolutionRisk,
   getResolutionPolicyConfig,
@@ -238,44 +238,90 @@ export const AGENT_PERFORMED_BY =
   "GRQ Assistant (on behalf of Sarah Hijazi)";
 
 /**
- * Notify the resolution Slack channel about ONE real apply/migration — fired
- * from every write path (autonomous tick, approval-execute, manual Apply), so
- * each Zoho change the AI makes is visible as it happens (not just the 6h
- * summary). No-op on dry-runs or when nothing changed; best-effort.
+ * Twice-daily APPLY DIGEST posted to the resolution Slack channel — at 09:00
+ * (start of day) and 17:00 (end of day) KSA. Replaces the per-apply ping:
+ * instead of one message per merge, it batches all AI solves/migrations in the
+ * window into a single morning/evening summary. Best-effort; always posts (a
+ * "nothing applied" line is a useful heartbeat). `sinceHours` covers back to the
+ * previous digest (16h for the 9AM run, 8h for the 5PM run).
  */
-export async function notifyResolutionApplied(
-  report: ExecuteReport,
-  opts: { performedBy: string; module: string },
-): Promise<void> {
+export async function postResolutionDigest(opts: {
+  label: string;
+  sinceHours: number;
+}): Promise<void> {
   try {
-    if (report.dryRun) return;
-    const changed =
-      report.taggedRecordIds.length +
-      report.fieldsMigrated.length +
-      (report.linkedToAccount ? 1 : 0);
-    if (changed === 0 && report.errors.length === 0) return;
     const token = process.env.SLACK_BOT_TOKEN;
     const channel = getResolutionSlackChannel();
     if (!token || !channel) return;
 
-    const reparented =
-      report.reparented.deals + report.reparented.contacts + report.reparented.notes;
-    const icon = report.errors.length ? "⚠️" : "✅";
-    const text =
-      `${icon} *Resolved ${opts.module} cluster #${report.clusterId}* — survivor "${report.master.name}"\n` +
-      `Tagged ${report.taggedRecordIds.length} as Duplicate-Delete · migrated ${report.fieldsMigrated.length} field(s)` +
-      (reparented ? ` · reparented ${reparented}` : "") +
-      (report.linkedToAccount ? " · linked to account" : "") +
-      `\nBy ${opts.performedBy}` +
-      (report.errors.length
-        ? `\n⚠️ ${report.errors.length} error(s): ${report.errors.map((e) => e.message).slice(0, 2).join("; ")}`
-        : "") +
-      `\n${resolutionScreenLink()}`;
+    let agentApplies = 0;
+    let humanApplies = 0;
+    let tagged = 0;
+    let fields = 0;
+    let undos = 0;
+    const perModule: Record<string, number> = {};
+    try {
+      const r = await pool.query(
+        `SELECT plan_json->>'module' AS module,
+                COUNT(*) FILTER (WHERE event_type='applied' AND COALESCE(performed_by,'') NOT ILIKE 'UNDO%')::int AS applies,
+                COUNT(*) FILTER (WHERE event_type='applied' AND COALESCE(performed_by,'') NOT ILIKE 'UNDO%'
+                                 AND (COALESCE(performed_by,'') ILIKE '%GRQ Assistant%' OR COALESCE(performed_by,'') ILIKE '%Autonomous Agent%'))::int AS agent_applies,
+                COALESCE(SUM(duplicates_tagged) FILTER (WHERE event_type='applied'),0)::int AS tagged,
+                COALESCE(SUM(fields_migrated) FILTER (WHERE event_type='applied'),0)::int AS fields,
+                COUNT(*) FILTER (WHERE COALESCE(performed_by,'') ILIKE 'UNDO%')::int AS undos
+           FROM duplicate_resolution_feedback
+          WHERE created_at > NOW() - ($1 || ' hours')::interval
+          GROUP BY plan_json->>'module'`,
+        [String(opts.sinceHours)],
+      );
+      for (const row of r.rows) {
+        const a = Number(row.applies || 0);
+        agentApplies += Number(row.agent_applies || 0);
+        humanApplies += a - Number(row.agent_applies || 0);
+        tagged += Number(row.tagged || 0);
+        fields += Number(row.fields || 0);
+        undos += Number(row.undos || 0);
+        if (row.module && a > 0) perModule[row.module] = (perModule[row.module] || 0) + a;
+      }
+    } catch {
+      /* digest aggregation best-effort */
+    }
+    const totalApplies = agentApplies + humanApplies;
 
+    // Current backlog (clusters remaining per module).
+    let scoreboard = "";
+    try {
+      const bd = await getModuleResolutionBreakdown();
+      const lines = bd
+        .filter((b) => b.total > 0)
+        .map((b) => `›  ${b.module}: ${b.rest} left · ${b.solved} solved`);
+      if (lines.length) scoreboard = `\n*Backlog (clusters):*\n${lines.join("\n")}`;
+    } catch {
+      /* non-fatal */
+    }
+
+    const byModule = Object.keys(perModule).length
+      ? "\nBy module: " +
+        Object.entries(perModule)
+          .map(([m, n]) => `${m} ${n}`)
+          .join(" · ")
+      : "";
+
+    const head =
+      totalApplies > 0
+        ? `📋 *Resolution digest — ${opts.label}* (last ${opts.sinceHours}h)\n` +
+          `${totalApplies} merge(s) applied · ${tagged} tagged · ${fields} field(s) migrated` +
+          (undos ? ` · ${undos} undone` : "") +
+          `\n  by GRQ Assistant: ${agentApplies} · by people: ${humanApplies}` +
+          byModule
+        : `📋 *Resolution digest — ${opts.label}* (last ${opts.sinceHours}h)\n` +
+          `No merges applied in this window.`;
+
+    const text = head + scoreboard + `\n${resolutionScreenLink()}`;
     const { WebClient } = await import("@slack/web-api");
     await new WebClient(token).chat.postMessage({ channel, text });
   } catch (e) {
-    logger.warn("[dup-resolution-runner] applied-notify failed (non-fatal)", {
+    logger.warn("[dup-resolution-runner] digest failed (non-fatal)", {
       error: e instanceof Error ? e.message : String(e),
     });
   }
@@ -935,10 +981,7 @@ async function processModule(ctx: {
         errors: report.errors.length,
         performedBy: AGENT_PERFORMED_BY,
       }).catch(() => {});
-      await notifyResolutionApplied(report, {
-        performedBy: AGENT_PERFORMED_BY,
-        module,
-      }).catch(() => {});
+      // (Apply notifications are batched into the twice-daily digest.)
     } catch (e) {
       item.action = "error";
       item.detail = e instanceof Error ? e.message : String(e);

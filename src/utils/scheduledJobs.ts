@@ -455,6 +455,61 @@ export async function runAutonomousResolutionIfStale(
 }
 
 /**
+ * Twice-daily Autonomous-Resolution apply digest — in-process fallback for the
+ * Inngest cron. Posts the morning digest in the 06:00–07:00 UTC window
+ * (09:00 KSA) and the evening digest in 14:00–15:00 UTC (17:00 KSA). Each is
+ * tracked separately in scanner_run_log so a digest fires at most once per day
+ * even though the fallback loop ticks every ~45 min. No-op outside the windows.
+ */
+export async function runResolutionDigestIfDue(): Promise<{ ran: boolean; ageHours: number }> {
+  const now = new Date();
+  const hourUTC = now.getUTCHours();
+  let slot: "morning" | "evening" | null = null;
+  if (hourUTC === 6) slot = "morning";
+  else if (hourUTC === 14) slot = "evening";
+  if (!slot) return { ran: false, ageHours: 0 };
+
+  const pool = sharedPool;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scanner_run_log (
+      id SERIAL PRIMARY KEY,
+      scanner_name VARCHAR(100) NOT NULL,
+      ran_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      success BOOLEAN NOT NULL DEFAULT true,
+      summary JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_scanner_run_log_name_time ON scanner_run_log(scanner_name, ran_at DESC);
+  `);
+  const scanner = `resolution-digest-${slot}`;
+  const r = await pool.query<{ hours: number | null }>(
+    `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ran_at)))/3600 AS hours
+     FROM scanner_run_log WHERE scanner_name=$1 AND success=true`,
+    [scanner],
+  );
+  const ageHours = r.rows[0]?.hours == null ? Infinity : Number(r.rows[0].hours);
+  if (ageHours < 12) return { ran: false, ageHours }; // already posted this slot today
+  try {
+    const { postResolutionDigest } = await import("./duplicateResolutionRunner");
+    await postResolutionDigest({
+      label: slot === "morning" ? "Start of day (9 AM KSA)" : "End of day (5 PM KSA)",
+      sinceHours: slot === "morning" ? 16 : 8,
+    });
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, true, $2)`,
+      [scanner, JSON.stringify({ slot })],
+    );
+    return { ran: true, ageHours };
+  } catch (err) {
+    logger.error("[ResolutionDigest Fallback] failed:", err);
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, false, $2)`,
+      [scanner, JSON.stringify({ error: String(err) })],
+    );
+    return { ran: false, ageHours };
+  }
+}
+
+/**
  * Weekly Supabase refresh — Replit Postgres → Supabase mirror.
  *
  * Pinned to Friday 23:00 Riyadh (= 20:00 UTC). The scheduledJobFallback
