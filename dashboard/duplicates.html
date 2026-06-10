@@ -504,16 +504,26 @@
         <!-- ═══ DEAL COMPLIANCE TAB (Sales SOP 7.5 — docs + fields) ═══ -->
         <div id="content-deal-compliance" class="tab-content hidden">
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-900">
-                <strong>Deal Compliance — Documents.</strong> Verifies the <strong>Zoho Attachments</strong> on deals in <strong>Proposal</strong>, <strong>Paid</strong> and <strong>Agreement Signed</strong> per Sales SOP 7.5.10:
-                Proposal needs the financial offer (العرض المالي); Paid / Agreement Signed need the proposal, contract/PO, VAT certificate, Commercial Registration and National Address.
+                <strong>Deal Compliance — Documents.</strong> Verifies the <strong>Zoho Attachments</strong> on deals in the closing stages per Sales SOP 7.5.10:
+                <strong>Proposal</strong> needs the financial offer (العرض المالي); <strong>Agreement Signed</strong> (and any closing stage you add) needs the proposal, contract/PO, VAT certificate, Commercial Registration and National Address.
+                Default stages: <strong>Proposal + Agreement Signed</strong> — change them in <strong>Advanced Filters → Stage</strong> and click Apply.
                 <em>Field / data-entry compliance is on the <a href="/" class="underline font-medium">Quality Dashboard</a> audit — this surface checks the uploaded files.</em>
             </div>
-            <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
-                <div id="dealComplianceSummary" class="text-sm text-gray-600">—</div>
-                <div class="flex items-center gap-2">
-                    <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" class="px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700">📎 Check all documents</button>
-                    <button data-on-click="loadDealCompliance" class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Reload</button>
-                </div>
+            <!-- Summary cards (consistent with CS Lifecycle) -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+                <div class="rounded-lg border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">In scope</div><div id="dcCardScope" class="text-2xl font-bold text-gray-900">—</div></div>
+                <div class="rounded-lg border border-green-200 bg-green-50 p-3"><div class="text-xs text-green-700">Compliant</div><div id="dcCardOk" class="text-2xl font-bold text-green-700">—</div></div>
+                <div class="rounded-lg border border-red-200 bg-red-50 p-3"><div class="text-xs text-red-700">Missing docs</div><div id="dcCardMissing" class="text-2xl font-bold text-red-700">—</div></div>
+                <div class="rounded-lg border border-amber-200 bg-amber-50 p-3"><div class="text-xs text-amber-700">Not yet checked</div><div id="dcCardPending" class="text-2xl font-bold text-amber-700">—</div></div>
+                <div class="rounded-lg border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">Scanned (Zoho)</div><div id="dcCardScanned" class="text-2xl font-bold text-gray-900">—</div></div>
+            </div>
+            <div id="dealComplianceSummary" class="text-sm text-gray-600 mb-2">—</div>
+            <!-- 4-button toolbar (consistent with every other tab) -->
+            <div class="flex items-center gap-2 flex-wrap mb-3">
+                <button data-on-click="exportDealCompliance" id="dcExportBtn" title="Download a CSV of the deals shown with their document status." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
+                <button data-on-click="loadDealCompliance" id="dcRefreshBtn" title="Re-fetch the deals in the selected stages from Zoho." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="checkAllDealDocs" id="checkAllDocsBtn" title="Fetch each deal's attachments and verify the required documents." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300">🔍 Run Scan</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deal-compliance" title="Open a corrective-action record (CAPA) on a non-compliant deal. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
@@ -6200,14 +6210,39 @@
         }
 
         // ─── Deal Compliance (Sales SOP 7.5 — docs + mandatory fields) ──────
+        // Which stages the operator picked in Advanced Filters → Stage (empty = default).
+        function _dcSelectedStages() {
+            var sel = document.getElementById('filterStage');
+            if (!sel) return [];
+            return Array.prototype.slice.call(sel.selectedOptions || [])
+                .map(function (o) { return o.value; }).filter(Boolean);
+        }
+        window._dcDeals = [];
+        window._dcResults = {};
+        function _dcUpdateCards() {
+            var deals = window._dcDeals || [];
+            var results = window._dcResults || {};
+            var ok = 0, missing = 0;
+            Object.keys(results).forEach(function (id) {
+                if (results[id].compliant) ok++; else missing++;
+            });
+            var setCard = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+            setCard('dcCardScope', deals.length);
+            setCard('dcCardOk', ok);
+            setCard('dcCardMissing', missing);
+            setCard('dcCardPending', Math.max(0, deals.length - ok - missing));
+        }
         async function loadDealCompliance() {
             var body = document.getElementById('dealComplianceBody');
             var summary = document.getElementById('dealComplianceSummary');
             if (!body) return;
+            window._dcResults = {};
             body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">Loading deals from Zoho…</td></tr>';
+            var stages = _dcSelectedStages();
+            var url = '/api/duplicates/deal-compliance' + (stages.length ? ('?stages=' + encodeURIComponent(stages.join(','))) : '');
             var data;
             try {
-                var res = await fetch('/api/duplicates/deal-compliance', { credentials: 'same-origin' });
+                var res = await fetch(url, { credentials: 'same-origin' });
                 data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -6216,12 +6251,17 @@
             }
             window._loadedTabs.add('deal-compliance');
             var deals = (data && data.deals) || [];
+            window._dcDeals = deals;
             var bs = (data && data.by_stage) || {};
-            summary.innerHTML = (data.total || 0) + ' deal(s) in Proposal/Paid/Agreement Signed · ' +
+            var setCard = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+            setCard('dcCardScanned', data.scanned != null ? data.scanned : '—');
+            _dcUpdateCards();
+            summary.innerHTML = 'Stages: <strong>' + escapeHtml((data.wanted || []).join(', ')) + '</strong> · ' +
+                (data.total || 0) + ' deal(s) · ' +
                 Object.keys(bs).map(function (s) { return escapeHtml(s) + ': ' + bs[s].total; }).join(' · ') +
-                ' · <span class="text-gray-400">click a row’s button (or “Check all”) to verify attachments</span>';
+                ' · <span class="text-gray-400">Run Scan (or a row button) to verify attachments</span>';
             if (!deals.length) {
-                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">No deals in these stages.</td></tr>';
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">No deals in the selected stage(s). Pick stages in Advanced Filters → Stage → Apply.</td></tr>';
                 return;
             }
             body.innerHTML = deals.map(function (d) {
@@ -6252,7 +6292,7 @@
                 var stage = rows[i].getAttribute('data-deal-stage');
                 await checkDealDocs(id, stage);
             }
-            if (btn) { btn.disabled = false; btn.textContent = '📎 Check all documents'; }
+            if (btn) { btn.disabled = false; btn.textContent = '🔍 Run Scan'; }
         }
 
         // Lazily fetch a deal's Zoho attachments and show which required docs are present/missing.
@@ -6268,6 +6308,13 @@
                 if (span) span.innerHTML = '<span class="text-xs text-amber-700">err: ' + escapeHtml(String(e && e.message || e)) + '</span>';
                 return;
             }
+            // Record for the summary cards + CSV export.
+            window._dcResults[id] = {
+                compliant: !!data.compliant,
+                missing: (data.missingDocs || []).map(function (m) { return m.label; }),
+                attachmentCount: data.attachmentCount || 0,
+            };
+            _dcUpdateCards();
             if (!span) return;
             var present = (data.presentDocs || []).map(function (p) { return '<div class="text-xs text-green-700">✓ ' + escapeHtml(p.label) + '</div>'; }).join('');
             var missing = (data.missingDocs || []).map(function (m) { return '<div class="text-xs text-red-700">✗ ' + escapeHtml(m.label) + '</div>'; }).join('');
@@ -6275,6 +6322,27 @@
                 ? '<div class="text-xs font-medium text-green-700 mb-1">✓ All required docs present (' + (data.attachmentCount || 0) + ' files)</div>'
                 : '<div class="text-xs font-medium text-red-700 mb-1">✗ ' + (data.missingDocs || []).length + ' missing (' + (data.attachmentCount || 0) + ' files attached)</div>';
             span.innerHTML = head + present + missing;
+        }
+
+        // CSV export of the deals shown + their document status.
+        function exportDealCompliance() {
+            var deals = window._dcDeals || [];
+            if (!deals.length) { alert('Nothing to export — load the tab first.'); return; }
+            var results = window._dcResults || {};
+            var esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+            var rows = [['Deal', 'Stage', 'Owner', 'Amount', 'Account', 'Doc status', 'Missing documents', 'Attachments'].join(',')];
+            deals.forEach(function (d) {
+                var r = results[String(d.id)];
+                var status = !r ? 'not checked' : (r.compliant ? 'compliant' : 'missing docs');
+                var miss = r ? r.missing.join('; ') : '';
+                var att = r ? r.attachmentCount : '';
+                rows.push([esc(d.name), esc(d.stage), esc(d.owner), esc(d.amount), esc(d.accountName), esc(status), esc(miss), esc(att)].join(','));
+            });
+            var blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'deal-compliance.csv';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
 
         // ─── Account Hints (smart account inference) ────────────────────────
@@ -8674,6 +8742,13 @@
             if (activeTab === 'cs-lifecycle') {
                 if (window._csLifecycleData) renderCsLifecycle(window._csLifecycleData);
                 else await loadCsLifecycle(window._csLifecycleFilter || 'all');
+                return;
+            }
+            if (activeTab === 'deal-compliance') {
+                // The Stage selector drives this tab; reload with the picked stages
+                // (loadDealCompliance reads #filterStage). Stay on the tab.
+                if (window._loadedTabs) window._loadedTabs.delete('deal-compliance');
+                await loadDealCompliance();
                 return;
             }
             if (activeTab === 'cs-overlap') {

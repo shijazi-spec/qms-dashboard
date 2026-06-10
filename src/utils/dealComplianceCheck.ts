@@ -22,14 +22,22 @@ export interface RequiredDoc {
   match: RegExp;
 }
 
-/** Stages this checker targets. "Paid" + "Closed Won" both mean the deal closed
- *  financially; both are accepted so it works whichever your Zoho pipeline uses. */
-export const DEAL_COMPLIANCE_STAGES = [
-  "Proposal",
-  "Paid",
-  "Agreement Signed",
-  "Closed Won",
-] as const;
+/** DEFAULT stages the tab checks when the operator hasn't picked any in the
+ *  Stage filter. Only the stages that actually exist in this Zoho pipeline. The
+ *  operator can widen/narrow this via the Advanced Filters → Stage selector. */
+export const DEAL_COMPLIANCE_STAGES = ["Proposal", "Agreement Signed"] as const;
+
+/** Closing/won stages that require the FULL document set (7.5.10). Covers the
+ *  common Zoho variants so a selected closing stage still gets doc requirements. */
+const FULL_DOC_STAGES = [
+  "paid",
+  "agreement signed",
+  "closed won",
+  "agreement sent",
+  "awaiting po",
+  "client activated",
+  "transferred to cs",
+];
 
 // Financial offer / commercial proposal (العرض المالي).
 const DOC_FINANCIAL_OFFER: RequiredDoc = {
@@ -69,7 +77,7 @@ const DOC_NATIONAL_ADDRESS: RequiredDoc = {
 export function requiredDocsForStage(stage: string): RequiredDoc[] {
   const s = (stage || "").trim().toLowerCase();
   if (s === "proposal") return [DOC_FINANCIAL_OFFER];
-  if (s === "paid" || s === "agreement signed" || s === "closed won") {
+  if (FULL_DOC_STAGES.includes(s)) {
     return [DOC_PROPOSAL_SENT, DOC_CONTRACT, DOC_VAT, DOC_CR, DOC_NATIONAL_ADDRESS];
   }
   return [];

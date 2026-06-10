@@ -1617,20 +1617,36 @@ export const duplicateRadarRoutes = [
         try {
           const user = await requireDuplicateRadarAccess(c);
           if (!user) return unauthorizedResponse(c);
-          const limit = Math.min(
-            Math.max(parseInt(c.req.query("limit") || "500", 10) || 500, 1),
-            2000,
-          );
-          const criteria =
-            "(" +
-            DEAL_COMPLIANCE_STAGES.map((s) => `(Stage:equals:${s})`).join("or") +
-            ")";
-          let deals: any[] = [];
+          // Which stages to check — from the Advanced Filters Stage selector
+          // (?stages=A,B,C); defaults to the real closing stages. Zoho's list
+          // endpoint ignores `criteria`, so we filter in CODE (reliable).
+          const stagesParam = (c.req.query("stages") || "").trim();
+          const wanted = stagesParam
+            ? stagesParam.split(",").map((s: string) => s.trim()).filter(Boolean)
+            : [...DEAL_COMPLIANCE_STAGES];
+          const wantedLower = new Set(wanted.map((s: string) => s.toLowerCase()));
+
+          // Fetch recent deals (most-recently-modified first so active/closing
+          // deals are covered) and filter to the wanted stages in code.
+          let allDeals: any[] = [];
           try {
-            deals = await fetchAllZohoRecords("Deals", { criteria, maxRecords: limit });
+            allDeals = await fetchAllZohoRecords("Deals", {
+              sortBy: "Modified_Time",
+              sortOrder: "desc",
+              maxRecords: 3000,
+            });
           } catch (e: any) {
             return c.json({ error: `Zoho fetch failed: ${e?.message || e}` }, 502);
           }
+
+          // Distinct stages present (for the UI to know what's available).
+          const distinctStages = Array.from(
+            new Set(allDeals.map((r: any) => (r.data?.Stage || "").trim()).filter(Boolean)),
+          ).sort();
+
+          const deals = allDeals.filter((r: any) =>
+            wantedLower.has(String(r.data?.Stage || "").trim().toLowerCase()),
+          );
           const rows = deals.map((rec: any) => {
             const d = rec.data || {};
             const stage = d.Stage || "";
@@ -1650,7 +1666,14 @@ export const duplicateRadarRoutes = [
             byStage[r.stage] = byStage[r.stage] || { total: 0 };
             byStage[r.stage].total++;
           }
-          return c.json({ total: rows.length, by_stage: byStage, deals: rows });
+          return c.json({
+            total: rows.length,
+            scanned: allDeals.length,
+            wanted,
+            distinct_stages: distinctStages,
+            by_stage: byStage,
+            deals: rows,
+          });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }
