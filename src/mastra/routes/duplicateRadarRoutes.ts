@@ -170,6 +170,7 @@ import {
   setResolutionSetting,
   isResolutionSlackConfigured,
   sendResolutionSlackTest,
+  notifyResolutionApplied,
   type ResolutionMode,
 } from "../../utils/duplicateResolutionRunner";
 
@@ -2062,6 +2063,16 @@ export const duplicateRadarRoutes = [
             });
           } catch {
             /* learning capture is non-fatal */
+          }
+
+          // Per-action Slack notification for real applies (manual operator
+          // Apply). Mirrors the agent/approval paths so every Zoho change is
+          // announced in the channel. Best-effort.
+          if (!dryRun) {
+            await notifyResolutionApplied(report, {
+              performedBy: (sessionUser as any)?.email || "operator",
+              module,
+            }).catch(() => {});
           }
 
           return c.json({ success: true, dryRun, plan, report });

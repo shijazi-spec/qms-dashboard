@@ -34,7 +34,7 @@ import {
   type DuplicateRecord,
 } from "./duplicateRadarDatabase";
 import { buildMergePlan, type CrmModule, type MergePlan } from "./duplicateMergePlanner";
-import { executeMergePlan } from "./duplicateMergeExecutor";
+import { executeMergePlan, type ExecuteReport } from "./duplicateMergeExecutor";
 import {
   evaluateResolutionRisk,
   getResolutionPolicyConfig,
@@ -174,6 +174,50 @@ export async function sendResolutionSlackTest(
 
 export const AGENT_PERFORMED_BY =
   "GRQ Assistant (on behalf of Sarah Hijazi)";
+
+/**
+ * Notify the resolution Slack channel about ONE real apply/migration — fired
+ * from every write path (autonomous tick, approval-execute, manual Apply), so
+ * each Zoho change the AI makes is visible as it happens (not just the 6h
+ * summary). No-op on dry-runs or when nothing changed; best-effort.
+ */
+export async function notifyResolutionApplied(
+  report: ExecuteReport,
+  opts: { performedBy: string; module: string },
+): Promise<void> {
+  try {
+    if (report.dryRun) return;
+    const changed =
+      report.taggedRecordIds.length +
+      report.fieldsMigrated.length +
+      (report.linkedToAccount ? 1 : 0);
+    if (changed === 0 && report.errors.length === 0) return;
+    const token = process.env.SLACK_BOT_TOKEN;
+    const channel = getResolutionSlackChannel();
+    if (!token || !channel) return;
+
+    const reparented =
+      report.reparented.deals + report.reparented.contacts + report.reparented.notes;
+    const icon = report.errors.length ? "⚠️" : "✅";
+    const text =
+      `${icon} *Resolved ${opts.module} cluster #${report.clusterId}* — survivor "${report.master.name}"\n` +
+      `Tagged ${report.taggedRecordIds.length} as Duplicate-Delete · migrated ${report.fieldsMigrated.length} field(s)` +
+      (reparented ? ` · reparented ${reparented}` : "") +
+      (report.linkedToAccount ? " · linked to account" : "") +
+      `\nBy ${opts.performedBy}` +
+      (report.errors.length
+        ? `\n⚠️ ${report.errors.length} error(s): ${report.errors.map((e) => e.message).slice(0, 2).join("; ")}`
+        : "") +
+      `\n${resolutionScreenLink()}`;
+
+    const { WebClient } = await import("@slack/web-api");
+    await new WebClient(token).chat.postMessage({ channel, text });
+  } catch (e) {
+    logger.warn("[dup-resolution-runner] applied-notify failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
 
 const RECORD_TYPE_TO_MODULE: Record<string, CrmModule> = {
   account: "Accounts",
@@ -828,6 +872,10 @@ async function processModule(ctx: {
           report.reparented.deals + report.reparented.contacts + report.reparented.notes,
         errors: report.errors.length,
         performedBy: AGENT_PERFORMED_BY,
+      }).catch(() => {});
+      await notifyResolutionApplied(report, {
+        performedBy: AGENT_PERFORMED_BY,
+        module,
       }).catch(() => {});
     } catch (e) {
       item.action = "error";
