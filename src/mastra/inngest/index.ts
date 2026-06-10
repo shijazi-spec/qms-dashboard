@@ -1,4 +1,5 @@
 import { inngest } from "./client";
+import { apiRouteFunctionId } from "./apiRouteFunctionId";
 import { init, serve as originalInngestServe } from "@mastra/inngest";
 import { registerApiRoute as originalRegisterApiRoute } from "@mastra/core/server";
 import { type Mastra } from "@mastra/core";
@@ -49,13 +50,17 @@ export function registerApiRoute<P extends string>(
   const pathWithoutApi = pathWithoutSlash.startsWith("api/")
     ? pathWithoutSlash.substring(4)
     : pathWithoutSlash;
-  // Take only the first segment as the connector name
+  // Take only the first segment as the connector name. This drives the event
+  // name below and must stay first-segment so connectors registered via
+  // createWebhook (e.g. "linear") keep matching `event/api.webhooks.linear.action`.
   const connectorName = pathWithoutApi.split("/")[0];
 
+  // The Inngest function id, however, must be unique per *route* (see
+  // apiRouteFunctionId for why first-segment ids collide and crash serve()).
   inngestFunctions.push(
     inngest.createFunction(
       {
-        id: `api-${connectorName}`,
+        id: apiRouteFunctionId(path),
         name: path,
       },
       {

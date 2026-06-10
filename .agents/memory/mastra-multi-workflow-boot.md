@@ -29,6 +29,23 @@ the fix by checking boot logs say "mastra ... ready".
 manual send of that event fans out to every cron workflow — gate it if that is
 undesirable in production.
 
+**Same family — `registerApiRoute()` duplicate ids (a SEPARATE boot crash):**
+the `registerApiRoute()` wrapper registers one Inngest function per Hono route
+and historically derived its id from only the FIRST path segment. Multiple
+routes can share that segment — e.g. two production-wired `/webhooks/slack/*`
+registrars (the consultant-rating route plus the newer "Adam" two-way Slack
+chat) both collapsed to `api-webhooks` → `inngest.serve()` throws "Duplicate
+function ID" at boot, identical symptom to the cron case (deploy healthcheck
+500, dev may still boot because the dev playground path doesn't hit the same
+serve dedup). Fix: derive the function id from the FULL path
+(`apiRouteFunctionId()` -> `api-<full-path-slug>`), but keep the Inngest *event*
+name keyed on the first segment so `createWebhook` connectors (e.g.
+`/linear/webhook` -> `event/api.webhooks.linear.action`) still match. Guarded by
+`tests/inngestApiRouteIds.test.ts` (wired into the `secret-redaction` workflow).
+**Why:** adding any 2nd route under an existing first segment silently
+reintroduces the collision; the static test fails at CI before it reaches a
+deploy.
+
 **Deploy build:** the build is self-cleaning (`rm -rf .mastra/output` before
 `mastra build`) because Replit autoscale snapshots the gitignored `.mastra/output`
 and a stale populated node_modules makes mastra's non-recursive cleanup fail
