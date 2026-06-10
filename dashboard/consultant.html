@@ -464,6 +464,21 @@
         var alertsList = document.getElementById('alertsList');
         var welcomeScreen = document.getElementById('welcomeScreen');
 
+        // When opened from the floating widget's "Full view" (link carries
+        // ?thread=<id>), adopt that conversation so it continues here instead
+        // of starting blank. Persist it as this page's thread, then strip the
+        // param from the URL so a manual refresh doesn't re-pin a stale thread.
+        (function adoptThreadFromQuery() {
+            try {
+                var t = new URLSearchParams(window.location.search).get('thread');
+                if (t) {
+                    sessionStorage.setItem('consultant_threadId', t);
+                    var clean = window.location.pathname + window.location.hash;
+                    window.history.replaceState({}, '', clean);
+                }
+            } catch (e) { /* non-fatal */ }
+        })();
+
         var threadId = sessionStorage.getItem('consultant_threadId') || null;
         var isStreaming = false;
         var lastMessage = '';

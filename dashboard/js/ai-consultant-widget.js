@@ -430,6 +430,15 @@
             var svgEl2 = expandLink.querySelector('svg');
             var svgHTML2 = svgEl2 ? svgEl2.outerHTML : '';
             expandLink.innerHTML = svgHTML2 + ' ' + _t('consultant.full_view', 'Full view');
+            // Carry the CURRENT widget conversation into the full page so it
+            // doesn't "disappear" on expand. The full page adopts ?thread=.
+            expandLink.addEventListener('click', function (e) {
+                var tid = sessionStorage.getItem('widget_consultant_threadId');
+                if (tid) {
+                    e.preventDefault();
+                    window.location.href = '/consultant.html?thread=' + encodeURIComponent(tid);
+                }
+            });
         }
         var wTitle = widget.querySelector('#ai-widget-welcome h4');
         if (wTitle) wTitle.textContent = _t('consultant.widget_welcome_title', 'GRQ Assistant');
