@@ -140,7 +140,14 @@ import {
   fetchRecordAttachments,
   fetchZohoRelatedRecords,
   removeZohoTags,
+  analyzeRecordHygiene,
+  DEFAULT_GOVERNANCE_RULES,
 } from "../../utils/zohoCRM";
+import {
+  DEAL_COMPLIANCE_STAGES,
+  requiredDocsForStage,
+  evaluateDocCompliance,
+} from "../../utils/dealComplianceCheck";
 
 import { logger } from "../../utils/logger";
 import {
@@ -1593,6 +1600,97 @@ export const duplicateRadarRoutes = [
             duplicatesInspected: Math.min(dups.length, 25),
             duplicatesTotal: dups.length,
           });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Deal-stage compliance (Sales SOP 7.5): deals in Proposal/Paid/Agreement
+    // Signed + their required-FIELD gaps (from analyzeRecordHygiene). Document
+    // (attachment) checks are loaded per-row via the doc-compliance endpoint.
+    path: "/api/duplicates/deal-compliance",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const limit = Math.min(
+            Math.max(parseInt(c.req.query("limit") || "500", 10) || 500, 1),
+            2000,
+          );
+          const criteria =
+            "(" +
+            DEAL_COMPLIANCE_STAGES.map((s) => `(Stage:equals:${s})`).join("or") +
+            ")";
+          let deals: any[] = [];
+          try {
+            deals = await fetchAllZohoRecords("Deals", { criteria, maxRecords: limit });
+          } catch (e: any) {
+            return c.json({ error: `Zoho fetch failed: ${e?.message || e}` }, 502);
+          }
+          const dealRules = DEFAULT_GOVERNANCE_RULES.filter((r) => r.module === "Deals");
+          const rows = deals.map((rec: any) => {
+            const d = rec.data || {};
+            const stage = d.Stage || "";
+            let fieldIssues: any[] = [];
+            try {
+              fieldIssues = analyzeRecordHygiene(rec, dealRules).map((i: any) => ({
+                field: i.fieldName,
+                description: i.description,
+                severity: i.severity,
+              }));
+            } catch {
+              /* hygiene best-effort */
+            }
+            return {
+              id: rec.id,
+              name: d.Deal_Name || rec.id,
+              stage,
+              owner: d.Owner?.name || rec.owner || "—",
+              amount: d.Amount ?? null,
+              accountName:
+                (typeof d.Account_Name === "object" ? d.Account_Name?.name : d.Account_Name) || null,
+              fieldIssues,
+              requiredDocs: requiredDocsForStage(stage).map((x) => ({ key: x.key, label: x.label })),
+            };
+          });
+          const byStage: Record<string, { total: number; fieldGaps: number }> = {};
+          for (const r of rows) {
+            byStage[r.stage] = byStage[r.stage] || { total: 0, fieldGaps: 0 };
+            byStage[r.stage].total++;
+            if (r.fieldIssues.length) byStage[r.stage].fieldGaps++;
+          }
+          return c.json({ total: rows.length, by_stage: byStage, deals: rows });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Per-deal document (attachment) compliance — fetches the deal's Zoho
+    // attachments and keyword-matches the SOP-required documents for its stage.
+    path: "/api/duplicates/deals/:id/doc-compliance",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const id = c.req.param("id");
+          const stage = c.req.query("stage") || "";
+          if (!id) return c.json({ error: "deal id required" }, 400);
+          let atts: any[] = [];
+          try {
+            atts = await fetchRecordAttachments("Deals", id);
+          } catch (e: any) {
+            return c.json({ error: `Zoho attachments fetch failed: ${e?.message || e}` }, 502);
+          }
+          const result = evaluateDocCompliance(stage, atts);
+          return c.json(result);
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

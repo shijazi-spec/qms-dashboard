@@ -143,6 +143,10 @@
                 <span class="inline-block w-2 h-2 rounded-full bg-purple-500"></span>
                 CS Lifecycle
             </button>
+            <button data-on-click="showTab" data-args="[&quot;deal-compliance&quot;]" id="tab-deal-compliance" data-testid="tab-deal-compliance" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Deal-stage compliance (Sales SOP 7.5): deals in Proposal / Paid / Agreement Signed must carry the required documents (financial offer, contract, VAT, CR, National Address) and mandatory fields.">
+                <span class="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
+                Deal Compliance
+            </button>
             <button data-on-click="showTab" data-args="[&quot;preflight&quot;]" id="tab-preflight" data-testid="tab-preflight" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Check a batch of incoming leads/deals against existing CRM data BEFORE pushing to CRM">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Preflight Check
@@ -494,6 +498,27 @@
             <div id="noSearchResults" class="hidden text-center py-12">
                 <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <h4 class="text-lg font-medium text-gray-500">No matching records found</h4>
+            </div>
+        </div>
+
+        <!-- ═══ DEAL COMPLIANCE TAB (Sales SOP 7.5 — docs + fields) ═══ -->
+        <div id="content-deal-compliance" class="tab-content hidden">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-900">
+                <strong>Deal Compliance.</strong> Deals in <strong>Proposal</strong>, <strong>Paid</strong> and <strong>Agreement Signed</strong> must carry the required documents and mandatory fields per Sales SOP 7.5.
+                Proposal needs the financial offer (العرض المالي); Paid / Agreement Signed need the proposal, contract/PO, VAT certificate, Commercial Registration and National Address — plus the mandatory deal &amp; onboarding fields. Read-only — this flags gaps; Sales fixes them in Zoho.
+            </div>
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <div id="dealComplianceSummary" class="text-sm text-gray-600">—</div>
+                <button data-on-click="loadDealCompliance" class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Reload</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead><tr class="text-xs text-gray-500 text-left border-b border-gray-200">
+                        <th class="px-3 py-2">Deal</th><th class="px-3 py-2">Stage</th><th class="px-3 py-2">Owner</th>
+                        <th class="px-3 py-2 text-end">Amount</th><th class="px-3 py-2">Missing fields</th><th class="px-3 py-2">Documents</th>
+                    </tr></thead>
+                    <tbody id="dealComplianceBody"><tr><td colspan="6" class="px-3 py-4 text-gray-500">Open this tab to load deals…</td></tr></tbody>
+                </table>
             </div>
         </div>
 
@@ -6158,6 +6183,7 @@
             if (tab === 'cs-lifecycle') loadCsLifecycle(window._csLifecycleFilter || 'all');
             if (tab === 'account-hints') loadAccountHints();
             if (tab === 'logs') loadAgentActivity();
+            if (tab === 'deal-compliance' && !window._loadedTabs.has('deal-compliance')) loadDealCompliance();
             // The Domain Clusters + 4 record tabs are expensive list queries;
             // load each one ONLY on first visit per refresh cycle. This is
             // the change that keeps the page under the 100 reads/min limit.
@@ -6167,6 +6193,70 @@
             if (['leads','deals','contacts','accounts'].includes(tab) && !window._loadedTabs.has(tab)) {
                 loadRecordTab(tab);
             }
+        }
+
+        // ─── Deal Compliance (Sales SOP 7.5 — docs + mandatory fields) ──────
+        async function loadDealCompliance() {
+            var body = document.getElementById('dealComplianceBody');
+            var summary = document.getElementById('dealComplianceSummary');
+            if (!body) return;
+            body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">Loading deals from Zoho…</td></tr>';
+            var data;
+            try {
+                var res = await fetch('/api/duplicates/deal-compliance', { credentials: 'same-origin' });
+                data = await res.json();
+                if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-amber-700">Could not load: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
+                return;
+            }
+            window._loadedTabs.add('deal-compliance');
+            var deals = (data && data.deals) || [];
+            var bs = (data && data.by_stage) || {};
+            summary.innerHTML = (data.total || 0) + ' deal(s) in Proposal/Paid/Agreement Signed · ' +
+                Object.keys(bs).map(function (s) { return escapeHtml(s) + ': ' + bs[s].fieldGaps + '/' + bs[s].total + ' with field gaps'; }).join(' · ');
+            if (!deals.length) {
+                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">No deals in these stages.</td></tr>';
+                return;
+            }
+            body.innerHTML = deals.map(function (d) {
+                var fields = (d.fieldIssues || []);
+                var fieldCell = fields.length
+                    ? fields.slice(0, 6).map(function (f) { return '<span class="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs mr-1 mb-1" title="' + escapeHtml(f.description || '') + '">' + escapeHtml(f.field) + '</span>'; }).join('')
+                    : '<span class="text-green-600 text-xs">✓ complete</span>';
+                var docArgs = escapeHtml(JSON.stringify([String(d.id), String(d.stage)]));
+                return '<tr class="border-t border-gray-100 align-top">' +
+                    '<td class="px-3 py-2 font-medium text-gray-800">' + escapeHtml(d.name) +
+                        (d.accountName ? '<div class="text-xs text-gray-400">' + escapeHtml(d.accountName) + '</div>' : '') + '</td>' +
+                    '<td class="px-3 py-2"><span class="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-xs">' + escapeHtml(d.stage) + '</span></td>' +
+                    '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(d.owner) + '</td>' +
+                    '<td class="px-3 py-2 text-end text-xs text-gray-700">' + (d.amount != null ? escapeHtml(String(d.amount)) : '—') + '</td>' +
+                    '<td class="px-3 py-2">' + fieldCell + '</td>' +
+                    '<td class="px-3 py-2"><span id="docs-' + escapeHtml(String(d.id)) + '"><button data-on-click="checkDealDocs" data-args=\'' + docArgs + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 Check documents</button></span></td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        // Lazily fetch a deal's Zoho attachments and show which required docs are present/missing.
+        async function checkDealDocs(id, stage) {
+            var span = document.getElementById('docs-' + id);
+            if (span) span.innerHTML = '<span class="text-xs text-gray-400">checking…</span>';
+            var data;
+            try {
+                var res = await fetch('/api/duplicates/deals/' + encodeURIComponent(id) + '/doc-compliance?stage=' + encodeURIComponent(stage), { credentials: 'same-origin' });
+                data = await res.json();
+                if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                if (span) span.innerHTML = '<span class="text-xs text-amber-700">err: ' + escapeHtml(String(e && e.message || e)) + '</span>';
+                return;
+            }
+            if (!span) return;
+            var present = (data.presentDocs || []).map(function (p) { return '<div class="text-xs text-green-700">✓ ' + escapeHtml(p.label) + '</div>'; }).join('');
+            var missing = (data.missingDocs || []).map(function (m) { return '<div class="text-xs text-red-700">✗ ' + escapeHtml(m.label) + '</div>'; }).join('');
+            var head = data.compliant
+                ? '<div class="text-xs font-medium text-green-700 mb-1">✓ All required docs present (' + (data.attachmentCount || 0) + ' files)</div>'
+                : '<div class="text-xs font-medium text-red-700 mb-1">✗ ' + (data.missingDocs || []).length + ' missing (' + (data.attachmentCount || 0) + ' files attached)</div>';
+            span.innerHTML = head + present + missing;
         }
 
         // ─── Account Hints (smart account inference) ────────────────────────
