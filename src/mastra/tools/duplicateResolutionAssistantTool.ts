@@ -17,6 +17,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import {
   getResolutionRunConfig,
+  getModuleResolutionBreakdown,
 } from "../../utils/duplicateResolutionRunner";
 import {
   listResolutionRules,
@@ -29,7 +30,7 @@ import {
   MODULE_RECORD_TYPE,
   type CrmModule,
 } from "../../utils/duplicateMergePlanner";
-import { getRecordsByClusterId } from "../../utils/duplicateRadarDatabase";
+import { getRecordsByClusterId, getClusterSummary } from "../../utils/duplicateRadarDatabase";
 
 const MODULES: CrmModule[] = ["Accounts", "Leads", "Deals", "Contacts"];
 function asModule(m: unknown): CrmModule {
@@ -78,13 +79,32 @@ export const duplicateResolutionAssistantTool = createTool({
           const g = latest[m];
           return `${m}: G${g?.grade ?? 1} ${g?.label ?? "Trainee"}`;
         }).join(", ");
+        // Aggregate figures so the agent can produce an EXECUTIVE summary
+        // (totals + SAR exposure + resolved-vs-remaining), not just grades.
+        const summaryStats = await getClusterSummary().catch(() => null);
+        const breakdown = await getModuleResolutionBreakdown().catch(() => []);
+        const totalSolved = breakdown.reduce((a, b) => a + (b.solved || 0), 0);
+        const totalActive = summaryStats?.activeCount ?? 0;
+        const exposure = summaryStats?.estimatedPipelineInflation ?? 0;
         return {
           success: true,
           summary:
             `Autonomous resolution is in ${cfg.mode.toUpperCase()} mode, ` +
             `writes ${cfg.enabled ? "ENABLED" : "DISABLED (kill-switch off)"}, ` +
-            `up to ${cfg.maxClusters} clusters per 6h tick. Grades — ${gradeLine}.`,
-          data: { config: cfg, grades: latest },
+            `up to ${cfg.maxClusters} clusters per 6h tick. ` +
+            (summaryStats
+              ? `Duplicate exposure: ${summaryStats.totalClusters} clusters, ` +
+                `~SAR ${Math.round(exposure).toLocaleString()} estimated pipeline inflation, ` +
+                `${summaryStats.resolvedCount} resolved · ${totalActive} still open. `
+              : "") +
+            `Agent maturity — ${gradeLine}.`,
+          data: {
+            config: cfg,
+            grades: latest,
+            aggregate: summaryStats,
+            byModule: breakdown,
+            totalSolved,
+          },
         };
       }
 
