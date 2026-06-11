@@ -3128,6 +3128,13 @@
             const dismissBtn = _aiCid
                 ? `<button data-on-click="dismissCluster" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-dismiss-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300" title="Dismiss as a false positive — use when these are intentionally separate accounts (e.g. Corporate-Accounts vs Marketplace: Sales B2B/B2C account vs Merchants account). Moves it to the Dismissed filter; it stops appearing as a duplicate to action.">🚫 Dismiss</button>`
                 : '';
+            // Re-open — set a resolved/dismissed cluster back to active so it can
+            // be merged. Shown on resolved clusters and in the Resolved/Dismissed
+            // filter views (for clusters marked done but not actually merged).
+            const _viewFilter = (window._aiStatusByTab && window._currentTab && window._aiStatusByTab[window._currentTab]) || 'active';
+            const reopenBtn = (_aiCid && (aiState === 'resolved' || _viewFilter === 'resolved' || _viewFilter === 'dismissed'))
+                ? `<button data-on-click="reopenCluster" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-reopen-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 hover:bg-blue-200" title="Re-open this cluster (set it back to active) so you can merge it — for clusters marked Resolved/Dismissed but not actually merged in Zoho.">🔓 Re-open</button>`
+                : '';
             return `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${gid}"]' data-testid="row-dup-group-${gid}">
                 <td class="px-4 py-3 text-sm" colspan="${colspan}">
                     <div class="flex items-center gap-2 flex-wrap">
@@ -3137,7 +3144,7 @@
                         <span class="text-xs text-gray-500">${summary.count} duplicate ${moduleLabel}</span>
                         <span class="flex flex-wrap gap-1">${chips}</span>
                         ${aiStateBadge}
-                        <span class="ms-auto flex items-center gap-2">${aiBtn}${dismissBtn}<span class="text-xs text-gray-500">Click to expand</span></span>
+                        <span class="ms-auto flex items-center gap-2">${reopenBtn}${aiBtn}${dismissBtn}<span class="text-xs text-gray-500">Click to expand</span></span>
                     </div>
                 </td>
             </tr>`;
@@ -5622,6 +5629,38 @@
                 }
             } catch (e) {
                 alert('Could not dismiss: ' + (e && e.message || e));
+            }
+        }
+
+        // Re-open a resolved/dismissed cluster (set status back to active) so it
+        // can be merged. For clusters marked resolved before they were actually
+        // merged in Zoho, or dismissed by mistake.
+        async function reopenCluster(module, clusterId) {
+            if (!confirm('Re-open this cluster so you can merge it?\n\nUse this if it was marked Resolved/Dismissed but the records still need merging. It returns to the active "Untouched" list. No Zoho changes.')) return;
+            const payload = JSON.stringify({ action: 'reopen' });
+            try {
+                let res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: payload
+                });
+                if (res.status === 401 || res.status === 403) {
+                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    if (!adminKey) return;
+                    res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
+                    });
+                }
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                if (typeof closeModal === 'function') { try { closeModal(); } catch (e) {} }
+                var tab = String(module || '').toLowerCase();
+                if (['leads','deals','contacts','accounts'].includes(tab)) {
+                    window._loadedTabs && window._loadedTabs.delete(tab);
+                    loadRecordTab(tab, 0);
+                } else if (typeof refreshData === 'function') { refreshData(); }
+            } catch (e) {
+                alert('Could not re-open: ' + (e && e.message || e));
             }
         }
 

@@ -4148,11 +4148,24 @@ export const duplicateRadarRoutes = [
           const body = await c.req.json();
           const { action, primary_record_id, notes } = body;
 
-          if (!action || !["resolve", "ignore"].includes(action)) {
+          if (!action || !["resolve", "ignore", "reopen"].includes(action)) {
             return c.json(
-              { error: 'action must be "resolve" or "ignore"' },
+              { error: 'action must be "resolve", "ignore" or "reopen"' },
               400,
             );
+          }
+
+          // Re-open: put a resolved/ignored cluster back to ACTIVE so it can be
+          // merged/applied. For clusters marked resolved before they were
+          // actually merged in Zoho (or dismissed by mistake).
+          if (action === "reopen") {
+            const cluster = await getClusterById(id);
+            if (!cluster) return c.json({ error: "Cluster not found" }, 404);
+            await updateClusterStatus(id, "active");
+            logger.info(
+              `🔓 [DuplicateRadar] Cluster #${id} re-opened (was '${cluster.status}') by ${sessionUser.email || "admin"}`,
+            );
+            return c.json({ success: true, status: "active" });
           }
 
           const result = await resolveCluster(
