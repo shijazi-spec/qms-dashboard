@@ -371,26 +371,34 @@ export async function buildExecutiveBriefText(
  * trend) to the configured channels, then records this week's snapshot so the
  * NEXT week can show the delta. Scheduled Sunday 06:00 KSA (03:00 UTC).
  */
-export async function postWeeklyExecBrief(): Promise<{
+export async function postWeeklyExecBrief(
+  opts: { recordSnapshot?: boolean } = {},
+): Promise<{
   ok: boolean;
   posted: string[];
   errors: string[];
 }> {
+  // The scheduled Sunday run records a snapshot (= next week's trend baseline).
+  // A MANUAL "send now" passes recordSnapshot:false so ad-hoc sends (e.g. for a
+  // meeting) don't pollute the week-over-week math, which must stay Sunday-anchored.
+  const recordSnapshot = opts.recordSnapshot !== false;
   const { brief, metrics } = await buildExecutiveBriefText({ withTrend: true });
-  // Snapshot AFTER building (build reads the PRIOR snapshot for the delta).
-  try {
-    await recordExecBriefSnapshot({
-      totalClusters: metrics.totalClusters,
-      resolvedCount: metrics.resolvedCount,
-      activeCount: metrics.activeCount,
-      exposure: metrics.exposure,
-      dupRate: metrics.dupRate,
-      metricsJson: metrics,
-    });
-  } catch (e) {
-    logger.warn("[exec-brief] snapshot record failed (non-fatal)", {
-      error: e instanceof Error ? e.message : String(e),
-    });
+  if (recordSnapshot) {
+    // Snapshot AFTER building (build reads the PRIOR snapshot for the delta).
+    try {
+      await recordExecBriefSnapshot({
+        totalClusters: metrics.totalClusters,
+        resolvedCount: metrics.resolvedCount,
+        activeCount: metrics.activeCount,
+        exposure: metrics.exposure,
+        dupRate: metrics.dupRate,
+        metricsJson: metrics,
+      });
+    } catch (e) {
+      logger.warn("[exec-brief] snapshot record failed (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
   const token = process.env.SLACK_BOT_TOKEN;
   const posted: string[] = [];

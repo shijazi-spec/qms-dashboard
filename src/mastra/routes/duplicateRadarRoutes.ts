@@ -179,6 +179,7 @@ import {
   sendResolutionSlackTest,
   postResolutionMessage,
   buildExecutiveBriefText,
+  postWeeklyExecBrief,
   getModuleResolutionBreakdown,
   type ResolutionMode,
 } from "../../utils/duplicateResolutionRunner";
@@ -1017,6 +1018,29 @@ export const duplicateRadarRoutes = [
           const res = await postResolutionMessage(stamped);
           if (!res.ok) return c.json({ error: res.error || "Slack post failed" }, 502);
           return c.json({ ok: true, channel: res.channel });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // "Send weekly brief now" — manually fire the SAME weekly leadership job
+    // (posts to both channels), but WITHOUT recording a trend snapshot so the
+    // Sunday-anchored week-over-week math stays intact. Management-tier only,
+    // since it broadcasts to leadership channels.
+    path: "/api/duplicates/autonomous/weekly-brief/send",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRoleOrKey(c, [...AUTONOMOUS_RESOLUTION_MANAGE_ROLES]);
+          if (!user) return unauthorizedResponse(c);
+          const res = await postWeeklyExecBrief({ recordSnapshot: false });
+          if (!res.ok) {
+            return c.json({ error: (res.errors || []).join("; ") || "Slack post failed" }, 502);
+          }
+          return c.json({ ok: true, posted: res.posted, errors: res.errors });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

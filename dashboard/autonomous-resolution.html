@@ -56,7 +56,7 @@
                 <h2 class="text-lg font-semibold text-gray-900">📋 Executive brief</h2>
                 <div class="flex items-center gap-2">
                     <button data-on-click="copyExecBrief" id="copyBriefBtn" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">⧉ Copy</button>
-                    <button data-on-click="postExecBriefToSlack" id="postBriefBtn" title="Post to #grq-platform-assistant" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Post to Slack</button>
+                    <button data-on-click="sendWeeklyBriefNow" id="sendBriefBtn" title="Post the brief now to the leadership channels (#grq-assistant + #automatic-audits)" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">📨 Send to leadership</button>
                     <button data-on-click="hideExecBrief" class="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600">✕</button>
                 </div>
             </div>
@@ -510,23 +510,24 @@
                 if (btn) { var o = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(function () { btn.textContent = o; }, 1500); }
             } catch (e) { if (btn) btn.textContent = 'Copy failed'; }
         }
-        async function postExecBriefToSlack() {
-            var btn = document.getElementById('postBriefBtn');
-            var text = window._execBrief || '';
-            if (!text) { return; }
-            if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+        // Fire the weekly leadership brief NOW — posts to both channels
+        // (#grq-assistant + #automatic-audits) without recording a trend
+        // snapshot (so the Sunday-anchored week-over-week math stays intact).
+        async function sendWeeklyBriefNow() {
+            if (!confirm('Post the leadership brief now to #grq-assistant and #automatic-audits?')) return;
+            var btn = document.getElementById('sendBriefBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
             try {
-                var res = await fetch('/api/duplicates/autonomous/executive-brief/post', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text })
+                var res = await fetch('/api/duplicates/autonomous/weekly-brief/send', {
+                    method: 'POST', credentials: 'same-origin'
                 });
                 var data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
-                if (btn) { btn.textContent = '✓ Posted'; setTimeout(function () { btn.textContent = 'Post to Slack'; btn.disabled = false; }, 2000); }
+                var n = (data && data.posted && data.posted.length) || 0;
+                if (btn) { btn.textContent = '✓ Sent to ' + n + ' channel' + (n === 1 ? '' : 's'); setTimeout(function () { btn.textContent = '📨 Send to leadership'; btn.disabled = false; }, 2500); }
             } catch (e) {
                 if (btn) { btn.textContent = 'Failed'; btn.disabled = false; }
-                alert('Could not post to Slack: ' + (e && e.message || e));
+                alert('Could not send: ' + (e && e.message || e));
             }
         }
 
