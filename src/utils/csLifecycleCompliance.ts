@@ -484,6 +484,9 @@ export interface CsLifecycleSummary {
   total_violations: number;
   by_severity: Record<CsViolationSeverity, number>;
   by_code: Record<CsViolationCode, number>;
+  /** CS deals counted by current lifecycle phase (onboarding/adoption/renewal/
+   *  termination/…) — answers "how many deals are in the renewal stage". */
+  by_phase: Record<string, number>;
 }
 
 export function summarizeViolations(
@@ -509,9 +512,14 @@ export function summarizeViolations(
       missing_arr_value: 0,
       renewal_overdue: 0,
     },
+    by_phase: {},
   };
   for (const ev of evaluations) {
-    if (ev.is_cs_deal) s.total_cs_deals++;
+    if (ev.is_cs_deal) {
+      s.total_cs_deals++;
+      const phase = (ev.current_phase || "unknown").toLowerCase();
+      s.by_phase[phase] = (s.by_phase[phase] || 0) + 1;
+    }
     for (const v of ev.violations) {
       s.total_violations++;
       s.by_severity[v.severity]++;

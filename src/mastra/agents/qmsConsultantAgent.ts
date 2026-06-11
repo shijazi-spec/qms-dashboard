@@ -22,6 +22,7 @@ import { createTrainingTool, getTrainingListTool, assignTrainingTool, getTrainin
 import { duplicateResolutionAssistantTool } from "../tools/duplicateResolutionAssistantTool";
 import { lookupEntityTool } from "../tools/lookupEntityTool";
 import { tagRecordsForRemovalTool } from "../tools/tagRecordsForRemovalTool";
+import { csLifecycleStatusTool } from "../tools/csLifecycleStatusTool";
 import { withApprovalGate } from "../../utils/withApprovalGate";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
 
@@ -113,6 +114,9 @@ Use suggestImprovementsTool to analyze quality trends and recommend process impr
 ### Checklist Engine Tools
 21. **runChecklistTool**: Execute compliance checklists against live platform data. Use action="list" to see available checklists, action="run" with a checklistId to execute one and get a scored pass/fail report, or action="history" to see past runs and score trends.
 22. **manageChecklistTool**: Create, view, or delete structured compliance checklists. When a user asks you to create a checklist (e.g., "Create an ISO 9001 Clause 10.2 checklist"), build the items with appropriate check_types (count_check, existence_check, threshold_check, or manual) and module_to_query fields so they can be auto-verified. Available modules: nonconformances, capas, risks, policies, compliance, kpis, training, vendors, audits.
+
+### CS Lifecycle Tool
+27. **csLifecycleStatusTool**: The Duplicate Radar's **CS Lifecycle tab** tracks Customer Success deals through their lifecycle phases — **onboarding → adoption → renewal → termination** — and checks CS data-hygiene rules (the "hygienic rules" the CS team set up: missing renewal date, renewal overdue, missing CS owner, etc.). Use this tool whenever the user asks about the **CS Lifecycle tab**, the **CS team's deals**, **how many deals are in the renewal stage**, upcoming/overdue renewals, or CS data hygiene. It returns the count of CS deals **by phase** (so you can answer "X deals are in the renewal stage"), the total CS deals, and the hygiene-violation counts. NOTE: these "hygienic rules" are CS-lifecycle data-quality checks — they are NOT the autonomous duplicate-resolver's "learning rules" (that's a different system); don't confuse the two.
 
 ### CRM Entity Lookup Tool
 25. **lookupEntityTool**: "Show me everything we have on <X>." Given ANY identifier — a company name, a person's name, a domain, an email, or a phone number — it searches all four Zoho modules at once (Accounts, Deals, Contacts, Leads) via Zoho's indexed global search and also surfaces any matching duplicate clusters. Use it whenever the user asks for everything on a company/client/person, or pastes a domain/email/phone/name to look up. After it returns, present a clear per-module summary (counts + the key records: deal stages/amounts, contact emails/phones, lead statuses, account details) and call out any duplicate clusters found. PDPL: this surfaces contact PII — only share it with the authorized user who asked.
@@ -347,6 +351,9 @@ export const qmsConsultantAgent = new Agent({
     // all four Zoho modules (Accounts/Deals/Contacts/Leads) at once + surfaces
     // matching duplicate clusters. Read-only.
     lookupEntityTool:                 wt(lookupEntityTool, AGENT_NAME),
+    // "How many deals are in the renewal stage?" / CS Lifecycle tab status —
+    // deals by lifecycle phase + CS data-hygiene violations. Read-only.
+    csLifecycleStatusTool:            wt(csLifecycleStatusTool, AGENT_NAME),
 
     // --- HIGH-risk write tools (gated) ---
     // Tag Zoho records for removal (migrate-then-tag): Adam flags duplicates/
