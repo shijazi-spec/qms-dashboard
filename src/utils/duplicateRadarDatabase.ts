@@ -4187,6 +4187,8 @@ export async function autoResolveClusters(): Promise<{
   let singletonsIgnored = 0;
   let highConfidenceResolved = 0;
 
+  // Only auto-clean SINGLETONS (clusters left with <=1 record after deletions
+  // — they are not duplicates anymore, so ignoring them is safe cleanup).
   const singletons = await pool.query(`
     SELECT id FROM duplicate_clusters WHERE total_records <= 1 AND status = 'active'
   `);
@@ -4198,25 +4200,14 @@ export async function autoResolveClusters(): Promise<{
     singletonsIgnored++;
   }
 
-  const highConf = await pool.query(`
-    SELECT id FROM duplicate_clusters WHERE confidence_score >= 95 AND status = 'active' AND total_records > 1
-  `);
-  for (const row of highConf.rows) {
-    const primary = await pool.query(
-      "SELECT id FROM duplicate_records WHERE cluster_id = $1 AND is_primary = true LIMIT 1",
-      [row.id],
-    );
-    if (primary.rows[0]) {
-      await resolveCluster(
-        row.id,
-        "resolve",
-        "auto-resolve",
-        primary.rows[0].id,
-        "Auto-resolved: confidence >= 95% with clear primary",
-      );
-      highConfidenceResolved++;
-    }
-  }
+  // REMOVED (2026-06-12): the old high-confidence auto-resolve marked any
+  // cluster with confidence_score >= 95% as 'resolved' — but high confidence
+  // that two records are duplicates is NOT the same as them having been MERGED
+  // in Zoho. This silently marked real, un-merged duplicates "Resolved",
+  // locking operators out of merging them ("already resolved" guard). A cluster
+  // must only become 'resolved' from an actual Apply/merge or an explicit
+  // operator "Mark Resolved" after merging in Zoho. highConfidenceResolved
+  // stays 0 to preserve the return shape for callers.
 
   return {
     singletonsIgnored,
