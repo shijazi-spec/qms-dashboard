@@ -93,6 +93,27 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       ].filter(Boolean).join('\n'),
   },
 
+  'tag-records-for-removal': {
+    toolId: 'tag-records-for-removal',
+    label: 'Tag Zoho records for removal',
+    riskLevel: 'high',
+    requiresApproval: true,
+    complianceRefs: [
+      'WP-SOP-011 (Automated Decision and Processing Process)',
+      'WP-DOC-004 (AI Adoption Guidelines)',
+      'ISO 9001:2015 §7.5 (Control of documented information)',
+      'PDPL Art. 18 (Data minimization / erasure)',
+    ],
+    entityType: 'zoho_tag',
+    buildPreview: (p: any) =>
+      [
+        `**Module:** ${p?.module ?? 'n/a'}`,
+        `**Tag:** ${p?.tag ?? 'Duplicate-Delete'}`,
+        `**Records:** ${(p?.recordIds || []).length} record(s) flagged for admin removal`,
+        p?.reason ? `**Reason:** ${trim(p.reason, 200)}` : null,
+      ].filter(Boolean).join('\n'),
+  },
+
   'create-capa': {
     toolId: 'create-capa',
     label: 'Create CAPA (Corrective/Preventive Action)',
