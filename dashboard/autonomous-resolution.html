@@ -95,6 +95,20 @@
             <div id="moduleBreakdown" class="space-y-2 text-sm"><div class="text-gray-500">Loading…</div></div>
         </section>
 
+        <!-- Notification schedule (Adam's Slack cadence) — reviewed monthly -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-1">🗓️ Adam — Notification Schedule (KSA)</h2>
+            <p class="text-xs text-gray-500 mb-3">What Adam posts to Slack and when. Reviewed automatically on the 1st of each month (posted to #grq-assistant) — to change a timing, edit its env var or ask me.</p>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead><tr class="text-xs text-gray-500 text-left border-b border-gray-200">
+                        <th class="px-3 py-2">When (KSA)</th><th class="px-3 py-2">What</th><th class="px-3 py-2">Channel</th>
+                    </tr></thead>
+                    <tbody id="notifScheduleBody"><tr><td colspan="3" class="px-3 py-3 text-gray-500">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- Competence grades -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <h2 class="text-lg font-semibold text-gray-900 mb-1">Competence grades</h2>
@@ -531,7 +545,29 @@
             }
         }
 
-        function refreshAll() { loadStatus(); loadGrades(); loadRules(); }
+        async function loadNotificationSchedule() {
+            var body = document.getElementById('notifScheduleBody');
+            if (!body) return;
+            try {
+                var data = await getJSON('/api/duplicates/autonomous/notification-schedule');
+                var rows = (data && data.schedule) || [];
+                if (!rows.length) { body.innerHTML = '<tr><td colspan="3" class="px-3 py-3 text-gray-500">—</td></tr>'; return; }
+                body.innerHTML = rows.map(function (e) {
+                    var ch = e.postsToSlack
+                        ? '<span class="text-indigo-700">' + esc(e.channel) + '</span>'
+                        : '<span class="text-gray-400">background (no post)</span>';
+                    return '<tr class="border-t border-gray-100 align-top">' +
+                        '<td class="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">' + esc(e.time) + '</td>' +
+                        '<td class="px-3 py-2 text-gray-700">' + esc(e.what) + '</td>' +
+                        '<td class="px-3 py-2 text-xs whitespace-nowrap">' + ch + '</td>' +
+                        '</tr>';
+                }).join('');
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="3" class="px-3 py-3 text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</td></tr>';
+            }
+        }
+
+        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); }
 
         document.addEventListener('DOMContentLoaded', refreshAll);
     </script>

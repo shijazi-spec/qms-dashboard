@@ -495,6 +495,25 @@ const execBriefWeeklyFunction = inngest.createFunction(
 );
 inngestFunctions.push(execBriefWeeklyFunction);
 
+// Monthly notification-schedule review — posts Adam's current notification
+// schedule to #grq-assistant on the 1st at 09:00 KSA (06:00 UTC) so the team
+// reviews the timings monthly and edits if needed.
+const scheduleReviewFunction = inngest.createFunction(
+  { id: "autonomous-schedule-review-monthly" },
+  { cron: process.env.AUTONOMOUS_SCHEDULE_REVIEW_CRON || "0 6 1 * *" },
+  async ({ step }) => {
+    return await step.run("post-schedule-review", async () => {
+      const { postMonthlyScheduleReview } = await import(
+        "../../utils/duplicateResolutionRunner"
+      );
+      const res = await postMonthlyScheduleReview();
+      logger.info("[ScheduleReview] monthly review posted", res);
+      return res;
+    });
+  },
+);
+inngestFunctions.push(scheduleReviewFunction);
+
 // Weekly Call Evaluation Digest — DECOMMISSIONED 2026-05-25.
 // Per scope amendments 3 (skip weekly digest) + 4 (Weekly Report is
 // in-dashboard only), this Inngest cron is unregistered. The function

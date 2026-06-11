@@ -180,6 +180,7 @@ import {
   postResolutionMessage,
   buildExecutiveBriefText,
   postWeeklyExecBrief,
+  ADAM_NOTIFICATION_SCHEDULE,
   getModuleResolutionBreakdown,
   type ResolutionMode,
 } from "../../utils/duplicateResolutionRunner";
@@ -995,6 +996,23 @@ export const duplicateRadarRoutes = [
           // withTrend shows week-over-week vs the last weekly snapshot.
           const { brief, metrics } = await buildExecutiveBriefText({ withTrend: true });
           return c.json({ brief, generated_at: new Date().toISOString(), data: metrics });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Adam's notification schedule (single source of truth) — for the platform
+    // "Notification Schedule" card. Reviewed monthly; timings edited via env.
+    path: "/api/duplicates/autonomous/notification-schedule",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          return c.json({ schedule: ADAM_NOTIFICATION_SCHEDULE });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

@@ -419,6 +419,45 @@ export async function postWeeklyExecBrief(
   return { ok: posted.length > 0, posted, errors };
 }
 
+/**
+ * SINGLE SOURCE OF TRUTH for Adam's scheduled notifications. Drives the
+ * platform "Notification Schedule" card, the monthly review post, and what
+ * Adam tells people about his own cadence. To change a timing, edit the
+ * matching env var (envKey) — review this monthly. Times are KSA (UTC+3).
+ */
+export interface NotificationScheduleEntry {
+  time: string;
+  cron: string;
+  envKey?: string;
+  channel: string;
+  what: string;
+  postsToSlack: boolean;
+}
+export const ADAM_NOTIFICATION_SCHEDULE: NotificationScheduleEntry[] = [
+  { time: "09:00 & 17:00 KSA · daily", cron: "0 6,14 * * *", envKey: "AUTONOMOUS_RESOLUTION_DIGEST_CRON", channel: "#grq-assistant", what: "Operational apply digest — what the agent applied/queued this shift", postsToSlack: true },
+  { time: "Sunday 06:00 KSA · weekly", cron: "0 3 * * 0", envKey: "AUTONOMOUS_EXEC_BRIEF_CRON", channel: "#grq-assistant + #automatic-audits", what: "Weekly leadership brief — exposure, dup-rate vs 2%, week-over-week trend, recommendation", postsToSlack: true },
+  { time: "After each 6h tick", cron: "30 */6 * * *", channel: "#grq-assistant", what: "Per-tick summary of the autonomous resolution run (quiet when nothing changed)", postsToSlack: true },
+  { time: "1st of month 09:00 KSA", cron: "0 6 1 * *", envKey: "AUTONOMOUS_SCHEDULE_REVIEW_CRON", channel: "#grq-assistant", what: "Monthly review of THIS notification schedule (edit timings if needed)", postsToSlack: true },
+  { time: "Every 6h (03/09/15/21 KSA) + 07:00 KSA", cron: "0 */6 * * * / 0 4 * * *", envKey: "DUPLICATE_SCAN_CRON / DUPLICATE_MORNING_SYNC_CRON", channel: "— (background)", what: "Incremental CRM sync — keeps the radar fresh (no Slack post)", postsToSlack: false },
+];
+
+/** Render the schedule as a Slack-friendly list. */
+export function buildNotificationScheduleText(): string {
+  const lines = ADAM_NOTIFICATION_SCHEDULE.map(
+    (e) => `• *${e.time}* — ${e.what}` + (e.postsToSlack ? ` → ${e.channel}` : ` _(background)_`),
+  ).join("\n");
+  return `*Adam — Notification Schedule (KSA)*\n${lines}`;
+}
+
+/** Monthly review post: shows the schedule and invites timing changes. */
+export async function postMonthlyScheduleReview(): Promise<{ ok: boolean; channel: string | null; error?: string }> {
+  const text =
+    `🗓️ *Monthly notification-schedule review*\n\n` +
+    buildNotificationScheduleText() +
+    `\n\nReply here if any timing should change and we'll update it. ${resolutionScreenLink()}`;
+  return postResolutionMessage(text);
+}
+
 export const AGENT_PERFORMED_BY =
   "Adam — GRQ Assistant (on behalf of Sarah Hijazi)";
 
