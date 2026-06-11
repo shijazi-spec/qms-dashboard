@@ -177,6 +177,7 @@ import {
   setResolutionSetting,
   isResolutionSlackConfigured,
   sendResolutionSlackTest,
+  postResolutionMessage,
   getModuleResolutionBreakdown,
   type ResolutionMode,
 } from "../../utils/duplicateResolutionRunner";
@@ -971,6 +972,104 @@ export const duplicateRadarRoutes = [
             module_breakdown: await getModuleResolutionBreakdown().catch(() => []),
             learnings: await getResolutionLearnings().catch(() => null),
           });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // One-tap EXECUTIVE BRIEF — assembles the real aggregate figures into a
+    // board-ready, shareable text block (CEO/CCO). Deterministic (no LLM), so
+    // it's consistent and never hallucinates a number. Same framing Adam uses.
+    path: "/api/duplicates/autonomous/executive-brief",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const cfg = await resolveResolutionRunConfig();
+          const agg = await getClusterSummary().catch(() => null);
+          const breakdown = await getModuleResolutionBreakdown().catch(() => [] as any[]);
+          const kpi = await getKPIMetrics().catch(() => null);
+          const grades = await getGradeHistory(undefined, 4 * 8).catch(() => []);
+          const latestByModule: Record<string, any> = {};
+          for (const g of grades) if (!latestByModule[g.module]) latestByModule[g.module] = g;
+
+          const sar = (n: number) => "SAR " + Math.round(n || 0).toLocaleString();
+          const exposure = agg?.estimatedPipelineInflation || 0;
+          const totalClusters = agg?.totalClusters || 0;
+          const resolved = agg?.resolvedCount || 0;
+          const open = agg?.activeCount || 0;
+          const totalSolved = breakdown.reduce((a: number, b: any) => a + (b.solved || 0), 0);
+          const dupRate = kpi
+            ? Math.max(kpi.duplicateLeadRate || 0, kpi.duplicateDealRate || 0)
+            : null;
+          // Plain-language mode + maturity
+          const modePlain =
+            cfg.mode === "shadow"
+              ? "observing only — making no changes to the CRM yet"
+              : cfg.mode === "assisted"
+                ? "assisting — auto-clearing the safe cases, queuing the rest for review"
+                : "autonomous — clearing safe cases on its own";
+          const maturity = ["Accounts", "Leads", "Deals", "Contacts"]
+            .map((m) => {
+              const g = latestByModule[m];
+              const lvl = g?.grade ?? 1;
+              const plain = lvl >= 4 ? "trusted" : lvl >= 3 ? "reliable" : lvl >= 2 ? "developing" : "still learning";
+              return `${m}: ${plain}`;
+            })
+            .join(" · ");
+
+          const moduleLines = breakdown
+            .map((b: any) => `   • ${b.module}: ${b.total.toLocaleString()} clusters · ${b.solved.toLocaleString()} cleared · ${b.rest.toLocaleString()} remaining`)
+            .join("\n");
+
+          const clearedPct = totalClusters > 0 ? ((resolved / totalClusters) * 100) : 0;
+
+          const brief =
+            `*GRQ — CRM Duplicate Health (Executive Brief)*\n\n` +
+            `*Bottom line:* ~${sar(exposure)} of pipeline value is inflated across ${totalClusters.toLocaleString()} duplicate clusters; ${clearedPct < 1 ? "under 1%" : clearedPct.toFixed(0) + "%"} cleared so far.\n\n` +
+            (dupRate != null ? `• *Duplicate rate:* ~${dupRate}% vs the 2% target — our biggest data-quality gap.\n` : "") +
+            `• *Financial exposure:* ${sar(exposure)} of estimated inflated pipeline sitting in duplicates.\n` +
+            `• *Progress:* ${resolved.toLocaleString()} clusters resolved · ${open.toLocaleString()} still open.\n` +
+            `• *Clean-up AI:* ${modePlain}.\n` +
+            `• *AI maturity by module:* ${maturity}.\n\n` +
+            `*By module:*\n${moduleLines}\n\n` +
+            `*Recommendation:* ${cfg.mode === "shadow"
+              ? "the AI's judgement is being validated in observe-only mode — once agreement holds, approve moving the strongest module to assisted (auto-clear safe cases, human-review the rest)."
+              : "continue assisted clean-up and review the override rate weekly; tighten thresholds as agreement improves."}`;
+
+          return c.json({
+            brief,
+            generated_at: new Date().toISOString(),
+            data: { config: cfg, aggregate: agg, byModule: breakdown, kpi, totalSolved },
+          });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Post a (generated) executive brief to the resolution Slack channel.
+    path: "/api/duplicates/autonomous/executive-brief/post",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const text = String(body?.text || "").trim().slice(0, 6000);
+          if (!text) return c.json({ error: "Nothing to post." }, 400);
+          const stamped =
+            text + `\n\n_Shared by ${(user as any)?.email || "an operator"} from the Autonomous Resolution screen._`;
+          const res = await postResolutionMessage(stamped);
+          if (!res.ok) return c.json({ error: res.error || "Slack post failed" }, 502);
+          return c.json({ ok: true, channel: res.channel });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

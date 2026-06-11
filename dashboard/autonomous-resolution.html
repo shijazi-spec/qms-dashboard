@@ -42,12 +42,27 @@
                 <h1 class="text-2xl font-bold text-gray-900">🤖 GRQ Assistant — Autonomous Resolution</h1>
                 <p class="text-sm text-gray-600 mt-1">Runs every 6 hours, acts on behalf of Sarah Hijazi, escalates the doubtful 1% to the AI Approvals queue, and learns from every decision.</p>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
                 <button data-on-click="refreshAll" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+                <button data-on-click="execBrief" id="execBriefBtn" title="Generate a board-ready summary for the CEO/CCO" class="px-3 py-2 text-sm rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100">📋 Executive brief</button>
                 <button data-on-click="testSlack" id="testSlackBtn" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">🔔 Send test ping</button>
                 <button data-on-click="runNow" id="runNowBtn" class="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">▶ Run now</button>
             </div>
         </header>
+
+        <!-- Executive brief (shareable, board-ready) -->
+        <section id="execBriefCard" class="hidden bg-white rounded-xl border border-indigo-200 p-5">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-lg font-semibold text-gray-900">📋 Executive brief</h2>
+                <div class="flex items-center gap-2">
+                    <button data-on-click="copyExecBrief" id="copyBriefBtn" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">⧉ Copy</button>
+                    <button data-on-click="postExecBriefToSlack" id="postBriefBtn" title="Post to #grq-platform-assistant" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Post to Slack</button>
+                    <button data-on-click="hideExecBrief" class="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600">✕</button>
+                </div>
+            </div>
+            <pre id="execBriefText" class="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded-lg p-3 max-h-96 overflow-y-auto">Generating…</pre>
+            <div id="execBriefMeta" class="text-[11px] text-gray-400 mt-1"></div>
+        </section>
 
         <!-- Status panel -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
@@ -457,6 +472,62 @@
                 }
             } catch (e) { alert('Test failed: ' + e); }
             finally { btn.disabled = false; btn.textContent = '🔔 Send test ping'; }
+        }
+
+        // ── Executive brief (board-ready, shareable) ─────────────────────
+        window._execBrief = '';
+        async function execBrief() {
+            var card = document.getElementById('execBriefCard');
+            var txt = document.getElementById('execBriefText');
+            var meta = document.getElementById('execBriefMeta');
+            var btn = document.getElementById('execBriefBtn');
+            if (card) card.classList.remove('hidden');
+            if (txt) txt.textContent = 'Generating…';
+            if (btn) btn.disabled = true;
+            try {
+                var data = await getJSON('/api/duplicates/autonomous/executive-brief');
+                window._execBrief = (data && data.brief) || '';
+                if (txt) txt.textContent = window._execBrief || 'No data.';
+                if (meta) meta.textContent = data && data.generated_at ? ('Generated ' + new Date(data.generated_at).toLocaleString()) : '';
+            } catch (e) {
+                if (txt) txt.textContent = 'Could not generate the brief: ' + (e && e.message || e);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+            if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        function hideExecBrief() {
+            var card = document.getElementById('execBriefCard');
+            if (card) card.classList.add('hidden');
+        }
+        async function copyExecBrief() {
+            var btn = document.getElementById('copyBriefBtn');
+            var text = window._execBrief || (document.getElementById('execBriefText') || {}).textContent || '';
+            if (!text) return;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+                else { var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); }
+                if (btn) { var o = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(function () { btn.textContent = o; }, 1500); }
+            } catch (e) { if (btn) btn.textContent = 'Copy failed'; }
+        }
+        async function postExecBriefToSlack() {
+            var btn = document.getElementById('postBriefBtn');
+            var text = window._execBrief || '';
+            if (!text) { return; }
+            if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+            try {
+                var res = await fetch('/api/duplicates/autonomous/executive-brief/post', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                var data = await res.json();
+                if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                if (btn) { btn.textContent = '✓ Posted'; setTimeout(function () { btn.textContent = 'Post to Slack'; btn.disabled = false; }, 2000); }
+            } catch (e) {
+                if (btn) { btn.textContent = 'Failed'; btn.disabled = false; }
+                alert('Could not post to Slack: ' + (e && e.message || e));
+            }
         }
 
         function refreshAll() { loadStatus(); loadGrades(); loadRules(); }

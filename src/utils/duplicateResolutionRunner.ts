@@ -254,6 +254,24 @@ export async function sendResolutionSlackTest(
   }
 }
 
+/** Post an arbitrary message to the resolution Slack channel (e.g. a
+ *  manually-triggered executive brief). Best-effort. */
+export async function postResolutionMessage(
+  text: string,
+): Promise<{ ok: boolean; channel: string | null; error?: string }> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  const channel = getResolutionSlackChannel();
+  if (!token) return { ok: false, channel, error: "SLACK_BOT_TOKEN is not set." };
+  if (!channel) return { ok: false, channel: null, error: "No resolution Slack channel configured." };
+  try {
+    const { WebClient } = await import("@slack/web-api");
+    await new WebClient(token).chat.postMessage({ channel, text });
+    return { ok: true, channel };
+  } catch (e) {
+    return { ok: false, channel, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export const AGENT_PERFORMED_BY =
   "Adam — GRQ Assistant (on behalf of Sarah Hijazi)";
 
