@@ -510,6 +510,55 @@ export async function runResolutionDigestIfDue(): Promise<{ ran: boolean; ageHou
 }
 
 /**
+ * In-process fallback for the WEEKLY leadership exec brief, in case the Inngest
+ * cron doesn't fire. Sunday 06:00 KSA = 03:00 UTC; we accept a 03:00–06:00 UTC
+ * Sunday window to absorb the ~45-min tick drift, gated to once per 6 days so
+ * only one fire actually posts.
+ */
+export async function runWeeklyExecBriefIfDue(): Promise<{ ran: boolean; ageHours: number }> {
+  const now = new Date();
+  const isSunday = now.getUTCDay() === 0;
+  const hourUTC = now.getUTCHours();
+  if (!isSunday || hourUTC < 3 || hourUTC > 6) return { ran: false, ageHours: 0 };
+
+  const pool = sharedPool;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scanner_run_log (
+      id SERIAL PRIMARY KEY,
+      scanner_name VARCHAR(100) NOT NULL,
+      ran_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      success BOOLEAN NOT NULL DEFAULT true,
+      summary JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_scanner_run_log_name_time ON scanner_run_log(scanner_name, ran_at DESC);
+  `);
+  const scanner = "exec-brief-weekly";
+  const r = await pool.query<{ hours: number | null }>(
+    `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ran_at)))/3600 AS hours
+     FROM scanner_run_log WHERE scanner_name=$1 AND success=true`,
+    [scanner],
+  );
+  const ageHours = r.rows[0]?.hours == null ? Infinity : Number(r.rows[0].hours);
+  if (ageHours < 144) return { ran: false, ageHours }; // already posted this week
+  try {
+    const { postWeeklyExecBrief } = await import("./duplicateResolutionRunner");
+    const res = await postWeeklyExecBrief();
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, true, $2)`,
+      [scanner, JSON.stringify(res)],
+    );
+    return { ran: true, ageHours };
+  } catch (err) {
+    logger.error("[ExecBriefWeekly Fallback] failed:", err);
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, false, $2)`,
+      [scanner, JSON.stringify({ error: String(err) })],
+    );
+    return { ran: false, ageHours };
+  }
+}
+
+/**
  * Weekly Supabase refresh — Replit Postgres → Supabase mirror.
  *
  * Pinned to Friday 23:00 Riyadh (= 20:00 UTC). The scheduledJobFallback

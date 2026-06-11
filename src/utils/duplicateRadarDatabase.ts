@@ -365,6 +365,51 @@ export async function getDealDocCompliance(
   return r.rows;
 }
 
+// ── Weekly executive-brief snapshots (for week-over-week trend) ───────────
+export interface ExecBriefSnapshot {
+  total_clusters: number;
+  resolved_count: number;
+  active_count: number;
+  exposure: number;
+  dup_rate: number | null;
+  metrics_json: any;
+  created_at: string;
+}
+
+export async function recordExecBriefSnapshot(s: {
+  totalClusters: number;
+  resolvedCount: number;
+  activeCount: number;
+  exposure: number;
+  dupRate: number | null;
+  metricsJson?: any;
+}): Promise<void> {
+  await pool.query(
+    `INSERT INTO exec_brief_snapshots
+       (total_clusters, resolved_count, active_count, exposure, dup_rate, metrics_json)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+    [
+      s.totalClusters || 0,
+      s.resolvedCount || 0,
+      s.activeCount || 0,
+      s.exposure || 0,
+      s.dupRate == null ? null : s.dupRate,
+      JSON.stringify(s.metricsJson || {}),
+    ],
+  );
+}
+
+/** Most recent snapshot (the prior week's), for computing the delta. */
+export async function getPreviousExecBriefSnapshot(): Promise<ExecBriefSnapshot | null> {
+  const r = await pool.query(
+    `SELECT total_clusters, resolved_count, active_count, exposure, dup_rate, metrics_json, created_at
+       FROM exec_brief_snapshots
+      ORDER BY created_at DESC
+      LIMIT 1`,
+  );
+  return r.rows[0] || null;
+}
+
 export function extractDomain(email: string): string | null {
   if (!email || typeof email !== "string") return null;
   const match = email
@@ -670,6 +715,22 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       attachment_count INTEGER NOT NULL DEFAULT 0,
       checked_at TIMESTAMP DEFAULT NOW(),
       checked_by VARCHAR(255)
+    );
+  `);
+
+  // Weekly executive-brief snapshots — one row per weekly leadership digest, so
+  // the next digest can report week-over-week trend (clusters cleared, exposure
+  // change, duplicate-rate change). Boot-created in dev & prod.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS exec_brief_snapshots (
+      id SERIAL PRIMARY KEY,
+      total_clusters INTEGER NOT NULL DEFAULT 0,
+      resolved_count INTEGER NOT NULL DEFAULT 0,
+      active_count INTEGER NOT NULL DEFAULT 0,
+      exposure NUMERIC NOT NULL DEFAULT 0,
+      dup_rate INTEGER,
+      metrics_json JSONB,
+      created_at TIMESTAMP DEFAULT NOW()
     );
   `);
 

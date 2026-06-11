@@ -510,6 +510,7 @@ export const mastra = new Mastra({
         runWeeklySupabaseRefreshIfStale,
         runAutonomousResolutionIfStale,
         runResolutionDigestIfDue,
+        runWeeklyExecBriefIfDue,
       } = await import("../utils/scheduledJobs");
       const helpers: Array<{
         name: string;
@@ -526,6 +527,8 @@ export const mastra = new Mastra({
         { name: "AutonomousResolution", fn: () => runAutonomousResolutionIfStale() },
         // Twice-daily apply digest (09:00 / 17:00 KSA). No-ops outside those windows.
         { name: "ResolutionDigest", fn: () => runResolutionDigestIfDue() },
+        // Weekly leadership exec brief (Sunday 06:00 KSA). No-ops otherwise.
+        { name: "ExecBriefWeekly", fn: () => runWeeklyExecBriefIfDue() },
         // Opt-in via SUPABASE_DATABASE_URL. No-ops silently when unset, so
         // it's safe to ship without any env work on Replit. See helper
         // body for the Friday 19:00–23:00 UTC time gate (= Friday 22:00–02:00

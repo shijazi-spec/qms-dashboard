@@ -29,6 +29,10 @@ import {
   getClusterById,
   captureClusterSnapshot,
   updateClusterStatus,
+  getClusterSummary,
+  getKPIMetrics,
+  recordExecBriefSnapshot,
+  getPreviousExecBriefSnapshot,
   pool,
   type DuplicateCluster,
   type DuplicateRecord,
@@ -43,7 +47,7 @@ import {
 } from "./duplicateResolutionPolicy";
 import { evaluateRules } from "./duplicateResolutionRules";
 import { recordResolutionEvent } from "./duplicateResolutionLearning";
-import { snapshotGrades } from "./duplicateResolutionGrades";
+import { snapshotGrades, getGradeHistory } from "./duplicateResolutionGrades";
 import { enqueuePendingAction, initAIApprovalTable } from "./aiApprovalDatabase";
 import { fetchRecordAttachments, removeZohoTags } from "./zohoCRM";
 import { logger } from "./logger";
@@ -270,6 +274,141 @@ export async function postResolutionMessage(
   } catch (e) {
     return { ok: false, channel, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+// Channels the WEEKLY leadership brief posts to. Defaults: #grq-assistant
+// (resolution channel) + #automatic-audits. Override via env (comma-separated
+// channel ids). The bot must be a MEMBER of each channel to post.
+const WEEKLY_BRIEF_CHANNELS_DEFAULT = ["C0B93BCJFFV", "C0AS5G4UN91"];
+function getWeeklyBriefChannels(): string[] {
+  const env = (process.env.AUTONOMOUS_WEEKLY_BRIEF_CHANNELS || "").trim();
+  if (env) return env.split(",").map((s) => s.trim()).filter(Boolean);
+  return Array.from(new Set(WEEKLY_BRIEF_CHANNELS_DEFAULT));
+}
+
+/**
+ * Build the board-ready executive brief text DETERMINISTICALLY from real
+ * aggregate figures (no LLM). Shared by the on-demand button and the weekly
+ * leadership digest. With `withTrend`, prepends a week-over-week line vs the
+ * last recorded snapshot.
+ */
+export async function buildExecutiveBriefText(
+  opts: { withTrend?: boolean } = {},
+): Promise<{ brief: string; metrics: any }> {
+  const cfg = await resolveResolutionRunConfig();
+  const agg = await getClusterSummary().catch(() => null);
+  const breakdown = await getModuleResolutionBreakdown().catch(() => [] as any[]);
+  const kpi = await getKPIMetrics().catch(() => null);
+  const grades = await getGradeHistory(undefined, 4 * 8).catch(() => []);
+  const latestByModule: Record<string, any> = {};
+  for (const g of grades) if (!latestByModule[g.module]) latestByModule[g.module] = g;
+
+  const sar = (n: number) => "SAR " + Math.round(n || 0).toLocaleString();
+  const totalClusters = agg?.totalClusters || 0;
+  const resolved = agg?.resolvedCount || 0;
+  const open = agg?.activeCount || 0;
+  const exposure = agg?.estimatedPipelineInflation || 0;
+  const dupRate = kpi ? Math.max(kpi.duplicateLeadRate || 0, kpi.duplicateDealRate || 0) : null;
+  const clearedPct = totalClusters > 0 ? (resolved / totalClusters) * 100 : 0;
+
+  const modePlain =
+    cfg.mode === "shadow"
+      ? "observing only — making no changes to the CRM yet"
+      : cfg.mode === "assisted"
+        ? "assisting — auto-clearing safe cases, queuing the rest for review"
+        : "autonomous — clearing safe cases on its own";
+  const maturity = ["Accounts", "Leads", "Deals", "Contacts"]
+    .map((m) => {
+      const lvl = latestByModule[m]?.grade ?? 1;
+      const plain = lvl >= 4 ? "trusted" : lvl >= 3 ? "reliable" : lvl >= 2 ? "developing" : "still learning";
+      return `${m}: ${plain}`;
+    })
+    .join(" · ");
+  const moduleLines = breakdown
+    .map((b: any) => `   • ${b.module}: ${b.total.toLocaleString()} clusters · ${b.solved.toLocaleString()} cleared · ${b.rest.toLocaleString()} remaining`)
+    .join("\n");
+
+  let trendLine = "";
+  if (opts.withTrend) {
+    const prev = await getPreviousExecBriefSnapshot().catch(() => null);
+    if (prev) {
+      const dResolved = resolved - (prev.resolved_count || 0);
+      const dExposure = exposure - Number(prev.exposure || 0);
+      const dRate = dupRate != null && prev.dup_rate != null ? dupRate - prev.dup_rate : null;
+      trendLine =
+        `\n*This week:* ${dResolved >= 0 ? "+" : ""}${dResolved.toLocaleString()} clusters cleared · ` +
+        `exposure ${dExposure <= 0 ? "down" : "up"} ${sar(Math.abs(dExposure))}` +
+        (dRate != null ? ` · duplicate rate ${dRate <= 0 ? "down" : "up"} ${Math.abs(dRate)} pts` : "") +
+        ".\n";
+    } else {
+      trendLine = `\n_First weekly baseline — week-over-week trend starts next week._\n`;
+    }
+  }
+
+  const brief =
+    `*GRQ — CRM Duplicate Health (Executive Brief)*\n\n` +
+    `*Bottom line:* ~${sar(exposure)} of pipeline value is inflated across ${totalClusters.toLocaleString()} duplicate clusters; ${clearedPct < 1 ? "under 1%" : clearedPct.toFixed(0) + "%"} cleared so far.\n` +
+    trendLine +
+    `\n` +
+    (dupRate != null ? `• *Duplicate rate:* ~${dupRate}% vs the 2% target — our biggest data-quality gap.\n` : "") +
+    `• *Financial exposure:* ${sar(exposure)} of estimated inflated pipeline in duplicates.\n` +
+    `• *Progress:* ${resolved.toLocaleString()} clusters resolved · ${open.toLocaleString()} still open.\n` +
+    `• *Clean-up AI:* ${modePlain}.\n` +
+    `• *AI maturity by module:* ${maturity}.\n\n` +
+    `*By module:*\n${moduleLines}\n\n` +
+    `*Recommendation:* ${cfg.mode === "shadow"
+      ? "validate the AI's judgement in observe-only mode; once agreement holds, approve moving the strongest module to assisted (auto-clear safe cases, human-review the rest)."
+      : "continue assisted clean-up; review the override rate weekly and tighten thresholds as agreement improves."}`;
+
+  return {
+    brief,
+    metrics: { totalClusters, resolvedCount: resolved, activeCount: open, exposure, dupRate },
+  };
+}
+
+/**
+ * Weekly leadership digest — posts the executive brief (with week-over-week
+ * trend) to the configured channels, then records this week's snapshot so the
+ * NEXT week can show the delta. Scheduled Sunday 06:00 KSA (03:00 UTC).
+ */
+export async function postWeeklyExecBrief(): Promise<{
+  ok: boolean;
+  posted: string[];
+  errors: string[];
+}> {
+  const { brief, metrics } = await buildExecutiveBriefText({ withTrend: true });
+  // Snapshot AFTER building (build reads the PRIOR snapshot for the delta).
+  try {
+    await recordExecBriefSnapshot({
+      totalClusters: metrics.totalClusters,
+      resolvedCount: metrics.resolvedCount,
+      activeCount: metrics.activeCount,
+      exposure: metrics.exposure,
+      dupRate: metrics.dupRate,
+      metricsJson: metrics,
+    });
+  } catch (e) {
+    logger.warn("[exec-brief] snapshot record failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+  const token = process.env.SLACK_BOT_TOKEN;
+  const posted: string[] = [];
+  const errors: string[] = [];
+  if (!token) return { ok: false, posted, errors: ["SLACK_BOT_TOKEN not set"] };
+  const text = `📊 *Weekly Leadership Brief*\n\n${brief}\n${resolutionScreenLink()}`;
+  const { WebClient } = await import("@slack/web-api");
+  const slack = new WebClient(token);
+  for (const ch of getWeeklyBriefChannels()) {
+    try {
+      await slack.chat.postMessage({ channel: ch, text });
+      posted.push(ch);
+    } catch (e) {
+      errors.push(`${ch}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  logger.info(`📊 [exec-brief] weekly brief posted to ${posted.length} channel(s)`, { posted, errors });
+  return { ok: posted.length > 0, posted, errors };
 }
 
 export const AGENT_PERFORMED_BY =

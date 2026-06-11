@@ -452,6 +452,25 @@ const resolutionDigestFunction = inngest.createFunction(
 );
 inngestFunctions.push(resolutionDigestFunction);
 
+// Weekly LEADERSHIP brief — board-ready executive summary (exposure, dup-rate
+// vs 2% target, week-over-week trend, recommendation) posted to #grq-assistant
+// + #automatic-audits. Sunday 03:00 UTC = Sunday 06:00 KSA.
+const execBriefWeeklyFunction = inngest.createFunction(
+  { id: "autonomous-exec-brief-weekly" },
+  { cron: process.env.AUTONOMOUS_EXEC_BRIEF_CRON || "0 3 * * 0" },
+  async ({ step }) => {
+    return await step.run("post-weekly-exec-brief", async () => {
+      const { postWeeklyExecBrief } = await import(
+        "../../utils/duplicateResolutionRunner"
+      );
+      const res = await postWeeklyExecBrief();
+      logger.info("[ExecBriefWeekly] posted", res);
+      return res;
+    });
+  },
+);
+inngestFunctions.push(execBriefWeeklyFunction);
+
 // Weekly Call Evaluation Digest — DECOMMISSIONED 2026-05-25.
 // Per scope amendments 3 (skip weekly digest) + 4 (Weekly Report is
 // in-dashboard only), this Inngest cron is unregistered. The function
