@@ -391,9 +391,19 @@ export function buildMergePlan(
     sel.length > 0
       ? records.filter((r) => r.zoho_record_id && selSet.has(r.zoho_record_id))
       : records;
-  if (sel.length > 0 && mergeSet.length < 2) {
+  // A LINK-ONLY (cascade) plan is valid with a single record: it sets
+  // Account_Name on the cluster's contacts and tags/merges nothing. So the
+  // "need 2 to merge" rule only applies when there is NO link target chosen
+  // (a pure merge). When a real account is being linked, allow 1 selected.
+  const isLinkOnly =
+    typeof opts.linkAccountZohoId === "string" &&
+    opts.linkAccountZohoId.trim().length > 0;
+  if (sel.length > 0 && mergeSet.length < 1) {
+    throw new Error(`Select at least 1 ${label} record (selected ${mergeSet.length}).`);
+  }
+  if (sel.length > 0 && mergeSet.length < 2 && !isLinkOnly) {
     throw new Error(
-      `Select at least 2 ${label} records to merge (selected ${mergeSet.length}).`,
+      `Select at least 2 ${label} records to merge — or pick an Account to link to for a link-only cascade (selected ${mergeSet.length}).`,
     );
   }
   if (sel.length > 0 && mergeSet.length < records.length) {

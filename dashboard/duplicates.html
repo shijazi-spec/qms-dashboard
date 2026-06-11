@@ -5171,8 +5171,13 @@
             const sel = new Set(Array.isArray(st.selected) ? st.selected : []);
             const key = String(zohoId);
             if (sel.has(key)) sel.delete(key); else sel.add(key);
-            if (sel.size < 2) {
-                alert('Select at least 2 records to merge.');
+            // A link-only cascade (an Account is chosen to link to) is valid
+            // with a single contact (the survivor) — it just sets Account_Name,
+            // nothing is merged. Only require 2 for an actual merge (no link).
+            var linkOnly = !!(st.linkAccount && String(st.linkAccount).trim());
+            var minSel = linkOnly ? 1 : 2;
+            if (sel.size < minSel) {
+                alert(linkOnly ? 'Keep at least the survivor contact selected.' : 'Select at least 2 records to merge (or pick an Account to link to for a link-only cascade).');
                 previewMergePlan(module, window.__planClusterId);
                 return;
             }
