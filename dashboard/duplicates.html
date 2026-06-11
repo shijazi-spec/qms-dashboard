@@ -6768,6 +6768,10 @@
             const allHints = data.hints || [];
             if (allHints.length === 0) {
                 body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No hints in this bucket. Click <em>Run scan</em> to generate fresh suggestions.</td></tr>';
+                // Reset the pagination footer too — otherwise it keeps the stale
+                // count from the previously-viewed bucket (e.g. "1–20 of 475"
+                // under an empty Pending bucket after everything was Applied).
+                renderPagination('accountHintsPagination', 0, 1, () => {}, 0, 'hints');
                 return;
             }
             // Advanced Filter — client-side. Account Hints expose
