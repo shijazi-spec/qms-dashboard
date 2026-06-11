@@ -335,6 +335,53 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     buildPreview: (p: any) => `${p?.severity ?? 'info'}: ${trim(p?.title, 100)}`,
   },
 
+  // --- Duplicate Radar read-only status tools (no writes; reads only) ---
+  'lookup-entity': {
+    toolId: 'lookup-entity',
+    label: 'CRM entity lookup (company/person/domain/email/phone)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only Zoho search across modules
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only CRM lookup; surfaces contact data only to the authorized caller'],
+    entityType: 'crm_lookup',
+    buildPreview: (p: any) => `Lookup: ${trim(p?.query, 80)}`,
+  },
+  'cs-lifecycle-status': {
+    toolId: 'cs-lifecycle-status',
+    label: 'CS Lifecycle status (deals by phase / renewal)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only CS lifecycle status'],
+    entityType: 'cs_lifecycle_status',
+    buildPreview: () => 'CS Lifecycle status',
+  },
+  'cs-pipeline-overlap-status': {
+    toolId: 'cs-pipeline-overlap-status',
+    label: 'CS Pipeline Overlap status (block/review/warn)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only CS overlap counts'],
+    entityType: 'cs_overlap_status',
+    buildPreview: () => 'CS Pipeline Overlap status',
+  },
+  'owner-accountability': {
+    toolId: 'owner-accountability',
+    label: 'Owner Accountability (duplicates by owner)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only aggregate
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only owner aggregate'],
+    entityType: 'owner_accountability',
+    buildPreview: () => 'Duplicates by owner',
+  },
+  'preflight-check': {
+    toolId: 'preflight-check',
+    label: 'Preflight create-verdict (duplicate / CS overlap)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only verdict; creates nothing
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only pre-create verdict; no record is created'],
+    entityType: 'preflight_verdict',
+    buildPreview: (p: any) => `Preflight: ${trim(p?.company_name || p?.domain || p?.email || p?.phone, 80)}`,
+  },
+
   'duplicate-resolution-assistant': {
     toolId: 'duplicate-resolution-assistant',
     label: 'Duplicate-resolution assistant (status / rules / preview)',
