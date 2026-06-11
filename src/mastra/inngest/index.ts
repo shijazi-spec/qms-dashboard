@@ -426,6 +426,30 @@ const duplicateSyncFunction = inngest.createFunction(
 );
 inngestFunctions.push(duplicateSyncFunction);
 
+// Dedicated PRE-SHIFT incremental sync — 07:00 KSA (04:00 UTC) so the radar is
+// fully current the moment Sarah starts her day, on top of the every-6h cron.
+// Incremental (scanZohoCRMForDuplicates default = not forceFull) so it's fast
+// and can't freeze; a full rebuild stays the manual "Rebuild Clusters" action.
+const duplicateMorningSyncFunction = inngest.createFunction(
+  { id: "duplicate-radar-morning-sync" },
+  { cron: process.env.DUPLICATE_MORNING_SYNC_CRON || "0 4 * * *" },
+  async ({ step }) => {
+    return await step.run("morning-incremental-sync", async () => {
+      logger.info("[DuplicateRadar] Pre-shift (07:00 KSA) incremental sync");
+      const { scanZohoCRMForDuplicates } = await import(
+        "../routes/duplicateRadarRoutes"
+      );
+      const r = await scanZohoCRMForDuplicates("scheduled");
+      logger.info("[DuplicateRadar] Pre-shift sync done", {
+        scanned: r.totalRecordsScanned,
+        clusters: r.totalClustersFound,
+      });
+      return { scanned: r.totalRecordsScanned, clusters: r.totalClustersFound };
+    });
+  },
+);
+inngestFunctions.push(duplicateMorningSyncFunction);
+
 // Autonomous-Resolution apply DIGEST — twice daily to #grq-platform-assistant:
 // 09:00 KSA (start of day) and 17:00 KSA (end of day). KSA = UTC+3, no DST, so
 // 06:00 and 14:00 UTC. Batches all AI solves/migrations in the window into one
