@@ -206,6 +206,18 @@ const PUBLIC_DOMAINS = [
   "stc.com.sa",
   "mobily.com.sa",
   "zain.com.sa",
+  // House / internal domains — WalaPlus's OWN domains. Records that picked these
+  // up (created via internal forms, or carrying the company email/website
+  // instead of the client's) are NOT the same company. Without excluding them,
+  // every such record collapses into one giant false "walaplus.com" cluster.
+  // Treated like a public domain → not a clustering signal. Add more house/ISP
+  // domains via the DUPLICATE_EXCLUDED_DOMAINS env (comma-separated).
+  "walaplus.com",
+  "walaplus.net",
+  ...(process.env.DUPLICATE_EXCLUDED_DOMAINS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
 ];
 
 // Full list (no LIMIT 5) for "View All" modals on the dashboard.
