@@ -87,27 +87,37 @@ export function registerGrqAssistantSlackRoutes(): ApiRoute[] {
           return null;
         }
 
+        // Mastra Memory ties a thread to ONE resource. The thread is therefore
+        // keyed per-CHANNEL-and-USER and the resource per-USER, so each person
+        // owns their own thread + their own working memory (no cross-user
+        // ownership clash, and PDPL-cleaner — one user's memory never bleeds
+        // into another's). NOTE: the older per-channel-only threadId
+        // (`slack-<channel>`) got stamped with the first speaker's resource;
+        // this per-user namespace deliberately starts fresh threads so that
+        // legacy "thread owned by another resource" error can't recur.
+        const slackUser = event.user || channel;
+        const convThreadId = `slack-${channel}-${slackUser}`;
+        const convResourceId = `slack-user-${slackUser}`;
+
         let reply = "";
         try {
-          // Per-channel memory so it's a continuous conversation; per-user
-          // resource keeps each person's context separate. The
-          // withAgentUserContext wrapper threads a role into the tool layer so
-          // Adam's RBAC-gated platform-data tools actually return data (mirrors
-          // what the web /api/consultant/chat route does for a logged-in user).
+          // withAgentUserContext threads a role into the tool layer so Adam's
+          // RBAC-gated platform-data tools actually return data (mirrors what
+          // the web /api/consultant/chat route does for a logged-in user).
           const res = await withAgentUserContext(
             {
               user: {
                 userId: null,
-                email: `slack-${event.user || channel}`,
+                email: `slack-${slackUser}`,
                 role: SLACK_ADAM_ROLE,
                 autoApproveTier: "never",
               },
-              threadId: `slack-${channel}`,
+              threadId: convThreadId,
             },
             () =>
               agent.generate([{ role: "user", content: q }], {
-                threadId: `slack-${channel}`,
-                resourceId: `slack-user-${event.user || channel}`,
+                threadId: convThreadId,
+                resourceId: convResourceId,
                 maxSteps: 6,
               }),
           );
