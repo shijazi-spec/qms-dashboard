@@ -574,11 +574,16 @@ async function scanZohoCRMForDuplicates(
     // Incremental = fetch only records modified since each module's last
     // successful sync (Zoho If-Modified-Since header) and DON'T wipe existing
     // data — updates land in place (upsertRecord is idempotent by Zoho id) and
-    // the deletion-detection pass purges merged/deleted rows. Requires a
-    // baseline for ALL four modules; the first-ever sync (no baseline) or an
-    // explicit "Rebuild all" (forceFull / DUPLICATE_SCAN_MODE=full) does a full
-    // pull. This is the fix for the ~30-min cold sync of 160k+ records: a
-    // normal day only changes a few hundred records, so incremental is seconds.
+    // the deletion-detection pass purges merged/deleted rows.
+    //
+    // PER-MODULE: incremental kicks in as soon as ANY module has a baseline
+    // (not all four). Each module independently does an incremental fetch if IT
+    // has a last_sync_at, else a full pull — so if a heavy module (Contacts,
+    // 56k) never finished and has no baseline, only IT does the full pull while
+    // Leads/Deals/Accounts go incremental. This breaks the "full never
+    // completes → no baseline → always full → freezes again" trap. The
+    // first-ever sync (no baseline anywhere) or an explicit "Rebuild all"
+    // (forceFull / DUPLICATE_SCAN_MODE=full) does a clean full rebuild.
     const SCAN_MODULES = ["Leads", "Deals", "Contacts", "Accounts"] as const;
     const envFull = (process.env.DUPLICATE_SCAN_MODE || "incremental") === "full";
     const baselines: Record<string, string | undefined> = {};
@@ -588,9 +593,12 @@ async function scanZohoCRMForDuplicates(
         ? new Date(st.last_sync_at).toISOString()
         : undefined;
     }
-    const haveAllBaselines = SCAN_MODULES.every((m) => !!baselines[m]);
-    const incremental = !forceFull && !envFull && haveAllBaselines;
+    const anyBaseline = SCAN_MODULES.some((m) => !!baselines[m]);
+    const incremental = !forceFull && !envFull && anyBaseline;
 
+    // Per-module: incremental only for modules that already have a baseline;
+    // modules without one fetch in full (and, because we skip the global wipe
+    // in incremental mode, their full upsert just refreshes those rows).
     // 10-min safety overlap so records modified mid-sync aren't missed
     // (re-processing a handful is harmless — upsert is idempotent by Zoho id).
     const sinceFor = (m: string): string | undefined => {
