@@ -5571,6 +5571,7 @@
                     applyBtn +
                     '<button data-on-click="splitMergeSelection" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Move the TICKED records into a brand-new cluster — for name-collision false positives (two real companies sharing a word, e.g. Andalusia Group vs Andalusia Hospital). No Zoho changes; they just become a separate cluster to resolve." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">✂️ Split ticked → new cluster</button>' +
                     '<button data-on-click="splitClusterByName" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Auto-detect the distinct company-name groups and split each into its own cluster (largest stays here). One click for name-collision clusters like Andalusia Group vs Andalusia Hospital. No Zoho changes." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">🪪 Split by company name</button>' +
+                    '<button data-on-click="dismissCluster" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Dismiss this whole cluster as a false positive — intentionally separate records (e.g. a Corporate-Accounts account vs a Marketplace account). Moves it to the Dismissed filter; no merge, no Zoho changes." class="px-3 py-2 bg-white border border-gray-400 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium">🚫 Dismiss (false positive)</button>' +
                     trailingNote +
                 '</div>' +
                 '<div id="mergeExecPanel-' + esc(plan.module) + '" class="text-sm mt-3"></div>' +
@@ -5601,6 +5602,8 @@
                 }
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                // Close the merge-plan modal if it's open (harmless from a list row).
+                if (typeof closeModal === 'function') { try { closeModal(); } catch (e) {} }
                 var tab = String(module || '').toLowerCase();
                 if (['leads','deals','contacts','accounts'].includes(tab)) {
                     window._loadedTabs && window._loadedTabs.delete(tab);
