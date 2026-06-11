@@ -175,7 +175,7 @@
                 cell('Mode', '<span class="pill ' + esc(modeClass) + '">' + esc(cfg.mode || 'shadow') + '</span>') +
                 cell('Writes', enabledTxt) +
                 cell('Max clusters / tick', esc(cfg.maxClusters != null ? cfg.maxClusters : '—')) +
-                cell('Resolutions logged', esc(l.totalEvents != null ? l.totalEvents : '—')) +
+                cell('Decisions logged (incl. shadow)', esc(l.totalEvents != null ? l.totalEvents : '—')) +
                 cell('Slack ping', slackTxt);
             renderGradeCards(data.grades_latest || []);
             renderModeControl(cfg, !!data.can_manage);

@@ -107,21 +107,41 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
     rest: 0,
   }));
   try {
-    // One row, 12 counts: per module-column, clusters that include it, split by status.
+    // "solved" = the agent ACTED on the cluster — either it's fully resolved,
+    // OR it carries a merge action (duplicates tagged Duplicate-Delete, pending
+    // the Zoho admin's hard-delete: the "AI-Applied · pending Zoho delete"
+    // state shown in the radar tabs). Two bugs this fixes:
+    //   1) Counting only status='resolved' made every cross-module/partial
+    //      apply show as "remaining" even though the agent had done the work
+    //      (Accounts showed ~10 AI-applied but "2 solved").
+    //   2) rest was status='active' only, so clusters in any OTHER status
+    //      (ignored/dismissed/…) fell into a gap → total ≠ solved + rest.
+    // rest is now derived as total − solved, so the three ALWAYS add up.
+    const appliedExpr = "(dc.status = 'resolved' OR COALESCE(ma.ac, 0) > 0)";
     const selects = order
       .map(
         (o) =>
-          `COUNT(*) FILTER (WHERE ${o.col} > 0)::int AS ${o.col}_t,
-           COUNT(*) FILTER (WHERE ${o.col} > 0 AND status='resolved')::int AS ${o.col}_s,
-           COUNT(*) FILTER (WHERE ${o.col} > 0 AND status='active')::int AS ${o.col}_r`,
+          `COUNT(*) FILTER (WHERE dc.${o.col} > 0)::int AS ${o.col}_t,
+           COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND ${appliedExpr})::int AS ${o.col}_s`,
       )
       .join(",\n");
-    const r = await pool.query(`SELECT ${selects} FROM duplicate_clusters`);
+    const r = await pool.query(
+      `SELECT ${selects}
+         FROM duplicate_clusters dc
+         LEFT JOIN (
+           SELECT cluster_id, COUNT(*) AS ac
+             FROM duplicate_merge_actions
+            WHERE action_type IN ('resolve','module_resolved')
+            GROUP BY cluster_id
+         ) ma ON ma.cluster_id = dc.id`,
+    );
     const row = r.rows[0] || {};
     order.forEach((o, i) => {
-      rows[i].total = Number(row[`${o.col}_t`] || 0);
-      rows[i].solved = Number(row[`${o.col}_s`] || 0);
-      rows[i].rest = Number(row[`${o.col}_r`] || 0);
+      const t = Number(row[`${o.col}_t`] || 0);
+      const s = Number(row[`${o.col}_s`] || 0);
+      rows[i].total = t;
+      rows[i].solved = s;
+      rows[i].rest = Math.max(0, t - s); // invariant: total = solved + rest
     });
   } catch (e) {
     logger.warn("[dup-resolution-runner] module breakdown failed (non-fatal)", {
