@@ -511,10 +511,11 @@
                 <em>Field / data-entry compliance is on the <a href="/" class="underline font-medium">Quality Dashboard</a> audit — this surface checks the uploaded files.</em>
             </div>
             <!-- Summary cards (consistent with CS Lifecycle) -->
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
                 <div class="rounded-lg border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">In scope</div><div id="dcCardScope" class="text-2xl font-bold text-gray-900">—</div></div>
                 <div class="rounded-lg border border-green-200 bg-green-50 p-3"><div class="text-xs text-green-700">Compliant</div><div id="dcCardOk" class="text-2xl font-bold text-green-700">—</div></div>
                 <div class="rounded-lg border border-red-200 bg-red-50 p-3"><div class="text-xs text-red-700">Missing docs</div><div id="dcCardMissing" class="text-2xl font-bold text-red-700">—</div></div>
+                <div class="rounded-lg border border-red-300 bg-red-50 p-3" title="Total deal Amount (SAR) of deals with missing documents"><div class="text-xs text-red-700">Amount at risk (SAR)</div><div id="dcCardAtRisk" class="text-2xl font-bold text-red-700">—</div></div>
                 <div class="rounded-lg border border-amber-200 bg-amber-50 p-3"><div class="text-xs text-amber-700">Not yet checked</div><div id="dcCardPending" class="text-2xl font-bold text-amber-700">—</div></div>
                 <div class="rounded-lg border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">Scanned (Zoho)</div><div id="dcCardScanned" class="text-2xl font-bold text-gray-900">—</div></div>
             </div>
@@ -6309,17 +6310,29 @@
         }
         window._dcDeals = [];
         window._dcResults = {};
+        // Compact SAR formatter for amounts (e.g. 1234567 -> "SAR 1.23M").
+        function _dcSar(n) {
+            var v = Number(n) || 0;
+            if (v >= 1e9) return 'SAR ' + (v / 1e9).toFixed(2) + 'B';
+            if (v >= 1e6) return 'SAR ' + (v / 1e6).toFixed(2) + 'M';
+            if (v >= 1e3) return 'SAR ' + (v / 1e3).toFixed(1) + 'K';
+            return 'SAR ' + v.toLocaleString();
+        }
         function _dcUpdateCards() {
             var deals = window._dcDeals || [];
             var results = window._dcResults || {};
-            var ok = 0, missing = 0;
+            var ok = 0, missing = 0, atRisk = 0;
+            var amtById = {};
+            deals.forEach(function (d) { amtById[String(d.id)] = Number(d.amount) || 0; });
             Object.keys(results).forEach(function (id) {
-                if (results[id].compliant) ok++; else missing++;
+                if (results[id].compliant) ok++;
+                else { missing++; atRisk += (amtById[id] || 0); }
             });
             var setCard = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
             setCard('dcCardScope', deals.length);
             setCard('dcCardOk', ok);
             setCard('dcCardMissing', missing);
+            setCard('dcCardAtRisk', missing ? _dcSar(atRisk) : '—');
             setCard('dcCardPending', Math.max(0, deals.length - ok - missing));
             _dcRenderCharts();
             // Keep an active chart filter consistent as row statuses fill in.
@@ -6337,14 +6350,14 @@
             // Returns { labels:[], compliant:[], missing:[], unchecked:[] } grouped by dimKey ('stage'|'owner').
             var deals = window._dcDeals || [];
             var results = window._dcResults || {};
-            var map = {}; // key -> {c,m,u}
+            var map = {}; // key -> {c,m,u,mAmt}
             deals.forEach(function (d) {
                 var key = (dimKey === 'owner' ? (d.owner || '—') : (d.stage || '—'));
-                if (!map[key]) map[key] = { c: 0, m: 0, u: 0 };
+                if (!map[key]) map[key] = { c: 0, m: 0, u: 0, mAmt: 0 };
                 var r = results[String(d.id)];
                 if (!r) map[key].u++;
                 else if (r.compliant) map[key].c++;
-                else map[key].m++;
+                else { map[key].m++; map[key].mAmt += (Number(d.amount) || 0); }
             });
             // Sort: most non-compliant first (worst offenders on top).
             var labels = Object.keys(map).sort(function (a, b) { return map[b].m - map[a].m; });
@@ -6359,6 +6372,7 @@
                 compliant: labels.map(function (k) { return map[k].c; }),
                 missing: labels.map(function (k) { return map[k].m; }),
                 unchecked: labels.map(function (k) { return map[k].u; }),
+                missingAmount: labels.map(function (k) { return map[k].mAmt; }),
             };
         }
 
@@ -6386,7 +6400,15 @@
                     },
                     plugins: {
                         legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
-                        tooltip: { callbacks: { footer: function () { return 'Click to filter the table'; } } }
+                        tooltip: { callbacks: {
+                            // On the "Missing docs" segment, show SAR at risk for that stage/owner.
+                            afterLabel: function (ctx) {
+                                if (ctx.datasetIndex !== 1) return '';
+                                var amt = (agg.missingAmount && agg.missingAmount[ctx.dataIndex]) || 0;
+                                return amt ? 'At risk: ' + _dcSar(amt) : '';
+                            },
+                            footer: function () { return 'Click to filter the table'; }
+                        } }
                     },
                     onClick: function (evt, els) {
                         if (!els || !els.length) return;
