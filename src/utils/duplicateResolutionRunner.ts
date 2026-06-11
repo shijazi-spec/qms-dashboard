@@ -433,12 +433,14 @@ export interface NotificationScheduleEntry {
   what: string;
   postsToSlack: boolean;
 }
+// Chronological — mirrors the "daily rhythm" table Sarah approved.
 export const ADAM_NOTIFICATION_SCHEDULE: NotificationScheduleEntry[] = [
+  { time: "03:00 / 09:00 / 15:00 / 21:00 KSA", cron: "0 */6 * * *", envKey: "DUPLICATE_SCAN_CRON", channel: "— (background)", what: "Every-6h incremental CRM sync — keeps data fresh round the clock", postsToSlack: false },
+  { time: "07:00 KSA · daily", cron: "0 4 * * *", envKey: "DUPLICATE_MORNING_SYNC_CRON", channel: "— (background)", what: "Pre-shift incremental sync — radar current before your shift", postsToSlack: false },
   { time: "09:00 & 17:00 KSA · daily", cron: "0 6,14 * * *", envKey: "AUTONOMOUS_RESOLUTION_DIGEST_CRON", channel: "#grq-assistant", what: "Operational apply digest — what the agent applied/queued this shift", postsToSlack: true },
   { time: "Sunday 06:00 KSA · weekly", cron: "0 3 * * 0", envKey: "AUTONOMOUS_EXEC_BRIEF_CRON", channel: "#grq-assistant + #automatic-audits", what: "Weekly leadership brief — exposure, dup-rate vs 2%, week-over-week trend, recommendation", postsToSlack: true },
-  { time: "After each 6h tick", cron: "30 */6 * * *", channel: "#grq-assistant", what: "Per-tick summary of the autonomous resolution run (quiet when nothing changed)", postsToSlack: true },
-  { time: "1st of month 09:00 KSA", cron: "0 6 1 * *", envKey: "AUTONOMOUS_SCHEDULE_REVIEW_CRON", channel: "#grq-assistant", what: "Monthly review of THIS notification schedule (edit timings if needed)", postsToSlack: true },
-  { time: "Every 6h (03/09/15/21 KSA) + 07:00 KSA", cron: "0 */6 * * * / 0 4 * * *", envKey: "DUPLICATE_SCAN_CRON / DUPLICATE_MORNING_SYNC_CRON", channel: "— (background)", what: "Incremental CRM sync — keeps the radar fresh (no Slack post)", postsToSlack: false },
+  { time: "Every 6h (:30)", cron: "30 */6 * * *", channel: "#grq-assistant", what: "Autonomous resolution tick (shadow) — per-tick summary, quiet when nothing changed", postsToSlack: true },
+  { time: "1st of month · 09:00 KSA", cron: "0 6 1 * *", envKey: "AUTONOMOUS_SCHEDULE_REVIEW_CRON", channel: "#grq-assistant", what: "Monthly review of THIS notification schedule — edit timings if needed", postsToSlack: true },
 ];
 
 /** Render the schedule as a Slack-friendly list. */
