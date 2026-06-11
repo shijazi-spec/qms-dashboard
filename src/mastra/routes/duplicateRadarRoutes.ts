@@ -98,6 +98,8 @@ import {
   getAllClustersByInflation,
   getClustersBySignal,
   findOrCreateClusterByCompany,
+  upsertDealDocCompliance,
+  getDealDocCompliance,
   extractDomain,
   normalizePhone,
   resolveCluster,
@@ -1758,7 +1760,60 @@ export const duplicateRadarRoutes = [
             return c.json({ error: `Zoho attachments fetch failed: ${e?.message || e}` }, 502);
           }
           const result = evaluateDocCompliance(stage, atts);
+          // Persist the latest result (shared across users/devices) so the
+          // scan survives reloads and can be re-checked / sent to owners.
+          // Best-effort: a DB hiccup must not fail the live compliance answer.
+          try {
+            await upsertDealDocCompliance({
+              zohoDealId: String(id),
+              stage,
+              compliant: !!result.compliant,
+              presentDocs: (result.presentDocs || []).map((p: any) => p.label),
+              missingDocs: (result.missingDocs || []).map((m: any) => m.label),
+              attachmentCount: result.attachmentCount || 0,
+              checkedBy: user.email || user.userId ? String(user.email || user.userId) : null,
+            });
+          } catch (persistErr: any) {
+            logger.warn(
+              `[DealCompliance] persist failed for deal ${id} (non-fatal): ${persistErr?.message || persistErr}`,
+            );
+          }
           return c.json(result);
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Persisted doc-compliance results (latest scan per deal) — rehydrates the
+    // Deal-Compliance tab on open so prior scans aren't lost. Optional ?ids=a,b
+    // to fetch just the visible deals; otherwise returns the most recent 5000.
+    path: "/api/duplicates/deal-compliance/results",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const idsParam = (c.req.query("ids") || "").trim();
+          const ids = idsParam
+            ? idsParam.split(",").map((s: string) => s.trim()).filter(Boolean)
+            : undefined;
+          const rows = await getDealDocCompliance(ids);
+          const results: Record<string, any> = {};
+          for (const r of rows) {
+            results[r.zoho_deal_id] = {
+              compliant: !!r.compliant,
+              present: Array.isArray(r.present_docs) ? r.present_docs : [],
+              missing: Array.isArray(r.missing_docs) ? r.missing_docs : [],
+              attachmentCount: r.attachment_count || 0,
+              stage: r.stage || "",
+              checkedAt: r.checked_at,
+              checkedBy: r.checked_by || null,
+            };
+          }
+          return c.json({ results });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

@@ -294,6 +294,77 @@ export async function searchClustersByText(
   return r.rows;
 }
 
+// ── Deal-Compliance document-scan persistence ─────────────────────────────
+export interface DealDocComplianceRow {
+  zoho_deal_id: string;
+  stage: string | null;
+  compliant: boolean;
+  present_docs: string[];
+  missing_docs: string[];
+  attachment_count: number;
+  checked_at: string;
+  checked_by: string | null;
+}
+
+/** Upsert the latest doc-compliance result for a deal (one row per deal). */
+export async function upsertDealDocCompliance(rec: {
+  zohoDealId: string;
+  stage?: string | null;
+  compliant: boolean;
+  presentDocs: string[];
+  missingDocs: string[];
+  attachmentCount: number;
+  checkedBy?: string | null;
+}): Promise<void> {
+  await pool.query(
+    `INSERT INTO deal_doc_compliance
+       (zoho_deal_id, stage, compliant, present_docs, missing_docs, attachment_count, checked_at, checked_by)
+     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, NOW(), $7)
+     ON CONFLICT (zoho_deal_id) DO UPDATE SET
+       stage = EXCLUDED.stage,
+       compliant = EXCLUDED.compliant,
+       present_docs = EXCLUDED.present_docs,
+       missing_docs = EXCLUDED.missing_docs,
+       attachment_count = EXCLUDED.attachment_count,
+       checked_at = NOW(),
+       checked_by = EXCLUDED.checked_by`,
+    [
+      rec.zohoDealId,
+      rec.stage || null,
+      !!rec.compliant,
+      JSON.stringify(rec.presentDocs || []),
+      JSON.stringify(rec.missingDocs || []),
+      Number(rec.attachmentCount) || 0,
+      rec.checkedBy || null,
+    ],
+  );
+}
+
+/** Fetch stored doc-compliance results. Optionally filtered to specific deal
+ *  ids (the visible page); capped to keep payloads sane. */
+export async function getDealDocCompliance(
+  ids?: string[],
+): Promise<DealDocComplianceRow[]> {
+  if (ids && ids.length) {
+    const r = await pool.query(
+      `SELECT zoho_deal_id, stage, compliant, present_docs, missing_docs,
+              attachment_count, checked_at, checked_by
+         FROM deal_doc_compliance
+        WHERE zoho_deal_id = ANY($1::text[])`,
+      [ids],
+    );
+    return r.rows;
+  }
+  const r = await pool.query(
+    `SELECT zoho_deal_id, stage, compliant, present_docs, missing_docs,
+            attachment_count, checked_at, checked_by
+       FROM deal_doc_compliance
+      ORDER BY checked_at DESC
+      LIMIT 5000`,
+  );
+  return r.rows;
+}
+
 export function extractDomain(email: string): string | null {
   if (!email || typeof email !== "string") return null;
   const match = email
@@ -582,6 +653,23 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       updated_by VARCHAR(255),
       updated_at TIMESTAMP DEFAULT NOW(),
       CONSTRAINT autonomous_resolution_settings_singleton CHECK (id = 1)
+    );
+  `);
+
+  // Deal-Compliance document-scan results (SOP 7.5.10 attachment checks).
+  // One row per Zoho deal, latest scan only — shared across users/devices so
+  // the missing-doc scope persists for re-checking and for sending to owners.
+  // Boot-created in dev & prod so Replit's schema-diff won't propose dropping it.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS deal_doc_compliance (
+      zoho_deal_id VARCHAR(64) PRIMARY KEY,
+      stage VARCHAR(64),
+      compliant BOOLEAN NOT NULL DEFAULT FALSE,
+      present_docs JSONB NOT NULL DEFAULT '[]'::jsonb,
+      missing_docs JSONB NOT NULL DEFAULT '[]'::jsonb,
+      attachment_count INTEGER NOT NULL DEFAULT 0,
+      checked_at TIMESTAMP DEFAULT NOW(),
+      checked_by VARCHAR(255)
     );
   `);
 

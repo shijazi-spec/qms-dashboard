@@ -6610,7 +6610,9 @@
             return head + present + missing + when + recheck;
         }
         // After deals load, restore any previously-scanned results for the
-        // visible deals and paint their status cells.
+        // visible deals and paint their status cells. localStorage paints
+        // instantly; then the SERVER copy (shared across users/devices) is
+        // overlaid as the authoritative source.
         function _dcRehydrateFromStore() {
             var deals = window._dcDeals || [];
             if (!deals.length) return;
@@ -6625,6 +6627,34 @@
                 restored++;
             });
             if (restored > 0) _dcUpdateCards();
+            _dcRehydrateFromServer(); // authoritative shared copy (async overlay)
+        }
+
+        // Overlay the server-persisted results (shared, durable) for the
+        // visible deals — so a scan run on another device / by a teammate
+        // shows up here too. Best-effort: localStorage already painted.
+        async function _dcRehydrateFromServer() {
+            var deals = window._dcDeals || [];
+            if (!deals.length) return;
+            var ids = deals.map(function (d) { return String(d.id); });
+            var data;
+            try {
+                var res = await fetch('/api/duplicates/deal-compliance/results?ids=' + encodeURIComponent(ids.join(',')), { credentials: 'same-origin' });
+                if (!res.ok) return;
+                data = await res.json();
+            } catch (e) { return; }
+            var results = (data && data.results) || {};
+            var n = 0;
+            deals.forEach(function (d) {
+                var rec = results[String(d.id)];
+                if (!rec) return;
+                window._dcResults[String(d.id)] = rec;
+                _dcStorePut(d.id, rec); // keep local cache in sync with server
+                var span = document.getElementById('docs-' + d.id);
+                if (span) span.innerHTML = _dcDocCellHtml(d.id, rec, d.stage);
+                n++;
+            });
+            if (n > 0) _dcUpdateCards();
         }
 
         // CSV export of the deals shown + their document status.
