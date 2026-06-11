@@ -3936,6 +3936,11 @@ export async function getDuplicateRecordsByType(
       " AND EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved'))";
   } else if (aiStatus === "resolved") {
     statusFilter = "AND dc.status = 'resolved'";
+  } else if (aiStatus === "dismissed") {
+    // Dismissed = the operator marked the cluster a false positive (e.g. a
+    // Corporate-Accounts and a Marketplace account that are intentionally two
+    // separate accounts). Stored as status='ignored'.
+    statusFilter = "AND dc.status = 'ignored'";
   } else if (aiStatus === "all") {
     statusFilter = "";
   } else if (aiStatus === "active") {

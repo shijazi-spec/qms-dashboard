@@ -46,7 +46,7 @@ function parseRecordTabFilters(url: URL): {
   // AI-status chip: active (untouched) | tagged_pending | resolved | all.
   // Whitelist enforced server-side so the DB query can't see unknown values.
   const rawAi = (url.searchParams.get("ai_status") || "").trim();
-  const ai_status = ["active", "tagged_pending", "resolved", "all"].includes(
+  const ai_status = ["active", "tagged_pending", "resolved", "dismissed", "all"].includes(
     rawAi,
   )
     ? rawAi
