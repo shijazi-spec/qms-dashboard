@@ -756,40 +756,58 @@ export async function fetchRecordAttachments(
   module: string,
   recordId: string
 ): Promise<ZohoAttachmentMeta[]> {
-  return makeZohoRequest(
-    async (config) => {
-      const url = `${config.apiDomain}/crm/v2/${module}/${recordId}/Attachments?per_page=200`;
-      return fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
-          'Content-Type': 'application/json',
+  // Retry on Zoho 429 ("too many requests") with backoff. The Deal-Compliance
+  // "Run Scan" fires one attachment call PER deal (hundreds), and they collide
+  // with any concurrent full/incremental sync — without this the rows showed
+  // "err: Too many requests". Mirrors the 429 handling in fetchAllZohoRecords.
+  const maxRetries = 4;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await makeZohoRequest(
+        async (config) => {
+          const url = `${config.apiDomain}/crm/v2/${module}/${recordId}/Attachments?per_page=200`;
+          return fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Zoho-oauthtoken ${config.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          });
         },
-      });
-    },
-    async (response) => {
-      if (response.status === 204) return [];
-      if (!response.ok) {
-        const txt = await response.text().catch(() => '');
-        throw new Error(`Zoho Attachments API error: ${response.status} - ${txt.slice(0, 200)}`);
+        async (response) => {
+          if (response.status === 204) return [];
+          if (!response.ok) {
+            const txt = await response.text().catch(() => '');
+            throw new Error(`Zoho Attachments API error: ${response.status} - ${txt.slice(0, 200)}`);
+          }
+          const text = await response.text();
+          if (!text || !text.trim()) return [];
+          let data: any;
+          try { data = JSON.parse(text); } catch { return []; }
+          return ((data.data || []) as any[]).map((a) => ({
+            id: a.id,
+            fileName: a.File_Name || '',
+            fileSizeBytes: a.Size != null ? Number(a.Size) : null,
+            attachmentType: a.$type || a.$attachment_type || null,
+            linkUrl: a.$link_url || null,
+            createdByName: a.Created_By?.name || null,
+            createdByEmail: a.Created_By?.email || null,
+            createdTime: a.Created_Time || null,
+            modifiedTime: a.Modified_Time || null,
+          }));
+        }
+      );
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      const is429 = /\b429\b|too many requests|rate.?limit/i.test(msg);
+      if (is429 && attempt < maxRetries) {
+        await sleep((attempt + 1) * 2500); // 2.5s, 5s, 7.5s, 10s
+        continue;
       }
-      const text = await response.text();
-      if (!text || !text.trim()) return [];
-      let data: any;
-      try { data = JSON.parse(text); } catch { return []; }
-      return ((data.data || []) as any[]).map((a) => ({
-        id: a.id,
-        fileName: a.File_Name || '',
-        fileSizeBytes: a.Size != null ? Number(a.Size) : null,
-        attachmentType: a.$type || a.$attachment_type || null,
-        linkUrl: a.$link_url || null,
-        createdByName: a.Created_By?.name || null,
-        createdByEmail: a.Created_By?.email || null,
-        createdTime: a.Created_Time || null,
-        modifiedTime: a.Modified_Time || null,
-      }));
+      throw e;
     }
-  );
+  }
 }
 
 // Records that Zoho has deleted, recycled, or merged. type=all covers

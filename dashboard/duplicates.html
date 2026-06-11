@@ -6344,7 +6344,8 @@
                 var reqd = (d.requiredDocs || []).map(function (x) { return x.label; }).join(', ');
                 var docArgs = escapeHtml(JSON.stringify([String(d.id), String(d.stage)]));
                 return '<tr class="border-t border-gray-100 align-top" data-deal-id="' + escapeHtml(String(d.id)) + '" data-deal-stage="' + escapeHtml(String(d.stage)) + '">' +
-                    '<td class="px-3 py-2 font-medium text-gray-800">' + escapeHtml(d.name) +
+                    '<td class="px-3 py-2 font-medium">' +
+                        '<a href="https://crm.zoho.com/crm/org766568398/tab/Potentials/' + encodeURIComponent(String(d.id)) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in Zoho CRM">' + escapeHtml(d.name) + '</a>' +
                         (d.accountName ? '<div class="text-xs text-gray-400">' + escapeHtml(d.accountName) + '</div>' : '') + '</td>' +
                     '<td class="px-3 py-2"><span class="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-xs">' + escapeHtml(d.stage) + '</span></td>' +
                     '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(d.owner) + '</td>' +
@@ -6369,6 +6370,9 @@
                 var id = rows[i].getAttribute('data-deal-id');
                 var stage = rows[i].getAttribute('data-deal-stage');
                 await checkDealDocs(id, stage);
+                // Pace the loop so we don't burst Zoho's attachment API (which
+                // 429s under load). The server also retries 429 with backoff.
+                if (i < cap - 1) await new Promise(function (r) { setTimeout(r, 350); });
             }
             if (btn) { btn.disabled = false; btn.textContent = '🔍 Run Scan'; }
         }
