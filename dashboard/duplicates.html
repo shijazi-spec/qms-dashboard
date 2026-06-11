@@ -6515,6 +6515,9 @@
                     '<td class="px-3 py-2"><span id="docs-' + escapeHtml(String(d.id)) + '" title="Required: ' + escapeHtml(reqd) + '"><button data-on-click="checkDealDocs" data-args=\'' + docArgs + '\' class="px-2 py-1 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50">📎 Check documents</button></span></td>' +
                     '</tr>';
             }).join('');
+            // Restore previously-scanned results (persisted) so re-opening the
+            // tab doesn't start from scratch.
+            _dcRehydrateFromStore();
         }
 
         // Sequentially verify documents for every loaded deal (bounded, paced to
@@ -6550,20 +6553,78 @@
                 if (span) span.innerHTML = '<span class="text-xs text-amber-700">err: ' + escapeHtml(String(e && e.message || e)) + '</span>';
                 return;
             }
-            // Record for the summary cards + CSV export.
-            window._dcResults[id] = {
+            // Record for the summary cards + CSV export, and PERSIST so the
+            // scan survives a page reload / platform restart (so you don't
+            // re-scan from scratch — scan once, send the missing-doc scope to
+            // owners, re-check later).
+            var rec = {
                 compliant: !!data.compliant,
+                present: (data.presentDocs || []).map(function (p) { return p.label; }),
                 missing: (data.missingDocs || []).map(function (m) { return m.label; }),
                 attachmentCount: data.attachmentCount || 0,
+                stage: stage,
+                checkedAt: new Date().toISOString(),
             };
+            window._dcResults[id] = rec;
+            _dcStorePut(id, rec);
             _dcUpdateCards();
-            if (!span) return;
-            var present = (data.presentDocs || []).map(function (p) { return '<div class="text-xs text-green-700">✓ ' + escapeHtml(p.label) + '</div>'; }).join('');
-            var missing = (data.missingDocs || []).map(function (m) { return '<div class="text-xs text-red-700">✗ ' + escapeHtml(m.label) + '</div>'; }).join('');
-            var head = data.compliant
-                ? '<div class="text-xs font-medium text-green-700 mb-1">✓ All required docs present (' + (data.attachmentCount || 0) + ' files)</div>'
-                : '<div class="text-xs font-medium text-red-700 mb-1">✗ ' + (data.missingDocs || []).length + ' missing (' + (data.attachmentCount || 0) + ' files attached)</div>';
-            span.innerHTML = head + present + missing;
+            if (span) span.innerHTML = _dcDocCellHtml(id, rec, stage);
+        }
+
+        // ── Persisted doc-compliance results (localStorage) ──────────────────
+        // Keyed by Zoho deal id, independent of stage, so re-opening the tab
+        // shows prior results without re-scanning. Capped/pruned to stay small.
+        var DC_STORE_KEY = 'dc_doc_results_v1';
+        function _dcStoreLoad() {
+            try { return JSON.parse(localStorage.getItem(DC_STORE_KEY) || '{}') || {}; }
+            catch (e) { return {}; }
+        }
+        function _dcStorePut(id, rec) {
+            try {
+                var store = _dcStoreLoad();
+                store[String(id)] = rec;
+                var keys = Object.keys(store);
+                if (keys.length > 5000) { // prune oldest by checkedAt
+                    keys.sort(function (a, b) { return (store[a].checkedAt || '') < (store[b].checkedAt || '') ? -1 : 1; });
+                    keys.slice(0, keys.length - 5000).forEach(function (k) { delete store[k]; });
+                }
+                localStorage.setItem(DC_STORE_KEY, JSON.stringify(store));
+            } catch (e) { /* quota / disabled storage — non-fatal */ }
+        }
+        function _dcWhen(iso) {
+            if (!iso) return '';
+            var d = new Date(iso);
+            if (isNaN(d.getTime())) return '';
+            try { return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+            catch (e) { return iso; }
+        }
+        // Renders the document-status cell from a stored/live result record.
+        function _dcDocCellHtml(id, rec, stage) {
+            var present = (rec.present || []).map(function (l) { return '<div class="text-xs text-green-700">✓ ' + escapeHtml(l) + '</div>'; }).join('');
+            var missing = (rec.missing || []).map(function (l) { return '<div class="text-xs text-red-700">✗ ' + escapeHtml(l) + '</div>'; }).join('');
+            var head = rec.compliant
+                ? '<div class="text-xs font-medium text-green-700 mb-1">✓ All required docs present (' + (rec.attachmentCount || 0) + ' files)</div>'
+                : '<div class="text-xs font-medium text-red-700 mb-1">✗ ' + ((rec.missing || []).length) + ' missing (' + (rec.attachmentCount || 0) + ' files attached)</div>';
+            var when = rec.checkedAt ? '<div class="text-[10px] text-gray-400 mt-0.5">checked ' + escapeHtml(_dcWhen(rec.checkedAt)) + '</div>' : '';
+            var recheck = '<button data-on-click="checkDealDocs" data-args=\'' + escapeHtml(JSON.stringify([String(id), String(stage || rec.stage || '')])) + '\' class="text-[10px] text-blue-600 hover:underline">↻ re-check</button>';
+            return head + present + missing + when + recheck;
+        }
+        // After deals load, restore any previously-scanned results for the
+        // visible deals and paint their status cells.
+        function _dcRehydrateFromStore() {
+            var deals = window._dcDeals || [];
+            if (!deals.length) return;
+            var store = _dcStoreLoad();
+            var restored = 0;
+            deals.forEach(function (d) {
+                var rec = store[String(d.id)];
+                if (!rec) return;
+                window._dcResults[String(d.id)] = rec;
+                var span = document.getElementById('docs-' + d.id);
+                if (span) span.innerHTML = _dcDocCellHtml(d.id, rec, d.stage);
+                restored++;
+            });
+            if (restored > 0) _dcUpdateCards();
         }
 
         // CSV export of the deals shown + their document status.
@@ -6572,13 +6633,14 @@
             if (!deals.length) { alert('Nothing to export — load the tab first.'); return; }
             var results = window._dcResults || {};
             var esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
-            var rows = [['Deal', 'Stage', 'Owner', 'Lead source', 'Created', 'Amount', 'Account', 'Doc status', 'Missing documents', 'Attachments'].join(',')];
+            var rows = [['Deal', 'Stage', 'Owner', 'Lead source', 'Created', 'Amount', 'Account', 'Doc status', 'Missing documents', 'Attachments', 'Checked at'].join(',')];
             deals.forEach(function (d) {
                 var r = results[String(d.id)];
                 var status = !r ? 'not checked' : (r.compliant ? 'compliant' : 'missing docs');
                 var miss = r ? r.missing.join('; ') : '';
                 var att = r ? r.attachmentCount : '';
-                rows.push([esc(d.name), esc(d.stage), esc(d.owner), esc(d.source), esc(d.createdTime), esc(d.amount), esc(d.accountName), esc(status), esc(miss), esc(att)].join(','));
+                var when = r && r.checkedAt ? r.checkedAt : '';
+                rows.push([esc(d.name), esc(d.stage), esc(d.owner), esc(d.source), esc(d.createdTime), esc(d.amount), esc(d.accountName), esc(status), esc(miss), esc(att), esc(when)].join(','));
             });
             var blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
             var a = document.createElement('a');
