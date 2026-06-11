@@ -83,6 +83,10 @@ export interface MergePlanRecordSummary {
    * with no Account_Name (e.g. orphan Contacts, all Accounts/Leads).
    */
   accountName: string | null;
+  /** Deal Stage (Zoho). Surfaced in the Deals merge modal in place of the
+   *  attachments chip — the stage is the more useful merge-decision signal for
+   *  Deals (don't merge away an open/won deal). Null for non-Deal records. */
+  stage: string | null;
   hasZohoId: boolean;
 }
 
@@ -635,6 +639,7 @@ export function buildMergePlan(
     owner: r.owner_name || r.owner_email || null,
     layout: layoutOf(r),
     accountName: accountNameOf(r),
+    stage: r.stage ?? null,
     hasZohoId: !!r.zoho_record_id,
   }));
 
