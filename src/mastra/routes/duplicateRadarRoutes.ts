@@ -100,6 +100,7 @@ import {
   findOrCreateClusterByCompany,
   upsertDealDocCompliance,
   getDealDocCompliance,
+  normalizeCompanyName,
   extractDomain,
   normalizePhone,
   resolveCluster,
@@ -2609,6 +2610,37 @@ export const duplicateRadarRoutes = [
                   company_name: seedRec?.company_name || dom,
                   domain: dom,
                 },
+              });
+            }
+          } else if (mode === "by_name") {
+            // Auto-split by distinct COMPANY NAME — for name-collision clusters
+            // (two real companies sharing a word, e.g. "Andalusia Group" vs
+            // "Andalusia Hospital"). Group records by normalized company name,
+            // keep the largest group on the source cluster, split each other
+            // name-group into its own cluster. NOTE: an EN and AR spelling of
+            // the SAME company normalize differently, so they may land in
+            // separate groups — use the manual tick-split for those.
+            const allRecords = await getRecordsByClusterId(id);
+            const byName = new Map<string, { ids: number[]; label: string }>();
+            for (const r of allRecords) {
+              const raw = (r.company_name || r.record_name || "").trim();
+              const key = normalizeCompanyName(raw) || `__${r.id}`;
+              if (!byName.has(key)) byName.set(key, { ids: [], label: raw || key });
+              if (typeof r.id === "number") byName.get(key)!.ids.push(r.id);
+            }
+            const groups = Array.from(byName.values()).filter((g) => g.ids.length > 0);
+            if (groups.length < 2) {
+              return c.json(
+                { error: "All records share the same company name — nothing to split by name." },
+                400,
+              );
+            }
+            // Keep the largest group on the source; split the rest off.
+            groups.sort((a, b) => b.ids.length - a.ids.length);
+            for (const g of groups.slice(1)) {
+              plans.push({
+                recordIds: g.ids,
+                seed: { company_name: g.label, domain: null },
               });
             }
           } else {

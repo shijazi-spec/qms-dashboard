@@ -625,6 +625,14 @@
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;leads&quot;]" data-testid="button-open-capa-leads" title="Open a corrective-action record (CAPA) on one of the lead-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
+            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="leads">
+                <span class="text-xs text-gray-500 me-1">AI status:</span>
+                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;active&quot;]" id="aiChip-leads-active" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-900 text-white" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;tagged_pending&quot;]" id="aiChip-leads-tagged_pending" class="px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200" title="Apply was run — duplicates tagged in Zoho, pending admin delete">🤖 AI-Applied · pending Zoho admin delete</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;resolved&quot;]" id="aiChip-leads-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Marked resolved">✅ Resolved</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;dismissed&quot;]" id="aiChip-leads-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;all&quot;]" id="aiChip-leads-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
+            </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -655,6 +663,14 @@
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;deals&quot;]" id="dealsZohoRefreshBtn" title="Pull live values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;deals&quot;]" data-testid="button-open-capa-deals" title="Open a corrective-action record (CAPA) on one of the deal-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="deals">
+                <span class="text-xs text-gray-500 me-1">AI status:</span>
+                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;active&quot;]" id="aiChip-deals-active" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-900 text-white" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;tagged_pending&quot;]" id="aiChip-deals-tagged_pending" class="px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200" title="Apply was run — duplicates tagged in Zoho, pending admin delete">🤖 AI-Applied · pending Zoho admin delete</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;resolved&quot;]" id="aiChip-deals-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Marked resolved">✅ Resolved</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;dismissed&quot;]" id="aiChip-deals-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;all&quot;]" id="aiChip-deals-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -688,6 +704,14 @@
                 <button data-on-click="bulkSplitContacts" id="bulkSplitContactsBtn" data-testid="button-bulk-split-contacts" title="One-shot cleanup of historical false-positive Contact clusters (e.g. the 7 SLB employees that were lumped together). Applies the ≥2-attribute rule retroactively. Dry-run first, then confirm." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-violet-200 text-violet-900 hover:bg-violet-300">🧹 Bulk-split bad clusters</button>
             </div>
             <div id="bulkSplitContactsPanel" class="text-xs mb-2"></div>
+            <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="contacts">
+                <span class="text-xs text-gray-500 me-1">AI status:</span>
+                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;active&quot;]" id="aiChip-contacts-active" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-900 text-white" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;tagged_pending&quot;]" id="aiChip-contacts-tagged_pending" class="px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200" title="Apply was run — duplicates tagged in Zoho, pending admin delete">🤖 AI-Applied · pending Zoho admin delete</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;resolved&quot;]" id="aiChip-contacts-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Marked resolved">✅ Resolved</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;dismissed&quot;]" id="aiChip-contacts-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
+                <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;all&quot;]" id="aiChip-contacts-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
+            </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -5239,6 +5263,26 @@
             }
         }
 
+        // Auto-split a cluster by distinct company name (largest group stays,
+        // each other name becomes its own cluster). For name-collision clusters.
+        async function splitClusterByName(module, clusterId) {
+            if (!confirm('Auto-split this cluster by company name?\n\nRecords are grouped by company name; the largest group stays here and each other name becomes its own cluster. Best for name-collision clusters (e.g. "Andalusia Group" vs "Andalusia Hospital").\n\nNo Zoho changes.')) return;
+            try {
+                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/split', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'by_name' })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                alert('Split into ' + ((data.new_cluster_ids || []).length) + ' new cluster(s) by company name. They now appear separately in the list to resolve.');
+                closeModal();
+                refreshData();
+            } catch (e) {
+                alert('Could not split by name: ' + (e && e.message || e) + (/403|401|admin/i.test(String(e && e.message || e)) ? '\n(Admin access is required to split a cluster.)' : ''));
+            }
+        }
+
         // Force a specific record to be the survivor (overrides the auto-pick).
         // Ensures it's part of the merge set, then re-previews.
         function setMergeSurvivor(module, zohoId) {
@@ -5526,6 +5570,7 @@
                     '<button data-on-click="dryRunMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-dryrun-merge-' + plan.module + '-' + plan.clusterId + '" class="px-3 py-2 bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-lg text-sm font-medium">Dry-run (no writes)</button>' +
                     applyBtn +
                     '<button data-on-click="splitMergeSelection" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Move the TICKED records into a brand-new cluster — for name-collision false positives (two real companies sharing a word, e.g. Andalusia Group vs Andalusia Hospital). No Zoho changes; they just become a separate cluster to resolve." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">✂️ Split ticked → new cluster</button>' +
+                    '<button data-on-click="splitClusterByName" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Auto-detect the distinct company-name groups and split each into its own cluster (largest stays here). One click for name-collision clusters like Andalusia Group vs Andalusia Hospital. No Zoho changes." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">🪪 Split by company name</button>' +
                     trailingNote +
                 '</div>' +
                 '<div id="mergeExecPanel-' + esc(plan.module) + '" class="text-sm mt-3"></div>' +
