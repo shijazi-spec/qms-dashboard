@@ -471,6 +471,55 @@ export const AGENT_PERFORMED_BY =
  * "nothing applied" line is a useful heartbeat). `sinceHours` covers back to the
  * previous digest (16h for the 9AM run, 8h for the 5PM run).
  */
+/**
+ * Per-tab status board for the Duplicate Radar — appended to the twice-daily
+ * digest so each shift sees the health of every key tab, not just the agent's
+ * applies. Each line best-effort; a failing query just drops its line.
+ */
+export async function buildRadarTabStatus(): Promise<string> {
+  const parts: string[] = [];
+  const n = (x: number) => Math.round(x || 0).toLocaleString();
+  // Executive Summary / Cross-Module — overall clusters + SAR exposure.
+  try {
+    const agg = await getClusterSummary();
+    if (agg) {
+      parts.push(
+        `›  *Overview:* ${n(agg.totalClusters)} clusters · ~SAR ${n(agg.estimatedPipelineInflation)} exposure · ${n(agg.resolvedCount)} resolved · ${n(agg.activeCount)} open`,
+      );
+    }
+  } catch { /* skip */ }
+  // Lead / Deal / Contact / Account Duplicates — remaining vs cleared.
+  try {
+    const bd = await getModuleResolutionBreakdown();
+    const ml = bd
+      .filter((b) => b.total > 0)
+      .map((b) => `${b.module} ${n(b.rest)} left/${n(b.solved)} done`)
+      .join(" · ");
+    if (ml) parts.push(`›  *Duplicates:* ${ml}`);
+  } catch { /* skip */ }
+  // Account Hints — pending / applied / dismissed.
+  try {
+    const { listAccountInferenceHints } = await import("./accountInference");
+    const h = await listAccountInferenceHints({ status: "pending", limit: 1 });
+    parts.push(
+      `›  *Account Hints:* ${n(h.summary.pending)} pending · ${n(h.summary.applied)} applied · ${n(h.summary.dismissed)} dismissed`,
+    );
+  } catch { /* skip */ }
+  // Deal Compliance — compliant vs missing docs (of deals scanned).
+  try {
+    const { getDealDocCompliance } = await import("./duplicateRadarDatabase");
+    const rows = await getDealDocCompliance();
+    const checked = rows.length;
+    if (checked) {
+      const compliant = rows.filter((r: any) => r.compliant).length;
+      parts.push(
+        `›  *Deal Compliance:* ${n(compliant)} compliant · ${n(checked - compliant)} missing docs (of ${n(checked)} checked)`,
+      );
+    }
+  } catch { /* skip */ }
+  return parts.length ? `\n*Radar status by tab:*\n${parts.join("\n")}` : "";
+}
+
 export async function postResolutionDigest(opts: {
   label: string;
   sinceHours: number;
@@ -514,14 +563,11 @@ export async function postResolutionDigest(opts: {
     }
     const totalApplies = agentApplies + humanApplies;
 
-    // Current backlog (clusters remaining per module).
+    // Per-tab status of the whole Duplicate Radar (overview + duplicates +
+    // account hints + deal compliance) — so each shift sees every tab's health.
     let scoreboard = "";
     try {
-      const bd = await getModuleResolutionBreakdown();
-      const lines = bd
-        .filter((b) => b.total > 0)
-        .map((b) => `›  ${b.module}: ${b.rest} left · ${b.solved} solved`);
-      if (lines.length) scoreboard = `\n*Backlog (clusters):*\n${lines.join("\n")}`;
+      scoreboard = await buildRadarTabStatus();
     } catch {
       /* non-fatal */
     }
