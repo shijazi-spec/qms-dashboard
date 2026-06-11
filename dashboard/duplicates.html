@@ -614,6 +614,13 @@
             <div id="clustersPagination" class="flex justify-center gap-3 mt-6"></div>
         </div>
 
+        <!-- Floating bulk-dismiss bar — shown when one or more cluster checkboxes are ticked -->
+        <div id="dupBulkBar" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white rounded-full shadow-xl px-4 py-2 items-center gap-3 text-sm">
+            <span><span id="dupBulkCount" class="font-bold">0</span> cluster(s) selected</span>
+            <button data-on-click="bulkDismissSelected" class="px-3 py-1 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-semibold">🚫 Dismiss selected</button>
+            <button data-on-click="clearDupBulk" class="text-gray-300 hover:text-white text-xs">Clear</button>
+        </div>
+
         <!-- ═══ LEADS TAB ═══ -->
         <div id="content-leads" class="tab-content hidden">
             <div class="bg-cyan-50 border border-cyan-200 rounded-lg p-3 mb-3 text-sm text-cyan-900">
@@ -3124,6 +3131,7 @@
             return `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${gid}"]' data-testid="row-dup-group-${gid}">
                 <td class="px-4 py-3 text-sm" colspan="${colspan}">
                     <div class="flex items-center gap-2 flex-wrap">
+                        ${_aiCid ? `<input type="checkbox" data-on-click="toggleDupBulk" data-args='["${_aiMod}",${_aiCid}]' class="dup-bulk-cb w-4 h-4 cursor-pointer" title="Select this cluster for bulk dismiss" ${(window._dupBulkSel && window._dupBulkSel.has(String(_aiCid))) ? 'checked' : ''}>` : ''}
                         <span id="dup-chev-${gid}" class="text-gray-600 font-mono" aria-hidden="true">▶</span>
                         <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
                         <span class="text-xs text-gray-500">${summary.count} duplicate ${moduleLabel}</span>
@@ -3299,6 +3307,7 @@
                 rows += `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${_gid}"]' data-testid="row-dup-group-${_gid}">
                     <td class="px-4 py-3 text-sm" colspan="8">
                         <div class="flex items-center gap-2 flex-wrap">
+                            ${_leadCid ? `<input type="checkbox" data-on-click="toggleDupBulk" data-args='["Leads",${_leadCid}]' class="dup-bulk-cb w-4 h-4 cursor-pointer" title="Select this cluster for bulk dismiss" ${(window._dupBulkSel && window._dupBulkSel.has(String(_leadCid))) ? 'checked' : ''}>` : ''}
                             <span id="dup-chev-${_gid}" class="text-gray-600 font-mono" aria-hidden="true">▶</span>
                             <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
                             <span class="text-xs text-gray-500">${summary.count} duplicate leads</span>
@@ -5613,6 +5622,61 @@
                 }
             } catch (e) {
                 alert('Could not dismiss: ' + (e && e.message || e));
+            }
+        }
+
+        // ── Bulk dismiss — tick cluster checkboxes, dismiss them all at once ──
+        window._dupBulkSel = window._dupBulkSel || new Set();
+        function toggleDupBulk(module, clusterId) {
+            window._dupBulkSel = window._dupBulkSel || new Set();
+            const k = String(clusterId);
+            if (window._dupBulkSel.has(k)) window._dupBulkSel.delete(k); else window._dupBulkSel.add(k);
+            _renderDupBulkBar();
+        }
+        function _renderDupBulkBar() {
+            const bar = document.getElementById('dupBulkBar');
+            const n = (window._dupBulkSel && window._dupBulkSel.size) || 0;
+            const cnt = document.getElementById('dupBulkCount');
+            if (cnt) cnt.textContent = n;
+            if (bar) {
+                if (n > 0) { bar.classList.remove('hidden'); bar.classList.add('flex'); }
+                else { bar.classList.add('hidden'); bar.classList.remove('flex'); }
+            }
+        }
+        function clearDupBulk() {
+            window._dupBulkSel = new Set();
+            document.querySelectorAll('.dup-bulk-cb').forEach(function (cb) { cb.checked = false; });
+            _renderDupBulkBar();
+        }
+        async function bulkDismissSelected() {
+            const ids = Array.from(window._dupBulkSel || []).map(Number).filter(function (x) { return Number.isFinite(x); });
+            if (!ids.length) return;
+            if (!confirm('Dismiss ' + ids.length + ' selected cluster(s) as false positives?\n\nThey move to the "Dismissed" filter and stop appearing as duplicates to action. No Zoho changes.')) return;
+            const payload = JSON.stringify({ cluster_ids: ids, action: 'ignore' });
+            try {
+                let res = await fetch('/api/duplicates/bulk-resolve', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: payload
+                });
+                if (res.status === 401 || res.status === 403) {
+                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    if (!adminKey) return;
+                    res = await fetch('/api/duplicates/bulk-resolve', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
+                    });
+                }
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                window._dupBulkSel = new Set();
+                _renderDupBulkBar();
+                var tab = window._currentTab || 'accounts';
+                if (['leads','deals','contacts','accounts'].includes(tab)) {
+                    window._loadedTabs && window._loadedTabs.delete(tab);
+                    loadRecordTab(tab, 0);
+                } else if (typeof refreshData === 'function') { refreshData(); }
+            } catch (e) {
+                alert('Could not dismiss selected: ' + (e && e.message || e));
             }
         }
 
