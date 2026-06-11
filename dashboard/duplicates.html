@@ -4865,6 +4865,7 @@
             // Sync selection state to what the plan actually included, so the
             // checkboxes and subsequent dry-run/apply stay consistent.
             st.selected = (data.plan.records || []).filter(r => r.included && r.zohoId).map(r => r.zohoId);
+            st.planRecords = data.plan.records || []; // for the Split action (zohoId → dbId)
             panel.innerHTML = __renderMergePlan(data.plan);
             // Middle-column lazy fill — three flavours:
             //   Contacts → "Account" column reads from the planner; no fetch.
@@ -5198,6 +5199,39 @@
             previewMergePlan(module, window.__planClusterId);
         }
 
+        // Split the TICKED records into a brand-new cluster — for name-collision
+        // false positives (two real companies sharing a word). Platform-only:
+        // re-points cluster membership; no Zoho writes.
+        async function splitMergeSelection(module, clusterId) {
+            const st = _planSt(module);
+            const selected = new Set(Array.isArray(st.selected) ? st.selected : []);
+            const recs = (st.planRecords || []).filter(r => r.zohoId && selected.has(String(r.zohoId)));
+            const dbIds = recs.map(r => r.dbId).filter(x => x !== null && x !== undefined);
+            if (dbIds.length < 1) {
+                alert('Tick the records you want to move into a new cluster first (e.g. the accounts that belong to the OTHER company), then click Split.');
+                return;
+            }
+            if ((st.planRecords || []).length && dbIds.length >= (st.planRecords || []).length) {
+                alert('Leave at least one record behind — splitting every record would just move the cluster. Untick the records that should stay.');
+                return;
+            }
+            if (!confirm('Move the ' + dbIds.length + ' ticked record(s) into a NEW cluster?\n\nThey become a separate cluster you can resolve on their own. This changes nothing in Zoho.')) return;
+            try {
+                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/split', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'manual', record_ids: dbIds })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                alert('Done — ' + dbIds.length + ' record(s) split into a new cluster. It now appears separately in the list to resolve.');
+                closeModal();
+                refreshData();
+            } catch (e) {
+                alert('Could not split: ' + (e && e.message || e) + (/403|401|admin/i.test(String(e && e.message || e)) ? '\n(Admin access is required to split a cluster.)' : ''));
+            }
+        }
+
         // Force a specific record to be the survivor (overrides the auto-pick).
         // Ensures it's part of the merge set, then re-previews.
         function setMergeSurvivor(module, zohoId) {
@@ -5484,6 +5518,7 @@
                 '<div class="flex flex-wrap items-center gap-2 border-t pt-3">' +
                     '<button data-on-click="dryRunMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-dryrun-merge-' + plan.module + '-' + plan.clusterId + '" class="px-3 py-2 bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-lg text-sm font-medium">Dry-run (no writes)</button>' +
                     applyBtn +
+                    '<button data-on-click="splitMergeSelection" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Move the TICKED records into a brand-new cluster — for name-collision false positives (two real companies sharing a word, e.g. Andalusia Group vs Andalusia Hospital). No Zoho changes; they just become a separate cluster to resolve." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">✂️ Split ticked → new cluster</button>' +
                     trailingNote +
                 '</div>' +
                 '<div id="mergeExecPanel-' + esc(plan.module) + '" class="text-sm mt-3"></div>' +
