@@ -537,6 +537,22 @@
                 </div>
                 <button data-on-click="loadDealCompliance" title="Re-load the deals for the ticked stages." class="px-3 py-1 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Apply stages</button>
             </div>
+            <!-- Compliance charts (populate after Run Scan): green = compliant, red = missing docs.
+                 Click any segment to filter the table to those deals. -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+                <div class="rounded-lg border border-gray-200 bg-white p-3">
+                    <div class="text-xs font-semibold text-gray-600 mb-1">Compliance by stage</div>
+                    <div class="chart-container"><canvas id="dcStageChart" role="img" aria-label="Document compliance by deal stage"></canvas></div>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-white p-3">
+                    <div class="text-xs font-semibold text-gray-600 mb-1">Compliance by owner</div>
+                    <div class="chart-container"><canvas id="dcOwnerChart" role="img" aria-label="Document compliance by deal owner"></canvas></div>
+                </div>
+            </div>
+            <div id="dcChartFilterBar" class="hidden items-center gap-2 mb-2 text-xs">
+                <span class="px-2 py-1 rounded-full bg-indigo-100 text-indigo-800" id="dcChartFilterLabel">—</span>
+                <button data-on-click="clearDcChartFilter" class="text-indigo-600 hover:text-indigo-800 font-medium">✕ clear filter</button>
+            </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead><tr class="text-xs text-gray-500 text-left border-b border-gray-200">
@@ -6305,12 +6321,134 @@
             setCard('dcCardOk', ok);
             setCard('dcCardMissing', missing);
             setCard('dcCardPending', Math.max(0, deals.length - ok - missing));
+            _dcRenderCharts();
+            // Keep an active chart filter consistent as row statuses fill in.
+            if (window._dcChartFilter) _dcFilterTableRows();
         }
+
+        // ── Compliance charts: 100%-stacked bars by stage & by owner ─────────
+        // green = compliant, red = missing docs, gray = not yet checked.
+        // Click a segment to filter the table. Data comes from _dcDeals +
+        // _dcResults (populated by Run Scan / per-row checks).
+        window._dcCharts = window._dcCharts || { stage: null, owner: null };
+        window._dcChartFilter = null; // { dim:'stage'|'owner', key, status:'compliant'|'missing'|'unchecked' }
+
+        function _dcAggregate(dimKey) {
+            // Returns { labels:[], compliant:[], missing:[], unchecked:[] } grouped by dimKey ('stage'|'owner').
+            var deals = window._dcDeals || [];
+            var results = window._dcResults || {};
+            var map = {}; // key -> {c,m,u}
+            deals.forEach(function (d) {
+                var key = (dimKey === 'owner' ? (d.owner || '—') : (d.stage || '—'));
+                if (!map[key]) map[key] = { c: 0, m: 0, u: 0 };
+                var r = results[String(d.id)];
+                if (!r) map[key].u++;
+                else if (r.compliant) map[key].c++;
+                else map[key].m++;
+            });
+            // Sort: most non-compliant first (worst offenders on top).
+            var labels = Object.keys(map).sort(function (a, b) { return map[b].m - map[a].m; });
+            // Owners can be many — cap to top 15 by deal volume to keep readable.
+            if (dimKey === 'owner' && labels.length > 15) {
+                labels = labels.sort(function (a, b) {
+                    return (map[b].c + map[b].m + map[b].u) - (map[a].c + map[a].m + map[a].u);
+                }).slice(0, 15);
+            }
+            return {
+                labels: labels,
+                compliant: labels.map(function (k) { return map[k].c; }),
+                missing: labels.map(function (k) { return map[k].m; }),
+                unchecked: labels.map(function (k) { return map[k].u; }),
+            };
+        }
+
+        function _dcBuildChart(canvasId, dimKey) {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas || typeof Chart === 'undefined') return null;
+            var agg = _dcAggregate(dimKey);
+            var cfg = {
+                type: 'bar',
+                data: {
+                    labels: agg.labels,
+                    datasets: [
+                        { label: 'Compliant', data: agg.compliant, backgroundColor: '#16a34a', stack: 's' },
+                        { label: 'Missing docs', data: agg.missing, backgroundColor: '#dc2626', stack: 's' },
+                        { label: 'Not checked', data: agg.unchecked, backgroundColor: '#d1d5db', stack: 's' }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, ticks: { precision: 0 } },
+                        y: { stacked: true, ticks: { font: { size: 10 } } }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+                        tooltip: { callbacks: { footer: function () { return 'Click to filter the table'; } } }
+                    },
+                    onClick: function (evt, els) {
+                        if (!els || !els.length) return;
+                        var el = els[0];
+                        var label = agg.labels[el.index];
+                        var statusKey = ['compliant', 'missing', 'unchecked'][el.datasetIndex];
+                        _dcApplyChartFilter(dimKey, label, statusKey);
+                    }
+                }
+            };
+            return new Chart(canvas, cfg);
+        }
+
+        function _dcRenderCharts() {
+            if (typeof Chart === 'undefined') return;
+            ['stage', 'owner'].forEach(function (dim) {
+                var id = dim === 'stage' ? 'dcStageChart' : 'dcOwnerChart';
+                if (window._dcCharts[dim]) { try { window._dcCharts[dim].destroy(); } catch (e) {} }
+                window._dcCharts[dim] = _dcBuildChart(id, dim);
+            });
+        }
+
+        function _dcApplyChartFilter(dim, key, status) {
+            window._dcChartFilter = { dim: dim, key: key, status: status };
+            var statusLabel = { compliant: 'compliant', missing: 'missing docs', unchecked: 'not checked' }[status] || status;
+            var bar = document.getElementById('dcChartFilterBar');
+            var lbl = document.getElementById('dcChartFilterLabel');
+            if (lbl) lbl.textContent = (dim === 'owner' ? 'Owner' : 'Stage') + ': ' + key + ' · ' + statusLabel;
+            if (bar) { bar.classList.remove('hidden'); bar.classList.add('flex'); }
+            _dcFilterTableRows();
+        }
+
+        function clearDcChartFilter() {
+            window._dcChartFilter = null;
+            var bar = document.getElementById('dcChartFilterBar');
+            if (bar) { bar.classList.add('hidden'); bar.classList.remove('flex'); }
+            _dcFilterTableRows();
+        }
+
+        function _dcFilterTableRows() {
+            var f = window._dcChartFilter;
+            var results = window._dcResults || {};
+            var rows = Array.prototype.slice.call(document.querySelectorAll('#dealComplianceBody tr[data-deal-id]'));
+            rows.forEach(function (row) {
+                if (!f) { row.style.display = ''; return; }
+                var id = row.getAttribute('data-deal-id');
+                var matchDim = (f.dim === 'owner')
+                    ? row.getAttribute('data-deal-owner') === f.key
+                    : row.getAttribute('data-deal-stage') === f.key;
+                var r = results[String(id)];
+                var rowStatus = !r ? 'unchecked' : (r.compliant ? 'compliant' : 'missing');
+                var matchStatus = rowStatus === f.status;
+                row.style.display = (matchDim && matchStatus) ? '' : 'none';
+            });
+        }
+
         async function loadDealCompliance() {
             var body = document.getElementById('dealComplianceBody');
             var summary = document.getElementById('dealComplianceSummary');
             if (!body) return;
             window._dcResults = {};
+            if (typeof clearDcChartFilter === 'function') clearDcChartFilter(); // rows rebuilt → drop any active chart filter
             body.innerHTML = '<tr><td colspan="7" class="px-3 py-4 text-gray-500">Loading deals from Zoho…</td></tr>';
             var stages = _dcSelectedStages();
             var url = '/api/duplicates/deal-compliance' + (stages.length ? ('?stages=' + encodeURIComponent(stages.join(','))) : '');
@@ -6343,7 +6481,7 @@
             body.innerHTML = deals.map(function (d) {
                 var reqd = (d.requiredDocs || []).map(function (x) { return x.label; }).join(', ');
                 var docArgs = escapeHtml(JSON.stringify([String(d.id), String(d.stage)]));
-                return '<tr class="border-t border-gray-100 align-top" data-deal-id="' + escapeHtml(String(d.id)) + '" data-deal-stage="' + escapeHtml(String(d.stage)) + '">' +
+                return '<tr class="border-t border-gray-100 align-top" data-deal-id="' + escapeHtml(String(d.id)) + '" data-deal-stage="' + escapeHtml(String(d.stage)) + '" data-deal-owner="' + escapeHtml(String(d.owner || '—')) + '">' +
                     '<td class="px-3 py-2 font-medium">' +
                         '<a href="https://crm.zoho.com/crm/org766568398/tab/Potentials/' + encodeURIComponent(String(d.id)) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in Zoho CRM">' + escapeHtml(d.name) + '</a>' +
                         (d.accountName ? '<div class="text-xs text-gray-400">' + escapeHtml(d.accountName) + '</div>' : '') + '</td>' +
