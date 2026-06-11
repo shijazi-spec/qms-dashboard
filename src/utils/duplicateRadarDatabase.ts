@@ -1766,6 +1766,34 @@ export async function getDuplicatesByOwner(): Promise<
   return result.rows;
 }
 
+// CS Pipeline Overlap tab — active duplicate clusters that overlap a live CS
+// customer, counted by verdict (block / review / warn). Powers Adam's
+// cs-pipeline-overlap status answer.
+export async function getCsOverlapVerdictCounts(): Promise<{
+  block: number;
+  review: number;
+  warn: number;
+  total: number;
+}> {
+  const r = await pool.query(
+    `SELECT cs_overlap_verdict AS v, COUNT(*)::int AS n
+       FROM duplicate_clusters
+      WHERE cs_overlap_verdict IS NOT NULL
+        AND status = 'active'
+        AND total_records > 1
+      GROUP BY cs_overlap_verdict`,
+  );
+  const out = { block: 0, review: 0, warn: 0, total: 0 };
+  for (const row of r.rows) {
+    const v = String(row.v || "").toLowerCase();
+    if (v === "block") out.block = row.n;
+    else if (v === "review") out.review = row.n;
+    else if (v === "warn") out.warn = row.n;
+    out.total += row.n;
+  }
+  return out;
+}
+
 export async function getDuplicatesBySource(): Promise<
   Array<{
     source: string;
