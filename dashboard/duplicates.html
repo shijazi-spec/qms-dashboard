@@ -8033,40 +8033,71 @@
             if (window._csLifecycleData) renderCsLifecycle(window._csLifecycleData);
         }
 
-        // Phase filter helpers (2026-05-30).
+        // Phase filter helpers.
         //
-        // _refreshCsLifecyclePhaseOptions repopulates the <select> based on
-        // whatever phases the current dataset actually contains. We sort
-        // alphabetically — Zoho's phase values vary per tenant (Adoption /
-        // Onboarding / Renewal / Churn, plus tenant-custom values), so
-        // there's no canonical ordering and alphabetical is the least
-        // surprising default. The active selection is preserved across
-        // re-renders if the new dataset still contains that phase;
-        // otherwise it silently resets to "All phases" so the operator
-        // never sees a stale filter that returns zero rows.
+        // The Phase <select> always offers the five canonical CS lifecycle
+        // phases (New Deal → Onboarding → Adoption → Renewal → Termination)
+        // in lifecycle order, even when the current violation set has no deal
+        // in a given phase — e.g. brand-new "New Deal" deals rarely have
+        // violations yet, but the operator must still be able to filter to
+        // them. Any extra tenant-custom phases present in the data are
+        // appended after the canonical list (alphabetically) so nothing from
+        // Zoho is hidden. Matching is case/whitespace-insensitive (see
+        // _normCsPhase) so a selection lines up with however Zoho stored the
+        // phase casing — this is what previously made the filter appear
+        // "broken" when a deal's phase was e.g. "onboarding" vs "Onboarding".
         //
-        // onCsLifecyclePhaseChange is the data-on-change handler. It
-        // stashes the choice on window so a subsequent renderCsLifecycle
-        // re-applies it, then triggers a render with the existing in-
-        // memory dataset (no Zoho re-fetch — phase filtering is purely
-        // client-side over the data we already loaded).
+        // The active selection is preserved across re-renders; canonical
+        // options always exist, so a canonical selection always survives.
+        //
+        // onCsLifecyclePhaseChange is the data-on-change handler. It stashes
+        // the choice on window so a subsequent renderCsLifecycle re-applies
+        // it, then triggers a render with the existing in-memory dataset (no
+        // Zoho re-fetch — phase filtering is purely client-side over the data
+        // we already loaded).
+        const CS_LIFECYCLE_CANONICAL_PHASES = ['New Deal', 'Onboarding', 'Adoption', 'Renewal', 'Termination'];
+        function _normCsPhase(p) {
+            return String(p == null ? '' : p).trim().toLowerCase();
+        }
         function _refreshCsLifecyclePhaseOptions(groups) {
             const sel = document.getElementById('csLifePhaseFilter');
             if (!sel) return;
-            const phases = new Set();
+            // Distinct phases actually present in the dataset, keyed by their
+            // normalised form so case variants ("onboarding" / "Onboarding")
+            // collapse to one entry. Preserve the first raw casing for display.
+            const dataPhases = new Map();
             for (const g of (groups || [])) {
-                const p = String(g.current_phase || '').trim();
-                if (p) phases.add(p);
+                const raw = String(g.current_phase || '').trim();
+                if (!raw) continue;
+                const norm = _normCsPhase(raw);
+                if (!dataPhases.has(norm)) dataPhases.set(norm, raw);
             }
-            const sorted = Array.from(phases).sort((a, b) => a.localeCompare(b));
+            // Canonical phases first (lifecycle order), then any extra data
+            // phases not already covered by a canonical entry, alphabetically.
+            const seen = new Set();
+            const ordered = [];
+            for (const c of CS_LIFECYCLE_CANONICAL_PHASES) {
+                ordered.push(c);
+                seen.add(_normCsPhase(c));
+            }
+            const extras = [];
+            for (const [norm, display] of dataPhases) {
+                if (!seen.has(norm)) { extras.push(display); seen.add(norm); }
+            }
+            extras.sort((a, b) => a.localeCompare(b));
+            const all = ordered.concat(extras);
+
             const current = window._csLifecyclePhaseFilter || '';
-            // Only the selection survives a re-render; if the previously
-            // chosen phase has dropped out of the dataset, clear it.
-            const stillPresent = current && phases.has(current);
-            const opts = ['<option value="">All phases</option>']
-                .concat(sorted.map(p =>
-                    '<option value="' + escAttr(p) + '"' + (p === current ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'
-                ));
+            const currentNorm = _normCsPhase(current);
+            // Canonical options always exist, so a canonical selection always
+            // survives; an extra (tenant-custom) selection clears if it drops
+            // out of the dataset so the operator never sees a stale filter.
+            const stillPresent = !!current && all.some(p => _normCsPhase(p) === currentNorm);
+            const opts = ['<option value="">All phases</option>'].concat(
+                all.map(p =>
+                    '<option value="' + escAttr(p) + '"' + (current && _normCsPhase(p) === currentNorm ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'
+                )
+            );
             sel.innerHTML = opts.join('');
             if (!stillPresent && current) {
                 window._csLifecyclePhaseFilter = '';
@@ -8076,6 +8107,10 @@
         function onCsLifecyclePhaseChange(event) {
             const v = event && event.target && event.target.value;
             window._csLifecyclePhaseFilter = v || '';
+            // Reset to the first page so the operator sees the start of the
+            // newly filtered set rather than a stale page index carried over
+            // from the previous (wider) filter.
+            window._csLifecyclePage = 0;
             // Re-paint the table from the in-memory dataset with the new
             // filter applied. No Zoho re-fetch.
             const data = window._csLifecycleData;
@@ -8111,8 +8146,9 @@
             // a selection like "Adoption" still narrows what we paint.
             _refreshCsLifecyclePhaseOptions(groups);
             const phaseSel = window._csLifecyclePhaseFilter || '';
+            const phaseSelNorm = _normCsPhase(phaseSel);
             let filtered = phaseSel
-                ? groups.filter(g => String(g.current_phase || '') === phaseSel)
+                ? groups.filter(g => _normCsPhase(g.current_phase) === phaseSelNorm)
                 : groups;
 
             // Advanced Filter — applied client-side here since
