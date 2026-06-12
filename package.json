@@ -75,7 +75,7 @@
     "protobufjs": "^7.5.9",
     "readable-stream": "^4.5.2",
     "resend": "^6.9.2",
-    "vitest": "^3.2.4",
+    "vitest": "^3.2.6",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -101,6 +101,11 @@
     "@opentelemetry/sdk-node": "^0.217.0",
     "@opentelemetry/auto-instrumentations-node": "^0.75.0",
     "protobufjs": "^7.5.9",
-    "@protobufjs/utf8": "^1.1.1"
+    "@protobufjs/utf8": "^1.1.1",
+    "shell-quote": "^1.8.4",
+    "@grpc/grpc-js": "^1.14.4",
+    "esbuild": "^0.28.1",
+    "@ai-sdk/provider-utils": "^4.0.29",
+    "@ai-sdk/provider-utils-v5": "npm:@ai-sdk/provider-utils@^4.0.29"
   }
 }
