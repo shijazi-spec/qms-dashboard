@@ -22,6 +22,7 @@ const READ_LIMIT = 100;
 const WRITE_LIMIT = 10;
 const AUTH_LIMIT = 5;
 const EXPORT_LIMIT = 10;
+const AUDIO_LIMIT = 20;
 const UNAUTH_READ_LIMIT = 10;
 const UNAUTH_WRITE_LIMIT = 3;
 
@@ -32,6 +33,9 @@ const AUTH_PATHS = [
   "/api/admin/auth",
 ];
 const EXPORT_PATHS = ["/export", "/pdf"];
+// Audio download path: /api/calls/:id/audio — large binary responses warrant
+// a tighter per-user cap independent of the general READ_LIMIT.
+const AUDIO_PATH_PATTERN = /^\/api\/calls\/\d+\/audio$/;
 
 /**
  * Boot-time guard: refuse to start the server if RATE_LIMIT_DISABLED is left
@@ -90,6 +94,10 @@ function getCategory(path?: string): string {
   if (path) {
     if (AUTH_PATHS.some((p) => path.startsWith(p) || path.includes(p)))
       return "auth";
+    // Audio downloads are large binary responses; use a tighter dedicated limit
+    // (AUDIO_LIMIT) rather than the general READ_LIMIT to bound the number of
+    // concurrent large-file allocations a single user can trigger per minute.
+    if (AUDIO_PATH_PATTERN.test(path.split("?")[0])) return "audio";
     if (EXPORT_PATHS.some((p) => path.includes(p))) {
       // Sibling `/estimate` endpoints (e.g. `/api/duplicates/export/estimate`)
       // are cheap COUNT(*) preflights used by streaming-download.js to show
@@ -198,6 +206,8 @@ export async function checkRateLimit(
     limit = AUTH_LIMIT;
   } else if (category === "export") {
     limit = EXPORT_LIMIT;
+  } else if (category === "audio") {
+    limit = AUDIO_LIMIT;
   } else if (!isAuthenticated) {
     limit = isWrite ? UNAUTH_WRITE_LIMIT : UNAUTH_READ_LIMIT;
   } else {

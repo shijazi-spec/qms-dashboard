@@ -27,6 +27,18 @@ const CALL_READ_ROLES = [
   "grc_manager",
 ] as const;
 
+// Global concurrency cap for audio downloads.  Each in-flight request holds
+// the semaphore for the entire response lifetime (including network egress),
+// so large recordings can tie up a slot for many seconds.  Cap prevents a
+// small group of users from exhausting Node heap via concurrent large-file
+// transfers even after the per-user rate limit is respected.
+// Override with MAX_CONCURRENT_AUDIO_DOWNLOADS env var.
+const MAX_CONCURRENT_AUDIO_DL = (() => {
+  const v = parseInt(process.env.MAX_CONCURRENT_AUDIO_DOWNLOADS ?? "8", 10);
+  return Number.isFinite(v) && v > 0 ? v : 8;
+})();
+let _activeAudioDownloads = 0;
+
 async function verifyAdminKey(c: any): Promise<SessionUser | null> {
   return requireAdminOrKey(c);
 }
@@ -3104,30 +3116,99 @@ Respond with JSON only:
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
+          // ── Concurrency gate ─────────────────────────────────────────────
+          // Slot lifecycle vars MUST live outside try/catch so releaseSlot()
+          // and wrapStream() are always in scope when the catch block runs.
+          // ─────────────────────────────────────────────────────────────────
+          if (_activeAudioDownloads >= MAX_CONCURRENT_AUDIO_DL) {
+            return new Response(
+              JSON.stringify({ error: "Too many concurrent audio downloads — please retry shortly" }),
+              {
+                status: 503,
+                headers: {
+                  "Content-Type": "application/json",
+                  "Retry-After": "5",
+                },
+              },
+            );
+          }
+          _activeAudioDownloads++;
+          let _slotReleased = false;
+          function releaseSlot() {
+            if (!_slotReleased) {
+              _slotReleased = true;
+              _activeAudioDownloads--;
+            }
+          }
+          // Release slot on early client disconnect (abort before response ends).
+          c.req.raw.signal?.addEventListener("abort", releaseSlot, { once: true });
+
+          // Wrap a ReadableStream so the concurrency slot is released exactly
+          // once when the response body drains, errors, or is cancelled.
+          // Applied to every streaming response in this handler.
+          function wrapStream(source: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+            const reader = source.getReader();
+            return new ReadableStream<Uint8Array>({
+              async pull(controller) {
+                try {
+                  const { done, value } = await reader.read();
+                  if (done) {
+                    controller.close();
+                    releaseSlot();
+                  } else {
+                    controller.enqueue(value);
+                  }
+                } catch (err) {
+                  controller.error(err);
+                  releaseSlot();
+                }
+              },
+              cancel() {
+                reader.cancel().catch(() => {});
+                releaseSlot();
+              },
+            });
+          }
+
         try {
           const admin = await verifyCallAccess(c);
-          if (!admin) return unauthorizedResponse(c);
+          if (!admin) {
+            releaseSlot();
+            return unauthorizedResponse(c);
+          }
 
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param("callId"));
           if (!Number.isFinite(callId) || callId <= 0) {
+            releaseSlot();
             return c.json({ error: "Invalid call id" }, 400);
           }
 
-          const { getCallRecordById, getCallRecordAudioBlob } = await import(
-            "../../utils/callIntelligenceDb"
-          );
+          const {
+            getCallRecordById,
+            getCallRecordAudioBlobMeta,
+            streamCallRecordAudioBlobRange,
+          } = await import("../../utils/callIntelligenceDb");
           const record = await getCallRecordById(callId);
-          if (!record) return c.json({ error: "Call not found" }, 404);
+          if (!record) {
+            releaseSlot();
+            return c.json({ error: "Call not found" }, 404);
+          }
 
           // DB-first fallback: when the FS audio file is missing (typical
           // after a Replit redeploy wipes uploads/) OR was never written
           // (the bulk-upload path until this PR), stream the bytes
           // straight from the audio_blob column. Range support preserved.
+          //
+          // Neither path loads the full BYTEA into application memory.
+          // getCallRecordAudioBlobMeta() fetches only MIME + size; the
+          // binary data is read in 512 KB chunks by streamCallRecordAudioBlobRange()
+          // so peak per-request heap stays well under 1 MB regardless of
+          // recording size.
           async function serveFromBlob(): Promise<Response | null> {
-            const blob = await getCallRecordAudioBlob(callId);
-            if (!blob) return null;
-            const totalSize = blob.size;
+            const meta = await getCallRecordAudioBlobMeta(callId);
+            if (!meta) return null;
+            const totalSize = meta.size;
             const rangeHdr = c.req.header("range") || c.req.header("Range");
             if (rangeHdr) {
               const m = /bytes=(\d*)-(\d*)/.exec(String(rangeHdr));
@@ -3139,29 +3220,37 @@ Respond with JSON only:
                   Number.isFinite(end) &&
                   start >= 0 && end < totalSize && start <= end
                 ) {
-                  const chunk = blob.buffer.slice(start, end + 1);
-                  return new Response(chunk, {
-                    status: 206,
-                    headers: {
-                      "Content-Type": blob.mime,
-                      "Content-Length": String(chunk.length),
-                      "Content-Range": `bytes ${start}-${end}/${totalSize}`,
-                      "Accept-Ranges": "bytes",
-                      "Cache-Control": "private, max-age=3600",
+                  const chunkLen = end - start + 1;
+                  return new Response(
+                    wrapStream(streamCallRecordAudioBlobRange(callId, start, end)),
+                    {
+                      status: 206,
+                      headers: {
+                        "Content-Type": meta.mime,
+                        "Content-Length": String(chunkLen),
+                        "Content-Range": `bytes ${start}-${end}/${totalSize}`,
+                        "Accept-Ranges": "bytes",
+                        "Cache-Control": "private, max-age=3600",
+                      },
                     },
-                  });
+                  );
                 }
               }
             }
-            return new Response(new Uint8Array(blob.buffer), {
-              status: 200,
-              headers: {
-                "Content-Type": blob.mime,
-                "Content-Length": String(totalSize),
-                "Accept-Ranges": "bytes",
-                "Cache-Control": "private, max-age=3600",
+            // Full response — stream the entire blob in 512 KB chunks so
+            // the recording is never fully resident in application memory.
+            return new Response(
+              wrapStream(streamCallRecordAudioBlobRange(callId, 0, totalSize - 1)),
+              {
+                status: 200,
+                headers: {
+                  "Content-Type": meta.mime,
+                  "Content-Length": String(totalSize),
+                  "Accept-Ranges": "bytes",
+                  "Cache-Control": "private, max-age=3600",
+                },
               },
-            });
+            );
           }
 
           const audioFilePath = (record as any).audio_file_path;
@@ -3169,6 +3258,7 @@ Respond with JSON only:
             // No FS path on file — go straight to DB blob.
             const blobRes = await serveFromBlob();
             if (blobRes) return blobRes;
+            releaseSlot();
             return c.json(
               { error: "This call has no audio file on the server" },
               404,
@@ -3183,12 +3273,14 @@ Respond with JSON only:
           // but defends against env-level shenanigans.
           if (absPath.includes("..")) {
             logger?.warn("[API] Suspicious audio path", { audioFilePath });
+            releaseSlot();
             return c.json({ error: "Invalid audio path" }, 400);
           }
           if (!fs.default.existsSync(absPath)) {
             // FS file gone (redeploy wiped uploads/) → fall back to blob.
             const blobRes = await serveFromBlob();
             if (blobRes) return blobRes;
+            releaseSlot();
             return c.json(
               { error: "Audio file referenced in DB no longer exists and no blob copy is stored" },
               404,
@@ -3208,10 +3300,10 @@ Respond with JSON only:
           };
           const contentType = mimeByExt[ext] || "audio/wav";
 
-          // HTTP Range — partial-content streaming for seek. The browser
-          // sends `Range: bytes=START-END` on seek; we reply with 206 +
-          // the matching byte slice. Without this, the audio element
-          // refuses to scrub on long recordings.
+          // HTTP Range — partial-content for seek.  The browser sends
+          // `Range: bytes=START-END` on scrub; we reply with 206 and a
+          // bounded createReadStream so chunkSize is never buffered in full.
+          // The concurrency slot is held until the slice stream drains.
           const rangeHeader = c.req.header("range") || c.req.header("Range");
           if (rangeHeader) {
             const match = /bytes=(\d*)-(\d*)/.exec(String(rangeHeader));
@@ -3226,14 +3318,10 @@ Respond with JSON only:
                 start <= end
               ) {
                 const chunkSize = end - start + 1;
-                // Read the slice into a Buffer — simpler than stream
-                // piping with Hono and our largest call audio is a
-                // handful of MB, well within the response budget.
-                const fd = fs.default.openSync(absPath, "r");
-                const buf = Buffer.alloc(chunkSize);
-                fs.default.readSync(fd, buf, 0, chunkSize, start);
-                fs.default.closeSync(fd);
-                return new Response(buf, {
+                const { Readable: Readable2 } = await import("stream");
+                const rangeStream = fs.default.createReadStream(absPath, { start, end });
+                const webRange = Readable2.toWeb(rangeStream) as ReadableStream<Uint8Array>;
+                return new Response(wrapStream(webRange), {
                   status: 206,
                   headers: {
                     "Content-Type": contentType,
@@ -3247,9 +3335,17 @@ Respond with JSON only:
             }
           }
 
-          // No Range header — return the whole file with 200.
-          const fullBuf = fs.default.readFileSync(absPath);
-          return new Response(fullBuf, {
+          // No Range header — stream the whole file with 200.
+          // Using createReadStream + Readable.toWeb() avoids loading the
+          // entire recording (up to 200 MB) into application memory before
+          // sending the response. The OS page-cache handles buffering;
+          // Node never holds more than the stream's internal highWaterMark
+          // (~64 KB) at a time, regardless of file size.
+          // wrapStream() releases the concurrency slot when the body drains.
+          const { Readable } = await import("stream");
+          const fileStream = fs.default.createReadStream(absPath);
+          const webReadable = Readable.toWeb(fileStream) as ReadableStream<Uint8Array>;
+          return new Response(wrapStream(webReadable), {
             status: 200,
             headers: {
               "Content-Type": contentType,
@@ -3259,6 +3355,7 @@ Respond with JSON only:
             },
           });
         } catch (error: any) {
+          releaseSlot();
           safeLogger.error("[API] audio stream failed", {
             error: error?.message || String(error),
           });

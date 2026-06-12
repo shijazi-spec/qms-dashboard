@@ -3435,6 +3435,79 @@ export async function hasCallRecordAudioBlob(
   return result.rows.length > 0;
 }
 
+/**
+ * Return blob metadata (MIME type and byte size) without loading the binary
+ * payload.  Used by the audio download route to build response headers and
+ * validate Range bounds before any BYTEA data is transferred from Postgres.
+ */
+export async function getCallRecordAudioBlobMeta(
+  callRecordId: number,
+): Promise<{ mime: string; size: number } | null> {
+  await ensureAudioBlobColumns();
+  const result = await pool.query(
+    `SELECT audio_blob_mime, audio_blob_size,
+            octet_length(audio_blob) AS actual_size
+       FROM call_records WHERE id = $1`,
+    [callRecordId],
+  );
+  const row = result.rows[0];
+  if (!row || row.actual_size == null) return null;
+  return {
+    mime: row.audio_blob_mime || "audio/wav",
+    size: row.audio_blob_size || parseInt(row.actual_size, 10),
+  };
+}
+
+/**
+ * Return a Web ReadableStream that reads the audio_blob BYTEA column in
+ * fixed-size chunks via `SUBSTRING(audio_blob FROM pos FOR len)`.
+ *
+ * Only the bytes in [startByte, endByte] (both 0-based, inclusive) are
+ * transferred.  Each pull fetches at most `chunkSize` bytes, so the maximum
+ * in-process memory per request equals one chunk (default 512 KB) rather than
+ * the full recording size (up to 200 MB).
+ *
+ * PostgreSQL SUBSTRING on BYTEA uses 1-based positions; the conversion is
+ * handled internally so callers always work in 0-based offsets.
+ */
+export function streamCallRecordAudioBlobRange(
+  callRecordId: number,
+  startByte: number,
+  endByte: number,
+  chunkSize = 512 * 1024,
+): ReadableStream<Uint8Array> {
+  let offset = startByte;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (offset > endByte) {
+        controller.close();
+        return;
+      }
+      const readLen = Math.min(chunkSize, endByte - offset + 1);
+      try {
+        const result = await pool.query<{ chunk: Buffer | null }>(
+          `SELECT SUBSTRING(audio_blob FROM $1 FOR $2) AS chunk
+             FROM call_records WHERE id = $3`,
+          [offset + 1, readLen, callRecordId],
+        );
+        const raw = result.rows[0]?.chunk;
+        if (!raw) {
+          controller.close();
+          return;
+        }
+        const buf: Buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+        controller.enqueue(new Uint8Array(buf));
+        offset += buf.length;
+        if (buf.length < readLen || offset > endByte) {
+          controller.close();
+        }
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+  });
+}
+
 let integrationConfigTableReady: Promise<void> | null = null;
 async function ensureIntegrationConfigTable(): Promise<void> {
   if (integrationConfigTableReady) return integrationConfigTableReady;
