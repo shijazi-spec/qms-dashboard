@@ -115,11 +115,21 @@ function isSecureDomain(): boolean {
  * Decision matrix:
  *   - Origin matches host  → same-origin (allow)
  *   - Referer matches host → same-origin (allow)
- *   - Neither matches BUT both absent → likely a typed-URL / bookmark
- *     navigation; treat as same-origin so the legitimate fallback still
- *     works. The attack vector we're closing (attacker.com link) sets
- *     Origin/Referer to attacker.com, which never reaches this branch.
  *   - Either present but not matching → cross-origin (block)
+ *   - Both absent → consult Sec-Fetch-Site (a browser-enforced "forbidden
+ *     header" that web pages cannot suppress or forge):
+ *       - "none"        → direct navigation (typed URL / bookmark) → allow
+ *       - "same-origin" → same-origin navigation → allow
+ *       - "cross-site" or "same-site" → cross-origin navigation → block
+ *       - header absent → non-browser caller (curl / API); no browser
+ *         means no SameSite=Lax cookie is attached, so allow (nothing
+ *         to protect against)
+ *
+ * This closes the rel="noreferrer" / Referrer-Policy:no-referrer bypass
+ * where both Origin and Referer can be absent on a cross-site top-level
+ * GET while the session cookie is still attached under SameSite=Lax.
+ * Sec-Fetch-Site is always "cross-site" in that scenario even when the
+ * legacy headers are stripped, so the guard correctly rejects it.
  *
  * SameSite=Lax already blocks the subresource-image-tag variant (cookies
  * aren't attached to cross-site subresource GETs). This guard adds
@@ -140,11 +150,19 @@ function isSameOriginNavigation(c: any): boolean {
   };
 
   if (matches(origin) || matches(referer)) return true;
-  // Both headers absent → typed URL / bookmark / non-browser caller.
-  // Allow to preserve the legitimate fallback. Cross-origin requests
-  // always carry at least one of these headers in modern browsers.
-  if (!origin && !referer) return true;
-  return false;
+  if (origin || referer) return false; // at least one present but non-matching
+
+  // Both Origin and Referer are absent. Use Sec-Fetch-Site to distinguish
+  // legitimate direct navigation from a cross-site link that stripped the
+  // legacy headers via rel="noreferrer" or Referrer-Policy: no-referrer.
+  // Sec-Fetch-Site is a browser-enforced forbidden header — it cannot be
+  // suppressed or spoofed by web pages. Non-browser callers (curl, server-
+  // to-server) do not send it, but they also cannot attach SameSite=Lax
+  // cookies, so there is nothing to protect against in that case.
+  const secFetchSite = c.req.header("Sec-Fetch-Site") || "";
+  if (!secFetchSite) return true; // non-browser caller — no cookie risk
+  if (secFetchSite === "none" || secFetchSite === "same-origin") return true;
+  return false; // "cross-site" or "same-site" (different subdomain) → block
 }
 
 function signSession(payload: Record<string, any>): string {
