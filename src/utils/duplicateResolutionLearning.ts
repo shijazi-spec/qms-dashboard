@@ -12,6 +12,7 @@
  */
 
 import { pool } from "./duplicateRadarDatabase";
+import { redactSensitiveDeep } from "./eventLogsDatabase";
 import { logger } from "./logger";
 
 let _tableReady = false;
@@ -71,6 +72,26 @@ export async function recordResolutionEvent(ev: ResolutionEvent): Promise<void> 
       !!ev.proposedMasterZohoId &&
       !!ev.chosenMasterZohoId &&
       ev.proposedMasterZohoId !== ev.chosenMasterZohoId;
+    // The agent-supplied plan/report are arbitrary objects that can embed
+    // credential-shaped values (e.g. a Zoho field snapshot containing an
+    // api_key/access_token). Scrub every value before it reaches the INSERT
+    // params, matching the platform's changeHistoryDatabase write-path
+    // convention. performed_by and the zoho-id strings are scrubbed defensively
+    // in case a caller ever routes a secret-shaped value through them.
+    const safePlan = redactSensitiveDeep(ev.plan ?? null);
+    const safeReport = redactSensitiveDeep(ev.report ?? null);
+    const safeProposed =
+      ev.proposedMasterZohoId != null
+        ? (redactSensitiveDeep(ev.proposedMasterZohoId, "proposed_master_zoho_id") as string)
+        : null;
+    const safeChosen =
+      ev.chosenMasterZohoId != null
+        ? (redactSensitiveDeep(ev.chosenMasterZohoId, "chosen_master_zoho_id") as string)
+        : null;
+    const safePerformedBy =
+      ev.performedBy != null
+        ? (redactSensitiveDeep(ev.performedBy, "performed_by") as string)
+        : null;
     await pool.query(
       `INSERT INTO duplicate_resolution_feedback
          (cluster_id, event_type, proposed_master_zoho_id, chosen_master_zoho_id,
@@ -80,16 +101,16 @@ export async function recordResolutionEvent(ev: ResolutionEvent): Promise<void> 
       [
         ev.clusterId,
         ev.eventType,
-        ev.proposedMasterZohoId ?? null,
-        ev.chosenMasterZohoId ?? null,
+        safeProposed,
+        safeChosen,
         overridden,
         ev.fieldsMigrated ?? 0,
         ev.duplicatesTagged ?? 0,
         ev.reparented ?? 0,
         ev.errors ?? 0,
-        JSON.stringify(ev.plan ?? null),
-        JSON.stringify(ev.report ?? null),
-        ev.performedBy ?? null,
+        JSON.stringify(safePlan ?? null),
+        JSON.stringify(safeReport ?? null),
+        safePerformedBy,
       ],
     );
   } catch (e) {

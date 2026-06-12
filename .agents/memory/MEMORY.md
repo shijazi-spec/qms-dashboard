@@ -2,3 +2,5 @@
 - [Mastra dev build cache](mastra-dev-build-cache.md) — "mastra dev" won't boot with inngest index.js/index.cjs error → `rm -rf .mastra/output` (restart alone won't fix)
 - [Multi-workflow boot crashes](mastra-multi-workflow-boot.md) — adding a 2nd Mastra workflow/cron trips two boot guards (single-workflow throw + duplicate Inngest cron id) that exit before the port opens
 - [Duplicate Radar pagination](duplicate-radar-pagination.md) — paginate by cluster end-to-end: server must page by cluster not row, AND client _dupBuckets must union by cluster_id or fuzzy clusters drop → empty pages
+- [Post-merge gate ordering](post-merge-gate-ordering.md) — post-merge.sh `set -e` runs the secret-leak coverage gate BEFORE the full suite; an early-gate failure masks a large latent backlog (RBAC/CSP/vitest) that surfaces once the early gate goes green
+- [supabaseBackup no-redact](supabase-backup-no-redact.md) — the whole-DB Supabase mirror must copy secrets verbatim (redaction corrupts restores); its test asserts bound-param injection-safety, NOT redaction — do not "fix" it by adding redactSensitiveDeep
