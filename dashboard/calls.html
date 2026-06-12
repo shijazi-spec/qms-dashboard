@@ -296,11 +296,11 @@
                 <div id="wr-custom-row" class="hidden mb-4 flex items-center gap-2 flex-wrap text-sm">
                     <label class="text-gray-600">
                         <span data-i18n="calls.wr_from">From</span>
-                        <input type="date" id="wr-custom-start" class="ml-2 px-2 py-1 border border-gray-300 rounded">
+                        <input type="date" id="wr-custom-start" class="ms-2 px-2 py-1 border border-gray-300 rounded">
                     </label>
                     <label class="text-gray-600">
                         <span data-i18n="calls.wr_to">To</span>
-                        <input type="date" id="wr-custom-end" class="ml-2 px-2 py-1 border border-gray-300 rounded">
+                        <input type="date" id="wr-custom-end" class="ms-2 px-2 py-1 border border-gray-300 rounded">
                     </label>
                     <button id="wr-custom-apply" data-on-click="applyWeeklyReportCustom"
                         class="px-3 py-1 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">
@@ -2727,13 +2727,13 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_agent">Agent</th>
-                                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_calls">Calls</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_score">Avg score</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_compliance">Compliance</th>
-                                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_critical">Critical</th>
-                                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_plans">Plans</th>
-                                <th class="px-3 py-2"></th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_agent">Agent</th>
+                                <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_calls">Calls</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_score">Avg score</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_compliance">Compliance</th>
+                                <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_critical">Critical</th>
+                                <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="calls.wr_col_plans">Plans</th>
+                                <th scope="col" class="px-3 py-2"></th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">${rows}</tbody>
@@ -4720,10 +4720,7 @@
             const tab = rec.lead_id ? 'Leads' : 'Potentials';
             const url = `https://crm.zoho.com/crm/org766568398/tab/${tab}/${encodeURIComponent(id)}`;
             const label = rec.lead_id ? 'Lead' : 'Deal';
-            return `<a href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="text-indigo-600 hover:text-indigo-800 underline" title="Open ${label} ${escapeHtml(String(id))} in Zoho CRM ↗">${escapeHtml(String(id))}</a>`;
-            // csp-safe-inline-handler: stopPropagation only — prevents the
-            // row click (group-toggle) from firing when the operator
-            // clicks the CRM link inside the row. Pure UI plumbing.
+            return `<a href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="text-indigo-600 hover:text-indigo-800 underline" title="Open ${label} ${escapeHtml(String(id))} in Zoho CRM ↗">${escapeHtml(String(id))}</a>`; // csp-safe-inline-handler: stopPropagation only — prevents the row click (group-toggle) from firing when the operator clicks the CRM link inside the row. Pure UI plumbing.
         }
 
         function renderComplianceTable() {
@@ -8032,7 +8029,7 @@
             const score = (call.sdr_overall_score ?? call.overall_score);
             const scoreStr = (score === null || score === undefined || isNaN(Number(score)))
                 ? ''
-                : `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono ${Number(score) >= 80 ? 'bg-green-100 text-green-700' : Number(score) >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">${Math.round(Number(score))}%</span>`;
+                : `<span class="ms-1 px-1.5 py-0.5 rounded text-[10px] font-mono ${Number(score) >= 80 ? 'bg-green-100 text-green-700' : Number(score) >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">${Math.round(Number(score))}%</span>`;
             slot.innerHTML = `
                 <div class="font-medium text-gray-800">${escapeHtml(agent)}${scoreStr}</div>
                 <div class="text-gray-500 truncate">${escapeHtml(contact)}</div>

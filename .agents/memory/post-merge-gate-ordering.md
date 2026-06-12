@@ -28,3 +28,25 @@ expose a second wave. Before assuming the new wave is your regression, check git
 and often owned by other in-progress tasks (e.g. an "Authorization" task owns the
 RBAC `ROUTE_PERMISSION_MAP` coverage failures). Don't silently swallow gate
 failures to force green; fix what's yours and route the rest to the owning task.
+
+## Inline-handler guard: post-merge runs a STRICTER flag than the test
+
+`scripts/lint-dashboard-handlers.sh` has two modes. The Playwright/tsx test
+`tests/noInlineHandlers.test.ts` spawns it WITHOUT args (only scans for inline
+`on*=` handler attributes). `scripts/post-merge.sh` runs it WITH
+`--check-inline-scripts`, which ALSO enforces that every inline `<script>` block
+lives on `INLINE_SCRIPT_NONCE_ALLOWLIST` in `scripts/check-handlers.cjs`.
+
+**Consequence:** the inline-handler *test* can be green while *post-merge* still
+fails on `inline-script-no-nonce` violations. A guard "passing as a workflow" does
+NOT prove post-merge passes — re-run the exact post-merge invocation.
+
+**How to apply:** any NEW dashboard `*.html` page with an inline `<script>` (no
+`src=`, no source-level `nonce=`) must be added to `INLINE_SCRIPT_NONCE_ALLOWLIST`,
+AND only after confirming the page is served via a non-`/api/` `text/html` route so
+`injectCspNonce` (src/mastra/middleware/index.ts) stamps the nonce at request time.
+The allowlist also fails on STALE entries (deleted file or page no longer has an
+unnonced inline script), so deleting a page means deleting its allowlist line.
+**Why:** allowlisting asserts "this page gets its nonce from middleware"; if a page
+is ever served outside that middleware the allowlist silently masks a real prod CSP
+break — so verify the serving route before adding.

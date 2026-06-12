@@ -556,10 +556,10 @@
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
-                    <thead><tr class="text-xs text-gray-500 text-left border-b border-gray-200">
-                        <th class="px-3 py-2">Deal</th><th class="px-3 py-2">Stage</th><th class="px-3 py-2">Owner</th>
-                        <th class="px-3 py-2">Lead source</th><th class="px-3 py-2">Created</th>
-                        <th class="px-3 py-2 text-end">Amount</th><th class="px-3 py-2">Required documents</th>
+                    <thead><tr class="text-xs text-gray-500 text-start border-b border-gray-200">
+                        <th scope="col" class="px-3 py-2">Deal</th><th scope="col" class="px-3 py-2">Stage</th><th scope="col" class="px-3 py-2">Owner</th>
+                        <th scope="col" class="px-3 py-2">Lead source</th><th scope="col" class="px-3 py-2">Created</th>
+                        <th scope="col" class="px-3 py-2 text-end">Amount</th><th scope="col" class="px-3 py-2">Required documents</th>
                     </tr></thead>
                     <tbody id="dealComplianceBody"><tr><td colspan="7" class="px-3 py-4 text-gray-500">Open this tab to load deals…</td></tr></tbody>
                 </table>
@@ -4036,14 +4036,14 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Module (headline)</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Records</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Confidence</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Exposure</th>
-                                <th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-3 py-2"></th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Module (headline)</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Records</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Exposure</th>
+                                <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th scope="col" class="px-3 py-2"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">${rows}</tbody>
@@ -5087,7 +5087,7 @@
                     + '</tr>';
             }).join('');
             panel.innerHTML = header + (rows
-                ? '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr><th class="px-2 py-1 text-start font-medium text-gray-600">Status</th><th class="px-2 py-1 text-start font-medium text-gray-600">Record</th><th class="px-2 py-1 text-start font-medium text-gray-600">Module</th><th class="px-2 py-1 text-start font-medium text-gray-600">Zoho</th><th class="px-2 py-1 text-start font-medium text-gray-600">Account (now)</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+                ? '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Status</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Record</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Module</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Zoho</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Account (now)</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
                 : '');
         }
 
@@ -5142,7 +5142,7 @@
                     + '</tr>';
             }).join('');
             panel.innerHTML = header + (rows
-                ? '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr><th class="px-2 py-1 text-start font-medium text-gray-600">Status</th><th class="px-2 py-1 text-start font-medium text-gray-600">Record</th><th class="px-2 py-1 text-start font-medium text-gray-600">Module</th><th class="px-2 py-1 text-start font-medium text-gray-600">Zoho</th><th class="px-2 py-1 text-start font-medium text-gray-600">Note</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+                ? '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Status</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Record</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Module</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Zoho</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Note</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
                 : '');
         }
 
@@ -5568,8 +5568,8 @@
                 ? '<div class="text-xs text-gray-500 mb-1">Tick the contacts to include in the link cascade. Unticked contacts are left completely untouched.</div>'
                 : '<div class="text-xs text-gray-500 mb-1">Tick the accounts to merge — at least 2. Unticked accounts are excluded and left untouched.</div>';
             const mergeColHeader = linkOnlyMode
-                ? '<th class="px-3 py-2 text-start" title="Include this contact in the link cascade">Link</th>'
-                : '<th class="px-3 py-2 text-start">Merge</th>';
+                ? '<th scope="col" class="px-3 py-2 text-start" title="Include this contact in the link cascade">Link</th>'
+                : '<th scope="col" class="px-3 py-2 text-start">Merge</th>';
             const applyBtn = linkOnlyMode
                 ? '<button data-on-click="applyMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-apply-merge-' + plan.module + '-' + plan.clusterId + '" class="px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 rounded-lg text-sm font-semibold">🔗 Link contacts in Zoho</button>'
                 : '<button data-on-click="applyMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-apply-merge-' + plan.module + '-' + plan.clusterId + '" class="px-4 py-2 bg-purple-700 text-white hover:bg-purple-800 rounded-lg text-sm font-semibold">⚡ Apply in Zoho</button>';
@@ -5582,20 +5582,20 @@
                 reparentSlot +
                 linkControl +
                 instructionLine +
-                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500">' + mergeColHeader + '<th class="px-3 py-2 text-start">Outcome</th><th class="px-3 py-2 text-start">Record</th><th class="px-3 py-2 text-start">Zoho ID</th>' + (
+                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500">' + mergeColHeader + '<th scope="col" class="px-3 py-2 text-start">Outcome</th><th scope="col" class="px-3 py-2 text-start">Record</th><th scope="col" class="px-3 py-2 text-start">Zoho ID</th>' + (
                     isContacts
-                        ? '<th class="px-3 py-2 text-start" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">Account</th>'
+                        ? '<th scope="col" class="px-3 py-2 text-start" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">Account</th>'
                         : plan.module === 'Accounts'
-                            ? '<th class="px-3 py-2 text-center" title="Number of Deals linked to each Account in Zoho. Stronger survivor signal than attachment counts — the Account with the bigger Deals book is usually the one to keep.">Deals</th>'
+                            ? '<th scope="col" class="px-3 py-2 text-center" title="Number of Deals linked to each Account in Zoho. Stronger survivor signal than attachment counts — the Account with the bigger Deals book is usually the one to keep.">Deals</th>'
                             : plan.module === 'Deals'
-                                ? '<th class="px-3 py-2 text-start" title="Deal Stage in Zoho — check each deal\'s stage before merging an open/won deal away">Stage</th>'
-                                : '<th class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th>'
-                ) + '<th class="px-3 py-2 text-end">Complete</th><th class="px-3 py-2 text-start">Owner</th><th class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
+                                ? '<th scope="col" class="px-3 py-2 text-start" title="Deal Stage in Zoho — check each deal\'s stage before merging an open/won deal away">Stage</th>'
+                                : '<th scope="col" class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th>'
+                ) + '<th scope="col" class="px-3 py-2 text-end">Complete</th><th scope="col" class="px-3 py-2 text-start">Owner</th><th scope="col" class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
                 (linkOnlyMode
                     ? ''
                     : '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Field migrations &amp; conflicts (' + (plan.fieldDecisions || []).length + ')</div>' +
                       (decRows
-                        ? '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th class="px-3 py-2 text-start">Field</th><th class="px-3 py-2 text-start">Action</th><th class="px-3 py-2 text-start">Value kept</th><th class="px-3 py-2 text-start">Why</th></tr></thead><tbody>' + decRows + '</tbody></table></div>'
+                        ? '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500"><th scope="col" class="px-3 py-2 text-start">Field</th><th scope="col" class="px-3 py-2 text-start">Action</th><th scope="col" class="px-3 py-2 text-start">Value kept</th><th scope="col" class="px-3 py-2 text-start">Why</th></tr></thead><tbody>' + decRows + '</tbody></table></div>'
                         : '<div class="text-gray-400 text-sm mb-4">No field changes needed — survivor already holds all values.</div>')) +
                 '<div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Warnings</div><div class="text-sm mb-3">' + warns + '</div>' +
                 '<div class="flex flex-wrap items-center gap-2 border-t pt-3">' +
