@@ -1,4 +1,5 @@
 - [Dev/prod DB parity](dev-prod-db-parity.md) — manual sync procedure (executeSql notebook) and nightly Inngest cron for prod→dev table mirroring; argv-limit and live-write gotchas
+- [provider-utils version conflict](provider-utils-version-conflict.md) — never globally force @ai-sdk/provider-utils to v4: it removes lazyValidator and breaks `mastra build`; split v3/v4 in overrides
 - [Mastra dev build cache](mastra-dev-build-cache.md) — "mastra dev" won't boot with inngest index.js/index.cjs error → `rm -rf .mastra/output` (restart alone won't fix)
 - [Multi-workflow boot crashes](mastra-multi-workflow-boot.md) — adding a 2nd Mastra workflow/cron trips two boot guards (single-workflow throw + duplicate Inngest cron id) that exit before the port opens
 - [Duplicate Radar pagination](duplicate-radar-pagination.md) — paginate by cluster end-to-end: server must page by cluster not row, AND client _dupBuckets must union by cluster_id or fuzzy clusters drop → empty pages
