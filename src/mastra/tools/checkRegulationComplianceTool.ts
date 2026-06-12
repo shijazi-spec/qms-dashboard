@@ -1,6 +1,17 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { sharedPool as pool } from "../../utils/sharedPool";
+import { getCurrentAgentContext } from "../../utils/withApprovalGate";
+
+// This tool queries pdpl_data_inventory, data_incidents, pdpl_ai_guardrails,
+// and other sensitive compliance tables. Restrict to the same cohort that
+// can reach those modules through the direct REST APIs.
+const COMPLIANCE_TOOL_ROLES = new Set([
+  "admin",
+  "grc_manager",
+  "head_of_operations_quality",
+  "quality_manager",
+]);
 
 interface ComplianceGap {
   area: string;
@@ -276,6 +287,24 @@ export const checkRegulationComplianceTool = createTool({
 
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
+
+    // Enforce RBAC: this tool queries pdpl_data_inventory, data_incidents,
+    // and pdpl_ai_guardrails — tables restricted to a narrow governance cohort
+    // through the direct REST APIs. Deny any caller whose role falls outside
+    // that cohort, including roles that can otherwise access the consultant.
+    const agentCtx = getCurrentAgentContext();
+    const callerRole = agentCtx?.user?.role ?? null;
+    if (!callerRole || !COMPLIANCE_TOOL_ROLES.has(callerRole)) {
+      logger?.warn("🚫 [checkRegulationComplianceTool] Role not permitted", { callerRole });
+      return {
+        success: false,
+        regulation: context.regulation,
+        complianceScore: 0,
+        gaps: [],
+        error: `Access denied: your role (${callerRole ?? "unknown"}) is not permitted to run regulation compliance checks.`,
+      };
+    }
+
     logger?.info("📋 [checkRegulationComplianceTool] Checking compliance...", {
       regulation: context.regulation,
     });

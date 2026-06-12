@@ -1,6 +1,18 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { sharedPool as pool } from "../../utils/sharedPool";
+import { getCurrentAgentContext } from "../../utils/withApprovalGate";
+
+// Mirrors src/mastra/routes/kpiRoutes.ts KPI-read role list. KPI names,
+// targets, and actuals must not be surfaced to department_viewer, custom,
+// team_lead, auditor, or bu_owner through the AI path.
+const KPI_MONITOR_ROLES = new Set([
+  "admin",
+  "quality_manager",
+  "grc_manager",
+  "head_of_operations_quality",
+  "executive",
+]);
 
 export const monitorKPIsTool = createTool({
   id: "monitor-kpis",
@@ -32,6 +44,22 @@ export const monitorKPIsTool = createTool({
 
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
+
+    // Enforce RBAC: KPI names, targets, and actuals must not be surfaced to
+    // lower-privilege roles through the AI path.
+    const agentCtx = getCurrentAgentContext();
+    const callerRole = agentCtx?.user?.role ?? null;
+    if (!callerRole || !KPI_MONITOR_ROLES.has(callerRole)) {
+      logger?.warn("🚫 [monitorKPIsTool] Role not permitted", { callerRole });
+      return {
+        success: false,
+        checkType: context.checkType,
+        kpisChecked: 0,
+        issues: [],
+        error: `Access denied: your role (${callerRole ?? "unknown"}) is not permitted to monitor KPIs.`,
+      };
+    }
+
     const periods = context.periodCount ?? 3;
 
     logger?.info("📊 [monitorKPIsTool] Running KPI check...", {

@@ -407,6 +407,19 @@ const CONSULTANT_ROLES: UserRole[] = [
   "custom",
 ];
 
+// The comprehensive scan (/api/consultant/scan and /api/consultant/scan-stream)
+// invokes every restricted monitoring tool in sequence and must therefore be
+// limited to roles that are allowed by ALL of those tools' individual RBAC
+// checks. runBackgroundScan() (used by scan-stream) queries the database
+// directly and cannot rely on tool-level RBAC at all, so it must be gated
+// here at the route level as well.
+const SCAN_ROLES: UserRole[] = [
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+];
+
 // Alert endpoints expose cross-module operational data (risk scores, PDPL
 // incidents, AI-ops failures, tool-health incidents) that is not scoped to
 // any individual user or module. Restrict both reads and mutations to roles
@@ -1541,7 +1554,11 @@ export const consultantRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const user = await requireRole(c, CONSULTANT_ROLES);
+          // The scan instructs the agent to use ALL monitoring tools, which
+          // query PDPL, NC, risk, KPI, and governance data. Restrict to the
+          // intersection of those tools' own RBAC allowlists so a low-
+          // privilege consultant cannot trigger the full platform scan.
+          const user = await requireRole(c, SCAN_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
           const mastra = c.get("mastra");
@@ -1582,15 +1599,30 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
                   promptVersion: QMS_CONSULTANT_PROMPT_VERSION,
                 }),
               },
+              // Wrap the agent call with the user's verified identity so that
+              // tool-level RBAC checks (getCurrentAgentContext()) can resolve
+              // the caller's role and enforce per-module access controls.
               async () =>
-                // 2026-06-08 ADAPTIVE FIX — same wrapper as /chat and
-                // /chat/stream above. Stops the polarity flip-flop from
-                // breaking the scan endpoint independently.
-                (await agentGenerateAdaptive(agent, scanPrompt, {
-                  threadId: `scan-${Date.now()}`,
-                  resourceId: "system-scanner",
-                  abortSignal: scanController.signal,
-                })) as AgentTextResult,
+                withAgentUserContext(
+                  {
+                    user: {
+                      userId: user.userId,
+                      email: user.email,
+                      role: user.role,
+                      autoApproveTier: resolveAutoApproveTier(user.role),
+                    },
+                    threadId: `scan-${Date.now()}`,
+                  },
+                  async () =>
+                    // 2026-06-08 ADAPTIVE FIX — same wrapper as /chat and
+                    // /chat/stream above. Stops the polarity flip-flop from
+                    // breaking the scan endpoint independently.
+                    (await agentGenerateAdaptive(agent, scanPrompt, {
+                      threadId: `scan-${Date.now()}`,
+                      resourceId: userResourceId(user.userId),
+                      abortSignal: scanController.signal,
+                    })) as AgentTextResult,
+                ),
             );
             scanResult = result;
           } finally {
@@ -1628,7 +1660,10 @@ IMPORTANT: Do NOT automatically create alerts, NCs, or CAPAs. Instead, compile a
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
-        const user = await requireRole(c, CONSULTANT_ROLES);
+        // runBackgroundScan() queries the database directly and bypasses all
+        // tool-level RBAC, so we must enforce the role gate here at the route
+        // level. Restrict to the same narrow cohort used by /api/consultant/scan.
+        const user = await requireRole(c, SCAN_ROLES);
         if (!user) {
           return c.json({ error: "Insufficient permissions" }, 403);
         }

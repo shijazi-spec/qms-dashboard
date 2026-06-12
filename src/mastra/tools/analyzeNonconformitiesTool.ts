@@ -1,6 +1,17 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { sharedPool as pool } from "../../utils/sharedPool";
+import { getCurrentAgentContext } from "../../utils/withApprovalGate";
+
+// Mirrors the QMS NC module access model. Low-privilege roles such as
+// department_viewer, custom, team_lead, and auditor must not be able to
+// enumerate NC trends or overdue CAPA details through the AI path.
+const NC_ANALYSIS_ROLES = new Set([
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+]);
 
 export const analyzeNonconformitiesTool = createTool({
   id: "analyze-nonconformities",
@@ -31,6 +42,22 @@ export const analyzeNonconformitiesTool = createTool({
 
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
+
+    // Enforce RBAC: NC records, CAPA details, and owner information must
+    // not be enumerated through the AI path by lower-privilege roles.
+    const agentCtx = getCurrentAgentContext();
+    const callerRole = agentCtx?.user?.role ?? null;
+    if (!callerRole || !NC_ANALYSIS_ROLES.has(callerRole)) {
+      logger?.warn("🚫 [analyzeNonconformitiesTool] Role not permitted", { callerRole });
+      return {
+        success: false,
+        analysisType: context.analysisType,
+        findings: [],
+        summary: "",
+        error: `Access denied: your role (${callerRole ?? "unknown"}) is not permitted to analyze nonconformities.`,
+      };
+    }
+
     logger?.info("🔍 [analyzeNonconformitiesTool] Running NC analysis...", {
       analysisType: context.analysisType,
       dayRange: context.dayRange,

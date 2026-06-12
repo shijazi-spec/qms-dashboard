@@ -1,5 +1,19 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { getCurrentAgentContext } from "../../utils/withApprovalGate";
+
+// Mirrors KNOWLEDGE_READ_ROLES in src/mastra/routes/knowledgeRoutes.ts.
+// Lower-privilege roles (department_viewer, custom, team_lead, auditor,
+// bu_owner, executive) may access the AI consultant but must NOT be able
+// to reach the knowledge base through the agent any more than they can
+// through the direct /api/knowledge/* REST routes.
+const KNOWLEDGE_READ_ROLES = new Set([
+  "admin",
+  "ai_specialist",
+  "grc_manager",
+  "head_of_operations_quality",
+  "quality_manager",
+]);
 
 export const searchKnowledgeTool = createTool({
   id: "search-knowledge-base",
@@ -17,6 +31,22 @@ export const searchKnowledgeTool = createTool({
   }),
   execute: async ({ context }) => {
     const { action, query, documentType, documentId, limit } = context;
+
+    // Enforce RBAC: only roles permitted to read the knowledge base through
+    // the direct REST API (/api/knowledge/documents) may reach it via the
+    // AI consultant tool.  getCurrentAgentContext() resolves to null when
+    // called outside a withAgentUserContext() span (e.g. cron / scan
+    // endpoints that do not set user context), which is also denied.
+    const agentCtx = getCurrentAgentContext();
+    const callerRole = agentCtx?.user?.role ?? null;
+    if (!callerRole || !KNOWLEDGE_READ_ROLES.has(callerRole)) {
+      return {
+        success: false,
+        message: `Access denied: your role (${callerRole ?? "unknown"}) is not permitted to access the knowledge base.`,
+        documents: [],
+        results: [],
+      };
+    }
 
     const { searchKnowledge, getDocuments, getDocumentById, initKnowledgeTables } = await import("../../utils/knowledgeDatabase");
     await initKnowledgeTables();

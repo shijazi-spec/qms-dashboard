@@ -1,6 +1,18 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { sharedPool as pool } from "../../utils/sharedPool";
+import { getCurrentAgentContext } from "../../utils/withApprovalGate";
+
+// Mirrors src/mastra/routes/riskRoutes.ts risk-read role list. The tool
+// returns risk IDs, titles, scores, and overdue treatment details that
+// must not be accessible to department_viewer, custom, or team_lead.
+const RISK_MONITOR_ROLES = new Set([
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+  "executive",
+]);
 
 export const monitorRisksTool = createTool({
   id: "monitor-risks",
@@ -32,6 +44,22 @@ export const monitorRisksTool = createTool({
 
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
+
+    // Enforce RBAC: risk IDs, titles, scores, and overdue treatment details
+    // must only be visible to the same roles permitted by the risk REST API.
+    const agentCtx = getCurrentAgentContext();
+    const callerRole = agentCtx?.user?.role ?? null;
+    if (!callerRole || !RISK_MONITOR_ROLES.has(callerRole)) {
+      logger?.warn("🚫 [monitorRisksTool] Role not permitted", { callerRole });
+      return {
+        success: false,
+        checkType: context.checkType,
+        risksFound: 0,
+        details: [],
+        error: `Access denied: your role (${callerRole ?? "unknown"}) is not permitted to monitor risks.`,
+      };
+    }
+
     const threshold = context.riskThreshold ?? 15;
 
     logger?.info("⚠️ [monitorRisksTool] Running risk check...", {

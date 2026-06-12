@@ -1,6 +1,23 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { sharedPool as pool } from "../../utils/sharedPool";
+import { getCurrentAgentContext } from "../../utils/withApprovalGate";
+
+// Governance documents are accessible to a broader governance cohort but
+// must remain hidden from department_viewer and custom roles, matching the
+// policy and governance-document REST route access model.
+const DOCUMENT_REVIEW_ROLES = new Set([
+  "admin",
+  "grc_manager",
+  "head_of_operations_quality",
+  "quality_manager",
+  "executive",
+  "auditor",
+  "quality_specialist",
+  "ai_specialist",
+  "bu_owner",
+  "team_lead",
+]);
 
 export const reviewDocumentTool = createTool({
   id: "review-document",
@@ -30,6 +47,22 @@ export const reviewDocumentTool = createTool({
 
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
+
+    // Enforce RBAC: governance documents must not be enumerated or reviewed
+    // by department_viewer or custom roles through the AI path.
+    const agentCtx = getCurrentAgentContext();
+    const callerRole = agentCtx?.user?.role ?? null;
+    if (!callerRole || !DOCUMENT_REVIEW_ROLES.has(callerRole)) {
+      logger?.warn("🚫 [reviewDocumentTool] Role not permitted", { callerRole });
+      return {
+        success: false,
+        documentTitle: "",
+        gaps: [],
+        overallStatus: "non_compliant" as const,
+        error: `Access denied: your role (${callerRole ?? "unknown"}) is not permitted to review governance documents.`,
+      };
+    }
+
     logger?.info("📄 [reviewDocumentTool] Starting document review...", {
       documentId: context.documentId,
       documentType: context.documentType,

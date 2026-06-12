@@ -1,6 +1,17 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { sharedPool as pool } from "../../utils/sharedPool";
+import { getCurrentAgentContext } from "../../utils/withApprovalGate";
+
+// This tool aggregates audit scores, nonconformance trends, risk data, and
+// agent scorecards — all restricted modules. Restrict to the same cohort
+// used for NC analysis to prevent indirect disclosure to lower-privilege roles.
+const SUGGEST_IMPROVEMENTS_ROLES = new Set([
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+]);
 
 function determineTrend(values: number[]): 'improving' | 'declining' | 'stable' {
   if (values.length < 2) return 'stable';
@@ -39,6 +50,23 @@ export const suggestImprovementsTool = createTool({
 
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
+
+    // Enforce RBAC: this tool aggregates audit scores, NC trends, risk data,
+    // and agent scorecard details — all restricted modules. Deny roles that
+    // cannot access those modules through the direct REST APIs.
+    const agentCtx = getCurrentAgentContext();
+    const callerRole = agentCtx?.user?.role ?? null;
+    if (!callerRole || !SUGGEST_IMPROVEMENTS_ROLES.has(callerRole)) {
+      logger?.warn("🚫 [suggestImprovementsTool] Role not permitted", { callerRole });
+      return {
+        success: false,
+        focusArea: context.focusArea,
+        dataPoints: [],
+        trendDirection: "stable" as const,
+        error: `Access denied: your role (${callerRole ?? "unknown"}) is not permitted to run improvement analysis.`,
+      };
+    }
+
     logger?.info("💡 [suggestImprovementsTool] Analyzing improvements...", {
       focusArea: context.focusArea,
       dayRange: context.dayRange,
