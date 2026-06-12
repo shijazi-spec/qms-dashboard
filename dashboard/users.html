@@ -1146,19 +1146,30 @@
                     .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
 
                 if (eligible.length === 0) {
-                    select.innerHTML = '<option value="">No deletable users — only protected accounts remain</option>';
+                    while (select.options.length) select.remove(0);
+                    const emptyOpt = document.createElement('option');
+                    emptyOpt.value = '';
+                    emptyOpt.textContent = 'No deletable users — only protected accounts remain';
+                    select.appendChild(emptyOpt);
                     select.disabled = true;
                     return;
                 }
 
-                select.innerHTML =
-                    '<option value="">Select a user…</option>' +
-                    eligible.map(u => {
-                        const label = (u.full_name && u.full_name.trim())
-                            ? `${u.full_name} <${u.email}>`
-                            : u.email;
-                        return `<option value="${u.id}" data-email="${u.email}">${label}</option>`;
-                    }).join('');
+                while (select.options.length) select.remove(0);
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = 'Select a user…';
+                select.appendChild(placeholder);
+                for (const u of eligible) {
+                    const label = (u.full_name && u.full_name.trim())
+                        ? `${u.full_name} <${u.email}>`
+                        : u.email;
+                    const opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.dataset.email = u.email;
+                    opt.textContent = label;
+                    select.appendChild(opt);
+                }
                 select.disabled = false;
             } catch (e) {
                 select.innerHTML = '<option value="">Error loading users</option>';
