@@ -1,4 +1,4 @@
-import { requireRoleOrKey, forbiddenResponse } from "../../utils/rbacMiddleware";
+import { requireRoleOrKey, forbiddenResponse, getPlatformUser } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacMiddleware";
 
 import { logger } from "../../utils/logger";
@@ -38,8 +38,18 @@ export const notificationRoutes = [
 
           // Admins and admin-key callers may see all notifications; everyone
           // else is scoped to their own email (plus unscoped system alerts).
+          // Use the live DB role (not the stale cookie role) to prevent a
+          // demoted user from retaining admin-scoped notification access.
+          let isLiveAdmin = false;
+          if (!isAdminKey && user?.email) {
+            const platformUser = await getPlatformUser(user.email);
+            isLiveAdmin =
+              platformUser?.status === "active" &&
+              platformUser?.role === "admin";
+          }
+
           const recipientFilter =
-            isAdminKey || user?.role === "admin"
+            isAdminKey || isLiveAdmin
               ? undefined
               : user?.email ?? undefined;
 
@@ -71,8 +81,18 @@ export const notificationRoutes = [
           const isAdminKey = hasValidAdminApiKey(c);
           const user = isAdminKey ? null : getSessionUser(c);
 
+          // Use live DB role to prevent a demoted user from seeing the global
+          // unread count instead of only their own.
+          let isLiveAdmin = false;
+          if (!isAdminKey && user?.email) {
+            const platformUser = await getPlatformUser(user.email);
+            isLiveAdmin =
+              platformUser?.status === "active" &&
+              platformUser?.role === "admin";
+          }
+
           const recipientFilter =
-            isAdminKey || user?.role === "admin"
+            isAdminKey || isLiveAdmin
               ? undefined
               : user?.email ?? undefined;
 
@@ -107,11 +127,15 @@ export const notificationRoutes = [
             const user = getSessionUser(c);
             if (!user) return c.json({ error: "Authentication required" }, 401);
 
-            const isAdmin = user.role === "admin";
+            // Use live DB role — cookie role is stale after demotion.
+            const platformUser = await getPlatformUser(user.email);
+            const isLiveAdmin =
+              platformUser?.status === "active" &&
+              platformUser?.role === "admin";
             const isRecipient =
               notif.recipient && notif.recipient === user.email;
 
-            if (!isAdmin && !isRecipient) {
+            if (!isLiveAdmin && !isRecipient) {
               return forbiddenResponse(
                 c,
                 "You may only mark your own notifications as read",
@@ -151,11 +175,15 @@ export const notificationRoutes = [
             const user = getSessionUser(c);
             if (!user) return c.json({ error: "Authentication required" }, 401);
 
-            const isAdmin = user.role === "admin";
+            // Use live DB role — cookie role is stale after demotion.
+            const platformUser = await getPlatformUser(user.email);
+            const isLiveAdmin =
+              platformUser?.status === "active" &&
+              platformUser?.role === "admin";
             const isRecipient =
               notif.recipient && notif.recipient === user.email;
 
-            if (!isAdmin && !isRecipient) {
+            if (!isLiveAdmin && !isRecipient) {
               return forbiddenResponse(
                 c,
                 "You may only dismiss notifications addressed to you",
