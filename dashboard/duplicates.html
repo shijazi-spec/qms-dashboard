@@ -3555,7 +3555,23 @@
                 id:      { emoji: '🆔', label: 'CRM ID',  color: 'bg-rose-200 text-rose-900 border border-rose-400' },
             };
             const counts = _dupCounts(items, extractors);
-            const groupList = _dupBuckets(items, extractors);
+            // Group by exact shared key OR by the server's own cluster id.
+            // Account clusters are frequently FUZZY-name matches (e.g. "Saudi
+            // Electricity Co" vs "Saudi Electricity Company") whose members
+            // share no exactly-equal field. The server paginates and counts by
+            // cluster, so without a cluster fallback those clusters are dropped
+            // client-side and a page of purely-fuzzy clusters renders empty even
+            // though the pager reports thousands of groups — which made the
+            // Untouched view show 14+ blank pages. The cluster key only unions
+            // records WITHIN the same server cluster; cross-cluster chaining via
+            // name/email/phone/website/id is unchanged (it only ever adds
+            // unions, never removes them), so the dense exact-match views are
+            // unaffected.
+            const bucketExtractors = {
+                ...extractors,
+                _cluster: r => (r.cluster_id != null ? 'cid:' + r.cluster_id : ''),
+            };
+            const groupList = _dupBuckets(items, bucketExtractors);
 
             let rows = '';
             groupList.forEach((idxs, gIdx) => {
