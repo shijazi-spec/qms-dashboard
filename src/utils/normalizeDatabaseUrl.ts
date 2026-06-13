@@ -42,12 +42,17 @@ function normalizeDatabaseUrlSsl(): void {
     }
     return;
   } catch {
-    // Connection string is not URL-parseable (e.g. a libpq key=value DSN).
-    // Fall back to a targeted, case-insensitive replacement of the URL-style
-    // query form; key=value DSNs without a `?`/`&sslmode=` token are left as-is.
+    // Connection string is not URL-parseable (e.g. a libpq key=value DSN such
+    // as "host=... port=5432 sslmode=require dbname=..."). Handle BOTH the
+    // URL-style query token (?sslmode= / &sslmode=) and the space-delimited
+    // libpq DSN token (^sslmode= / " sslmode="), case-insensitively, so a
+    // future switch to DSN format cannot reintroduce the verify-full crash.
+    // The leading delimiter is captured and preserved; the trailing lookahead
+    // anchors on a value boundary so `verify-full` / `required` are never
+    // partially matched.
     const replaced = raw.replace(
-      /([?&]sslmode=)(require|prefer|verify-ca)\b/i,
-      "$1no-verify",
+      /(^|[?&\s])(sslmode=)(require|prefer|verify-ca)(?=$|[\s&])/i,
+      "$1$2no-verify",
     );
     if (replaced !== raw) {
       process.env.DATABASE_URL = replaced;

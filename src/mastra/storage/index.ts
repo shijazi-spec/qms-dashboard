@@ -1,3 +1,9 @@
+// MUST run before process.env.DATABASE_URL is read below: this is the fatal
+// boot path (PostgresStore.init crash-loops the whole server if the DB TLS
+// handshake fails). Importing the normalizer here — not only in the entry
+// point — guarantees the sslmode rewrite happens before this module reads the
+// connection string, independent of bundler/import-order behavior.
+import "../../utils/normalizeDatabaseUrl";
 import { PostgresStore } from "@mastra/pg";
 
 const connectionString = process.env.DATABASE_URL;
