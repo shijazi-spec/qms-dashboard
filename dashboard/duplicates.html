@@ -8104,8 +8104,14 @@
                 sel.value = '';
             }
         }
-        function onCsLifecyclePhaseChange(event) {
-            const v = event && event.target && event.target.value;
+        function onCsLifecyclePhaseChange() {
+            // Read the value straight off the <select> by id (the page
+            // convention for data-on-change handlers). The safe-actions
+            // delegation does NOT pass the DOM event unless data-pass-event is
+            // set, so an `event`-based read here was always undefined and the
+            // filter silently reset to "All phases" on every change.
+            const sel = document.getElementById('csLifePhaseFilter');
+            const v = sel ? sel.value : '';
             window._csLifecyclePhaseFilter = v || '';
             // Reset to the first page so the operator sees the start of the
             // newly filtered set rather than a stale page index carried over
