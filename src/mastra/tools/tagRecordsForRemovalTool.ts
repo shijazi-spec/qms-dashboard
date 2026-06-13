@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { addZohoTags } from "../../utils/zohoCRM";
+import { addZohoTags, zohoWritesAllowedInEnv } from "../../utils/zohoCRM";
 
 /**
  * Tag Zoho records for removal — the chat-side of the migrate-then-tag rule.
@@ -64,6 +64,17 @@ export const tagRecordsForRemovalTool = createTool({
         tagged: 0,
         message: "No record ids provided.",
         error: "recordIds is empty",
+      };
+    }
+    if (!zohoWritesAllowedInEnv()) {
+      return {
+        success: false,
+        module: context.module,
+        tag,
+        tagged: 0,
+        message:
+          "Tagging is blocked outside production (dev shares production's Zoho credentials). Run it from the deployed app.",
+        error: "live Zoho writes disabled outside production",
       };
     }
     try {

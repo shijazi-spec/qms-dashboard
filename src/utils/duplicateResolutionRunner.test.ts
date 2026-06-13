@@ -9,6 +9,7 @@ import {
   buildResolutionRiskInput,
   buildRuleFeatures,
   getResolutionRunConfig,
+  liveWritesPermitted,
   type BuildRiskInputArgs,
 } from "./duplicateResolutionRunner";
 
@@ -154,6 +155,54 @@ assert(
 );
 assert(typeof cfg.enabled === "boolean", "enabled is boolean (kill switch)");
 assert(cfg.maxClusters > 0, "maxClusters positive");
+
+console.log("liveWritesPermitted — environment guardrail");
+{
+  const savedEnv = process.env.NODE_ENV;
+  const savedOverride = process.env.RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD;
+  try {
+    process.env.NODE_ENV = "production";
+    delete process.env.RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD;
+    assert(
+      liveWritesPermitted({ enabled: true }, "assisted") === true,
+      "prod + enabled + assisted → writes allowed",
+    );
+    assert(
+      liveWritesPermitted({ enabled: true }, "autonomous") === true,
+      "prod + enabled + autonomous → writes allowed",
+    );
+    assert(
+      liveWritesPermitted({ enabled: true }, "shadow") === false,
+      "prod + enabled + shadow → no writes",
+    );
+    assert(
+      liveWritesPermitted({ enabled: false }, "assisted") === false,
+      "prod + kill switch off → no writes",
+    );
+
+    process.env.NODE_ENV = "development";
+    assert(
+      liveWritesPermitted({ enabled: true }, "autonomous") === false,
+      "dev + enabled + autonomous → blocked (shared live Zoho creds)",
+    );
+
+    process.env.RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD = "true";
+    assert(
+      liveWritesPermitted({ enabled: true }, "assisted") === true,
+      "dev + explicit override + enabled + assisted → writes allowed",
+    );
+    assert(
+      liveWritesPermitted({ enabled: true }, "shadow") === false,
+      "dev + override but shadow → still no writes",
+    );
+  } finally {
+    if (savedEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = savedEnv;
+    if (savedOverride === undefined)
+      delete process.env.RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD;
+    else process.env.RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD = savedOverride;
+  }
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

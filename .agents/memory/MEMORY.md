@@ -1,4 +1,5 @@
 - [Dev/prod DB parity](dev-prod-db-parity.md) — manual sync procedure (executeSql notebook) and nightly Inngest cron for prod→dev table mirroring; argv-limit and live-write gotchas
+- [Duplicate-radar resolution](duplicate-radar-resolution.md) — per-module "solved" must be module-scoped (durable ledger + resolve/module_resolved attribution); all live Zoho writes gate on zohoWritesAllowedInEnv()
 - [DB TLS sslmode verify-full crash](db-tls-sslmode-verify-full.md) — managed-Postgres deploy crash-loops when upgraded pg treats sslmode=require as verify-full; startup DATABASE_URL normalization to no-verify
 - [provider-utils version conflict](provider-utils-version-conflict.md) — never globally force @ai-sdk/provider-utils to v4: it removes lazyValidator and breaks `mastra build`; split v3/v4 in overrides
 - [Mastra dev build cache](mastra-dev-build-cache.md) — "mastra dev" won't boot with inngest index.js/index.cjs error → `rm -rf .mastra/output` (restart alone won't fix)

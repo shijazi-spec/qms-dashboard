@@ -2936,7 +2936,7 @@ export const duplicateRadarRoutes = [
         } catch (error: any) {
           logger.error("Error in bulk-close-leads:", error);
           return c.json(
-            { success: false, error: "An internal error occurred" },
+            { success: false, error: error?.message || "An internal error occurred" },
             500,
           );
         }

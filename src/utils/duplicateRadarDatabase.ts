@@ -989,6 +989,130 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     )
   `);
 
+  // Durable resolution ledger — keyed by STABLE Zoho identity (module +
+  // master_zoho_id), NOT by cluster_id. This table is intentionally NOT part of
+  // truncateAllDuplicateData()'s TRUNCATE: "Rebuild Clusters" wipes
+  // duplicate_clusters/duplicate_records (and cascades duplicate_merge_actions),
+  // which previously collapsed the "solved" scoreboard back to 0 on every
+  // rebuild/rescan. The ledger remembers that a survivor was resolved so the
+  // breakdown can re-attribute "solved" to whatever cluster the survivor lands
+  // in after the next scan. ON CONFLICT keeps it idempotent across re-applies.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS duplicate_resolution_ledger (
+      id SERIAL PRIMARY KEY,
+      module VARCHAR(20) NOT NULL,
+      master_zoho_id VARCHAR(100),
+      duplicate_zoho_ids JSONB NOT NULL DEFAULT '[]',
+      action_type VARCHAR(20) NOT NULL DEFAULT 'resolve',
+      performed_by VARCHAR(255),
+      notes TEXT,
+      resolved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool
+    .query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_dup_res_ledger_identity
+         ON duplicate_resolution_ledger(module, master_zoho_id)
+         WHERE master_zoho_id IS NOT NULL`,
+    )
+    .catch(() => {});
+  await pool
+    .query(
+      `CREATE INDEX IF NOT EXISTS idx_dup_res_ledger_master
+         ON duplicate_resolution_ledger(master_zoho_id)`,
+    )
+    .catch(() => {});
+
+  // One-time-safe backfill: seed the ledger from solved state that still exists
+  // at boot so its "solved" credit survives the next rebuild. Idempotent via
+  // ON CONFLICT DO NOTHING, safe on every boot. NOTE: cannot resurrect history
+  // wiped by a prior rebuild (before this ledger existed).
+  //
+  // Attribution must be PER-MODULE-ACCURATE, or a partial cross-module apply
+  // would inflate solved counts:
+  //   A) WHOLE-cluster resolves (status='resolved' or a 'resolve' merge action)
+  //      → credit EVERY module present, each keyed to a record OF THAT MODULE
+  //      (its primary if any, else a representative — DISTINCT ON picks it).
+  //   B) 'module_resolved' actions (ONE module merged inside a still-open
+  //      cross-module cluster) → credit ONLY the module of that action's
+  //      primary record, NOT every record_type in the cluster.
+  await pool
+    .query(
+      `INSERT INTO duplicate_resolution_ledger
+         (module, master_zoho_id, action_type, performed_by, notes, resolved_at)
+       SELECT DISTINCT ON (dr.cluster_id, mod.module)
+         mod.module,
+         dr.zoho_record_id,
+         'resolve',
+         dc.resolved_by,
+         'backfilled from whole-cluster resolve',
+         COALESCE(dc.resolved_at, NOW())
+       FROM duplicate_clusters dc
+       JOIN duplicate_records dr ON dr.cluster_id = dc.id
+       JOIN LATERAL (
+         SELECT CASE dr.record_type
+                  WHEN 'lead' THEN 'Leads'
+                  WHEN 'deal' THEN 'Deals'
+                  WHEN 'contact' THEN 'Contacts'
+                  WHEN 'account' THEN 'Accounts'
+                END AS module
+       ) mod ON true
+       WHERE (
+               dc.status = 'resolved'
+               OR EXISTS (
+                 SELECT 1 FROM duplicate_merge_actions ma
+                  WHERE ma.cluster_id = dc.id AND ma.action_type = 'resolve'
+               )
+             )
+         AND dr.record_type IN ('lead','deal','contact','account')
+         AND dr.zoho_record_id IS NOT NULL
+       ORDER BY dr.cluster_id, mod.module, dr.is_primary DESC, dr.id ASC
+       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
+    )
+    .catch((e) => {
+      logger.warn("[DuplicateRadar] resolution-ledger resolve-backfill skipped (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    });
+  await pool
+    .query(
+      `INSERT INTO duplicate_resolution_ledger
+         (module, master_zoho_id, action_type, performed_by, notes, resolved_at)
+       SELECT DISTINCT ON (ma.cluster_id, mod.module)
+         mod.module,
+         pr.zoho_record_id,
+         'module_resolved',
+         ma.performed_by,
+         'backfilled from module_resolved action',
+         COALESCE(ma.created_at, NOW())
+       FROM duplicate_merge_actions ma
+       JOIN duplicate_records pr ON pr.id = ma.primary_record_id
+       JOIN duplicate_clusters dc ON dc.id = ma.cluster_id
+       JOIN LATERAL (
+         SELECT CASE pr.record_type
+                  WHEN 'lead' THEN 'Leads'
+                  WHEN 'deal' THEN 'Deals'
+                  WHEN 'contact' THEN 'Contacts'
+                  WHEN 'account' THEN 'Accounts'
+                END AS module
+       ) mod ON true
+       WHERE ma.action_type = 'module_resolved'
+         AND dc.status <> 'resolved'
+         AND NOT EXISTS (
+           SELECT 1 FROM duplicate_merge_actions r2
+            WHERE r2.cluster_id = ma.cluster_id AND r2.action_type = 'resolve'
+         )
+         AND pr.record_type IN ('lead','deal','contact','account')
+         AND pr.zoho_record_id IS NOT NULL
+       ORDER BY ma.cluster_id, mod.module, ma.created_at DESC
+       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
+    )
+    .catch((e) => {
+      logger.warn("[DuplicateRadar] resolution-ledger module-backfill skipped (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    });
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_detection_logs (
       id SERIAL PRIMARY KEY,
@@ -3155,6 +3279,51 @@ export async function getClusterSnapshot(
   return (r.rows[0] as ClusterSnapshotFull) ?? null;
 }
 
+/**
+ * Durable "solved" ledger write — keyed by STABLE Zoho identity (module +
+ * survivor zoho id), NOT by cluster_id. Survives a Rebuild Clusters wipe so the
+ * per-module "solved" scoreboard does not collapse to 0 on every rescan.
+ * Best-effort — never throws to the caller. No-op without a master zoho id
+ * (nothing stable to re-attribute after a rebuild).
+ */
+export async function recordResolutionLedgerEntry(params: {
+  module: string;
+  masterZohoId: string | null | undefined;
+  duplicateZohoIds?: string[];
+  actionType?: "resolve" | "module_resolved";
+  performedBy?: string;
+  notes?: string;
+}): Promise<void> {
+  const { module, masterZohoId } = params;
+  if (!module || !masterZohoId) return;
+  try {
+    await pool.query(
+      `INSERT INTO duplicate_resolution_ledger
+         (module, master_zoho_id, duplicate_zoho_ids, action_type, performed_by, notes)
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6)
+       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL
+       DO UPDATE SET
+         duplicate_zoho_ids = EXCLUDED.duplicate_zoho_ids,
+         action_type = EXCLUDED.action_type,
+         performed_by = EXCLUDED.performed_by,
+         notes = EXCLUDED.notes,
+         resolved_at = NOW()`,
+      [
+        module,
+        masterZohoId,
+        JSON.stringify(params.duplicateZohoIds || []),
+        params.actionType || "resolve",
+        params.performedBy || null,
+        params.notes || null,
+      ],
+    );
+  } catch (e) {
+    logger.warn("[DuplicateRadar] resolution-ledger write failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
 export async function resolveCluster(
   clusterId: number,
   action: "resolve" | "ignore",
@@ -3205,6 +3374,59 @@ export async function resolveCluster(
     "UPDATE duplicate_clusters SET status = $1, resolved_by = $2, resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
     [newStatus, performedBy, clusterId],
   );
+
+  // Durable ledger write so this "Mark Resolved" survives a future Rebuild
+  // Clusters wipe. Only 'resolve' counts as solved ('ignore' is a dismissal).
+  // We key EACH present module to a record OF THAT MODULE (its primary if any,
+  // else a representative) so the survivor's stable Zoho id re-attributes to
+  // whatever cluster it lands in after a rescan. Best-effort.
+  if (action === "resolve") {
+    try {
+      const recs = await pool.query(
+        `SELECT id, record_type, zoho_record_id, is_primary
+           FROM duplicate_records WHERE cluster_id = $1`,
+        [clusterId],
+      );
+      const rtToModule: Record<string, string> = {
+        lead: "Leads",
+        deal: "Deals",
+        contact: "Contacts",
+        account: "Accounts",
+      };
+      const modules = new Set<string>();
+      for (const r of recs.rows) {
+        const m = rtToModule[r.record_type as string];
+        if (m) modules.add(m);
+      }
+      for (const m of modules) {
+        const modRecs = recs.rows.filter(
+          (r) => rtToModule[r.record_type as string] === m && r.zoho_record_id,
+        );
+        if (modRecs.length === 0) continue;
+        const modMaster =
+          modRecs.find((r) => primaryRecordId && r.id === primaryRecordId) ||
+          modRecs.find((r) => r.is_primary) ||
+          modRecs[0];
+        const modMasterZoho = modMaster.zoho_record_id as string;
+        const dupZohoIds = modRecs
+          .filter((r) => r.zoho_record_id && r.zoho_record_id !== modMasterZoho)
+          .map((r) => r.zoho_record_id as string);
+        await recordResolutionLedgerEntry({
+          module: m,
+          masterZohoId: modMasterZoho,
+          duplicateZohoIds: dupZohoIds,
+          actionType: "resolve",
+          performedBy,
+          notes: notes || "Mark Resolved",
+        });
+      }
+    } catch (e) {
+      logger.warn(
+        "[DuplicateRadar] ledger write on resolveCluster failed (non-fatal)",
+        { error: e instanceof Error ? e.message : String(e) },
+      );
+    }
+  }
 
   return result.rows[0] || null;
 }
@@ -4653,7 +4875,17 @@ export async function bulkCloseLeadsInClusters(opts: {
     };
   }
 
-  const { updateZohoRecord } = await import("./zohoCRM");
+  const { updateZohoRecord, zohoWritesAllowedInEnv } = await import("./zohoCRM");
+
+  // Env guardrail: bulk-close mutates live Zoho (Lead_Status → Lost Lead), so
+  // a REAL run must be blocked outside production (dev shares prod's Zoho
+  // credentials). Dry-run is always allowed (it writes nothing).
+  if (!dryRun && !zohoWritesAllowedInEnv()) {
+    throw new Error(
+      "Bulk-close is blocked outside production (dev shares production's Zoho credentials). " +
+        "Run it from the deployed app, or set RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true only for a dedicated non-prod Zoho org.",
+    );
+  }
 
   const closeOneLead = async (
     zohoLeadId: string,

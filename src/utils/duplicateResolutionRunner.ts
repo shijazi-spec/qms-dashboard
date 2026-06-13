@@ -38,7 +38,7 @@ import {
   type DuplicateRecord,
 } from "./duplicateRadarDatabase";
 import { buildMergePlan, type CrmModule, type MergePlan } from "./duplicateMergePlanner";
-import { executeMergePlan } from "./duplicateMergeExecutor";
+import { executeMergePlan, zohoWritesAllowedInEnv } from "./duplicateMergeExecutor";
 import {
   evaluateResolutionRisk,
   getResolutionPolicyConfig,
@@ -121,23 +121,64 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
     //   2) rest was status='active' only, so clusters in any OTHER status
     //      (ignored/dismissed/…) fell into a gap → total ≠ solved + rest.
     // rest is now derived as total − solved, so the three ALWAYS add up.
-    const appliedExpr = "(dc.status = 'resolved' OR COALESCE(ma.ac, 0) > 0)";
+    // "solved" now has a THIRD, DURABLE source: the resolution ledger (keyed by
+    // stable Zoho identity, NOT cluster_id). dc.status + duplicate_merge_actions
+    // are both reset/cascade-deleted by "Rebuild Clusters", so before the ledger
+    // every rebuild collapsed solved → 0. The ledger persists, and because the
+    // survivor's zoho id reappears in whatever cluster it lands in after the
+    // rescan, a per-module ledger match re-credits the cluster as solved.
+    const lgCol: Record<string, string> = {
+      total_leads: "lg_leads",
+      total_deals: "lg_deals",
+      total_contacts: "lg_contacts",
+      total_accounts: "lg_accounts",
+    };
+    // Merge-action attribution must be MODULE-SCOPED, not cluster-scoped: a
+    // whole-cluster 'resolve' credits every module present (ma.r_all), but a
+    // per-module 'module_resolved' must credit ONLY its own module, derived
+    // from the primary record's record_type (same mapping the backfill uses).
+    // Cluster-scoping here would over-credit untouched modules in a mixed
+    // cross-module cluster.
+    const maCol: Record<string, string> = {
+      total_leads: "mr_leads",
+      total_deals: "mr_deals",
+      total_contacts: "mr_contacts",
+      total_accounts: "mr_accounts",
+    };
     const selects = order
-      .map(
-        (o) =>
-          `COUNT(*) FILTER (WHERE dc.${o.col} > 0)::int AS ${o.col}_t,
-           COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND ${appliedExpr})::int AS ${o.col}_s`,
-      )
+      .map((o) => {
+        const applied = `(dc.status = 'resolved' OR COALESCE(ma.r_all, 0) > 0 OR COALESCE(ma.${maCol[o.col]}, 0) > 0 OR COALESCE(lg.${lgCol[o.col]}, 0) > 0)`;
+        return `COUNT(*) FILTER (WHERE dc.${o.col} > 0)::int AS ${o.col}_t,
+           COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND ${applied})::int AS ${o.col}_s`;
+      })
       .join(",\n");
     const r = await pool.query(
       `SELECT ${selects}
          FROM duplicate_clusters dc
          LEFT JOIN (
-           SELECT cluster_id, COUNT(*) AS ac
-             FROM duplicate_merge_actions
-            WHERE action_type IN ('resolve','module_resolved')
-            GROUP BY cluster_id
-         ) ma ON ma.cluster_id = dc.id`,
+           SELECT ma.cluster_id,
+                  COUNT(*) FILTER (WHERE ma.action_type = 'resolve') AS r_all,
+                  COUNT(*) FILTER (WHERE ma.action_type = 'module_resolved' AND pr.record_type = 'lead')    AS mr_leads,
+                  COUNT(*) FILTER (WHERE ma.action_type = 'module_resolved' AND pr.record_type = 'deal')    AS mr_deals,
+                  COUNT(*) FILTER (WHERE ma.action_type = 'module_resolved' AND pr.record_type = 'contact') AS mr_contacts,
+                  COUNT(*) FILTER (WHERE ma.action_type = 'module_resolved' AND pr.record_type = 'account') AS mr_accounts
+             FROM duplicate_merge_actions ma
+             LEFT JOIN duplicate_records pr ON pr.id = ma.primary_record_id
+            WHERE ma.action_type IN ('resolve','module_resolved')
+            GROUP BY ma.cluster_id
+         ) ma ON ma.cluster_id = dc.id
+         LEFT JOIN (
+           SELECT dr.cluster_id,
+                  COUNT(*) FILTER (WHERE lg.module = 'Leads')    AS lg_leads,
+                  COUNT(*) FILTER (WHERE lg.module = 'Deals')    AS lg_deals,
+                  COUNT(*) FILTER (WHERE lg.module = 'Contacts') AS lg_contacts,
+                  COUNT(*) FILTER (WHERE lg.module = 'Accounts') AS lg_accounts
+             FROM duplicate_records dr
+             JOIN duplicate_resolution_ledger lg
+               ON lg.master_zoho_id = dr.zoho_record_id
+            WHERE dr.zoho_record_id IS NOT NULL
+            GROUP BY dr.cluster_id
+         ) lg ON lg.cluster_id = dc.id`,
     );
     const row = r.rows[0] || {};
     order.forEach((o, i) => {
@@ -214,7 +255,7 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
     }
     const text =
       `${icon} *Autonomous Resolution — ${summary.mode} run* ` +
-      (summary.enabled ? "" : "(shadow: no Zoho writes) ") +
+      (summary.writesAllowed ? "" : "(shadow: no Zoho writes) ") +
       `\nScanned ${summary.clustersScanned} · applied ${summary.applied} · ` +
       `queued ${summary.queued} · errors ${summary.errors}` +
       (summary.queued > 0 ? `\n${summary.queued} item(s) need your call.` : "") +
@@ -724,6 +765,27 @@ export async function resolveResolutionRunConfig(): Promise<
   };
 }
 
+/**
+ * Hard environment guardrail. The agent must NEVER mutate the SHARED live Zoho
+ * org from a non-production environment, even when the kill switch is on and the
+ * mode is assisted/autonomous. Dev and prod share the same Zoho credentials but
+ * run on SEPARATE databases, so a dev tick (or a dev operator flipping the
+ * toggle) could otherwise tag/merge real CRM records. Live writes therefore
+ * require BOTH `NODE_ENV=production` AND the operator's explicit kill-switch +
+ * mode. Set `RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true` only for a dedicated
+ * non-prod org that does NOT share production's Zoho creds.
+ */
+export function liveWritesPermitted(
+  cfg: { enabled: boolean },
+  mode: ResolutionMode,
+): boolean {
+  return (
+    zohoWritesAllowedInEnv() &&
+    cfg.enabled &&
+    (mode === "assisted" || mode === "autonomous")
+  );
+}
+
 // ── Pure: build the risk-gate input from a cluster + its records + the plan ───
 
 /** Stages we treat as "active" (anything not explicitly lost/dead/junk). */
@@ -845,6 +907,8 @@ export interface ResolutionRunSummary {
   applied: number;
   queued: number;
   errors: number;
+  /** Effective write permission AFTER the environment guardrail (dev = false even when enabled). */
+  writesAllowed: boolean;
   items: ResolutionRunItem[];
 }
 
@@ -880,11 +944,14 @@ export async function runAutonomousResolution(
     applied: 0,
     queued: 0,
     errors: 0,
+    writesAllowed: false,
     items: [],
   };
 
-  // Writes only happen in assisted/autonomous AND when the kill switch is on.
-  const writesAllowed = cfg.enabled && (mode === "assisted" || mode === "autonomous");
+  // Writes only happen in assisted/autonomous AND when the kill switch is on
+  // AND we are in production (the dev environment shares prod's live Zoho creds).
+  const writesAllowed = liveWritesPermitted(cfg, mode);
+  summary.writesAllowed = writesAllowed;
 
   try {
     await initAIApprovalTable().catch(() => {});
@@ -936,7 +1003,7 @@ export async function runResolutionForCluster(
   const cfg = await resolveResolutionRunConfig();
   const mode = opts.modeOverride ?? cfg.mode;
   const policyCfg = getResolutionPolicyConfig();
-  const writesAllowed = cfg.enabled && (mode === "assisted" || mode === "autonomous");
+  const writesAllowed = liveWritesPermitted(cfg, mode);
 
   const summary: ResolutionRunSummary = {
     startedAt,
@@ -948,6 +1015,7 @@ export async function runResolutionForCluster(
     applied: 0,
     queued: 0,
     errors: 0,
+    writesAllowed,
     items: [],
   };
   try {
@@ -1012,6 +1080,18 @@ export async function undoClusterResolution(
     const taggedIds: string[] = (report.taggedRecordIds || plan.duplicateZohoIds || []).filter(
       Boolean,
     );
+    // Undo is ALSO a live Zoho mutation (it removes the Duplicate-Delete tag),
+    // so it must obey the same environment guardrail as executeMergePlan — dev
+    // shares prod's Zoho creds and must never touch the real org.
+    if (taggedIds.length && !zohoWritesAllowedInEnv()) {
+      return {
+        ok: false,
+        untagged: 0,
+        module,
+        message:
+          "Undo is blocked outside production (dev shares production's Zoho credentials). Undo from the deployed app, or set RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true only for a dedicated non-prod Zoho org.",
+      };
+    }
     let untagged = 0;
     if (taggedIds.length) {
       await removeZohoTags(module, taggedIds, ["Duplicate-Delete"]);

@@ -110,6 +110,21 @@ export function getZohoRateLimitState(): { rateLimited: boolean; cooldownMsRemai
   };
 }
 
+/**
+ * Hard environment gate for duplicate-radar LIVE Zoho writes (apply, undo,
+ * bulk-close, …). Dev and prod run on SEPARATE databases but SHARE the same
+ * Zoho credentials, so any non-prod write would mutate the real CRM org. This
+ * is the single source of truth reused by every duplicate-radar write path.
+ * Escape hatch (`RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true`) is for a dedicated
+ * non-prod Zoho org only.
+ */
+export function zohoWritesAllowedInEnv(): boolean {
+  return (
+    process.env.NODE_ENV === "production" ||
+    process.env.RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD === "true"
+  );
+}
+
 function getZohoOAuthConfig(): ZohoOAuthConfig | null {
   const clientId = process.env.ZOHO_CLIENT_ID_NEW || process.env.ZOHO_CLIENT_ID;
   const clientSecret = process.env.ZOHO_CLIENT_SECRET;

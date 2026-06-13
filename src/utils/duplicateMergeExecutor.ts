@@ -26,12 +26,18 @@ import {
   fetchZohoRelatedRecords,
   addZohoTags,
   addZohoNote,
+  zohoWritesAllowedInEnv,
 } from "./zohoCRM";
+
+// Re-exported so existing callers (autonomous runner) keep importing the env
+// gate from here; the single source of truth lives in zohoCRM.
+export { zohoWritesAllowedInEnv } from "./zohoCRM";
 import {
   captureClusterSnapshot,
   resolveCluster,
   markPrimaryRecord,
   recordPartialMergeAction,
+  recordResolutionLedgerEntry,
 } from "./duplicateRadarDatabase";
 import { logger } from "./logger";
 
@@ -94,6 +100,16 @@ export async function executeMergePlan(
   opts: ExecuteOptions,
 ): Promise<ExecuteReport> {
   const dryRun = opts.dryRun !== false; // safe default: dry-run unless told otherwise
+
+  // Central kill switch: refuse REAL writes outside production. This protects
+  // every caller (manual Apply route + autonomous runner) from mutating the
+  // shared live Zoho org from dev. Dry-run is always allowed (it never writes).
+  if (!dryRun && !zohoWritesAllowedInEnv()) {
+    throw new Error(
+      "Live Zoho writes are blocked outside production (dev shares production's Zoho credentials). " +
+        "Apply from the deployed app, or set RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true only for a dedicated non-prod Zoho org.",
+    );
+  }
   const performedBy = opts.performedBy || "duplicate-radar";
   const module = plan.module; // "Accounts"
   const masterId = plan.masterZohoId;
@@ -345,6 +361,23 @@ export async function executeMergePlan(
     } catch (e) {
       fail("record-partial-merge", e);
     }
+  }
+
+  // Durable solved-ledger write — keyed by stable Zoho identity so the per-
+  // module "solved" scoreboard survives a Rebuild Clusters wipe. Only on a
+  // clean real run (no errors): a partial/failed apply must not be credited as
+  // solved. closeCluster=false ⇒ a single module was merged (the rest of a
+  // cross-module cluster stays open) ⇒ record it as 'module_resolved'. Best-
+  // effort; covers both the autonomous auto-apply and the manual Apply button.
+  if (!dryRun && report.errors.length === 0) {
+    await recordResolutionLedgerEntry({
+      module,
+      masterZohoId: masterId,
+      duplicateZohoIds: dups,
+      actionType: closeCluster ? "resolve" : "module_resolved",
+      performedBy,
+      notes: `Agentic ${closeCluster ? "merge" : "module merge"} into ${masterId}`,
+    }).catch(() => {});
   }
 
   logger.info(
