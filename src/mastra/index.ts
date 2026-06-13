@@ -1,3 +1,7 @@
+// MUST be first: normalizes DATABASE_URL SSL mode before any pool/PostgresStore
+// is constructed. See src/utils/normalizeDatabaseUrl.ts for the rationale.
+import "../utils/normalizeDatabaseUrl";
+
 import { Mastra } from "@mastra/core";
 import { PinoLogger } from "@mastra/loggers";
 import { LogLevel, MastraLogger } from "@mastra/core/logger";
