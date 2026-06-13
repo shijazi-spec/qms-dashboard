@@ -68,6 +68,43 @@ async function check(name: string, input: string, expected: string) {
     "postgres://u:p@host/db",
   );
 
+  // libpq key=value DSN form (not URL-parseable -> fallback branch)
+  await check(
+    "DSN sslmode=require -> no-verify (mid-string)",
+    "host=db.example.com port=5432 sslmode=require dbname=app",
+    "host=db.example.com port=5432 sslmode=no-verify dbname=app",
+  );
+  await check(
+    "DSN sslmode=require -> no-verify (at start)",
+    "sslmode=require host=db.example.com dbname=app",
+    "sslmode=no-verify host=db.example.com dbname=app",
+  );
+  await check(
+    "DSN sslmode=require -> no-verify (at end)",
+    "host=db.example.com dbname=app sslmode=require",
+    "host=db.example.com dbname=app sslmode=no-verify",
+  );
+  await check(
+    "DSN uppercase VERIFY-CA -> no-verify (case-insensitive)",
+    "host=db.example.com sslmode=VERIFY-CA dbname=app",
+    "host=db.example.com sslmode=no-verify dbname=app",
+  );
+  await check(
+    "DSN sslmode=verify-full left untouched",
+    "host=db.example.com sslmode=verify-full dbname=app",
+    "host=db.example.com sslmode=verify-full dbname=app",
+  );
+  await check(
+    "DSN sslmode=disable left untouched",
+    "host=db.example.com sslmode=disable dbname=app",
+    "host=db.example.com sslmode=disable dbname=app",
+  );
+  await check(
+    "DSN no sslmode left untouched",
+    "host=db.example.com port=5432 dbname=app",
+    "host=db.example.com port=5432 dbname=app",
+  );
+
   console.log(`\nResult: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 })();

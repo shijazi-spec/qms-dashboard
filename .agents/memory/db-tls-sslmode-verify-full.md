@@ -23,14 +23,21 @@ dev logs don't.
 *after* the pg/pg-connection-string version that changed this behavior — a long
 broken-build gap can hide the regression until a deploy finally goes out.
 
-**Fix in this repo:** a side-effect module imported FIRST in the app entry point
-rewrites `process.env.DATABASE_URL` `sslmode` `require|prefer|verify-ca` →
-`no-verify` (encrypted, no cert-chain verification — restores prior behavior)
-before any of the many `new Pool(...)` sites or Mastra's `PostgresStore` (which
-only accepts a `connectionString`) read it. No-op when there's no `sslmode`.
+**Fix in this repo:** a side-effect module rewrites `process.env.DATABASE_URL`
+`sslmode` `require|prefer|verify-ca` → `no-verify` (encrypted, no cert-chain
+verification — restores prior behavior) before any of the many `new Pool(...)`
+sites or Mastra's `PostgresStore` (which only accepts a `connectionString`) read
+it. Handles BOTH URL-query form (`?sslmode=`/`&sslmode=`) and libpq key/value
+DSN form (space-delimited `sslmode=`). No-op when there's no `sslmode`.
 
 **Why:** centralizing at the env var is the only practical way to cover both the
 ~40 scattered pools and Mastra's internal store in one place.
+
+**Ordering is the only real recurrence risk** — the rewrite must run before the
+first DB read. It's imported first in the entry point AND as the first line of
+the storage module (the fatal boot path = `PostgresStore.init`), so timing
+holds regardless of bundler/import-order. Keep the storage-level import anchor
+permanently; do NOT rely solely on entry-point ordering.
 
 **How to apply:** if a managed-DB app crash-loops on TLS after a `pg` bump,
 check whether the prod connection string uses `sslmode=require` and whether the
