@@ -14,10 +14,8 @@
  *
  *   The connection is still encrypted; we only restore the prior behavior of
  *   NOT requiring full certificate-chain verification, which is the libpq
- *   semantics of `sslmode=require` and exactly what the driver warning
- *   recommends (`uselibpqcompat=true&sslmode=require`). We express it as
- *   `sslmode=no-verify`, which `pg-connection-string` maps to
- *   `ssl: { rejectUnauthorized: false }`.
+ *   semantics of `sslmode=require`. We express it as `sslmode=no-verify`, which
+ *   `pg-connection-string` maps to `ssl: { rejectUnauthorized: false }`.
  *
  *   This is a no-op in development, whose DATABASE_URL carries no `sslmode`.
  *
@@ -33,20 +31,29 @@ function normalizeDatabaseUrlSsl(): void {
   try {
     const url = new URL(raw);
     const mode = url.searchParams.get("sslmode");
-    if (mode && STRICT_MODES.has(mode)) {
+    const lowered = mode?.toLowerCase();
+    if (lowered && STRICT_MODES.has(lowered)) {
       url.searchParams.set("sslmode", "no-verify");
       process.env.DATABASE_URL = url.toString();
+      // Mode keyword only — never the connection string (which holds credentials).
+      console.log(
+        `[DB-SSL] Normalized DATABASE_URL sslmode '${mode}' -> 'no-verify' for TLS compatibility`,
+      );
     }
     return;
   } catch {
-    // Non-URL-parseable connection string (e.g. key=value form) — fall back to
-    // a targeted string replacement.
+    // Connection string is not URL-parseable (e.g. a libpq key=value DSN).
+    // Fall back to a targeted, case-insensitive replacement of the URL-style
+    // query form; key=value DSNs without a `?`/`&sslmode=` token are left as-is.
     const replaced = raw.replace(
       /([?&]sslmode=)(require|prefer|verify-ca)\b/i,
       "$1no-verify",
     );
     if (replaced !== raw) {
       process.env.DATABASE_URL = replaced;
+      console.log(
+        "[DB-SSL] Normalized DATABASE_URL sslmode -> 'no-verify' for TLS compatibility",
+      );
     }
   }
 }

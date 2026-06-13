@@ -1,0 +1,40 @@
+---
+name: DB TLS sslmode verify-full crash
+description: Why a managed-Postgres deploy can crash-loop on TLS after a pg upgrade, and how DATABASE_URL is normalized at startup.
+---
+
+# Managed-Postgres `sslmode=require` → `verify-full` deploy crash
+
+Newer `pg-connection-string` (bundled via `pg`) reinterprets `sslmode=require`
+(and `prefer` / `verify-ca`) as `verify-full` — strict TLS certificate-chain
+verification. When the managed Postgres cert can't be verified against the
+deploy container's CA bundle, the handshake aborts with "Client network socket
+disconnected before secure TLS connection was established", the storage layer
+throws (`MASTRA_STORAGE_PG_STORE_CREATE_TABLE_FAILED`), and the process exits →
+**production crash-loops and every page returns Internal Server Error**.
+
+**Why dev didn't show it:** dev and prod use *different* `DATABASE_URL` values
+(secrets are global, but the managed-DB URLs differ). The dev URL carries no
+`sslmode`, so dev never triggers verify-full. Tell-tale: prod logs print the
+driver warning that `require`/`prefer`/`verify-ca` are aliased to `verify-full`;
+dev logs don't.
+
+**Why it surfaced "suddenly":** it only appears on the first successful publish
+*after* the pg/pg-connection-string version that changed this behavior — a long
+broken-build gap can hide the regression until a deploy finally goes out.
+
+**Fix in this repo:** a side-effect module imported FIRST in the app entry point
+rewrites `process.env.DATABASE_URL` `sslmode` `require|prefer|verify-ca` →
+`no-verify` (encrypted, no cert-chain verification — restores prior behavior)
+before any of the many `new Pool(...)` sites or Mastra's `PostgresStore` (which
+only accepts a `connectionString`) read it. No-op when there's no `sslmode`.
+
+**Why:** centralizing at the env var is the only practical way to cover both the
+~40 scattered pools and Mastra's internal store in one place.
+
+**How to apply:** if a managed-DB app crash-loops on TLS after a `pg` bump,
+check whether the prod connection string uses `sslmode=require` and whether the
+driver now treats it as `verify-full`; restore non-strict verification rather
+than chasing per-pool `ssl` options. `no-verify` keeps encryption but disables
+cert authenticity (slight MITM-resistance downgrade) — acceptable as the
+status-quo-ante for managed DBs on trusted infra.
