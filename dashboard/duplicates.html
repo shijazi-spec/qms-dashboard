@@ -3442,27 +3442,22 @@
             let rows = '';
             groupList.forEach((idxs, gIdx) => {
                 const summary = _groupSummary(idxs);
-                const chips = summary.sharedKeys.length
-                    ? summary.sharedKeys.map(s => `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${s.color}" title="All ${summary.count} leads in this group share this ${s.label}: ${escapeHtml(String(s.value))}">${s.k} ${escapeHtml(s.label)}</span>`).join(' ')
-                    : '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700" title="Members of this group are linked through chained matches (e.g. A shares email with B, B shares phone with C)">🔗 chained match</span>';
-
+                // Use the shared _dupGroupHeaderRow helper (same one the
+                // Deals/Contacts/Accounts tabs use) so Leads gets parity:
+                //   - "🤖 AI-Applied · N pending Zoho delete" badge when
+                //     the cluster already has a merge_action against it
+                //   - "🔍 Open AI Plan" / "🔁 Re-open AI Plan" button
+                //     label (NOT the misleading old "Resolve with AI")
+                //   - "✅ Verify in CRM" button on AI-applied clusters
+                //   - "🔓 Re-open" button on resolved/dismissed clusters
+                //   - "🚫 Dismiss" button on active clusters
+                //   - "✓" bulk-select checkbox
+                // Previously the Leads tab rendered an asymmetric inline
+                // header that was missing every one of these states.
                 const _gid = 'leads-' + gIdx;
                 const _leadCid = summary.primary && summary.primary.cluster_id;
-                const _leadAiBtn = _leadCid
-                    ? `<button data-on-click="resolveGroupWithAI" data-args='["Leads",${_leadCid}]' data-testid="btn-resolve-ai-${_gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700" title="Open AI Agentic Resolution for this group's cluster">🔍 Resolve with AI</button>`
-                    : '';
-                rows += `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${_gid}"]' data-testid="row-dup-group-${_gid}">
-                    <td class="px-4 py-3 text-sm" colspan="8">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            ${_leadCid ? `<input type="checkbox" data-on-click="toggleDupBulk" data-args='["Leads",${_leadCid}]' class="dup-bulk-cb w-4 h-4 cursor-pointer" title="Select this cluster for bulk dismiss" ${(window._dupBulkSel && window._dupBulkSel.has(String(_leadCid))) ? 'checked' : ''}>` : ''}
-                            <span id="dup-chev-${_gid}" class="text-gray-600 font-mono" aria-hidden="true">▶</span>
-                            <span class="font-semibold text-gray-900">${escapeHtml(summary.primary.record_name || '(no name)')}</span>
-                            <span class="text-xs text-gray-500">${summary.count} duplicate leads</span>
-                            <span class="flex flex-wrap gap-1">${chips}</span>
-                            <span class="ms-auto flex items-center gap-2">${_leadAiBtn}<span class="text-xs text-gray-500">Click to expand</span></span>
-                        </div>
-                    </td>
-                </tr>`;
+                const cmeta = (_leadCid && clusterMetaById[_leadCid]) || null;
+                rows += _dupGroupHeaderRow(_gid, summary, 8, 'leads', cmeta);
 
                 idxs.forEach(i => {
                     const r = allLeads[i];
