@@ -2642,10 +2642,13 @@ const PLACEHOLDER_COMPANY_NAMES = new Set<string>([
   "unknown", "tbd", "tba", "pending",
   "test", "testing", "demo",
   "none", "null", "no name",
+  "not provided", "not-provided", "notprovided",
+  "not specified", "not available", "not applicable",
+  "no company", "unknown company",
   "-", "--", "---", "0",
   // Arabic
   "لا يوجد", "لايوجد", "غير معروف", "غير محدد", "تجريبي",
-  "لا شيء", "بدون اسم", "اختبار",
+  "لا شيء", "بدون اسم", "اختبار", "غير متوفر", "غير متاح",
 ]);
 
 const PLACEHOLDER_CLUSTER_DOMAIN = "_placeholder.cluster";
@@ -4913,15 +4916,28 @@ export async function getCrossModuleOverlaps(opts: {
     }),
   }));
 
+  // Drop placeholder / quarantine buckets — these are NOT real cross-module
+  // overlaps. `_placeholder.cluster` is the single quarantine bucket for blank /
+  // placeholder company names, and any cluster whose company name is itself a
+  // placeholder (N/A, "Not Provided", …) is CS name-quality noise, not one
+  // company to CONVERT/LINK. They'd otherwise inflate Total open + ARR with
+  // thousands of unrelated records. Genuine no-domain clusters (a real company
+  // that simply has no domain, e.g. "جباس") are KEPT.
+  const realOverlaps = all.filter(
+    (c) =>
+      c.domain !== PLACEHOLDER_CLUSTER_DOMAIN &&
+      !isPlaceholderName(c.company_name),
+  );
+
   // Aggregate the per-record dimensions (owner / module / deal-stage / layout /
   // pipeline) onto each cluster so the dashboard's Advanced Filters can match a
   // cross-module cluster by what its member records hold. One grouped query over
   // the already-bounded cluster set — owner_name is a column; stage/layout/
   // pipeline are read out of raw_data (Layout arrives as { name }). Best-effort:
   // any failure just leaves the dimensions empty (filters skip them, no crash).
-  if (all.length > 0) {
+  if (realOverlaps.length > 0) {
     try {
-      const ids = all.map((c) => c.id);
+      const ids = realOverlaps.map((c) => c.id);
       const agg = await pool.query(
         `SELECT cluster_id,
                 array_agg(DISTINCT record_type)
@@ -4942,7 +4958,7 @@ export async function getCrossModuleOverlaps(opts: {
       );
       const byId = new Map<number, any>();
       for (const row of agg.rows) byId.set(Number(row.cluster_id), row);
-      for (const c of all as any[]) {
+      for (const c of realOverlaps as any[]) {
         const a = byId.get(c.id);
         if (!a) continue;
         c.modules_present = a.modules_present ?? [];
@@ -4961,12 +4977,12 @@ export async function getCrossModuleOverlaps(opts: {
   }
 
   const filtered = opts.pairing
-    ? all.filter((c) => c.pairing === opts.pairing)
-    : all;
+    ? realOverlaps.filter((c) => c.pairing === opts.pairing)
+    : realOverlaps;
 
   const byPairing: Record<string, number> = {};
   let arrTotal = 0;
-  for (const c of all) {
+  for (const c of realOverlaps) {
     const key = c.pairing ?? "unknown";
     byPairing[key] = (byPairing[key] ?? 0) + 1;
     arrTotal += Number(c.estimated_pipeline_value ?? 0);
