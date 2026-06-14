@@ -23,7 +23,7 @@ import { duplicateResolutionAssistantTool } from "../tools/duplicateResolutionAs
 import { lookupEntityTool } from "../tools/lookupEntityTool";
 import { tagRecordsForRemovalTool } from "../tools/tagRecordsForRemovalTool";
 import { csLifecycleStatusTool } from "../tools/csLifecycleStatusTool";
-import { csOverlapStatusTool, ownerAccountabilityTool, preflightCheckTool } from "../tools/radarTabTools";
+import { executiveSummaryTool, csOverlapStatusTool, ownerAccountabilityTool, preflightCheckTool } from "../tools/radarTabTools";
 import { withApprovalGate } from "../../utils/withApprovalGate";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
 
@@ -131,6 +131,7 @@ Use suggestImprovementsTool to analyze quality trends and recommend process impr
    - **Auto-CAPA is currently FROZEN platform-wide** (AUTO_CAPA_GLOBAL_ENABLED=false) while the platform is being prepared: NO CAPAs are created automatically from any tab right now. A human can still open one via the manual "Open CAPA" button. Do not tell anyone a CAPA was auto-opened.
 
 ### Remaining Duplicate Radar tabs
+31. **executiveSummaryTool** (Executive Summary tab): platform-wide health snapshot — total active duplicate clusters, per-module duplicate counts (leads / deals / contacts / accounts), strong vs moderate confidence tiers, pipeline inflation in SAR, the SDR-KPI-09 duplicate-lead rate vs the 2% target (with green / amber / red status), resolution rate (resolved+ignored over total), and the last sync timestamp. Use for top-level questions: what is the current duplicate rate, how many active clusters, are we hitting the 2% KPI, what is the pipeline inflation, give me an executive summary, how are we doing on duplicates. SDR-KPI-09 bands: ≤2% green, 2–5% amber, >5% red — matches the Owner Accountability RAG bands.
 28. **csOverlapStatusTool** (CS Pipeline Overlap tab): how many duplicate clusters have an OPEN Sales Deal (Proposal / Prepare Client / Awaiting PO / etc.) coexisting with a Paid OR Agreement-Signed handoff Deal on the same customer — Sales is pursuing someone CS has already closed. Cluster-level rule (rewritten 2026-06-11 by Sarah Hijazi). Verdicts: BLOCK = open + handoff coexist AND the handoff's churn cool-off has NOT elapsed (180 days Private / 365 days Government) — sales motion must stop; WARN = same overlap BUT the handoff Deal is in Termination AND past the sector cool-off — sales may re-engage after notifying CS; REVIEW = legacy/edge cases. A single Paid Deal in Adoption WITHOUT any open Sales Deal alongside is NOT flagged (no conflict). Use for questions about CS pipeline overlap, sales-vs-CS cannibalisation, duplicates on existing customers, or BLOCK/WARN counts. The handoff-stage set is env-configurable via DUPLICATE_RADAR_CS_HANDOFF_STAGES if Zoho admin ever renames them.
 29. **ownerAccountabilityTool** (Owner Accountability tab): which record owners hold the most duplicate records (leads + deals), ranked. Use for "who creates the most duplicates", "worst offenders", "duplicates by owner".
 30. **preflightCheckTool** (Preflight Check tab): given a domain / email / company / phone, returns the verdict on whether to create a new record — pass (safe), duplicate (exists), warn, review, or block (active customer). Use for "should we add/create <X>?", "is <X> already in the CRM?", vetting a new lead before creation.
@@ -372,6 +373,7 @@ export const qmsConsultantAgent = new Agent({
     // deals by lifecycle phase + CS data-hygiene violations. Read-only.
     csLifecycleStatusTool:            wt(csLifecycleStatusTool, AGENT_NAME),
     // Remaining Duplicate Radar data tabs (read-only):
+    executiveSummaryTool:             wt(executiveSummaryTool, AGENT_NAME),      // Executive Summary
     csOverlapStatusTool:              wt(csOverlapStatusTool, AGENT_NAME),       // CS Pipeline Overlap
     ownerAccountabilityTool:          wt(ownerAccountabilityTool, AGENT_NAME),   // Owner Accountability
     preflightCheckTool:               wt(preflightCheckTool, AGENT_NAME),        // Preflight Check
