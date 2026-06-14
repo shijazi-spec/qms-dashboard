@@ -584,6 +584,208 @@ export function extractCsFieldsFromRawData(
   };
 }
 
+// ── Cluster-level overlap classifier ────────────────────────────────────────
+//
+// Sarah Hijazi (2026-06-11) rewrote the BLOCK rule:
+//
+//   BLOCK only fires when an OPEN sales Deal AND a CS-HANDOFF Deal coexist
+//   in the same cluster. The handoff Deal is the one that says "this
+//   customer is now in CS's hands" — Stage ∈ {Paid, Agreement Signed} by
+//   default — and the open Deal is anything still in the sales motion
+//   (NOT in the closed/handoff stage set). The sector-aware churn cool-off
+//   (180 private / 365 government) gates the verdict: while the customer
+//   is active or within cool-off, BLOCK; past cool-off, the overlap
+//   becomes WARN (sales may re-engage after notifying CS).
+//
+// This replaces the per-deal phase-only classifier as the cluster's
+// authoritative verdict. classifyCsOverlap() is preserved for the CS
+// Lifecycle Compliance + Communication Eligibility checks, which still
+// reason about individual deals — those checks don't conflate the
+// duplicate-radar cluster context.
+
+/** Pulled from raw_data with the same tolerance as extractCsFieldsFromRawData. */
+export interface ClusterDealInfo {
+  /** Zoho Stage field — drives the open / handoff classification. */
+  stage: string | null;
+  /** CS section fields — Phase / Churn Date / Renewal Date / Gov Type / Domain. */
+  cs: CsOverlapInput;
+  /** ARR pulled from raw_data — included in the cluster's arrExposure when verdict fires. */
+  arr_value: number | null;
+}
+
+interface ClusterOverlapConfig {
+  /** Stages that mean "Sales has handed this customer off to CS". */
+  handoffStages: string[];
+  /** Stages that mean "this Deal is closed in the sales pipeline" (handoff or lost). */
+  closedStages: string[];
+}
+
+let cachedClusterConfig: ClusterOverlapConfig | null = null;
+
+function loadClusterConfig(): ClusterOverlapConfig {
+  if (cachedClusterConfig) return cachedClusterConfig;
+  const list = (v: string | undefined, fallback: string[]): string[] =>
+    (v ?? "").trim()
+      ? (v as string).split(",").map((s) => s.trim()).filter(Boolean)
+      : fallback;
+  cachedClusterConfig = {
+    handoffStages: list(process.env.DUPLICATE_RADAR_CS_HANDOFF_STAGES, [
+      "Paid",
+      "Agreement Signed",
+    ]),
+    closedStages: list(process.env.DUPLICATE_RADAR_CS_CLOSED_STAGES, [
+      "Paid",
+      "Agreement Signed",
+      "Closed Won",
+      "Closed Lost",
+    ]),
+  };
+  return cachedClusterConfig;
+}
+
+/** Reset cluster-config cache. Tests should call this between cases. */
+export function resetClusterOverlapConfigCache(): void {
+  cachedClusterConfig = null;
+}
+
+/** Pull Zoho Stage out of a raw_data blob, tolerant of common variants. */
+export function extractDealStage(rawData: unknown): string | null {
+  if (!rawData || typeof rawData !== "object") return null;
+  const r = rawData as Record<string, unknown>;
+  const tryKeys = ["Stage", "stage", "Deal_Stage", "DealStage"];
+  for (const k of tryKeys) {
+    const v = r[k];
+    if (v == null || v === "") continue;
+    if (typeof v === "string") return v.trim() || null;
+    // Some Zoho responses wrap stage as { value: "Paid" } — be tolerant.
+    if (typeof v === "object") {
+      const obj = v as Record<string, unknown>;
+      const candidate = obj.value ?? obj.name ?? obj.display_label;
+      if (typeof candidate === "string") return candidate.trim() || null;
+    }
+  }
+  return null;
+}
+
+function stageInSet(stage: string | null, set: string[]): boolean {
+  if (!stage) return false;
+  const lower = stage.trim().toLowerCase();
+  return set.some((s) => s.toLowerCase() === lower);
+}
+
+/**
+ * Cluster-level CS-pipeline overlap classifier (the new BLOCK rule).
+ *
+ * Returns the cluster's verdict + the lifecycle_state and sector pulled
+ * from the chosen handoff Deal (so the dashboard's CS Phase column keeps
+ * showing the customer's current state). On no overlap → null verdict.
+ *
+ * Verdict ladder:
+ *   - Open Sales Deal + Handoff Deal both present:
+ *       Phase ∈ {Onboarding, Adoption, Renewal} OR re-engaged       → BLOCK
+ *       Phase = Termination + within sector cool-off                → BLOCK
+ *       Phase = Termination + past sector cool-off                  → WARN
+ *       Phase missing or unknown                                    → BLOCK
+ *         (be conservative; CS team has unfinished data)
+ *   - No Handoff Deal, or no Open Sales Deal                        → null
+ *     (just a duplicate cluster — not an overlap)
+ */
+export function classifyClusterOverlap(
+  deals: ClusterDealInfo[],
+  now: Date = new Date(),
+): {
+  verdict: CsOverlapVerdict;
+  lifecycle_state: CsLifecycleState;
+  sector: ClientSector;
+  arr_exposure: number;
+  reason: string;
+} {
+  const cfg = loadClusterConfig();
+
+  // Partition the deals.
+  const handoffDeals: ClusterDealInfo[] = [];
+  const openSalesDeals: ClusterDealInfo[] = [];
+  for (const d of deals) {
+    if (stageInSet(d.stage, cfg.handoffStages)) {
+      handoffDeals.push(d);
+    } else if (!stageInSet(d.stage, cfg.closedStages)) {
+      // Anything not in the closed-stage set is "still in the sales motion".
+      openSalesDeals.push(d);
+    }
+    // Deals in closedStages but not handoffStages (e.g. "Closed Lost")
+    // are ignored — they don't represent the customer being in CS hands
+    // AND they're not open opportunities either.
+  }
+
+  if (handoffDeals.length === 0 || openSalesDeals.length === 0) {
+    return {
+      verdict: null,
+      lifecycle_state: null,
+      sector: null,
+      arr_exposure: 0,
+      reason: handoffDeals.length === 0
+        ? "no_handoff_deal"
+        : "no_open_sales_deal",
+    };
+  }
+
+  // Pick the most-actionable handoff deal: prefer the one with the active
+  // CS phase, then the freshest churn date, then anything. This drives
+  // the cool-off gating + the lifecycle_state we report back.
+  let chosenHandoff = handoffDeals[0];
+  let chosenClassification = classifyCsOverlap(chosenHandoff.cs, now);
+  for (const h of handoffDeals.slice(1)) {
+    const cls = classifyCsOverlap(h.cs, now);
+    // BLOCK > review > warn > null
+    const order: Record<string, number> = { block: 3, review: 2, warn: 1 };
+    const better =
+      (order[cls.verdict ?? ""] ?? 0) >
+      (order[chosenClassification.verdict ?? ""] ?? 0);
+    if (better) {
+      chosenHandoff = h;
+      chosenClassification = cls;
+    }
+  }
+
+  // ARR exposure — sum across every verdict-bearing deal (handoff and open).
+  // The "exposure" is real revenue at risk: the existing CS book PLUS the
+  // pipeline value Sales would build on the same customer.
+  const arrExposure = deals.reduce((acc, d) => {
+    return acc + (d.arr_value && d.arr_value > 0 ? d.arr_value : 0);
+  }, 0);
+
+  // Apply the cool-off / re-engagement gating.
+  let verdict: CsOverlapVerdict = "block";
+  let reason = "overlap_active_handoff";
+  if (chosenClassification.verdict === "warn") {
+    // Termination + past cool-off → downgrade to WARN even though there's
+    // a real open sales deal. The customer churned long ago; Sales may
+    // proceed after notifying CS.
+    verdict = "warn";
+    reason = `overlap_past_cooloff:${chosenClassification.reason}`;
+  } else if (chosenClassification.verdict === "review") {
+    // Termination + within cool-off → BLOCK. The customer is recently
+    // churned; CS may still be in recovery talks. Sales must not push.
+    verdict = "block";
+    reason = `overlap_within_cooloff:${chosenClassification.reason}`;
+  } else if (chosenClassification.verdict === "block") {
+    verdict = "block";
+    reason = `overlap_active_cs_phase:${chosenClassification.reason}`;
+  } else {
+    // Handoff deal has no readable CS phase. Be conservative: BLOCK.
+    verdict = "block";
+    reason = "overlap_unknown_cs_phase";
+  }
+
+  return {
+    verdict,
+    lifecycle_state: chosenClassification.lifecycle_state,
+    sector: chosenClassification.sector,
+    arr_exposure: arrExposure,
+    reason,
+  };
+}
+
 /** Pick the strongest verdict across multiple records sharing a cluster. */
 export function rollupClusterVerdict(
   perRecord: CsOverlapClassification[],

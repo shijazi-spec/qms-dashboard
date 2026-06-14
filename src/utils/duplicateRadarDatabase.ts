@@ -5624,11 +5624,11 @@ export async function runLiveQualityCheck(
 // All thresholds and field names are env-configurable; see duplicateRadarCsOverlap.
 
 import {
-  classifyCsOverlap,
+  classifyClusterOverlap,
   extractCsFieldsFromRawData,
-  rollupClusterVerdict,
+  extractDealStage,
+  type ClusterDealInfo,
   type CsLifecycleState,
-  type CsOverlapClassification,
   type CsOverlapVerdict,
   type ClientSector,
 } from "./duplicateRadarCsOverlap";
@@ -5673,21 +5673,28 @@ export async function scanClusterForCsOverlap(
     [clusterId],
   );
 
-  const classifications: CsOverlapClassification[] = [];
-  let arrTotal = 0;
-
+  // Build the cluster-level deal list: every Deal record's Stage + CS section
+  // + ARR. The new classifier (Sarah Hijazi 2026-06-11) needs the WHOLE set
+  // so it can detect "OPEN sales deal + Paid/Agreement-Signed handoff deal
+  // coexist" — the per-deal classifier alone can't see that co-existence.
+  const deals: ClusterDealInfo[] = [];
+  let classifiedCount = 0;
   for (const rec of recordsRow.rows) {
     const fields = extractCsFieldsFromRawData(rec.raw_data, { domain });
     // gov_type column is preferred over raw_data lookup if present
     if (rec.gov_type) fields.gov_type = rec.gov_type;
-    const cls = classifyCsOverlap(fields);
-    classifications.push(cls);
-    if (cls.verdict && fields.arr_value && fields.arr_value > 0) {
-      arrTotal += fields.arr_value;
-    }
+    const stage = extractDealStage(rec.raw_data);
+    deals.push({
+      stage,
+      cs: fields,
+      arr_value: typeof fields.arr_value === "number" ? fields.arr_value : null,
+    });
+    // Count any deal with a readable CS phase as "classified" for the
+    // cluster-level metric the route already exposes.
+    if (fields.phase && String(fields.phase).trim() !== "") classifiedCount++;
   }
 
-  const rollup = rollupClusterVerdict(classifications);
+  const verdictPick = classifyClusterOverlap(deals);
 
   await pool.query(
     `UPDATE duplicate_clusters
@@ -5699,20 +5706,20 @@ export async function scanClusterForCsOverlap(
        WHERE id = $1`,
     [
       clusterId,
-      rollup.verdict,
-      rollup.lifecycle_state,
-      rollup.sector,
-      arrTotal,
+      verdictPick.verdict,
+      verdictPick.lifecycle_state,
+      verdictPick.sector,
+      verdictPick.arr_exposure,
     ],
   );
 
   return {
     cluster_id: clusterId,
-    verdict: rollup.verdict,
-    lifecycle_state: rollup.lifecycle_state,
-    sector: rollup.sector,
-    arr_exposure: arrTotal,
-    classified_records: classifications.filter((c) => c.verdict !== null).length,
+    verdict: verdictPick.verdict,
+    lifecycle_state: verdictPick.lifecycle_state,
+    sector: verdictPick.sector,
+    arr_exposure: verdictPick.arr_exposure,
+    classified_records: classifiedCount,
   };
 }
 
