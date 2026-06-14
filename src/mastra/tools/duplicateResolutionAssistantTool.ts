@@ -84,18 +84,37 @@ export const duplicateResolutionAssistantTool = createTool({
         const summaryStats = await getClusterSummary().catch(() => null);
         const breakdown = await getModuleResolutionBreakdown().catch(() => []);
         const totalSolved = breakdown.reduce((a, b) => a + (b.solved || 0), 0);
+        // HONEST "merged" accounting: `applied` = clusters with a REAL merge
+        // action (duplicates actually tagged Duplicate-Delete in Zoho); a
+        // status='resolved' cluster with NO merge action was NEVER merged. Never
+        // report status='resolved' as "merged data" — that conflation is the
+        // exact bug the high-confidence auto-resolve caused.
+        const totalApplied = breakdown.reduce((a, b) => a + (b.applied || 0), 0);
+        const totalMarkedOnly = breakdown.reduce((a, b) => a + (b.markedOnly || 0), 0);
         const totalActive = summaryStats?.activeCount ?? 0;
         const exposure = summaryStats?.estimatedPipelineInflation ?? 0;
+        const perModuleMerged = breakdown
+          .filter((b) => b.total > 0)
+          .map((b) => `${b.module}: ${b.applied} merged / ${b.total} clusters`)
+          .join(", ");
         return {
           success: true,
           summary:
             `Autonomous resolution is in ${cfg.mode.toUpperCase()} mode, ` +
             `writes ${cfg.enabled ? "ENABLED" : "DISABLED (kill-switch off)"}, ` +
             `up to ${cfg.maxClusters} clusters per 6h tick. ` +
+            (cfg.mode === "shadow"
+              ? "In SHADOW mode the agent makes NO automatic Zoho writes, so any merges are operator-driven Applies only. "
+              : "") +
             (summaryStats
               ? `Duplicate exposure: ${summaryStats.totalClusters} clusters, ` +
-                `~SAR ${Math.round(exposure).toLocaleString()} estimated pipeline inflation, ` +
-                `${summaryStats.resolvedCount} resolved · ${totalActive} still open. `
+                `~SAR ${Math.round(exposure).toLocaleString()} estimated pipeline inflation. ` +
+                `ACTUALLY MERGED (real Apply / Duplicate-Delete tags): ${totalApplied} clusters` +
+                (perModuleMerged ? ` (${perModuleMerged}). ` : ". ") +
+                `${totalActive} still open. ` +
+                (totalMarkedOnly > 0
+                  ? `NOTE: ${totalMarkedOnly} cluster(s) are marked 'resolved' WITHOUT any merge action — these were closed but NOT actually merged (legacy auto-resolve or manual Mark-Resolved); do not count them as merged data. They can be re-opened. `
+                  : "")
               : "") +
             `Agent maturity — ${gradeLine}.`,
           data: {
@@ -104,6 +123,8 @@ export const duplicateResolutionAssistantTool = createTool({
             aggregate: summaryStats,
             byModule: breakdown,
             totalSolved,
+            totalApplied,
+            totalMarkedOnly,
           },
         };
       }

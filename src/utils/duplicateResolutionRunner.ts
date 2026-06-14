@@ -89,6 +89,19 @@ export interface ModuleBreakdownRow {
   total: number;
   solved: number;
   rest: number;
+  /**
+   * Clusters that carry a REAL merge action (duplicates actually tagged
+   * Duplicate-Delete in Zoho via an Apply). This is the honest "data merged"
+   * figure — distinct from `solved`, which also counts status='resolved'.
+   */
+  applied: number;
+  /**
+   * Clusters marked status='resolved' but with NO merge action recorded —
+   * i.e. closed WITHOUT an actual Zoho merge. Includes legacy clusters from
+   * the now-removed high-confidence auto-resolve, plus manual "Mark resolved".
+   * These were NOT merged; do not report them as merged data.
+   */
+  markedOnly: number;
 }
 
 /**
@@ -109,6 +122,8 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
     total: 0,
     solved: 0,
     rest: 0,
+    applied: 0,
+    markedOnly: 0,
   }));
   try {
     // "solved" = the agent ACTED on the cluster — either it's fully resolved,
@@ -147,9 +162,17 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
     };
     const selects = order
       .map((o) => {
-        const applied = `(dc.status = 'resolved' OR COALESCE(ma.r_all, 0) > 0 OR COALESCE(ma.${maCol[o.col]}, 0) > 0 OR COALESCE(lg.${lgCol[o.col]}, 0) > 0)`;
+        // MERGED (the honest "data merged" figure): a recorded merge action for
+        // this module OR a durable ledger entry — i.e. duplicates were actually
+        // tagged Duplicate-Delete in Zoho. A bare dc.status='resolved' does NOT
+        // count here (it can be a legacy auto-resolve / manual close with no
+        // merge). This is the figure to report when asked "how much was merged".
+        const merged = `(COALESCE(ma.r_all, 0) > 0 OR COALESCE(ma.${maCol[o.col]}, 0) > 0 OR COALESCE(lg.${lgCol[o.col]}, 0) > 0)`;
+        // SOLVED = the agent acted at all — also counts a bare resolved status.
+        const solved = `(dc.status = 'resolved' OR ${merged})`;
         return `COUNT(*) FILTER (WHERE dc.${o.col} > 0)::int AS ${o.col}_t,
-           COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND ${applied})::int AS ${o.col}_s`;
+           COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND ${solved})::int AS ${o.col}_s,
+           COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND ${merged})::int AS ${o.col}_a`;
       })
       .join(",\n");
     const r = await pool.query(
@@ -184,9 +207,12 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
     order.forEach((o, i) => {
       const t = Number(row[`${o.col}_t`] || 0);
       const s = Number(row[`${o.col}_s`] || 0);
+      const a = Number(row[`${o.col}_a`] || 0);
       rows[i].total = t;
       rows[i].solved = s;
       rows[i].rest = Math.max(0, t - s); // invariant: total = solved + rest
+      rows[i].applied = a; // real Zoho merges
+      rows[i].markedOnly = Math.max(0, s - a); // resolved but never merged
     });
   } catch (e) {
     logger.warn("[dup-resolution-runner] module breakdown failed (non-fatal)", {
