@@ -5,10 +5,82 @@ import { z } from "zod";
  * Read tools for the remaining Duplicate Radar data tabs, so Adam can answer
  * questions about each one with real numbers (all read-only, reusing the same
  * engines the dashboard tabs use).
- *   - cs-pipeline-overlap : duplicate clusters overlapping live CS customers
- *   - owner-accountability: who owns the most duplicate records
- *   - preflight-check     : "should we create a record for <X>?" verdict
+ *   - executive-summary    : platform-wide KPI tiles (clusters, dup rate, pipeline inflation, resolution rate)
+ *   - cs-pipeline-overlap  : duplicate clusters overlapping live CS customers
+ *   - owner-accountability : who owns the most duplicate records
+ *   - preflight-check      : "should we create a record for <X>?" verdict
  */
+
+// ── Executive Summary ─────────────────────────────────────────────────────
+export const executiveSummaryTool = createTool({
+  id: "executive-summary",
+  description:
+    "Return the platform-wide Duplicate Radar KPIs Sarah's leadership team watches on the Executive Summary tab. Covers total active clusters, per-module duplicate counts (leads/deals/contacts/accounts), strong vs moderate confidence tiers, pipeline inflation in SAR, the SDR-KPI-09 duplicate-lead rate vs the 2% target, resolution rate (resolved+ignored over total), and the last sync info. Use when asked 'what's the current duplicate rate', 'how many active clusters do we have', 'what's the pipeline inflation', 'are we hitting the 2% KPI target', or for a top-level health snapshot. Read-only, reuses the dashboard's /api/duplicates/summary engine.",
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    success: z.boolean(),
+    trueDuplicateClusters: z.number().optional(),
+    totalDuplicateLeads: z.number().optional(),
+    totalDuplicateDeals: z.number().optional(),
+    totalDuplicateContacts: z.number().optional(),
+    totalDuplicateAccounts: z.number().optional(),
+    highConfidence: z.number().optional(),
+    mediumConfidence: z.number().optional(),
+    estimatedPipelineInflationSar: z.number().optional(),
+    activeCount: z.number().optional(),
+    resolvedCount: z.number().optional(),
+    ignoredCount: z.number().optional(),
+    resolutionRatePct: z.number().optional(),
+    duplicateLeadRatePct: z.number().optional(),
+    duplicateDealRatePct: z.number().optional(),
+    sdrKpi09Status: z.string().optional(), // "green" | "amber" | "red"
+    lastSyncAt: z.string().nullable().optional(),
+    error: z.string().optional(),
+  }),
+  execute: async () => {
+    try {
+      const { getEnhancedSummary } = await import(
+        "../../utils/duplicateRadarDatabase"
+      );
+      const s: any = await getEnhancedSummary();
+      const leadRate = Number(
+        s?.duplicateLeadRate ?? s?.kpis?.duplicateLeadRate ?? 0,
+      );
+      // RAG matches the gauge on the dashboard + SDR-KPI-09 bands.
+      const sdrKpi09Status =
+        leadRate <= 2 ? "green" : leadRate <= 5 ? "amber" : "red";
+      const lastSyncAt =
+        s?.lastScanInfo?.completed_at
+          ? String(s.lastScanInfo.completed_at)
+          : null;
+      return {
+        success: true,
+        trueDuplicateClusters: Number(s?.trueDuplicateClusters ?? 0),
+        totalDuplicateLeads: Number(s?.totalDuplicateLeads ?? 0),
+        totalDuplicateDeals: Number(s?.totalDuplicateDeals ?? 0),
+        totalDuplicateContacts: Number(s?.totalDuplicateContacts ?? 0),
+        totalDuplicateAccounts: Number(s?.totalDuplicateAccounts ?? 0),
+        highConfidence: Number(s?.highConfidence ?? 0),
+        mediumConfidence: Number(s?.mediumConfidence ?? 0),
+        estimatedPipelineInflationSar: Number(
+          s?.estimatedPipelineInflation ?? 0,
+        ),
+        activeCount: Number(s?.activeCount ?? 0),
+        resolvedCount: Number(s?.resolvedCount ?? 0),
+        ignoredCount: Number(s?.ignoredCount ?? 0),
+        resolutionRatePct: Number(s?.resolutionRate ?? 0),
+        duplicateLeadRatePct: leadRate,
+        duplicateDealRatePct: Number(
+          s?.duplicateDealRate ?? s?.kpis?.duplicateDealRate ?? 0,
+        ),
+        sdrKpi09Status,
+        lastSyncAt,
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || String(e) };
+    }
+  },
+});
 
 // ── CS Pipeline Overlap ───────────────────────────────────────────────────
 export const csOverlapStatusTool = createTool({
