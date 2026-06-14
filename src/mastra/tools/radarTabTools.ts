@@ -41,7 +41,7 @@ export const csOverlapStatusTool = createTool({
 export const ownerAccountabilityTool = createTool({
   id: "owner-accountability",
   description:
-    "Check the Owner Accountability tab — which record owners have the most duplicate records in the CRM (leads + deals). Use when asked who is creating/holding the most duplicates, the worst offenders, or duplicates by owner. Returns the top owners ranked by duplicate count.",
+    "Check the Owner Accountability tab — per-owner duplicate scorecard. For each rep returns: team, total records owned, duplicate records, duplicate rate %, RAG status (green ≤2% · amber 2–5% · red >5% per SDR-KPI-09), clusters involved, high-confidence duplicates, and estimated waste value (deal SAR sitting on duplicates). Reps tagged on multiple mailboxes are consolidated under their canonical email (OWNER_EMAIL_ALIASES). Use when asked who is the worst offender, who is RED on the duplicate KPI, which rep has the most waste value, or duplicates by owner. Returns the top owners ranked by duplicate count.",
   inputSchema: z.object({
     limit: z.number().optional().describe("How many top owners to return (default 10, max 50)"),
   }),
@@ -53,17 +53,25 @@ export const ownerAccountabilityTool = createTool({
   }),
   execute: async ({ context }) => {
     try {
-      const { getDuplicatesByOwner } = await import(
+      const { getOwnerAccountability } = await import(
         "../../utils/duplicateRadarDatabase"
       );
       const cap = Math.max(1, Math.min((context as any)?.limit ?? 10, 50));
-      const rows = await getDuplicatesByOwner();
+      // Pull the rich scorecard so Adam can answer RAG / waste / cluster
+      // questions — not just raw counts. Already consolidated by
+      // OWNER_EMAIL_ALIASES inside the function, sorted dup-desc.
+      const rows = await getOwnerAccountability();
       const owners = rows.slice(0, cap).map((o) => ({
         owner: o.owner_name,
         email: o.owner_email,
-        leads: Number(o.lead_count) || 0,
-        deals: Number(o.deal_count) || 0,
-        totalDuplicates: Number(o.total_duplicates) || 0,
+        team: o.team,
+        totalRecords: o.total_records,
+        duplicates: o.duplicate_records,
+        duplicateRatePct: o.duplicate_rate,
+        rag: o.rag_status, // "green" | "amber" | "red"
+        clustersInvolved: o.clusters_involved,
+        highConfidenceDuplicates: o.high_confidence_duplicates,
+        estimatedWasteValue: o.estimated_waste_value,
       }));
       return { success: true, totalOwners: rows.length, owners };
     } catch (e: any) {

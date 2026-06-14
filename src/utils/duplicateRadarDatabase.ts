@@ -1901,7 +1901,7 @@ export async function getDuplicatesByOwner(): Promise<
   }>
 > {
   const result = await pool.query(`
-    SELECT 
+    SELECT
       owner_name,
       owner_email,
       COUNT(*) FILTER (WHERE record_type = 'lead') as lead_count,
@@ -1912,7 +1912,46 @@ export async function getDuplicatesByOwner(): Promise<
     GROUP BY owner_name, owner_email
     ORDER BY total_duplicates DESC
   `);
-  return result.rows;
+
+  // Consolidate per OWNER_EMAIL_ALIASES so reps tagged on multiple mailboxes
+  // (Rayan's three addresses, etc.) land in ONE row. Without this, Adam's
+  // answers split a single rep into 3 — the dashboard already merges, but
+  // every backend consumer needs the same treatment for parity.
+  const { canonicaliseOwnerEmail } = await import("./ownerEmailAliases");
+  const byCanonical = new Map<
+    string,
+    {
+      owner_name: string;
+      owner_email: string;
+      lead_count: number;
+      deal_count: number;
+      total_duplicates: number;
+    }
+  >();
+  for (const r of result.rows) {
+    const rawEmail = String(r.owner_email || "");
+    const canonical = canonicaliseOwnerEmail(rawEmail) || rawEmail.toLowerCase();
+    const lead = parseInt(r.lead_count) || 0;
+    const deal = parseInt(r.deal_count) || 0;
+    const total = parseInt(r.total_duplicates) || 0;
+    const existing = byCanonical.get(canonical);
+    if (!existing) {
+      byCanonical.set(canonical, {
+        owner_name: r.owner_name,
+        owner_email: canonical,
+        lead_count: lead,
+        deal_count: deal,
+        total_duplicates: total,
+      });
+    } else {
+      existing.lead_count += lead;
+      existing.deal_count += deal;
+      existing.total_duplicates += total;
+    }
+  }
+  return Array.from(byCanonical.values()).sort(
+    (a, b) => b.total_duplicates - a.total_duplicates,
+  );
 }
 
 // CS Pipeline Overlap tab — active duplicate clusters that overlap a live CS
@@ -3770,28 +3809,77 @@ export async function getOwnerAccountability(): Promise<OwnerAccountability[]> {
   // role badge without an extra round-trip. Lazy-imported to avoid pulling
   // the static seed list into modules that don't touch the owner scorecard.
   const { findSeedUser } = await import("../data/seedUsers");
+  const { canonicaliseOwnerEmail } = await import("./ownerEmailAliases");
 
-  return result.rows.map((r) => {
+  // Aggregate by CANONICAL email so a single rep tagged on multiple
+  // mailboxes (e.g. Rayan's three addresses) lands in ONE row, not three.
+  // The map preserves insertion order so the SQL's ORDER BY (highest dup
+  // count first) survives the consolidation.
+  type Accum = {
+    owner_name: string;
+    owner_email: string;
+    alias_emails: Set<string>;
+    total_records: number;
+    duplicate_records: number;
+    clusters_involved: number;
+    high_confidence_duplicates: number;
+    estimated_waste_value: number;
+  };
+  const byCanonical = new Map<string, Accum>();
+  for (const r of result.rows) {
+    const rawEmail = String(r.owner_email || "");
+    const canonical = canonicaliseOwnerEmail(rawEmail) || rawEmail.toLowerCase();
     const totalRecs = parseInt(r.total_records) || 0;
     const dupRecs = parseInt(r.duplicate_records) || 0;
-    const dupRate = totalRecs > 0 ? Math.round((dupRecs / totalRecs) * 100) : 0;
+    const clusters = parseInt(r.clusters_involved) || 0;
+    const highConf = parseInt(r.high_confidence_duplicates) || 0;
+    const waste = parseFloat(r.estimated_waste_value) || 0;
+    const existing = byCanonical.get(canonical);
+    if (!existing) {
+      byCanonical.set(canonical, {
+        owner_name: r.owner_name,
+        owner_email: canonical,
+        alias_emails: new Set(rawEmail ? [rawEmail.toLowerCase()] : []),
+        total_records: totalRecs,
+        duplicate_records: dupRecs,
+        clusters_involved: clusters,
+        high_confidence_duplicates: highConf,
+        estimated_waste_value: waste,
+      });
+    } else {
+      existing.total_records += totalRecs;
+      existing.duplicate_records += dupRecs;
+      existing.clusters_involved += clusters;
+      existing.high_confidence_duplicates += highConf;
+      existing.estimated_waste_value += waste;
+      if (rawEmail) existing.alias_emails.add(rawEmail.toLowerCase());
+    }
+  }
+
+  return Array.from(byCanonical.values()).map((a) => {
+    const dupRate =
+      a.total_records > 0
+        ? Math.round((a.duplicate_records / a.total_records) * 1000) / 10
+        : 0;
+    // RAG bands (SDR-KPI-09): ≤2% green · 2–5% amber · >5% red. Matches
+    // the dashboard's post-merge re-derive — single source of truth.
     let ragStatus: "green" | "amber" | "red" = "green";
     if (dupRate > 5) ragStatus = "red";
     else if (dupRate > 2) ragStatus = "amber";
 
-    const seed = findSeedUser(r.owner_name);
+    const seed = findSeedUser(a.owner_name);
     const team = (seed && seed.team) || "Unassigned";
 
     return {
-      owner_name: r.owner_name,
-      owner_email: r.owner_email || "",
+      owner_name: a.owner_name,
+      owner_email: a.owner_email,
       team,
-      total_records: totalRecs,
-      duplicate_records: dupRecs,
+      total_records: a.total_records,
+      duplicate_records: a.duplicate_records,
       duplicate_rate: dupRate,
-      clusters_involved: parseInt(r.clusters_involved) || 0,
-      high_confidence_duplicates: parseInt(r.high_confidence_duplicates) || 0,
-      estimated_waste_value: parseFloat(r.estimated_waste_value) || 0,
+      clusters_involved: a.clusters_involved,
+      high_confidence_duplicates: a.high_confidence_duplicates,
+      estimated_waste_value: a.estimated_waste_value,
       rag_status: ragStatus,
     };
   });
