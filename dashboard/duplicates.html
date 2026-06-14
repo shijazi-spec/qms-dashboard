@@ -3256,6 +3256,14 @@
             const dismissBtn = _aiCid
                 ? `<button data-on-click="dismissCluster" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-dismiss-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300" title="Dismiss as a false positive — use when these are intentionally separate accounts (e.g. Corporate-Accounts vs Marketplace: Sales B2B/B2C account vs Merchants account). Moves it to the Dismissed filter; it stops appearing as a duplicate to action.">🚫 Dismiss</button>`
                 : '';
+            // Verify in CRM — the trustworthy "resolve": re-query Zoho for every
+            // record this cluster tagged Duplicate-Delete and, ONLY if the admin
+            // has actually deleted them all, mark the cluster Resolved. Shown on
+            // AI-Applied (pending Zoho delete) clusters across every module tab —
+            // this replaces the old "assert it's done" Mark Resolved.
+            const verifyBtn = (_aiCid && aiState === 'tagged_pending_delete')
+                ? `<button data-on-click="verifyAndResolveCluster" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-verify-crm-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700" title="Check Zoho: has the admin actually deleted the Duplicate-Delete records? If every tagged duplicate is gone, this marks the cluster Resolved. If any are still in Zoho, it tells you which — and does NOT resolve.">✅ Verify in CRM</button>`
+                : '';
             // Re-open — set a resolved/dismissed cluster back to active so it can
             // be merged. Shown on resolved clusters and in the Resolved/Dismissed
             // filter views (for clusters marked done but not actually merged).
@@ -3272,7 +3280,7 @@
                         <span class="text-xs text-gray-500">${summary.count} duplicate ${moduleLabel}</span>
                         <span class="flex flex-wrap gap-1">${chips}</span>
                         ${aiStateBadge}
-                        <span class="ms-auto flex items-center gap-2">${reopenBtn}${aiBtn}${dismissBtn}<span class="text-xs text-gray-500">Click to expand</span></span>
+                        <span class="ms-auto flex items-center gap-2">${reopenBtn}${verifyBtn}${aiBtn}${dismissBtn}<span class="text-xs text-gray-500">Click to expand</span></span>
                     </div>
                 </td>
             </tr>`;
@@ -5744,6 +5752,67 @@
         // For intentionally-separate accounts (e.g. a Corporate-Accounts account
         // and a Marketplace account — Sales B2B/B2C vs Merchants). Uses the
         // admin SESSION (no key prompt); falls back to a key prompt if needed.
+        // Verify-in-CRM resolve: re-query Zoho for the cluster's Duplicate-Delete
+        // records and mark the cluster Resolved ONLY if the admin has actually
+        // deleted every one. This is the trustworthy replacement for the manual
+        // "Mark Resolved" — a cluster is only "done" once the CRM proves it.
+        async function verifyAndResolveCluster(module, clusterId) {
+            let res, data;
+            try {
+                res = await fetch('/api/duplicates/clusters/' + clusterId + '/verify-tags', { credentials: 'same-origin' });
+                data = await res.json().catch(() => null);
+            } catch (e) {
+                alert('Could not reach server to verify: ' + (e && e.message || e));
+                return;
+            }
+            if (!res.ok || !data) {
+                alert('Verify failed: ' + ((data && data.error) || ('HTTP ' + res.status)));
+                return;
+            }
+            if (data.message || (data.total || 0) === 0) {
+                alert(data.message || 'No tagged duplicates on this cluster yet — run Apply first, then have the Zoho admin delete the tagged records.');
+                return;
+            }
+            const total = data.total || 0, deleted = data.deleted || 0, alive = data.alive || 0, errors = data.errors || 0;
+            if (errors > 0) {
+                alert('Could not verify ' + errors + ' of ' + total + ' tagged record(s) (Zoho error). Try again in a moment — not marking Resolved until every record is confirmed.');
+                return;
+            }
+            if (alive > 0) {
+                alert(deleted + ' of ' + total + ' tagged duplicate(s) have been deleted in Zoho.\n\n' + alive + ' are STILL in Zoho — the admin hasn\'t removed these yet. Open the cluster to see which records, share them with the admin, and re-run Verify once deleted.\n\nNot marked Resolved.');
+                return;
+            }
+            // All tagged duplicates confirmed deleted → mark Resolved (verified).
+            if (!confirm('✓ All ' + total + ' tagged duplicate(s) are confirmed deleted in Zoho.\n\nMark this cluster Resolved? (Reversible via Re-open.)')) return;
+            const payload = JSON.stringify({ action: 'resolve', notes: 'Verified in CRM: all ' + total + ' Duplicate-Delete record(s) confirmed deleted in Zoho by the admin.' });
+            try {
+                let r2 = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: payload
+                });
+                if (r2.status === 401 || r2.status === 403) {
+                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    if (!adminKey) return;
+                    r2 = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
+                    });
+                }
+                const d2 = await r2.json();
+                if (!r2.ok || !d2.success) throw new Error((d2 && d2.error) || ('HTTP ' + r2.status));
+                if (typeof closeModal === 'function') { try { closeModal(); } catch (e) {} }
+                var tab = String(module || '').toLowerCase();
+                if (['leads','deals','contacts','accounts'].includes(tab)) {
+                    window._loadedTabs && window._loadedTabs.delete(tab);
+                    loadRecordTab(tab, 0);
+                } else if (tab === 'cross-module' && typeof loadCrossModule === 'function') {
+                    loadCrossModule();
+                } else if (typeof refreshData === 'function') { refreshData(); }
+            } catch (e) {
+                alert('Verified deleted, but could not mark Resolved: ' + (e && e.message || e));
+            }
+        }
+
         async function dismissCluster(module, clusterId) {
             if (!confirm('Dismiss this cluster as a false positive?\n\nUse this when the records are intentionally separate accounts (e.g. a Corporate-Accounts account and a Marketplace account). It moves to the "Dismissed" filter and stops appearing as a duplicate to action.\n\nNo Zoho changes.')) return;
             const payload = JSON.stringify({ action: 'ignore', notes: 'Dismissed from list — intentional separate accounts (e.g. different layout: Corporate Accounts vs Marketplace).' });
