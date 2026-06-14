@@ -10,9 +10,149 @@ import { z } from "zod";
  *   - cross-module-overlap : same company across ≥2 Zoho modules (Lead+Contact, Lead+Account, …)
  *   - account-hints        : deals missing Account_Name + the inferred-Account verdict (pending/applied/dismissed)
  *   - deal-compliance      : Sales SOP 7.5.10 attachments check on Proposal / Agreement Signed / Paid deals
+ *   - agent-activity       : audit-trail of every preview/dry-run/apply the autonomous resolver performed
  *   - owner-accountability : who owns the most duplicate records
  *   - preflight-check      : "should we create a record for <X>?" verdict
  */
+
+// ── Agent Activity (Logs tab) ─────────────────────────────────────────────
+export const agentActivityTool = createTool({
+  id: "agent-activity",
+  description:
+    "Pull the most recent rows from the autonomous Duplicate Resolution audit trail (the Agent Activity sub-table on the Logs tab). Every preview / dry-run / apply the agent or an operator performed lands in duplicate_resolution_feedback: cluster id, event type (preview | dry_run | applied), proposed survivor Zoho id, actually-chosen survivor (and whether the operator overrode the agent's pick), field migrations, duplicates tagged, related records reparented, error count, who performed it, and when. The tool aggregates the last N events into headline counters (by event type + by performed_by — agent vs human) and returns the latest events in full. Use when asked what the AI did today, how many applies happened this week, did the agent or a human override the survivor most often, show me the last 10 resolutions, or any agent-activity audit question. Read-only.",
+  inputSchema: z.object({
+    limit: z
+      .number()
+      .optional()
+      .describe(
+        "How many recent events to scan (default 100, max 500). Aggregates are computed over this window.",
+      ),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    inspected: z.number().optional(),
+    byEventType: z
+      .object({
+        preview: z.number(),
+        dryRun: z.number(),
+        applied: z.number(),
+      })
+      .optional(),
+    appliedByAgent: z.number().optional(), // performed_by contains "GRQ Assistant" / "Autonomous Agent"
+    appliedByHuman: z.number().optional(),
+    overrideRatePct: z.number().optional(), // master_overridden share across applies
+    totals: z
+      .object({
+        fieldsMigrated: z.number(),
+        duplicatesTagged: z.number(),
+        reparented: z.number(),
+        errors: z.number(),
+      })
+      .optional(),
+    recentEvents: z
+      .array(
+        z.object({
+          clusterId: z.number().nullable(),
+          eventType: z.string(),
+          chosenMaster: z.string().nullable(),
+          masterOverridden: z.boolean(),
+          fieldsMigrated: z.number(),
+          duplicatesTagged: z.number(),
+          reparented: z.number(),
+          errors: z.number(),
+          performedBy: z.string().nullable(),
+          at: z.string().nullable(),
+        }),
+      )
+      .optional(),
+    error: z.string().optional(),
+  }),
+  execute: async ({ context }) => {
+    try {
+      const limit = Math.max(
+        1,
+        Math.min(((context as any)?.limit as number) ?? 100, 500),
+      );
+      const { getResolutionActivity } = await import(
+        "../../utils/duplicateResolutionLearning"
+      );
+      const rows = await getResolutionActivity(limit);
+      const byEventType = { preview: 0, dryRun: 0, applied: 0 };
+      let appliedByAgent = 0;
+      let appliedByHuman = 0;
+      let appliedOverrideCount = 0;
+      let totalApplied = 0;
+      const totals = {
+        fieldsMigrated: 0,
+        duplicatesTagged: 0,
+        reparented: 0,
+        errors: 0,
+      };
+      const recentEvents: Array<{
+        clusterId: number | null;
+        eventType: string;
+        chosenMaster: string | null;
+        masterOverridden: boolean;
+        fieldsMigrated: number;
+        duplicatesTagged: number;
+        reparented: number;
+        errors: number;
+        performedBy: string | null;
+        at: string | null;
+      }> = [];
+      for (const r of rows) {
+        const et = String(r.eventType || "").toLowerCase();
+        if (et === "preview") byEventType.preview++;
+        else if (et === "dry_run" || et === "dryrun") byEventType.dryRun++;
+        else if (et === "applied") byEventType.applied++;
+
+        totals.fieldsMigrated += Number(r.fieldsMigrated || 0);
+        totals.duplicatesTagged += Number(r.duplicatesTagged || 0);
+        totals.reparented += Number(r.reparented || 0);
+        totals.errors += Number(r.errors || 0);
+
+        if (et === "applied") {
+          totalApplied++;
+          if (r.masterOverridden) appliedOverrideCount++;
+          const pb = String(r.performedBy || "");
+          if (/GRQ Assistant|Autonomous Agent/i.test(pb)) appliedByAgent++;
+          else appliedByHuman++;
+        }
+
+        if (recentEvents.length < 20) {
+          recentEvents.push({
+            clusterId: r.clusterId ?? null,
+            eventType: r.eventType,
+            chosenMaster: r.chosenMaster ?? null,
+            masterOverridden: !!r.masterOverridden,
+            fieldsMigrated: Number(r.fieldsMigrated || 0),
+            duplicatesTagged: Number(r.duplicatesTagged || 0),
+            reparented: Number(r.reparented || 0),
+            errors: Number(r.errors || 0),
+            performedBy: r.performedBy ?? null,
+            at: r.at ?? null,
+          });
+        }
+      }
+      const overrideRatePct =
+        totalApplied > 0
+          ? Math.round((appliedOverrideCount / totalApplied) * 1000) / 10
+          : 0;
+      return {
+        success: true,
+        inspected: rows.length,
+        byEventType,
+        appliedByAgent,
+        appliedByHuman,
+        overrideRatePct,
+        totals,
+        recentEvents,
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || String(e) };
+    }
+  },
+});
 
 // ── Deal Compliance ───────────────────────────────────────────────────────
 export const dealComplianceStatusTool = createTool({
