@@ -7550,26 +7550,64 @@
         // preflight; keep this map in sync with the codes there.
         function humanizePreflightReason(reason) {
             if (!reason) return '';
-            const r = String(reason);
-            // active_phase:<phase>
-            const ap = r.match(/^active_phase:(.+)$/);
-            if (ap) return 'Active CS customer (phase: ' + ap[1] + '). Marketing must not push as new lead.';
-            // re_engaged_renewal_after_churn
-            if (r === 're_engaged_renewal_after_churn') return 'Re-engaged customer (Renewal Date set after Churn Date). Treat as active.';
-            // termination_no_churn_date
-            if (r === 'termination_no_churn_date') return 'Terminated but Churn Date missing — CS to confirm before sales can re-engage.';
-            // termination_within_cooloff:<d>d<<cool>d
-            const tw = r.match(/^termination_within_cooloff:(\d+)d<(\d+)d$/);
-            if (tw) return 'Within sector cool-off (' + tw[1] + ' days since churn, threshold ' + tw[2] + 'd). CS to confirm before re-engagement.';
-            // termination_past_cooloff:<d>d>=<cool>d
-            const tp = r.match(/^termination_past_cooloff:(\d+)d>=(\d+)d$/);
-            if (tp) return 'Past sector cool-off (' + tp[1] + ' days since churn, threshold ' + tp[2] + 'd). Sales may re-engage.';
-            // no_cs_phase / unknown_phase / duplicate-specific codes
-            if (r === 'no_cs_phase') return 'No CS pipeline overlap.';
-            const up = r.match(/^unknown_phase:(.+)$/);
-            if (up) return 'Phase "' + up[1] + '" is not configured — verdict held.';
-            // Fallback: tidy up the raw code (underscores → spaces, sentence-case).
-            return r.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+            let r = String(reason);
+            // Preflight match-path prefix (2026-06-11): the reason may now be
+            // "phone_match__<verdict_reason>" or "company_fuzzy_match__<verdict_reason>"
+            // when the row matched a cluster via the phone or company-name
+            // fallback path instead of the domain match. Surface that lead-in
+            // separately, then humanise the inner reason.
+            let prefix = '';
+            if (r.startsWith('phone_match__')) {
+                prefix = 'Matched by PHONE — ';
+                r = r.slice('phone_match__'.length);
+            } else if (r.startsWith('company_fuzzy_match__')) {
+                prefix = 'Matched by COMPANY-NAME fuzzy similarity — ';
+                r = r.slice('company_fuzzy_match__'.length);
+            }
+            // Preflight verdict reasons (top-level) — wrapped so the prefix
+            // can chain. The match below shadows the recursion model.
+            const inner = (() => {
+                // active_cs_customer (BLOCK)
+                if (r === 'active_cs_customer') return 'Active CS customer — do not push as new lead.';
+                // cs_termination_within_cooloff (REVIEW)
+                if (r === 'cs_termination_within_cooloff') return 'Within sector cool-off (180d Private / 365d Government). CS to confirm before re-engagement.';
+                // cs_termination_past_cooloff (WARN)
+                if (r === 'cs_termination_past_cooloff') return 'Past sector cool-off — Sales may re-engage after notifying CS.';
+                // existing_record_no_cs_overlap (DUPLICATE)
+                if (r === 'existing_record_no_cs_overlap') return 'Already present in Leads/Deals — no active CS overlap.';
+                // no_match (PASS) / no_domain_resolved (PASS)
+                if (r === 'no_match') return 'No overlap detected — safe to import.';
+                if (r === 'no_domain_resolved') return 'No domain/email/phone/company resolved — treated as PASS.';
+                // ── Cluster-level CS overlap classifier reasons (2026-06-11) ──
+                if (r === 'overlap_active_handoff' || r === 'overlap_active_cs_phase' || r.startsWith('overlap_active_cs_phase:'))
+                    return 'OPEN Sales Deal + Paid/Agreement-Signed handoff Deal coexist on this customer (CS phase is active).';
+                if (r.startsWith('overlap_within_cooloff:'))
+                    return 'OPEN Sales Deal + handoff Deal coexist — churn date is within the sector cool-off (180d Private / 365d Government). Sales must stop.';
+                if (r.startsWith('overlap_past_cooloff:'))
+                    return 'OPEN Sales Deal + handoff Deal coexist BUT churn date is past the sector cool-off. Sales may re-engage after notifying CS.';
+                if (r === 'overlap_unknown_cs_phase')
+                    return 'OPEN Sales Deal + handoff Deal coexist; CS phase is unreadable — conservative BLOCK.';
+                if (r === 'no_handoff_deal')
+                    return 'No Paid/Agreement-Signed handoff Deal in cluster — not flagged as overlap.';
+                if (r === 'no_open_sales_deal')
+                    return 'No OPEN Sales Deal in cluster — not flagged as overlap.';
+                // ── Legacy per-deal reasons (still emitted by Communication
+                // Eligibility check and CS Lifecycle Compliance) ──
+                const ap = r.match(/^active_phase:(.+)$/);
+                if (ap) return 'Active CS customer (phase: ' + ap[1] + '). Marketing must not push as new lead.';
+                if (r === 're_engaged_renewal_after_churn') return 'Re-engaged customer (Renewal Date set after Churn Date). Treat as active.';
+                if (r === 'termination_no_churn_date') return 'Terminated but Churn Date missing — CS to confirm before sales can re-engage.';
+                const tw = r.match(/^termination_within_cooloff:(\d+)d<(\d+)d$/);
+                if (tw) return 'Within sector cool-off (' + tw[1] + ' days since churn, threshold ' + tw[2] + 'd). CS to confirm before re-engagement.';
+                const tp = r.match(/^termination_past_cooloff:(\d+)d>=(\d+)d$/);
+                if (tp) return 'Past sector cool-off (' + tp[1] + ' days since churn, threshold ' + tp[2] + 'd). Sales may re-engage.';
+                if (r === 'no_cs_phase') return 'No CS pipeline overlap.';
+                const up = r.match(/^unknown_phase:(.+)$/);
+                if (up) return 'Phase "' + up[1] + '" is not configured — verdict held.';
+                // Fallback: tidy up the raw code (underscores → spaces, sentence-case).
+                return r.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+            })();
+            return prefix + inner;
         }
 
         function loadPreflightSample() {

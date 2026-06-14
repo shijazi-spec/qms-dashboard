@@ -6193,6 +6193,12 @@ export const duplicateRadarRoutes = [
                 ref: body.ref ?? null,
               },
             ],
+            // Webhook callers (Zoho workflows, intake forms) tend to fire
+            // right when a record is being created — staleness matters.
+            // Default to ON for the single-record webhook so the verdict
+            // reflects the latest CS section. Caller can override with
+            // refresh_overlap=false to skip the recompute.
+            refresh_overlap: body.refresh_overlap !== false,
           });
 
           const row = result.rows[0];
@@ -6218,6 +6224,8 @@ export const duplicateRadarRoutes = [
             sector: row.sector,
             owners: row.owners,
             arr_exposure: row.arr_exposure,
+            matched_via: row.matched_via,
+            module_counts: row.module_counts,
           });
         } catch (error: any) {
           logger.error("Error in preflight webhook:", error);
@@ -6641,6 +6649,11 @@ export const duplicateRadarRoutes = [
             rows: body.rows,
             max_check:
               typeof body.max_check === "number" ? body.max_check : undefined,
+            // Opt-in: when the operator wants a fresh CS overlap verdict
+            // (e.g. they just nudged a Phase in Zoho), pass
+            // ?refresh_overlap=true in the body. Default false keeps the
+            // batch endpoint fast.
+            refresh_overlap: body.refresh_overlap === true,
           });
           return c.json({ success: true, ...result });
         } catch (error: any) {
