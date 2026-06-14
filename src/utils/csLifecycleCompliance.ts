@@ -68,6 +68,13 @@ interface Config {
   steadyStatePhases: string[];
   /** Minimum days a customer must have existed before Adoption is plausible. */
   adoptionMinCustomerAgeDays: number;
+  /**
+   * Days a Renewal Date can be overdue before the deal is treated as a CRITICAL
+   * churn/termination candidate (not just a warning). Default 90 (~a quarter):
+   * past this, the renewal motion has clearly failed and the deal should be
+   * moved to Termination/Churn.
+   */
+  renewalOverdueCriticalDays: number;
 }
 
 let cachedConfig: Config | null = null;
@@ -106,6 +113,10 @@ function loadConfig(): Config {
     adoptionMinCustomerAgeDays: num(
       process.env.CS_LIFECYCLE_ADOPTION_MIN_CUSTOMER_AGE_DAYS,
       30,
+    ),
+    renewalOverdueCriticalDays: num(
+      process.env.CS_LIFECYCLE_RENEWAL_OVERDUE_CRITICAL_DAYS,
+      90,
     ),
   };
   return cachedConfig;
@@ -455,13 +466,21 @@ export function evaluateCsLifecycle(
       const daysOverdue = Math.floor(
         (now.getTime() - renewal.getTime()) / (1000 * 60 * 60 * 24),
       );
+      // Past ~a quarter overdue the renewal motion has clearly failed: escalate
+      // to CRITICAL — the deal should be moved to Termination/Churn rather than
+      // left sitting in an active phase.
+      const pastQuarter = daysOverdue >= cfg.renewalOverdueCriticalDays;
       violations.push({
         code: "renewal_overdue",
-        severity: "warning",
-        message: `Renewal Date was ${daysOverdue} day(s) ago but deal is still in active phase "${phase}". Confirm renewal status and update the date or phase.`,
+        severity: pastQuarter ? "critical" : "warning",
+        message: pastQuarter
+          ? `Renewal Date was ${daysOverdue} day(s) ago — over ${cfg.renewalOverdueCriticalDays} days (a quarter) overdue while still in active phase "${phase}". The renewal has effectively lapsed: move this deal to Termination/Churn or close the renewal now.`
+          : `Renewal Date was ${daysOverdue} day(s) ago but deal is still in active phase "${phase}". Confirm renewal status and update the date or phase.`,
         days_in_phase: daysSinceModified,
         current_phase: phase,
-        suggested_action: SUGGESTED_ACTIONS.renewal_overdue,
+        suggested_action: pastQuarter
+          ? `Renewal is over a quarter overdue (${daysOverdue} days). Treat as a churn/termination candidate: confirm with the CS owner, then move the deal to the Termination phase with a Churn Date and Churn Reason, or record a completed renewal if it actually renewed.`
+          : SUGGESTED_ACTIONS.renewal_overdue,
       });
     }
   }

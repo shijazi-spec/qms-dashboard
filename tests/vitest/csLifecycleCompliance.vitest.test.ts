@@ -160,6 +160,37 @@ describe("phase_churn_desync (critical)", () => {
   });
 });
 
+describe("renewal_overdue", () => {
+  test("warning when Renewal Date has only recently passed", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Renewal",
+        Company_Domain: "acme.com",
+        Renewal_Date: daysAgo(20).toISOString().slice(0, 10),
+      },
+      modified_date: daysAgo(2),
+    });
+    const v = result.violations.find((x) => x.code === "renewal_overdue");
+    expect(v).toBeTruthy();
+    expect(v!.severity).toBe("warning");
+  });
+
+  test("CRITICAL when Renewal Date is over a quarter overdue (churn candidate)", () => {
+    const result = evaluateCsLifecycle({
+      raw_data: {
+        Phase: "Renewal",
+        Company_Domain: "acme.com",
+        Renewal_Date: daysAgo(120).toISOString().slice(0, 10),
+      },
+      modified_date: daysAgo(2),
+    });
+    const v = result.violations.find((x) => x.code === "renewal_overdue");
+    expect(v).toBeTruthy();
+    expect(v!.severity).toBe("critical");
+    expect(v!.message).toMatch(/quarter|Termination\/Churn/i);
+  });
+});
+
 describe("termination_missing_churn_date", () => {
   test("fires when Phase is Termination but no Churn Date", () => {
     const result = evaluateCsLifecycle({
@@ -460,23 +491,49 @@ describe("missing_company_domain", () => {
 
 describe("summarizeViolations", () => {
   test("rolls up severity + code counts correctly", () => {
+    // A fully-populated active CS deal: supplying every required field keeps the
+    // missing-field rules (missing_cs_owner=critical, missing_renewal_date, etc.)
+    // quiet so each record below fires ONLY its intended violation. Renewal is
+    // far-future so renewal_overdue never fires.
+    const COMPLETE = {
+      CS_Owner_Name: "Lina CS",
+      Customer_Since: "2024-01-01",
+      Renewal_Date: "2027-12-31",
+      Health: 80,
+      ARR_Value: 50000,
+      Company_Domain: "acme.com",
+    };
     const evals = [
+      // onboarding_overdue (warning) only
       evaluateCsLifecycle({
-        raw_data: { Phase: "Onboarding" },
+        raw_data: { Phase: "Onboarding", ...COMPLETE },
         modified_date: daysAgo(45),
       }),
+      // phase_churn_desync (critical) + missing_renewal_date (warning).
+      // Renewal_Date omitted on purpose so the churn date is the latest event.
       evaluateCsLifecycle({
-        raw_data: { Phase: "Adoption", Churn_Date: "2026-04-01" },
+        raw_data: {
+          Phase: "Adoption",
+          Churn_Date: "2026-04-01",
+          CS_Owner_Name: "Lina CS",
+          Customer_Since: "2024-01-01",
+          Health: 80,
+          ARR_Value: 50000,
+          Company_Domain: "acme.com",
+        },
         modified_date: daysAgo(2),
       }),
+      // termination_missing_churn_date + termination_missing_churn_reason (both
+      // warning); Termination isn't an active phase so no missing-field criticals.
       evaluateCsLifecycle({
         raw_data: { Phase: "Termination" },
         modified_date: daysAgo(10),
       }),
+      // no violations — complete Adoption deal, recently touched, no trial window
       evaluateCsLifecycle({
-        raw_data: { Phase: "Adoption" },
+        raw_data: { Phase: "Adoption", ...COMPLETE },
         modified_date: daysAgo(2),
-      }), // no violations
+      }),
       evaluateCsLifecycle({
         raw_data: { Stage: "Closed Won" }, // not a CS deal
         modified_date: daysAgo(1),
