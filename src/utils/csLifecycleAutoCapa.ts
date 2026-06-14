@@ -6,16 +6,20 @@
  * pattern — one open CAPA per (deal record × violation code) — so the nightly
  * scan can re-run any time without duplicating tracked actions.
  *
- * Default scope: severity = 'critical' only. The `phase_churn_desync` rule is
- * the only currently-critical lifecycle violation; it represents a one-working-
- * day SLA breach that Quality should never miss. Operators can expand the
- * scope via env (AUTO_CAPA_LIFECYCLE_SEVERITIES=critical,warning) if they
- * want CAPAs for warnings too.
+ * Default scope: severity = 'critical'. Critical lifecycle rules currently are
+ * `phase_churn_desync` (a one-working-day SLA breach), `missing_cs_owner` (no
+ * one accountable for the motion), and `renewal_overdue` once it passes ~a
+ * quarter. `renewal_overdue` is EXCLUDED from auto-CAPA by default (see
+ * AUTO_CAPA_LIFECYCLE_EXCLUDE_CODES) because it can match a large backlog and a
+ * surprise flood of auto-created CAPAs is hard to undo — it still shows as a
+ * critical FLAG and a manual "Open CAPA" is always available. Operators can
+ * expand the scope via env (AUTO_CAPA_LIFECYCLE_SEVERITIES=critical,warning).
  *
  * Env knobs:
  *   AUTO_CAPA_LIFECYCLE_ENABLED        (default 'true')
  *   AUTO_CAPA_LIFECYCLE_SEVERITIES     (default 'critical')
  *   AUTO_CAPA_LIFECYCLE_CODES          (default '' — all codes within selected severities)
+ *   AUTO_CAPA_LIFECYCLE_EXCLUDE_CODES  (default 'renewal_overdue' — critical flag, no auto-CAPA)
  *   AUTO_CAPA_LIFECYCLE_TARGET_DAYS    (default '3' — critical SLA window)
  *   AUTO_CAPA_DEFAULT_ASSIGNEE         (shared with csOverlapAutoCapa)
  */
@@ -182,6 +186,7 @@ export async function autoOpenCapasForCsLifecycle(opts: {
   enabled?: boolean;
   severities?: CsViolationSeverity[];
   codes?: CsViolationCode[];
+  excludeCodes?: CsViolationCode[];
   createdBy?: string;
 }): Promise<CsLifecycleAutoCapaResult> {
   const enabled =
@@ -196,6 +201,18 @@ export async function autoOpenCapasForCsLifecycle(opts: {
   const codes =
     opts.codes ?? envList<CsViolationCode>("AUTO_CAPA_LIFECYCLE_CODES", []);
   const codesFilter = codes.length > 0 ? codes : null;
+  // Codes that are CRITICAL (so they show red in the tab + Critical filter +
+  // the nightly critical notification) but should NOT auto-spawn a formal CAPA
+  // until an operator opts in. renewal_overdue is excluded by default: once
+  // renewals can be a quarter overdue this rule can match a large backlog, and
+  // a surprise flood of auto-created CAPAs is hard to undo. Enable auto-CAPA for
+  // it by setting AUTO_CAPA_LIFECYCLE_EXCLUDE_CODES="" (or omitting it).
+  const excludeCodes =
+    opts.excludeCodes ??
+    envList<CsViolationCode>("AUTO_CAPA_LIFECYCLE_EXCLUDE_CODES", [
+      "renewal_overdue",
+    ]);
+  const excludeSet = new Set<CsViolationCode>(excludeCodes);
   const targetDays = Math.max(
     1,
     envNumber("AUTO_CAPA_LIFECYCLE_TARGET_DAYS", 3),
@@ -228,6 +245,7 @@ export async function autoOpenCapasForCsLifecycle(opts: {
   const matchedViolations = scan.violations.filter((v) => {
     if (!severities.includes(v.violation.severity)) return false;
     if (codesFilter && !codesFilter.includes(v.violation.code)) return false;
+    if (excludeSet.has(v.violation.code)) return false;
     return true;
   });
   result.candidates = matchedViolations.length;
