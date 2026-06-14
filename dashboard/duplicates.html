@@ -1606,7 +1606,10 @@
         async function loadCrossModule() {
             crossModuleLoadError = null;
             try {
-                const res = await fetch('/api/duplicates/cross-module-overlaps', { credentials: 'same-origin' });
+                // limit=100000 → load the WHOLE cross-module dataset (the old
+                // default of 200 silently hid overlaps). The table paginates
+                // client-side, so loading everything is fine.
+                const res = await fetch('/api/duplicates/cross-module-overlaps?limit=100000', { credentials: 'same-origin' });
                 if (!res.ok) {
                     let body = '';
                     try { body = (await res.text()).slice(0, 200); } catch (_) {}

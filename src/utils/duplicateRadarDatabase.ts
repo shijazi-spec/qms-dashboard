@@ -4751,15 +4751,20 @@ export interface CrossModuleOverlapsResponse {
  * (the SQL aggregates produce all pairings; trimming after is cheap given
  * the result set is bounded by `limit`).
  *
- * Limit defaults to 200, clamped [1, 1000]. Most tenants will have <200
- * cross-module clusters open at any time — this is a triage view, not a
- * pagination view.
+ * Returns the FULL set of active cross-module clusters by default (the previous
+ * 200 cap silently hid real overlaps). The dashboard paginates client-side, so
+ * returning everything is fine. `limit` defaults to "all" and is clamped to a
+ * 100,000 safety ceiling to guard against a pathological payload.
  */
 export async function getCrossModuleOverlaps(opts: {
   limit?: number;
   pairing?: CrossModulePairing | null;
 } = {}): Promise<CrossModuleOverlapsResponse> {
-  const limit = Math.min(1000, Math.max(1, Math.floor(opts.limit ?? 200) || 200));
+  const CROSS_MODULE_MAX = 100000;
+  const limit = Math.min(
+    CROSS_MODULE_MAX,
+    Math.max(1, Math.floor(opts.limit ?? CROSS_MODULE_MAX) || CROSS_MODULE_MAX),
+  );
   const r = await pool.query<CrossModuleClusterRow>(
     `
     SELECT

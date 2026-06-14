@@ -2824,7 +2824,9 @@ export const duplicateRadarRoutes = [
 
           const url = new URL(c.req.url);
           const limitRaw = url.searchParams.get("limit");
-          const limit = limitRaw ? parseInt(limitRaw, 10) : 200;
+          // Default to "all" (100k ceiling in getCrossModuleOverlaps) — the old
+          // 200 default silently hid real cross-module overlaps.
+          const limit = limitRaw ? parseInt(limitRaw, 10) : 100000;
           const pairingRaw = url.searchParams.get("pairing");
           const allowedPairings = new Set([
             "lead_contact",
