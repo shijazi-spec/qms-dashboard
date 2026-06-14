@@ -12,8 +12,11 @@ import { describe, expect, test } from "vitest";
 import {
   classifyPreflightRows,
   resolveDomain,
+  resolvePhone,
+  resolveCompany,
   shouldCreateForVerdict,
   type PreflightClusterRow,
+  type PreflightRowMatch,
 } from "../../src/utils/duplicateRadarPreflight";
 
 describe("resolveDomain", () => {
@@ -241,6 +244,96 @@ describe("classifyPreflightRows verdict ladder", () => {
     });
     expect(res.rows[0]!.owners).toHaveLength(5);
     expect(res.rows[0]!.owners[0]).toBe("alice@walaplus.com");
+  });
+});
+
+// ── 2026-06-11 — phone + company-name fallback paths ──────────────────────
+describe("resolvePhone", () => {
+  test("normalises and accepts phone with ≥7 digits", () => {
+    expect(resolvePhone({ phone: "0599 555 375" })).toBe("599555375");
+  });
+  test("drops phone with <7 digits", () => {
+    expect(resolvePhone({ phone: "555" })).toBeNull();
+  });
+  test("returns null when phone missing", () => {
+    expect(resolvePhone({})).toBeNull();
+  });
+});
+
+describe("resolveCompany", () => {
+  test("normalises a company name", () => {
+    expect(resolveCompany({ company_name: "Schlumberger SLB" })).toMatch(/schlumberger/);
+  });
+  test("drops names with <5 normalised chars", () => {
+    expect(resolveCompany({ company_name: "ABC" })).toBeNull();
+  });
+  test("returns null when missing", () => {
+    expect(resolveCompany({})).toBeNull();
+  });
+});
+
+describe("classifyPreflightRows — phone & company-name match paths", () => {
+  const blockCluster: PreflightClusterRow = {
+    id: 42,
+    domain: "schlumberger.com",
+    cs_overlap_verdict: "block",
+    pipeline_lifecycle_state: "adoption",
+    client_sector: "private",
+    arr_exposure: 1_000_000,
+    owners_involved: ["ali@walaplus.com"],
+    total_leads: 0,
+    total_deals: 2,
+    total_contacts: 7,
+    total_accounts: 1,
+  };
+
+  test("phone-only row matched via phone returns BLOCK with matched_via='phone'", () => {
+    const matchByRow = new Map<number, PreflightRowMatch>([
+      [0, { cluster: blockCluster, matched_via: "phone" }],
+    ]);
+    const res = classifyPreflightRows({
+      rows: [{ phone: "0599 555 375" }],
+      matchByRow,
+    });
+    expect(res.rows[0]!.verdict).toBe("block");
+    expect(res.rows[0]!.matched_via).toBe("phone");
+    expect(res.rows[0]!.reason).toBe("phone_match__active_cs_customer");
+    expect(res.rows[0]!.arr_exposure).toBe(1_000_000);
+  });
+
+  test("company-name-only row matched via fuzzy returns BLOCK with matched_via='company_name'", () => {
+    const matchByRow = new Map<number, PreflightRowMatch>([
+      [0, { cluster: blockCluster, matched_via: "company_name" }],
+    ]);
+    const res = classifyPreflightRows({
+      rows: [{ company_name: "Schlumberger SLB" }],
+      matchByRow,
+    });
+    expect(res.rows[0]!.verdict).toBe("block");
+    expect(res.rows[0]!.matched_via).toBe("company_name");
+    expect(res.rows[0]!.reason).toBe("company_fuzzy_match__active_cs_customer");
+  });
+
+  test("no match falls through to PASS with matched_via=null", () => {
+    const res = classifyPreflightRows({
+      rows: [{ phone: "0599 555 375" }],
+      matchByRow: new Map(),
+    });
+    expect(res.rows[0]!.verdict).toBe("pass");
+    expect(res.rows[0]!.matched_via).toBeNull();
+  });
+
+  test("domain match wins over phone match when both present (priority)", () => {
+    // Domain match should set matched_via='domain' with NO prefix on reason.
+    const matchByRow = new Map<number, PreflightRowMatch>([
+      [0, { cluster: blockCluster, matched_via: "domain" }],
+    ]);
+    const res = classifyPreflightRows({
+      rows: [{ domain: "schlumberger.com", phone: "0599555375" }],
+      matchByRow,
+    });
+    expect(res.rows[0]!.matched_via).toBe("domain");
+    expect(res.rows[0]!.reason).toBe("active_cs_customer"); // no prefix
   });
 });
 

@@ -76,7 +76,7 @@ export const ownerAccountabilityTool = createTool({
 export const preflightCheckTool = createTool({
   id: "preflight-check",
   description:
-    "Run the Preflight Check — given a company domain / email / company name / phone, return the verdict on whether a NEW record should be created or it would duplicate / hit a live CS customer: pass (safe to create), duplicate (already exists), warn, review, or block (active customer). Use when asked 'should we create / add <X>?', 'is <X> already in the CRM?', or to vet a new lead/deal before creation.",
+    "Run the Preflight Check — given a company domain / email / company name / phone, return the verdict on whether a NEW record should be created or it would duplicate / hit a live CS customer. Verdicts: pass (safe to create), duplicate (already in CRM, no active CS overlap), warn (overlap but past the sector cool-off — Sales may re-engage after notifying CS), review (legacy — within cool-off), block (active CS customer, do not push). The fallback chain (added 2026-06-11) tries domain/email-domain first, then normalized phone (≥7 digits) against duplicate_records, then fuzzy company-name (pg_trgm similarity ≥ 0.6) against active clusters — so a phone-only or company-only lookup now finds an existing match. The output `matchedVia` field tells you which path matched. Single-record calls automatically refresh the CS overlap verdict before answering so the result reflects the latest Zoho CS section, not yesterday's cron. Use when asked should we create / add this lead, is this already in the CRM, or to vet a new lead/deal before creation.",
   inputSchema: z.object({
     domain: z.string().optional(),
     email: z.string().optional(),
@@ -92,6 +92,7 @@ export const preflightCheckTool = createTool({
     clusterId: z.number().nullable().optional(),
     lifecycleState: z.string().nullable().optional(),
     arrExposure: z.number().nullable().optional(),
+    matchedVia: z.string().nullable().optional(),
     error: z.string().optional(),
   }),
   execute: async ({ context }) => {
@@ -114,6 +115,10 @@ export const preflightCheckTool = createTool({
             ref: null,
           },
         ],
+        // Single-record chat calls get the fresh verdict by default —
+        // Adam is usually asked right when someone is about to create
+        // a record, so staleness would be a confusing failure mode.
+        refresh_overlap: true,
       });
       const row = result.rows[0];
       if (!row) return { success: false, error: "Preflight returned no verdict." };
@@ -126,6 +131,7 @@ export const preflightCheckTool = createTool({
         clusterId: row.cluster_id ?? null,
         lifecycleState: row.lifecycle_state ?? null,
         arrExposure: row.arr_exposure ?? null,
+        matchedVia: row.matched_via ?? null,
       };
     } catch (e: any) {
       return { success: false, error: e?.message || String(e) };

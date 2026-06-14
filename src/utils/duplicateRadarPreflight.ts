@@ -15,7 +15,12 @@
  */
 
 import { pool } from "./duplicateRadarDatabase";
-import { extractDomain, normalizeDomain } from "./duplicateRadarDatabase";
+import {
+  extractDomain,
+  normalizeDomain,
+  normalizePhone,
+  normalizeCompanyName,
+} from "./duplicateRadarDatabase";
 
 export type PreflightVerdict =
   | "block"
@@ -68,6 +73,15 @@ export interface PreflightResultRow {
     accounts: number;
     total: number;
   } | null;
+  /**
+   * How the row's cluster was found. Added 2026-06-11 when Preflight
+   * grew phone + company-name fallback lookups:
+   *   "domain"       — domain or email-domain match (the original path)
+   *   "phone"        — normalized phone hit a duplicate_records row
+   *   "company_name" — normalized company name fuzzy-matched a cluster
+   *   null           — no match (PASS rows) or no fallback path
+   */
+  matched_via: "domain" | "phone" | "company_name" | null;
 }
 
 export interface PreflightSummary {
@@ -118,6 +132,29 @@ export function resolveDomain(row: PreflightInputRow): string | null {
   return fromEmail ? normalizeDomain(fromEmail) : null;
 }
 
+/**
+ * Normalized phone (≥7 digits) for the phone-match fallback path. Mirrors
+ * findOrCreateClusterByCompany — anything shorter than 7 digits is too
+ * generic to use as identity and is dropped silently.
+ */
+export function resolvePhone(row: PreflightInputRow): string | null {
+  const raw = (row.phone ?? "").trim();
+  if (!raw) return null;
+  const normalized = normalizePhone(raw);
+  return normalized && normalized.length >= 7 ? normalized : null;
+}
+
+/**
+ * Normalized company name (≥5 chars) for the fuzzy-match fallback path.
+ * Below 5 chars the trigram similarity threshold collapses to noise.
+ */
+export function resolveCompany(row: PreflightInputRow): string | null {
+  const raw = (row.company_name ?? "").trim();
+  if (!raw) return null;
+  const normalized = normalizeCompanyName(raw);
+  return normalized && normalized.length >= 5 ? normalized : null;
+}
+
 export interface PreflightClusterRow {
   id: number;
   domain: string;
@@ -133,13 +170,30 @@ export interface PreflightClusterRow {
 }
 
 /**
- * Pure classifier — given a batch of input rows AND a pre-fetched map of
- * clusters keyed by normalized domain, produce the full preflight response.
- * Extracted from runPreflight so unit tests can exercise it without DB mocks.
+ * How the cluster for a single row was found. Drives the matched_via
+ * field on the result row + lets the classifier stay pure (no DB).
+ */
+export interface PreflightRowMatch {
+  cluster: PreflightClusterRow;
+  matched_via: "domain" | "phone" | "company_name";
+}
+
+/**
+ * Pure classifier — given a batch of input rows AND a pre-fetched per-row
+ * map of matched clusters, produce the full preflight response. The wrapper
+ * (`runPreflight`) is responsible for actually querying the DB and building
+ * the per-row map; this function stays DB-free so unit tests can exercise
+ * the verdict ladder without mocks.
+ *
+ * Back-compat: `clustersByDomain` still accepted as a fallback. New callers
+ * should pass `matchByRow`.
  */
 export function classifyPreflightRows(input: {
   rows: PreflightInputRow[];
-  clustersByDomain: Map<string, PreflightClusterRow>;
+  /** Per-row matches (preferred). Index = row index in `rows`. */
+  matchByRow?: Map<number, PreflightRowMatch>;
+  /** Legacy fallback when only domain matching was wired up. */
+  clustersByDomain?: Map<string, PreflightClusterRow>;
   max_check?: number;
 }): PreflightResponse {
   const cap = Math.max(1, Math.min(input.max_check ?? 5000, 10000));
@@ -162,27 +216,18 @@ export function classifyPreflightRows(input: {
     const ref = row.ref ?? null;
     const domain = resolveDomain(row);
 
-    if (!domain) {
-      out.push({
-        row_index: i,
-        ref,
-        input: { domain: null, company_name: row.company_name ?? null },
-        verdict: "pass",
-        cluster_id: null,
-        lifecycle_state: null,
-        sector: null,
-        arr_exposure: null,
-        owners: [],
-        reason: "no_domain_resolved",
-        suggested_action: SUGGESTED_ACTIONS.pass,
-        module_counts: null,
-      });
-      summary.pass++;
-      continue;
+    // Pull the row's matched cluster + how it matched. Prefer the new
+    // per-row map; fall back to the legacy domain map when only that
+    // was provided.
+    let matched: PreflightRowMatch | null = null;
+    if (input.matchByRow && input.matchByRow.has(i)) {
+      matched = input.matchByRow.get(i)!;
+    } else if (input.clustersByDomain && domain) {
+      const c = input.clustersByDomain.get(domain);
+      if (c) matched = { cluster: c, matched_via: "domain" };
     }
 
-    const c = input.clustersByDomain.get(domain);
-    if (!c) {
+    if (!matched) {
       out.push({
         row_index: i,
         ref,
@@ -193,13 +238,15 @@ export function classifyPreflightRows(input: {
         sector: null,
         arr_exposure: null,
         owners: [],
-        reason: VERDICT_REASONS.pass,
+        reason: domain ? VERDICT_REASONS.pass : "no_domain_resolved",
         suggested_action: SUGGESTED_ACTIONS.pass,
         module_counts: null,
+        matched_via: null,
       });
       summary.pass++;
       continue;
     }
+    const c = matched.cluster;
 
     let verdict: PreflightVerdict;
     if (c.cs_overlap_verdict === "block") verdict = "block";
@@ -232,6 +279,15 @@ export function classifyPreflightRows(input: {
     const accountsN = _n(c.total_accounts);
 
     summary[verdict]++;
+    // Reason — for non-domain matches, prefix so the operator knows
+    // WHY this row hit a cluster (phone match vs company-name match
+    // vs the obvious domain match).
+    const matchedViaPrefix =
+      matched.matched_via === "phone"
+        ? "phone_match__"
+        : matched.matched_via === "company_name"
+          ? "company_fuzzy_match__"
+          : "";
     out.push({
       row_index: i,
       ref,
@@ -244,7 +300,7 @@ export function classifyPreflightRows(input: {
       sector: (c.client_sector as PreflightResultRow["sector"]) ?? null,
       arr_exposure: arr,
       owners: extractOwners(c.owners_involved),
-      reason: VERDICT_REASONS[verdict],
+      reason: matchedViaPrefix + VERDICT_REASONS[verdict],
       suggested_action: SUGGESTED_ACTIONS[verdict],
       module_counts: {
         leads: leadsN,
@@ -253,6 +309,7 @@ export function classifyPreflightRows(input: {
         accounts: accountsN,
         total: leadsN + dealsN + contactsN + accountsN,
       },
+      matched_via: matched.matched_via,
     });
   }
 
@@ -297,30 +354,60 @@ export function shouldCreateForVerdict(
   return verdict === "warn" || verdict === "duplicate" || verdict === "pass";
 }
 
-export async function runPreflight(input: {
-  rows: PreflightInputRow[];
-  max_check?: number;
-}): Promise<PreflightResponse> {
-  const cap = Math.max(1, Math.min(input.max_check ?? 5000, 10000));
-  const rows = input.rows ?? [];
-  const examineCount = Math.min(rows.length, cap);
-
-  const domainSet = new Set<string>();
-  for (let i = 0; i < examineCount; i++) {
-    const d = resolveDomain(rows[i]!);
-    if (d) domainSet.add(d);
-  }
-
-  const clustersByDomain = new Map<string, PreflightClusterRow>();
-  if (domainSet.size > 0) {
-    const q = await pool.query<PreflightClusterRow>(
-      `SELECT id, domain,
+/** SELECT list reused by every cluster lookup so the result rows are shape-stable. */
+const CLUSTER_SELECT_COLS = `id, domain,
               cs_overlap_verdict,
               pipeline_lifecycle_state,
               client_sector,
               arr_exposure,
               owners_involved,
-              total_leads, total_deals, total_contacts, total_accounts
+              total_leads, total_deals, total_contacts, total_accounts`;
+
+export async function runPreflight(input: {
+  rows: PreflightInputRow[];
+  max_check?: number;
+  /**
+   * When true, re-run the cluster-level CS overlap scan on every matched
+   * cluster BEFORE classifying — guarantees the verdict reflects the
+   * latest Zoho CS section (Phase / Churn_Date / Renewal_Date) instead
+   * of yesterday's cron. Adds one DB write + Zoho-free recompute per
+   * unique cluster; only opt into this when staleness matters (e.g. an
+   * intake form that runs minutes after the CS team flipped a phase).
+   */
+  refresh_overlap?: boolean;
+}): Promise<PreflightResponse> {
+  const cap = Math.max(1, Math.min(input.max_check ?? 5000, 10000));
+  const rows = input.rows ?? [];
+  const examineCount = Math.min(rows.length, cap);
+
+  // Pre-resolve the three identity signals per row so the batch queries
+  // below run once each on the union of all keys.
+  const domainByRow = new Map<number, string>();
+  const phoneByRow = new Map<number, string>();
+  const companyByRow = new Map<number, string>();
+  const domainSet = new Set<string>();
+  const phoneSet = new Set<string>();
+  for (let i = 0; i < examineCount; i++) {
+    const r = rows[i]!;
+    const d = resolveDomain(r);
+    if (d) {
+      domainByRow.set(i, d);
+      domainSet.add(d);
+    }
+    const p = resolvePhone(r);
+    if (p) {
+      phoneByRow.set(i, p);
+      phoneSet.add(p);
+    }
+    const c = resolveCompany(r);
+    if (c) companyByRow.set(i, c);
+  }
+
+  // PATH 1 — Batch lookup by domain (the dominant case).
+  const clustersByDomain = new Map<string, PreflightClusterRow>();
+  if (domainSet.size > 0) {
+    const q = await pool.query<PreflightClusterRow>(
+      `SELECT ${CLUSTER_SELECT_COLS}
          FROM duplicate_clusters
         WHERE domain = ANY($1::text[])
           AND status = 'active'`,
@@ -337,9 +424,134 @@ export async function runPreflight(input: {
     }
   }
 
+  // PATH 2 — Batch lookup by phone for the rows that didn't hit on domain.
+  // Joins through duplicate_records → duplicate_clusters because the phone
+  // lives on the record row, not the cluster row.
+  const phonesNeeded = new Set<string>();
+  for (const [i, p] of phoneByRow) {
+    const d = domainByRow.get(i);
+    if (d && clustersByDomain.has(d)) continue;
+    phonesNeeded.add(p);
+  }
+  const clustersByPhone = new Map<string, PreflightClusterRow>();
+  if (phonesNeeded.size > 0) {
+    const q = await pool.query<PreflightClusterRow & { matched_phone: string }>(
+      `SELECT DISTINCT ON (dr.phone_normalized)
+              dr.phone_normalized AS matched_phone,
+              dc.id, dc.domain,
+              dc.cs_overlap_verdict,
+              dc.pipeline_lifecycle_state,
+              dc.client_sector,
+              dc.arr_exposure,
+              dc.owners_involved,
+              dc.total_leads, dc.total_deals, dc.total_contacts, dc.total_accounts
+         FROM duplicate_records dr
+         JOIN duplicate_clusters dc ON dc.id = dr.cluster_id
+        WHERE dr.phone_normalized = ANY($1::text[])
+          AND dc.status = 'active'
+        ORDER BY dr.phone_normalized,
+                 CASE dc.cs_overlap_verdict
+                   WHEN 'block'  THEN 4
+                   WHEN 'review' THEN 3
+                   WHEN 'warn'   THEN 2
+                   ELSE 1
+                 END DESC`,
+      [Array.from(phonesNeeded)],
+    );
+    for (const row of q.rows) {
+      const { matched_phone, ...cluster } = row;
+      clustersByPhone.set(matched_phone, cluster as PreflightClusterRow);
+    }
+  }
+
+  // PATH 3 — Per-row fuzzy company-name lookup (pg_trgm similarity ≥ 0.6).
+  // Only for rows that didn't match by domain OR by phone. Per-row because
+  // pg_trgm's similarity() can't be batched cleanly via ANY().
+  const companyMatchByRow = new Map<number, PreflightClusterRow>();
+  for (const [i, cname] of companyByRow) {
+    const d = domainByRow.get(i);
+    if (d && clustersByDomain.has(d)) continue;
+    const p = phoneByRow.get(i);
+    if (p && clustersByPhone.has(p)) continue;
+    try {
+      const q = await pool.query<PreflightClusterRow>(
+        `SELECT ${CLUSTER_SELECT_COLS}
+           FROM duplicate_clusters
+          WHERE status = 'active'
+            AND company_name_normalized IS NOT NULL
+            AND company_name_normalized != ''
+            AND similarity(company_name_normalized, $1) >= 0.6
+          ORDER BY similarity(company_name_normalized, $1) DESC
+          LIMIT 1`,
+        [cname],
+      );
+      if (q.rows[0]) companyMatchByRow.set(i, q.rows[0]);
+    } catch {
+      // pg_trgm extension may not be installed in some envs — silently
+      // degrade. The other paths still fire.
+    }
+  }
+
+  // Build the per-row match map by walking the fallback chain in priority
+  // order: domain → phone → company.
+  const matchByRow = new Map<number, PreflightRowMatch>();
+  for (let i = 0; i < examineCount; i++) {
+    const d = domainByRow.get(i);
+    if (d) {
+      const c = clustersByDomain.get(d);
+      if (c) {
+        matchByRow.set(i, { cluster: c, matched_via: "domain" });
+        continue;
+      }
+    }
+    const p = phoneByRow.get(i);
+    if (p) {
+      const c = clustersByPhone.get(p);
+      if (c) {
+        matchByRow.set(i, { cluster: c, matched_via: "phone" });
+        continue;
+      }
+    }
+    const c = companyMatchByRow.get(i);
+    if (c) {
+      matchByRow.set(i, { cluster: c, matched_via: "company_name" });
+    }
+  }
+
+  // OPT-IN — refresh the CS overlap verdict on every matched cluster.
+  // Imported lazily so we don't pull in scanClusterForCsOverlap on every
+  // call (avoid circular import in dbtest scenarios).
+  if (input.refresh_overlap && matchByRow.size > 0) {
+    const uniqueClusterIds = new Set<number>();
+    for (const m of matchByRow.values()) uniqueClusterIds.add(m.cluster.id);
+    const { scanClusterForCsOverlap } = await import("./duplicateRadarDatabase");
+    for (const cid of uniqueClusterIds) {
+      try {
+        await scanClusterForCsOverlap(cid);
+      } catch {
+        /* non-fatal — fall back to the cached verdict */
+      }
+    }
+    // Re-fetch the affected clusters so the response reflects the freshly
+    // computed verdicts. One round-trip, scoped to the touched ids.
+    const ids = Array.from(uniqueClusterIds);
+    const q = await pool.query<PreflightClusterRow>(
+      `SELECT ${CLUSTER_SELECT_COLS}
+         FROM duplicate_clusters
+        WHERE id = ANY($1::int[])`,
+      [ids],
+    );
+    const freshById = new Map<number, PreflightClusterRow>();
+    for (const r of q.rows) freshById.set(r.id, r);
+    for (const [i, m] of matchByRow) {
+      const fresh = freshById.get(m.cluster.id);
+      if (fresh) matchByRow.set(i, { cluster: fresh, matched_via: m.matched_via });
+    }
+  }
+
   return classifyPreflightRows({
     rows,
-    clustersByDomain,
+    matchByRow,
     max_check: cap,
   });
 }
