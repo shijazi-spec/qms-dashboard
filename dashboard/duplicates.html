@@ -830,6 +830,15 @@
                 <button data-on-click="openCapaPicker" data-args="[&quot;cross-module&quot;]" data-testid="button-open-capa-cross-module" title="Open a corrective-action record (CAPA) on one of the cross-module clusters below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
 
+            <!-- Status filter: open queue vs handled/dismissed (auditable) -->
+            <div class="flex flex-wrap items-center gap-2 mb-2" id="cmoStatusChips">
+                <span class="text-xs text-gray-500 me-1">Status:</span>
+                <button data-on-click="setCrossModuleStatus" data-args="[&quot;active&quot;]" id="cmoStatus-active" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">Open</button>
+                <button data-on-click="setCrossModuleStatus" data-args="[&quot;resolved&quot;]" id="cmoStatus-resolved" class="px-3 py-1.5 text-xs font-medium rounded-full bg-green-100 text-green-700 hover:bg-green-200">Resolved</button>
+                <button data-on-click="setCrossModuleStatus" data-args="[&quot;ignored&quot;]" id="cmoStatus-ignored" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300">Dismissed</button>
+                <button data-on-click="setCrossModuleStatus" data-args="[&quot;all&quot;]" id="cmoStatus-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">All</button>
+            </div>
+
             <!-- Filter chips per pairing type -->
             <div class="flex flex-wrap gap-2 mb-4" id="cmoChips">
                 <button data-on-click="filterCrossModule" data-args="[&quot;all&quot;]" id="cmoChip-all" data-testid="cmo-chip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
@@ -867,6 +876,7 @@
                             <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Confidence</th>
                             <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase">Pipeline value</th>
                             <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Recommended action</th>
+                            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Track</th>
                         </tr>
                     </thead>
                     <tbody id="crossModuleTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -1608,8 +1618,10 @@
             try {
                 // limit=100000 → load the WHOLE cross-module dataset (the old
                 // default of 200 silently hid overlaps). The table paginates
-                // client-side, so loading everything is fine.
-                const res = await fetch('/api/duplicates/cross-module-overlaps?limit=100000', { credentials: 'same-origin' });
+                // client-side, so loading everything is fine. status drives the
+                // Open / Resolved / Dismissed / All filter.
+                const _cmStatus = window._crossModuleStatusFilter || 'active';
+                const res = await fetch('/api/duplicates/cross-module-overlaps?limit=100000&status=' + encodeURIComponent(_cmStatus), { credentials: 'same-origin' });
                 if (!res.ok) {
                     let body = '';
                     try { body = (await res.text()).slice(0, 200); } catch (_) {}
@@ -1684,6 +1696,54 @@
             if (arrEl)   arrEl.textContent   = formatCurrency(arrSum);
         }
 
+        // Status filter (Open / Resolved / Dismissed / All). Re-fetches with the
+        // chosen status so handled/dismissed overlaps are reviewable + reversible.
+        window._crossModuleStatusFilter = window._crossModuleStatusFilter || 'active';
+        function setCrossModuleStatus(status) {
+            window._crossModuleStatusFilter = status || 'active';
+            ['active', 'resolved', 'ignored', 'all'].forEach(k => {
+                const el = document.getElementById('cmoStatus-' + k);
+                if (!el) return;
+                const active = k === window._crossModuleStatusFilter;
+                const palette = {
+                    active:   active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    resolved: active ? 'bg-green-700 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200',
+                    ignored:  active ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
+                    all:      active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                };
+                el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + palette[k];
+            });
+            window._crossModulePage = 0;
+            loadCrossModule();
+        }
+
+        // Mark a cross-module overlap as HANDLED (status='resolved') — the
+        // operator converted / linked / closed it in Zoho. No Zoho write here;
+        // it just drops the row from the open queue and is reversible via Re-open.
+        async function markCrossModuleHandled(clusterId) {
+            if (!confirm('Mark this cross-module overlap as handled?\n\nUse this once you have CONVERTED / LINKED / CLOSED the records in Zoho. It leaves the open queue (still reviewable under "Resolved" and reversible). No Zoho changes are made here.')) return;
+            const payload = JSON.stringify({ action: 'resolve', notes: 'Cross-module overlap handled in Zoho (convert / link / close) — marked from the Cross-Module tab.' });
+            try {
+                let res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: payload
+                });
+                if (res.status === 401 || res.status === 403) {
+                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    if (!adminKey) return;
+                    res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
+                    });
+                }
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                loadCrossModule();
+            } catch (e) {
+                alert('Could not mark handled: ' + (e && e.message || e));
+            }
+        }
+
         function filterCrossModule(pairing) {
             crossModuleFilter = pairing || 'all';
             // Repaint chip styles
@@ -1748,7 +1808,7 @@
                 } else {
                     msg = 'No cross-module overlaps match this filter — try the <strong>All</strong> chip.';
                 }
-                tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-sm">${msg}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-8 text-center text-sm">${msg}</td></tr>`;
                 updateCrossModuleBulkBar();
                 return;
             }
@@ -1792,9 +1852,33 @@
                     + '<td class="px-4 py-2 text-xs text-end cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']"><span class="confidence-' + getConfidenceLevel(c.confidence_score || 0) + ' px-2 py-1 rounded">' + _fn(c.confidence_score || 0) + '%</span></td>'
                     + '<td class="px-4 py-2 text-xs text-end font-medium cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + formatCurrency(Number(c.estimated_pipeline_value || 0)) + '</td>'
                     + '<td class="px-4 py-2 text-xs text-gray-700 cursor-pointer" data-on-click="showClusterDetails" data-args="[' + c.id + ']">' + escapeHtml(meta.action) + '</td>'
+                    + _crossModuleTrackCell(c)
                     + '</tr>';
             }).join('');
             updateCrossModuleBulkBar();
+        }
+
+        // Per-row tracking cell. In the open queue: ✓ Handled (mark resolved —
+        // I converted/linked/closed it in Zoho) + 🚫 Dismiss (false positive /
+        // intentional). In the Resolved/Dismissed views: a status tag + 🔓 Re-open.
+        // No Zoho writes — this only tracks the cluster's status so handled items
+        // leave "Total open" and the KPIs stay honest, while staying auditable.
+        function _crossModuleTrackCell(c) {
+            const st = window._crossModuleStatusFilter || 'active';
+            const isOpen = (c.status || 'active') === 'active';
+            if (st === 'active' || isOpen) {
+                return '<td class="px-4 py-2 text-xs text-center whitespace-nowrap">'
+                    + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark handled — I converted / linked / closed this in Zoho. Removes it from the open queue (auditable, reversible)." class="px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 me-1">✓ Handled</button>'
+                    + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No Zoho changes." class="px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">🚫</button>'
+                    + '</td>';
+            }
+            const tag = (c.status === 'resolved')
+                ? '<span class="text-[10px] text-green-600 me-1">Resolved</span>'
+                : '<span class="text-[10px] text-gray-500 me-1">Dismissed</span>';
+            return '<td class="px-4 py-2 text-xs text-center whitespace-nowrap">'
+                + tag
+                + '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200">🔓</button>'
+                + '</td>';
         }
 
         // Follow-up 3: bulk-close selection state + action.
@@ -5686,6 +5770,8 @@
                 if (['leads','deals','contacts','accounts'].includes(tab)) {
                     window._loadedTabs && window._loadedTabs.delete(tab);
                     loadRecordTab(tab, 0);
+                } else if (tab === 'cross-module' && typeof loadCrossModule === 'function') {
+                    loadCrossModule();
                 } else if (typeof refreshData === 'function') {
                     refreshData();
                 }
@@ -5720,6 +5806,8 @@
                 if (['leads','deals','contacts','accounts'].includes(tab)) {
                     window._loadedTabs && window._loadedTabs.delete(tab);
                     loadRecordTab(tab, 0);
+                } else if (tab === 'cross-module' && typeof loadCrossModule === 'function') {
+                    loadCrossModule();
                 } else if (typeof refreshData === 'function') { refreshData(); }
             } catch (e) {
                 alert('Could not re-open: ' + (e && e.message || e));

@@ -4875,12 +4875,20 @@ export interface CrossModuleOverlapsResponse {
 export async function getCrossModuleOverlaps(opts: {
   limit?: number;
   pairing?: CrossModulePairing | null;
+  /** Which lifecycle status to return: 'active' (default, the open queue),
+   *  'resolved' (handled), 'ignored' (dismissed), or 'all'. */
+  status?: "active" | "resolved" | "ignored" | "all";
 } = {}): Promise<CrossModuleOverlapsResponse> {
   const CROSS_MODULE_MAX = 100000;
   const limit = Math.min(
     CROSS_MODULE_MAX,
     Math.max(1, Math.floor(opts.limit ?? CROSS_MODULE_MAX) || CROSS_MODULE_MAX),
   );
+  const statusOpt = opts.status ?? "active";
+  // Parameterised status clause; 'all' drops the filter entirely.
+  const statusClause =
+    statusOpt === "all" ? "TRUE" : "status = $2";
+  const params: any[] = statusOpt === "all" ? [limit] : [limit, statusOpt];
   const r = await pool.query<CrossModuleClusterRow>(
     `
     SELECT
@@ -4891,7 +4899,7 @@ export async function getCrossModuleOverlaps(opts: {
       COALESCE(estimated_pipeline_value, 0)::numeric AS estimated_pipeline_value,
       status, created_at, updated_at
     FROM duplicate_clusters
-    WHERE status = 'active'
+    WHERE ${statusClause}
       AND (
         (CASE WHEN total_leads > 0 THEN 1 ELSE 0 END +
          CASE WHEN total_contacts > 0 THEN 1 ELSE 0 END +
@@ -4902,7 +4910,7 @@ export async function getCrossModuleOverlaps(opts: {
     ORDER BY total_records DESC, confidence_score DESC
     LIMIT $1
     `,
-    [limit],
+    params,
   );
 
   const all = r.rows.map((row) => ({

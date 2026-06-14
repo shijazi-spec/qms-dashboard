@@ -354,6 +354,15 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     entityType: 'cs_lifecycle_status',
     buildPreview: () => 'CS Lifecycle status',
   },
+  'executive-summary': {
+    toolId: 'executive-summary',
+    label: 'Executive Summary (platform-wide duplicate KPIs)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only aggregate tiles
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only KPI summary'],
+    entityType: 'executive_summary',
+    buildPreview: () => 'Executive duplicate-radar summary',
+  },
   'cs-pipeline-overlap-status': {
     toolId: 'cs-pipeline-overlap-status',
     label: 'CS Pipeline Overlap status (block/review/warn)',

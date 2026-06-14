@@ -2849,12 +2849,18 @@ export const duplicateRadarRoutes = [
                   | "mixed")
               : null;
 
+          const statusRaw = (url.searchParams.get("status") || "active").toLowerCase();
+          const status = (["active", "resolved", "ignored", "all"].includes(statusRaw)
+            ? statusRaw
+            : "active") as "active" | "resolved" | "ignored" | "all";
+
           const { getCrossModuleOverlaps } = await import(
             "../../utils/duplicateRadarDatabase"
           );
           const result = await getCrossModuleOverlaps({
             limit: Number.isFinite(limit) ? limit : 200,
             pairing,
+            status,
           });
           return c.json({ success: true, ...result });
         } catch (error: any) {
