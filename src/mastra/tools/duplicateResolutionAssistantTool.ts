@@ -18,6 +18,7 @@ import { z } from "zod";
 import {
   getResolutionRunConfig,
   getModuleResolutionBreakdown,
+  getRecentApplyStats,
 } from "../../utils/duplicateResolutionRunner";
 import {
   listResolutionRules,
@@ -30,7 +31,11 @@ import {
   MODULE_RECORD_TYPE,
   type CrmModule,
 } from "../../utils/duplicateMergePlanner";
-import { getRecordsByClusterId, getClusterSummary } from "../../utils/duplicateRadarDatabase";
+import {
+  getRecordsByClusterId,
+  getClusterSummary,
+  getPreviousExecBriefSnapshot,
+} from "../../utils/duplicateRadarDatabase";
 
 const MODULES: CrmModule[] = ["Accounts", "Leads", "Deals", "Contacts"];
 function asModule(m: unknown): CrmModule {
@@ -97,6 +102,13 @@ export const duplicateResolutionAssistantTool = createTool({
           .filter((b) => b.total > 0)
           .map((b) => `${b.module}: ${b.applied} merged / ${b.total} clusters`)
           .join(", ");
+        // REAL progress, honestly sourced. recentApplies = actual merges in the
+        // last 7d from the append-only feedback log (survives rebuilds). prevSnap
+        // = the last recorded weekly exec-brief snapshot, for a true before/after.
+        // Use THESE for any "is there progress / previous vs current" question —
+        // never invent a number or reuse one from earlier in the chat.
+        const recentApplies = await getRecentApplyStats(24 * 7).catch(() => null);
+        const prevSnap = await getPreviousExecBriefSnapshot().catch(() => null);
         return {
           success: true,
           summary:
@@ -116,6 +128,12 @@ export const duplicateResolutionAssistantTool = createTool({
                   ? `NOTE: ${totalMarkedOnly} cluster(s) are marked 'resolved' WITHOUT any merge action — these were closed but NOT actually merged (legacy auto-resolve or manual Mark-Resolved); do not count them as merged data. They can be re-opened. `
                   : "")
               : "") +
+            (recentApplies
+              ? `PROGRESS (real merges, last 7 days, survives rebuilds): ${recentApplies.applies} apply(ies)` +
+                (recentApplies.applies > 0
+                  ? ` (${recentApplies.agentApplies} agent · ${recentApplies.humanApplies} people · ${recentApplies.duplicatesTagged} duplicates tagged). `
+                  : " — nothing was merged in the last week. ")
+              : "") +
             `Agent maturity — ${gradeLine}.`,
           data: {
             config: cfg,
@@ -125,6 +143,8 @@ export const duplicateResolutionAssistantTool = createTool({
             totalSolved,
             totalApplied,
             totalMarkedOnly,
+            recentApplies,
+            previousSnapshot: prevSnap,
           },
         };
       }

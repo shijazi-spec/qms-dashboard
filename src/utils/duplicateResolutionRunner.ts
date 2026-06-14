@@ -223,6 +223,57 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
 }
 
 /**
+ * REAL merge activity over a recent window, sourced from the append-only
+ * resolution feedback log — NOT cluster status (which a "Rebuild Clusters" wipes
+ * back to 'active'). This is the HONEST "is there progress?" figure: how many
+ * Applies actually happened, who did them, how many duplicates were tagged. In
+ * shadow mode this is typically 0 (the agent makes no Zoho writes). Use this to
+ * answer progress/comparison questions — never cluster resolved-count deltas,
+ * which swing to 0 on a rebuild without anything actually being un-merged.
+ */
+export async function getRecentApplyStats(sinceHours: number): Promise<{
+  sinceHours: number;
+  applies: number;
+  agentApplies: number;
+  humanApplies: number;
+  duplicatesTagged: number;
+  undos: number;
+}> {
+  const out = {
+    sinceHours,
+    applies: 0,
+    agentApplies: 0,
+    humanApplies: 0,
+    duplicatesTagged: 0,
+    undos: 0,
+  };
+  try {
+    const r = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE event_type='applied' AND COALESCE(performed_by,'') NOT ILIKE 'UNDO%')::int AS applies,
+         COUNT(*) FILTER (WHERE event_type='applied' AND COALESCE(performed_by,'') NOT ILIKE 'UNDO%'
+                          AND (COALESCE(performed_by,'') ILIKE '%GRQ Assistant%' OR COALESCE(performed_by,'') ILIKE '%Autonomous Agent%'))::int AS agent_applies,
+         COALESCE(SUM(duplicates_tagged) FILTER (WHERE event_type='applied'),0)::int AS tagged,
+         COUNT(*) FILTER (WHERE COALESCE(performed_by,'') ILIKE 'UNDO%')::int AS undos
+       FROM duplicate_resolution_feedback
+      WHERE created_at > NOW() - ($1 || ' hours')::interval`,
+      [String(sinceHours)],
+    );
+    const row = r.rows[0] || {};
+    out.applies = Number(row.applies || 0);
+    out.agentApplies = Number(row.agent_applies || 0);
+    out.humanApplies = Math.max(0, out.applies - out.agentApplies);
+    out.duplicatesTagged = Number(row.tagged || 0);
+    out.undos = Number(row.undos || 0);
+  } catch (e) {
+    logger.warn("[dup-resolution-runner] recent apply stats failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+  return out;
+}
+
+/**
  * The private resolution channel: #grq-platform-assistant (Sarah + the agent +
  * her manager). Overridable via env if the channel ever moves. The QMS Slack
  * bot must be a member of this channel and SLACK_BOT_TOKEN must be set.
@@ -546,21 +597,42 @@ export const AGENT_PERFORMED_BY =
 export async function buildRadarTabStatus(): Promise<string> {
   const parts: string[] = [];
   const n = (x: number) => Math.round(x || 0).toLocaleString();
+  // Pull the durable per-module breakdown ONCE — used for both the Overview
+  // "merged" total and the per-module line. `applied` = real Zoho merges that
+  // survive a Rebuild (ledger-backed); `solved` also counts a bare resolved
+  // status (rebuild-fragile). We report the DURABLE figure so the digest never
+  // falsely shows "0 done" just because a Rebuild reset cluster statuses.
+  let bd: ModuleBreakdownRow[] = [];
+  try {
+    bd = await getModuleResolutionBreakdown();
+  } catch { /* skip */ }
+  const totalMerged = bd.reduce((a, b) => a + (b.applied || 0), 0);
   // Executive Summary / Cross-Module — overall clusters + SAR exposure.
   try {
     const agg = await getClusterSummary();
     if (agg) {
       parts.push(
-        `›  *Overview:* ${n(agg.totalClusters)} clusters · ~SAR ${n(agg.estimatedPipelineInflation)} exposure · ${n(agg.resolvedCount)} resolved · ${n(agg.activeCount)} open`,
+        `›  *Overview:* ${n(agg.totalClusters)} clusters · ~SAR ${n(agg.estimatedPipelineInflation)} exposure · ${n(totalMerged)} merged · ${n(agg.activeCount)} open`,
       );
     }
   } catch { /* skip */ }
-  // Lead / Deal / Contact / Account Duplicates — remaining vs cleared.
+  // Real merge activity in the last 24h, from the append-only feedback log
+  // (survives rebuilds). The honest "is anything actually happening?" line —
+  // 0 in shadow mode, which is the truth, not an error.
   try {
-    const bd = await getModuleResolutionBreakdown();
+    const recent = await getRecentApplyStats(24);
+    parts.push(
+      `›  *Merges applied (real, last 24h):* ${n(recent.applies)}` +
+        (recent.applies > 0
+          ? ` (${n(recent.agentApplies)} agent · ${n(recent.humanApplies)} people · ${n(recent.duplicatesTagged)} duplicates tagged)`
+          : " — nothing merged in this window"),
+    );
+  } catch { /* skip */ }
+  // Lead / Deal / Contact / Account Duplicates — remaining vs MERGED (durable).
+  try {
     const ml = bd
       .filter((b) => b.total > 0)
-      .map((b) => `${b.module} ${n(b.rest)} left/${n(b.solved)} done`)
+      .map((b) => `${b.module} ${n(b.rest)} left/${n(b.applied)} merged`)
       .join(" · ");
     if (ml) parts.push(`›  *Duplicates:* ${ml}`);
   } catch { /* skip */ }
