@@ -7067,7 +7067,11 @@
                 missing: (data.missingDocs || []).map(function (m) { return m.label; }),
                 attachmentCount: data.attachmentCount || 0,
                 stage: stage,
-                checkedAt: new Date().toISOString(),
+                // Prefer the server's checkedAt/checkedBy when present so the
+                // row matches the persisted attribution; fall back to "now"
+                // for environments where the response doesn't echo them yet.
+                checkedAt: data.checkedAt || new Date().toISOString(),
+                checkedBy: data.checkedBy || null,
             };
             window._dcResults[id] = rec;
             _dcStorePut(id, rec);
@@ -7109,7 +7113,12 @@
             var head = rec.compliant
                 ? '<div class="text-xs font-medium text-green-700 mb-1">✓ All required docs present (' + (rec.attachmentCount || 0) + ' files)</div>'
                 : '<div class="text-xs font-medium text-red-700 mb-1">✗ ' + ((rec.missing || []).length) + ' missing (' + (rec.attachmentCount || 0) + ' files attached)</div>';
-            var when = rec.checkedAt ? '<div class="text-[10px] text-gray-400 mt-0.5">checked ' + escapeHtml(_dcWhen(rec.checkedAt)) + '</div>' : '';
+            // Surface "checked by" alongside the timestamp so a second
+            // reviewer can see who already ran the scan on this deal
+            // (the server's deal_doc_compliance row carries checkedBy,
+            // overlaid by _dcRehydrateFromServer). Cross-team visibility.
+            var byPart = rec.checkedBy ? ' by ' + escapeHtml(String(rec.checkedBy)) : '';
+            var when = rec.checkedAt ? '<div class="text-[10px] text-gray-400 mt-0.5" title="Persisted in deal_doc_compliance. Whoever scans this deal most recently overwrites the checkedBy field.">checked ' + escapeHtml(_dcWhen(rec.checkedAt)) + byPart + '</div>' : '';
             var recheck = '<button data-on-click="checkDealDocs" data-args=\'' + escapeHtml(JSON.stringify([String(id), String(stage || rec.stage || '')])) + '\' class="text-[10px] text-blue-600 hover:underline">↻ re-check</button>';
             return head + present + missing + when + recheck;
         }

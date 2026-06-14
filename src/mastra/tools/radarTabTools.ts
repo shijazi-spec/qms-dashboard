@@ -9,9 +9,92 @@ import { z } from "zod";
  *   - cs-pipeline-overlap  : duplicate clusters overlapping live CS customers
  *   - cross-module-overlap : same company across ≥2 Zoho modules (Lead+Contact, Lead+Account, …)
  *   - account-hints        : deals missing Account_Name + the inferred-Account verdict (pending/applied/dismissed)
+ *   - deal-compliance      : Sales SOP 7.5.10 attachments check on Proposal / Agreement Signed / Paid deals
  *   - owner-accountability : who owns the most duplicate records
  *   - preflight-check      : "should we create a record for <X>?" verdict
  */
+
+// ── Deal Compliance ───────────────────────────────────────────────────────
+export const dealComplianceStatusTool = createTool({
+  id: "deal-compliance-status",
+  description:
+    "Check the Deal Compliance tab — Sales SOP 7.5.10 attachments-verification on Deals in the closing stages. The matcher reads Zoho attachment file names and looks for: financial offer (Arabic عرض مالي) for Proposal stage; proposal + contract/PO + VAT certificate + Commercial Registration + National Address for Agreement Signed and Paid (Paid is the Agreement-Signed stage re-labelled for backdated/migrated deals — same five docs). Default stages in scope: Proposal, Agreement Signed, Paid. Returns counts of compliant vs missing-docs deals across the cached scans, plus the breakdown by stage so the user knows which closing stage is the biggest gap. Read-only. Use when asked how many deals are missing documents, which closing stage has the worst compliance, what the Sales SOP attachment gap looks like, or for a Deal Compliance snapshot. Field-level data-entry compliance is on the Quality Dashboard audit (a separate engine) — this tool only covers ATTACHMENTS.",
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    success: z.boolean(),
+    totalChecked: z.number().optional(),
+    compliant: z.number().optional(),
+    missingDocs: z.number().optional(),
+    byStage: z.record(
+      z.object({
+        total: z.number(),
+        compliant: z.number(),
+        missing: z.number(),
+      }),
+    ).optional(),
+    topMissingDocs: z.array(
+      z.object({
+        label: z.string(),
+        count: z.number(),
+      }),
+    ).optional(),
+    error: z.string().optional(),
+  }),
+  execute: async () => {
+    try {
+      const { getDealDocCompliance } = await import(
+        "../../utils/duplicateRadarDatabase"
+      );
+      // Pull the latest 5000 persisted scans (the table's natural cap).
+      // Each row is one deal's most recent attachment verdict.
+      const rows: any[] = await getDealDocCompliance();
+      const totalChecked = rows.length;
+      const compliant = rows.filter((r) => r.compliant === true).length;
+      const missingDocs = totalChecked - compliant;
+
+      // Per-stage breakdown so Adam can say "Proposal: 12 of 30 missing docs"
+      const byStage: Record<string, { total: number; compliant: number; missing: number }> = {};
+      for (const r of rows) {
+        const stage = String(r.stage || "unknown");
+        if (!byStage[stage]) byStage[stage] = { total: 0, compliant: 0, missing: 0 };
+        byStage[stage].total++;
+        if (r.compliant) byStage[stage].compliant++;
+        else byStage[stage].missing++;
+      }
+
+      // Top-5 missing-document types so Adam can tell the operator which
+      // doc is the biggest gap across the corpus.
+      const missingCounts: Record<string, number> = {};
+      for (const r of rows) {
+        if (r.compliant) continue;
+        const missing: any[] = Array.isArray(r.missing_docs)
+          ? r.missing_docs
+          : typeof r.missing_docs === "string"
+            ? JSON.parse(r.missing_docs || "[]")
+            : [];
+        for (const m of missing) {
+          const label = String(m?.label ?? m?.key ?? "unknown");
+          missingCounts[label] = (missingCounts[label] || 0) + 1;
+        }
+      }
+      const topMissingDocs = Object.entries(missingCounts)
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      return {
+        success: true,
+        totalChecked,
+        compliant,
+        missingDocs,
+        byStage,
+        topMissingDocs,
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || String(e) };
+    }
+  },
+});
 
 // ── Account Hints ─────────────────────────────────────────────────────────
 export const accountHintsStatusTool = createTool({
