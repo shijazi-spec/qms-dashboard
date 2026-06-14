@@ -8,9 +8,84 @@ import { z } from "zod";
  *   - executive-summary    : platform-wide KPI tiles (clusters, dup rate, pipeline inflation, resolution rate)
  *   - cs-pipeline-overlap  : duplicate clusters overlapping live CS customers
  *   - cross-module-overlap : same company across ≥2 Zoho modules (Lead+Contact, Lead+Account, …)
+ *   - account-hints        : deals missing Account_Name + the inferred-Account verdict (pending/applied/dismissed)
  *   - owner-accountability : who owns the most duplicate records
  *   - preflight-check      : "should we create a record for <X>?" verdict
  */
+
+// ── Account Hints ─────────────────────────────────────────────────────────
+export const accountHintsStatusTool = createTool({
+  id: "account-hints-status",
+  description:
+    "Check the Account Hints tab — Deals in Zoho with missing or placeholder Account_Name where the platform has walked Deal → linked Contact → Contact's email domain → matching Account and inferred which Account to set. Returns the triage queue size, the confidence distribution, and the AI-resolve readiness. Confidence formula (40 base + 25 if two-plus contacts agree + 10 if one contact agrees + 25 if the Account has an explicit domain field + 10 if the Account has any related records, capped at 100). AI auto-resolve gate is 70 percent by default — below that the row stays pending for manual Applied or Dismiss. Every AI write is attributed to GRQ Assistant on behalf of the calling user and writes Account_Name on the Deal in Zoho. Use when asked how many account hints are pending, how many high-confidence hints are ready for one-click resolve, what the inference algorithm does, or any Account Hints status question.",
+  inputSchema: z.object({
+    status: z
+      .enum(["pending", "applied", "dismissed"])
+      .optional()
+      .describe(
+        "Which slice to count. pending = open queue (default), applied = AI or operator wrote Account_Name, dismissed = operator rejected.",
+      ),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    status: z.string().optional(),
+    summary: z
+      .object({
+        pending: z.number(),
+        applied: z.number(),
+        dismissed: z.number(),
+      })
+      .optional(),
+    aiResolveReady: z.number().optional(), // pending AND confidence >= 70
+    confidenceDistribution: z
+      .object({
+        high: z.number(), // >= 80
+        medium: z.number(), // 60-79
+        low: z.number(), // < 60
+      })
+      .optional(),
+    error: z.string().optional(),
+  }),
+  execute: async ({ context }) => {
+    try {
+      const status = ((context as any)?.status as string) || "pending";
+      const { listAccountInferenceHints } = await import(
+        "../../utils/accountInference"
+      );
+      // Pull a wide slice so the distribution is meaningful even on
+      // large tenants — the list is capped server-side at 2000.
+      const r: any = await listAccountInferenceHints({
+        status,
+        limit: 2000,
+      });
+      const hints: Array<{ confidence: number; status: string }> = Array.isArray(r?.hints)
+        ? r.hints
+        : [];
+      const aiResolveReady = hints.filter(
+        (h) => h.status === "pending" && Number(h.confidence || 0) >= 70,
+      ).length;
+      const high = hints.filter((h) => Number(h.confidence || 0) >= 80).length;
+      const medium = hints.filter((h) => {
+        const c = Number(h.confidence || 0);
+        return c >= 60 && c < 80;
+      }).length;
+      const low = hints.filter((h) => Number(h.confidence || 0) < 60).length;
+      return {
+        success: true,
+        status,
+        summary: {
+          pending: Number(r?.summary?.pending ?? 0),
+          applied: Number(r?.summary?.applied ?? 0),
+          dismissed: Number(r?.summary?.dismissed ?? 0),
+        },
+        aiResolveReady,
+        confidenceDistribution: { high, medium, low },
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || String(e) };
+    }
+  },
+});
 
 // ── Executive Summary ─────────────────────────────────────────────────────
 export const executiveSummaryTool = createTool({
