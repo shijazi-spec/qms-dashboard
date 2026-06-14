@@ -17,7 +17,10 @@
  * All knobs are env-configurable so Quality can tune the threshold without
  * a redeploy:
  *
- *   AUTO_CAPA_ON_BLOCK_ENABLED        (default 'true')
+ *   AUTO_CAPA_GLOBAL_ENABLED          (default 'false' — MASTER switch; while
+ *                                      false, NO auto-CAPA runs anywhere. Set
+ *                                      'true' to resume once the platform is ready.)
+ *   AUTO_CAPA_ON_BLOCK_ENABLED        (default 'true', only applies once global is on)
  *   AUTO_CAPA_ARR_THRESHOLD_SAR       (default '1000000' — 1M SAR)
  *   AUTO_CAPA_DEFAULT_ASSIGNEE        (optional; left blank by default)
  *   AUTO_CAPA_TARGET_DAYS             (default '7' — 1-week target close)
@@ -142,7 +145,12 @@ export async function autoOpenCapasForBlockClusters(opts: {
   /** Override default created_by attribution. */
   createdBy?: string;
 }): Promise<AutoCapaResult> {
-  const enabled = opts.enabled ?? envBool("AUTO_CAPA_ON_BLOCK_ENABLED", true);
+  // GLOBAL kill-switch (shared with csLifecycleAutoCapa): all auto-CAPA stays
+  // OFF until AUTO_CAPA_GLOBAL_ENABLED=true. Default false while the platform is
+  // being prepared. Overrides opts.enabled so no caller can bypass the freeze.
+  const enabled =
+    envBool("AUTO_CAPA_GLOBAL_ENABLED", false) &&
+    (opts.enabled ?? envBool("AUTO_CAPA_ON_BLOCK_ENABLED", true));
   const threshold =
     opts.thresholdSar ?? envNumber("AUTO_CAPA_ARR_THRESHOLD_SAR", 1_000_000);
   const assignee = process.env.AUTO_CAPA_DEFAULT_ASSIGNEE || undefined;

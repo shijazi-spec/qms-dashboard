@@ -19,6 +19,7 @@ afterEach(() => {
   delete process.env.AUTO_CAPA_LIFECYCLE_ENABLED;
   delete process.env.AUTO_CAPA_LIFECYCLE_SEVERITIES;
   delete process.env.AUTO_CAPA_LIFECYCLE_CODES;
+  delete process.env.AUTO_CAPA_GLOBAL_ENABLED;
 });
 
 describe("violationSourceId", () => {
@@ -86,12 +87,27 @@ describe("autoOpenCapasForCsLifecycle — env-disabled short-circuit", () => {
   });
 
   test("empty severities list short-circuits even when enabled", async () => {
+    // Global switch on so we genuinely exercise the empty-severities branch
+    // (not the global kill-switch).
+    process.env.AUTO_CAPA_GLOBAL_ENABLED = "true";
     const result = await autoOpenCapasForCsLifecycle({
       enabled: true,
       severities: [],
     });
-    // Note: empty severities short-circuit returns enabled=true but no candidates
     expect(result.candidates).toBe(0);
     expect(result.created).toBe(0);
+  });
+
+  test("GLOBAL kill-switch off (default) disables auto-CAPA even when opts.enabled=true", async () => {
+    // AUTO_CAPA_GLOBAL_ENABLED unset → default false → nothing runs, regardless
+    // of opts.enabled or per-feature env. This is the platform-prep freeze.
+    process.env.AUTO_CAPA_LIFECYCLE_ENABLED = "true";
+    const result = await autoOpenCapasForCsLifecycle({
+      enabled: true,
+      severities: ["critical"],
+    });
+    expect(result.enabled).toBe(false);
+    expect(result.created).toBe(0);
+    expect(result.candidates).toBe(0);
   });
 });

@@ -16,7 +16,11 @@
  * expand the scope via env (AUTO_CAPA_LIFECYCLE_SEVERITIES=critical,warning).
  *
  * Env knobs:
- *   AUTO_CAPA_LIFECYCLE_ENABLED        (default 'true')
+ *   AUTO_CAPA_GLOBAL_ENABLED           (default 'false' — MASTER switch; while
+ *                                       false, NO auto-CAPA runs anywhere, cron
+ *                                       or manual bulk endpoint. Set 'true' to
+ *                                       resume once the platform is ready.)
+ *   AUTO_CAPA_LIFECYCLE_ENABLED        (default 'true', only applies once global is on)
  *   AUTO_CAPA_LIFECYCLE_SEVERITIES     (default 'critical')
  *   AUTO_CAPA_LIFECYCLE_CODES          (default '' — all codes within selected severities)
  *   AUTO_CAPA_LIFECYCLE_EXCLUDE_CODES  (default 'renewal_overdue' — critical flag, no auto-CAPA)
@@ -189,8 +193,14 @@ export async function autoOpenCapasForCsLifecycle(opts: {
   excludeCodes?: CsViolationCode[];
   createdBy?: string;
 }): Promise<CsLifecycleAutoCapaResult> {
+  // GLOBAL kill-switch: while the platform is still being prepared, NO auto-CAPA
+  // runs anywhere (nightly cron OR the manual bulk endpoint) unless
+  // AUTO_CAPA_GLOBAL_ENABLED is explicitly true. Default false = off everywhere.
+  // The per-feature flag still applies once the global switch is turned on. This
+  // overrides opts.enabled so a stray caller can't bypass the freeze.
   const enabled =
-    opts.enabled ?? envBool("AUTO_CAPA_LIFECYCLE_ENABLED", true);
+    envBool("AUTO_CAPA_GLOBAL_ENABLED", false) &&
+    (opts.enabled ?? envBool("AUTO_CAPA_LIFECYCLE_ENABLED", true));
   const severities =
     opts.severities ??
     envList<CsViolationSeverity>(
