@@ -2597,6 +2597,61 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // "Manual Actions" section in the Logs tab: every Mark Resolved / Mark
+    // Dismissed / Bulk-split / partial-apply (module_resolved) operators
+    // perform. Reads duplicate_merge_actions, joined with the cluster row
+    // for display. Filters: ?action_type=resolve,ignore,split,module_resolved
+    // and ?performed_by_like=<substring> and ?cluster_id=N.
+    path: "/api/duplicates/merge-actions",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const limit = parseInt(url.searchParams.get("limit") || "100");
+          const clusterIdRaw = url.searchParams.get("cluster_id");
+          const clusterId =
+            clusterIdRaw && !isNaN(Number(clusterIdRaw))
+              ? Number(clusterIdRaw)
+              : undefined;
+          const actionTypeRaw = url.searchParams.get("action_type");
+          const VALID_TYPES = [
+            "resolve",
+            "ignore",
+            "module_resolved",
+            "split",
+            "merge",
+          ] as const;
+          const actionTypes = actionTypeRaw
+            ? actionTypeRaw
+                .split(",")
+                .map((s) => s.trim())
+                .filter((s): s is (typeof VALID_TYPES)[number] =>
+                  VALID_TYPES.includes(s as any),
+                )
+            : undefined;
+          const performedByLike =
+            url.searchParams.get("performed_by_like") || undefined;
+          const { getMergeHistoryEnriched } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const actions = await getMergeHistoryEnriched({
+            clusterId,
+            actionTypes,
+            performedByLike,
+            limit: Number.isFinite(limit) ? limit : 100,
+          });
+          return c.json({ success: true, actions });
+        } catch (error: any) {
+          logger.error("Error fetching merge actions:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Agentic Resolution — LLM reviewer. READ-ONLY: builds the deterministic
     // plan + learnings briefing server-side and asks the duplicateResolution
     // Agent for a concise verdict/confidence/risks narrative. No writes; the

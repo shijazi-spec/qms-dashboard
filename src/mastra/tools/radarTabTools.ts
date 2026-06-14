@@ -15,6 +15,148 @@ import { z } from "zod";
  *   - preflight-check      : "should we create a record for <X>?" verdict
  */
 
+// ── Manual Actions (Logs tab · operator-driven audit trail) ───────────────
+export const manualActionAuditTool = createTool({
+  id: "manual-action-audit",
+  description:
+    "Pull the most recent rows from the operator-driven cluster audit trail (the Manual Actions sub-table on the Logs tab — duplicate_merge_actions). Captures every Mark Resolved / Mark Dismissed / Bulk-split contacts / partial-apply (module_resolved for cross-module clusters) decision an operator makes on the dashboard. Returns inspected count + byActionType counts (resolve / ignore / module_resolved / split / merge) + topPerformers (who took the most actions in the window) + total records affected + the latest 20 events with cluster id, cluster company/domain, action type, records affected, performed_by, and notes. Pair this with agentActivityTool for the complete audit picture per cluster — agentActivityTool covers the autonomous resolver, this tool covers everything human-driven. Optional filters: actionType (narrow to one type) and performedByLike (substring match on email/name). Read-only.",
+  inputSchema: z.object({
+    limit: z
+      .number()
+      .optional()
+      .describe(
+        "How many recent actions to scan (default 100, max 500). Aggregates are computed over this window.",
+      ),
+    actionType: z
+      .enum(["resolve", "ignore", "module_resolved", "split", "merge"])
+      .optional()
+      .describe("Filter to one action type. Omit to see all."),
+    performedByLike: z
+      .string()
+      .optional()
+      .describe(
+        "Substring match on the performed_by field. Useful for 'all actions Sarah took this week' (pass her email or display name).",
+      ),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    inspected: z.number().optional(),
+    byActionType: z
+      .object({
+        resolve: z.number(),
+        ignore: z.number(),
+        module_resolved: z.number(),
+        split: z.number(),
+        merge: z.number(),
+      })
+      .optional(),
+    totalRecordsAffected: z.number().optional(),
+    topPerformers: z
+      .array(
+        z.object({
+          performedBy: z.string(),
+          actionCount: z.number(),
+        }),
+      )
+      .optional(),
+    recentEvents: z
+      .array(
+        z.object({
+          clusterId: z.number().nullable(),
+          clusterCompanyName: z.string().nullable(),
+          clusterDomain: z.string().nullable(),
+          actionType: z.string(),
+          recordsAffected: z.number(),
+          performedBy: z.string().nullable(),
+          notes: z.string().nullable(),
+          at: z.string().nullable(),
+        }),
+      )
+      .optional(),
+    error: z.string().optional(),
+  }),
+  execute: async ({ context }) => {
+    try {
+      const ctx = (context as any) || {};
+      const limit = Math.max(1, Math.min(Number(ctx.limit) || 100, 500));
+      const actionTypes = ctx.actionType ? [ctx.actionType] : undefined;
+      const performedByLike = ctx.performedByLike || undefined;
+      const { getMergeHistoryEnriched } = await import(
+        "../../utils/duplicateRadarDatabase"
+      );
+      const rows: any[] = await getMergeHistoryEnriched({
+        limit,
+        actionTypes,
+        performedByLike,
+      });
+      const byActionType = {
+        resolve: 0,
+        ignore: 0,
+        module_resolved: 0,
+        split: 0,
+        merge: 0,
+      };
+      let totalRecordsAffected = 0;
+      const performerCounts: Record<string, number> = {};
+      const recentEvents: Array<{
+        clusterId: number | null;
+        clusterCompanyName: string | null;
+        clusterDomain: string | null;
+        actionType: string;
+        recordsAffected: number;
+        performedBy: string | null;
+        notes: string | null;
+        at: string | null;
+      }> = [];
+      for (const r of rows) {
+        const at = String(r.action_type || "") as keyof typeof byActionType;
+        if (at in byActionType) byActionType[at]++;
+        const ids = Array.isArray(r.merged_record_ids)
+          ? r.merged_record_ids
+          : typeof r.merged_record_ids === "string"
+            ? (() => {
+                try {
+                  return JSON.parse(r.merged_record_ids);
+                } catch {
+                  return [];
+                }
+              })()
+            : [];
+        const recCount = Array.isArray(ids) ? ids.length : 0;
+        totalRecordsAffected += recCount;
+        const pb = String(r.performed_by || "").trim();
+        if (pb) performerCounts[pb] = (performerCounts[pb] || 0) + 1;
+        if (recentEvents.length < 20) {
+          recentEvents.push({
+            clusterId: r.cluster_id ?? null,
+            clusterCompanyName: r.cluster_company_name ?? null,
+            clusterDomain: r.cluster_domain ?? null,
+            actionType: String(r.action_type || ""),
+            recordsAffected: recCount,
+            performedBy: pb || null,
+            notes: r.notes ?? null,
+            at: r.created_at ? new Date(r.created_at).toISOString() : null,
+          });
+        }
+      }
+      const topPerformers = Object.entries(performerCounts)
+        .map(([performedBy, actionCount]) => ({ performedBy, actionCount }))
+        .sort((a, b) => b.actionCount - a.actionCount)
+        .slice(0, 5);
+      return {
+        success: true,
+        inspected: rows.length,
+        byActionType,
+        totalRecordsAffected,
+        topPerformers,
+        recentEvents,
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || String(e) };
+    }
+  },
+});
+
 // ── Agent Activity (Logs tab) ─────────────────────────────────────────────
 export const agentActivityTool = createTool({
   id: "agent-activity",

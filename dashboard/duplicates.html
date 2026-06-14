@@ -1325,6 +1325,39 @@
                     </table>
                 </div>
             </div>
+
+            <!-- Manual Actions — Mark Resolved / Mark Dismissed / Bulk-split
+                 events from duplicate_merge_actions. Surfaces operator work
+                 alongside the autonomous agent's work above for a complete
+                 audit picture per cluster. -->
+            <div class="mt-6">
+                <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-3 text-sm text-indigo-900">
+                    <strong>👥 Manual Actions.</strong> Every Mark Resolved, Mark Dismissed, partial-apply (cross-module module_resolved), and Bulk-split contacts decision taken by an operator. This is the audit trail of HUMAN-driven cluster lifecycle changes — pairs with the AI activity above for a complete audit picture per cluster.
+                </div>
+                <div class="flex items-center gap-2 flex-wrap mb-2 text-xs">
+                    <span class="text-gray-500">Filter:</span>
+                    <button data-on-click="filterMergeActions" data-args='["all"]' id="manualActChip-all" class="px-3 py-1 rounded-full font-semibold bg-gray-900 text-white">All</button>
+                    <button data-on-click="filterMergeActions" data-args='["resolve"]' id="manualActChip-resolve" class="px-3 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Mark Resolved</button>
+                    <button data-on-click="filterMergeActions" data-args='["ignore"]' id="manualActChip-ignore" class="px-3 py-1 rounded-full font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300">Mark Dismissed</button>
+                    <button data-on-click="filterMergeActions" data-args='["module_resolved"]' id="manualActChip-module_resolved" class="px-3 py-1 rounded-full font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200">Partial apply</button>
+                    <button data-on-click="filterMergeActions" data-args='["split"]' id="manualActChip-split" class="px-3 py-1 rounded-full font-semibold bg-violet-100 text-violet-700 hover:bg-violet-200">Bulk-split</button>
+                </div>
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">When</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Action</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Cluster</th>
+                                <th scope="col" class="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase" title="How many duplicate records were affected by this action.">Records</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">By</th>
+                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="manualActionsTable" class="bg-white divide-y divide-gray-200"><tr><td colspan="6" class="px-6 py-4 text-center text-gray-400">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <!-- Generic "View All" list modal — used by Top Signals + Top Inflation cards -->
@@ -4414,6 +4447,77 @@
             } catch (e) { alert('Re-do failed: ' + e); }
         }
 
+        // Manual Actions table — Mark Resolved / Mark Dismissed / Bulk-split
+        // events from duplicate_merge_actions, paired with the AI activity
+        // above. Default filter is "all"; chips narrow to one action_type.
+        window._manualActionsFilter = window._manualActionsFilter || 'all';
+        async function loadManualActions() {
+            const tbody = document.getElementById('manualActionsTable');
+            if (!tbody) return;
+            const filter = window._manualActionsFilter || 'all';
+            const url = filter === 'all'
+                ? '/api/duplicates/merge-actions?limit=100'
+                : '/api/duplicates/merge-actions?limit=100&action_type=' + encodeURIComponent(filter);
+            let data;
+            try {
+                const res = await fetch(url, { credentials: 'same-origin' });
+                data = await res.json();
+            } catch (_) { data = null; }
+            renderManualActions((data && data.actions) || []);
+        }
+        function filterMergeActions(filter) {
+            window._manualActionsFilter = filter || 'all';
+            // Repaint chip palette — active chip = solid, others = soft.
+            ['all','resolve','ignore','module_resolved','split'].forEach(function (k) {
+                const el = document.getElementById('manualActChip-' + k);
+                if (!el) return;
+                const isOn = k === filter;
+                const palette = {
+                    all:             { on: 'bg-gray-900 text-white',     off: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
+                    resolve:         { on: 'bg-emerald-600 text-white',  off: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
+                    ignore:          { on: 'bg-gray-700 text-white',     off: 'bg-gray-200 text-gray-700 hover:bg-gray-300' },
+                    module_resolved: { on: 'bg-amber-600 text-white',    off: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
+                    split:           { on: 'bg-violet-600 text-white',   off: 'bg-violet-100 text-violet-700 hover:bg-violet-200' },
+                };
+                el.className = 'px-3 py-1 rounded-full font-semibold ' + (isOn ? palette[k].on : palette[k].off);
+            });
+            loadManualActions();
+        }
+        function renderManualActions(rows) {
+            const tbody = document.getElementById('manualActionsTable');
+            if (!tbody) return;
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-400">No manual actions yet for this filter — Mark Resolved / Mark Dismissed / Bulk-split events land here as soon as an operator acts.</td></tr>';
+                return;
+            }
+            const actionBadge = function (t) {
+                if (t === 'resolve')         return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">Mark Resolved</span>';
+                if (t === 'ignore')          return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700">Mark Dismissed</span>';
+                if (t === 'module_resolved') return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="One module of a cross-module cluster applied; other modules still open">Partial apply</span>';
+                if (t === 'split')           return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-800" title="Bulk-split contacts cleanup re-shaped this cluster">Bulk-split</span>';
+                if (t === 'merge')           return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Merge</span>';
+                return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">' + escapeHtml(String(t || '—')) + '</span>';
+            };
+            tbody.innerHTML = rows.map(function (r) {
+                const mergedIds = Array.isArray(r.merged_record_ids) ? r.merged_record_ids
+                    : (typeof r.merged_record_ids === 'string'
+                        ? (function () { try { return JSON.parse(r.merged_record_ids); } catch (_) { return []; } })()
+                        : []);
+                const recordsCount = mergedIds.length;
+                const cluster = '<span class="text-blue-600 hover:underline cursor-pointer" data-on-click="showClusterDetails" data-args="[' + Number(r.cluster_id) + ']">#' + Number(r.cluster_id) + '</span>'
+                    + (r.cluster_company_name ? ' <span class="text-gray-500 text-xs">' + escapeHtml(r.cluster_company_name) + '</span>' : '')
+                    + (r.cluster_domain ? ' <span class="text-gray-400 text-[10px] font-mono">(' + escapeHtml(r.cluster_domain) + ')</span>' : '');
+                return '<tr>'
+                    + '<td class="px-4 py-3 text-sm text-gray-500">' + formatDate(r.created_at) + '</td>'
+                    + '<td class="px-4 py-3 text-sm">' + actionBadge(r.action_type) + '</td>'
+                    + '<td class="px-4 py-3 text-sm">' + cluster + '</td>'
+                    + '<td class="px-4 py-3 text-sm text-end">' + recordsCount + '</td>'
+                    + '<td class="px-4 py-3 text-sm text-gray-600">' + escapeHtml(r.performed_by || '—') + '</td>'
+                    + '<td class="px-4 py-3 text-xs text-gray-500 max-w-md" title="' + escapeHtml(r.notes || '') + '">' + escapeHtml((r.notes || '').slice(0, 120)) + (r.notes && r.notes.length > 120 ? '…' : '') + '</td>'
+                    + '</tr>';
+            }).join('');
+        }
+
         // Undo: remove the agent's Duplicate-Delete tags + reopen the cluster.
         async function undoResolution(clusterId) {
             if (!confirm('Undo the last apply on cluster #' + clusterId + '?\n\nThis removes the Duplicate-Delete tags and reopens the cluster. Gap-filled survivor fields are kept (they only filled blanks).')) return;
@@ -6754,7 +6858,7 @@
             if (tab === 'cs-overlap') loadCsOverlap(window._csOverlapFilter || 'all');
             if (tab === 'cs-lifecycle') loadCsLifecycle(window._csLifecycleFilter || 'all');
             if (tab === 'account-hints') loadAccountHints();
-            if (tab === 'logs') loadAgentActivity();
+            if (tab === 'logs') { loadAgentActivity(); loadManualActions(); }
             if (tab === 'deal-compliance' && !window._loadedTabs.has('deal-compliance')) loadDealCompliance();
             // The Domain Clusters + 4 record tabs are expensive list queries;
             // load each one ONLY on first visit per refresh cycle. This is
