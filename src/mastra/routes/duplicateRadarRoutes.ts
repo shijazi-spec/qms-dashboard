@@ -1514,6 +1514,160 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // BULK verify-and-resolve: for every AI-Applied (pending Zoho delete)
+    // cluster — optionally a single module — re-query Zoho for the tagged
+    // Duplicate-Delete records and mark Resolved ONLY those where the admin has
+    // deleted every one. For when the admin clears a big batch at once. Bounded
+    // (≤ maxClusters, ≤50 records/cluster) and conservative — a cluster is only
+    // resolved when EVERY tagged duplicate is provably gone (no alive, no
+    // no-zoho-id, no Zoho error). Reuses the verify-tags logic + resolveCluster.
+    //   POST /api/duplicates/verify-resolve-applied
+    //   Body: { module?: 'Accounts'|'Leads'|'Deals'|'Contacts', maxClusters?: number }
+    //   Response: { checked, resolved, pending, errored, noTags, more, perCluster }
+    path: "/api/duplicates/verify-resolve-applied",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          const body = await c.req.json().catch(() => ({}));
+          const MODCOL: Record<string, string> = {
+            Accounts: "total_accounts",
+            Leads: "total_leads",
+            Deals: "total_deals",
+            Contacts: "total_contacts",
+          };
+          const moduleRaw = String(body?.module || "").trim();
+          const moduleCol = MODCOL[moduleRaw] || null;
+          const maxClusters = Number.isFinite(body?.maxClusters)
+            ? Math.max(1, Math.min(50, Number(body.maxClusters)))
+            : 20;
+
+          const { pool } = await import("../../utils/duplicateRadarDatabase");
+          const moduleFilter = moduleCol ? ` AND dc.${moduleCol} > 0` : "";
+          // AI-Applied = active cluster carrying a resolve/module_resolved action.
+          const clustersQ = await pool.query(
+            `SELECT dc.id
+               FROM duplicate_clusters dc
+              WHERE dc.status = 'active'
+                AND EXISTS (
+                  SELECT 1 FROM duplicate_merge_actions ma
+                   WHERE ma.cluster_id = dc.id
+                     AND ma.action_type IN ('resolve','module_resolved')
+                )${moduleFilter}
+              ORDER BY dc.updated_at DESC NULLS LAST
+              LIMIT $1`,
+            [maxClusters + 1],
+          );
+          const allIds = clustersQ.rows.map((r: any) => Number(r.id));
+          const more = allIds.length > maxClusters;
+          const ids = allIds.slice(0, maxClusters);
+
+          const RTM: Record<string, string> = {
+            lead: "Leads",
+            deal: "Deals",
+            contact: "Contacts",
+            account: "Accounts",
+          };
+          let resolved = 0,
+            pending = 0,
+            errored = 0,
+            noTags = 0;
+          const perCluster: any[] = [];
+
+          // Sequential across clusters (so a big batch can't fan out into a
+          // thousand concurrent Zoho calls); records WITHIN a cluster checked in
+          // parallel, bounded to ≤50.
+          for (const cid of ids) {
+            const acts = await pool.query(
+              `SELECT merged_record_ids FROM duplicate_merge_actions
+                WHERE cluster_id = $1 AND action_type IN ('resolve','module_resolved')`,
+              [cid],
+            );
+            const dbIdSet = new Set<number>();
+            for (const r of acts.rows) {
+              const raw = r.merged_record_ids;
+              const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
+              if (Array.isArray(arr)) {
+                for (const v of arr) {
+                  const n = typeof v === "number" ? v : parseInt(String(v), 10);
+                  if (Number.isFinite(n)) dbIdSet.add(n);
+                }
+              }
+            }
+            if (dbIdSet.size === 0) {
+              noTags++;
+              continue;
+            }
+            const dbIds = Array.from(dbIdSet).slice(0, 50);
+            const recs = await pool.query(
+              `SELECT id, zoho_record_id, zoho_module, record_type
+                 FROM duplicate_records WHERE id = ANY($1::int[])`,
+              [dbIds],
+            );
+            let total = 0,
+              deleted = 0,
+              alive = 0,
+              errs = 0;
+            await Promise.all(
+              recs.rows.map(async (row: any) => {
+                total++;
+                const zohoId = row.zoho_record_id || null;
+                const mod =
+                  row.zoho_module || RTM[row.record_type as string] || null;
+                if (!zohoId || !mod) {
+                  // Can't confirm deletion → conservatively treat as not-gone.
+                  alive++;
+                  return;
+                }
+                try {
+                  const live = await fetchZohoRecordById(mod, zohoId);
+                  if (live === null) deleted++;
+                  else alive++;
+                } catch {
+                  errs++;
+                }
+              }),
+            );
+            if (total > 0 && alive === 0 && errs === 0 && deleted === total) {
+              await resolveCluster(
+                cid,
+                "resolve",
+                sessionUser.email || "admin",
+                undefined,
+                `Verified in CRM (bulk): all ${total} Duplicate-Delete record(s) confirmed deleted in Zoho.`,
+              );
+              resolved++;
+              perCluster.push({ id: cid, outcome: "resolved", deleted, total });
+            } else if (errs > 0) {
+              errored++;
+              perCluster.push({ id: cid, outcome: "error", deleted, alive, errors: errs, total });
+            } else {
+              pending++;
+              perCluster.push({ id: cid, outcome: "pending", deleted, alive, total });
+            }
+          }
+          return c.json({
+            success: true,
+            checked: ids.length,
+            resolved,
+            pending,
+            errored,
+            noTags,
+            more,
+            perCluster,
+          });
+        } catch (error: any) {
+          logger.error("Error in verify-resolve-applied:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // One-shot cleanup: apply the ≥2-attribute Contact rule retroactively
     // to every existing active Contacts cluster. Splits each cluster's
     // sub-components into their own clusters so today's "7 SLB employees"

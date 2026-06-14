@@ -639,6 +639,7 @@
                 <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;resolved&quot;]" id="aiChip-leads-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Marked resolved">✅ Resolved</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;dismissed&quot;]" id="aiChip-leads-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;leads&quot;,&quot;all&quot;]" id="aiChip-leads-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
+                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;leads&quot;]" id="verifyAllCrm-leads" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-600 text-white hover:bg-emerald-700 ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -678,6 +679,7 @@
                 <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;resolved&quot;]" id="aiChip-deals-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Marked resolved">✅ Resolved</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;dismissed&quot;]" id="aiChip-deals-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;deals&quot;,&quot;all&quot;]" id="aiChip-deals-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
+                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;deals&quot;]" id="verifyAllCrm-deals" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-600 text-white hover:bg-emerald-700 ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -718,6 +720,7 @@
                 <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;resolved&quot;]" id="aiChip-contacts-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Marked resolved">✅ Resolved</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;dismissed&quot;]" id="aiChip-contacts-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — intentionally separate records">🚫 Dismissed</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;all&quot;]" id="aiChip-contacts-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
+                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;contacts&quot;]" id="verifyAllCrm-contacts" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-600 text-white hover:bg-emerald-700 ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -761,6 +764,7 @@
                 <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;resolved&quot;]" id="aiChip-accounts-resolved" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200" title="Cluster was marked resolved — the radar considers it done">✅ Resolved</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;dismissed&quot;]" id="aiChip-accounts-dismissed" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Dismissed as a false positive — e.g. a Corporate-Accounts and a Marketplace account that are intentionally two separate accounts (Sales B2B/B2C vs Merchants).">🚫 Dismissed</button>
                 <button data-on-click="setAiStatus" data-args="[&quot;accounts&quot;,&quot;all&quot;]" id="aiChip-accounts-all" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" title="Every cluster regardless of status">All</button>
+                <button data-on-click="bulkVerifyResolveInCRM" data-args="[&quot;accounts&quot;]" id="verifyAllCrm-accounts" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-600 text-white hover:bg-emerald-700 ms-2" title="Check Zoho for ALL AI-Applied clusters in this module and mark Resolved the ones whose Duplicate-Delete records the admin has actually deleted. Use after the admin clears a batch.">✅ Verify all in CRM</button>
             </div>
             <div class="bg-white rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -5810,6 +5814,50 @@
                 } else if (typeof refreshData === 'function') { refreshData(); }
             } catch (e) {
                 alert('Verified deleted, but could not mark Resolved: ' + (e && e.message || e));
+            }
+        }
+
+        // Bulk Verify-in-CRM: check ALL AI-Applied clusters in a module at once
+        // and resolve every one whose Duplicate-Delete records the admin has
+        // fully deleted. For when a batch is cleared in Zoho. Server-side +
+        // bounded, so one click can't fan out into thousands of Zoho calls.
+        async function bulkVerifyResolveInCRM(module) {
+            const mod = ({ leads: 'Leads', deals: 'Deals', contacts: 'Contacts', accounts: 'Accounts' })[String(module || '').toLowerCase()] || null;
+            const btn = document.getElementById('verifyAllCrm-' + String(module || '').toLowerCase());
+            if (!confirm('Verify all AI-Applied ' + (mod || '') + ' clusters against Zoho?\n\nThis checks each cluster\'s Duplicate-Delete records in the CRM and marks Resolved ONLY the ones the admin has fully deleted. Clusters with records still in Zoho are left untouched. No Zoho changes are made.')) return;
+            const origLabel = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Verifying…'; }
+            const payload = JSON.stringify({ module: mod, maxClusters: 50 });
+            try {
+                let res = await fetch('/api/duplicates/verify-resolve-applied', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: payload
+                });
+                if (res.status === 401 || res.status === 403) {
+                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    if (!adminKey) { if (btn) { btn.disabled = false; btn.textContent = origLabel; } return; }
+                    res = await fetch('/api/duplicates/verify-resolve-applied', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }, body: payload
+                    });
+                }
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                let msg = 'Checked ' + data.checked + ' AI-Applied cluster(s):\n'
+                    + '• ' + data.resolved + ' fully deleted in Zoho → marked Resolved\n'
+                    + '• ' + data.pending + ' still have records in Zoho → left open\n'
+                    + (data.errored ? ('• ' + data.errored + ' had Zoho errors → left open (retry later)\n') : '');
+                if (data.more) msg += '\nThere are more AI-Applied clusters than processed this run — click again to continue.';
+                alert(msg);
+                var tab = String(module || '').toLowerCase();
+                if (['leads','deals','contacts','accounts'].includes(tab)) {
+                    window._loadedTabs && window._loadedTabs.delete(tab);
+                    loadRecordTab(tab, 0);
+                } else if (typeof refreshData === 'function') { refreshData(); }
+            } catch (e) {
+                alert('Bulk verify failed: ' + (e && e.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = origLabel; }
             }
         }
 

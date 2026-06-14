@@ -372,6 +372,15 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     entityType: 'cs_overlap_status',
     buildPreview: () => 'CS Pipeline Overlap status',
   },
+  'cross-module-overlap-status': {
+    toolId: 'cross-module-overlap-status',
+    label: 'Cross-Module Overlap status (same company across modules)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only counts
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only cross-module counts'],
+    entityType: 'cross_module_status',
+    buildPreview: () => 'Cross-Module Overlap status',
+  },
   'owner-accountability': {
     toolId: 'owner-accountability',
     label: 'Owner Accountability (duplicates by owner)',
