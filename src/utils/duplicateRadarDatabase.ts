@@ -4722,6 +4722,16 @@ export interface CrossModuleClusterRow {
   status: string;
   created_at: Date | null;
   updated_at: Date | null;
+  // Per-record dimensions aggregated from duplicate_records so the dashboard's
+  // Advanced Filters (Owner / Module / Stage / Layout / Pipeline) can match a
+  // cross-module CLUSTER by what its member records hold. Owner/Stage/etc. live
+  // on records, not the cluster, so without these the filters silently no-op.
+  modules_present?: string[]; // e.g. ["lead","deal"]
+  owners?: string[];
+  owner_name?: string; // owners joined — the substring matcher reads this
+  stages?: string[]; // Deal stages present in the cluster
+  layouts?: string[];
+  pipelines?: string[];
 }
 
 export interface CrossModuleOverlapsResponse {
@@ -4784,6 +4794,53 @@ export async function getCrossModuleOverlaps(opts: {
       total_deals: Number(row.total_deals ?? 0),
     }),
   }));
+
+  // Aggregate the per-record dimensions (owner / module / deal-stage / layout /
+  // pipeline) onto each cluster so the dashboard's Advanced Filters can match a
+  // cross-module cluster by what its member records hold. One grouped query over
+  // the already-bounded cluster set — owner_name is a column; stage/layout/
+  // pipeline are read out of raw_data (Layout arrives as { name }). Best-effort:
+  // any failure just leaves the dimensions empty (filters skip them, no crash).
+  if (all.length > 0) {
+    try {
+      const ids = all.map((c) => c.id);
+      const agg = await pool.query(
+        `SELECT cluster_id,
+                array_agg(DISTINCT record_type)
+                  FILTER (WHERE record_type IS NOT NULL)                       AS modules_present,
+                array_agg(DISTINCT owner_name)
+                  FILTER (WHERE owner_name IS NOT NULL AND owner_name <> '')   AS owners,
+                array_agg(DISTINCT (raw_data->>'Stage'))
+                  FILTER (WHERE record_type = 'deal'
+                          AND COALESCE(raw_data->>'Stage','') <> '')           AS stages,
+                array_agg(DISTINCT COALESCE(raw_data#>>'{Layout,name}', raw_data->>'Layout'))
+                  FILTER (WHERE COALESCE(raw_data#>>'{Layout,name}', raw_data->>'Layout','') <> '') AS layouts,
+                array_agg(DISTINCT (raw_data->>'Pipeline'))
+                  FILTER (WHERE COALESCE(raw_data->>'Pipeline','') <> '')      AS pipelines
+           FROM duplicate_records
+          WHERE cluster_id = ANY($1::int[])
+          GROUP BY cluster_id`,
+        [ids],
+      );
+      const byId = new Map<number, any>();
+      for (const row of agg.rows) byId.set(Number(row.cluster_id), row);
+      for (const c of all as any[]) {
+        const a = byId.get(c.id);
+        if (!a) continue;
+        c.modules_present = a.modules_present ?? [];
+        c.owners = a.owners ?? [];
+        c.owner_name = (a.owners ?? []).join(", ");
+        c.stages = a.stages ?? [];
+        c.layouts = a.layouts ?? [];
+        c.pipelines = a.pipelines ?? [];
+      }
+    } catch (e) {
+      logger.warn(
+        "[DuplicateRadar] cross-module dimension aggregation failed (filters will skip those dims)",
+        { error: e instanceof Error ? e.message : String(e) },
+      );
+    }
+  }
 
   const filtered = opts.pairing
     ? all.filter((c) => c.pairing === opts.pairing)

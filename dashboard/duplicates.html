@@ -1660,6 +1660,27 @@
             if (arrEl)   arrEl.textContent   = formatCurrency(Number(data.arr_exposure_total || 0));
         }
 
+        // Recompute the KPI cards from a (filtered) cluster list so the amounts
+        // reflect exactly what the table shows after Advanced Filters + the
+        // pairing chip are applied. Called from renderCrossModuleTable.
+        function updateCrossModuleKpisFromList(list) {
+            const arr = Array.isArray(list) ? list : [];
+            const totalEl = document.getElementById('cmoTotal');
+            const lcEl    = document.getElementById('cmoLeadContact');
+            const laEl    = document.getElementById('cmoLeadAccount');
+            const arrEl   = document.getElementById('cmoArr');
+            let lc = 0, la = 0, arrSum = 0;
+            for (const c of arr) {
+                if (c.pairing === 'lead_contact') lc++;
+                if (c.pairing === 'lead_account') la++;
+                arrSum += Number(c.estimated_pipeline_value || 0);
+            }
+            if (totalEl) totalEl.textContent = _fn(arr.length);
+            if (lcEl)    lcEl.textContent    = _fn(lc);
+            if (laEl)    laEl.textContent    = _fn(la);
+            if (arrEl)   arrEl.textContent   = formatCurrency(arrSum);
+        }
+
         function filterCrossModule(pairing) {
             crossModuleFilter = pairing || 'all';
             // Repaint chip styles
@@ -1684,17 +1705,37 @@
         function renderCrossModuleTable() {
             const tbody = document.getElementById('crossModuleTable');
             if (!tbody) return;
+            const _cmSpec = getAdvancedFilterSpec();
             const list = (crossModuleClusters || []).filter(c => {
                 if (crossModuleFilter !== 'all' && c.pairing !== crossModuleFilter) return false;
-                // Advanced Filter — Cross-Module clusters expose domain,
-                // confidence_score, and updated_at. The pairing chip above
-                // is the panel's complement; both stack.
-                return rowMatchesAdvancedFilter(c, {
+                // Advanced Filter — match a cross-module CLUSTER by what its
+                // member records hold. Owner/Stage/Layout/Pipeline are
+                // aggregated onto the cluster by the backend (owners[]/stages[]
+                // /layouts[]/pipelines[]); Module is derived here from the
+                // per-module counts so 'Leads' etc. match the filter vocabulary.
+                // The pairing chip above is a complement; both stack.
+                const modulesPresent = [];
+                if (c.total_leads    > 0) modulesPresent.push('leads');
+                if (c.total_contacts > 0) modulesPresent.push('contacts');
+                if (c.total_accounts > 0) modulesPresent.push('accounts');
+                if (c.total_deals    > 0) modulesPresent.push('deals');
+                const row = Object.assign({}, c, { modules_present: modulesPresent });
+                return rowMatchesAdvancedFilter(row, {
+                    ownerField:      'owner_name',
+                    moduleField:     'modules_present',
+                    stageField:      'stages',
+                    layoutField:     'layouts',
+                    pipelineField:   'pipelines',
                     domainField:     'domain',
                     confidenceField: 'confidence_score',
                     dateField:       'updated_at',
-                });
+                }, _cmSpec);
             });
+            // Recompute the KPI cards from the FILTERED list so the amounts
+            // (Total open / Lead↔Contact / Lead↔Account / ARR exposure) track
+            // the active filters + pairing chip instead of showing stale
+            // server-load totals.
+            updateCrossModuleKpisFromList(list);
             if (list.length === 0) {
                 let msg;
                 if (crossModuleLoadError) {
