@@ -3,14 +3,17 @@ import { z } from "zod";
 import { sharedPool as pool } from "../../utils/sharedPool";
 import { getCurrentAgentContext } from "../../utils/withApprovalGate";
 
-// Mirrors the QMS NC module access model. Low-privilege roles such as
-// department_viewer, custom, team_lead, and auditor must not be able to
-// enumerate NC trends or overdue CAPA details through the AI path.
+// NC / CAPA data is ADMIN-ONLY across the platform: the REST endpoint
+// /api/qms/nc is admin-gated, and query-platform-data (module 'nonconformances')
+// mirrors that with ["admin"]. This AI path must NOT be a looser bypass — it
+// previously allowed head_of_operations_quality / grc_manager / quality_manager
+// to enumerate NC trends the REST API would deny. Per Sarah's governance
+// decision (2026-06-11) NC/CAPA/Training stay admin-only, INCLUDING for the
+// Slack role (head_of_operations_quality), since Slack channel membership is not
+// a platform login. To open NC to the team later, add the roles here AND in
+// queryPlatformDataTool's MODULE_ROLE_ALLOWLIST so both paths stay consistent.
 const NC_ANALYSIS_ROLES = new Set([
   "admin",
-  "head_of_operations_quality",
-  "grc_manager",
-  "quality_manager",
 ]);
 
 export const analyzeNonconformitiesTool = createTool({
