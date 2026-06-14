@@ -3775,10 +3775,12 @@
                 const tot = Number(merged.total_records || 0);
                 const dup = Number(merged.duplicate_records || 0);
                 merged.duplicate_rate = tot > 0 ? Math.round((dup / tot) * 1000) / 10 : 0;
-                // Re-derive RAG from the new rate using the same thresholds
-                // the server applies (≥50% red, ≥25% amber, else green).
-                merged.rag_status = merged.duplicate_rate >= 50 ? 'red'
-                                  : merged.duplicate_rate >= 25 ? 'amber'
+                // Re-derive RAG using the SDR-KPI-09 bands the backend
+                // applies after consolidation: ≤2% green · 2–5% amber · >5%
+                // red. (Previous version used 25/50% bands — fixed
+                // 2026-06-14 so a 49% rep no longer renders as amber.)
+                merged.rag_status = merged.duplicate_rate > 5 ? 'red'
+                                  : merged.duplicate_rate > 2 ? 'amber'
                                   : 'green';
                 delete merged._name_set;
                 delete merged._team_set;
