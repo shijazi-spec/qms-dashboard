@@ -900,7 +900,7 @@
         <!-- ═══ CS PIPELINE OVERLAP TAB ═══ -->
         <div id="content-cs-overlap" class="tab-content hidden">
             <div class="bg-rose-50 border border-rose-200 rounded-lg p-3 mb-4 text-sm text-rose-900">
-                <strong>CS pipeline overlap.</strong> Companies where the Customer Success team is already managing an active account but Sales still has open Leads / Deals for the same domain — i.e. someone is selling to an existing customer. Verdicts: <code>BLOCK</code> stops the sales motion (likely cannibalisation), <code>REVIEW</code> needs a CS-Sales conversation, <code>WARN</code> is informational. ARR exposure quantifies the revenue at risk.
+                <strong>CS pipeline overlap.</strong> An <strong>OPEN Sales Deal</strong> (Proposal / Prepare Client / Awaiting PO / …) and a <strong>Paid or Agreement-Signed handoff Deal</strong> coexist on the same customer — Sales is pursuing someone CS has already closed. Verdicts: <code>BLOCK</code> stops the sales motion until the churn cool-off elapses (180d Private / 365d Government); <code>WARN</code> = cool-off has passed, Sales may re-engage after notifying CS; <code>REVIEW</code> is a legacy case. ARR exposure = sum of open + handoff Deal ARR.
             </div>
             <!-- Summary widget -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
