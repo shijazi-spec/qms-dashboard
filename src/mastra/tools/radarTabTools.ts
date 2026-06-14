@@ -7,6 +7,7 @@ import { z } from "zod";
  * engines the dashboard tabs use).
  *   - executive-summary    : platform-wide KPI tiles (clusters, dup rate, pipeline inflation, resolution rate)
  *   - cs-pipeline-overlap  : duplicate clusters overlapping live CS customers
+ *   - cross-module-overlap : same company across ≥2 Zoho modules (Lead+Contact, Lead+Account, …)
  *   - owner-accountability : who owns the most duplicate records
  *   - preflight-check      : "should we create a record for <X>?" verdict
  */
@@ -75,6 +76,52 @@ export const executiveSummaryTool = createTool({
         ),
         sdrKpi09Status,
         lastSyncAt,
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || String(e) };
+    }
+  },
+});
+
+// ── Cross-Module Overlap ──────────────────────────────────────────────────
+export const crossModuleOverlapTool = createTool({
+  id: "cross-module-overlap-status",
+  description:
+    "Check the Cross-Module Overlap tab — duplicate clusters where the same company shows up in 2+ Zoho modules at once (Lead + Contact, Lead + Account, Contact + Account, Lead + Deal, etc.). Returns counts by pairing type, total ARR exposure across the open overlaps, and totals by triage status (open / handled / dismissed). Use when asked how many cross-module overlaps are open, how many Lead-vs-Account conflicts exist, what the cross-module ARR exposure is, or for a snapshot of the cross-module triage queue. The remediation in Zoho for Lead-vs-anything-else is usually CLOSE the duplicate Lead (Zoho doesn't allow cross-module merges); for Contact↔Account / Deal↔Account it's LINK (set Account_Name); for Contact↔Deal it's LINK (set Contact_Name).",
+  inputSchema: z.object({
+    status: z
+      .enum(["active", "resolved", "ignored", "all"])
+      .optional()
+      .describe(
+        "Triage status filter. active=open queue (default), resolved=marked handled, ignored=dismissed, all=every row.",
+      ),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    status: z.string().optional(),
+    totalClusters: z.number().optional(),
+    byPairing: z.record(z.number()).optional(), // { lead_contact: N, lead_account: N, ... }
+    arrExposureTotalSar: z.number().optional(),
+    error: z.string().optional(),
+  }),
+  execute: async ({ context }) => {
+    try {
+      const status =
+        ((context as any)?.status as string) || "active";
+      const { getCrossModuleOverlaps } = await import(
+        "../../utils/duplicateRadarDatabase"
+      );
+      const r: any = await getCrossModuleOverlaps({
+        status: status as "active" | "resolved" | "ignored" | "all",
+      });
+      // The engine already aggregates by_pairing and arr_exposure_total;
+      // Adam just needs the headline numbers (not the full cluster list).
+      return {
+        success: true,
+        status,
+        totalClusters: Number(r?.total ?? 0),
+        byPairing: r?.by_pairing ?? {},
+        arrExposureTotalSar: Number(r?.arr_exposure_total ?? 0),
       };
     } catch (e: any) {
       return { success: false, error: e?.message || String(e) };
