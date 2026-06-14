@@ -14,7 +14,7 @@ import { z } from "zod";
 export const csOverlapStatusTool = createTool({
   id: "cs-pipeline-overlap-status",
   description:
-    "Check the CS Pipeline Overlap tab — how many active duplicate clusters overlap a LIVE Customer Success customer, by verdict: BLOCK (active customer — do not touch), REVIEW (needs a human look), WARN (caution). Use when asked about CS pipeline overlap, duplicates on existing customers, or block/review counts.",
+    "Check the CS Pipeline Overlap tab — how many duplicate clusters have an OPEN Sales Deal coexisting with a Paid or Agreement-Signed handoff Deal on the same customer (cluster-level rule, rewritten 2026-06-11). Verdicts: BLOCK (open + handoff coexist; cool-off not elapsed yet — sales must stop), REVIEW (legacy), WARN (overlap exists but the handoff Deal's churn is past the sector cool-off — 180d Private / 365d Government — sales may re-engage after notifying CS). Use when asked about CS pipeline overlap, sales-vs-CS cannibalisation, or BLOCK/WARN counts.",
   inputSchema: z.object({}),
   outputSchema: z.object({
     success: z.boolean(),

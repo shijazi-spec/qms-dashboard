@@ -165,6 +165,16 @@ DUPLICATE_RADAR_GOV_DOMAIN_PATTERNS=.gov.sa,.gov,.mil.sa
 DUPLICATE_RADAR_CHURN_COOLOFF_PRIVATE_DAYS=180
 DUPLICATE_RADAR_CHURN_COOLOFF_GOVERNMENT_DAYS=365
 
+# Cluster-level handoff / closed-stage detection
+# (added 2026-06-11 with the cluster-level BLOCK rewrite)
+#
+# A cluster is flagged only when an OPEN sales Deal coexists with a
+# HANDOFF Deal in the same duplicate cluster. Stages NOT in the closed
+# list count as "open"; stages in the handoff list count as "handed off
+# to CS".
+DUPLICATE_RADAR_CS_HANDOFF_STAGES=Paid,Agreement Signed
+DUPLICATE_RADAR_CS_CLOSED_STAGES=Paid,Agreement Signed,Closed Won,Closed Lost
+
 # ARR field (for exposure rollup)
 DUPLICATE_RADAR_FIELD_ARR_VALUE=ARR_value
 
