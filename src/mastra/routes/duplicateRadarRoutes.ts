@@ -2021,7 +2021,14 @@ export const duplicateRadarRoutes = [
               `[DealCompliance] persist failed for deal ${id} (non-fatal): ${persistErr?.message || persistErr}`,
             );
           }
-          return c.json(result);
+          // Return checkedBy + checkedAt alongside the live verdict so the
+          // dashboard's freshly-scanned row immediately shows "checked just
+          // now by <user>" — without waiting for the next page-load overlay
+          // from /deal-compliance/results. Cross-team visibility: any other
+          // reviewer hitting Refresh will see the same attribution.
+          const checkedBy =
+            user.email || user.userId ? String(user.email || user.userId) : null;
+          return c.json({ ...result, checkedBy, checkedAt: new Date().toISOString() });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }
