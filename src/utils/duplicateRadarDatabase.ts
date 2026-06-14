@@ -190,19 +190,30 @@ export interface DuplicateExportLog {
 
 const PUBLIC_DOMAINS = [
   "gmail.com",
+  "googlemail.com",
   "yahoo.com",
+  "ymail.com",
+  "rocketmail.com",
   "hotmail.com",
+  "hotmail.co.uk",
   "outlook.com",
   "icloud.com",
+  "me.com",
+  "mac.com",
   "aol.com",
   "live.com",
   "msn.com",
   "mail.com",
   "protonmail.com",
+  "proton.me",
   "yandex.com",
   "zoho.com",
   "gmx.com",
+  "gmx.net",
   "fastmail.com",
+  "qq.com",
+  "163.com",
+  "126.com",
   "stc.com.sa",
   "mobily.com.sa",
   "zain.com.sa",
@@ -1589,9 +1600,11 @@ export async function getAllClusters(filters?: {
                 AND r.domain IS NOT NULL
                 AND r.domain <> ''
                 AND LOWER(r.domain) NOT IN (
-                  'gmail.com','yahoo.com','hotmail.com','outlook.com',
-                  'live.com','aol.com','icloud.com','mail.com',
-                  'protonmail.com','yandex.com','zoho.com'
+                  'gmail.com','googlemail.com','yahoo.com','ymail.com',
+                  'rocketmail.com','hotmail.com','hotmail.co.uk','outlook.com',
+                  'live.com','aol.com','icloud.com','me.com','mac.com','mail.com',
+                  'protonmail.com','proton.me','yandex.com','zoho.com',
+                  'gmx.com','gmx.net','qq.com','163.com','126.com'
                 )
             ) AS domain_count
        FROM duplicate_clusters
@@ -2547,16 +2560,28 @@ export function normalizeCompanyName(name: string): string {
 // `src/utils/zohoCRM.ts`. Keep extending this if more providers appear.
 const PUBLIC_EMAIL_DOMAINS = new Set<string>([
   "gmail.com",
+  "googlemail.com",
   "yahoo.com",
+  "ymail.com",
+  "rocketmail.com",
   "hotmail.com",
+  "hotmail.co.uk",
   "outlook.com",
   "live.com",
   "aol.com",
   "icloud.com",
+  "me.com",
+  "mac.com",
   "mail.com",
   "protonmail.com",
+  "proton.me",
   "yandex.com",
   "zoho.com",
+  "gmx.com",
+  "gmx.net",
+  "qq.com",
+  "163.com",
+  "126.com",
 ]);
 
 function isCorporateDomain(d: string | null | undefined): boolean {

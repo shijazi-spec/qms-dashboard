@@ -794,7 +794,7 @@
         <div id="content-cross-module" class="tab-content hidden">
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-900">
                 <div class="font-semibold mb-1">Cross-module overlaps</div>
-                <p>Clusters where the same company appears across multiple Zoho modules (Leads, Contacts, Accounts, Deals). Zoho does NOT allow merging across modules — the recommendation is to <strong>CONVERT</strong> the Lead to a Contact under the existing Account, or <strong>LINK</strong> the Deal/Contact by setting its Account_Name field. Open any cluster below to see the per-record recommendation.</p>
+                <p>Clusters where the same company appears across multiple Zoho modules (Leads, Contacts, Accounts, Deals). Zoho does NOT allow merging across modules, and a <strong>Lead cannot be linked</strong> to anything — so when a Contact/Account/Deal already exists for that company, the right action is to <strong>CLOSE</strong> the duplicate Lead (or convert it into the existing Account without creating a second Contact). For Contact ↔ Account / Deal ↔ Account / Contact ↔ Deal pairs, <strong>LINK</strong> by setting Account_Name / Contact_Name. Open any cluster below for the per-record recommendation.</p>
             </div>
 
             <!-- KPI summary -->
@@ -1588,9 +1588,9 @@
         // R6: pairing labels and per-pairing recommended action — kept in
         // one place so the badge / chip / table all stay consistent.
         const CROSS_MODULE_PAIRING_LABELS = {
-            lead_contact:   { label: 'Lead ↔ Contact',   chip: 'cmoChip-lead_contact',   action: 'Convert the Lead to a Contact under the existing Account' },
-            lead_account:   { label: 'Lead ↔ Account',   chip: 'cmoChip-lead_account',   action: 'Close the Lead — set Account_Name on related Deals / Contacts' },
-            lead_deal:      { label: 'Lead ↔ Deal',      chip: 'cmoChip-lead_deal',      action: 'Close the Lead — the Deal is the canonical record' },
+            lead_contact:   { label: 'Lead ↔ Contact',   chip: 'cmoChip-lead_contact',   action: 'Close the duplicate Lead — a Contact already exists. A Lead can\'t be linked; converting would create a 2nd Contact.' },
+            lead_account:   { label: 'Lead ↔ Account',   chip: 'cmoChip-lead_account',   action: 'Close the duplicate Lead — an Account already exists (or convert the Lead into that existing Account).' },
+            lead_deal:      { label: 'Lead ↔ Deal',      chip: 'cmoChip-lead_deal',      action: 'Close the duplicate Lead — the Deal is the canonical record.' },
             contact_account:{ label: 'Contact ↔ Account', chip: 'cmoChip-contact_account', action: 'Link Contact: set Account_Name to the existing Account' },
             contact_deal:   { label: 'Contact ↔ Deal',   chip: 'cmoChip-contact_deal',   action: 'Link Deal: set Contact_Name to the existing Contact' },
             deal_account:   { label: 'Deal ↔ Account',   chip: 'cmoChip-deal_account',   action: 'Link Deal: set Account_Name to the existing Account' },
