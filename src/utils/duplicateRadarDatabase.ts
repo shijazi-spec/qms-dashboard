@@ -135,10 +135,32 @@ export interface MergeAction {
   cluster_id: number;
   primary_record_id: number;
   merged_record_ids: number[];
-  action_type: "merge" | "resolve" | "ignore";
+  /**
+   * Five action types observed in the wild — keep this union in sync with
+   * every callsite that writes to duplicate_merge_actions:
+   *   "resolve"          — operator Mark Resolved OR successful merge Apply
+   *                        (resolveCluster, executeMergePlan single-module path)
+   *   "ignore"           — operator Mark Dismissed (false-positive)
+   *   "module_resolved"  — partial-apply on a cross-module cluster: one module
+   *                        merged, others still open (executeMergePlan
+   *                        cross-module path, via recordPartialMergeAction)
+   *   "split"            — bulk-split contacts cleanup (carved a cluster into
+   *                        ≥2 strict sub-clusters)
+   *   "merge"            — legacy; reserved for back-compat
+   */
+  action_type: "merge" | "resolve" | "ignore" | "module_resolved" | "split";
   performed_by?: string;
   notes?: string;
   created_at?: Date;
+}
+
+/** Enriched merge action: MergeAction + the cluster's domain / company name
+ *  + the action_type's human-readable label. Powers the Logs tab UI + Adam's
+ *  manualActionAuditTool. */
+export interface MergeActionEnriched extends MergeAction {
+  cluster_domain: string | null;
+  cluster_company_name: string | null;
+  cluster_status: string | null;
 }
 
 export interface OwnerAccountability {
@@ -3711,6 +3733,61 @@ export async function getMergeHistory(
   params.push(limit);
   const result = await pool.query(query, params);
   return result.rows;
+}
+
+/**
+ * Enriched merge-history reader — joins duplicate_clusters to surface domain
+ * + company_name + status alongside each action row. Powers the Logs tab UI
+ * (a new "Manual Actions" sub-section) and Adam's manualActionAuditTool so
+ * neither has to make a second hop per row.
+ *
+ * Filters:
+ *   - clusterId      : single cluster
+ *   - actionTypes    : narrow to one or more of resolve / ignore /
+ *                      module_resolved / split / merge
+ *   - performedByLike: substring match on the performed_by field
+ *                      (e.g. "GRQ Assistant" to find agent actions, or an
+ *                       operator's email)
+ * Sorted by created_at DESC, capped at 500.
+ */
+export async function getMergeHistoryEnriched(opts: {
+  clusterId?: number;
+  actionTypes?: Array<MergeAction["action_type"]>;
+  performedByLike?: string;
+  limit?: number;
+} = {}): Promise<MergeActionEnriched[]> {
+  const lim = Math.max(1, Math.min(opts.limit ?? 100, 500));
+  const where: string[] = [];
+  const params: any[] = [];
+  if (typeof opts.clusterId === "number") {
+    params.push(opts.clusterId);
+    where.push(`ma.cluster_id = $${params.length}`);
+  }
+  if (opts.actionTypes && opts.actionTypes.length > 0) {
+    params.push(opts.actionTypes);
+    where.push(`ma.action_type = ANY($${params.length}::text[])`);
+  }
+  if (opts.performedByLike && opts.performedByLike.trim()) {
+    params.push(`%${opts.performedByLike.trim()}%`);
+    where.push(`ma.performed_by ILIKE $${params.length}`);
+  }
+  const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  params.push(lim);
+  const limitParam = `$${params.length}`;
+  const result = await pool.query(
+    `SELECT ma.id, ma.cluster_id, ma.primary_record_id, ma.merged_record_ids,
+            ma.action_type, ma.performed_by, ma.notes, ma.created_at,
+            dc.domain        AS cluster_domain,
+            dc.company_name  AS cluster_company_name,
+            dc.status        AS cluster_status
+       FROM duplicate_merge_actions ma
+       LEFT JOIN duplicate_clusters dc ON dc.id = ma.cluster_id
+       ${whereClause}
+      ORDER BY ma.created_at DESC
+      LIMIT ${limitParam}`,
+    params,
+  );
+  return result.rows as MergeActionEnriched[];
 }
 
 /**
