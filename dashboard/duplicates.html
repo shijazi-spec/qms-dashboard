@@ -192,10 +192,10 @@
         <div id="mergeGuideBanner" class="hidden bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 flex items-start gap-3" data-testid="banner-merge-guide">
             <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             <div class="flex-1 text-xs text-blue-900">
-                <p class="font-semibold mb-1">After merging duplicates in Zoho — please do both:</p>
+                <p class="font-semibold mb-1">After merging duplicates in Zoho:</p>
                 <ol class="list-decimal list-inside space-y-0.5 text-blue-800">
-                    <li>In each cluster you merged, click <strong>"Mark Resolved"</strong> here so the audit trail and KPIs (SDR-KPI-09: Duplicate Rate ≤2%) stay accurate.</li>
-                    <li>Click <strong>"Sync Now"</strong> above to refresh from Zoho and remove merged-away records from this list.</li>
+                    <li>Click <strong>"Sync Now"</strong> above to refresh from Zoho — clusters whose duplicates were actually tagged or merged will flip to <strong>Resolved</strong> automatically. (KPIs incl. SDR-KPI-09 Duplicate Rate ≤2% rely on CRM-verified resolution, not a manual "mark done".)</li>
+                    <li>If a duplicate is a false positive, use the <strong>Ignore</strong> button inside the cluster to drop it from triage without merging.</li>
                 </ol>
             </div>
             <button data-on-click="addClass,localStorage.setItem" data-args="[[&quot;mergeGuideBanner&quot;,&quot;hidden&quot;],[&quot;mergeGuideDismissed&quot;,&quot;1&quot;]]" class="text-blue-400 hover:text-blue-600" data-testid="button-dismiss-merge-guide" title="Dismiss">
@@ -1578,7 +1578,7 @@
                     <div class="flex justify-between items-start mb-2">
                         <div>
                             <h3 class="text-lg font-bold text-gray-900">Cluster Snapshot</h3>
-                            <p class="text-xs text-gray-500">Frozen state at the moment Mark Resolved was clicked.</p>
+                            <p class="text-xs text-gray-500">Frozen state captured before an agentic apply or domain-collision merge.</p>
                         </div>
                         <button data-on-click="closeSnapshotViewer" data-testid="button-close-snapshot" class="text-gray-400 hover:text-gray-600" aria-label="Close snapshot viewer">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -3365,7 +3365,7 @@
             if (aiState === 'tagged_pending_delete') {
                 aiStateBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Apply was already run on this cluster${lastAt ? ' (' + lastAt + ')' : ''}. ${tagged} duplicate(s) carry the Duplicate-Delete tag in Zoho — the cluster keeps re-appearing here on every scan until the Zoho admin physically deletes those tagged records.">🤖 AI-Applied · ${tagged} pending Zoho delete</span>`;
             } else if (aiState === 'resolved') {
-                aiStateBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300" title="Cluster status='resolved' — marked done from the merge plan or the Mark Resolved button.">✅ Resolved</span>`;
+                aiStateBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300" title="Cluster status='resolved' — confirmed via agentic apply / CRM verification.">✅ Resolved</span>`;
             }
             // Button label clarified: "🔍 Open AI Plan" instead of
             // "🔍 Resolve with AI" — the original wording made operators
@@ -4859,15 +4859,9 @@
             });
             html += '</tr></tbody></table></div>';
 
-            // Action buttons — label depends on whether the cluster is cross-module
             if (cluster.status === 'active') {
-                const resolveLabel = is_cross_module
-                    ? WalaPlusI18n.t('dyn.duplicates.resolve_label_cross')
-                    : WalaPlusI18n.t('dyn.duplicates.resolve_label_simple');
                 html += `<div class="border-t pt-4">
                     <div class="flex flex-wrap gap-3 mb-2">
-                        <button data-on-click="resolveClusterAndVerify" data-args="[${cluster.id}]" data-testid="button-resolve-verify-${cluster.id}" title="Mark this cluster resolved AND verify with Zoho that the non-primary records were actually deleted. If Zoho still shows the duplicates, the cluster is automatically re-opened." class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-semibold">${resolveLabel} + Verify</button>
-                        <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;resolve&quot;]" data-testid="button-resolve-${cluster.id}" title="Mark resolved without verifying against Zoho (skip the Zoho check)" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">${resolveLabel}</button>
                         <button data-on-click="resolveClusterAction" data-args="[${cluster.id},&quot;ignore&quot;]" data-testid="button-ignore-${cluster.id}" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">${WalaPlusI18n.t('dyn.duplicates.ignore_label')}</button>
                     </div>
                     <p data-testid="text-post-merge-hint" class="text-xs text-gray-500 italic">
@@ -4926,7 +4920,7 @@
                     </div>
                     <div id="recheckPanel-${cluster.id}" class="text-sm mb-2"></div>
                     <div id="verifyTagsPanel-${cluster.id}" class="text-sm mb-2"></div>
-                    ${is_cross_module ? `<div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900"><strong>Multi-module cluster:</strong> this resolves <strong>${escapeHtml(am.label)} only</strong> and <strong>leaves the cluster open</strong> for the other modules — finish them via their own Agentic section or <strong>Mark Resolved</strong>. The platform never deletes.</div>` : ''}
+                    ${is_cross_module ? `<div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900"><strong>Multi-module cluster:</strong> this resolves <strong>${escapeHtml(am.label)} only</strong> and <strong>leaves the cluster open</strong> for the other modules — finish them via their own Agentic Resolution section. The platform never deletes.</div>` : ''}
                     <div id="mergePlanPanel-${am.module}" class="text-sm"></div>
                 </div>`;
             }
@@ -4938,7 +4932,7 @@
             html += `<div class="border-t pt-4 mt-4">
                 <div class="flex items-center justify-between mb-2">
                     <h4 class="text-sm font-semibold text-gray-700">Pre-merge snapshots</h4>
-                    <span class="text-xs text-gray-400">Forensic trail — frozen at Mark Resolved click</span>
+                    <span class="text-xs text-gray-400">Forensic trail — captured before each agentic apply / domain-collision merge</span>
                 </div>
                 <div id="clusterSnapshotsList" data-cluster-id="${cluster.id}" class="text-xs text-gray-500">Loading snapshots…</div>
             </div>`;
@@ -4974,7 +4968,7 @@
                 const data = await res.json();
                 const actions = Array.isArray(data && data.history) ? data.history : [];
                 if (actions.length === 0) {
-                    listEl.innerHTML = '<span class="text-gray-400 italic">No actions yet — clicking Mark Resolved, Ignore, or a domain-collision merge will log here.</span>';
+                    listEl.innerHTML = '<span class="text-gray-400 italic">No actions yet — Ignore, an agentic apply, or a domain-collision merge will log here.</span>';
                     return;
                 }
                 listEl.innerHTML = '<ul class="divide-y divide-gray-100 border border-gray-100 rounded">' + actions.map(a => renderActionTimelineRow(a)).join('') + '</ul>';
@@ -5036,7 +5030,7 @@
                 const data = await res.json();
                 const snaps = (data && data.snapshots) || [];
                 if (snaps.length === 0) {
-                    listEl.innerHTML = '<span class="text-gray-400 italic">No snapshots yet — they\'re created automatically when an operator clicks Mark Resolved.</span>';
+                    listEl.innerHTML = '<span class="text-gray-400 italic">No snapshots yet — they\'re captured automatically before each agentic apply or domain-collision merge.</span>';
                     return;
                 }
                 listEl.innerHTML = '<ul class="divide-y divide-gray-100 border border-gray-100 rounded">' + snaps.map(s => {
@@ -6192,76 +6186,6 @@
             }
         }
 
-        // R3: Mark resolved AND verify against Zoho. The operator's click is
-        // an assertion that they merged in Zoho — this endpoint checks the
-        // assertion by searching Zoho for each non-primary record's id. If
-        // Zoho still has them, the cluster is automatically re-opened so the
-        // operator doesn't lose visibility on a failed merge.
-        async function resolveClusterAndVerify(clusterId) {
-            const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
-            if (!adminKey) return;
-
-            // Visual feedback: replace the modal action area with a "Verifying"
-            // indicator since the Zoho searches can take a few seconds.
-            const verifyBtn = document.querySelector(`[data-testid="button-resolve-verify-${clusterId}"]`);
-            const originalLabel = verifyBtn ? verifyBtn.innerHTML : null;
-            if (verifyBtn) {
-                verifyBtn.disabled = true;
-                verifyBtn.innerHTML = '<svg class="w-4 h-4 inline animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Verifying with Zoho…';
-            }
-
-            try {
-                const res = await fetch(`/api/duplicates/clusters/${clusterId}/resolve-and-verify`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ action: 'resolve' }),
-                });
-                const data = await res.json();
-                if (!data.success) {
-                    alert(data.error || 'Failed to resolve + verify.');
-                    if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.innerHTML = originalLabel; }
-                    return;
-                }
-
-                const v = data.verification || {};
-                if (v.verified) {
-                    alert(`✓ Verified — ${v.confirmed_deleted} record(s) confirmed deleted in Zoho.\n\n${v.notes}`);
-                    closeModal();
-                    refreshData();
-                } else {
-                    // Follow-up 2: on verification failure, immediately
-                    // open the pre-resolve snapshot viewer so the
-                    // operator sees what was about to be merged. The
-                    // resolve-and-verify endpoint returns latest_snapshot_id
-                    // (the snapshot captured by resolveCluster as its
-                    // first step). If for some reason the lookup failed
-                    // we fall back to the original alert-only flow.
-                    const snapshotId = data.latest_snapshot_id;
-                    const messageParts = [
-                        `⚠ Verification failed — Zoho still shows ${v.still_present} non-primary record(s).`,
-                        '',
-                        v.notes,
-                        '',
-                        'The cluster has been re-opened so it stays in your queue.',
-                        'Confirm the merge in Zoho, then try Mark Resolved + Verify again.',
-                    ];
-                    if (snapshotId) {
-                        messageParts.push('', 'Click OK to view the pre-resolve snapshot showing what was about to be merged.');
-                    }
-                    alert(messageParts.join('\n'));
-                    closeModal();
-                    refreshData();
-                    if (snapshotId) {
-                        // Layered above the (now closed) cluster modal —
-                        // openSnapshotViewer manages its own modal.
-                        openSnapshotViewer(snapshotId);
-                    }
-                }
-            } catch (e) {
-                alert('Network error during resolve + verify: ' + (e && e.message || e));
-                if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.innerHTML = originalLabel; }
-            }
-        }
 
         function closeModal() { document.getElementById('clusterModal').classList.add('hidden'); }
 
