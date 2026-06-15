@@ -2164,6 +2164,35 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  {
+    // Per-tab snapshot — one headline + verdict per Duplicate Radar tab.
+    // Fans out across all the tab scanners in parallel and returns ONLY
+    // the summary metrics so the Executive Summary "at-a-glance"
+    // scorecard loads fast. Each tab is wrapped — one slow / failing
+    // dependency cannot brick the whole exec view.
+    path: "/api/duplicates/overview",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const admin = await requireDuplicateRadarAccess(c);
+          if (!admin) return unauthorizedResponse(c);
+
+          const { getDuplicateRadarOverview } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const overview = await getDuplicateRadarOverview();
+          return c.json({ success: true, ...overview });
+        } catch (error: any) {
+          logger.error("Error fetching Duplicate Radar overview:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
+        }
+      };
+    },
+  },
   // "View All" support for the executive-summary cards (Top Match Signal Sources
   // and Top Clusters by Pipeline Inflation). These endpoints return the full
   // ranked list, not just the top 5 rendered inline on the page.
