@@ -146,7 +146,7 @@ export async function initKPITables(): Promise<void> {
       target_value DECIMAL(10,2),
       status VARCHAR(10) NOT NULL CHECK (status IN ('green', 'amber', 'red')),
       trend VARCHAR(15),
-      calculated_by VARCHAR(10) DEFAULT 'system',
+      calculated_by VARCHAR(20) DEFAULT 'system',
       override_reason TEXT,
       evidence_ids INTEGER[],
       ai_confidence DECIMAL(5,2),
@@ -155,6 +155,12 @@ export async function initKPITables(): Promise<void> {
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  // Widen calculated_by on existing DBs: 'system_auto' (11 chars) overflowed the
+  // original VARCHAR(10), so every auto-calc value silently failed to record.
+  await pool.query(
+    `ALTER TABLE kpi_values ALTER COLUMN calculated_by TYPE VARCHAR(20)`,
+  );
 
   // FIX: idempotency. Without this, the daily KPI cron silently inserted
   // duplicate rows whenever it ran more than once for the same period.

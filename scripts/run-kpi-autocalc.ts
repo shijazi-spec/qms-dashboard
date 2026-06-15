@@ -16,6 +16,34 @@ import {
 } from "../src/utils/kpiDatabase";
 import { initKPIChecklistTables } from "../src/utils/kpiChecklistDatabase";
 import { runKPIAutoCalc } from "../src/utils/kpiAutoCalc";
+import { pool as radarPool } from "../src/utils/duplicateRadarDatabase";
+
+/** Quick data-source diagnostic so empty KPIs are explainable. */
+async function printDiagnostics() {
+  console.log("\n— Data source diagnostic —");
+  const out: any[] = [];
+  const safe = async (label: string, sql: string) => {
+    try {
+      const r = await radarPool.query(sql);
+      out.push({ Source: label, Count: Number(r.rows[0]?.n ?? 0) });
+    } catch (e) {
+      out.push({ Source: label, Count: `error: ${(e as Error).message}` });
+    }
+  };
+  await safe("call_records (total)", "SELECT COUNT(*)::int n FROM call_records");
+  await safe(
+    "call_records outbound+lead-linked, 30d",
+    "SELECT COUNT(*)::int n FROM call_records WHERE lower(coalesce(direction,'outbound'))='outbound' AND lead_id IS NOT NULL AND call_date >= NOW() - INTERVAL '30 days'",
+  );
+  await safe(
+    "call_records with lead_id (any)",
+    "SELECT COUNT(*)::int n FROM call_records WHERE lead_id IS NOT NULL",
+  );
+  await safe("deal_doc_compliance rows", "SELECT COUNT(*)::int n FROM deal_doc_compliance");
+  await safe("local Leads", "SELECT COUNT(*)::int n FROM duplicate_records WHERE zoho_module='Leads'");
+  await safe("local Deals", "SELECT COUNT(*)::int n FROM duplicate_records WHERE zoho_module='Deals'");
+  console.table(out);
+}
 
 const OWNER_LABEL: Record<string, string> = {
   quality_manager: "Sarah (Quality)",
@@ -89,6 +117,8 @@ async function main() {
   console.log(
     `\n${live}/${summary.kpiDetails.length} active KPIs have a live value.\n`,
   );
+
+  await printDiagnostics();
   process.exit(0);
 }
 

@@ -189,7 +189,7 @@ export async function calcSdrCallsPerDay(): Promise<ProcessKpiValue> {
   const res = await pool.query(
     `SELECT COUNT(*)::int AS total, COUNT(DISTINCT agent_email)::int AS agents
        FROM call_records
-      WHERE direction = 'outbound' AND lead_id IS NOT NULL
+      WHERE lower(coalesce(direction,'outbound')) = 'outbound' AND lead_id IS NOT NULL
         AND call_date >= NOW() - INTERVAL '${CALL_WINDOW_DAYS} days'`,
   );
   const total = Number(res.rows[0]?.total || 0);
@@ -209,7 +209,7 @@ export async function calcSdrContactRate(): Promise<ProcessKpiValue> {
     `SELECT COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE duration_seconds > 0)::int AS connected
        FROM call_records
-      WHERE direction = 'outbound' AND lead_id IS NOT NULL
+      WHERE lower(coalesce(direction,'outbound')) = 'outbound' AND lead_id IS NOT NULL
         AND call_date >= NOW() - INTERVAL '${CALL_WINDOW_DAYS} days'`,
   );
   const total = Number(res.rows[0]?.total || 0);
