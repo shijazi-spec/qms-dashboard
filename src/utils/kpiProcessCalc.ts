@@ -16,11 +16,7 @@ import {
   getDealDocCompliance,
   scanDealStageAgingViolations,
 } from "./duplicateRadarDatabase";
-import {
-  analyzeRecordHygiene,
-  DEFAULT_GOVERNANCE_RULES,
-  fetchDealStageHistory,
-} from "./zohoCRM";
+import { fetchDealStageHistory } from "./zohoCRM";
 
 export interface ProcessKpiValue {
   value: number;
@@ -51,17 +47,39 @@ async function localRawRecords(
   return res.rows.map((r: any) => r.raw_data || {});
 }
 
-/** Hygiene "clean" share: records with zero governance issues ÷ total. */
+/** True if a Zoho field (string or {name}) has a non-empty value on the record. */
+function hasField(raw: any, field: string): boolean {
+  const v = raw?.[field];
+  if (v == null) return false;
+  if (typeof v === "object") return String(v.name ?? "").trim() !== "";
+  return String(v).trim() !== "";
+}
+
+// CRM Data Accuracy = share of records that carry their CORE operational fields.
+// Deliberately NOT the full DEFAULT_GOVERNANCE_RULES (which require enrichment
+// fields like City/Industry/Description that are essentially never filled →
+// 0% clean and useless as a trend KPI). Full-governance compliance lives on the
+// Quality Dashboard AI Audit. Core fields confirmed against the live data
+// distribution (2026-06-16). Easy to extend if the team adds required fields.
+const LEAD_CORE_REQUIRED = ["First_Name", "Lead_Source", "Lead_Status"];
+const DEAL_CORE_REQUIRED = ["Stage", "Amount", "Account_Name", "Closing_Date"];
+
+function leadIsClean(raw: any): boolean {
+  // Contactable = phone OR email (requiring both is too strict for the data).
+  const contactable = hasField(raw, "Phone") || hasField(raw, "Email");
+  return contactable && LEAD_CORE_REQUIRED.every((f) => hasField(raw, f));
+}
+
+function dealIsClean(raw: any): boolean {
+  return DEAL_CORE_REQUIRED.every((f) => hasField(raw, f));
+}
+
+/** Core-field "clean" share ÷ total. */
 function cleanShare(rawRecords: any[], module: "Leads" | "Deals"): ProcessKpiValue {
   if (rawRecords.length === 0) return EMPTY;
+  const isClean = module === "Leads" ? leadIsClean : dealIsClean;
   let clean = 0;
-  for (const raw of rawRecords) {
-    const issues = analyzeRecordHygiene(
-      { id: String(raw.id || ""), module, data: raw } as any,
-      DEFAULT_GOVERNANCE_RULES,
-    );
-    if (issues.length === 0) clean++;
-  }
+  for (const raw of rawRecords) if (isClean(raw)) clean++;
   const value = Math.round((clean / rawRecords.length) * 1000) / 10;
   return { value, dataAvailable: true, details: { clean, total: rawRecords.length } };
 }
@@ -276,7 +294,8 @@ export async function calcSalesConversionRate(): Promise<ProcessKpiValue> {
   let lost = 0;
   for (const r of recs) {
     const s = (readField(r.Stage) || "").toLowerCase();
-    if (/agreement signed|paid|closed won/.test(s)) signed++;
+    // Won = any "Signed" stage (covers "Signed" + "Agreement Signed"), Paid, Closed Won.
+    if (/signed|paid|closed won/.test(s)) signed++;
     else if (/closed lost|junk/.test(s)) lost++;
   }
   const denom = signed + lost;
