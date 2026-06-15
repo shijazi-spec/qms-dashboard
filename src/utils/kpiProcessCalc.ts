@@ -17,6 +17,7 @@ import {
   scanDealStageAgingViolations,
 } from "./duplicateRadarDatabase";
 import { fetchDealStageHistory } from "./zohoCRM";
+import { getAllFrameworkCoverage } from "./obligationDocumentsDatabase";
 
 export interface ProcessKpiValue {
   value: number;
@@ -399,6 +400,39 @@ export async function computeSalesCycleTimes(
   };
 }
 
+// ───────────────────────── GRC — Certification Milestones ───────────────────
+/**
+ * GRC-KPI-002 Certification Milestones On-Track — driven by the Document Mapping
+ * "Coverage by Framework" data (per Sarah, 2026-06-16). Each certification /
+ * compliance framework (COPC, ISO-27001, ISO-9001, NCA-DCC/ECC, PCI-DSS, PDPL,
+ * SAMA-CSF) is a milestone; progress = clauses with ≥1 linked document. The KPI
+ * = overall coverage across all frameworks (mirrors the page's "Overall
+ * Document-Mapping Coverage" headline). Details carry per-framework breakdown.
+ */
+export async function calcCertificationMilestones(): Promise<ProcessKpiValue> {
+  let frameworks;
+  try {
+    frameworks = await getAllFrameworkCoverage();
+  } catch {
+    return EMPTY;
+  }
+  if (!frameworks || frameworks.length === 0) return EMPTY;
+  let total = 0;
+  let mapped = 0;
+  const byFramework: Record<string, number> = {};
+  for (const f of frameworks) {
+    total += Number(f.total_obligations) || 0;
+    mapped += Number(f.with_evidence) || 0;
+    byFramework[f.regulation_code] = Number(f.coverage_pct) || 0;
+  }
+  if (total === 0) return EMPTY;
+  return {
+    value: Math.round((mapped / total) * 1000) / 10,
+    dataAvailable: true,
+    details: { frameworks: frameworks.length, total_clauses: total, mapped, byFramework },
+  };
+}
+
 /**
  * Map of canonical SDR/Sales KPI code → LOCAL-only calculator (no Zoho calls).
  * Cycle-time KPIs (SALES-KPI-03/04) are handled separately via
@@ -423,6 +457,8 @@ export const PROCESS_CALCULATORS: Record<
   "SALES-KPI-02": calcSalesConversionRate,
   "SALES-KPI-05": calcSalesDocCompliance,
   "SALES-KPI-06": calcSalesCrmAccuracy,
+  // GRC — driven by the Document Mapping framework coverage
+  "GRC-KPI-002": calcCertificationMilestones,
 };
 
 /**
