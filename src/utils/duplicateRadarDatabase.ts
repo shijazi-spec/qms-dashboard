@@ -4265,6 +4265,11 @@ export async function getEnhancedSummary(): Promise<{
   duplicateDealRate: number;
   topClustersByInflation: any[];
   lastScanInfo: any;
+  /** ISO timestamp of the most recent successful sync across all modules
+   *  (incremental OR full) — sourced from zoho_sync_state. Drives the
+   *  "Last sync" line on the Executive Summary card. Distinct from
+   *  lastScanInfo, which is the most recent FULL rebuild only. */
+  lastSyncAt: string | null;
 }> {
   const result = await pool.query(`
     SELECT 
@@ -4319,12 +4324,27 @@ export async function getEnhancedSummary(): Promise<{
     LIMIT 5
   `);
 
-  // D4: Last scan info
+  // D4: Last scan info — most recent FULL rebuild (every row in
+  //     duplicate_detection_logs corresponds to a complete corpus scan).
   const lastScanResult = await pool.query(`
     SELECT completed_at, detection_duration_ms, total_records_scanned, total_clusters_found, total_duplicates_detected
     FROM duplicate_detection_logs WHERE status = 'completed'
     ORDER BY completed_at DESC LIMIT 1
   `);
+
+  // Most recent sync of ANY kind (incremental Sync Now / scheduled cron /
+  // full rebuild) — taken from the per-module zoho_sync_state. This is
+  // what the operator-facing "Last sync" line reflects. The incremental
+  // syncs that landed via the inngest path between full rebuilds DO
+  // update zoho_sync_state but not duplicate_detection_logs, which is
+  // why the legacy Last-Scan card looked frozen on the last full
+  // rebuild date. The query is a no-op if the table is empty.
+  const lastSyncResult = await pool.query(`
+    SELECT MAX(last_sync_at) AS last_sync_at FROM zoho_sync_state
+  `);
+  const lastSyncAt: string | null = lastSyncResult.rows[0]?.last_sync_at
+    ? new Date(lastSyncResult.rows[0].last_sync_at).toISOString()
+    : null;
 
   const totalClusters = parseInt(row.total_clusters) || 0;
   const resolvedCount = parseInt(row.resolved_count) || 0;
@@ -4356,6 +4376,7 @@ export async function getEnhancedSummary(): Promise<{
     duplicateDealRate: Math.round((dupDeals / tDeals) * 100),
     topClustersByInflation: topClustersResult.rows,
     lastScanInfo: lastScanResult.rows[0] || null,
+    lastSyncAt,
   };
 }
 
