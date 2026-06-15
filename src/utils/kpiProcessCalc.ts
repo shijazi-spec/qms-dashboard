@@ -16,7 +16,11 @@ import {
   getDealDocCompliance,
   scanDealStageAgingViolations,
 } from "./duplicateRadarDatabase";
-import { analyzeRecordHygiene, DEFAULT_GOVERNANCE_RULES } from "./zohoCRM";
+import {
+  analyzeRecordHygiene,
+  DEFAULT_GOVERNANCE_RULES,
+  fetchDealStageHistory,
+} from "./zohoCRM";
 
 export interface ProcessKpiValue {
   value: number;
@@ -162,6 +166,89 @@ export async function calcSdrPipelineAging(): Promise<ProcessKpiValue> {
   };
 }
 
+// ───────────────────────── SDR — Call Intelligence ──────────────────────────
+// Per Sarah (2026-06-16): all SDR calls are captured in the platform's Call
+// Intelligence logs (`call_records`). SDR activity = outbound calls tied to a
+// Lead (SDRs work Leads; Sales works Deals). 30-day rolling window.
+
+const CALL_WINDOW_DAYS = 30;
+
+/** Business days (Mon–Fri) in the last N days — denominator for calls/day. */
+function businessDaysInWindow(days: number): number {
+  let count = 0;
+  const now = Date.now();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now - i * 86400000).getUTCDay();
+    if (d !== 0 && d !== 6) count++;
+  }
+  return Math.max(1, count);
+}
+
+/** SDR-KPI-01 Calls Per Day — outbound lead calls ÷ (agents × business days). */
+export async function calcSdrCallsPerDay(): Promise<ProcessKpiValue> {
+  const res = await pool.query(
+    `SELECT COUNT(*)::int AS total, COUNT(DISTINCT agent_email)::int AS agents
+       FROM call_records
+      WHERE direction = 'outbound' AND lead_id IS NOT NULL
+        AND call_date >= NOW() - INTERVAL '${CALL_WINDOW_DAYS} days'`,
+  );
+  const total = Number(res.rows[0]?.total || 0);
+  const agents = Math.max(1, Number(res.rows[0]?.agents || 0));
+  if (total === 0) return EMPTY;
+  const perDay = total / (agents * businessDaysInWindow(CALL_WINDOW_DAYS));
+  return {
+    value: Math.round(perDay * 10) / 10,
+    dataAvailable: true,
+    details: { total_calls: total, agents, window_days: CALL_WINDOW_DAYS },
+  };
+}
+
+/** SDR-KPI-02 Contact Rate — connected (duration>0) ÷ total outbound lead calls. */
+export async function calcSdrContactRate(): Promise<ProcessKpiValue> {
+  const res = await pool.query(
+    `SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE duration_seconds > 0)::int AS connected
+       FROM call_records
+      WHERE direction = 'outbound' AND lead_id IS NOT NULL
+        AND call_date >= NOW() - INTERVAL '${CALL_WINDOW_DAYS} days'`,
+  );
+  const total = Number(res.rows[0]?.total || 0);
+  const connected = Number(res.rows[0]?.connected || 0);
+  if (total === 0) return EMPTY;
+  return {
+    value: Math.round((connected / total) * 1000) / 10,
+    dataAvailable: true,
+    details: { connected, total },
+  };
+}
+
+/** SDR-KPI-06 Average Speed to Lead — avg hours from lead creation to first call. */
+export async function calcSdrSpeedToLead(): Promise<ProcessKpiValue> {
+  const res = await pool.query(
+    `WITH first_calls AS (
+       SELECT lead_id, MIN(call_date) AS first_call
+         FROM call_records
+        WHERE lead_id IS NOT NULL AND call_date IS NOT NULL
+        GROUP BY lead_id
+     )
+     SELECT AVG(EXTRACT(EPOCH FROM (fc.first_call - (dr.raw_data->>'Created_Time')::timestamptz)) / 3600.0) AS avg_hours,
+            COUNT(*)::int AS n
+       FROM first_calls fc
+       JOIN duplicate_records dr
+         ON dr.zoho_module = 'Leads' AND dr.zoho_record_id = fc.lead_id
+      WHERE dr.raw_data->>'Created_Time' IS NOT NULL
+        AND fc.first_call >= (dr.raw_data->>'Created_Time')::timestamptz`,
+  );
+  const n = Number(res.rows[0]?.n || 0);
+  const avgHours = res.rows[0]?.avg_hours;
+  if (n === 0 || avgHours == null) return EMPTY;
+  return {
+    value: Math.round(Number(avgHours) * 10) / 10,
+    dataAvailable: true,
+    details: { leads_with_calls: n },
+  };
+}
+
 // ────────────────────────────── SALES ───────────────────────────────────────
 
 /** SALES-KPI-01 Deal Stage Aging Compliance — deals within SLA ÷ tracked deals. */
@@ -214,16 +301,95 @@ export async function calcSalesCrmAccuracy(): Promise<ProcessKpiValue> {
 }
 
 /**
- * Map of canonical SDR/Sales KPI code → calculator. Codes NOT listed here have no
- * safe local source yet (e.g. Calls/Tasks-module KPIs, stage-history cycle times)
- * and are intentionally left to show "--".
+ * SALES-KPI-03 Proposal Cycle Time + SALES-KPI-04 Agreement Cycle Time — from
+ * Zoho Stage_History (per Sarah's choice). Zoho gives Stage_Duration (days spent
+ * in each stage) directly, so no transition math. This is the ONE place that hits
+ * the live Zoho API, so it is bounded to a sample of recently-modified deals that
+ * have reached Proposal+; the sample size is logged (no silent truncation).
+ */
+const CYCLE_TIME_DEAL_CAP = 40;
+
+export async function computeSalesCycleTimes(
+  cap = CYCLE_TIME_DEAL_CAP,
+): Promise<Record<string, ProcessKpiValue>> {
+  const dealRows = await pool.query(
+    `SELECT zoho_record_id
+       FROM duplicate_records
+      WHERE zoho_module = 'Deals' AND zoho_record_id IS NOT NULL
+        AND lower(coalesce(raw_data->>'Stage','')) ~ '(proposal|agreement|paid|closed won)'
+      ORDER BY modified_date DESC NULLS LAST
+      LIMIT $1`,
+    [cap],
+  );
+  const ids: string[] = dealRows.rows
+    .map((r: any) => r.zoho_record_id)
+    .filter(Boolean);
+
+  if (ids.length === 0) {
+    return { "SALES-KPI-03": EMPTY, "SALES-KPI-04": EMPTY };
+  }
+
+  const proposalDurations: number[] = [];
+  const agreementDurations: number[] = [];
+  let fetched = 0;
+
+  for (const id of ids) {
+    try {
+      const history = await fetchDealStageHistory(id);
+      fetched++;
+      for (const row of history) {
+        const stage = (row.Stage || "").toLowerCase();
+        const dur =
+          typeof row.Stage_Duration === "number"
+            ? row.Stage_Duration
+            : Number(row.Stage_Duration);
+        if (!Number.isFinite(dur) || dur < 0) continue;
+        if (stage.includes("proposal")) proposalDurations.push(dur);
+        else if (stage.includes("agreement sent")) agreementDurations.push(dur);
+      }
+    } catch (e) {
+      // One deal's history failing must not abort the sample.
+      logger.error(
+        `[KPIProcessCalc] stage history failed for deal ${id}: ${(e as Error).message}`,
+      );
+    }
+  }
+
+  logger.info(
+    `[KPIProcessCalc] Sales cycle times sampled ${fetched}/${ids.length} deals ` +
+      `(proposal n=${proposalDurations.length}, agreement n=${agreementDurations.length})`,
+  );
+
+  const avg = (xs: number[]): ProcessKpiValue =>
+    xs.length === 0
+      ? EMPTY
+      : {
+          value: Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10,
+          dataAvailable: true,
+          details: { sample: xs.length },
+        };
+
+  return {
+    "SALES-KPI-03": avg(proposalDurations),
+    "SALES-KPI-04": avg(agreementDurations),
+  };
+}
+
+/**
+ * Map of canonical SDR/Sales KPI code → LOCAL-only calculator (no Zoho calls).
+ * Cycle-time KPIs (SALES-KPI-03/04) are handled separately via
+ * computeSalesCycleTimes() because they hit the live Zoho API. Codes not covered
+ * anywhere have no source yet and stay "--".
  */
 export const PROCESS_CALCULATORS: Record<
   string,
   () => Promise<ProcessKpiValue>
 > = {
   // SDR
+  "SDR-KPI-01": calcSdrCallsPerDay,
+  "SDR-KPI-02": calcSdrContactRate,
   "SDR-KPI-03": calcSdrQualificationRate,
+  "SDR-KPI-06": calcSdrSpeedToLead,
   "SDR-KPI-07": calcSdrLeadToQualified,
   "SDR-KPI-08": calcSdrCrmAccuracy,
   "SDR-KPI-09": calcSdrDuplicateRate,
@@ -239,9 +405,9 @@ export const PROCESS_CALCULATORS: Record<
  * Run every process calculator and return code → result. Each is isolated so one
  * failure (or empty source) can't abort the rest.
  */
-export async function computeProcessKPIs(): Promise<
-  Record<string, ProcessKpiValue>
-> {
+export async function computeProcessKPIs(
+  includeCycleTimes = false,
+): Promise<Record<string, ProcessKpiValue>> {
   const out: Record<string, ProcessKpiValue> = {};
   for (const [code, fn] of Object.entries(PROCESS_CALCULATORS)) {
     try {
@@ -251,5 +417,19 @@ export async function computeProcessKPIs(): Promise<
       out[code] = EMPTY;
     }
   }
+
+  // Sales cycle times = the ONLY Zoho-API step (up to 40 sequential per-deal
+  // history calls). Run it only in the background daily job (includeCycleTimes),
+  // NOT on the interactive Recalculate button, so the button can't hang / time out.
+  if (includeCycleTimes) {
+    try {
+      Object.assign(out, await computeSalesCycleTimes());
+    } catch (e) {
+      logger.error(`[KPIProcessCalc] cycle-times failed: ${(e as Error).message}`);
+      out["SALES-KPI-03"] = EMPTY;
+      out["SALES-KPI-04"] = EMPTY;
+    }
+  }
+
   return out;
 }

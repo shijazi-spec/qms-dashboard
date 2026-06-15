@@ -57,7 +57,9 @@ export interface KPIAutoCalcResult {
  * "Recalculate" button. Never throws on a single-KPI failure — it logs and
  * continues so one bad source can't blank the whole page.
  */
-export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
+export async function runKPIAutoCalc(
+  includeCycleTimes = false,
+): Promise<KPIAutoCalcResult> {
   const details: KPIAutoCalcResult["details"] = [];
   let recorded = 0;
   let skipped = 0;
@@ -105,7 +107,7 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
   // 2) SDR + Sales process KPIs (from the Duplicate Radar's local synced data —
   //    no live Zoho calls). Codes without a safe local source stay "--".
   try {
-    const proc = await computeProcessKPIs();
+    const proc = await computeProcessKPIs(includeCycleTimes);
     for (const [code, result] of Object.entries(proc)) {
       const def = await getKPIByCode(code);
       if (!def || !def.is_active || !def.id) {

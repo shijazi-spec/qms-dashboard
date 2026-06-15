@@ -133,7 +133,10 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
   try {
     const { runKPIAutoCalc: runCanonicalKPIAutoCalc } =
       await import("./kpiAutoCalc");
-    const canon = await runCanonicalKPIAutoCalc();
+    // includeCycleTimes=true: the daily background run also refreshes the Sales
+    // Proposal/Agreement cycle times (Zoho stage-history sample) — too slow for
+    // the interactive Recalculate button, fine here.
+    const canon = await runCanonicalKPIAutoCalc(true);
     for (const d of canon.details) {
       results.push({
         kpi: d.code,

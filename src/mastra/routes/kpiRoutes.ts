@@ -577,7 +577,12 @@ export const kpiRoutes = [
               c,
               "Insufficient permissions to recalculate KPIs",
             );
-          const result = await runKPIAutoCalc();
+          // ?cycleTimes=1 forces the Zoho stage-history step (Sales cycle times)
+          // on demand; default is the fast local-only recompute.
+          const includeCycleTimes =
+            c.req.query("cycleTimes") === "1" ||
+            c.req.query("cycleTimes") === "true";
+          const result = await runKPIAutoCalc(includeCycleTimes);
           return c.json({ success: true, ...result });
         } catch (error) {
           safeLogger.error("Error recalculating KPIs:", error);
