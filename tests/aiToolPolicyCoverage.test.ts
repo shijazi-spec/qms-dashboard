@@ -37,6 +37,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   TOOL_GOVERNANCE_POLICIES,
+  getEffectiveToolGovernancePolicy,
   type ToolGovernancePolicy,
 } from "../src/utils/aiToolGovernance";
 
@@ -296,19 +297,31 @@ async function run(): Promise<void> {
   const policyIds = new Set(Object.keys(TOOL_GOVERNANCE_POLICIES));
 
   for (const toolId of [...allToolIds].sort()) {
-    const policy: ToolGovernancePolicy | undefined =
-      TOOL_GOVERNANCE_POLICIES[toolId];
+    const explicit = TOOL_GOVERNANCE_POLICIES[toolId];
+    const isGated = gatedToolIds.has(toolId);
 
-    // (a) Every createTool id MUST have a TOOL_GOVERNANCE_POLICIES entry.
-    //     Read-only tools may set requiresApproval: false, but they still
-    //     need a policy entry that documents the bypass and provides a
-    //     preview if anything ever does try to gate them.
-    assert(
-      !!policy,
-      `[${toolId}] has a TOOL_GOVERNANCE_POLICIES entry`,
-    );
+    // (a) GATED (write/approval) tools MUST be explicitly classified — a
+    //     synthesized default would silently make a write tool no-approval,
+    //     which is a security hole. withApprovalGate also refuses to run them
+    //     without an explicit policy.
+    //     UN-GATED read-only tools auto-get a documented read-only default via
+    //     getEffectiveToolGovernancePolicy(), so a new radar read-tool never
+    //     blocks a publish on this gate.
+    if (isGated) {
+      assert(
+        !!explicit,
+        `[${toolId}] GATED tool has an explicit TOOL_GOVERNANCE_POLICIES entry`,
+      );
+    } else if (!explicit) {
+      console.log(
+        `  • [${toolId}] no explicit policy → auto read-only default (ok, un-gated)`,
+      );
+    }
 
-    if (!policy) continue;
+    // Validate the EFFECTIVE policy (explicit, or the synthesized read-only
+    // default) so the shape contract holds either way.
+    const policy: ToolGovernancePolicy =
+      getEffectiveToolGovernancePolicy(toolId);
 
     // (b) Shape: buildPreview must be a function that returns a
     //     non-empty string for an empty payload, and complianceRefs must

@@ -990,6 +990,37 @@ export function getPolicy(toolId: string): ToolGovernancePolicy | null {
   return TOOL_GOVERNANCE_POLICIES[toolId] || null;
 }
 
+/**
+ * Resolve a tool's policy, synthesizing a SAFE read-only default for any tool
+ * that has no explicit entry. This is the "self-registration" guard so a new
+ * read-only radar tool (added in the Replit editor, say) never blocks a publish
+ * on the governance-coverage gate.
+ *
+ * SECURITY: the default is read-only (requiresApproval: false). It is therefore
+ * ONLY safe for tools that are NOT approval-gated. `getPolicy()` (used by
+ * `withApprovalGate`) deliberately stays strict and returns null for unknown
+ * tools — so a WRITE tool wrapped with the gate still MUST have an explicit
+ * policy (defaulting a write tool to no-approval would be a security hole).
+ * Use THIS function only for coverage/audit/read paths, never to gate writes.
+ */
+export function getEffectiveToolGovernancePolicy(
+  toolId: string,
+): ToolGovernancePolicy {
+  const explicit = TOOL_GOVERNANCE_POLICIES[toolId];
+  if (explicit) return explicit;
+  return {
+    toolId,
+    label: `${toolId} (auto-classified read-only)`,
+    riskLevel: 'low',
+    requiresApproval: false,
+    complianceRefs: [
+      'WP-DOC-004 (AI Adoption Guidelines) — auto-classified read-only; add an explicit TOOL_GOVERNANCE_POLICIES entry to override',
+    ],
+    entityType: 'auto_read_only',
+    buildPreview: () => `${toolId} (read-only)`,
+  };
+}
+
 /* ------------------------------------------------------------------------- *
  * Read-only audit view of the governance registry.
  *

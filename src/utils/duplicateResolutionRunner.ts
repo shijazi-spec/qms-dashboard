@@ -656,6 +656,52 @@ export async function buildRadarTabStatus(): Promise<string> {
       );
     }
   } catch { /* skip */ }
+  // Pending Zoho admin delete — AI-Applied clusters whose Duplicate-Delete
+  // records the admin hasn't deleted yet. The actionable backlog: once the
+  // admin clears them, "Verify in CRM" marks them Resolved.
+  try {
+    const r = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM duplicate_clusters dc
+        WHERE dc.status = 'active'
+          AND EXISTS (
+            SELECT 1 FROM duplicate_merge_actions ma
+             WHERE ma.cluster_id = dc.id
+               AND ma.action_type IN ('resolve','module_resolved'))`,
+    );
+    const pend = Number(r.rows?.[0]?.n || 0);
+    if (pend > 0) {
+      parts.push(
+        `›  *Pending Zoho admin delete:* ${n(pend)} AI-Applied cluster(s) awaiting the admin's delete → then Verify in CRM`,
+      );
+    }
+  } catch { /* skip */ }
+  // Cross-Module overlaps — same company across ≥2 modules (CONVERT/LINK/CLOSE).
+  try {
+    const r = await pool.query(
+      `SELECT COUNT(*)::int AS n, COALESCE(SUM(estimated_pipeline_value),0)::float AS arr
+         FROM duplicate_clusters
+        WHERE status = 'active'
+          AND ((CASE WHEN total_leads    > 0 THEN 1 ELSE 0 END
+              + CASE WHEN total_contacts > 0 THEN 1 ELSE 0 END
+              + CASE WHEN total_accounts > 0 THEN 1 ELSE 0 END
+              + CASE WHEN total_deals    > 0 THEN 1 ELSE 0 END) >= 2)`,
+    );
+    const cm = Number(r.rows?.[0]?.n || 0);
+    const cmArr = Number(r.rows?.[0]?.arr || 0);
+    if (cm > 0) {
+      parts.push(`›  *Cross-Module:* ${n(cm)} overlap(s) · ~SAR ${n(cmArr)} pipeline`);
+    }
+  } catch { /* skip */ }
+  // CS Pipeline Overlap — an open Sales deal coexisting with a CS handoff deal.
+  try {
+    const { getCsOverlapVerdictCounts } = await import("./duplicateRadarDatabase");
+    const v = await getCsOverlapVerdictCounts();
+    if (v && (v.block || v.review || v.warn)) {
+      parts.push(
+        `›  *CS Pipeline Overlap:* ${n(v.block)} block · ${n(v.review)} review · ${n(v.warn)} warn`,
+      );
+    }
+  } catch { /* skip */ }
   return parts.length ? `\n*Radar status by tab:*\n${parts.join("\n")}` : "";
 }
 
