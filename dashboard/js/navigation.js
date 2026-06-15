@@ -187,10 +187,6 @@ const WalaPlusNav = {
       color: 'amber',
       items: [
         { label: 'KPIs', href: '/kpis', icon: 'chart-bar', id: 'kpis' },
-        { label: 'KPI Catalog', href: '/kpi-catalog', icon: 'database', id: 'kpi-catalog', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
-        { label: 'OKRs', href: '/okrs', icon: 'document-report', id: 'okrs', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
-        { label: 'Leadership KPIs', href: '/leadership-kpis', icon: 'chart-bar', id: 'leadership-kpis', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
-        { label: 'Enter KPI Data', href: '/leadership-kpis/data', icon: 'document-text', id: 'leadership-kpis-data', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
         { label: 'Board Dashboard', href: '/executive', icon: 'office-building', id: 'executive' },
         { label: 'Team Performance', href: '/team', icon: 'user-group', id: 'team' },
         // AI Approvals Queue lives under Team Mgmt per user request — it is
@@ -959,6 +955,17 @@ const WalaPlusNav = {
           body, body.wp-rail-collapsed { padding-left: 0 !important; padding-right: 0 !important; }
         }
         .wp-topstrip { position: fixed; top: 0; left: 0; right: 0; height: 48px; z-index: 30; }
+        /* Critical tooltip-hiding rule injected here so the rail never double-renders
+           its label on pages that don't load /css/navigation.css. The full hover
+           polish (colors, arrow, focus) still lives in navigation.css. */
+        .wp-nav-tooltip { position: absolute; opacity: 0; visibility: hidden; pointer-events: none;
+                          left: calc(100% + 10px); top: 50%; transform: translateY(-50%); z-index: 200;
+                          white-space: nowrap; background: #1e293b; color: #f8fafc; font-size: .75rem;
+                          padding: 4px 10px; border-radius: 6px; }
+        .wp-rail-item:hover .wp-nav-tooltip, .wp-rail-item:focus .wp-nav-tooltip,
+        .wp-group-toggle:hover .wp-nav-tooltip, .wp-group-toggle:focus .wp-nav-tooltip { opacity: 1; visibility: visible; }
+        body:not(.wp-rail-collapsed) .wp-rail-item:hover .wp-nav-tooltip,
+        body:not(.wp-rail-collapsed) .wp-group-toggle:hover .wp-nav-tooltip { opacity: 0; visibility: hidden; }
         .wp-rail { position: fixed; top: 48px; bottom: 0; left: 0; width: 256px; z-index: 30;
                    transition: width .2s ease, transform .2s ease; overflow: hidden; }
         body.wp-rail-collapsed .wp-rail { width: 64px; }

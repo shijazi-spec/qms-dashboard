@@ -158,7 +158,7 @@
     "kpi_insight_excellent": "KPI performance is excellent with 80%+ on target. Consider raising targets for continuous improvement.",
     "insight_no_issues": "System analysis complete. No critical issues detected.",
     "chart_kpis": "KPIs",
-    "owner_quality": "Sara (Quality)",
+    "owner_quality": "Sarah (Quality)",
     "owner_grc": "Maram (GRC)",
     "owner_shared": "Shared",
     "chart_risks_dataset": "Risks",
@@ -799,13 +799,13 @@
     "kpis": {
       "no_kpis": "No KPIs found",
       "owners": {
-        "quality_manager": "Sara",
+        "quality_manager": "Sarah",
         "grc_manager": "Maram",
         "governance_officer": "Mohammed",
         "shared": "Shared"
       },
       "owners_full": {
-        "quality_manager": "Sara (Quality Manager)",
+        "quality_manager": "Sarah (Quality Manager)",
         "grc_manager": "Maram (GRC Manager)",
         "governance_officer": "Mohammed (Governance Officer)",
         "shared": "Shared"
@@ -1752,7 +1752,7 @@
     "f_frequency": "Frequency",
     "f_target": "Target",
     "f_direction": "Direction",
-    "o_quality_manager": "Sara (Quality Manager)",
+    "o_quality_manager": "Sarah (Quality Manager)",
     "o_grc_manager": "Maram (GRC Manager)",
     "o_governance_officer": "Mohammed (Governance Officer)",
     "o_shared": "Shared",
@@ -3091,7 +3091,7 @@
   },
   "feedback": {
     "title": "Team Feedback Center",
-    "subtitle": "View and analyze feedback from Sara, Maram, and your team members across all dashboards.",
+    "subtitle": "View and analyze feedback from Sarah, Maram, and your team members across all dashboards.",
     "submit_feedback": "Submit Feedback",
     "total_feedback": "Total Feedback",
     "avg_rating": "Avg. Rating",

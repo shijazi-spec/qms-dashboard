@@ -20,11 +20,24 @@ import {
   generateMBRData,
   seedMohammedKPIsManual,
   seedSDRKPIsManual,
+  seedSalesKPIsManual,
 } from "../../utils/kpiDatabase";
+import { runKPIAutoCalc } from "../../utils/kpiAutoCalc";
+import {
+  initKPIChecklistTables,
+  getChecklistItems,
+  checklistProgress,
+  addChecklistItem,
+  updateChecklistItem,
+  deleteChecklistItem,
+  recordChecklistKPIValue,
+} from "../../utils/kpiChecklistDatabase";
 
-initKPITables().catch((err) =>
-  safeLogger.error("[KpiRoutes] initKPITables failed", err),
-);
+initKPITables()
+  .then(() => initKPIChecklistTables())
+  .catch((err) =>
+    safeLogger.error("[KpiRoutes] KPI table init failed", err),
+  );
 
 const KPI_READ_ROLES = [
   "admin",
@@ -521,6 +534,169 @@ export const kpiRoutes = [
         } catch (error) {
           safeLogger.error("Error seeding SDR KPIs:", error);
           return c.json({ error: "Failed to seed SDR KPIs" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/kpis/seed-sales",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, ["admin"]);
+          if (!user)
+            return forbiddenResponse(c, "Admin access required to seed KPIs");
+          await seedSalesKPIsManual();
+          return c.json({
+            success: true,
+            message: "Sales Team KPIs (8) seeded successfully",
+          });
+        } catch (error) {
+          safeLogger.error("Error seeding Sales KPIs:", error);
+          return c.json({ error: "Failed to seed Sales KPIs" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Recompute live KPI values (leadership-feed-backed Quality/GRC + checklist
+    // KPIs) and record them into kpi_values so /kpis shows real numbers.
+    path: "/api/kpis/recalc",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to recalculate KPIs",
+            );
+          const result = await runKPIAutoCalc();
+          return c.json({ success: true, ...result });
+        } catch (error) {
+          safeLogger.error("Error recalculating KPIs:", error);
+          return c.json({ error: "Failed to recalculate KPIs" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/kpis/:id{[0-9]+}/checklist",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for KPI checklist",
+            );
+          const kpiId = parseInt(c.req.param("id"));
+          const items = await getChecklistItems(kpiId);
+          return c.json({ items, progress: checklistProgress(items) });
+        } catch (error) {
+          safeLogger.error("Error fetching KPI checklist:", error);
+          return c.json({ error: "Failed to fetch KPI checklist" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/kpis/:id{[0-9]+}/checklist",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to edit KPI checklist",
+            );
+          const kpiId = parseInt(c.req.param("id"));
+          const body = await c.req.json();
+          const text = (body?.item_text || "").trim();
+          if (!text) return c.json({ error: "item_text is required" }, 400);
+          const by = user?.email || "system";
+          const item = await addChecklistItem(kpiId, text, by);
+          // Re-record the KPI value so its % reflects the new item immediately.
+          await recordChecklistKPIValue(kpiId);
+          return c.json({ success: true, item });
+        } catch (error) {
+          safeLogger.error("Error adding checklist item:", error);
+          return c.json({ error: "Failed to add checklist item" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/kpis/checklist/:itemId{[0-9]+}",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to edit KPI checklist",
+            );
+          const itemId = parseInt(c.req.param("itemId"));
+          const body = await c.req.json();
+          const by = user?.email || "system";
+          const item = await updateChecklistItem(
+            itemId,
+            {
+              item_text: body?.item_text,
+              is_done: body?.is_done,
+              note: body?.note,
+            },
+            by,
+          );
+          if (!item) return c.json({ error: "Checklist item not found" }, 404);
+          // Recompute the parent KPI's value after a tick/edit.
+          await recordChecklistKPIValue(item.kpi_id);
+          return c.json({ success: true, item });
+        } catch (error) {
+          safeLogger.error("Error updating checklist item:", error);
+          return c.json({ error: "Failed to update checklist item" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/kpis/checklist/:itemId{[0-9]+}",
+    method: "DELETE" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to edit KPI checklist",
+            );
+          const itemId = parseInt(c.req.param("itemId"));
+          const ok = await deleteChecklistItem(itemId);
+          return c.json({ success: ok });
+        } catch (error) {
+          safeLogger.error("Error deleting checklist item:", error);
+          return c.json({ error: "Failed to delete checklist item" }, 500);
         }
       };
     },

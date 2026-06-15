@@ -125,6 +125,27 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
   } catch (err) {
     logger.error("[KPI Auto] Fatal error:", err);
   }
+
+  // Also run the canonical KPI engine: leadership-feed-backed Quality/GRC values
+  // + checklist-mode KPIs (% of items done). This is the authoritative source for
+  // the agreed owner-based KPI list on /kpis; the scorecard calculators above
+  // remain for the legacy fuzzy-matched KPIs.
+  try {
+    const { runKPIAutoCalc: runCanonicalKPIAutoCalc } =
+      await import("./kpiAutoCalc");
+    const canon = await runCanonicalKPIAutoCalc();
+    for (const d of canon.details) {
+      results.push({
+        kpi: d.code,
+        value: d.value,
+        status: d.value !== undefined ? "recorded" : "failed",
+        error: d.reason,
+      });
+    }
+  } catch (err) {
+    logger.error("[KPI Auto] Canonical engine error:", err);
+  }
+
   logger.info("[KPI Auto] Completed:", results);
   return { calculated: results.length, results };
 }

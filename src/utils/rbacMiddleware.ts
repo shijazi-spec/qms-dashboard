@@ -902,8 +902,31 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
 
   // Admin-only KPI seeders (write fixture data into the platform).
   {
-    pattern: /^\/api\/kpis\/seed-(mohammed|sdr)$/,
+    pattern: /^\/api\/kpis\/seed-(mohammed|sdr|sales)$/,
     methods: ["POST"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
+  // KPI auto-calc recompute — governance write roles only.
+  {
+    pattern: /^\/api\/kpis\/recalc$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
+  // KPI checklist read — governance roles + executive + viewer.
+  {
+    pattern: /^\/api\/kpis\/\d+\/checklist$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  // KPI checklist writes (add item, tick/edit, delete) — governance write roles only.
+  {
+    pattern: /^\/api\/kpis\/\d+\/checklist$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
+  {
+    pattern: /^\/api\/kpis\/checklist\/\d+$/,
+    methods: ["PUT", "DELETE"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
   // KPI value entry — governance write roles only.

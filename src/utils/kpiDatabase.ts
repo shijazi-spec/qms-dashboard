@@ -24,8 +24,12 @@ export interface KPIDefinition {
     | "quality_manager"
     | "grc_manager"
     | "governance_officer"
+    | "sdr_team"
+    | "sales_team"
     | "shared";
   owner_name?: string;
+  /** How the live value is produced: auto (computed), checklist (% done), or manual entry. */
+  calc_mode?: "auto" | "checklist" | "manual";
   category:
     | "governance"
     | "risk"
@@ -118,6 +122,7 @@ export async function initKPITables(): Promise<void> {
       weight DECIMAL(5,2) DEFAULT 1.0,
       is_active BOOLEAN DEFAULT true,
       is_north_star BOOLEAN DEFAULT false,
+      calc_mode VARCHAR(20) DEFAULT 'manual',
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
@@ -201,6 +206,16 @@ export async function initKPITables(): Promise<void> {
     END $$;
   `);
 
+  // calc_mode: how each KPI's live value is produced (auto | checklist | manual).
+  await pool.query(
+    `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS calc_mode VARCHAR(20) DEFAULT 'manual'`,
+  );
+
+  // Name normalization: Sarah prefers her name spelled "Sarah" everywhere.
+  await pool.query(
+    `UPDATE kpi_definitions SET owner_name = 'Sarah' WHERE owner_name = 'Sara'`,
+  );
+
   await seedDefaultKPIs();
 
   // Post-seed migration: fold Mohammed's KPIs into Sara/Maram after his
@@ -213,6 +228,19 @@ export async function initKPITables(): Promise<void> {
 
   // Seed the agreed GRQ scorecard KPIs onto the KPI Engine (first /kpis page).
   await seedGrqScorecardKPIs();
+
+  // SDR + Sales KPIs are derived from the platform's own process data. Each has
+  // its own existence guard, so calling them independently (seedDefaultKPIs
+  // early-returns once any KPI exists) backfills them on already-seeded DBs.
+  await seedSDRKPIs();
+  await seedSalesKPIs();
+
+  // SDR + Sales KPIs are all process-derived → mark them calc_mode='auto' (the
+  // SDR seed pre-dates the calc_mode column so its rows default to 'manual').
+  await pool.query(
+    `UPDATE kpi_definitions SET calc_mode = 'auto'
+     WHERE owner_type IN ('sdr_team', 'sales_team') AND (calc_mode IS NULL OR calc_mode = 'manual')`,
+  );
 
   logger.info("✅ [KPIDB] KPI Engine tables initialized");
 }
@@ -231,7 +259,7 @@ async function seedDefaultKPIs(): Promise<void> {
       description:
         "Percentage of business processes covered by governance documents",
       owner_type: "quality_manager",
-      owner_name: "Sara",
+      owner_name: "Sarah",
       category: "governance",
       formula: "(Covered Processes / Total Processes) × 100",
       unit: "%",
@@ -247,7 +275,7 @@ async function seedDefaultKPIs(): Promise<void> {
       kpi_code: "QM-DOC-001",
       description: "Percentage of required documents completed and approved",
       owner_type: "quality_manager",
-      owner_name: "Sara",
+      owner_name: "Sarah",
       category: "governance",
       formula: "(Approved Documents / Required Documents) × 100",
       unit: "%",
@@ -263,7 +291,7 @@ async function seedDefaultKPIs(): Promise<void> {
       kpi_code: "QM-AUD-001",
       description: "Percentage of planned audits completed on schedule",
       owner_type: "quality_manager",
-      owner_name: "Sara",
+      owner_name: "Sarah",
       category: "audit",
       formula: "(Completed Audits / Planned Audits) × 100",
       unit: "%",
@@ -279,7 +307,7 @@ async function seedDefaultKPIs(): Promise<void> {
       kpi_code: "QM-AUD-002",
       description: "Percentage of audit findings closed within SLA",
       owner_type: "quality_manager",
-      owner_name: "Sara",
+      owner_name: "Sarah",
       category: "audit",
       formula: "(Closed Findings / Total Findings) × 100",
       unit: "%",
@@ -295,7 +323,7 @@ async function seedDefaultKPIs(): Promise<void> {
       kpi_code: "QM-AUD-003",
       description: "Reduction in repeat audit findings vs previous period",
       owner_type: "quality_manager",
-      owner_name: "Sara",
+      owner_name: "Sarah",
       category: "audit",
       formula: "((Previous Repeat Findings - Current) / Previous) × 100",
       unit: "%",
@@ -311,7 +339,7 @@ async function seedDefaultKPIs(): Promise<void> {
       kpi_code: "QM-TRN-001",
       description: "Percentage of staff with up-to-date training",
       owner_type: "quality_manager",
-      owner_name: "Sara",
+      owner_name: "Sarah",
       category: "training",
       formula: "(Trained Staff / Total Staff) × 100",
       unit: "%",
@@ -327,7 +355,7 @@ async function seedDefaultKPIs(): Promise<void> {
       kpi_code: "QM-CI-001",
       description: "Number of improvement initiatives implemented per quarter",
       owner_type: "quality_manager",
-      owner_name: "Sara",
+      owner_name: "Sarah",
       category: "quality",
       formula: "Count of implemented initiatives",
       unit: "count",
@@ -343,7 +371,7 @@ async function seedDefaultKPIs(): Promise<void> {
       kpi_code: "QM-AUTO-001",
       description: "Percentage of QMS processes with automation",
       owner_type: "quality_manager",
-      owner_name: "Sara",
+      owner_name: "Sarah",
       category: "quality",
       formula: "(Automated Processes / Total Processes) × 100",
       unit: "%",
@@ -598,7 +626,7 @@ async function seedMohammedKPIs(): Promise<void> {
           route: "/policies",
           what_to_check: "Look for red/overdue review dates",
           if_result: "Review date passed",
-          then_action: "Contact owner (e.g., Sara) to schedule review",
+          then_action: "Contact owner (e.g., Sarah) to schedule review",
         },
         {
           step: 3,
@@ -934,7 +962,7 @@ async function seedMohammedKPIs(): Promise<void> {
  * resignation (2026-06). His role was tracking/enablement only, so each KPI
  * folds back to the manager who owns the underlying work, per the Quality↔GRC
  * RACI in "Quality Plan 2026":
- *   - MAM-KPI-01 Governance Documentation Lifecycle → Quality Manager (Sara)
+ *   - MAM-KPI-01 Governance Documentation Lifecycle → Quality Manager (Sarah)
  *   - MAM-KPI-02..06 (compliance, audit evidence, handoff, risk hygiene,
  *     exec reporting)                              → GRC Manager (Maram)
  * Idempotent: keyed on kpi_code and gated on any remaining governance_officer
@@ -945,7 +973,7 @@ const MOHAMMED_KPI_REASSIGNMENT: Array<{
   owner_type: "quality_manager" | "grc_manager";
   owner_name: string;
 }> = [
-  { code: "MAM-KPI-01", owner_type: "quality_manager", owner_name: "Sara" },
+  { code: "MAM-KPI-01", owner_type: "quality_manager", owner_name: "Sarah" },
   { code: "MAM-KPI-02", owner_type: "grc_manager", owner_name: "Maram" },
   { code: "MAM-KPI-03", owner_type: "grc_manager", owner_name: "Maram" },
   { code: "MAM-KPI-04", owner_type: "grc_manager", owner_name: "Maram" },
@@ -959,7 +987,7 @@ export async function reassignMohammedKPIs(): Promise<void> {
   );
   if (parseInt(pending.rows[0].count) === 0) return;
   logger.info(
-    "🔁 [KPIDB] Reassigning Mohammed's KPIs (resignation) → Sara / Maram...",
+    "🔁 [KPIDB] Reassigning Mohammed's KPIs (resignation) → Sarah / Maram...",
   );
   for (const m of MOHAMMED_KPI_REASSIGNMENT) {
     await pool.query(
@@ -969,7 +997,7 @@ export async function reassignMohammedKPIs(): Promise<void> {
       [m.owner_type, m.owner_name, m.code],
     );
   }
-  logger.info("✅ [KPIDB] Mohammed's KPIs reassigned to Sara / Maram");
+  logger.info("✅ [KPIDB] Mohammed's KPIs reassigned to Sarah / Maram");
 }
 
 /**
@@ -1018,38 +1046,84 @@ export async function deactivateStaleLegacyKPIs(): Promise<void> {
  * North Star flag) so the engine shows the full agreed set. Idempotent.
  */
 const GRQ_SCORECARD_KPIS: Array<Partial<KPIDefinition>> = [
-  // Quality (Sara)
-  { kpi_code: "QM-KPI-001", kpi_name: "Quality North Star Score", owner_type: "quality_manager", owner_name: "Sara", category: "quality", unit: "%", target_value: 65, threshold_green: 65, threshold_amber: 58, threshold_red: 50, threshold_direction: "higher_is_better", is_north_star: true, frequency: "quarterly", description: "Weighted composite of Sarah's quality KPIs for the quarter.", formula: "Σ(weight × component actual) per North Star plan" },
-  { kpi_code: "QM-KPI-015", kpi_name: "QMS Framework Completion", owner_type: "quality_manager", owner_name: "Sara", category: "governance", unit: "%", target_value: 100, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Share of planned BU governance frameworks approved & published in QMS.", formula: "(Approved framework packages ÷ planned) × 100" },
-  { kpi_code: "QM-KPI-002", kpi_name: "Audit Execution Rate", owner_type: "quality_manager", owner_name: "Sara", category: "audit", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Percent of planned audits completed within the quarter.", formula: "(Audits completed ÷ planned) × 100" },
-  { kpi_code: "QM-KPI-003", kpi_name: "Gap Closure Rate", owner_type: "quality_manager", owner_name: "Sara", category: "audit", unit: "%", target_value: 90, threshold_green: 85, threshold_amber: 70, threshold_red: 55, threshold_direction: "higher_is_better", frequency: "monthly", description: "Percent of audit findings/gaps closed within timeline.", formula: "(Findings closed on-time ÷ total) × 100" },
-  { kpi_code: "QM-KPI-004", kpi_name: "QMS Adoption Rate", owner_type: "quality_manager", owner_name: "Sara", category: "quality", unit: "%", target_value: 70, threshold_green: 70, threshold_amber: 50, threshold_red: 40, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Share of BUs actively adopting the QMS/governance system.", formula: "(Adopted BUs ÷ total BUs) × 100" },
-  { kpi_code: "QM-KPI-005", kpi_name: "Quality Training Coverage", owner_type: "quality_manager", owner_name: "Sara", category: "training", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Coverage of BU staff trained on released governance documents.", formula: "(Trained staff ÷ target staff) × 100" },
-  { kpi_code: "QM-KPI-006", kpi_name: "Quality→GRC Handoff Cycle Time", owner_type: "quality_manager", owner_name: "Sara", category: "governance", unit: "days", target_value: 5, threshold_green: 5, threshold_amber: 8, threshold_red: 12, threshold_direction: "lower_is_better", frequency: "monthly", description: "Average days from a Quality finding to its GRC handoff.", formula: "Avg(handoff date − finding date)" },
-  { kpi_code: "QM-KPI-007", kpi_name: "Operational Excellence Value Realization", owner_type: "quality_manager", owner_name: "Sara", category: "quality", unit: "%", target_value: 70, threshold_green: 70, threshold_amber: 50, threshold_red: 40, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Share of targeted value realized from quality/automation initiatives.", formula: "(Realized value ÷ target value) × 100" },
-  { kpi_code: "QM-KPI-008", kpi_name: "BU Coverage Rate", owner_type: "quality_manager", owner_name: "Sara", category: "governance", unit: "%", target_value: 100, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Percent of business units with governance coverage.", formula: "(BUs with governance coverage ÷ total BUs) × 100" },
-  // GRC (Maram)
-  { kpi_code: "GRC-KPI-001", kpi_name: "GRC North Star Score", owner_type: "grc_manager", owner_name: "Maram", category: "governance", unit: "%", target_value: 85, threshold_green: 85, threshold_amber: 76, threshold_red: 65, threshold_direction: "higher_is_better", is_north_star: true, frequency: "quarterly", description: "Weighted composite of Maram's GRC KPIs for the quarter.", formula: "Σ(weight × component actual) per North Star plan" },
-  { kpi_code: "GRC-KPI-002", kpi_name: "Certification Milestone Delivery Rate", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "On-time delivery of ISO/PDPL/PCI/NCA certification milestones.", formula: "(Milestones delivered on-time ÷ planned) × 100" },
-  { kpi_code: "GRC-KPI-003", kpi_name: "Audit & Certification Readiness Index", owner_type: "grc_manager", owner_name: "Maram", category: "audit", unit: "%", target_value: 85, threshold_green: 85, threshold_amber: 70, threshold_red: 55, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Required audit/cert evidence compiled and approved.", formula: "(Evidence ready ÷ required) × 100" },
-  { kpi_code: "GRC-KPI-004", kpi_name: "Evidence SLA Compliance", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "monthly", description: "Evidence requests delivered within SLA.", formula: "(Delivered within SLA ÷ total) × 100" },
-  { kpi_code: "GRC-KPI-005", kpi_name: "Risk Treatment Closure Rate (CAPA)", owner_type: "grc_manager", owner_name: "Maram", category: "risk", unit: "%", target_value: 80, threshold_green: 80, threshold_amber: 65, threshold_red: 50, threshold_direction: "higher_is_better", frequency: "monthly", description: "Risk treatments / CAPAs closed.", formula: "(Treatments completed ÷ due) × 100" },
-  { kpi_code: "GRC-KPI-006", kpi_name: "TPRA Vendor Risk Turnaround SLA", owner_type: "grc_manager", owner_name: "Maram", category: "vendor", unit: "%", target_value: 85, threshold_green: 85, threshold_amber: 70, threshold_red: 55, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Third-party (vendor) risk assessments completed within SLA.", formula: "(TPRA within SLA ÷ total) × 100" },
-  { kpi_code: "GRC-KPI-007", kpi_name: "Year-End Compliance Closure Score", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 95, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "annual", description: "2026 obligations closed or formally accepted by year-end.", formula: "(Closed or accepted ÷ applicable) × 100" },
-  { kpi_code: "GRC-KPI-008", kpi_name: "Compliance Coverage Index", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Applicable obligations mapped to a control/policy.", formula: "(Mapped obligations ÷ applicable) × 100" },
+  // ===== Quality Manager — Sarah (source: "OKRS with KPIs" sheet) =====
+  { kpi_code: "QM-KPI-015", kpi_name: "BU Framework Completion", owner_type: "quality_manager", owner_name: "Sarah", category: "governance", unit: "%", target_value: 100, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", is_north_star: true, calc_mode: "checklist", frequency: "quarterly", description: "Business-unit governance frameworks built, pilot-audited and published in QMS.", formula: "(Completed framework packages incl. pilot audit ÷ planned BUs) × 100" },
+  { kpi_code: "QM-KPI-002", kpi_name: "BU Audit Execution Rate", owner_type: "quality_manager", owner_name: "Sarah", category: "audit", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "quarterly", description: "Planned audits executed per function within the quarter.", formula: "(Audits completed ÷ planned) × 100" },
+  { kpi_code: "QM-KPI-003", kpi_name: "Gap Closure Rate", owner_type: "quality_manager", owner_name: "Sarah", category: "audit", unit: "%", target_value: 90, threshold_green: 85, threshold_amber: 70, threshold_red: 55, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "monthly", description: "Audit findings / gaps closed within their timeline.", formula: "(Findings closed on-time ÷ total) × 100" },
+  { kpi_code: "QM-KPI-009", kpi_name: "Repeat Findings Rate", owner_type: "quality_manager", owner_name: "Sarah", category: "audit", unit: "%", target_value: 10, threshold_green: 10, threshold_amber: 20, threshold_red: 30, threshold_direction: "lower_is_better", calc_mode: "auto", frequency: "quarterly", description: "Findings that recur in a later audit (lower is better).", formula: "(Repeat findings ÷ total findings) × 100" },
+  { kpi_code: "QM-KPI-004", kpi_name: "QMS Adoption Rate", owner_type: "quality_manager", owner_name: "Sarah", category: "quality", unit: "%", target_value: 70, threshold_green: 70, threshold_amber: 50, threshold_red: 40, threshold_direction: "higher_is_better", calc_mode: "checklist", frequency: "quarterly", description: "Business units actively adopting the QMS / governance system.", formula: "(Adopted BUs ÷ total BUs) × 100" },
+  { kpi_code: "QM-KPI-006", kpi_name: "Quality↔GRC Handoff SLA", owner_type: "quality_manager", owner_name: "Sarah", category: "governance", unit: "days", target_value: 5, threshold_green: 5, threshold_amber: 8, threshold_red: 12, threshold_direction: "lower_is_better", calc_mode: "auto", frequency: "monthly", description: "Average days from a Quality finding to its GRC handoff.", formula: "Avg(handoff date − finding date)" },
+  { kpi_code: "QM-KPI-010", kpi_name: "Documentation Lifecycle Compliance", owner_type: "quality_manager", owner_name: "Sarah", category: "governance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "quarterly", description: "Controlled documents reviewed / approved within their lifecycle.", formula: "(Docs within lifecycle SLA ÷ total controlled docs) × 100" },
+  // ===== GRC Manager — Maram =====
+  { kpi_code: "GRC-KPI-009", kpi_name: "High-Risk Items with Treatment Plan", owner_type: "grc_manager", owner_name: "Maram", category: "risk", unit: "%", target_value: 100, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "monthly", description: "High-risk items carrying an active treatment plan.", formula: "(High risks with treatment plan ÷ total high risks) × 100" },
+  { kpi_code: "GRC-KPI-010", kpi_name: "Risk Assessment Coverage (BUs)", owner_type: "grc_manager", owner_name: "Maram", category: "risk", unit: "%", target_value: 100, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "quarterly", description: "Business units with a completed risk assessment.", formula: "(BUs risk-assessed ÷ total BUs) × 100" },
+  { kpi_code: "GRC-KPI-005", kpi_name: "Risk Treatment On-Time Closure", owner_type: "grc_manager", owner_name: "Maram", category: "risk", unit: "%", target_value: 80, threshold_green: 80, threshold_amber: 65, threshold_red: 50, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "monthly", description: "Risk treatments / CAPAs closed on time.", formula: "(Treatments closed on-time ÷ due) × 100" },
+  { kpi_code: "GRC-KPI-003", kpi_name: "Audit Evidence Readiness", owner_type: "grc_manager", owner_name: "Maram", category: "audit", unit: "%", target_value: 85, threshold_green: 85, threshold_amber: 70, threshold_red: 55, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "quarterly", description: "Required audit / certification evidence compiled and approved.", formula: "(Evidence ready ÷ required) × 100" },
+  { kpi_code: "GRC-KPI-002", kpi_name: "Certification Milestones On-Track", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", is_north_star: true, calc_mode: "checklist", frequency: "quarterly", description: "ISO / PDPL / PCI / NCA certification milestones on track.", formula: "(Milestones on-track ÷ planned) × 100" },
+  { kpi_code: "GRC-KPI-008", kpi_name: "Compliance Coverage Index", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "quarterly", description: "Applicable obligations mapped to a control / policy.", formula: "(Mapped obligations ÷ applicable) × 100" },
+  { kpi_code: "GRC-KPI-011", kpi_name: "Policy Review Compliance", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "quarterly", description: "Policies reviewed on their scheduled review cycle.", formula: "(Policies reviewed on-cycle ÷ due) × 100" },
+  { kpi_code: "GRC-KPI-012", kpi_name: "Regulatory Response Timeliness", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 100, threshold_green: 95, threshold_amber: 85, threshold_red: 70, threshold_direction: "higher_is_better", calc_mode: "manual", frequency: "quarterly", description: "Regulatory requests answered within their deadline.", formula: "(Responses within deadline ÷ total) × 100" },
+  { kpi_code: "GRC-KPI-013", kpi_name: "Security Incident Governance Closure Time", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "days", target_value: 15, threshold_green: 15, threshold_amber: 30, threshold_red: 45, threshold_direction: "lower_is_better", calc_mode: "manual", frequency: "quarterly", description: "Average days to govern a security incident to closure.", formula: "Avg(closure date − reported date)" },
+  { kpi_code: "GRC-KPI-014", kpi_name: "Client/Partner Security Assessment SLA", owner_type: "grc_manager", owner_name: "Maram", category: "vendor", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", calc_mode: "manual", frequency: "quarterly", description: "Client / partner security assessments answered within SLA.", formula: "(Assessments within SLA ÷ total) × 100" },
+  { kpi_code: "GRC-KPI-006", kpi_name: "High-Risk Vendor Findings Closure", owner_type: "grc_manager", owner_name: "Maram", category: "vendor", unit: "%", target_value: 85, threshold_green: 85, threshold_amber: 70, threshold_red: 55, threshold_direction: "higher_is_better", calc_mode: "auto", frequency: "quarterly", description: "High-risk third-party (vendor) findings remediated / closed.", formula: "(High-risk vendor findings closed ÷ total) × 100" },
+];
+
+/**
+ * Codes from the earlier (pre-Excel) scorecard that are NOT in the canonical
+ * list above — the synthetic North Star composites and phase-2 extras. Deactivated
+ * (reversible) so /kpis shows only the agreed owner-based set. North Star is now a
+ * flag on real KPIs (BU Framework Completion, Certification Milestones), not a
+ * separate composite row.
+ */
+const SUPERSEDED_SCORECARD_KPI_CODES = [
+  "QM-KPI-001", // Quality North Star Score (composite) → flag moved to QM-KPI-015
+  "QM-KPI-005", // Quality Training Coverage
+  "QM-KPI-007", // Operational Excellence Value Realization
+  "QM-KPI-008", // BU Coverage Rate
+  "GRC-KPI-001", // GRC North Star Score (composite) → flag moved to GRC-KPI-002
+  "GRC-KPI-004", // Evidence SLA Compliance
+  "GRC-KPI-007", // Year-End Compliance Closure Score
 ];
 
 export async function seedGrqScorecardKPIs(): Promise<void> {
   for (const k of GRQ_SCORECARD_KPIS) {
+    // Upsert: existing rows get the canonical name/owner/category/calc_mode/North
+    // Star flag applied (so the Sara→Sarah rename and the Excel reshuffle land on
+    // DBs that already seeded the earlier set). Live kpi_values are untouched.
     await pool.query(
       `INSERT INTO kpi_definitions
-         (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, is_active, is_north_star)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true,$15)
-       ON CONFLICT (kpi_code) DO NOTHING`,
-      [k.kpi_name, k.kpi_code, k.description, k.owner_type, k.owner_name, k.category, k.formula, k.unit, k.frequency, k.threshold_green, k.threshold_amber, k.threshold_red, k.threshold_direction, k.target_value, k.is_north_star ?? false],
+         (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, is_active, is_north_star, calc_mode)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true,$15,$16)
+       ON CONFLICT (kpi_code) DO UPDATE SET
+         kpi_name = EXCLUDED.kpi_name,
+         description = EXCLUDED.description,
+         owner_type = EXCLUDED.owner_type,
+         owner_name = EXCLUDED.owner_name,
+         category = EXCLUDED.category,
+         formula = EXCLUDED.formula,
+         unit = EXCLUDED.unit,
+         frequency = EXCLUDED.frequency,
+         threshold_green = EXCLUDED.threshold_green,
+         threshold_amber = EXCLUDED.threshold_amber,
+         threshold_red = EXCLUDED.threshold_red,
+         threshold_direction = EXCLUDED.threshold_direction,
+         target_value = EXCLUDED.target_value,
+         is_active = true,
+         is_north_star = EXCLUDED.is_north_star,
+         calc_mode = EXCLUDED.calc_mode,
+         updated_at = NOW()`,
+      [k.kpi_name, k.kpi_code, k.description, k.owner_type, k.owner_name, k.category, k.formula, k.unit, k.frequency, k.threshold_green, k.threshold_amber, k.threshold_red, k.threshold_direction, k.target_value, k.is_north_star ?? false, k.calc_mode ?? "manual"],
     );
   }
-  logger.info("✅ [KPIDB] Seeded GRQ scorecard KPIs onto the KPI Engine");
+
+  // Retire the pre-Excel composites / phase-2 extras (reversible).
+  await pool.query(
+    `UPDATE kpi_definitions SET is_active = false, updated_at = NOW()
+     WHERE kpi_code = ANY($1) AND is_active = true`,
+    [SUPERSEDED_SCORECARD_KPI_CODES],
+  );
+
+  logger.info("✅ [KPIDB] Seeded canonical GRQ scorecard KPIs (Quality/Sarah + GRC/Maram) onto the KPI Engine");
 }
 
 export async function seedMohammedKPIsManual(): Promise<void> {
@@ -1417,6 +1491,48 @@ export async function seedSDRKPIsManual(): Promise<void> {
   await seedSDRKPIs();
 }
 
+/**
+ * Seed the Sales Team KPIs (owner_type='sales_team'). Like the SDR set these are
+ * derived from the platform's own Deal process (Zoho Deals → stage-aging SLA, deal
+ * document compliance, governance field rules). Definitions are seeded here; the
+ * live values are computed by the auto-calc engine (Phase C). Idempotent.
+ */
+async function seedSalesKPIs(): Promise<void> {
+  const exists = await pool.query(
+    "SELECT COUNT(*) FROM kpi_definitions WHERE owner_type = 'sales_team'",
+  );
+  if (parseInt(exists.rows[0].count) > 0) return;
+
+  logger.info("🌱 [KPIDB] Seeding Sales Team KPIs...");
+
+  const salesKPIs: Array<Partial<KPIDefinition>> = [
+    { kpi_code: "SALES-KPI-01", kpi_name: "Deal Stage Aging Compliance", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "weekly", description: "Open deals sitting within their stage SLA (Sales SOP stage aging).", formula: "(Deals within stage SLA ÷ open deals) × 100" },
+    { kpi_code: "SALES-KPI-02", kpi_name: "Conversion Rate (SQL→Signed)", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 30, threshold_green: 30, threshold_amber: 20, threshold_red: 12, threshold_direction: "higher_is_better", frequency: "monthly", description: "Sales-qualified deals that reach Agreement Signed / Paid.", formula: "(Signed deals ÷ SQL deals) × 100" },
+    { kpi_code: "SALES-KPI-03", kpi_name: "Proposal Cycle Time", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "days", target_value: 7, threshold_green: 7, threshold_amber: 14, threshold_red: 21, threshold_direction: "lower_is_better", frequency: "monthly", description: "Average days a deal spends in the Proposal stage.", formula: "Avg(days in Proposal stage)" },
+    { kpi_code: "SALES-KPI-04", kpi_name: "Agreement Cycle Time", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "days", target_value: 14, threshold_green: 14, threshold_amber: 30, threshold_red: 45, threshold_direction: "lower_is_better", frequency: "monthly", description: "Average days from Agreement Sent to Agreement Signed.", formula: "Avg(signed date − sent date)" },
+    { kpi_code: "SALES-KPI-05", kpi_name: "Deal Document Compliance", owner_type: "sales_team", owner_name: "Sales Team", category: "compliance", unit: "%", target_value: 95, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "monthly", description: "Deals in Proposal/Agreement Signed/Paid carrying the required documents.", formula: "(Deals with required docs ÷ deals in scope) × 100" },
+    { kpi_code: "SALES-KPI-06", kpi_name: "CRM Data Accuracy (Deals)", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 95, threshold_green: 95, threshold_amber: 85, threshold_red: 70, threshold_direction: "higher_is_better", frequency: "monthly", description: "Deals passing the Sales-SOP governance field checks.", formula: "(Clean deals ÷ total deals) × 100" },
+    { kpi_code: "SALES-KPI-07", kpi_name: "Follow-Up Effectiveness", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 80, threshold_green: 80, threshold_amber: 60, threshold_red: 40, threshold_direction: "higher_is_better", frequency: "weekly", description: "Open deals with an upcoming / on-time follow-up task.", formula: "(Deals with on-time follow-up ÷ open deals) × 100" },
+    { kpi_code: "SALES-KPI-08", kpi_name: "First-Contact SLA", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "weekly", description: "New deals contacted within the first-contact SLA window.", formula: "(Deals contacted within SLA ÷ new deals) × 100" },
+  ];
+
+  for (const k of salesKPIs) {
+    await pool.query(
+      `INSERT INTO kpi_definitions
+         (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, calc_mode)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'auto')
+       ON CONFLICT (kpi_code) DO NOTHING`,
+      [k.kpi_name, k.kpi_code, k.description, k.owner_type, k.owner_name, k.category, k.formula, k.unit, k.frequency, k.threshold_green, k.threshold_amber, k.threshold_red, k.threshold_direction, k.target_value],
+    );
+  }
+
+  logger.info("✅ [KPIDB] Seeded 8 Sales Team KPIs");
+}
+
+export async function seedSalesKPIsManual(): Promise<void> {
+  await seedSalesKPIs();
+}
+
 export async function getAllKPIDefinitions(): Promise<KPIDefinition[]> {
   const result = await pool.query(
     "SELECT * FROM kpi_definitions WHERE is_active = true ORDER BY owner_type, category, kpi_name",
@@ -1442,13 +1558,21 @@ export async function getKPIById(id: number): Promise<KPIDefinition | null> {
   return result.rows[0] || null;
 }
 
+export async function getKPIByCode(code: string): Promise<KPIDefinition | null> {
+  const result = await pool.query(
+    "SELECT * FROM kpi_definitions WHERE kpi_code = $1",
+    [code],
+  );
+  return result.rows[0] || null;
+}
+
 export async function createKPIDefinition(
   kpi: KPIDefinition,
 ): Promise<KPIDefinition> {
   const result = await pool.query(
     `
-    INSERT INTO kpi_definitions (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, data_source, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, weight, is_active, is_north_star)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+    INSERT INTO kpi_definitions (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, data_source, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, weight, is_active, is_north_star, calc_mode)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
     RETURNING *
   `,
     [
@@ -1470,6 +1594,7 @@ export async function createKPIDefinition(
       kpi.weight || 1.0,
       kpi.is_active,
       kpi.is_north_star ?? false,
+      kpi.calc_mode ?? "manual",
     ],
   );
   return result.rows[0];
@@ -1501,6 +1626,7 @@ export async function updateKPIDefinition(
     "weight",
     "is_active",
     "is_north_star",
+    "calc_mode",
   ];
 
   for (const field of allowedFields) {
@@ -1616,7 +1742,7 @@ export async function getKPIDashboardSummary(): Promise<any> {
   const kpis = await getAllKPIDefinitions();
   const summary: any = {
     total: kpis.length,
-    byOwner: { quality_manager: 0, grc_manager: 0, sdr_team: 0, shared: 0 },
+    byOwner: { quality_manager: 0, grc_manager: 0, sdr_team: 0, sales_team: 0, shared: 0 },
     byStatus: { green: 0, amber: 0, red: 0, no_data: 0 },
     byCategory: {},
     kpiDetails: [],

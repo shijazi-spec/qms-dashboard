@@ -42,24 +42,21 @@
                 <h1 class="text-2xl font-bold text-gray-900" data-i18n="kpis.title">KPI Engine</h1>
                 <p class="text-gray-600" data-i18n="kpis.subtitle">Role-based KPI tracking with automated calculations</p>
                 <span id="lastCalcTimestamp" class="text-xs text-gray-400"></span>
-                <div class="mt-2 text-xs text-cyan-800 bg-cyan-50 border border-cyan-100 inline-block px-3 py-1.5 rounded-lg">
-                    Admin / edit engine. For the owner-grouped live view, open the
-                    <a href="/kpi-catalog" class="underline font-medium">KPI Catalog →</a>
-                </div>
             </div>
             <div class="flex gap-2">
                 <select id="ownerFilter" class="border rounded px-3 py-2 text-sm" data-on-change="loadKPIs">
                     <option value="" data-i18n="kpis.all_owners">All Owners</option>
-                    <option value="quality_manager" data-i18n="kpis.o_quality_manager">Sara (Quality Manager)</option>
-                    <option value="grc_manager" data-i18n="kpis.o_grc_manager">Maram (GRC Manager)</option>
+                    <option value="quality_manager">Sarah (Quality Manager)</option>
+                    <option value="grc_manager">Maram (GRC Manager)</option>
                     <option value="sdr_team">SDR Team</option>
+                    <option value="sales_team">Sales Team</option>
                     <option value="shared" data-i18n="kpis.o_shared_kpis">Shared KPIs</option>
                 </select>
                 <select id="statusFilter" class="border rounded px-3 py-2 text-sm" data-on-change="loadKPIs" data-testid="select-status-filter">
                     <option value="" data-i18n="common.all_statuses">All Statuses</option>
-                    <option value="green" data-i18n="kpis.s_on_target">On Target</option>
-                    <option value="yellow" data-i18n="kpis.s_at_risk">At Risk</option>
-                    <option value="red" data-i18n="kpis.s_below_target">Below Target</option>
+                    <option value="green">On Track</option>
+                    <option value="amber">At Risk</option>
+                    <option value="red">Off Track</option>
                 </select>
                 <button data-on-click="navigateTo" data-args="[&quot;/api/kpis/export-xlsx&quot;]" class="border border-emerald-700 text-emerald-700 px-3 py-2 rounded text-sm hover:bg-emerald-50 flex items-center gap-1" data-testid="button-export-xlsx" title="Multi-sheet workbook by category">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -68,6 +65,10 @@
                 <button data-on-click="navigateTo" data-args="[&quot;/api/kpis/export&quot;]" class="border border-blue-600 text-blue-600 px-3 py-2 rounded text-sm hover:bg-blue-50 flex items-center gap-1" data-testid="button-export-csv">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     CSV
+                </button>
+                <button data-on-click="recalcKPIs" id="recalcBtn" class="border border-emerald-600 text-emerald-700 px-3 py-2 rounded text-sm hover:bg-emerald-50 flex items-center gap-1" title="Recompute live values from platform data + checklists">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Recalculate
                 </button>
                 <button data-on-click="openAddModal" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">+ Add KPI</button>
             </div>
@@ -80,15 +81,15 @@
             </div>
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="text-3xl font-bold text-green-700" id="greenCount">0</div>
-                <div class="text-sm text-gray-600" data-i18n="kpis.on_target">On Target</div>
+                <div class="text-sm text-gray-600">On Track</div>
             </div>
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="text-3xl font-bold text-amber-600" id="amberCount">0</div>
-                <div class="text-sm text-gray-600" data-i18n="kpis.at_risk">At Risk</div>
+                <div class="text-sm text-gray-600">At Risk</div>
             </div>
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="text-3xl font-bold text-red-700" id="redCount">0</div>
-                <div class="text-sm text-gray-600" data-i18n="kpis.off_target">Off Target</div>
+                <div class="text-sm text-gray-600">Off Track</div>
             </div>
         </div>
 
@@ -242,6 +243,27 @@
         </div>
     </div>
 
+    <!-- Checklist modal (for calc_mode='checklist' KPIs) -->
+    <div id="checklistModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b flex justify-between items-center">
+                <div>
+                    <h3 class="font-semibold text-gray-900" id="checklistTitle">Checklist</h3>
+                    <p class="text-xs text-gray-500">KPI value = % of items completed</p>
+                </div>
+                <button data-on-click="closeChecklistModal" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div class="p-4">
+                <div id="checklistProgress" class="mb-3 text-sm font-medium text-gray-700"></div>
+                <div id="checklistItems" class="space-y-2 mb-4"></div>
+                <div class="flex gap-2">
+                    <input id="newChecklistItem" type="text" placeholder="Add a checklist item…" class="border rounded px-3 py-2 text-sm flex-1" />
+                    <button data-on-click="addChecklistItem" class="bg-amber-600 text-white px-3 py-2 rounded text-sm hover:bg-amber-700">+ Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let allKPIs = [];
 
@@ -260,21 +282,31 @@
         }
         function _kpiOwnerLabel(owner) {
             switch (owner) {
-                case 'quality_manager':    return WalaPlusI18n.t('dyn.kpis.owners.quality_manager');
-                case 'grc_manager':        return WalaPlusI18n.t('dyn.kpis.owners.grc_manager');
-                case 'governance_officer': return WalaPlusI18n.t('dyn.kpis.owners.governance_officer');
-                case 'shared':             return WalaPlusI18n.t('dyn.kpis.owners.shared');
+                case 'quality_manager':    return 'Sarah';
+                case 'grc_manager':        return 'Maram';
+                case 'sdr_team':           return 'SDR Team';
+                case 'sales_team':         return 'Sales Team';
+                case 'shared':             return 'Shared';
             }
             return owner;
         }
         function _kpiOwnerFullLabel(owner) {
             switch (owner) {
-                case 'quality_manager':    return WalaPlusI18n.t('dyn.kpis.owners_full.quality_manager');
-                case 'grc_manager':        return WalaPlusI18n.t('dyn.kpis.owners_full.grc_manager');
-                case 'governance_officer': return WalaPlusI18n.t('dyn.kpis.owners_full.governance_officer');
-                case 'shared':             return WalaPlusI18n.t('dyn.kpis.owners_full.shared');
+                case 'quality_manager':    return 'Sarah (Quality Manager)';
+                case 'grc_manager':        return 'Maram (GRC Manager)';
+                case 'sdr_team':           return 'SDR Team';
+                case 'sales_team':         return 'Sales Team';
+                case 'shared':             return 'Shared';
             }
             return owner;
+        }
+        function _kpiCalcModeBadge(mode) {
+            switch (mode) {
+                case 'auto':      return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium" title="Calculated automatically from platform data">⚙️ Auto</span>';
+                case 'checklist': return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-medium" title="Value = % of checklist items done">📋 Checklist</span>';
+                case 'manual':    return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium" title="Entered manually">✍️ Manual</span>';
+            }
+            return '';
         }
         const _fd = (d, opts) => window.WalaPlusI18n ? WalaPlusI18n.formatDate(d, opts) : (d ? new Date(d).toLocaleDateString() : '-');
         const _fn = (n) => window.WalaPlusI18n ? WalaPlusI18n.formatNumber(n) : String(n);
@@ -333,15 +365,10 @@
             charts.owner = new Chart(document.getElementById('ownerChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: [
-                        WalaPlusI18n.t('kpis.o_quality_manager', 'Sara (Quality)'),
-                        WalaPlusI18n.t('kpis.o_grc_manager', 'Maram (GRC)'),
-                        WalaPlusI18n.t('kpis.o_sdr_team', 'SDR Team'),
-                        WalaPlusI18n.t('kpis.o_shared', 'Shared')
-                    ],
+                    labels: ['Sarah (Quality)', 'Maram (GRC)', 'SDR Team', 'Sales Team', 'Shared'],
                     datasets: [{
-                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.sdr_team || 0, data.byOwner?.shared || 0],
-                        backgroundColor: ['#1E3A8A', '#1E293B', '#0891B2', '#6D28D9']
+                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.sdr_team || 0, data.byOwner?.sales_team || 0, data.byOwner?.shared || 0],
+                        backgroundColor: ['#1E3A8A', '#1E293B', '#0891B2', '#0E7490', '#6D28D9']
                     }]
                 },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
@@ -352,10 +379,10 @@
                 type: 'doughnut',
                 data: {
                     labels: [
-                        WalaPlusI18n.t('kpis.on_target', 'On Target'),
-                        WalaPlusI18n.t('kpis.at_risk', 'At Risk'),
-                        WalaPlusI18n.t('kpis.off_target', 'Off Target'),
-                        WalaPlusI18n.t('dyn.kpis.no_data_status', 'No Data')
+                        'On Track',
+                        'At Risk',
+                        'Off Track',
+                        'No Data'
                     ],
                     datasets: [{
                         data: [data.byStatus?.green || 0, data.byStatus?.amber || 0, data.byStatus?.red || 0, data.byStatus?.no_data || 0],
@@ -403,6 +430,7 @@
                                     <span class="w-3 h-3 rounded-full status-${statusClass}"></span>
                                     <span class="font-medium text-gray-900">${kpi.kpi_name}</span>
                                     <span class="text-xs text-gray-500">${kpi.kpi_code}</span>
+                                    ${_kpiCalcModeBadge(kpi.calc_mode)}
                                 </div>
                                 ${kpi.is_north_star ? '<div class="text-xs font-semibold text-amber-600 mt-0.5">⭐ North Star</div>' : ''}
                                 <p class="text-sm text-gray-600 mt-1">${kpi.description || ''}</p>
@@ -535,6 +563,7 @@
                         ` : '<p class="text-gray-500 text-sm">' + WalaPlusI18n.t('dyn.kpis.no_history') + '</p>'}
                     </div>
                     <div class="mt-6 flex justify-end gap-2">
+                        ${kpi.calc_mode === 'checklist' ? `<button data-on-click="openChecklistModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm">📋 Manage Checklist</button>` : ''}
                         <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">${WalaPlusI18n.t('dyn.kpis.record_value_btn')}</button>
                         <button data-on-click="editKPI" data-args="[${kpi.id}]" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">${WalaPlusI18n.t('dyn.kpis.edit_kpi_btn')}</button>
                     </div>
@@ -692,6 +721,95 @@
             } catch (error) {
                 console.error('Error recording value:', error);
             }
+        }
+
+        async function recalcKPIs() {
+            const btn = document.getElementById('recalcBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Recalculating…'; }
+            try {
+                const res = await fetch('/api/kpis/recalc', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await res.json();
+                if (res.ok) {
+                    await loadKPIs();
+                    alert(`Recalculated. Recorded ${data.recorded} live value(s), skipped ${data.skipped} (no data / manual).`);
+                } else {
+                    alert(data.error || 'Failed to recalculate KPIs.');
+                }
+            } catch (e) {
+                console.error('Recalc error:', e);
+                alert('Failed to recalculate KPIs.');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
+        // ===== Checklist modal =====
+        let _checklistKpiId = null;
+        async function openChecklistModal(kpiId) {
+            _checklistKpiId = kpiId;
+            const kpi = allKPIs.find(k => k.id === kpiId);
+            document.getElementById('checklistTitle').textContent = 'Checklist — ' + (kpi ? kpi.kpi_name : ('KPI #' + kpiId));
+            document.getElementById('checklistModal').classList.remove('hidden');
+            await loadChecklist();
+        }
+        function closeChecklistModal() {
+            document.getElementById('checklistModal').classList.add('hidden');
+            _checklistKpiId = null;
+            // Refresh the list so the recomputed value/RAG shows.
+            loadKPIs();
+        }
+        async function loadChecklist() {
+            if (_checklistKpiId == null) return;
+            try {
+                const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist`);
+                const data = await res.json();
+                const items = data.items || [];
+                const prog = data.progress || { total: 0, done: 0, pct: 0 };
+                document.getElementById('checklistProgress').textContent = `${prog.done} / ${prog.total} done — ${prog.pct}%`;
+                const wrap = document.getElementById('checklistItems');
+                if (!items.length) {
+                    wrap.innerHTML = '<p class="text-sm text-gray-500">No items yet. Add the completion checkpoints for this KPI.</p>';
+                    return;
+                }
+                wrap.innerHTML = items.map(it => `
+                    <div class="flex items-center gap-2 border rounded px-2 py-1.5">
+                        <input type="checkbox" ${it.is_done ? 'checked' : ''} data-on-change="toggleChecklistItem" data-args="[${it.id}, ${!it.is_done}]" class="w-4 h-4" />
+                        <span class="flex-1 text-sm ${it.is_done ? 'line-through text-gray-400' : 'text-gray-800'}">${(it.item_text || '').replace(/</g,'&lt;')}</span>
+                        <button data-on-click="deleteChecklistItem" data-args="[${it.id}]" class="text-gray-400 hover:text-red-600 text-sm" title="Delete">&times;</button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Load checklist error:', e);
+            }
+        }
+        async function addChecklistItem() {
+            const input = document.getElementById('newChecklistItem');
+            const text = (input.value || '').trim();
+            if (!text || _checklistKpiId == null) return;
+            try {
+                const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_text: text })
+                });
+                if (res.ok) { input.value = ''; await loadChecklist(); }
+                else { alert('Failed to add item.'); }
+            } catch (e) { console.error('Add checklist item error:', e); }
+        }
+        async function toggleChecklistItem(itemId, isDone) {
+            try {
+                const res = await fetch(`/api/kpis/checklist/${itemId}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_done: isDone })
+                });
+                if (res.ok) await loadChecklist();
+            } catch (e) { console.error('Toggle checklist item error:', e); }
+        }
+        async function deleteChecklistItem(itemId) {
+            try {
+                const res = await fetch(`/api/kpis/checklist/${itemId}`, { method: 'DELETE' });
+                if (res.ok) await loadChecklist();
+            } catch (e) { console.error('Delete checklist item error:', e); }
         }
 
         _runWhenI18nReady(loadKPIs);

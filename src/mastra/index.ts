@@ -59,7 +59,6 @@ import { handoffRoutes } from "./routes/handoffRoutes";
 import { kpiRoutes } from "./routes/kpiRoutes";
 import { leadershipFeedRoutes } from "./routes/leadershipFeedRoutes";
 import { northStarSourceRoutes } from "./routes/northStarSourceRoutes";
-import { okrRoutes } from "./routes/okrRoutes";
 import { kpiCatalogRoutes } from "./routes/kpiCatalogRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
 import { zohoAgingRoutes } from "./routes/zohoAgingRoutes";
@@ -299,7 +298,6 @@ export const mastra = new Mastra({
       //     Platform; self-authenticates via the X-Feed-Key header. ──────────
       ...leadershipFeedRoutes,
       ...northStarSourceRoutes,
-      ...okrRoutes,
       ...kpiCatalogRoutes,
       ...kpiRoutes,
       ...duplicateRadarRoutes,
