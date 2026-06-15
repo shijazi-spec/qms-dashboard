@@ -39,8 +39,9 @@
           <tr>
             <th class="px-4 py-3">KPI</th>
             <th class="px-4 py-3">Code</th>
+            <th class="px-4 py-3 text-right">Baseline → Target</th>
             <th class="px-4 py-3 text-right">Current</th>
-            <th class="px-4 py-3 text-right">Target</th>
+            <th class="px-4 py-3 text-right">Progress</th>
             <th class="px-4 py-3">Status</th>
             <th class="px-4 py-3"></th>
           </tr>
@@ -66,23 +67,27 @@
       let green = 0, amber = 0, red = 0, awaiting = 0;
       const rows = defs.map((d, i) => {
         const k = live.get(d.code);
+        const u = esc(d.unit || "");
         let statusHtml = '<span class="badge muted">awaiting data</span>';
         let current = '<span class="text-gray-400">—</span>';
+        let progress = '<span class="text-gray-300">—</span>';
         if (k) {
           const cls = k.status || "muted";
           if (cls === "green") green++; else if (cls === "amber") amber++; else if (cls === "red") red++;
-          statusHtml = `<span class="badge ${cls}">${(k.status || "").toUpperCase()}</span>`;
-          current = `<span class="font-semibold">${k.value}${esc(d.unit || "")}</span>`;
+          statusHtml = `<span class="badge ${cls}">${esc(k.status_label || "")}</span>`;
+          current = `<span class="font-semibold">${k.value}${u}</span>`;
+          if (k.progress_pct !== null && k.progress_pct !== undefined) progress = `${k.progress_pct}%`;
         } else { awaiting++; }
         return `<tr class="border-t">
             <td class="px-4 py-3">${esc(d.name)}</td>
             <td class="px-4 py-3 text-gray-400 font-mono text-xs">${esc(d.code)}</td>
+            <td class="px-4 py-3 text-right text-gray-500">${esc(d.baseline)}${u} → ${esc(d.target)}${u}</td>
             <td class="px-4 py-3 text-right">${current}</td>
-            <td class="px-4 py-3 text-right text-gray-500">${esc(d.target)}${esc(d.unit || "")}</td>
+            <td class="px-4 py-3 text-right text-gray-500">${progress}</td>
             <td class="px-4 py-3">${statusHtml}</td>
             <td class="px-4 py-3 text-right"><button class="text-cyan-600 text-xs" onclick="document.getElementById('det-${i}').classList.toggle('open')">how &amp; why ▾</button></td>
           </tr>
-          <tr class="detail" id="det-${i}"><td colspan="6" class="px-4 pb-4 pt-0 bg-gray-50">
+          <tr class="detail" id="det-${i}"><td colspan="7" class="px-4 pb-4 pt-0 bg-gray-50">
             <div class="text-gray-700"><b>What:</b> ${esc(d.description)}</div>
             <div class="text-gray-700 mt-1"><b>How calculated:</b> ${esc(d.methodology)}</div>
             <div class="text-gray-700 mt-1"><b>Why:</b> ${esc(d.rationale)}</div>

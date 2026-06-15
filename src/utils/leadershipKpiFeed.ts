@@ -39,6 +39,11 @@ export interface FeedKpiResult {
   unit: string;
   value: number | null;
   status: RagStatus | null;
+  /** Leadership-style label derived from status: On Track / At Risk / Off Track. */
+  status_label?: string | null;
+  baseline?: number | null;
+  /** % toward target ((value-baseline)/(target-baseline)), clamped 0-100. */
+  progress_pct?: number | null;
   data_available: boolean;
   period: string;
   as_of: string;
@@ -66,6 +71,30 @@ function ragStatus(value: number, cfg: FeedKpiConfig): RagStatus {
   if (value <= cfg.green) return "green";
   if (value <= cfg.amber) return "amber";
   return "red";
+}
+
+/** Leadership-platform-style status wording from our RAG. */
+function statusLabel(s: RagStatus): string {
+  return s === "green" ? "On Track" : s === "amber" ? "At Risk" : "Off Track";
+}
+
+/**
+ * Baselines per KPI (the "from" of Baseline → Target), as set on the Leadership
+ * Platform. Seeded for the KPIs leadership tracks today; defaults to 0 otherwise
+ * and is editable. Target comes from each KPI's `target` in FEED_KPIS.
+ */
+const BASELINES: Record<string, number> = {
+  "QM-KPI-002": 40, // Audit Execution Rate (40 → 90)
+  "QM-KPI-008": 0, // BU Coverage Rate (0 → 100)
+  "GRC-KPI-008": 45, // Compliance Coverage Index (45 → 90)
+  "QM-KPI-015": 0, // QMS Framework Completion (0 → 100)
+};
+
+function progressPct(value: number, baseline: number, target: number): number {
+  const span = target - baseline;
+  if (span === 0) return value >= target ? 100 : 0;
+  const p = ((value - baseline) / span) * 100;
+  return Math.max(0, Math.min(100, Math.round(p * 10) / 10));
 }
 
 function currentQuarterLabel(now: Date): string {
@@ -840,6 +869,7 @@ export interface KpiDefinitionOut extends KpiDetail {
   direction: "higher_is_better" | "lower_is_better";
   entry_where: string;
   entry_route: string;
+  baseline: number;
 }
 
 export interface LeadershipFeed {
@@ -1028,6 +1058,7 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
     plan_ref: KPI_DETAILS[cfg.code]?.plan_ref ?? "",
     entry_where: KPI_ENTRY[cfg.code]?.where ?? "",
     entry_route: KPI_ENTRY[cfg.code]?.route ?? "",
+    baseline: BASELINES[cfg.code] ?? 0,
   }));
 
   for (const cfg of FEED_KPIS) {
@@ -1041,12 +1072,17 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
         });
         continue;
       }
+      const st = ragStatus(value, cfg);
+      const baseline = BASELINES[cfg.code] ?? 0;
       kpis.push({
         code: cfg.code,
         name: cfg.name,
         unit: cfg.unit,
         value,
-        status: ragStatus(value, cfg),
+        status: st,
+        status_label: statusLabel(st),
+        baseline,
+        progress_pct: progressPct(value, baseline, cfg.target),
         data_available: true,
         period,
         as_of: asOf,
@@ -1080,6 +1116,7 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
       entry_where:
         "Composite — auto-computed from the KPIs in this scorecard; nothing to enter directly.",
       entry_route: "/leadership-kpis",
+      baseline: 0,
     });
     let score = 0;
     let weightWithData = 0;
@@ -1110,6 +1147,9 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
       unit: "%",
       value,
       status,
+      status_label: statusLabel(status),
+      baseline: 0,
+      progress_pct: progressPct(value, 0, targetPct),
       data_available: true,
       period,
       as_of: asOf,
