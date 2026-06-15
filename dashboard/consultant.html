@@ -577,7 +577,12 @@
             wrapper.className = 'flex justify-end message-animate';
             var bubble = document.createElement('div');
             bubble.className = 'max-w-[70%] bg-indigo-600 text-white rounded-2xl rounded-br-md px-4 py-3 text-sm leading-relaxed shadow-sm';
-            if (isArabic(text)) bubble.setAttribute('dir', 'rtl');
+            // dir="auto" lets the browser pick LTR / RTL per-message from
+            // the first strongly-typed character — correct for mixed
+            // English/Arabic content and replaces the manual isArabic()
+            // call that didn't handle "I want to update نوفل عبدالهادي" style
+            // mixed prompts.
+            bubble.setAttribute('dir', 'auto');
             bubble.textContent = text;
             wrapper.appendChild(bubble);
             messagesContainer.appendChild(wrapper);
@@ -600,6 +605,11 @@
             var bubble = document.createElement('div');
             bubble.className = 'bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3 text-sm text-gray-800 leading-relaxed shadow-sm assistant-content';
             bubble.setAttribute('data-role', 'assistant-bubble');
+            // dir="auto" — pick LTR / RTL from the first strong character of
+            // the rendered content. Without this, when the page is in Arabic
+            // mode the parent's RTL bleeds into English replies (punctuation
+            // and numbered-list markers end up flipped to the right).
+            bubble.setAttribute('dir', 'auto');
 
             column.appendChild(bubble);
             wrapper.appendChild(avatar);
@@ -992,6 +1002,18 @@
             if (inList) result.push('</' + listType + '>');
 
             html = result.join('\n');
+
+            // Merge adjacent <ol> / <ul> blocks. Adam (and most LLMs) often
+            // emits numbered lists where every item is "1." separated by
+            // blank lines, so the per-line parser above closes the list
+            // between items and the next "1." opens a fresh <ol> that
+            // restarts at 1. Result: every bullet renders as "1." instead
+            // of 1, 2, 3, 4, 5. Stitching adjacent same-type blocks lets
+            // the browser renumber sequentially. Safe — same-type lists
+            // separated only by whitespace are functionally one list.
+            html = html.replace(/<\/ol>\s*<ol>/g, '');
+            html = html.replace(/<\/ul>\s*<ul>/g, '');
+
             for (var ci = 0; ci < codeBlocks.length; ci++) html = html.replace('%%CODEBLOCK_' + ci + '%%', codeBlocks[ci]);
             for (var ti = 0; ti < tableBlocks.length; ti++) html = html.replace('%%TABLEBLOCK_' + ti + '%%', tableBlocks[ti]);
 
