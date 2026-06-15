@@ -344,9 +344,13 @@
                     </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-sm font-medium text-gray-500 mb-2">Last Scan</div>
-                    <div id="lastScanDate" data-testid="text-last-scan" class="text-lg font-bold text-gray-700">Never</div>
-                    <div id="lastScanDetails" class="text-xs text-gray-400 mt-1"></div>
+                    <div class="text-sm font-medium text-gray-500 mb-2">Sync Activity</div>
+                    <div id="lastSyncDate" data-testid="text-last-sync" class="text-base font-bold text-gray-800">Never</div>
+                    <div id="lastSyncRelative" class="text-[11px] text-gray-500 mt-0.5"></div>
+                    <div class="border-t border-gray-100 my-2"></div>
+                    <div class="text-[10px] uppercase tracking-wide text-gray-400">Last full rebuild</div>
+                    <div id="lastScanDate" data-testid="text-last-scan" class="text-xs font-semibold text-gray-700">Never</div>
+                    <div id="lastScanDetails" class="text-[10px] text-gray-400 mt-0.5"></div>
                 </div>
             </div>
 
@@ -2353,10 +2357,33 @@
             gaugeBar.style.width = gaugePct + '%';
             gaugeBar.style.background = overallDupRate <= 2 ? '#22C55E' : overallDupRate <= 5 ? '#F59E0B' : '#EF4444';
 
-            // D4: Last scan info
+            // Sync Activity card — top line is the most recent sync of any
+            // kind (incremental Sync Now / scheduled cron / full rebuild),
+            // sourced from zoho_sync_state.last_sync_at. The bottom line is
+            // the most recent FULL rebuild from duplicate_detection_logs.
+            // Pre-fix the card only showed the latter, which made the
+            // dashboard look frozen on the last rebuild date even though
+            // operators were syncing daily.
+            const lastSyncDateEl = document.getElementById('lastSyncDate');
+            const lastSyncRelEl  = document.getElementById('lastSyncRelative');
+            if (data.lastSyncAt) {
+                const syncDate = new Date(data.lastSyncAt);
+                lastSyncDateEl.textContent = _fd(syncDate, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const diffMs = Date.now() - syncDate.getTime();
+                const diffMin = Math.max(0, Math.round(diffMs / 60000));
+                let rel;
+                if (diffMin < 1) rel = 'just now';
+                else if (diffMin < 60) rel = diffMin + ' min ago';
+                else if (diffMin < 60 * 24) rel = Math.round(diffMin / 60) + ' hr ago';
+                else rel = Math.round(diffMin / 60 / 24) + ' day(s) ago';
+                lastSyncRelEl.textContent = rel;
+            } else {
+                lastSyncDateEl.textContent = 'Never';
+                lastSyncRelEl.textContent = '';
+            }
             if (data.lastScanInfo) {
                 const scanDate = new Date(data.lastScanInfo.completed_at);
-                document.getElementById('lastScanDate').textContent = _fd(scanDate, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                document.getElementById('lastScanDate').textContent = _fd(scanDate, { day: 'numeric', month: 'short', year: 'numeric' });
                 document.getElementById('lastScanDetails').textContent = WalaPlusI18n.t('dyn.duplicates.scan_summary', { records: _fn(data.lastScanInfo.total_records_scanned || 0), dur: _fn(Math.round((data.lastScanInfo.detection_duration_ms || 0) / 1000)), dup: _fn(data.lastScanInfo.total_duplicates_detected || 0) });
             } else if (data.lastScanDate) {
                 document.getElementById('lastScanDate').textContent = _fd(new Date(data.lastScanDate), { day: 'numeric', month: 'short', year: 'numeric' });
