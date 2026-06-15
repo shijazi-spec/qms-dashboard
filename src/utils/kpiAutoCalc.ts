@@ -22,6 +22,7 @@ import {
 } from "./kpiDatabase";
 import { recordChecklistKPIValue } from "./kpiChecklistDatabase";
 import { buildLeadershipKpiFeed } from "./leadershipKpiFeed";
+import { computeProcessKPIs } from "./kpiProcessCalc";
 
 /**
  * Canonical scorecard code → leadership-feed code, matched by what the metric
@@ -101,7 +102,42 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
     logger.error(`[KPIAutoCalc] leadership-feed step failed: ${(e as Error).message}`);
   }
 
-  // 2) Checklist-mode KPIs → % of items done.
+  // 2) SDR + Sales process KPIs (from the Duplicate Radar's local synced data —
+  //    no live Zoho calls). Codes without a safe local source stay "--".
+  try {
+    const proc = await computeProcessKPIs();
+    for (const [code, result] of Object.entries(proc)) {
+      const def = await getKPIByCode(code);
+      if (!def || !def.is_active || !def.id) {
+        skipped++;
+        details.push({ code, reason: "definition missing/inactive" });
+        continue;
+      }
+      if (!result.dataAvailable) {
+        skipped++;
+        details.push({ code, reason: "no synced source data" });
+        continue;
+      }
+      try {
+        await recordKPIValue({
+          kpi_id: def.id,
+          period_start: periodStart,
+          period_end: periodEnd,
+          actual_value: result.value,
+          calculated_by: "system_auto",
+        });
+        recorded++;
+        details.push({ code, value: result.value });
+      } catch (e) {
+        skipped++;
+        details.push({ code, reason: `record failed: ${(e as Error).message}` });
+      }
+    }
+  } catch (e) {
+    logger.error(`[KPIAutoCalc] process-KPI step failed: ${(e as Error).message}`);
+  }
+
+  // 3) Checklist-mode KPIs → % of items done.
   try {
     const res = await pool.query(
       `SELECT id, kpi_code FROM kpi_definitions WHERE is_active = true AND calc_mode = 'checklist'`,
