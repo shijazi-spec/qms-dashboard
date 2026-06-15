@@ -4298,10 +4298,37 @@ export async function getEnhancedSummary(): Promise<{
   const totalDeals = await pool.query(
     "SELECT COUNT(*) as cnt FROM duplicate_records WHERE record_type = 'deal'",
   );
+  const totalContacts = await pool.query(
+    "SELECT COUNT(*) as cnt FROM duplicate_records WHERE record_type = 'contact'",
+  );
+  const totalAccounts = await pool.query(
+    "SELECT COUNT(*) as cnt FROM duplicate_records WHERE record_type = 'account'",
+  );
   const tLeads = parseInt(totalLeads.rows[0]?.cnt) || 1;
   const tDeals = parseInt(totalDeals.rows[0]?.cnt) || 1;
-  const dupLeads = parseInt(row.dup_leads) || 0;
-  const dupDeals = parseInt(row.dup_deals) || 0;
+  const tContacts = parseInt(totalContacts.rows[0]?.cnt) || 1;
+  const tAccounts = parseInt(totalAccounts.rows[0]?.cnt) || 1;
+
+  // ACTIONABLE-only counts: records that should be merged/deleted to
+  // deduplicate, i.e. dup-cluster members that are NOT the survivor.
+  // The old "dup_leads" (SUM(total_leads) FILTER total_leads>1) counted
+  // EVERY record in a dup cluster including the primary, which inflated
+  // the rate from the actionable 43% to a misleading 58% and didn't
+  // match the 2% target framing (the target is about records that need
+  // action). Same applies to deals/contacts/accounts.
+  const actionableResult = await pool.query(`
+    SELECT
+      COUNT(*) FILTER (WHERE dr.record_type = 'lead'    AND dc.total_leads    > 1 AND dr.is_primary = false AND dc.status = 'active') AS act_leads,
+      COUNT(*) FILTER (WHERE dr.record_type = 'deal'    AND dc.total_deals    > 1 AND dr.is_primary = false AND dc.status = 'active') AS act_deals,
+      COUNT(*) FILTER (WHERE dr.record_type = 'contact' AND dc.total_contacts > 1 AND dr.is_primary = false AND dc.status = 'active') AS act_contacts,
+      COUNT(*) FILTER (WHERE dr.record_type = 'account' AND dc.total_accounts > 1 AND dr.is_primary = false AND dc.status = 'active') AS act_accounts
+    FROM duplicate_records dr
+    JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+  `);
+  const dupLeads = parseInt(actionableResult.rows[0]?.act_leads) || 0;
+  const dupDeals = parseInt(actionableResult.rows[0]?.act_deals) || 0;
+  const dupContacts = parseInt(actionableResult.rows[0]?.act_contacts) || 0;
+  const dupAccounts = parseInt(actionableResult.rows[0]?.act_accounts) || 0;
 
   const signalResult = await pool.query(`
     SELECT match_signals FROM duplicate_clusters
@@ -4349,20 +4376,30 @@ export async function getEnhancedSummary(): Promise<{
   const totalClusters = parseInt(row.total_clusters) || 0;
   const resolvedCount = parseInt(row.resolved_count) || 0;
   const ignoredCount = parseInt(row.ignored_count) || 0;
+  const trueDuplicateClusters = parseInt(row.true_dup_clusters) || 0;
+  // Denominator is the universe of duplicate clusters we ever cared about:
+  // open dup clusters + ones we've already resolved or ignored. Using
+  // totalClusters here (which includes ~77k singletons) silently diluted
+  // the rate to 0% even after hundreds of clusters were closed — singletons
+  // are not duplicates and never were.
+  const resolutionDenominator =
+    trueDuplicateClusters + resolvedCount + ignoredCount;
   const resolutionRate =
-    totalClusters > 0
-      ? Math.round(((resolvedCount + ignoredCount) / totalClusters) * 100)
+    resolutionDenominator > 0
+      ? Math.round(
+          ((resolvedCount + ignoredCount) / resolutionDenominator) * 100,
+        )
       : 0;
 
   return {
     totalClusters,
-    trueDuplicateClusters: parseInt(row.true_dup_clusters) || 0,
+    trueDuplicateClusters,
     singletonCount: parseInt(row.singleton_count) || 0,
     totalRecords: parseInt(row.total_records) || 0,
     totalDuplicateLeads: dupLeads,
     totalDuplicateDeals: dupDeals,
-    totalDuplicateContacts: parseInt(row.dup_contacts) || 0,
-    totalDuplicateAccounts: parseInt(row.dup_accounts) || 0,
+    totalDuplicateContacts: dupContacts,
+    totalDuplicateAccounts: dupAccounts,
     highConfidence: parseInt(row.high_confidence) || 0,
     mediumConfidence: parseInt(row.medium_confidence) || 0,
     lowConfidence: parseInt(row.low_confidence) || 0,
