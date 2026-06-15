@@ -68,33 +68,50 @@
         var lines = html.split('\n');
         var result = [];
         var inList = false;
+        var listTag = ''; // 'ul' or 'ol' — close with matching tag
+        function closeList() {
+            if (inList) { result.push('</' + listTag + '>'); inList = false; listTag = ''; }
+        }
+        function ensureList(tag) {
+            if (inList && listTag === tag) return;
+            closeList();
+            result.push('<' + tag + ' class="aiw-list">');
+            inList = true;
+            listTag = tag;
+        }
 
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
             if (line.match(/^%%CODEBLOCK_\d+%%$/)) {
-                if (inList) { result.push('</ul>'); inList = false; }
+                closeList();
                 result.push(line);
             } else if (line.match(/^#{1,3}\s/)) {
-                if (inList) { result.push('</ul>'); inList = false; }
+                closeList();
                 var level = line.match(/^(#{1,3})/)[1].length;
                 result.push('<p class="aiw-heading-' + level + '">' + formatInline(line.replace(/^#{1,3}\s*/, '')) + '</p>');
             } else if (line.match(/^[\-\*]\s/)) {
-                if (!inList) { result.push('<ul class="aiw-list">'); inList = true; }
+                ensureList('ul');
                 result.push('<li class="aiw-list-item">' + formatInline(line.replace(/^[\-\*]\s*/, '')) + '</li>');
             } else if (line.match(/^\d+\.\s/)) {
-                if (!inList) { result.push('<ol class="aiw-list">'); inList = true; }
+                ensureList('ol');
                 result.push('<li class="aiw-list-item">' + formatInline(line.replace(/^\d+\.\s*/, '')) + '</li>');
             } else if (line.trim() === '') {
-                if (inList) { result.push('</ul>'); inList = false; }
+                closeList();
                 result.push('<br>');
             } else {
-                if (inList) { result.push('</ul>'); inList = false; }
+                closeList();
                 result.push('<p class="aiw-paragraph">' + formatInline(line) + '</p>');
             }
         }
-        if (inList) result.push('</ul>');
+        closeList();
 
         html = result.join('\n');
+        // Merge adjacent same-type lists so Adam's "1. … \n\n 1. … \n\n 1. …"
+        // pattern (every item labelled "1." with blank lines between) shows
+        // as 1, 2, 3, 4, 5 instead of five "1." items each in their own
+        // restart-at-1 <ol>. Same fix as the consultant.html renderer.
+        html = html.replace(/<\/ol>\s*(?:<br>\s*)*<ol class="aiw-list">/g, '');
+        html = html.replace(/<\/ul>\s*(?:<br>\s*)*<ul class="aiw-list">/g, '');
         for (var j = 0; j < codeBlocks.length; j++) {
             html = html.replace('%%CODEBLOCK_' + j + '%%', codeBlocks[j]);
         }
@@ -373,7 +390,8 @@
                 } else if (m.role === 'assistant') {
                     var bubble = widgetCreateAI();
                     bubble.innerHTML = renderMarkdown(m.content);
-                    if (isArabic(m.content)) bubble.setAttribute('dir', 'rtl');
+                    // dir="auto" is already set by widgetCreateAI — let the
+                    // browser pick LTR / RTL from the rendered content.
                     chatMessages.push({ role: 'assistant', content: m.content, time: m.createdAt || new Date().toISOString() });
                     if (m.messageId && m.content && m.content.trim()) {
                         widgetAttachFeedback(bubble, m.messageId, '', m.content, pv);
@@ -485,7 +503,7 @@
         div.className = 'widget-msg-user';
         var bubble = document.createElement('div');
         bubble.className = 'bubble';
-        if (isArabic(text)) bubble.setAttribute('dir', 'rtl');
+        bubble.setAttribute('dir', 'auto');
         bubble.textContent = text;
         div.appendChild(bubble);
         messagesEl.insertBefore(div, typingEl);
@@ -498,6 +516,11 @@
         div.innerHTML = '<div class="avatar"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg></div>';
         var bubble = document.createElement('div');
         bubble.className = 'bubble';
+        // dir="auto" — browser picks LTR / RTL per-message from the first
+        // strong character. Replaces three scattered isArabic() setters
+        // that only handled the RTL case and let English bleed when the
+        // host page was in Arabic mode.
+        bubble.setAttribute('dir', 'auto');
         div.appendChild(bubble);
         messagesEl.insertBefore(div, typingEl);
         widgetScrollBottom();
@@ -725,7 +748,7 @@
             var decoder = new TextDecoder();
             widgetHideTyping();
             bubble = widgetCreateAI();
-            if (isArabic(text)) bubble.setAttribute('dir', 'rtl');
+            // dir="auto" is already set by widgetCreateAI.
             streamOk = true;
             var buffer = '';
 
