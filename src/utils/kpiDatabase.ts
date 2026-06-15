@@ -211,6 +211,9 @@ export async function initKPITables(): Promise<void> {
   // Hide the stale legacy QM/GRC KPIs superseded by the new QM-KPI/GRC-KPI set.
   await deactivateStaleLegacyKPIs();
 
+  // Seed the agreed GRQ scorecard KPIs onto the KPI Engine (first /kpis page).
+  await seedGrqScorecardKPIs();
+
   logger.info("✅ [KPIDB] KPI Engine tables initialized");
 }
 
@@ -1006,6 +1009,47 @@ export async function deactivateStaleLegacyKPIs(): Promise<void> {
       `🧹 [KPIDB] Deactivated ${res.rowCount} stale legacy QM/GRC KPIs (superseded by QM-KPI/GRC-KPI)`,
     );
   }
+}
+
+/**
+ * Seed the agreed GRQ scorecard KPIs (Quality + GRC) into the KPI Engine so
+ * they appear on the first KPI page (/kpis). These are the same KPIs the
+ * leadership feed computes; here they are listed (with targets and the ⭐
+ * North Star flag) so the engine shows the full agreed set. Idempotent.
+ */
+const GRQ_SCORECARD_KPIS: Array<Partial<KPIDefinition>> = [
+  // Quality (Sara)
+  { kpi_code: "QM-KPI-001", kpi_name: "Quality North Star Score", owner_type: "quality_manager", owner_name: "Sara", category: "quality", unit: "%", target_value: 65, threshold_green: 65, threshold_amber: 58, threshold_red: 50, threshold_direction: "higher_is_better", is_north_star: true, frequency: "quarterly", description: "Weighted composite of Sarah's quality KPIs for the quarter.", formula: "Σ(weight × component actual) per North Star plan" },
+  { kpi_code: "QM-KPI-015", kpi_name: "QMS Framework Completion", owner_type: "quality_manager", owner_name: "Sara", category: "governance", unit: "%", target_value: 100, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Share of planned BU governance frameworks approved & published in QMS.", formula: "(Approved framework packages ÷ planned) × 100" },
+  { kpi_code: "QM-KPI-002", kpi_name: "Audit Execution Rate", owner_type: "quality_manager", owner_name: "Sara", category: "audit", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Percent of planned audits completed within the quarter.", formula: "(Audits completed ÷ planned) × 100" },
+  { kpi_code: "QM-KPI-003", kpi_name: "Gap Closure Rate", owner_type: "quality_manager", owner_name: "Sara", category: "audit", unit: "%", target_value: 90, threshold_green: 85, threshold_amber: 70, threshold_red: 55, threshold_direction: "higher_is_better", frequency: "monthly", description: "Percent of audit findings/gaps closed within timeline.", formula: "(Findings closed on-time ÷ total) × 100" },
+  { kpi_code: "QM-KPI-004", kpi_name: "QMS Adoption Rate", owner_type: "quality_manager", owner_name: "Sara", category: "quality", unit: "%", target_value: 70, threshold_green: 70, threshold_amber: 50, threshold_red: 40, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Share of BUs actively adopting the QMS/governance system.", formula: "(Adopted BUs ÷ total BUs) × 100" },
+  { kpi_code: "QM-KPI-005", kpi_name: "Quality Training Coverage", owner_type: "quality_manager", owner_name: "Sara", category: "training", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Coverage of BU staff trained on released governance documents.", formula: "(Trained staff ÷ target staff) × 100" },
+  { kpi_code: "QM-KPI-006", kpi_name: "Quality→GRC Handoff Cycle Time", owner_type: "quality_manager", owner_name: "Sara", category: "governance", unit: "days", target_value: 5, threshold_green: 5, threshold_amber: 8, threshold_red: 12, threshold_direction: "lower_is_better", frequency: "monthly", description: "Average days from a Quality finding to its GRC handoff.", formula: "Avg(handoff date − finding date)" },
+  { kpi_code: "QM-KPI-007", kpi_name: "Operational Excellence Value Realization", owner_type: "quality_manager", owner_name: "Sara", category: "quality", unit: "%", target_value: 70, threshold_green: 70, threshold_amber: 50, threshold_red: 40, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Share of targeted value realized from quality/automation initiatives.", formula: "(Realized value ÷ target value) × 100" },
+  { kpi_code: "QM-KPI-008", kpi_name: "BU Coverage Rate", owner_type: "quality_manager", owner_name: "Sara", category: "governance", unit: "%", target_value: 100, threshold_green: 95, threshold_amber: 80, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Percent of business units with governance coverage.", formula: "(BUs with governance coverage ÷ total BUs) × 100" },
+  // GRC (Maram)
+  { kpi_code: "GRC-KPI-001", kpi_name: "GRC North Star Score", owner_type: "grc_manager", owner_name: "Maram", category: "governance", unit: "%", target_value: 85, threshold_green: 85, threshold_amber: 76, threshold_red: 65, threshold_direction: "higher_is_better", is_north_star: true, frequency: "quarterly", description: "Weighted composite of Maram's GRC KPIs for the quarter.", formula: "Σ(weight × component actual) per North Star plan" },
+  { kpi_code: "GRC-KPI-002", kpi_name: "Certification Milestone Delivery Rate", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "On-time delivery of ISO/PDPL/PCI/NCA certification milestones.", formula: "(Milestones delivered on-time ÷ planned) × 100" },
+  { kpi_code: "GRC-KPI-003", kpi_name: "Audit & Certification Readiness Index", owner_type: "grc_manager", owner_name: "Maram", category: "audit", unit: "%", target_value: 85, threshold_green: 85, threshold_amber: 70, threshold_red: 55, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Required audit/cert evidence compiled and approved.", formula: "(Evidence ready ÷ required) × 100" },
+  { kpi_code: "GRC-KPI-004", kpi_name: "Evidence SLA Compliance", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "monthly", description: "Evidence requests delivered within SLA.", formula: "(Delivered within SLA ÷ total) × 100" },
+  { kpi_code: "GRC-KPI-005", kpi_name: "Risk Treatment Closure Rate (CAPA)", owner_type: "grc_manager", owner_name: "Maram", category: "risk", unit: "%", target_value: 80, threshold_green: 80, threshold_amber: 65, threshold_red: 50, threshold_direction: "higher_is_better", frequency: "monthly", description: "Risk treatments / CAPAs closed.", formula: "(Treatments completed ÷ due) × 100" },
+  { kpi_code: "GRC-KPI-006", kpi_name: "TPRA Vendor Risk Turnaround SLA", owner_type: "grc_manager", owner_name: "Maram", category: "vendor", unit: "%", target_value: 85, threshold_green: 85, threshold_amber: 70, threshold_red: 55, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Third-party (vendor) risk assessments completed within SLA.", formula: "(TPRA within SLA ÷ total) × 100" },
+  { kpi_code: "GRC-KPI-007", kpi_name: "Year-End Compliance Closure Score", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 95, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "annual", description: "2026 obligations closed or formally accepted by year-end.", formula: "(Closed or accepted ÷ applicable) × 100" },
+  { kpi_code: "GRC-KPI-008", kpi_name: "Compliance Coverage Index", owner_type: "grc_manager", owner_name: "Maram", category: "compliance", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "quarterly", description: "Applicable obligations mapped to a control/policy.", formula: "(Mapped obligations ÷ applicable) × 100" },
+];
+
+export async function seedGrqScorecardKPIs(): Promise<void> {
+  for (const k of GRQ_SCORECARD_KPIS) {
+    await pool.query(
+      `INSERT INTO kpi_definitions
+         (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, is_active, is_north_star)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true,$15)
+       ON CONFLICT (kpi_code) DO NOTHING`,
+      [k.kpi_name, k.kpi_code, k.description, k.owner_type, k.owner_name, k.category, k.formula, k.unit, k.frequency, k.threshold_green, k.threshold_amber, k.threshold_red, k.threshold_direction, k.target_value, k.is_north_star ?? false],
+    );
+  }
+  logger.info("✅ [KPIDB] Seeded GRQ scorecard KPIs onto the KPI Engine");
 }
 
 export async function seedMohammedKPIsManual(): Promise<void> {
