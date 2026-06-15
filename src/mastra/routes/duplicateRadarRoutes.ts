@@ -3361,6 +3361,48 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // One-shot purge of singleton clusters (status='active' AND
+    // total_records<=1). Engine residue, not duplicates. Defaults to
+    // dryRun=true: returns the audit + 20-row sample + the count of
+    // duplicate_records pointing at them. Caller must POST
+    // { "dryRun": false } to actually delete. Refuses if candidate
+    // count > maxDelete (default 100k). Admin-only.
+    path: "/api/duplicates/cleanup-singletons",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const body = await c.req.json().catch(() => ({}));
+          const dryRun = body?.dryRun !== false;
+          const maxDelete =
+            typeof body?.maxDelete === "number" && body.maxDelete > 0
+              ? Math.floor(body.maxDelete)
+              : 100000;
+
+          const { cleanupSingletonClusters } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const result = await cleanupSingletonClusters({ dryRun, maxDelete });
+          logger.info(
+            `🧹 [DuplicateRadar] cleanupSingletonClusters (${dryRun ? "DRY-RUN" : "APPLIED"}) by ${sessionUser?.email || "admin-key"}: ${result.candidateCount} candidates, deleted ${result.deletedClusterCount}, cleared ${result.cleanedRecordCount} records, refused=${result.refusedReason ?? "no"}`,
+          );
+          return c.json({ success: true, ...result });
+        } catch (error: any) {
+          logger.error("Error in cleanup-singletons:", error);
+          return c.json(
+            { success: false, error: "An internal error occurred" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/rebuild",
     method: "POST" as const,
     createHandler: async () => {
