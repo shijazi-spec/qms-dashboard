@@ -5709,6 +5709,48 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Deal Stage Aging — list current Sales-SOP stage-aging violations.
+    // Query params: severity={info|warning|critical}, stage={Proposal|...}, limit=N
+    // Backed by scanDealStageAgingViolations + the Sales SOP spec
+    // (src/utils/salesStageSlaSpec.ts). Pairs with the "Deals Lifecycle"
+    // tab in the Duplicate Radar.
+    path: "/api/duplicates/deal-stage-aging",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const url = new URL(c.req.url);
+          const severity = url.searchParams.get("severity") || undefined;
+          const stage = url.searchParams.get("stage") || undefined;
+          const limit = parseInt(url.searchParams.get("limit") || "2000", 10);
+
+          const { scanDealStageAgingViolations } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const { SALES_STAGE_SLA_SPEC } = await import(
+            "../../utils/salesStageSlaSpec"
+          );
+          const result = await scanDealStageAgingViolations({
+            severity: severity as any,
+            stage,
+            limit,
+          });
+          return c.json({
+            success: true,
+            spec: SALES_STAGE_SLA_SPEC,
+            ...result,
+          });
+        } catch (error: any) {
+          logger.error("Error fetching Deal Stage Aging violations:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // CS lifecycle compliance — list current violations.
     // Query params: severity={info|warning|critical}, code={onboarding_overdue|...}, limit=N
     path: "/api/duplicates/cs-lifecycle/violations",
