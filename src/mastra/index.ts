@@ -60,6 +60,7 @@ import { kpiRoutes } from "./routes/kpiRoutes";
 import { leadershipFeedRoutes } from "./routes/leadershipFeedRoutes";
 import { northStarSourceRoutes } from "./routes/northStarSourceRoutes";
 import { okrRoutes } from "./routes/okrRoutes";
+import { kpiCatalogRoutes } from "./routes/kpiCatalogRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
 import { zohoAgingRoutes } from "./routes/zohoAgingRoutes";
 import { zohoActivitiesRoutes } from "./routes/zohoActivitiesRoutes";
@@ -299,6 +300,7 @@ export const mastra = new Mastra({
       ...leadershipFeedRoutes,
       ...northStarSourceRoutes,
       ...okrRoutes,
+      ...kpiCatalogRoutes,
       ...kpiRoutes,
       ...duplicateRadarRoutes,
       ...zohoAgingRoutes,
