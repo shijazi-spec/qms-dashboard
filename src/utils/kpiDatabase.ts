@@ -202,6 +202,9 @@ export async function initKPITables(): Promise<void> {
   // KPIs already exist, so this must be called independently).
   await reassignMohammedKPIs();
 
+  // Hide the stale legacy QM/GRC KPIs superseded by the new QM-KPI/GRC-KPI set.
+  await deactivateStaleLegacyKPIs();
+
   logger.info("✅ [KPIDB] KPI Engine tables initialized");
 }
 
@@ -958,6 +961,45 @@ export async function reassignMohammedKPIs(): Promise<void> {
     );
   }
   logger.info("✅ [KPIDB] Mohammed's KPIs reassigned to Sara / Maram");
+}
+
+/**
+ * Deactivate the stale legacy QM/GRC KPI definitions that are superseded by the
+ * new GRQ system (QM-KPI-### / GRC-KPI-### in the leadership feed). Non-
+ * destructive (is_active=false, reversible) and idempotent — so the old /kpis
+ * engine stops showing duplicates while the KPI Catalog uses the new ones.
+ */
+const STALE_LEGACY_KPI_CODES = [
+  // Quality (superseded by QM-KPI-###)
+  "QM-GOV-001",
+  "QM-DOC-001",
+  "QM-AUD-001",
+  "QM-AUD-002",
+  "QM-AUD-003",
+  "QM-TRN-001",
+  "QM-CI-001",
+  "QM-AUTO-001",
+  // GRC (superseded by GRC-KPI-###)
+  "GRC-RSK-001",
+  "GRC-RSK-002",
+  "GRC-RSK-003",
+  "GRC-CMP-001",
+  "GRC-AUD-001",
+  "GRC-VND-001",
+  "GRC-REG-001",
+];
+
+export async function deactivateStaleLegacyKPIs(): Promise<void> {
+  const res = await pool.query(
+    `UPDATE kpi_definitions SET is_active = false, updated_at = NOW()
+     WHERE kpi_code = ANY($1) AND is_active = true`,
+    [STALE_LEGACY_KPI_CODES],
+  );
+  if (res.rowCount && res.rowCount > 0) {
+    logger.info(
+      `🧹 [KPIDB] Deactivated ${res.rowCount} stale legacy QM/GRC KPIs (superseded by QM-KPI/GRC-KPI)`,
+    );
+  }
 }
 
 export async function seedMohammedKPIsManual(): Promise<void> {
