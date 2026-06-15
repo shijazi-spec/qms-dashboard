@@ -181,6 +181,7 @@ import {
   postResolutionMessage,
   buildExecutiveBriefText,
   postWeeklyExecBrief,
+  postResolutionDigest,
   ADAM_NOTIFICATION_SCHEDULE,
   getModuleResolutionBreakdown,
   type ResolutionMode,
@@ -1060,6 +1061,31 @@ export const duplicateRadarRoutes = [
             return c.json({ error: (res.errors || []).join("; ") || "Slack post failed" }, 502);
           }
           return c.json({ ok: true, posted: res.posted, errors: res.errors });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // "Post operational digest now" — manually fire the SAME twice-daily apply
+    // digest (per-tab status board) on demand, so you can see it immediately
+    // instead of waiting for the 09:00 / 17:00 KSA run. Posts to the resolution
+    // Slack channel. Management-tier only (it broadcasts to the team channel).
+    path: "/api/duplicates/autonomous/digest/send",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRoleOrKey(c, [...AUTONOMOUS_RESOLUTION_MANAGE_ROLES]);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const sinceHours =
+            Number.isFinite(body?.sinceHours) && body.sinceHours > 0
+              ? Math.min(168, Math.floor(body.sinceHours))
+              : 8;
+          await postResolutionDigest({ label: "Manual run", sinceHours });
+          return c.json({ ok: true, sinceHours });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

@@ -57,6 +57,7 @@
                 <div class="flex items-center gap-2">
                     <button data-on-click="copyExecBrief" id="copyBriefBtn" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">⧉ Copy</button>
                     <button data-on-click="sendWeeklyBriefNow" id="sendBriefBtn" title="Post the brief now to the leadership channels (#grq-assistant + #automatic-audits)" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">📨 Send to leadership</button>
+                    <button data-on-click="postDigestNow" id="postDigestBtn" title="Post the operational apply-digest (per-tab status board) to the resolution Slack channel right now, instead of waiting for the 09:00 / 17:00 run." class="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">📨 Post digest now</button>
                     <button data-on-click="hideExecBrief" class="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600">✕</button>
                 </div>
             </div>
@@ -542,6 +543,27 @@
             } catch (e) {
                 if (btn) { btn.textContent = 'Failed'; btn.disabled = false; }
                 alert('Could not send: ' + (e && e.message || e));
+            }
+        }
+
+        // Post the operational apply-digest (per-tab status board) to the
+        // resolution Slack channel on demand, instead of waiting for 09:00/17:00.
+        async function postDigestNow() {
+            if (!confirm('Post the operational digest now to the resolution Slack channel (#grq-assistant)?')) return;
+            var btn = document.getElementById('postDigestBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+            try {
+                var res = await fetch('/api/duplicates/autonomous/digest/send', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sinceHours: 8 })
+                });
+                var data = await res.json();
+                if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                if (btn) { btn.textContent = '✓ Posted to Slack'; setTimeout(function () { btn.textContent = '📨 Post digest now'; btn.disabled = false; }, 2500); }
+            } catch (e) {
+                if (btn) { btn.textContent = 'Failed'; btn.disabled = false; }
+                alert('Could not post digest: ' + (e && e.message || e));
             }
         }
 
