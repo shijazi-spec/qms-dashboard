@@ -64,10 +64,11 @@ export interface ExecuteOptions {
   /**
    * Whether to mark the whole cluster resolved after the Account writes.
    * Default true. Set FALSE for cross-module clusters — Agentic Resolution
-   * touches Accounts only, so closing the cluster would skip the cross-module
-   * link/close step the manual "Mark Resolved" flow performs and drop the
-   * cluster from the active list prematurely. Leaving it open preserves that
-   * follow-up.
+   * touches Accounts only, so closing the cluster would drop it from the
+   * active list before the remaining modules (Leads / Deals / Contacts)
+   * have been actioned via their own Agentic Resolution sections. The
+   * cluster auto-flips to resolved once the next sync detects every
+   * module's duplicates as merged/tagged in Zoho.
    */
   closeCluster?: boolean;
 }
@@ -319,8 +320,8 @@ export async function executeMergePlan(
 
   // 5) Mark the survivor primary + resolve the cluster internally — but ONLY
   // when this run is allowed to close it. For cross-module clusters
-  // closeCluster is false, so the cluster stays active for the cross-module
-  // link/close step (manual "Mark Resolved"); Agentic only handles Accounts.
+  // closeCluster is false, so the cluster stays active for the remaining
+  // modules' Agentic Resolution sections; Agentic only handles Accounts here.
   const closeCluster = opts.closeCluster !== false;
   if (!dryRun && closeCluster) {
     try {
@@ -340,7 +341,7 @@ export async function executeMergePlan(
     }
   } else if (!dryRun && !closeCluster) {
     report.warnings.push(
-      "Cross-module cluster: duplicate Accounts were migrated & tagged, but the cluster was left OPEN — link/close the Leads/Deals/Contacts via Mark Resolved to finish it.",
+      "Cross-module cluster: duplicate Accounts were migrated & tagged, but the cluster was left OPEN. Finish the other modules (Leads / Deals / Contacts) via their own Agentic Resolution sections — the cluster auto-resolves once the next sync sees every module's duplicates merged or tagged in Zoho.",
     );
     // Record the partial merge so subsequent same-cluster plans for the
     // OTHER modules can filter out the just-tagged duplicates (else the
