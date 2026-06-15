@@ -32,6 +32,18 @@ const READ_ROLES = [
   "viewer",
 ] as const;
 
+/** Map our RAG (+ no-data) to the leadership 7-status wording. */
+function ragToLeadershipLabel(
+  status: string | null,
+  hasValue: boolean,
+): string {
+  if (!hasValue) return "Not Started";
+  if (status === "green") return "On Track";
+  if (status === "amber") return "At Risk";
+  if (status === "red") return "Off Track";
+  return "Not Started";
+}
+
 async function legacyGroup(ownerType: string) {
   const { getKPIsByOwner, getLatestKPIValue } =
     await import("../../utils/kpiDatabase");
@@ -54,6 +66,7 @@ async function legacyGroup(ownerType: string) {
         target: d.target_value ?? null,
         value,
         status,
+        status_label: ragToLeadershipLabel(status, value !== null),
         frequency: d.frequency || "",
         source: "manual",
       };
@@ -90,6 +103,9 @@ export const kpiCatalogRoutes = [
                   target: d.target,
                   value: k ? k.value : null,
                   status: k ? k.status : null,
+                  status_label: k
+                    ? (k.status_label ?? ragToLeadershipLabel(k.status, true))
+                    : "Not Started",
                   frequency: "",
                   source: "auto",
                 };

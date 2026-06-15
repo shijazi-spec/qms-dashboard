@@ -11,6 +11,7 @@
     .amber { background:#fef9c3; color:#854d0e; }
     .red   { background:#fee2e2; color:#991b1b; }
     .muted { background:#f1f5f9; color:#475569; }
+    .pending { background:#ede9fe; color:#5b21b6; }
     .box-body { display:block; }
     .box-body.collapsed { display:none; }
   </style>
@@ -45,9 +46,12 @@
     };
 
     function valCell(k) {
-      if (k.value === null || k.value === undefined) return '<span class="badge muted">—</span>';
+      if (k.value === null || k.value === undefined) {
+        return `<span class="badge pending">${esc(k.status_label || "Not Started")}</span>`;
+      }
       const cls = k.status || "muted";
-      return `<span class="badge ${cls}">${esc(k.value)}${esc(k.unit||"")}${k.status?" · "+k.status.toUpperCase():""}</span>`;
+      const lbl = k.status_label ? " · " + esc(k.status_label) : "";
+      return `<span class="badge ${cls}">${esc(k.value)}${esc(k.unit||"")}${lbl}</span>`;
     }
 
     function box(g, i) {
