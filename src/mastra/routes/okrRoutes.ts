@@ -23,6 +23,10 @@ const READ_ROLES = [
   "grc_manager",
   "head_of_operations_quality",
   "executive",
+  "auditor",
+  "team_lead",
+  "ai_specialist",
+  "viewer",
 ] as const;
 
 export const okrRoutes = [

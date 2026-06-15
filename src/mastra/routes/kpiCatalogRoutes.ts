@@ -17,12 +17,19 @@ import { readFileSync, existsSync } from "fs";
 
 import { logger as safeLogger } from "../../utils/logger";
 
+// Read-only KPI catalog — viewable by any active platform user (the global
+// middleware already requires a valid session). Broadened so managers aren't
+// blocked by a narrow role list.
 const READ_ROLES = [
   "admin",
   "quality_manager",
   "grc_manager",
   "head_of_operations_quality",
   "executive",
+  "auditor",
+  "team_lead",
+  "ai_specialist",
+  "viewer",
 ] as const;
 
 async function legacyGroup(ownerType: string) {

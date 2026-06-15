@@ -52,7 +52,7 @@
                     <option value="" data-i18n="kpis.all_owners">All Owners</option>
                     <option value="quality_manager" data-i18n="kpis.o_quality_manager">Sara (Quality Manager)</option>
                     <option value="grc_manager" data-i18n="kpis.o_grc_manager">Maram (GRC Manager)</option>
-                    <option value="governance_officer" data-i18n="kpis.o_governance_officer">Mohammed (Governance Officer)</option>
+                    <option value="sdr_team">SDR Team</option>
                     <option value="shared" data-i18n="kpis.o_shared_kpis">Shared KPIs</option>
                 </select>
                 <select id="statusFilter" class="border rounded px-3 py-2 text-sm" data-on-change="loadKPIs" data-testid="select-status-filter">
@@ -156,7 +156,7 @@
                         <select id="kpiOwnerType" required class="w-full border rounded px-3 py-2">
                             <option value="quality_manager" data-i18n="kpis.o_quality_manager">Sara (Quality Manager)</option>
                             <option value="grc_manager" data-i18n="kpis.o_grc_manager">Maram (GRC Manager)</option>
-                            <option value="governance_officer" data-i18n="kpis.o_governance_officer">Mohammed (Governance Officer)</option>
+                            <option value="sdr_team">SDR Team</option>
                             <option value="shared" data-i18n="kpis.o_shared">Shared</option>
                         </select>
                     </div>
@@ -332,11 +332,11 @@
                     labels: [
                         WalaPlusI18n.t('kpis.o_quality_manager', 'Sara (Quality)'),
                         WalaPlusI18n.t('kpis.o_grc_manager', 'Maram (GRC)'),
-                        WalaPlusI18n.t('kpis.o_governance_officer', 'Mohammed (Governance)'),
+                        WalaPlusI18n.t('kpis.o_sdr_team', 'SDR Team'),
                         WalaPlusI18n.t('kpis.o_shared', 'Shared')
                     ],
                     datasets: [{
-                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.governance_officer || 0, data.byOwner?.shared || 0],
+                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.sdr_team || 0, data.byOwner?.shared || 0],
                         backgroundColor: ['#1E3A8A', '#1E293B', '#0891B2', '#6D28D9']
                     }]
                 },

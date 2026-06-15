@@ -1564,14 +1564,15 @@ export async function getKPIDashboardSummary(): Promise<any> {
   const kpis = await getAllKPIDefinitions();
   const summary: any = {
     total: kpis.length,
-    byOwner: { quality_manager: 0, grc_manager: 0, shared: 0 },
+    byOwner: { quality_manager: 0, grc_manager: 0, sdr_team: 0, shared: 0 },
     byStatus: { green: 0, amber: 0, red: 0, no_data: 0 },
     byCategory: {},
     kpiDetails: [],
   };
 
   for (const kpi of kpis) {
-    summary.byOwner[kpi.owner_type]++;
+    summary.byOwner[kpi.owner_type] =
+      (summary.byOwner[kpi.owner_type] || 0) + 1;
     if (!summary.byCategory[kpi.category]) summary.byCategory[kpi.category] = 0;
     summary.byCategory[kpi.category]++;
 
