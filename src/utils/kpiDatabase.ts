@@ -197,6 +197,11 @@ export async function initKPITables(): Promise<void> {
 
   await seedDefaultKPIs();
 
+  // Post-seed migration: fold Mohammed's KPIs into Sara/Maram after his
+  // resignation. Runs on existing DBs too (seedDefaultKPIs early-returns when
+  // KPIs already exist, so this must be called independently).
+  await reassignMohammedKPIs();
+
   logger.info("✅ [KPIDB] KPI Engine tables initialized");
 }
 
@@ -535,8 +540,12 @@ async function seedDefaultKPIs(): Promise<void> {
 }
 
 async function seedMohammedKPIs(): Promise<void> {
+  // Guard on the MAM kpi_code prefix, NOT on owner_type. These KPIs were
+  // reassigned away from 'governance_officer' after Mohammed's resignation
+  // (see reassignMohammedKPIs), so an owner_type check would wrongly think
+  // they were never seeded and re-run every boot.
   const exists = await pool.query(
-    "SELECT COUNT(*) FROM kpi_definitions WHERE owner_type = 'governance_officer'",
+    "SELECT COUNT(*) FROM kpi_definitions WHERE kpi_code LIKE 'MAM-KPI-%'",
   );
   if (parseInt(exists.rows[0].count) > 0) return;
 
@@ -906,6 +915,49 @@ async function seedMohammedKPIs(): Promise<void> {
   }
 
   logger.info("✅ [KPIDB] Seeded Mohammed Al Muzaini KPIs");
+}
+
+/**
+ * Reassign the six governance-enablement KPIs after Mohammed Al-Muzaini's
+ * resignation (2026-06). His role was tracking/enablement only, so each KPI
+ * folds back to the manager who owns the underlying work, per the Quality↔GRC
+ * RACI in "Quality Plan 2026":
+ *   - MAM-KPI-01 Governance Documentation Lifecycle → Quality Manager (Sara)
+ *   - MAM-KPI-02..06 (compliance, audit evidence, handoff, risk hygiene,
+ *     exec reporting)                              → GRC Manager (Maram)
+ * Idempotent: keyed on kpi_code and gated on any remaining governance_officer
+ * rows, so it runs once and is a no-op thereafter.
+ */
+const MOHAMMED_KPI_REASSIGNMENT: Array<{
+  code: string;
+  owner_type: "quality_manager" | "grc_manager";
+  owner_name: string;
+}> = [
+  { code: "MAM-KPI-01", owner_type: "quality_manager", owner_name: "Sara" },
+  { code: "MAM-KPI-02", owner_type: "grc_manager", owner_name: "Maram" },
+  { code: "MAM-KPI-03", owner_type: "grc_manager", owner_name: "Maram" },
+  { code: "MAM-KPI-04", owner_type: "grc_manager", owner_name: "Maram" },
+  { code: "MAM-KPI-05", owner_type: "grc_manager", owner_name: "Maram" },
+  { code: "MAM-KPI-06", owner_type: "grc_manager", owner_name: "Maram" },
+];
+
+export async function reassignMohammedKPIs(): Promise<void> {
+  const pending = await pool.query(
+    "SELECT COUNT(*) FROM kpi_definitions WHERE owner_type = 'governance_officer'",
+  );
+  if (parseInt(pending.rows[0].count) === 0) return;
+  logger.info(
+    "🔁 [KPIDB] Reassigning Mohammed's KPIs (resignation) → Sara / Maram...",
+  );
+  for (const m of MOHAMMED_KPI_REASSIGNMENT) {
+    await pool.query(
+      `UPDATE kpi_definitions
+         SET owner_type = $1, owner_name = $2, updated_at = NOW()
+       WHERE kpi_code = $3`,
+      [m.owner_type, m.owner_name, m.code],
+    );
+  }
+  logger.info("✅ [KPIDB] Mohammed's KPIs reassigned to Sara / Maram");
 }
 
 export async function seedMohammedKPIsManual(): Promise<void> {

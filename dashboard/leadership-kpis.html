@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leadership KPIs — Computed by QMS</title>
+  <link rel="stylesheet" href="/dashboard/tailwind.css" />
+  <style>
+    .badge { padding: 2px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+    .green { background:#dcfce7; color:#166534; }
+    .amber { background:#fef9c3; color:#854d0e; }
+    .red   { background:#fee2e2; color:#991b1b; }
+    .muted { background:#f1f5f9; color:#475569; }
+    .detail { display:none; }
+    .detail.open { display:block; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div id="walaplus-nav"></div>
+  <script src="/js/navigation.js"></script>
+  <script>try { WalaPlusNav.init('leadership-kpis'); } catch (e) {}</script>
+
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-2">
+      <h1 class="text-2xl font-bold text-blue-900">Leadership KPIs</h1>
+      <div class="flex gap-2">
+        <a href="/leadership-kpis/data" class="px-4 py-2 bg-white border border-cyan-600 text-cyan-700 rounded-lg hover:bg-cyan-50 text-sm">✎ Enter KPI data</a>
+        <button id="refresh" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 text-sm">↻ Recalculate</button>
+      </div>
+    </div>
+    <p class="text-gray-500 mb-6">Computed live by the QMS platform from real data. KPIs without data show “awaiting data”. This is the same feed the Leadership Platform pulls.</p>
+
+    <div id="summary" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6"></div>
+    <div id="generated" class="text-xs text-gray-400 mb-3"></div>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-100 text-gray-600 text-left">
+          <tr>
+            <th class="px-4 py-3">KPI</th>
+            <th class="px-4 py-3">Code</th>
+            <th class="px-4 py-3 text-right">Current</th>
+            <th class="px-4 py-3 text-right">Target</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div id="error" class="hidden mt-6 p-4 bg-red-50 text-red-700 rounded-lg"></div>
+  </div>
+
+  <script>
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
+
+    function card(label, value, cls) {
+      return `<div class="bg-white rounded-lg shadow p-3 text-center">
+        <div class="text-2xl font-bold ${cls}">${value}</div>
+        <div class="text-xs text-gray-500">${label}</div></div>`;
+    }
+
+    function render(feed) {
+      const live = new Map((feed.kpis || []).map((k) => [k.code, k]));
+      const defs = feed.definitions || [];
+      let green = 0, amber = 0, red = 0, awaiting = 0;
+      const rows = defs.map((d, i) => {
+        const k = live.get(d.code);
+        let statusHtml = '<span class="badge muted">awaiting data</span>';
+        let current = '<span class="text-gray-400">—</span>';
+        if (k) {
+          const cls = k.status || "muted";
+          if (cls === "green") green++; else if (cls === "amber") amber++; else if (cls === "red") red++;
+          statusHtml = `<span class="badge ${cls}">${(k.status || "").toUpperCase()}</span>`;
+          current = `<span class="font-semibold">${k.value}${esc(d.unit || "")}</span>`;
+        } else { awaiting++; }
+        return `<tr class="border-t">
+            <td class="px-4 py-3">${esc(d.name)}</td>
+            <td class="px-4 py-3 text-gray-400 font-mono text-xs">${esc(d.code)}</td>
+            <td class="px-4 py-3 text-right">${current}</td>
+            <td class="px-4 py-3 text-right text-gray-500">${esc(d.target)}${esc(d.unit || "")}</td>
+            <td class="px-4 py-3">${statusHtml}</td>
+            <td class="px-4 py-3 text-right"><button class="text-cyan-600 text-xs" onclick="document.getElementById('det-${i}').classList.toggle('open')">how &amp; why ▾</button></td>
+          </tr>
+          <tr class="detail" id="det-${i}"><td colspan="6" class="px-4 pb-4 pt-0 bg-gray-50">
+            <div class="text-gray-700"><b>What:</b> ${esc(d.description)}</div>
+            <div class="text-gray-700 mt-1"><b>How calculated:</b> ${esc(d.methodology)}</div>
+            <div class="text-gray-700 mt-1"><b>Why:</b> ${esc(d.rationale)}</div>
+            <div class="text-gray-800 mt-1"><b>Where to update in QMS:</b> ${esc(d.entry_where)}${d.entry_route ? ` <a class="text-cyan-600 underline" href="${esc(d.entry_route)}">open ↗</a>` : ""}</div>
+            <div class="text-gray-400 text-xs mt-1">${esc(d.plan_ref)}</div>
+          </td></tr>`;
+      }).join("");
+
+      document.getElementById("summary").innerHTML =
+        card("Total KPIs", defs.length, "text-blue-900") +
+        card("Green", green, "text-green-600") +
+        card("Amber", amber, "text-yellow-600") +
+        card("Red", red, "text-red-600") +
+        card("Awaiting data", awaiting, "text-gray-500");
+      document.getElementById("rows").innerHTML = rows;
+      document.getElementById("generated").textContent = "Generated " + (feed.generated_at || "");
+    }
+
+    async function load() {
+      const err = document.getElementById("error");
+      err.classList.add("hidden");
+      try {
+        const r = await fetch("/api/kpis/leadership-feed/preview", { credentials: "same-origin" });
+        if (!r.ok) throw new Error("HTTP " + r.status + (r.status === 403 ? " — needs Quality/GRC/admin role" : ""));
+        render(await r.json());
+      } catch (e) {
+        err.textContent = "Could not load KPI results: " + e.message;
+        err.classList.remove("hidden");
+      }
+    }
+    document.getElementById("refresh").addEventListener("click", load);
+    load();
+  </script>
+</body>
+</html>

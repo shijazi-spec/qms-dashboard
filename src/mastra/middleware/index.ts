@@ -198,6 +198,14 @@ export const PUBLIC_PATHS = [
   // deliberately NOT listed and stays behind auth.
   '/webhooks/slack/action',
   '/api/webhooks/slack/action',
+
+  // ---- Leadership KPI feed (server-to-server pull) ----
+  // The WalaPlus Leadership Platform (a separate Replit app) pulls this feed
+  // to auto-refresh its KPI "Current" values. It has no platform session, so
+  // the route self-authenticates via the X-Feed-Key header (constant-time
+  // compare vs LEADERSHIP_FEED_KEY) in src/mastra/routes/leadershipFeedRoutes.ts
+  // and fails closed (503) when the key is unset. EXACT entry.
+  '/api/kpis/leadership-feed',
 ];
 
 const MASTRA_INTERNAL_PREFIXES = ['/api/workflows/', '/api/memory/'];

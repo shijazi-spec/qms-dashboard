@@ -49,7 +49,7 @@ await suite.test("GET /kpis — html serve (200) when present, 404 otherwise", a
 // HTML-serving and SOW/screenshots routes call c.html / c.get("mastra")
 // which are dashboard-page concerns, not data-API auth boundaries — skip
 // them here; their structural test already runs above.
-const SKIP_PATHS = new Set(["/kpis", "/executive", "/mohammed-sow", "/docs/screenshots/:filename"]);
+const SKIP_PATHS = new Set(["/kpis", "/executive", "/docs/screenshots/:filename"]);
 
 for (const route of kpiRoutes) {
   const path = route.path;

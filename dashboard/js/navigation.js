@@ -187,6 +187,9 @@ const WalaPlusNav = {
       color: 'amber',
       items: [
         { label: 'KPIs', href: '/kpis', icon: 'chart-bar', id: 'kpis' },
+        { label: 'OKRs', href: '/okrs', icon: 'document-report', id: 'okrs', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
+        { label: 'Leadership KPIs', href: '/leadership-kpis', icon: 'chart-bar', id: 'leadership-kpis', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] },
+        { label: 'Enter KPI Data', href: '/leadership-kpis/data', icon: 'document-text', id: 'leadership-kpis-data', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager'] },
         { label: 'Board Dashboard', href: '/executive', icon: 'office-building', id: 'executive' },
         { label: 'Team Performance', href: '/team', icon: 'user-group', id: 'team' },
         // AI Approvals Queue lives under Team Mgmt per user request — it is

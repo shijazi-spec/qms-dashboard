@@ -57,6 +57,9 @@ import { vendorRoutes } from "./routes/vendorRoutes";
 import { migrationRoutes } from "./routes/migrationRoutes";
 import { handoffRoutes } from "./routes/handoffRoutes";
 import { kpiRoutes } from "./routes/kpiRoutes";
+import { leadershipFeedRoutes } from "./routes/leadershipFeedRoutes";
+import { northStarSourceRoutes } from "./routes/northStarSourceRoutes";
+import { okrRoutes } from "./routes/okrRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
 import { zohoAgingRoutes } from "./routes/zohoAgingRoutes";
 import { zohoActivitiesRoutes } from "./routes/zohoActivitiesRoutes";
@@ -289,6 +292,13 @@ export const mastra = new Mastra({
       ...vendorRoutes,
       ...migrationRoutes,
       ...handoffRoutes,
+      // ── Leadership KPI feed (registered BEFORE kpiRoutes so the literal
+      //     `/api/kpis/leadership-feed` is matched before the dynamic
+      //     `/api/kpis/:id` handlers). Pulled by the WalaPlus Leadership
+      //     Platform; self-authenticates via the X-Feed-Key header. ──────────
+      ...leadershipFeedRoutes,
+      ...northStarSourceRoutes,
+      ...okrRoutes,
       ...kpiRoutes,
       ...duplicateRadarRoutes,
       ...zohoAgingRoutes,
