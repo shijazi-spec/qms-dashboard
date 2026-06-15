@@ -230,14 +230,19 @@ export async function calcSdrSpeedToLead(): Promise<ProcessKpiValue> {
          FROM call_records
         WHERE lead_id IS NOT NULL AND call_date IS NOT NULL
         GROUP BY lead_id
+     ),
+     joined AS (
+       SELECT fc.first_call,
+              CASE WHEN dr.raw_data->>'Created_Time' ~ '^\\d{4}-\\d{2}-\\d{2}T'
+                   THEN (dr.raw_data->>'Created_Time')::timestamptz END AS created
+         FROM first_calls fc
+         JOIN duplicate_records dr
+           ON dr.zoho_module = 'Leads' AND dr.zoho_record_id = fc.lead_id
      )
-     SELECT AVG(EXTRACT(EPOCH FROM (fc.first_call - (dr.raw_data->>'Created_Time')::timestamptz)) / 3600.0) AS avg_hours,
+     SELECT AVG(EXTRACT(EPOCH FROM (first_call - created)) / 3600.0) AS avg_hours,
             COUNT(*)::int AS n
-       FROM first_calls fc
-       JOIN duplicate_records dr
-         ON dr.zoho_module = 'Leads' AND dr.zoho_record_id = fc.lead_id
-      WHERE dr.raw_data->>'Created_Time' IS NOT NULL
-        AND fc.first_call >= (dr.raw_data->>'Created_Time')::timestamptz`,
+       FROM joined
+      WHERE created IS NOT NULL AND first_call >= created`,
   );
   const n = Number(res.rows[0]?.n || 0);
   const avgHours = res.rows[0]?.avg_hours;
