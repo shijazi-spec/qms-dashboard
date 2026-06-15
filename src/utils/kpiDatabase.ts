@@ -47,6 +47,8 @@ export interface KPIDefinition {
   weight?: number;
   navigation_map?: NavigationStep[];
   is_active: boolean;
+  /** Flagged as a North Star KPI — shown with a ⭐ North Star label. */
+  is_north_star?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -115,11 +117,15 @@ export async function initKPITables(): Promise<void> {
       target_value DECIMAL(10,2),
       weight DECIMAL(5,2) DEFAULT 1.0,
       is_active BOOLEAN DEFAULT true,
+      is_north_star BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
 
+  await pool.query(
+    `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS is_north_star BOOLEAN DEFAULT false`,
+  );
   await pool.query(
     `ALTER TABLE kpi_definitions ADD COLUMN IF NOT EXISTS navigation_map JSONB`,
   );
@@ -1397,8 +1403,8 @@ export async function createKPIDefinition(
 ): Promise<KPIDefinition> {
   const result = await pool.query(
     `
-    INSERT INTO kpi_definitions (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, data_source, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, weight, is_active)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+    INSERT INTO kpi_definitions (kpi_name, kpi_code, description, owner_type, owner_name, category, formula, data_source, unit, frequency, threshold_green, threshold_amber, threshold_red, threshold_direction, target_value, weight, is_active, is_north_star)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
     RETURNING *
   `,
     [
@@ -1419,6 +1425,7 @@ export async function createKPIDefinition(
       kpi.target_value,
       kpi.weight || 1.0,
       kpi.is_active,
+      kpi.is_north_star ?? false,
     ],
   );
   return result.rows[0];
@@ -1449,6 +1456,7 @@ export async function updateKPIDefinition(
     "target_value",
     "weight",
     "is_active",
+    "is_north_star",
   ];
 
   for (const field of allowedFields) {
