@@ -10,9 +10,9 @@
  *
  * Scope = the 4 KPIs leadership tracks today:
  *   - QM-KPI-002  Audit Execution Rate                    (Quality Manager)
- *   - QM-KPI-008   BU Coverage Rate                        (Quality Manager)
- *   - GRC-KPI-009 Compliance Coverage Index               (GRC Manager)
- *   - GRC-KPI-002 Process and Quality Framework Completion (GRC Manager)
+ *   - QM-KPI-008  BU Coverage Rate                         (Quality Manager)
+ *   - QM-KPI-015  QMS Framework Completion                 (Quality Manager)
+ *   - GRC-KPI-008 Compliance Coverage Index               (GRC Manager)
  *
  * SAFETY RULE: if a KPI has no underlying data in QMS (its source table is
  * empty or unreadable), we set `data_available: false` and the route OMITS it
@@ -98,7 +98,7 @@ async function calcAuditExecutionRate() {
   };
 }
 
-/** GRC-KPI-009 — (applicable obligations with a mapped control/policy / total applicable) × 100. */
+/** GRC-KPI-008 — (applicable obligations with a mapped control/policy / total applicable) × 100. */
 async function calcComplianceCoverage() {
   const r = await pool.query(`
     SELECT
@@ -121,7 +121,7 @@ async function calcComplianceCoverage() {
   };
 }
 
-/** GRC-KPI-002 — (published & in-review-date policies / total policies) × 100. */
+/** QM-KPI-015 — (published & in-review-date policies / total policies) × 100. */
 async function calcProcessQualityFramework() {
   const r = await pool.query(`
     SELECT
@@ -249,7 +249,7 @@ async function calcTrainingCoverage() {
   };
 }
 
-/** GRC-KPI-006 — Risk Treatment Closure (CAPA): (completed / non-cancelled total) × 100. */
+/** GRC-KPI-005 — Risk Treatment Closure (CAPA): (completed / non-cancelled total) × 100. */
 async function calcRiskTreatmentClosure() {
   const r = await pool.query(`
     SELECT
@@ -267,7 +267,7 @@ async function calcRiskTreatmentClosure() {
   };
 }
 
-/** GRC-KPI-008 — Year-End Compliance Closure: (obligations closed-or-accepted / applicable) × 100. */
+/** GRC-KPI-007 — Year-End Compliance Closure: (obligations closed-or-accepted / applicable) × 100. */
 async function calcYearEndComplianceClosure() {
   const r = await pool.query(`
     SELECT
@@ -312,7 +312,7 @@ async function calcHandoffCycleTime() {
   };
 }
 
-/** GRC-KPI-004 — Audit & Certification Readiness: (ready evidence packs / total) × 100. */
+/** GRC-KPI-003 — Audit & Certification Readiness: (ready evidence packs / total) × 100. */
 async function calcAuditCertReadiness() {
   const r = await pool.query(`
     SELECT
@@ -347,7 +347,7 @@ async function calcAuditCycleTime() {
   return { value: Math.round(Number(avg) * 10) / 10, dataAvailable: true, details: { completed_audits: done } };
 }
 
-/** GRC-KPI-010 — Risk Assessment Coverage: BUs with >=1 risk / total BUs. (BU registry seeded by QM-KPI-008.) */
+/** GRC-KPI-009 — Risk Assessment Coverage: BUs with >=1 risk / total BUs. (BU registry seeded by QM-KPI-008.) */
 async function calcRiskAssessmentCoverage() {
   const r = await pool.query(`
     SELECT
@@ -362,7 +362,7 @@ async function calcRiskAssessmentCoverage() {
   return { value: Math.round((assessed / total) * 1000) / 10, dataAvailable: true, details: { total_bus: total, assessed_bus: assessed } };
 }
 
-/** GRC-KPI-011 — High-Risk Items with Treatment Plan: high/critical risks with >=1 treatment / total. */
+/** GRC-KPI-010 — High-Risk Items with Treatment Plan: high/critical risks with >=1 treatment / total. */
 async function calcHighRiskTreatmentPlan() {
   const r = await pool.query(`
     SELECT
@@ -377,7 +377,7 @@ async function calcHighRiskTreatmentPlan() {
   return { value: Math.round((withPlan / total) * 1000) / 10, dataAvailable: true, details: { total_high_risks: total, with_treatment_plan: withPlan } };
 }
 
-/** GRC-KPI-017 — Policy Review Compliance: policies within review cycle (not overdue) / total. */
+/** GRC-KPI-016 — Policy Review Compliance: policies within review cycle (not overdue) / total. */
 async function calcPolicyReviewCompliance() {
   const r = await pool.query(`
     SELECT COUNT(*)::int AS total,
@@ -390,7 +390,7 @@ async function calcPolicyReviewCompliance() {
   return { value: Math.round((onTime / total) * 1000) / 10, dataAvailable: true, details: { total_policies: total, within_review_cycle: onTime } };
 }
 
-/** GRC-KPI-012 — TPRA Coverage: critical vendors with an assessment / total critical vendors. */
+/** GRC-KPI-011 — TPRA Coverage: critical vendors with an assessment / total critical vendors. */
 async function calcTpraCoverage() {
   const r = await pool.query(`
     SELECT
@@ -405,7 +405,7 @@ async function calcTpraCoverage() {
   return { value: Math.round((assessed / total) * 1000) / 10, dataAvailable: true, details: { total_critical_vendors: total, assessed } };
 }
 
-/** GRC-KPI-014 — High-Risk Vendor Findings Closure: closed remediations / total. */
+/** GRC-KPI-013 — High-Risk Vendor Findings Closure: closed remediations / total. */
 async function calcVendorFindingsClosure() {
   const r = await pool.query(`
     SELECT COUNT(*)::int AS total,
@@ -440,7 +440,7 @@ const FEED_KPIS: FeedKpiConfig[] = [
     calc: calcBuCoverageRate,
   },
   {
-    code: "GRC-KPI-009",
+    code: "GRC-KPI-008",
     name: "Compliance Coverage Index",
     unit: "%",
     target: 90,
@@ -450,8 +450,8 @@ const FEED_KPIS: FeedKpiConfig[] = [
     calc: calcComplianceCoverage,
   },
   {
-    code: "GRC-KPI-002",
-    name: "Process and Quality Framework Completion",
+    code: "QM-KPI-015",
+    name: "QMS Framework Completion",
     unit: "%",
     target: 100,
     green: 95,
@@ -482,7 +482,7 @@ const FEED_KPIS: FeedKpiConfig[] = [
     calc: calcTrainingCoverage,
   },
   {
-    code: "GRC-KPI-006",
+    code: "GRC-KPI-005",
     name: "Risk Treatment Closure Rate (CAPA)",
     unit: "%",
     target: 80,
@@ -492,7 +492,7 @@ const FEED_KPIS: FeedKpiConfig[] = [
     calc: calcRiskTreatmentClosure,
   },
   {
-    code: "GRC-KPI-008",
+    code: "GRC-KPI-007",
     name: "Year-End Compliance Closure Score",
     unit: "%",
     target: 95,
@@ -534,7 +534,7 @@ const FEED_KPIS: FeedKpiConfig[] = [
     calc: calcValueRealization,
   },
   {
-    code: "GRC-KPI-003",
+    code: "GRC-KPI-002",
     name: "Certification Milestone Delivery Rate",
     unit: "%",
     target: 90,
@@ -544,7 +544,7 @@ const FEED_KPIS: FeedKpiConfig[] = [
     calc: calcCertMilestoneDelivery,
   },
   {
-    code: "GRC-KPI-005",
+    code: "GRC-KPI-004",
     name: "Evidence SLA Compliance",
     unit: "%",
     target: 90,
@@ -554,7 +554,7 @@ const FEED_KPIS: FeedKpiConfig[] = [
     calc: calcEvidenceSlaCompliance,
   },
   {
-    code: "GRC-KPI-007",
+    code: "GRC-KPI-006",
     name: "TPRA Vendor Risk Turnaround SLA",
     unit: "%",
     target: 85,
@@ -564,7 +564,7 @@ const FEED_KPIS: FeedKpiConfig[] = [
     calc: calcTpraTurnaround,
   },
   {
-    code: "GRC-KPI-004",
+    code: "GRC-KPI-003",
     name: "Audit & Certification Readiness Index",
     unit: "%",
     target: 85,
@@ -580,14 +580,14 @@ const FEED_KPIS: FeedKpiConfig[] = [
   { code: "QM-KPI-012", name: "Automation Coverage (Quality Workflows)", unit: "%", target: 30, green: 30, amber: 20, direction: "higher_is_better", calc: makeCaptureCalc("QM-KPI-012", "ratio") },
   { code: "QM-KPI-013", name: "Manual Effort Reduction", unit: "%", target: 30, green: 30, amber: 20, direction: "higher_is_better", calc: makeCaptureCalc("QM-KPI-013", "reduction") },
   { code: "QM-KPI-014", name: "Operational Waste Reduction (Rework)", unit: "%", target: 20, green: 20, amber: 10, direction: "higher_is_better", calc: makeCaptureCalc("QM-KPI-014", "reduction") },
-  { code: "GRC-KPI-010", name: "Risk Assessment Coverage (BUs)", unit: "%", target: 100, green: 95, amber: 80, direction: "higher_is_better", calc: calcRiskAssessmentCoverage },
-  { code: "GRC-KPI-011", name: "High-Risk Items with Treatment Plan", unit: "%", target: 100, green: 100, amber: 90, direction: "higher_is_better", calc: calcHighRiskTreatmentPlan },
-  { code: "GRC-KPI-012", name: "TPRA Coverage Rate (Critical Vendors)", unit: "%", target: 95, green: 95, amber: 80, direction: "higher_is_better", calc: calcTpraCoverage },
-  { code: "GRC-KPI-013", name: "Client/Partner Security Assessment SLA", unit: "%", target: 90, green: 90, amber: 75, direction: "higher_is_better", calc: makeCaptureCalc("GRC-KPI-013", "ratio") },
-  { code: "GRC-KPI-014", name: "High-Risk Vendor Findings Closure", unit: "%", target: 85, green: 85, amber: 70, direction: "higher_is_better", calc: calcVendorFindingsClosure },
-  { code: "GRC-KPI-015", name: "Regulatory Response Timeliness", unit: "days", target: 5, green: 5, amber: 8, direction: "lower_is_better", calc: makeCaptureCalc("GRC-KPI-015", "days") },
-  { code: "GRC-KPI-016", name: "Security Incident Governance Closure Time", unit: "days", target: 30, green: 30, amber: 45, direction: "lower_is_better", calc: makeCaptureCalc("GRC-KPI-016", "days") },
-  { code: "GRC-KPI-017", name: "Policy Review Compliance", unit: "%", target: 95, green: 95, amber: 80, direction: "higher_is_better", calc: calcPolicyReviewCompliance },
+  { code: "GRC-KPI-009", name: "Risk Assessment Coverage (BUs)", unit: "%", target: 100, green: 95, amber: 80, direction: "higher_is_better", calc: calcRiskAssessmentCoverage },
+  { code: "GRC-KPI-010", name: "High-Risk Items with Treatment Plan", unit: "%", target: 100, green: 100, amber: 90, direction: "higher_is_better", calc: calcHighRiskTreatmentPlan },
+  { code: "GRC-KPI-011", name: "TPRA Coverage Rate (Critical Vendors)", unit: "%", target: 95, green: 95, amber: 80, direction: "higher_is_better", calc: calcTpraCoverage },
+  { code: "GRC-KPI-012", name: "Client/Partner Security Assessment SLA", unit: "%", target: 90, green: 90, amber: 75, direction: "higher_is_better", calc: makeCaptureCalc("GRC-KPI-012", "ratio") },
+  { code: "GRC-KPI-013", name: "High-Risk Vendor Findings Closure", unit: "%", target: 85, green: 85, amber: 70, direction: "higher_is_better", calc: calcVendorFindingsClosure },
+  { code: "GRC-KPI-014", name: "Regulatory Response Timeliness", unit: "days", target: 5, green: 5, amber: 8, direction: "lower_is_better", calc: makeCaptureCalc("GRC-KPI-014", "days") },
+  { code: "GRC-KPI-015", name: "Security Incident Governance Closure Time", unit: "days", target: 30, green: 30, amber: 45, direction: "lower_is_better", calc: makeCaptureCalc("GRC-KPI-015", "days") },
+  { code: "GRC-KPI-016", name: "Policy Review Compliance", unit: "%", target: 95, green: 95, amber: 80, direction: "higher_is_better", calc: calcPolicyReviewCompliance },
 ];
 
 /**
@@ -603,7 +603,7 @@ interface KpiDetail {
 }
 
 const KPI_DETAILS: Record<string, KpiDetail> = {
-  "GRC-KPI-002": {
+  "QM-KPI-015": {
     description:
       "Percentage of the governance/process framework documents completed and published across the 13 business units.",
     methodology:
@@ -671,7 +671,7 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
     plan_ref:
       "Quality ↔ GRC RACI; North Star 'Handoff SLA / Cycle Time' (≤ 5 days).",
   },
-  "GRC-KPI-009": {
+  "GRC-KPI-008": {
     description:
       "Percentage of applicable regulatory obligations mapped to a control or policy.",
     methodology:
@@ -680,7 +680,7 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
       "Shows regulatory obligations (PDPL / ISO 27001 / NCA / PCI) are governed by controls — the audit-readiness foundation.",
     plan_ref: "Quality ↔ GRC RACI (Compliance → GRC = Accountable).",
   },
-  "GRC-KPI-004": {
+  "GRC-KPI-003": {
     description:
       "Percentage of required audit/certification evidence artifacts compiled and approved.",
     methodology:
@@ -690,7 +690,7 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
     plan_ref:
       "North Star 'Audit & Certification Readiness Index' (Q1 90% → Q4 100%).",
   },
-  "GRC-KPI-005": {
+  "GRC-KPI-004": {
     description:
       "Percentage of evidence requests delivered by business units within SLA.",
     methodology:
@@ -699,7 +699,7 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
       "Ensures business units supply audit evidence on time so certifications stay on track.",
     plan_ref: "North Star 'Evidence SLA Compliance' (≥ 90%).",
   },
-  "GRC-KPI-006": {
+  "GRC-KPI-005": {
     description: "Percentage of risk treatments / CAPAs closed.",
     methodology:
       "Treatments with status completed ÷ non-cancelled treatments (source: risk_treatment_actions).",
@@ -707,7 +707,7 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
       "Confirms identified risks are actually treated and closed, with no critical risk left overdue > 30 days.",
     plan_ref: "North Star 'Risk Treatment Closure (CAPA)' (≥ 80%).",
   },
-  "GRC-KPI-007": {
+  "GRC-KPI-006": {
     description:
       "Percentage of third-party (vendor) risk assessments completed within SLA.",
     methodology:
@@ -716,7 +716,7 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
       "Keeps vendor / third-party risk under control within agreed turnaround times.",
     plan_ref: "North Star 'TPRA (Vendor Risk) Turnaround SLA' (≥ 85%).",
   },
-  "GRC-KPI-003": {
+  "GRC-KPI-002": {
     description:
       "Percentage of certification-roadmap milestones delivered on time.",
     methodology:
@@ -725,7 +725,7 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
       "Tracks on-time delivery of ISO 27001 / PDPL / PCI / NCA milestones — the certification roadmap.",
     plan_ref: "North Star 'Certification Milestone Delivery' (≥ 90%).",
   },
-  "GRC-KPI-008": {
+  "GRC-KPI-007": {
     description:
       "Percentage of 2026 obligations closed or formally accepted by year-end.",
     methodology:
@@ -753,7 +753,7 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
  * at the REST path.
  */
 const KPI_ENTRY: Record<string, { where: string; route: string }> = {
-  "GRC-KPI-002": {
+  "QM-KPI-015": {
     where: "QMS → Policies: create & publish governance documents (SOPs, controls), one set per business unit.",
     route: "/policies",
   },
@@ -781,31 +781,31 @@ const KPI_ENTRY: Record<string, { where: string; route: string }> = {
     where: "Generated automatically by the Quality→GRC handoff engine — no manual entry; managed in the GRC module.",
     route: "/grc",
   },
-  "GRC-KPI-009": {
+  "GRC-KPI-008": {
     where: "QMS → Compliance: ensure each applicable obligation has a linked control or policy.",
     route: "/compliance",
   },
-  "GRC-KPI-004": {
+  "GRC-KPI-003": {
     where: "QMS → Audit Readiness: compile evidence packs and mark them reviewed/submitted.",
     route: "/audit-readiness",
   },
-  "GRC-KPI-005": {
+  "GRC-KPI-004": {
     where: "Capture API: POST /api/northstar/evidence_requests — log requests with SLA due + delivered dates (no UI form yet).",
     route: "/leadership-kpis",
   },
-  "GRC-KPI-006": {
+  "GRC-KPI-005": {
     where: "QMS → Risks: add treatment actions to risks and mark them completed when closed.",
     route: "/risks",
   },
-  "GRC-KPI-007": {
+  "GRC-KPI-006": {
     where: "Capture API: POST /api/northstar/tpra_requests — log vendor assessments with SLA due + completed dates (no UI form yet).",
     route: "/leadership-kpis",
   },
-  "GRC-KPI-003": {
+  "GRC-KPI-002": {
     where: "Capture API: POST /api/northstar/certification_milestones — log milestones with planned + delivered dates (no UI form yet).",
     route: "/leadership-kpis",
   },
-  "GRC-KPI-008": {
+  "GRC-KPI-007": {
     where: "QMS → Compliance: record compliance assessments as 'compliant', or mark obligations exempt/accepted.",
     route: "/compliance",
   },
@@ -820,14 +820,14 @@ const KPI_ENTRY: Record<string, { where: string; route: string }> = {
   "QM-KPI-012": { where: "Capture form: Enter KPI Data → metric QM-KPI-012 (numerator = automated, denominator = total workflows).", route: "/leadership-kpis/data" },
   "QM-KPI-013": { where: "Capture form: Enter KPI Data → metric QM-KPI-013 (baseline & current manual hours).", route: "/leadership-kpis/data" },
   "QM-KPI-014": { where: "Capture form: Enter KPI Data → metric QM-KPI-014 (baseline & current rework).", route: "/leadership-kpis/data" },
-  "GRC-KPI-010": { where: "QMS → Risks: ensure each BU has a risk assessment (matched by owner department).", route: "/risks" },
-  "GRC-KPI-011": { where: "QMS → Risks: add a treatment action to every high/critical risk.", route: "/risks" },
-  "GRC-KPI-012": { where: "QMS → Vendors: mark critical vendors and record an assessment for each.", route: "/vendors" },
-  "GRC-KPI-013": { where: "Capture form: Enter KPI Data → metric GRC-KPI-013 (numerator = on-time, denominator = total assessments).", route: "/leadership-kpis/data" },
-  "GRC-KPI-014": { where: "QMS → Vendors: log vendor remediations and close them.", route: "/vendors" },
-  "GRC-KPI-015": { where: "Capture form: Enter KPI Data → metric GRC-KPI-015 (avg days to respond).", route: "/leadership-kpis/data" },
-  "GRC-KPI-016": { where: "Capture form: Enter KPI Data → metric GRC-KPI-016 (avg days to close incidents).", route: "/leadership-kpis/data" },
-  "GRC-KPI-017": { where: "QMS → Policies: keep each policy's review date current (not overdue).", route: "/policies" },
+  "GRC-KPI-009": { where: "QMS → Risks: ensure each BU has a risk assessment (matched by owner department).", route: "/risks" },
+  "GRC-KPI-010": { where: "QMS → Risks: add a treatment action to every high/critical risk.", route: "/risks" },
+  "GRC-KPI-011": { where: "QMS → Vendors: mark critical vendors and record an assessment for each.", route: "/vendors" },
+  "GRC-KPI-012": { where: "Capture form: Enter KPI Data → metric GRC-KPI-012 (numerator = on-time, denominator = total assessments).", route: "/leadership-kpis/data" },
+  "GRC-KPI-013": { where: "QMS → Vendors: log vendor remediations and close them.", route: "/vendors" },
+  "GRC-KPI-014": { where: "Capture form: Enter KPI Data → metric GRC-KPI-014 (avg days to respond).", route: "/leadership-kpis/data" },
+  "GRC-KPI-015": { where: "Capture form: Enter KPI Data → metric GRC-KPI-015 (avg days to close incidents).", route: "/leadership-kpis/data" },
+  "GRC-KPI-016": { where: "QMS → Policies: keep each policy's review date current (not overdue).", route: "/policies" },
 };
 
 export interface KpiDefinitionOut extends KpiDetail {
@@ -880,7 +880,7 @@ const SARA_NORTH_STAR: Record<number, NsQuarter> = {
   1: {
     target: 0.35,
     components: [
-      { code: "GRC-KPI-002", weight: 0.5 },
+      { code: "QM-KPI-015", weight: 0.5 },
       { code: "QM-KPI-002", weight: 0.3 },
       { code: "QM-KPI-004", weight: 0.2 },
     ],
@@ -888,7 +888,7 @@ const SARA_NORTH_STAR: Record<number, NsQuarter> = {
   2: {
     target: 0.65,
     components: [
-      { code: "GRC-KPI-002", weight: 0.35 },
+      { code: "QM-KPI-015", weight: 0.35 },
       { code: "QM-KPI-002", weight: 0.25 },
       { code: "QM-KPI-003", weight: 0.2 },
       { code: "QM-KPI-004", weight: 0.2 },
@@ -897,7 +897,7 @@ const SARA_NORTH_STAR: Record<number, NsQuarter> = {
   3: {
     target: 0.75,
     components: [
-      { code: "GRC-KPI-002", weight: 0.25 },
+      { code: "QM-KPI-015", weight: 0.25 },
       { code: "QM-KPI-002", weight: 0.2 },
       { code: "QM-KPI-003", weight: 0.2 },
       { code: "QM-KPI-004", weight: 0.2 },
@@ -907,7 +907,7 @@ const SARA_NORTH_STAR: Record<number, NsQuarter> = {
   4: {
     target: 0.8,
     components: [
-      { code: "GRC-KPI-002", weight: 0.15 },
+      { code: "QM-KPI-015", weight: 0.15 },
       { code: "QM-KPI-002", weight: 0.15 },
       { code: "QM-KPI-003", weight: 0.15 },
       { code: "QM-KPI-005", weight: 0.15 },
@@ -922,32 +922,32 @@ const MARAM_NORTH_STAR: Record<number, NsQuarter> = {
   1: {
     target: 0.9,
     components: [
-      { code: "GRC-KPI-003", weight: 0.35 },
-      { code: "GRC-KPI-004", weight: 0.25 },
-      { code: "GRC-KPI-005", weight: 0.4 },
+      { code: "GRC-KPI-002", weight: 0.35 },
+      { code: "GRC-KPI-003", weight: 0.25 },
+      { code: "GRC-KPI-004", weight: 0.4 },
     ],
   },
   2: {
     target: 0.85,
     components: [
-      { code: "GRC-KPI-005", weight: 0.35 },
-      { code: "GRC-KPI-004", weight: 0.3 },
-      { code: "GRC-KPI-003", weight: 0.35 },
+      { code: "GRC-KPI-004", weight: 0.35 },
+      { code: "GRC-KPI-003", weight: 0.3 },
+      { code: "GRC-KPI-002", weight: 0.35 },
     ],
   },
   3: {
     target: 0.8,
     components: [
-      { code: "GRC-KPI-006", weight: 0.4 },
-      { code: "GRC-KPI-007", weight: 0.35 },
-      { code: "GRC-KPI-004", weight: 0.25 },
+      { code: "GRC-KPI-005", weight: 0.4 },
+      { code: "GRC-KPI-006", weight: 0.35 },
+      { code: "GRC-KPI-003", weight: 0.25 },
     ],
   },
   4: {
     target: 0.95,
     components: [
-      { code: "GRC-KPI-004", weight: 0.3 },
-      { code: "GRC-KPI-008", weight: 0.4 },
+      { code: "GRC-KPI-003", weight: 0.3 },
+      { code: "GRC-KPI-007", weight: 0.4 },
       { code: "QM-KPI-006", weight: 0.3 },
     ],
   },

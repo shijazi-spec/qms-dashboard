@@ -9,9 +9,9 @@
  *     - QM-KPI-004  QMS Adoption Rate          → qms_adoption
  *     - QM-KPI-007  Op. Excellence Value Real. → value_realization
  *   Maram (GRC):
- *     - GRC-KPI-003 Certification Milestone Delivery → certification_milestones
- *     - GRC-KPI-005  Evidence SLA Compliance         → evidence_requests
- *     - GRC-KPI-007 TPRA Vendor Risk Turnaround SLA → tpra_requests
+ *     - GRC-KPI-002 Certification Milestone Delivery → certification_milestones
+ *     - GRC-KPI-004  Evidence SLA Compliance         → evidence_requests
+ *     - GRC-KPI-006 TPRA Vendor Risk Turnaround SLA → tpra_requests
  *
  * Each calculator returns { value, dataAvailable } and reports
  * dataAvailable:false when its table is EMPTY, so the feed omits the KPI and
@@ -252,7 +252,7 @@ export async function insertSource(
 
 // ── Calculators (each omits when its capture table is empty) ─────────────────
 
-/** GRC-KPI-003 — (milestones delivered on time / planned) × 100. */
+/** GRC-KPI-002 — (milestones delivered on time / planned) × 100. */
 export async function calcCertMilestoneDelivery() {
   const r = await pool.query(`
     SELECT
@@ -273,7 +273,7 @@ export async function calcCertMilestoneDelivery() {
   };
 }
 
-/** GRC-KPI-005 — (evidence delivered within SLA / total requests) × 100. */
+/** GRC-KPI-004 — (evidence delivered within SLA / total requests) × 100. */
 export async function calcEvidenceSlaCompliance() {
   const r = await pool.query(`
     SELECT
@@ -294,7 +294,7 @@ export async function calcEvidenceSlaCompliance() {
   };
 }
 
-/** GRC-KPI-007 — (TPRA completed within SLA / total requests) × 100. */
+/** GRC-KPI-006 — (TPRA completed within SLA / total requests) × 100. */
 export async function calcTpraTurnaround() {
   const r = await pool.query(`
     SELECT

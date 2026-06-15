@@ -41,7 +41,7 @@ const SEED: OkrObjective[] = [
       "Deploy Internal Governance & Process Quality Framework across all BUs",
     owner: "Sara (Quality)",
     key_results: [
-      { kr_code: "Q-KR1", kpi_name: "Process & Quality Framework Completion", kpi_code: "GRC-KPI-002", definition: "Share of planned BU governance frameworks (process/SOP packages) approved and published in QMS.", calculation: "(# Approved Framework Packages ÷ # Planned Framework Packages) × 100", target_text: "100% by Q4", frequency: "Quarterly", data_source: "QMS Governance Library" },
+      { kr_code: "Q-KR1", kpi_name: "QMS Framework Completion", kpi_code: "QM-KPI-015", definition: "Share of planned BU governance frameworks (process/SOP packages) approved and published in QMS.", calculation: "(# Approved Framework Packages ÷ # Planned Framework Packages) × 100", target_text: "100% by Q4", frequency: "Quarterly", data_source: "QMS Governance Library" },
       { kr_code: "Q-KR2", kpi_name: "Governance Training Coverage", kpi_code: "QM-KPI-005", definition: "Coverage of BU staff trained on the governance documents released for their BU.", calculation: "(# Trained Staff ÷ # Target Staff) × 100", target_text: "≥90% by Q4", frequency: "Quarterly", data_source: "LMS / Training Tracker" },
       { kr_code: "Q-KR3", kpi_name: "Governance Adoption Rate", kpi_code: "QM-KPI-004", definition: "Share of audited BUs demonstrating adherence to the latest approved governance documents.", calculation: "(# BUs Passing Adoption Check ÷ # BUs Audited) × 100", target_text: "≥85% by Q4", frequency: "Quarterly", data_source: "Audit Results (QMS)" },
     ],
@@ -87,7 +87,7 @@ const SEED: OkrObjective[] = [
     key_results: [
       { kr_code: "G-KR1", kpi_name: "Risk Assessment Coverage (BUs)", kpi_code: null, definition: "Share of Business Units with completed risk assessment in the year/plan.", calculation: "(# BUs Assessed ÷ # Total BUs) × 100", target_text: "100% by Q4", frequency: "Quarterly", data_source: "Enterprise Risk Register" },
       { kr_code: "G-KR2", kpi_name: "High-Risk Items with Treatment Plan", kpi_code: null, definition: "Share of high/critical risks having an approved mitigation plan and owner.", calculation: "(# High Risks with Plans ÷ # Total High Risks) × 100", target_text: "100% always", frequency: "Monthly", data_source: "Risk Register" },
-      { kr_code: "G-KR3", kpi_name: "Risk Treatment On-Time Closure", kpi_code: "GRC-KPI-006", definition: "Share of mitigation actions closed within due dates.", calculation: "(# Treatments Closed On-Time ÷ # Total Treatments Due) × 100", target_text: "≥85% monthly", frequency: "Monthly", data_source: "Risk Action Tracker (QMS)" },
+      { kr_code: "G-KR3", kpi_name: "Risk Treatment On-Time Closure", kpi_code: "GRC-KPI-005", definition: "Share of mitigation actions closed within due dates.", calculation: "(# Treatments Closed On-Time ÷ # Total Treatments Due) × 100", target_text: "≥85% monthly", frequency: "Monthly", data_source: "Risk Action Tracker (QMS)" },
     ],
   },
   {
@@ -96,9 +96,9 @@ const SEED: OkrObjective[] = [
     objective: "Maintain Continuous Regulatory & Audit Readiness (PDPL, NCA, ISO)",
     owner: "Maram (GRC)",
     key_results: [
-      { kr_code: "G-KR1", kpi_name: "Compliance Coverage Index", kpi_code: "GRC-KPI-009", definition: "Coverage of required controls for applicable regulations/standards.", calculation: "(# Controls Implemented ÷ # Controls Required) × 100", target_text: "≥95% by Q4", frequency: "Quarterly", data_source: "Compliance Matrix" },
-      { kr_code: "G-KR2", kpi_name: "Audit Evidence Readiness", kpi_code: "GRC-KPI-004", definition: "Share of required audit evidence available and up-to-date.", calculation: "(# Evidence Items Ready ÷ # Evidence Items Required) × 100", target_text: "≥95% by audit windows", frequency: "Quarterly", data_source: "Evidence Repository" },
-      { kr_code: "G-KR3", kpi_name: "Certification Milestones On-Track", kpi_code: "GRC-KPI-003", definition: "Delivery of planned certification milestones (surveillance/recert/prep) on schedule.", calculation: "(# Milestones Delivered ÷ # Milestones Planned) × 100", target_text: "100% on-time", frequency: "Quarterly", data_source: "Certification Plan" },
+      { kr_code: "G-KR1", kpi_name: "Compliance Coverage Index", kpi_code: "GRC-KPI-008", definition: "Coverage of required controls for applicable regulations/standards.", calculation: "(# Controls Implemented ÷ # Controls Required) × 100", target_text: "≥95% by Q4", frequency: "Quarterly", data_source: "Compliance Matrix" },
+      { kr_code: "G-KR2", kpi_name: "Audit Evidence Readiness", kpi_code: "GRC-KPI-003", definition: "Share of required audit evidence available and up-to-date.", calculation: "(# Evidence Items Ready ÷ # Evidence Items Required) × 100", target_text: "≥95% by audit windows", frequency: "Quarterly", data_source: "Evidence Repository" },
+      { kr_code: "G-KR3", kpi_name: "Certification Milestones On-Track", kpi_code: "GRC-KPI-002", definition: "Delivery of planned certification milestones (surveillance/recert/prep) on schedule.", calculation: "(# Milestones Delivered ÷ # Milestones Planned) × 100", target_text: "100% on-time", frequency: "Quarterly", data_source: "Certification Plan" },
     ],
   },
   {
@@ -191,14 +191,14 @@ export async function initOkrTables(): Promise<void> {
     ["Q-O4", "Q-KR1", "QM-KPI-012"],
     ["Q-O4", "Q-KR2", "QM-KPI-013"],
     ["Q-O4", "Q-KR3", "QM-KPI-014"],
-    ["G-O1", "G-KR1", "GRC-KPI-010"],
-    ["G-O1", "G-KR2", "GRC-KPI-011"],
-    ["G-O3", "G-KR1", "GRC-KPI-012"],
-    ["G-O3", "G-KR2", "GRC-KPI-013"],
-    ["G-O3", "G-KR3", "GRC-KPI-014"],
-    ["G-O4", "G-KR1", "GRC-KPI-015"],
-    ["G-O4", "G-KR2", "GRC-KPI-016"],
-    ["G-O4", "G-KR3", "GRC-KPI-017"],
+    ["G-O1", "G-KR1", "GRC-KPI-009"],
+    ["G-O1", "G-KR2", "GRC-KPI-010"],
+    ["G-O3", "G-KR1", "GRC-KPI-011"],
+    ["G-O3", "G-KR2", "GRC-KPI-012"],
+    ["G-O3", "G-KR3", "GRC-KPI-013"],
+    ["G-O4", "G-KR1", "GRC-KPI-014"],
+    ["G-O4", "G-KR2", "GRC-KPI-015"],
+    ["G-O4", "G-KR3", "GRC-KPI-016"],
   ];
   for (const [oc, kc, code] of KR_KPI_MAP) {
     await pool.query(

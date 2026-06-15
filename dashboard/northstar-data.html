@@ -46,7 +46,7 @@
     const BU = ["SDR","Sales","Marketplace","Customer Success","WalaOne","Marketing","HR","Finance","IT","Software","Customer Support","GRC","Quality"];
     // schema: field -> {type, label, options?}
     const SOURCES = {
-      certification_milestones: { title: "Certification Milestone Delivery (GRC-KPI-003)", fields: {
+      certification_milestones: { title: "Certification Milestone Delivery (GRC-KPI-002)", fields: {
         certification: { type:"text", label:"Certification (ISO 27001 / PDPL / PCI / NCA)" },
         milestone_name: { type:"text", label:"Milestone name" },
         planned_date: { type:"date", label:"Planned date" },
@@ -55,7 +55,7 @@
         owner: { type:"text", label:"Owner" },
         notes: { type:"text", label:"Notes" },
       }},
-      evidence_requests: { title: "Evidence SLA Compliance (GRC-KPI-005)", fields: {
+      evidence_requests: { title: "Evidence SLA Compliance (GRC-KPI-004)", fields: {
         request_ref: { type:"text", label:"Request reference" },
         business_unit: { type:"select", label:"Business unit", options:BU },
         requested_date: { type:"date", label:"Requested date" },
@@ -64,7 +64,7 @@
         status: { type:"select", label:"Status", options:["open","delivered","late","cancelled"] },
         owner: { type:"text", label:"Owner" },
       }},
-      tpra_requests: { title: "TPRA Vendor Risk SLA (GRC-KPI-007)", fields: {
+      tpra_requests: { title: "TPRA Vendor Risk SLA (GRC-KPI-006)", fields: {
         vendor_name: { type:"text", label:"Vendor name" },
         requested_date: { type:"date", label:"Requested date" },
         sla_due_date: { type:"date", label:"SLA due date" },
@@ -88,7 +88,7 @@
         notes: { type:"text", label:"Notes" },
       }},
       okr_metric_entries: { title: "OKR Capture Metrics — Phase 2 (by code)", fields: {
-        metric_code: { type:"select", label:"Metric code (see OKRs page)", options:["QM-KPI-010","QM-KPI-011","QM-KPI-012","QM-KPI-013","QM-KPI-014","GRC-KPI-013","GRC-KPI-015","GRC-KPI-016"] },
+        metric_code: { type:"select", label:"Metric code (see OKRs page)", options:["QM-KPI-010","QM-KPI-011","QM-KPI-012","QM-KPI-013","QM-KPI-014","GRC-KPI-012","GRC-KPI-014","GRC-KPI-015"] },
         period: { type:"text", label:"Period (e.g. 2026-Q2)" },
         numerator: { type:"number", label:"Numerator — for ratio metrics (e.g. on-time count)" },
         denominator: { type:"number", label:"Denominator — for ratio metrics (e.g. total)" },
