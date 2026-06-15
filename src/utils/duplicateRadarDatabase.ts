@@ -2628,6 +2628,173 @@ export async function markRecordStalePending(
   return (result.rowCount || 0) > 0;
 }
 
+/**
+ * One-shot purge of singleton clusters — `duplicate_clusters` rows with
+ * `status = 'active'` and `total_records ≤ 1`. These are residue from
+ * the engine speculatively creating a cluster for every incoming record's
+ * domain even when no second record ever joined; they're not duplicates,
+ * they bloat the table (~78k extra rows in Sarah's env on 2026-06-15),
+ * and they dilute COUNT() queries. Today's Executive Summary fix already
+ * excludes them from every operator-facing number — this helper is the
+ * underlying data hygiene pass.
+ *
+ * Safety rails:
+ *  - `dryRun` defaults TRUE — caller must pass `false` explicitly to write.
+ *  - Audit + a 20-row sample come back BEFORE the delete so the caller
+ *    can sanity-check what's about to disappear.
+ *  - Refuses if candidateCount > maxDelete (default 100,000). A
+ *    sudden spike past that is almost certainly a bug, not a
+ *    cleanup target.
+ *  - duplicate_records rows whose cluster_id points at one of the
+ *    targets get their cluster_id cleared FIRST (inside the same
+ *    transaction) so a future incremental scan can re-cluster them
+ *    cleanly. Without this they'd FK-orphan or be deleted by cascade,
+ *    depending on the schema.
+ *  - Everything runs inside BEGIN / COMMIT — partial failure rolls
+ *    back the whole thing.
+ *
+ * Returns the full result so the caller can log + surface counts.
+ */
+export interface SingletonCleanupResult {
+  dryRun: boolean;
+  candidateCount: number;
+  sampleRows: Array<{
+    id: number;
+    domain: string | null;
+    company_name: string | null;
+    total_records: number;
+    created_at: string | null;
+  }>;
+  pointedAtByRecordsCount: number;
+  refusedReason: "over-limit" | "no-candidates" | null;
+  cleanedRecordCount: number;
+  deletedClusterCount: number;
+  durationMs: number;
+}
+
+export async function cleanupSingletonClusters(
+  opts: { dryRun?: boolean; maxDelete?: number } = {},
+): Promise<SingletonCleanupResult> {
+  const t0 = Date.now();
+  const dryRun = opts.dryRun !== false;
+  const maxDelete = Math.max(1, opts.maxDelete ?? 100000);
+
+  const countResult = await pool.query(
+    `SELECT COUNT(*)::int AS n
+       FROM duplicate_clusters
+      WHERE status = 'active' AND total_records <= 1`,
+  );
+  const candidateCount = countResult.rows[0]?.n ?? 0;
+
+  if (candidateCount === 0) {
+    return {
+      dryRun,
+      candidateCount: 0,
+      sampleRows: [],
+      pointedAtByRecordsCount: 0,
+      refusedReason: "no-candidates",
+      cleanedRecordCount: 0,
+      deletedClusterCount: 0,
+      durationMs: Date.now() - t0,
+    };
+  }
+
+  const sampleResult = await pool.query(
+    `SELECT id, domain, company_name, total_records, created_at
+       FROM duplicate_clusters
+      WHERE status = 'active' AND total_records <= 1
+      ORDER BY created_at DESC NULLS LAST
+      LIMIT 20`,
+  );
+  const sampleRows = sampleResult.rows.map((r: any) => ({
+    id: Number(r.id),
+    domain: r.domain ?? null,
+    company_name: r.company_name ?? null,
+    total_records: Number(r.total_records) || 0,
+    created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
+  }));
+
+  const pointedResult = await pool.query(
+    `SELECT COUNT(*)::int AS n
+       FROM duplicate_records
+      WHERE cluster_id IN (
+        SELECT id FROM duplicate_clusters
+         WHERE status = 'active' AND total_records <= 1
+      )`,
+  );
+  const pointedAtByRecordsCount = pointedResult.rows[0]?.n ?? 0;
+
+  if (candidateCount > maxDelete) {
+    logger.warn(
+      `🛑 [DuplicateRadar] cleanupSingletonClusters refused: ${candidateCount} candidates > maxDelete ${maxDelete}`,
+    );
+    return {
+      dryRun,
+      candidateCount,
+      sampleRows,
+      pointedAtByRecordsCount,
+      refusedReason: "over-limit",
+      cleanedRecordCount: 0,
+      deletedClusterCount: 0,
+      durationMs: Date.now() - t0,
+    };
+  }
+
+  if (dryRun) {
+    return {
+      dryRun: true,
+      candidateCount,
+      sampleRows,
+      pointedAtByRecordsCount,
+      refusedReason: null,
+      cleanedRecordCount: 0,
+      deletedClusterCount: 0,
+      durationMs: Date.now() - t0,
+    };
+  }
+
+  const client = await pool.connect();
+  let cleanedRecordCount = 0;
+  let deletedClusterCount = 0;
+  try {
+    await client.query("BEGIN");
+    const clearResult = await client.query(
+      `UPDATE duplicate_records
+          SET cluster_id = NULL
+        WHERE cluster_id IN (
+          SELECT id FROM duplicate_clusters
+           WHERE status = 'active' AND total_records <= 1
+        )`,
+    );
+    cleanedRecordCount = clearResult.rowCount || 0;
+    const delResult = await client.query(
+      `DELETE FROM duplicate_clusters
+        WHERE status = 'active' AND total_records <= 1`,
+    );
+    deletedClusterCount = delResult.rowCount || 0;
+    await client.query("COMMIT");
+    logger.info(
+      `🧹 [DuplicateRadar] cleanupSingletonClusters: deleted ${deletedClusterCount} clusters, cleared cluster_id on ${cleanedRecordCount} records`,
+    );
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  return {
+    dryRun: false,
+    candidateCount,
+    sampleRows,
+    pointedAtByRecordsCount,
+    refusedReason: null,
+    cleanedRecordCount,
+    deletedClusterCount,
+    durationMs: Date.now() - t0,
+  };
+}
+
 // A1: Remove records that were stale and not refreshed
 export async function cleanupStaleRecords(): Promise<number> {
   const result = await pool.query(`
