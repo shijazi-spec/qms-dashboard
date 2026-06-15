@@ -143,6 +143,13 @@
                 <span class="inline-block w-2 h-2 rounded-full bg-purple-500"></span>
                 CS Lifecycle
             </button>
+            <!-- Deals Lifecycle sits next to CS Lifecycle so the two pipeline-aging
+                 tabs (Sales side + CS side) are visually grouped. Driven by the
+                 Sales SOP per-stage SLAs (salesStageSlaSpec.ts). -->
+            <button data-on-click="showTab" data-args="[&quot;deal-lifecycle&quot;]" id="tab-deal-lifecycle" data-testid="tab-deal-lifecycle" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Deals Lifecycle — Sales SOP stage aging. Flags deals sitting in Not Attend Meeting / Meeting / On Hold / Proposal / Agreement Sent past the per-stage SOP allowance (§7.2.8, §7.3, §7.3.11, §7.4.2, §7.5.1).">
+                <span class="inline-block w-2 h-2 rounded-full bg-orange-500"></span>
+                Deals Lifecycle
+            </button>
             <button data-on-click="showTab" data-args="[&quot;deal-compliance&quot;]" id="tab-deal-compliance" data-testid="tab-deal-compliance" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1" title="Deal-stage compliance (Sales SOP 7.5): deals in Proposal / Paid / Agreement Signed must carry the required documents (financial offer, contract, VAT, CR, National Address) and mandatory fields.">
                 <span class="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
                 Deal Compliance
@@ -1224,6 +1231,86 @@
           </div><!-- /lg:px-… inner padding wrapper -->
         </div>
 
+        <!-- ═══ DEALS LIFECYCLE TAB — Sales SOP stage aging ═══ -->
+        <div id="content-deal-lifecycle" class="tab-content hidden lg:-mx-8 xl:-mx-16 2xl:-mx-32">
+          <div class="lg:px-8 xl:px-16 2xl:px-32">
+            <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3 text-sm text-orange-900">
+                <strong>Deals Lifecycle — Sales SOP stage aging.</strong> Flags Deals that have been sitting in a Sales-pipeline stage longer than the WalaPlus Sales Management Process allows (SOP §7.2.8 / §7.3 / §7.3.11 / §7.4.2 / §7.5.1). Aging is computed against the deal's Modified_Time as the stage-entry proxy. Terminal stages (Agreement Signed / Paid / Closed Won / Closed Lost) freeze aging — no SLA breach possible.
+            </div>
+
+            <!-- Summary cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-red-500">
+                    <div class="text-xs text-red-600 uppercase">Critical</div>
+                    <div id="dealLifeSumCritical" class="text-2xl font-bold text-red-700">—</div>
+                    <div class="text-[10px] text-gray-500 mt-0.5">Past 1.5× SOP allowance</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-amber-500">
+                    <div class="text-xs text-amber-600 uppercase">Warning</div>
+                    <div id="dealLifeSumWarning" class="text-2xl font-bold text-amber-700">—</div>
+                    <div class="text-[10px] text-gray-500 mt-0.5">Crossed SOP threshold</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-gray-300">
+                    <div class="text-xs text-gray-600 uppercase">Deals scanned</div>
+                    <div id="dealLifeSumDeals" class="text-2xl font-bold text-gray-700">—</div>
+                    <div class="text-[10px] text-gray-500 mt-0.5">Tracked-stage deals only</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-3 border-s-4 border-orange-500">
+                    <div class="text-xs text-orange-700 uppercase">Total violations</div>
+                    <div id="dealLifeSumTotal" class="text-2xl font-bold text-orange-700">—</div>
+                    <div class="text-[10px] text-gray-500 mt-0.5">Critical + Warning</div>
+                </div>
+            </div>
+
+            <!-- SOP reference card -->
+            <details class="bg-white border border-gray-200 rounded-lg p-3 mb-3 text-xs text-gray-700">
+                <summary class="cursor-pointer font-semibold text-gray-900">Sales SOP per-stage SLAs (click to expand)</summary>
+                <div id="dealLifeSpecRows" class="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    <!-- populated by renderDealLifecycle from the spec returned by the API -->
+                </div>
+            </details>
+
+            <!-- Filters -->
+            <div class="flex flex-wrap items-center gap-2 mb-3">
+                <div class="flex items-center gap-1">
+                    <button data-on-click="filterDealLifecycle" data-args="[&quot;all&quot;]" id="dealLifeChip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
+                    <button data-on-click="filterDealLifecycle" data-args="[&quot;critical&quot;]" id="dealLifeChip-critical" class="px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200">Critical</button>
+                    <button data-on-click="filterDealLifecycle" data-args="[&quot;warning&quot;]" id="dealLifeChip-warning" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">Warning</button>
+                </div>
+                <div class="flex items-center gap-1 ms-2">
+                    <label for="dealLifeStageFilter" class="text-xs font-medium text-gray-600">Stage:</label>
+                    <select id="dealLifeStageFilter" data-on-change="onDealLifecycleStageChange" class="text-xs rounded-full border border-gray-300 bg-white px-2 py-1 focus:outline-none focus:ring-1 focus:ring-orange-300">
+                        <option value="">All stages</option>
+                    </select>
+                </div>
+                <div class="flex-1"></div>
+                <button data-on-click="exportDealLifecycle" id="dealLifeExportBtn" data-testid="button-export-deal-lifecycle" title="Download a CSV of the deal-stage-aging violations currently shown." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
+                <button data-on-click="loadDealLifecycle" data-testid="button-refresh-deal-lifecycle" title="Recompute the scan from the latest synced Deal data." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-200 text-orange-900 hover:bg-orange-300 me-2">🔄 Refresh</button>
+                <button data-on-click="openCapaPicker" data-args="[&quot;deal-lifecycle&quot;]" data-testid="button-open-capa-deal-lifecycle" title="Open a corrective-action record (CAPA) on one of the stage-aging breaches." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+            </div>
+
+            <!-- Table -->
+            <div class="bg-white rounded-lg shadow overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">Severity</th>
+                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase">Deal / Account</th>
+                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">Stage</th>
+                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">Owner</th>
+                            <th scope="col" class="px-2 py-2 text-end text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap" title="Aging in the unit the SOP defines for that stage (business days for Not Attend Meeting / Meeting, calendar days otherwise).">Aging</th>
+                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase whitespace-nowrap">SLA / Clause</th>
+                            <th scope="col" class="px-2 py-2 text-start text-[11px] font-medium text-gray-500 uppercase">Suggested action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dealLifecycleTable" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+          </div><!-- /lg:px-… inner padding wrapper -->
+        </div>
+
         <!-- Auto-CAPA KPIs tab content retired 2026-05-30. Manual "Open CAPA"
              buttons on each actionable row now feed the QMS CAPA inbox, where
              Quality investigates and closes the loop. The auto-CAPA cron jobs
@@ -1608,6 +1695,8 @@
                     await refreshCsLifecycleFromZoho({ silent: true });
                 } else if (activeTab === 'cs-overlap') {
                     loadCsOverlap(window._csOverlapFilter || 'all');
+                } else if (activeTab === 'deal-lifecycle') {
+                    loadDealLifecycle();
                 } else if (activeTab === 'account-hints') {
                     loadAccountHints();
                 }
@@ -6857,6 +6946,7 @@
             // them every time is fine — they manage their own state.
             if (tab === 'cs-overlap') loadCsOverlap(window._csOverlapFilter || 'all');
             if (tab === 'cs-lifecycle') loadCsLifecycle(window._csLifecycleFilter || 'all');
+            if (tab === 'deal-lifecycle') loadDealLifecycle();
             if (tab === 'account-hints') loadAccountHints();
             if (tab === 'logs') { loadAgentActivity(); loadManualActions(); }
             if (tab === 'deal-compliance' && !window._loadedTabs.has('deal-compliance')) loadDealCompliance();
@@ -8163,6 +8253,161 @@
                 btn.disabled = false;
                 btn.textContent = original;
             }
+        }
+
+        // ─── Deals Lifecycle (Sales SOP stage aging) ────────────────────────
+        window._dealLifecycleSeverityFilter = 'all';
+        window._dealLifecycleStageFilter = '';
+        window._dealLifecycleData = null;
+
+        function dealLifeSeverityBadge(s) {
+            const map = {
+                critical: 'bg-red-100 text-red-800 border-red-200',
+                warning:  'bg-amber-100 text-amber-800 border-amber-200',
+                info:     'bg-blue-100 text-blue-800 border-blue-200',
+            };
+            const cls = map[s] || 'bg-gray-100 text-gray-800 border-gray-200';
+            return '<span class="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full border ' + cls + '">' + (s || '—').toUpperCase() + '</span>';
+        }
+
+        async function loadDealLifecycle() {
+            const body = document.getElementById('dealLifecycleTable');
+            if (body) body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">Loading…</td></tr>';
+            try {
+                const sevQ = window._dealLifecycleSeverityFilter !== 'all'
+                    ? ('&severity=' + encodeURIComponent(window._dealLifecycleSeverityFilter))
+                    : '';
+                const stageQ = window._dealLifecycleStageFilter
+                    ? ('&stage=' + encodeURIComponent(window._dealLifecycleStageFilter))
+                    : '';
+                const res = await fetch('/api/duplicates/deal-stage-aging?limit=10000' + sevQ + stageQ);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                window._dealLifecycleData = data;
+                renderDealLifecycle(data);
+            } catch (e) {
+                console.error('Deal Lifecycle load failed:', e);
+                if (body) body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-red-600">Failed to load: ' + (e.message || e) + '</td></tr>';
+            }
+        }
+
+        function renderDealLifecycle(data) {
+            const summary = (data && data.summary) || {};
+            const sev = summary.by_severity || {};
+            const totalViolations = (sev.critical || 0) + (sev.warning || 0);
+            const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = (v ?? 0).toLocaleString(); };
+            setText('dealLifeSumCritical', sev.critical || 0);
+            setText('dealLifeSumWarning', sev.warning || 0);
+            setText('dealLifeSumDeals', summary.total_tracked_deals || 0);
+            setText('dealLifeSumTotal', totalViolations);
+
+            // SOP spec card — render only once per data load to avoid flicker
+            const specHost = document.getElementById('dealLifeSpecRows');
+            if (specHost && Array.isArray(data.spec)) {
+                specHost.innerHTML = data.spec.map(s => {
+                    const unitLabel = s.unit === 'business_days' ? 'BD' : 'days';
+                    const range = (s.warnDays != null && s.critDays != null)
+                        ? (s.warnDays + '–' + s.critDays + ' calendar days')
+                        : ('≤ ' + s.sla + ' ' + unitLabel);
+                    return '<div class="bg-gray-50 border border-gray-200 rounded p-2"><div class="font-semibold text-gray-800">' + _esc(s.stage) + '</div><div class="text-gray-600">' + _esc(range) + '</div><div class="text-[10px] text-gray-500 mt-1">Sales SOP §' + _esc(s.clauseRef) + '</div></div>';
+                }).join('');
+            }
+
+            // Populate the stage filter dropdown from the violations actually present
+            const stageSelect = document.getElementById('dealLifeStageFilter');
+            if (stageSelect) {
+                const stages = Array.from(new Set((data.violations || []).map(v => v.stage).filter(Boolean))).sort();
+                const cur = window._dealLifecycleStageFilter || '';
+                stageSelect.innerHTML = '<option value="">All stages</option>' + stages.map(s => '<option value="' + _esc(s) + '"' + (s === cur ? ' selected' : '') + '>' + _esc(s) + '</option>').join('');
+            }
+
+            const body = document.getElementById('dealLifecycleTable');
+            if (!body) return;
+            const rows = data.violations || [];
+            if (rows.length === 0) {
+                body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No stage-aging violations 🎉</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(r => {
+                const v = r.violation || {};
+                const unitLabel = v.unit === 'business_days' ? 'BD' : 'days';
+                const slaLabel = v.unit === 'business_days'
+                    ? (v.sla_units + ' BD')
+                    : (v.sla_units + ' days');
+                const dealCell = (r.deal_name ? '<div class="font-medium text-gray-900">' + _esc(r.deal_name) + '</div>' : '')
+                    + (r.account_name ? '<div class="text-xs text-gray-500">' + _esc(r.account_name) + '</div>' : '');
+                const ownerCell = (r.owner_name ? '<div>' + _esc(r.owner_name) + '</div>' : '<span class="text-gray-400">—</span>')
+                    + (r.owner_email ? '<div class="text-[10px] text-gray-500 font-mono">' + _esc(r.owner_email) + '</div>' : '');
+                const stageCell = '<div class="font-medium text-gray-800">' + _esc(r.stage) + '</div>'
+                    + (r.pipeline ? '<div class="text-[10px] text-gray-500">' + _esc(r.pipeline) + '</div>' : '');
+                return '<tr class="hover:bg-orange-50">'
+                    + '<td class="px-2 py-2 align-top">' + dealLifeSeverityBadge(v.severity) + '</td>'
+                    + '<td class="px-2 py-2 align-top">' + dealCell + '</td>'
+                    + '<td class="px-2 py-2 align-top">' + stageCell + '</td>'
+                    + '<td class="px-2 py-2 align-top text-xs text-gray-700">' + ownerCell + '</td>'
+                    + '<td class="px-2 py-2 align-top text-end font-semibold ' + (v.severity === 'critical' ? 'text-red-700' : v.severity === 'warning' ? 'text-amber-700' : 'text-gray-700') + '">' + (v.aging_units ?? '—') + ' ' + unitLabel + '<div class="text-[10px] font-normal text-gray-500">' + (v.aging_calendar_days ?? '—') + ' calendar d</div></td>'
+                    + '<td class="px-2 py-2 align-top text-xs"><div class="font-mono text-gray-800">≤ ' + _esc(slaLabel) + '</div><div class="text-[10px] text-gray-500">Sales SOP §' + _esc(v.clause_ref) + '</div></td>'
+                    + '<td class="px-2 py-2 align-top text-xs text-gray-700">' + _esc(v.suggested_action || v.message || '') + '</td>'
+                    + '</tr>';
+            }).join('');
+        }
+
+        function filterDealLifecycle(severity) {
+            window._dealLifecycleSeverityFilter = severity || 'all';
+            // Repaint chip highlight
+            ['all','critical','warning'].forEach(k => {
+                const el = document.getElementById('dealLifeChip-' + k);
+                if (!el) return;
+                if (k === window._dealLifecycleSeverityFilter) {
+                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + (k === 'critical' ? 'bg-red-600 text-white' : k === 'warning' ? 'bg-amber-500 text-white' : 'bg-gray-900 text-white');
+                } else {
+                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + (k === 'critical' ? 'bg-red-100 text-red-700 hover:bg-red-200' : k === 'warning' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-gray-200 text-gray-700 hover:bg-gray-300');
+                }
+            });
+            loadDealLifecycle();
+        }
+
+        function onDealLifecycleStageChange(ev) {
+            const v = ev && ev.target ? ev.target.value : '';
+            window._dealLifecycleStageFilter = v || '';
+            loadDealLifecycle();
+        }
+
+        function exportDealLifecycle() {
+            const data = window._dealLifecycleData;
+            if (!data || !Array.isArray(data.violations) || data.violations.length === 0) {
+                alert('Nothing to export — run a scan first or clear filters.');
+                return;
+            }
+            const headers = ['Severity','Stage','Deal','Account','Owner','Owner email','Aging units','Aging unit','Aging calendar days','SLA units','SOP clause','Modified date','Suggested action'];
+            const rows = data.violations.map(r => {
+                const v = r.violation || {};
+                return [
+                    v.severity || '',
+                    r.stage || '',
+                    r.deal_name || '',
+                    r.account_name || '',
+                    r.owner_name || '',
+                    r.owner_email || '',
+                    v.aging_units ?? '',
+                    v.unit || '',
+                    v.aging_calendar_days ?? '',
+                    v.sla_units ?? '',
+                    v.clause_ref || '',
+                    r.modified_date || '',
+                    (v.suggested_action || v.message || '').replace(/\n/g, ' '),
+                ];
+            });
+            const csv = [headers, ...rows].map(r => r.map(cell => {
+                const s = String(cell ?? '');
+                return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+            }).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'deal-lifecycle-violations.csv';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
         }
 
         // ─── CS lifecycle compliance ────────────────────────────────────────

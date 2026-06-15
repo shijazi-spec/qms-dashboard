@@ -6309,4 +6309,149 @@ export async function scanCsLifecycleViolations(opts: {
   };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Deal Stage Aging — scans the Deal corpus for stage-aging SOP violations.
+// Mirrors scanCsLifecycleViolations but applies the Sales SOP per-stage SLA
+// spec from salesStageSlaSpec.ts. Used by:
+//   - GET /api/duplicates/deal-stage-aging
+//   - dealStageAgingStatusTool (Adam)
+//   - twice-daily digest (buildRadarTabStatus)
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface DealStageAgingViolationRow {
+  record_id: number;
+  cluster_id: number | null;
+  zoho_record_id: string | null;
+  deal_name: string | null;
+  account_name: string | null;
+  owner_name: string | null;
+  owner_email: string | null;
+  layout: string | null;
+  pipeline: string | null;
+  stage: string;
+  amount: number | null;
+  created_time: string | null;
+  modified_date: string | null;
+  violation: import("./dealStageAgingCompliance").DealStageAgingViolation;
+}
+
+export interface DealStageAgingScanResult {
+  summary: import("./dealStageAgingCompliance").DealStageAgingSummary;
+  violations: DealStageAgingViolationRow[];
+  duration_ms: number;
+}
+
+export async function scanDealStageAgingViolations(
+  opts: {
+    severity?: "info" | "warning" | "critical";
+    stage?: string;
+    limit?: number;
+  } = {},
+): Promise<DealStageAgingScanResult> {
+  const t0 = Date.now();
+  const limit = Math.max(1, Math.min(opts.limit ?? 10000, 50000));
+
+  const { evaluateDealStageAging, summarizeDealStageAging } = await import(
+    "./dealStageAgingCompliance"
+  );
+
+  const dealRows = await pool.query(
+    `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,
+            r.modified_date, r.raw_data
+       FROM duplicate_records r
+      WHERE r.zoho_module = 'Deals'
+      ORDER BY r.modified_date DESC NULLS LAST
+      LIMIT $1`,
+    [limit],
+  );
+
+  const evaluations: ReturnType<typeof evaluateDealStageAging>[] = [];
+  const violations: DealStageAgingViolationRow[] = [];
+
+  const fmtDate = (d: string | Date | null | undefined): string | null => {
+    if (!d) return null;
+    const s = typeof d === "string" ? d : d.toISOString();
+    return s.slice(0, 10);
+  };
+  const readObjOrStr = (v: any): string | null => {
+    if (v == null) return null;
+    if (typeof v === "string") return v.trim() || null;
+    if (typeof v === "object" && typeof v.name === "string") {
+      return v.name.trim() || null;
+    }
+    return null;
+  };
+
+  for (const row of dealRows.rows) {
+    const raw: any = (row.raw_data as any) ?? {};
+    const stage = readObjOrStr(raw.Stage);
+    const ev = evaluateDealStageAging({
+      stage,
+      modified_date: row.modified_date,
+      created_time: raw.Created_Time ?? null,
+    });
+    evaluations.push(ev);
+    if (!ev.violation) continue;
+    if (opts.severity && ev.violation.severity !== opts.severity) continue;
+    if (
+      opts.stage &&
+      ev.violation.stage.toLowerCase() !== opts.stage.toLowerCase()
+    )
+      continue;
+
+    const owner = raw.Owner ?? null;
+    const ownerName =
+      (owner && typeof owner === "object" && typeof owner.name === "string"
+        ? owner.name.trim() || null
+        : null) ?? null;
+    const ownerEmail =
+      (owner && typeof owner === "object" && typeof owner.email === "string"
+        ? owner.email.trim().toLowerCase() || null
+        : null) ?? null;
+
+    const amountRaw = raw.Amount;
+    const amount =
+      typeof amountRaw === "number"
+        ? amountRaw
+        : typeof amountRaw === "string" && amountRaw.trim() !== ""
+          ? Number.parseFloat(amountRaw)
+          : null;
+
+    violations.push({
+      record_id: row.id,
+      cluster_id: row.cluster_id ?? null,
+      zoho_record_id: row.zoho_record_id ?? null,
+      deal_name: readObjOrStr(raw.Deal_Name),
+      account_name: row.account_name ?? readObjOrStr(raw.Account_Name) ?? null,
+      owner_name: ownerName,
+      owner_email: ownerEmail,
+      layout: readObjOrStr(raw.Layout),
+      pipeline: readObjOrStr(raw.Pipeline),
+      stage: ev.violation.stage,
+      amount: Number.isFinite(amount as number) ? (amount as number) : null,
+      created_time: fmtDate(raw.Created_Time ?? null),
+      modified_date: fmtDate(row.modified_date),
+      violation: ev.violation,
+    });
+  }
+
+  const sevOrder: Record<"info" | "warning" | "critical", number> = {
+    critical: 0,
+    warning: 1,
+    info: 2,
+  };
+  violations.sort((a, b) => {
+    const s =
+      sevOrder[a.violation.severity] - sevOrder[b.violation.severity];
+    if (s !== 0) return s;
+    return (b.violation.aging_calendar_days ?? 0) - (a.violation.aging_calendar_days ?? 0);
+  });
+
+  return {
+    summary: summarizeDealStageAging(evaluations),
+    violations,
+    duration_ms: Date.now() - t0,
+  };
+}
+
 export { pool };
