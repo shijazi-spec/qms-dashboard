@@ -73,9 +73,36 @@ function ragStatus(value: number, cfg: FeedKpiConfig): RagStatus {
   return "red";
 }
 
-/** Leadership-platform-style status wording from our RAG. */
-function statusLabel(s: RagStatus): string {
-  return s === "green" ? "On Track" : s === "amber" ? "At Risk" : "Off Track";
+/**
+ * Leadership-platform status taxonomy (7 states, matching the WalaPlus
+ * Leadership Platform): Not Started, On Track, At Risk, Off Track, Behind,
+ * Completed, Exceeded. ("Not Started" is assigned to KPIs with no data, in the
+ * page/summary layer.) Derived from value vs baseline→target + our RAG.
+ */
+export type LeadershipStatus =
+  | "Not Started"
+  | "On Track"
+  | "At Risk"
+  | "Off Track"
+  | "Behind"
+  | "Completed"
+  | "Exceeded";
+
+function leadershipStatus(
+  value: number,
+  baseline: number,
+  target: number,
+  direction: "higher_is_better" | "lower_is_better",
+  rag: RagStatus,
+): LeadershipStatus {
+  const higher = direction === "higher_is_better";
+  const beyond = higher ? value > target : value < target;
+  const met = higher ? value >= target : value <= target;
+  if (beyond) return "Exceeded";
+  if (met) return "Completed";
+  if (rag === "green") return "On Track";
+  if (rag === "amber") return "At Risk";
+  return progressPct(value, baseline, target) < 50 ? "Behind" : "Off Track";
 }
 
 /**
@@ -1080,7 +1107,7 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
         unit: cfg.unit,
         value,
         status: st,
-        status_label: statusLabel(st),
+        status_label: leadershipStatus(value, baseline, cfg.target, cfg.direction, st),
         baseline,
         progress_pct: progressPct(value, baseline, cfg.target),
         data_available: true,
@@ -1147,7 +1174,7 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
       unit: "%",
       value,
       status,
-      status_label: statusLabel(status),
+      status_label: leadershipStatus(value, 0, targetPct, "higher_is_better", status),
       baseline: 0,
       progress_pct: progressPct(value, 0, targetPct),
       data_available: true,

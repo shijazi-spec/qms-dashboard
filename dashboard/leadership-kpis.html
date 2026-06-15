@@ -30,7 +30,7 @@
     </div>
     <p class="text-gray-500 mb-6">Computed live by the QMS platform from real data. KPIs without data show “awaiting data”. This is the same feed the Leadership Platform pulls.</p>
 
-    <div id="summary" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6"></div>
+    <div id="summary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"></div>
     <div id="generated" class="text-xs text-gray-400 mb-3"></div>
 
     <div class="bg-white rounded-xl shadow overflow-hidden">
@@ -64,20 +64,22 @@
     function render(feed) {
       const live = new Map((feed.kpis || []).map((k) => [k.code, k]));
       const defs = feed.definitions || [];
-      let green = 0, amber = 0, red = 0, awaiting = 0;
+      // Leadership status buckets
+      const tally = { "On Track":0, "Exceeded":0, "Completed":0, "At Risk":0, "Off Track":0, "Behind":0, "Not Started":0 };
       const rows = defs.map((d, i) => {
         const k = live.get(d.code);
         const u = esc(d.unit || "");
-        let statusHtml = '<span class="badge muted">awaiting data</span>';
+        let statusHtml = '<span class="badge muted">Not Started</span>';
         let current = '<span class="text-gray-400">—</span>';
         let progress = '<span class="text-gray-300">—</span>';
         if (k) {
           const cls = k.status || "muted";
-          if (cls === "green") green++; else if (cls === "amber") amber++; else if (cls === "red") red++;
-          statusHtml = `<span class="badge ${cls}">${esc(k.status_label || "")}</span>`;
+          const lbl = k.status_label || "On Track";
+          if (tally[lbl] !== undefined) tally[lbl]++;
+          statusHtml = `<span class="badge ${cls}">${esc(lbl)}</span>`;
           current = `<span class="font-semibold">${k.value}${u}</span>`;
           if (k.progress_pct !== null && k.progress_pct !== undefined) progress = `${k.progress_pct}%`;
-        } else { awaiting++; }
+        } else { tally["Not Started"]++; }
         return `<tr class="border-t">
             <td class="px-4 py-3">${esc(d.name)}</td>
             <td class="px-4 py-3 text-gray-400 font-mono text-xs">${esc(d.code)}</td>
@@ -98,10 +100,13 @@
 
       document.getElementById("summary").innerHTML =
         card("Total KPIs", defs.length, "text-blue-900") +
-        card("Green", green, "text-green-600") +
-        card("Amber", amber, "text-yellow-600") +
-        card("Red", red, "text-red-600") +
-        card("Awaiting data", awaiting, "text-gray-500");
+        card("On Track", tally["On Track"], "text-green-600") +
+        card("Exceeded", tally["Exceeded"], "text-emerald-600") +
+        card("Completed", tally["Completed"], "text-teal-600") +
+        card("At Risk", tally["At Risk"], "text-yellow-600") +
+        card("Off Track", tally["Off Track"], "text-red-600") +
+        card("Behind", tally["Behind"], "text-rose-700") +
+        card("Not Started", tally["Not Started"], "text-gray-500");
       document.getElementById("rows").innerHTML = rows;
       document.getElementById("generated").textContent = "Generated " + (feed.generated_at || "");
     }
