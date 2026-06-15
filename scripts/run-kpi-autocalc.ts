@@ -17,6 +17,59 @@ import {
 import { initKPIChecklistTables } from "../src/utils/kpiChecklistDatabase";
 import { runKPIAutoCalc } from "../src/utils/kpiAutoCalc";
 import { pool as radarPool } from "../src/utils/duplicateRadarDatabase";
+import { analyzeRecordHygiene, DEFAULT_GOVERNANCE_RULES } from "../src/utils/zohoCRM";
+
+/** Surface the ACTUAL field values so the matchers can be calibrated to reality. */
+async function printValueDiagnostics() {
+  const topValues = async (label: string, module: string, field: string) => {
+    try {
+      const r = await radarPool.query(
+        `SELECT coalesce(raw_data->>'${field}','(blank)') AS v, COUNT(*)::int AS n
+           FROM duplicate_records WHERE zoho_module = $1
+           GROUP BY 1 ORDER BY n DESC LIMIT 15`,
+        [module],
+      );
+      console.log(`\n— ${label} (top 15) —`);
+      console.table(r.rows.map((x: any) => ({ Value: x.v, Count: x.n })));
+    } catch (e) {
+      console.log(`\n— ${label}: error ${(e as Error).message}`);
+    }
+  };
+  await topValues("Lead_Status values", "Leads", "Lead_Status");
+  await topValues("Deal Stage values", "Deals", "Stage");
+
+  // Hygiene failure breakdown on a sample, so we see WHY CRM accuracy is ~0%.
+  for (const module of ["Leads", "Deals"] as const) {
+    try {
+      const r = await radarPool.query(
+        `SELECT raw_data FROM duplicate_records WHERE zoho_module = $1 LIMIT 1000`,
+        [module],
+      );
+      const tally: Record<string, number> = {};
+      let clean = 0;
+      for (const row of r.rows) {
+        const issues = analyzeRecordHygiene(
+          { id: "", module, data: row.raw_data || {} } as any,
+          DEFAULT_GOVERNANCE_RULES,
+        );
+        if (issues.length === 0) clean++;
+        for (const is of issues)
+          tally[is.fieldName || is.issueType] =
+            (tally[is.fieldName || is.issueType] || 0) + 1;
+      }
+      const top = Object.entries(tally)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12)
+        .map(([field, count]) => ({ Field: field, Failing: count }));
+      console.log(
+        `\n— ${module} hygiene (sample ${r.rows.length}: ${clean} clean) — top failing fields —`,
+      );
+      console.table(top);
+    } catch (e) {
+      console.log(`\n— ${module} hygiene: error ${(e as Error).message}`);
+    }
+  }
+}
 
 /** Quick data-source diagnostic so empty KPIs are explainable. */
 async function printDiagnostics() {
@@ -119,6 +172,7 @@ async function main() {
   );
 
   await printDiagnostics();
+  await printValueDiagnostics();
   process.exit(0);
 }
 
