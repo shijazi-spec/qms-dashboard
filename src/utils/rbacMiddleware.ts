@@ -924,6 +924,34 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
+  // GRQ KPI feed/OKR/catalog reads — same read audience as KPI reads.
+  {
+    pattern: /^\/api\/kpis\/leadership-feed\/preview$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
+    pattern: /^\/api\/okrs$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
+    pattern: /^\/api\/kpi-catalog$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  // North Star capture-table reads.
+  {
+    pattern: /^\/api\/northstar\/[a-z_]+$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  // North Star capture-table writes — governance write roles.
+  {
+    pattern: /^\/api\/northstar\/[a-z_]+$/,
+    methods: ["POST"],
+    roles: ["admin", "executive", "grc_manager", "head_of_operations_quality", "quality_manager"],
+  },
 
   // Executive reports (MBR/QBR documents) and MBR data feed — governance + executive.
   {
