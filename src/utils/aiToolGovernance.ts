@@ -381,6 +381,42 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     entityType: 'cross_module_status',
     buildPreview: () => 'Cross-Module Overlap status',
   },
+  'account-hints-status': {
+    toolId: 'account-hints-status',
+    label: 'Account Hints status (pending/applied/dismissed)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only counts
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only account-hints counts'],
+    entityType: 'account_hints_status',
+    buildPreview: () => 'Account Hints status',
+  },
+  'deal-compliance-status': {
+    toolId: 'deal-compliance-status',
+    label: 'Deal Compliance status (documents present/missing)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only counts
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only deal-compliance counts'],
+    entityType: 'deal_compliance_status',
+    buildPreview: () => 'Deal Compliance status',
+  },
+  'agent-activity': {
+    toolId: 'agent-activity',
+    label: 'Agent Activity log (autonomous resolution audit trail)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only audit trail
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only agent-activity log'],
+    entityType: 'agent_activity',
+    buildPreview: () => 'Agent Activity log',
+  },
+  'manual-action-audit': {
+    toolId: 'manual-action-audit',
+    label: 'Manual Actions audit (operator merge/resolve actions)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only audit trail
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only manual-action audit'],
+    entityType: 'manual_action_audit',
+    buildPreview: () => 'Manual Actions audit',
+  },
   'owner-accountability': {
     toolId: 'owner-accountability',
     label: 'Owner Accountability (duplicates by owner)',

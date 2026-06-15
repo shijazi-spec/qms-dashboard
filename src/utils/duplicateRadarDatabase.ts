@@ -1069,82 +1069,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   //   B) 'module_resolved' actions (ONE module merged inside a still-open
   //      cross-module cluster) → credit ONLY the module of that action's
   //      primary record, NOT every record_type in the cluster.
-  await pool
-    .query(
-      `INSERT INTO duplicate_resolution_ledger
-         (module, master_zoho_id, action_type, performed_by, notes, resolved_at)
-       SELECT DISTINCT ON (dr.cluster_id, mod.module)
-         mod.module,
-         dr.zoho_record_id,
-         'resolve',
-         dc.resolved_by,
-         'backfilled from whole-cluster resolve',
-         COALESCE(dc.resolved_at, NOW())
-       FROM duplicate_clusters dc
-       JOIN duplicate_records dr ON dr.cluster_id = dc.id
-       JOIN LATERAL (
-         SELECT CASE dr.record_type
-                  WHEN 'lead' THEN 'Leads'
-                  WHEN 'deal' THEN 'Deals'
-                  WHEN 'contact' THEN 'Contacts'
-                  WHEN 'account' THEN 'Accounts'
-                END AS module
-       ) mod ON true
-       WHERE (
-               dc.status = 'resolved'
-               OR EXISTS (
-                 SELECT 1 FROM duplicate_merge_actions ma
-                  WHERE ma.cluster_id = dc.id AND ma.action_type = 'resolve'
-               )
-             )
-         AND dr.record_type IN ('lead','deal','contact','account')
-         AND dr.zoho_record_id IS NOT NULL
-       ORDER BY dr.cluster_id, mod.module, dr.is_primary DESC, dr.id ASC
-       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
-    )
-    .catch((e) => {
-      logger.warn("[DuplicateRadar] resolution-ledger resolve-backfill skipped (non-fatal)", {
-        error: e instanceof Error ? e.message : String(e),
-      });
-    });
-  await pool
-    .query(
-      `INSERT INTO duplicate_resolution_ledger
-         (module, master_zoho_id, action_type, performed_by, notes, resolved_at)
-       SELECT DISTINCT ON (ma.cluster_id, mod.module)
-         mod.module,
-         pr.zoho_record_id,
-         'module_resolved',
-         ma.performed_by,
-         'backfilled from module_resolved action',
-         COALESCE(ma.created_at, NOW())
-       FROM duplicate_merge_actions ma
-       JOIN duplicate_records pr ON pr.id = ma.primary_record_id
-       JOIN duplicate_clusters dc ON dc.id = ma.cluster_id
-       JOIN LATERAL (
-         SELECT CASE pr.record_type
-                  WHEN 'lead' THEN 'Leads'
-                  WHEN 'deal' THEN 'Deals'
-                  WHEN 'contact' THEN 'Contacts'
-                  WHEN 'account' THEN 'Accounts'
-                END AS module
-       ) mod ON true
-       WHERE ma.action_type = 'module_resolved'
-         AND dc.status <> 'resolved'
-         AND NOT EXISTS (
-           SELECT 1 FROM duplicate_merge_actions r2
-            WHERE r2.cluster_id = ma.cluster_id AND r2.action_type = 'resolve'
-         )
-         AND pr.record_type IN ('lead','deal','contact','account')
-         AND pr.zoho_record_id IS NOT NULL
-       ORDER BY ma.cluster_id, mod.module, ma.created_at DESC
-       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
-    )
-    .catch((e) => {
-      logger.warn("[DuplicateRadar] resolution-ledger module-backfill skipped (non-fatal)", {
-        error: e instanceof Error ? e.message : String(e),
-      });
-    });
+  await backfillResolutionLedger();
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_detection_logs (
@@ -1668,12 +1593,149 @@ export async function getClusterCount(filters?: {
   return parseInt(result.rows[0]?.total) || 0;
 }
 
+/**
+ * Snapshot the current "solved" state (status='resolved' / 'resolve' &
+ * 'module_resolved' merge actions) into the durable duplicate_resolution_ledger,
+ * keyed by the survivor's stable Zoho id. Idempotent (ON CONFLICT DO NOTHING).
+ *
+ * MUST run at boot AND immediately before any Rebuild truncate — a Rebuild
+ * CASCADE-deletes merge_actions and resets cluster status, so progress only
+ * survives if it's been written to the ledger first. Skipping this is exactly
+ * why the per-module "solved" counts collapsed to 0 after a rebuild.
+ */
+export async function backfillResolutionLedger(): Promise<void> {
+  await pool
+    .query(
+      `INSERT INTO duplicate_resolution_ledger
+         (module, master_zoho_id, action_type, performed_by, notes, resolved_at)
+       SELECT DISTINCT ON (dr.cluster_id, mod.module)
+         mod.module,
+         dr.zoho_record_id,
+         'resolve',
+         dc.resolved_by,
+         'backfilled from whole-cluster resolve',
+         COALESCE(dc.resolved_at, NOW())
+       FROM duplicate_clusters dc
+       JOIN duplicate_records dr ON dr.cluster_id = dc.id
+       JOIN LATERAL (
+         SELECT CASE dr.record_type
+                  WHEN 'lead' THEN 'Leads'
+                  WHEN 'deal' THEN 'Deals'
+                  WHEN 'contact' THEN 'Contacts'
+                  WHEN 'account' THEN 'Accounts'
+                END AS module
+       ) mod ON true
+       WHERE (
+               dc.status = 'resolved'
+               OR EXISTS (
+                 SELECT 1 FROM duplicate_merge_actions ma
+                  WHERE ma.cluster_id = dc.id AND ma.action_type = 'resolve'
+               )
+             )
+         AND dr.record_type IN ('lead','deal','contact','account')
+         AND dr.zoho_record_id IS NOT NULL
+       ORDER BY dr.cluster_id, mod.module, dr.is_primary DESC, dr.id ASC
+       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
+    )
+    .catch((e) => {
+      logger.warn("[DuplicateRadar] resolution-ledger resolve-backfill skipped (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    });
+  await pool
+    .query(
+      `INSERT INTO duplicate_resolution_ledger
+         (module, master_zoho_id, action_type, performed_by, notes, resolved_at)
+       SELECT DISTINCT ON (ma.cluster_id, mod.module)
+         mod.module,
+         pr.zoho_record_id,
+         'module_resolved',
+         ma.performed_by,
+         'backfilled from module_resolved action',
+         COALESCE(ma.created_at, NOW())
+       FROM duplicate_merge_actions ma
+       JOIN duplicate_records pr ON pr.id = ma.primary_record_id
+       JOIN duplicate_clusters dc ON dc.id = ma.cluster_id
+       JOIN LATERAL (
+         SELECT CASE pr.record_type
+                  WHEN 'lead' THEN 'Leads'
+                  WHEN 'deal' THEN 'Deals'
+                  WHEN 'contact' THEN 'Contacts'
+                  WHEN 'account' THEN 'Accounts'
+                END AS module
+       ) mod ON true
+       WHERE ma.action_type = 'module_resolved'
+         AND dc.status <> 'resolved'
+         AND NOT EXISTS (
+           SELECT 1 FROM duplicate_merge_actions r2
+            WHERE r2.cluster_id = ma.cluster_id AND r2.action_type = 'resolve'
+         )
+         AND pr.record_type IN ('lead','deal','contact','account')
+         AND pr.zoho_record_id IS NOT NULL
+       ORDER BY ma.cluster_id, mod.module, ma.created_at DESC
+       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
+    )
+    .catch((e) => {
+      logger.warn("[DuplicateRadar] resolution-ledger module-backfill skipped (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    });
+
+  // THIRD source — the append-only apply log (duplicate_resolution_feedback).
+  // Its cluster_id has NO foreign key, so it SURVIVES a Rebuild's TRUNCATE
+  // CASCADE (unlike status + merge_actions). Seeding from it RECOVERS solved
+  // progress that a prior rebuild wiped before this ledger captured it (the
+  // "0 solved after rebuild" Sarah hit), keyed by the survivor's stable Zoho id.
+  // Excludes applies that were later UNDONE (undo removes the tags + reopens).
+  await pool
+    .query(
+      `INSERT INTO duplicate_resolution_ledger
+         (module, master_zoho_id, action_type, performed_by, notes, resolved_at)
+       SELECT DISTINCT ON (mm.module, mm.master)
+         mm.module,
+         mm.master,
+         'resolve',
+         f.performed_by,
+         'backfilled from apply feedback log',
+         COALESCE(f.created_at, NOW())
+       FROM duplicate_resolution_feedback f
+       JOIN LATERAL (
+         SELECT f.plan_json->>'module' AS module,
+                COALESCE(f.chosen_master_zoho_id, f.proposed_master_zoho_id) AS master
+       ) mm ON true
+       WHERE f.event_type = 'applied'
+         AND COALESCE(f.performed_by, '') NOT ILIKE 'UNDO%'
+         AND mm.module IN ('Leads','Deals','Contacts','Accounts')
+         AND mm.master IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM duplicate_resolution_feedback u
+            WHERE u.cluster_id = f.cluster_id
+              AND COALESCE(u.performed_by, '') ILIKE 'UNDO%'
+              AND u.created_at > f.created_at
+         )
+       ORDER BY mm.module, mm.master, f.created_at DESC
+       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
+    )
+    .catch((e) => {
+      logger.warn("[DuplicateRadar] resolution-ledger feedback-backfill skipped (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    });
+}
+
 // Hard reset for the "Rebuild Clusters" admin action.
 // Wipes all clusters + records so the next scan starts from a clean slate.
 export async function truncateAllDuplicateData(): Promise<void> {
   logger.info(
     "🧨 [DuplicateRadar] Truncating all duplicate data for rebuild...",
   );
+  // CRITICAL: snapshot solved-state into the durable ledger BEFORE truncating.
+  // The TRUNCATE ... CASCADE below deletes duplicate_merge_actions and resets
+  // every cluster's status, so without this the per-module "solved" scoreboard
+  // collapses to 0 on every rebuild (the bug Sarah hit). The ledger survives the
+  // truncate and re-credits "solved" to whatever cluster each survivor lands in
+  // after the rescan.
+  await backfillResolutionLedger();
   await pool.query(
     "TRUNCATE duplicate_records, duplicate_clusters RESTART IDENTITY CASCADE",
   );
