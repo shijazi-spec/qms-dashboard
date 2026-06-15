@@ -48,6 +48,7 @@
                     <option value="" data-i18n="kpis.all_owners">All Owners</option>
                     <option value="quality_manager">Sarah (Quality Manager)</option>
                     <option value="grc_manager">Maram (GRC Manager)</option>
+                    <option value="grq_specialist">AlHanouf (GRQ Specialist)</option>
                     <option value="sdr_team">SDR Team</option>
                     <option value="sales_team">Sales Team</option>
                     <option value="shared" data-i18n="kpis.o_shared_kpis">Shared KPIs</option>
@@ -155,10 +156,12 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="kpis.f_owner">Owner</label>
                         <select id="kpiOwnerType" required class="w-full border rounded px-3 py-2">
-                            <option value="quality_manager" data-i18n="kpis.o_quality_manager">Sara (Quality Manager)</option>
-                            <option value="grc_manager" data-i18n="kpis.o_grc_manager">Maram (GRC Manager)</option>
+                            <option value="quality_manager">Sarah (Quality Manager)</option>
+                            <option value="grc_manager">Maram (GRC Manager)</option>
+                            <option value="grq_specialist">AlHanouf (GRQ Specialist)</option>
                             <option value="sdr_team">SDR Team</option>
-                            <option value="shared" data-i18n="kpis.o_shared">Shared</option>
+                            <option value="sales_team">Sales Team</option>
+                            <option value="shared">Shared</option>
                         </select>
                     </div>
                     <div>
@@ -284,6 +287,8 @@
             switch (owner) {
                 case 'quality_manager':    return 'Sarah';
                 case 'grc_manager':        return 'Maram';
+                case 'grq_specialist':     return 'AlHanouf';
+                case 'governance_officer': return 'AlHanouf';
                 case 'sdr_team':           return 'SDR Team';
                 case 'sales_team':         return 'Sales Team';
                 case 'shared':             return 'Shared';
@@ -294,12 +299,23 @@
             switch (owner) {
                 case 'quality_manager':    return 'Sarah (Quality Manager)';
                 case 'grc_manager':        return 'Maram (GRC Manager)';
+                case 'grq_specialist':     return 'AlHanouf (GRQ Specialist)';
+                case 'governance_officer': return 'AlHanouf (GRQ Specialist)';
                 case 'sdr_team':           return 'SDR Team';
                 case 'sales_team':         return 'Sales Team';
                 case 'shared':             return 'Shared';
             }
             return owner;
         }
+        // Owner options for the inline "Reassign to…" control (detail modal).
+        const _KPI_OWNER_OPTIONS = [
+            ['quality_manager', 'Sarah (Quality Manager)'],
+            ['grc_manager', 'Maram (GRC Manager)'],
+            ['grq_specialist', 'AlHanouf (GRQ Specialist)'],
+            ['sdr_team', 'SDR Team'],
+            ['sales_team', 'Sales Team'],
+            ['shared', 'Shared'],
+        ];
         function _kpiCalcModeBadge(mode) {
             switch (mode) {
                 case 'auto':      return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium" title="Calculated automatically from platform data">⚙️ Auto</span>';
@@ -365,10 +381,10 @@
             charts.owner = new Chart(document.getElementById('ownerChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: ['Sarah (Quality)', 'Maram (GRC)', 'SDR Team', 'Sales Team', 'Shared'],
+                    labels: ['Sarah (Quality)', 'Maram (GRC)', 'AlHanouf (Specialist)', 'SDR Team', 'Sales Team', 'Shared'],
                     datasets: [{
-                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.sdr_team || 0, data.byOwner?.sales_team || 0, data.byOwner?.shared || 0],
-                        backgroundColor: ['#1E3A8A', '#1E293B', '#0891B2', '#0E7490', '#6D28D9']
+                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.grq_specialist || 0, data.byOwner?.sdr_team || 0, data.byOwner?.sales_team || 0, data.byOwner?.shared || 0],
+                        backgroundColor: ['#1E3A8A', '#1E293B', '#7C3AED', '#0891B2', '#0E7490', '#6D28D9']
                     }]
                 },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
@@ -562,10 +578,18 @@
                             </figure>
                         ` : '<p class="text-gray-500 text-sm">' + WalaPlusI18n.t('dyn.kpis.no_history') + '</p>'}
                     </div>
-                    <div class="mt-6 flex justify-end gap-2">
-                        ${kpi.calc_mode === 'checklist' ? `<button data-on-click="openChecklistModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm">📋 Manage Checklist</button>` : ''}
-                        <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">${WalaPlusI18n.t('dyn.kpis.record_value_btn')}</button>
-                        <button data-on-click="editKPI" data-args="[${kpi.id}]" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">${WalaPlusI18n.t('dyn.kpis.edit_kpi_btn')}</button>
+                    <div class="mt-6 flex flex-wrap justify-between items-center gap-2">
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm text-gray-600">Owner:</label>
+                            <select data-on-change="reassignOwner" data-args="[${kpi.id}, &quot;@this.value&quot;]" class="border rounded px-2 py-1.5 text-sm">
+                                ${_KPI_OWNER_OPTIONS.map(([val, lbl]) => `<option value="${val}" ${kpi.owner_type === val ? 'selected' : ''}>${lbl}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="flex gap-2">
+                            ${kpi.calc_mode === 'checklist' ? `<button data-on-click="openChecklistModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm">📋 Manage Checklist</button>` : ''}
+                            <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">${WalaPlusI18n.t('dyn.kpis.record_value_btn')}</button>
+                            <button data-on-click="editKPI" data-args="[${kpi.id}]" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">${WalaPlusI18n.t('dyn.kpis.edit_kpi_btn')}</button>
+                        </div>
                     </div>
                 `;
                 
@@ -720,6 +744,28 @@
                 }
             } catch (error) {
                 console.error('Error recording value:', error);
+            }
+        }
+
+        // Quick owner reassignment from the detail modal — change owner_type and
+        // the server derives the matching owner_name. Any KPI → any team member.
+        async function reassignOwner(kpiId, ownerType) {
+            try {
+                const res = await fetch(`/api/kpis/${kpiId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ owner_type: ownerType })
+                });
+                if (res.ok) {
+                    closeDetailModal();
+                    await loadKPIs();
+                } else {
+                    const d = await res.json().catch(() => ({}));
+                    alert(d.error || 'Failed to reassign KPI owner.');
+                }
+            } catch (e) {
+                console.error('Reassign owner error:', e);
+                alert('Failed to reassign KPI owner.');
             }
         }
 

@@ -24,6 +24,7 @@ export interface KPIDefinition {
     | "quality_manager"
     | "grc_manager"
     | "governance_officer"
+    | "grq_specialist"
     | "sdr_team"
     | "sales_team"
     | "shared";
@@ -201,7 +202,7 @@ export async function initKPITables(): Promise<void> {
     DO $$ BEGIN
       ALTER TABLE kpi_definitions DROP CONSTRAINT IF EXISTS kpi_definitions_owner_type_check;
       ALTER TABLE kpi_definitions ADD CONSTRAINT kpi_definitions_owner_type_check
-        CHECK (owner_type IN ('quality_manager', 'grc_manager', 'governance_officer', 'shared', 'sdr_team', 'sales_team'));
+        CHECK (owner_type IN ('quality_manager', 'grc_manager', 'governance_officer', 'grq_specialist', 'shared', 'sdr_team', 'sales_team'));
     EXCEPTION WHEN others THEN NULL;
     END $$;
   `);
@@ -228,6 +229,9 @@ export async function initKPITables(): Promise<void> {
 
   // Seed the agreed GRQ scorecard KPIs onto the KPI Engine (first /kpis page).
   await seedGrqScorecardKPIs();
+
+  // Leftover pre-Excel KPIs (Mohammed's 6 + 3 Shared) → AlHanouf (GRQ Specialist).
+  await assignLeftoverKPIsToSpecialist();
 
   // SDR + Sales KPIs are derived from the platform's own process data. Each has
   // its own existence guard, so calling them independently (seedDefaultKPIs
@@ -1039,6 +1043,50 @@ export async function deactivateStaleLegacyKPIs(): Promise<void> {
   }
 }
 
+/** Canonical display name per owner_type — used so a reassignment also sets owner_name. */
+export const OWNER_NAME_BY_TYPE: Record<string, string> = {
+  quality_manager: "Sarah",
+  grc_manager: "Maram",
+  grq_specialist: "AlHanouf",
+  sdr_team: "SDR Team",
+  sales_team: "Sales Team",
+  shared: "Shared",
+  governance_officer: "AlHanouf",
+};
+
+/**
+ * Per Sarah (2026-06-15): the leftover pre-Excel KPIs that aren't in the canonical
+ * owner list — Mohammed's reassigned set (MAM-KPI-01..06) and the 3 Shared KPIs —
+ * go to **AlHanouf (GRQ Specialist)** rather than being deactivated. Idempotent
+ * (re-running just re-sets the same owner). They stay ACTIVE under the new owner.
+ */
+const SPECIALIST_REASSIGN_KPI_CODES = [
+  "MAM-KPI-01",
+  "MAM-KPI-02",
+  "MAM-KPI-03",
+  "MAM-KPI-04",
+  "MAM-KPI-05",
+  "MAM-KPI-06",
+  "SHR-GOV-001",
+  "SHR-AI-001",
+  "SHR-INT-001",
+];
+
+export async function assignLeftoverKPIsToSpecialist(): Promise<void> {
+  const res = await pool.query(
+    `UPDATE kpi_definitions
+        SET owner_type = 'grq_specialist', owner_name = 'AlHanouf', updated_at = NOW()
+      WHERE kpi_code = ANY($1)
+        AND (owner_type <> 'grq_specialist' OR owner_name IS DISTINCT FROM 'AlHanouf')`,
+    [SPECIALIST_REASSIGN_KPI_CODES],
+  );
+  if (res.rowCount && res.rowCount > 0) {
+    logger.info(
+      `👤 [KPIDB] Assigned ${res.rowCount} leftover KPIs (Mohammed's + Shared) to AlHanouf (GRQ Specialist)`,
+    );
+  }
+}
+
 /**
  * Seed the agreed GRQ scorecard KPIs (Quality + GRC) into the KPI Engine so
  * they appear on the first KPI page (/kpis). These are the same KPIs the
@@ -1637,6 +1685,18 @@ export async function updateKPIDefinition(
     }
   }
 
+  // When the owner_type is reassigned without an explicit owner_name, derive the
+  // canonical display name so the new owner shows correctly everywhere.
+  if (
+    kpi.owner_type !== undefined &&
+    kpi.owner_name === undefined &&
+    OWNER_NAME_BY_TYPE[kpi.owner_type]
+  ) {
+    fields.push(`owner_name = $${paramCount}`);
+    values.push(OWNER_NAME_BY_TYPE[kpi.owner_type]);
+    paramCount++;
+  }
+
   if (fields.length === 0) return null;
 
   fields.push(`updated_at = NOW()`);
@@ -1742,7 +1802,7 @@ export async function getKPIDashboardSummary(): Promise<any> {
   const kpis = await getAllKPIDefinitions();
   const summary: any = {
     total: kpis.length,
-    byOwner: { quality_manager: 0, grc_manager: 0, sdr_team: 0, sales_team: 0, shared: 0 },
+    byOwner: { quality_manager: 0, grc_manager: 0, grq_specialist: 0, sdr_team: 0, sales_team: 0, shared: 0 },
     byStatus: { green: 0, amber: 0, red: 0, no_data: 0 },
     byCategory: {},
     kpiDetails: [],
