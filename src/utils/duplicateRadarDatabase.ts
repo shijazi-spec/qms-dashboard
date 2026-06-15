@@ -4591,6 +4591,292 @@ export async function getLastScanDate(): Promise<Date | null> {
   return result.rows[0]?.completed_at || null;
 }
 
+/**
+ * Lightweight per-tab snapshot for the Executive Summary "at-a-glance"
+ * scorecard. Fans out across every Duplicate Radar tab in parallel and
+ * returns ONLY the headline figures (no row arrays) so the response
+ * stays fast and small.
+ *
+ * Each tab returns its own `verdict` field — green / amber / red /
+ * neutral — so the UI can colour the tile without re-deriving the
+ * logic. The verdict thresholds match the same rules each tab uses
+ * internally.
+ *
+ * Errors in any single tab are swallowed and returned as
+ * `error: <message>` on that tab's slot so a slow Zoho dependency or
+ * missing optional table never bricks the whole exec view.
+ */
+export interface RadarTabSnapshot {
+  verdict: "green" | "amber" | "red" | "neutral";
+  headline: string;
+  metrics: Record<string, number | string>;
+  error?: string;
+}
+export interface DuplicateRadarOverview {
+  generatedAt: string;
+  tabs: {
+    crossModule: RadarTabSnapshot;
+    csOverlap: RadarTabSnapshot;
+    csLifecycle: RadarTabSnapshot;
+    dealsLifecycle: RadarTabSnapshot;
+    dealCompliance: RadarTabSnapshot;
+    accountHints: RadarTabSnapshot;
+    ownerAccountability: RadarTabSnapshot;
+    logs: RadarTabSnapshot;
+  };
+}
+
+async function _safeSnapshot(
+  loader: () => Promise<RadarTabSnapshot>,
+): Promise<RadarTabSnapshot> {
+  try {
+    return await loader();
+  } catch (e: any) {
+    return {
+      verdict: "neutral",
+      headline: "Snapshot unavailable",
+      metrics: {},
+      error: e?.message || String(e),
+    };
+  }
+}
+
+export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOverview> {
+  const generatedAt = new Date().toISOString();
+
+  const [
+    crossModule,
+    csOverlap,
+    csLifecycle,
+    dealsLifecycle,
+    dealCompliance,
+    accountHints,
+    ownerAccountability,
+    logs,
+  ] = await Promise.all([
+    _safeSnapshot(async () => {
+      const r = await pool.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE cross_module_status = 'active')::int   AS open_count,
+           COUNT(*) FILTER (WHERE cross_module_status = 'resolved')::int AS handled_count,
+           COUNT(*) FILTER (WHERE cross_module_status = 'ignored')::int  AS dismissed_count,
+           COALESCE(SUM(estimated_pipeline_value)
+             FILTER (WHERE cross_module_status = 'active'), 0)::float    AS arr_sar
+         FROM duplicate_clusters
+         WHERE cross_module_status IS NOT NULL`,
+      );
+      const row = r.rows[0] || {};
+      const open = Number(row.open_count || 0);
+      const handled = Number(row.handled_count || 0);
+      const dismissed = Number(row.dismissed_count || 0);
+      const arr = Math.round(Number(row.arr_sar || 0));
+      const verdict: RadarTabSnapshot["verdict"] =
+        open === 0 ? "green" : open > 50 ? "red" : "amber";
+      return {
+        verdict,
+        headline: open + " open overlap(s), SAR " + arr.toLocaleString() + " exposure",
+        metrics: { open, handled, dismissed, arrExposureSar: arr },
+      };
+    }),
+
+    _safeSnapshot(async () => {
+      const v = await getCsOverlapVerdictCounts();
+      const verdict: RadarTabSnapshot["verdict"] =
+        v.block > 0 ? "red" : v.review > 0 || v.warn > 0 ? "amber" : "green";
+      return {
+        verdict,
+        headline:
+          v.block + " block / " + v.review + " review / " + v.warn + " warn",
+        metrics: { block: v.block, review: v.review, warn: v.warn, total: v.total },
+      };
+    }),
+
+    _safeSnapshot(async () => {
+      const r = await scanCsLifecycleViolations({ limit: 50000 });
+      const s = r.summary;
+      const critical = s.by_severity.critical || 0;
+      const warning = s.by_severity.warning || 0;
+      const inRenewal = s.by_phase?.renewal || 0;
+      const verdict: RadarTabSnapshot["verdict"] =
+        critical > 0 ? "red" : warning > 0 ? "amber" : "green";
+      return {
+        verdict,
+        headline:
+          critical +
+          " critical / " +
+          warning +
+          " warning · " +
+          s.total_cs_deals +
+          " CS deals",
+        metrics: {
+          critical,
+          warning,
+          info: s.by_severity.info || 0,
+          totalCsDeals: s.total_cs_deals,
+          inRenewal,
+        },
+      };
+    }),
+
+    _safeSnapshot(async () => {
+      const { scanDealStageAgingViolations } = await import(
+        "./duplicateRadarDatabase"
+      );
+      const r = await scanDealStageAgingViolations({ limit: 50000 });
+      const s = r.summary;
+      const critical = s.by_severity.critical || 0;
+      const warning = s.by_severity.warning || 0;
+      const verdict: RadarTabSnapshot["verdict"] =
+        critical > 0 ? "red" : warning > 0 ? "amber" : "green";
+      return {
+        verdict,
+        headline:
+          critical +
+          " critical / " +
+          warning +
+          " warning · " +
+          s.total_tracked_deals +
+          " Sales-stage deals",
+        metrics: {
+          critical,
+          warning,
+          totalTrackedDeals: s.total_tracked_deals,
+        },
+      };
+    }),
+
+    _safeSnapshot(async () => {
+      const r = await pool.query(
+        `SELECT
+           COUNT(*)::int                                                            AS checked,
+           COUNT(*) FILTER (WHERE COALESCE((result->>'compliant')::boolean,false))::int AS compliant
+         FROM deal_doc_compliance`,
+      );
+      const row = r.rows[0] || {};
+      const checked = Number(row.checked || 0);
+      const compliant = Number(row.compliant || 0);
+      const missing = checked - compliant;
+      const verdict: RadarTabSnapshot["verdict"] =
+        checked === 0
+          ? "neutral"
+          : missing === 0
+            ? "green"
+            : missing > checked / 2
+              ? "red"
+              : "amber";
+      return {
+        verdict,
+        headline:
+          checked > 0
+            ? compliant + " / " + checked + " deals fully documented"
+            : "No documents checked yet",
+        metrics: { checked, compliant, missing },
+      };
+    }),
+
+    _safeSnapshot(async () => {
+      const r = await pool.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE status = 'pending')::int                                                    AS pending,
+           COUNT(*) FILTER (WHERE status = 'pending' AND confidence >= 70)::int                               AS ready,
+           COUNT(*) FILTER (WHERE status = 'applied')::int                                                    AS applied,
+           COUNT(*) FILTER (WHERE status = 'dismissed')::int                                                  AS dismissed
+         FROM account_inference_hints`,
+      );
+      const row = r.rows[0] || {};
+      const pending = Number(row.pending || 0);
+      const ready = Number(row.ready || 0);
+      const applied = Number(row.applied || 0);
+      const dismissed = Number(row.dismissed || 0);
+      const verdict: RadarTabSnapshot["verdict"] =
+        pending === 0
+          ? "green"
+          : ready > 0
+            ? "amber"
+            : pending > 100
+              ? "red"
+              : "amber";
+      return {
+        verdict,
+        headline:
+          pending +
+          " pending (" +
+          ready +
+          " AI-ready ≥70%) · " +
+          applied +
+          " applied · " +
+          dismissed +
+          " dismissed",
+        metrics: { pending, ready, applied, dismissed },
+      };
+    }),
+
+    _safeSnapshot(async () => {
+      const owners = await getOwnerAccountability();
+      const inRed = owners.filter((o) => o.rag_status === "red").length;
+      const inAmber = owners.filter((o) => o.rag_status === "amber").length;
+      const worst = owners[0];
+      const verdict: RadarTabSnapshot["verdict"] =
+        inRed > 0 ? "red" : inAmber > 0 ? "amber" : "green";
+      return {
+        verdict,
+        headline:
+          inRed +
+          " red / " +
+          inAmber +
+          " amber" +
+          (worst ? " · worst: " + (worst.owner_name || worst.owner_email || "—") : ""),
+        metrics: {
+          redCount: inRed,
+          amberCount: inAmber,
+          totalOwners: owners.length,
+          worstOwner: worst
+            ? worst.owner_name || worst.owner_email || ""
+            : "",
+          worstRatePct: worst ? Math.round(worst.duplicate_rate) : 0,
+        },
+      };
+    }),
+
+    _safeSnapshot(async () => {
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const r = await pool.query(
+        `SELECT
+           (SELECT COUNT(*)::int FROM duplicate_resolution_feedback WHERE created_at >= $1) AS agent_24h,
+           (SELECT COUNT(*)::int FROM duplicate_merge_actions       WHERE performed_at >= $1) AS manual_24h`,
+        [since24h],
+      );
+      const agent = Number(r.rows[0]?.agent_24h || 0);
+      const manual = Number(r.rows[0]?.manual_24h || 0);
+      const verdict: RadarTabSnapshot["verdict"] =
+        agent + manual === 0 ? "neutral" : "green";
+      return {
+        verdict,
+        headline:
+          agent +
+          " agent event(s) · " +
+          manual +
+          " operator action(s) in 24h",
+        metrics: { agentEvents24h: agent, manualActions24h: manual },
+      };
+    }),
+  ]);
+
+  return {
+    generatedAt,
+    tabs: {
+      crossModule,
+      csOverlap,
+      csLifecycle,
+      dealsLifecycle,
+      dealCompliance,
+      accountHints,
+      ownerAccountability,
+      logs,
+    },
+  };
+}
+
 // B5: JOIN-based queries eliminating N+1 pattern
 export async function getDuplicateRecordsByType(
   recordType: string,
