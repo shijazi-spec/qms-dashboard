@@ -8510,8 +8510,14 @@
             loadDealLifecycle();
         }
 
-        function onDealLifecycleStageChange(ev) {
-            const v = ev && ev.target ? ev.target.value : '';
+        function onDealLifecycleStageChange() {
+            // Read the value straight off the <select> by id — the page's
+            // safe-actions delegation does NOT pass the DOM event unless
+            // data-pass-event is set, so reading from an `ev` argument was
+            // always undefined and the filter silently reset to "All stages"
+            // on every change. Same convention as onCsLifecyclePhaseChange.
+            const sel = document.getElementById('dealLifeStageFilter');
+            const v = sel ? sel.value : '';
             window._dealLifecycleStageFilter = v || '';
             loadDealLifecycle();
         }
