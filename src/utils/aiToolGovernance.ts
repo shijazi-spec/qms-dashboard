@@ -114,6 +114,26 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       ].filter(Boolean).join('\n'),
   },
 
+  'link-records-to-account': {
+    toolId: 'link-records-to-account',
+    label: 'Link Contacts/Deals to an Account (set Account_Name)',
+    riskLevel: 'medium',
+    requiresApproval: true,
+    complianceRefs: [
+      'WP-SOP-011 (Automated Decision and Processing Process)',
+      'WP-DOC-004 (AI Adoption Guidelines)',
+      'ISO 9001:2015 §7.5 (Control of documented information)',
+    ],
+    entityType: 'zoho_link',
+    buildPreview: (p: any) =>
+      [
+        `**Module:** ${p?.module ?? 'n/a'}`,
+        `**Link to Account:** ${p?.accountZohoId ?? 'n/a'}`,
+        `**Records:** ${(p?.recordIds || []).length} record(s) to relink`,
+        p?.reason ? `**Reason:** ${trim(p.reason, 200)}` : null,
+      ].filter(Boolean).join('\n'),
+  },
+
   'create-capa': {
     toolId: 'create-capa',
     label: 'Create CAPA (Corrective/Preventive Action)',
