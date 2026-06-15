@@ -607,7 +607,20 @@ export const kpiRoutes = [
             );
           const kpiId = parseInt(c.req.param("id"));
           const items = await getChecklistItems(kpiId);
-          return c.json({ items, progress: checklistProgress(items) });
+          const { groupChecklistBySection } = await import(
+            "../../utils/kpiChecklistDatabase"
+          );
+          const sections = groupChecklistBySection(items);
+          const buComplete = sections.filter(
+            (s: any) => s.section && s.complete,
+          ).length;
+          const buTotal = sections.filter((s: any) => s.section).length;
+          return c.json({
+            items,
+            progress: checklistProgress(items),
+            sections,
+            bu_summary: { complete: buComplete, total: buTotal },
+          });
         } catch (error) {
           safeLogger.error("Error fetching KPI checklist:", error);
           return c.json({ error: "Failed to fetch KPI checklist" }, 500);
@@ -634,13 +647,52 @@ export const kpiRoutes = [
           const text = (body?.item_text || "").trim();
           if (!text) return c.json({ error: "item_text is required" }, 400);
           const by = user?.email || "system";
-          const item = await addChecklistItem(kpiId, text, by);
+          const section = (body?.section || "").trim() || undefined;
+          const item = await addChecklistItem(kpiId, text, by, section);
           // Re-record the KPI value so its % reflects the new item immediately.
           await recordChecklistKPIValue(kpiId);
           return c.json({ success: true, item });
         } catch (error) {
           safeLogger.error("Error adding checklist item:", error);
           return c.json({ error: "Failed to add checklist item" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Add a Business Unit (section) pre-filled with the standard framework action plan.
+    path: "/api/kpis/:id{[0-9]+}/checklist/bu",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to edit KPI checklist",
+            );
+          const kpiId = parseInt(c.req.param("id"));
+          const body = await c.req.json();
+          const bu = (body?.name || "").trim();
+          if (!bu) return c.json({ error: "BU name is required" }, 400);
+          const by = user?.email || "system";
+          const { BU_FRAMEWORK_ACTION_PLAN } = await import(
+            "../../utils/kpiChecklistDatabase"
+          );
+          // Optional custom action plan; otherwise the standard framework steps.
+          const plan: string[] =
+            Array.isArray(body?.action_plan) && body.action_plan.length
+              ? body.action_plan
+              : BU_FRAMEWORK_ACTION_PLAN;
+          for (const step of plan) await addChecklistItem(kpiId, step, by, bu);
+          await recordChecklistKPIValue(kpiId);
+          return c.json({ success: true, bu, items: plan.length });
+        } catch (error) {
+          safeLogger.error("Error adding checklist BU:", error);
+          return c.json({ error: "Failed to add BU" }, 500);
         }
       };
     },

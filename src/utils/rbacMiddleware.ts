@@ -918,9 +918,9 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
-  // KPI checklist writes (add item, tick/edit, delete) — governance write roles only.
+  // KPI checklist writes (add item, add BU, tick/edit, delete) — governance write roles only.
   {
-    pattern: /^\/api\/kpis\/\d+\/checklist$/,
+    pattern: /^\/api\/kpis\/\d+\/checklist(\/bu)?$/,
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },

@@ -252,14 +252,20 @@
             <div class="p-4 border-b flex justify-between items-center">
                 <div>
                     <h3 class="font-semibold text-gray-900" id="checklistTitle">Checklist</h3>
-                    <p class="text-xs text-gray-500">KPI value = % of items completed</p>
+                    <p class="text-xs text-gray-500">KPI value = % of action items completed</p>
                 </div>
                 <button data-on-click="closeChecklistModal" class="text-gray-400 hover:text-gray-600">&times;</button>
             </div>
             <div class="p-4">
                 <div id="checklistProgress" class="mb-3 text-sm font-medium text-gray-700"></div>
                 <div id="checklistItems" class="space-y-2 mb-4"></div>
-                <div class="flex gap-2">
+                <!-- Sectioned KPIs (e.g. BU Framework): add a Business Unit -->
+                <div id="checklistAddBu" class="hidden border-t pt-3 mt-2 flex gap-2">
+                    <input id="newChecklistBu" type="text" placeholder="Add a Business Unit…" class="border rounded px-3 py-2 text-sm flex-1" />
+                    <button data-on-click="addChecklistBu" class="bg-indigo-600 text-white px-3 py-2 rounded text-sm hover:bg-indigo-700">+ Add BU</button>
+                </div>
+                <!-- Flat KPIs: add a single checklist item -->
+                <div id="checklistFlatAdd" class="hidden flex gap-2">
                     <input id="newChecklistItem" type="text" placeholder="Add a checklist item…" class="border rounded px-3 py-2 text-sm flex-1" />
                     <button data-on-click="addChecklistItem" class="bg-amber-600 text-white px-3 py-2 rounded text-sm hover:bg-amber-700">+ Add</button>
                 </div>
@@ -805,6 +811,18 @@
             // Refresh the list so the recomputed value/RAG shows.
             loadKPIs();
         }
+        const _esc = (s) => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+        const _slug = (s) => (s || '').replace(/[^a-z0-9]+/gi, '_');
+        const _collapsedBUs = new Set();
+        function _itemRow(it) {
+            return `
+                <div class="flex items-center gap-2 border rounded px-2 py-1.5">
+                    <input type="checkbox" ${it.is_done ? 'checked' : ''} data-on-change="toggleChecklistItem" data-args="[${it.id}, ${!it.is_done}]" class="w-4 h-4" />
+                    <span class="flex-1 text-sm ${it.is_done ? 'line-through text-gray-400' : 'text-gray-800'}">${_esc(it.item_text)}</span>
+                    <button data-on-click="deleteChecklistItem" data-args="[${it.id}]" class="text-gray-400 hover:text-red-600 text-sm" title="Delete">&times;</button>
+                </div>`;
+        }
+        function _barColor(pct) { return pct >= 100 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-gray-400'; }
         async function loadChecklist() {
             if (_checklistKpiId == null) return;
             try {
@@ -812,35 +830,78 @@
                 const data = await res.json();
                 const items = data.items || [];
                 const prog = data.progress || { total: 0, done: 0, pct: 0 };
-                document.getElementById('checklistProgress').textContent = `${prog.done} / ${prog.total} done — ${prog.pct}%`;
+                const sections = data.sections || [];
+                const buSummary = data.bu_summary || { complete: 0, total: 0 };
+                const sectioned = sections.some(s => s.section);
                 const wrap = document.getElementById('checklistItems');
-                if (!items.length) {
-                    wrap.innerHTML = '<p class="text-sm text-gray-500">No items yet. Add the completion checkpoints for this KPI.</p>';
-                    return;
+                document.getElementById('checklistAddBu').classList.toggle('hidden', !sectioned);
+                document.getElementById('checklistFlatAdd').classList.toggle('hidden', sectioned);
+
+                if (sectioned) {
+                    document.getElementById('checklistProgress').innerHTML =
+                        `Framework completion: <span class="text-gray-900">${prog.pct}%</span> &middot; ${buSummary.complete} of ${buSummary.total} BUs complete`;
+                    wrap.innerHTML = sections.filter(s => s.section).map(s => {
+                        const open = !_collapsedBUs.has(s.section);
+                        return `
+                        <div class="border rounded-lg">
+                            <div class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50" data-on-click="toggleBuSection" data-args="[&quot;${_esc(s.section)}&quot;]">
+                                <span class="text-gray-400 text-xs">${open ? '▾' : '▸'}</span>
+                                <span class="font-medium text-gray-900 flex-1">${s.complete ? '✅ ' : ''}${_esc(s.section)}</span>
+                                <span class="text-xs text-gray-500">${s.done}/${s.total}</span>
+                                <div class="w-24 h-2 bg-gray-100 rounded overflow-hidden"><div class="h-2 ${_barColor(s.pct)}" style="width:${s.pct}%"></div></div>
+                                <span class="text-xs font-semibold text-gray-700 w-9 text-end">${s.pct}%</span>
+                            </div>
+                            ${open ? `<div class="px-3 pb-3 space-y-1.5">
+                                ${s.items.map(_itemRow).join('')}
+                                <div class="flex gap-2 pt-1">
+                                    <input type="text" id="addItem-${_slug(s.section)}" placeholder="Add action item…" class="border rounded px-2 py-1 text-xs flex-1" />
+                                    <button data-on-click="addChecklistItem" data-args="[&quot;${_esc(s.section)}&quot;]" class="text-xs bg-amber-600 text-white px-2 py-1 rounded hover:bg-amber-700">+ Item</button>
+                                </div>
+                            </div>` : ''}
+                        </div>`;
+                    }).join('');
+                } else {
+                    document.getElementById('checklistProgress').textContent = `${prog.done} / ${prog.total} done — ${prog.pct}%`;
+                    if (!items.length) {
+                        wrap.innerHTML = '<p class="text-sm text-gray-500">No items yet. Add the completion checkpoints for this KPI.</p>';
+                        return;
+                    }
+                    wrap.innerHTML = items.map(_itemRow).join('');
                 }
-                wrap.innerHTML = items.map(it => `
-                    <div class="flex items-center gap-2 border rounded px-2 py-1.5">
-                        <input type="checkbox" ${it.is_done ? 'checked' : ''} data-on-change="toggleChecklistItem" data-args="[${it.id}, ${!it.is_done}]" class="w-4 h-4" />
-                        <span class="flex-1 text-sm ${it.is_done ? 'line-through text-gray-400' : 'text-gray-800'}">${(it.item_text || '').replace(/</g,'&lt;')}</span>
-                        <button data-on-click="deleteChecklistItem" data-args="[${it.id}]" class="text-gray-400 hover:text-red-600 text-sm" title="Delete">&times;</button>
-                    </div>
-                `).join('');
             } catch (e) {
                 console.error('Load checklist error:', e);
             }
         }
-        async function addChecklistItem() {
-            const input = document.getElementById('newChecklistItem');
-            const text = (input.value || '').trim();
+        function toggleBuSection(section) {
+            if (_collapsedBUs.has(section)) _collapsedBUs.delete(section); else _collapsedBUs.add(section);
+            loadChecklist();
+        }
+        async function addChecklistItem(section) {
+            // section provided → per-BU input; otherwise the flat input.
+            const input = section ? document.getElementById('addItem-' + _slug(section)) : document.getElementById('newChecklistItem');
+            const text = (input && input.value || '').trim();
             if (!text || _checklistKpiId == null) return;
             try {
                 const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ item_text: text })
+                    body: JSON.stringify({ item_text: text, section: section || undefined })
                 });
                 if (res.ok) { input.value = ''; await loadChecklist(); }
                 else { alert('Failed to add item.'); }
             } catch (e) { console.error('Add checklist item error:', e); }
+        }
+        async function addChecklistBu() {
+            const input = document.getElementById('newChecklistBu');
+            const name = (input.value || '').trim();
+            if (!name || _checklistKpiId == null) return;
+            try {
+                const res = await fetch(`/api/kpis/${_checklistKpiId}/checklist/bu`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                if (res.ok) { input.value = ''; await loadChecklist(); }
+                else { const d = await res.json().catch(()=>({})); alert(d.error || 'Failed to add BU.'); }
+            } catch (e) { console.error('Add BU error:', e); }
         }
         async function toggleChecklistItem(itemId, isDone) {
             try {

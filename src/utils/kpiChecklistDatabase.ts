@@ -8,11 +8,13 @@
  * "Certification Milestones On-Track", "QMS Adoption Rate".
  */
 import { logger } from "./logger";
-import { pool, getKPIById, recordKPIValue } from "./kpiDatabase";
+import { pool, getKPIById, getKPIByCode, recordKPIValue } from "./kpiDatabase";
 
 export interface KPIChecklistItem {
   id?: number;
   kpi_id: number;
+  /** Optional group header (e.g. a Business Unit). Flat checklists leave it blank. */
+  section?: string | null;
   item_text: string;
   is_done: boolean;
   note?: string | null;
@@ -26,6 +28,7 @@ export async function initKPIChecklistTables(): Promise<void> {
     CREATE TABLE IF NOT EXISTS kpi_checklist_items (
       id SERIAL PRIMARY KEY,
       kpi_id INTEGER NOT NULL REFERENCES kpi_definitions(id) ON DELETE CASCADE,
+      section VARCHAR(150),
       item_text TEXT NOT NULL,
       is_done BOOLEAN DEFAULT false,
       note TEXT,
@@ -35,16 +38,84 @@ export async function initKPIChecklistTables(): Promise<void> {
     )
   `);
   await pool.query(
+    `ALTER TABLE kpi_checklist_items ADD COLUMN IF NOT EXISTS section VARCHAR(150)`,
+  );
+  await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_kpi_checklist_kpi ON kpi_checklist_items(kpi_id)`,
   );
   logger.info("✅ [KPIChecklist] kpi_checklist_items table ready");
+
+  // Seed the BU Framework Completion KPI (QM-KPI-015) with the Business Units +
+  // their standard framework action plan, so it opens ready-to-use. Idempotent.
+  await seedBuFrameworkChecklist();
+}
+
+/**
+ * The Business Units the Quality governance framework is rolled out across
+ * (Quality Plan 2026 → BU Coverage Plan). Editable in the UI afterwards.
+ */
+export const FRAMEWORK_BUSINESS_UNITS = [
+  "SDR",
+  "Sales",
+  "Marketplace",
+  "Customer Success",
+  "WalaOne",
+  "Marketing",
+  "HR",
+  "Finance",
+  "IT",
+  "Software",
+  "Customer Support",
+  "GRC",
+  "Quality",
+];
+
+/** Standard framework-build action plan applied to every BU (ends with pilot audit). */
+export const BU_FRAMEWORK_ACTION_PLAN = [
+  "Process mapping & current-state assessment",
+  "Governance documents drafted (policies / procedures / SOPs)",
+  "Documents reviewed & approved",
+  "Published in QMS",
+  "BU staff trained on the framework",
+  "Pilot audit conducted & gaps closed",
+];
+
+/**
+ * Seed QM-KPI-015 (BU Framework Completion) with one section per Business Unit,
+ * each carrying the standard action-plan checklist. Only seeds when the KPI has
+ * NO checklist items yet (never overwrites edits). KPI value = % of all action
+ * items done across all BUs (with equal templates this equals average BU
+ * completion); per-BU progress is surfaced in the UI.
+ */
+export async function seedBuFrameworkChecklist(): Promise<void> {
+  const kpi = await getKPIByCode("QM-KPI-015");
+  if (!kpi || !kpi.id) return;
+  const existing = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM kpi_checklist_items WHERE kpi_id = $1`,
+    [kpi.id],
+  );
+  if (Number(existing.rows[0]?.n || 0) > 0) return;
+
+  for (const bu of FRAMEWORK_BUSINESS_UNITS) {
+    for (const step of BU_FRAMEWORK_ACTION_PLAN) {
+      await pool.query(
+        `INSERT INTO kpi_checklist_items (kpi_id, section, item_text, updated_by)
+         VALUES ($1, $2, $3, 'system')`,
+        [kpi.id, bu, step],
+      );
+    }
+  }
+  logger.info(
+    `🌱 [KPIChecklist] Seeded BU Framework Completion: ${FRAMEWORK_BUSINESS_UNITS.length} BUs × ${BU_FRAMEWORK_ACTION_PLAN.length} action items`,
+  );
 }
 
 export async function getChecklistItems(
   kpiId: number,
 ): Promise<KPIChecklistItem[]> {
   const res = await pool.query(
-    `SELECT * FROM kpi_checklist_items WHERE kpi_id = $1 ORDER BY id ASC`,
+    `SELECT * FROM kpi_checklist_items WHERE kpi_id = $1
+     ORDER BY section NULLS FIRST, id ASC`,
     [kpiId],
   );
   return res.rows;
@@ -61,15 +132,48 @@ export function checklistProgress(items: KPIChecklistItem[]): {
   return { total, done, pct };
 }
 
+export interface ChecklistSection {
+  section: string;
+  total: number;
+  done: number;
+  pct: number;
+  complete: boolean;
+  items: KPIChecklistItem[];
+}
+
+/** Group items by section (BU) with per-section progress, in stable order. */
+export function groupChecklistBySection(
+  items: KPIChecklistItem[],
+): ChecklistSection[] {
+  const order: string[] = [];
+  const map = new Map<string, KPIChecklistItem[]>();
+  for (const it of items) {
+    const key = (it.section || "").trim();
+    if (!map.has(key)) {
+      map.set(key, []);
+      order.push(key);
+    }
+    map.get(key)!.push(it);
+  }
+  return order.map((section) => {
+    const secItems = map.get(section)!;
+    const total = secItems.length;
+    const done = secItems.filter((i) => i.is_done).length;
+    const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+    return { section, total, done, pct, complete: total > 0 && done === total, items: secItems };
+  });
+}
+
 export async function addChecklistItem(
   kpiId: number,
   itemText: string,
   updatedBy?: string,
+  section?: string,
 ): Promise<KPIChecklistItem> {
   const res = await pool.query(
-    `INSERT INTO kpi_checklist_items (kpi_id, item_text, updated_by)
-     VALUES ($1, $2, $3) RETURNING *`,
-    [kpiId, itemText, updatedBy || null],
+    `INSERT INTO kpi_checklist_items (kpi_id, section, item_text, updated_by)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [kpiId, section?.trim() || null, itemText, updatedBy || null],
   );
   return res.rows[0];
 }
