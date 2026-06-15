@@ -38,8 +38,27 @@ import {
   markPrimaryRecord,
   recordPartialMergeAction,
   recordResolutionLedgerEntry,
+  markRecordStalePending,
 } from "./duplicateRadarDatabase";
 import { logger } from "./logger";
+
+/**
+ * Zoho returns 400 "the related id given seems to be invalid" when the
+ * referenced record has already been deleted on their side. Our local
+ * duplicate_records table is then carrying a ghost — every per-record
+ * operation against that id (fetch related list, stamp note, write
+ * lookup) will keep 400-ing. Detect the pattern so the executor can
+ * mark it stale and stop trying to act on it.
+ *
+ * Match is case-insensitive on the exact wording Zoho ships in the
+ * response body so unrelated 400s (rate limit, malformed payload) keep
+ * surfacing as real errors.
+ */
+export function isGhostRecordError(e: unknown): boolean {
+  if (!e) return false;
+  const msg = e instanceof Error ? e.message : String(e);
+  return /the related id given seems to be invalid/i.test(msg);
+}
 
 export interface ExecuteReport {
   dryRun: boolean;
@@ -55,6 +74,12 @@ export interface ExecuteReport {
   clusterResolved: boolean;
   warnings: string[];
   errors: Array<{ step: string; recordId?: string; message: string }>;
+  /** Duplicate Zoho ids the executor detected as already-deleted in Zoho
+   *  (Zoho 400 "the related id given seems to be invalid"). They were
+   *  tagged stale_pending locally and the next sync's cleanup pass will
+   *  purge them from duplicate_records. Surfaced as a single info-level
+   *  warning instead of a wall of red errors. */
+  staleDropped: string[];
 }
 
 export interface ExecuteOptions {
@@ -129,9 +154,33 @@ export async function executeMergePlan(
     clusterResolved: false,
     warnings: [...plan.warnings],
     errors: [],
+    staleDropped: [],
+  };
+
+  // Ghost-id ledger: once a Zoho id 400s with "invalid related id", every
+  // subsequent op against the same id is skipped silently and the id is
+  // tagged stale_pending in our DB so the next sync cleanup purges it.
+  const ghostIds = new Set<string>();
+  const markGhost = (recordId: string) => {
+    if (ghostIds.has(recordId)) return;
+    ghostIds.add(recordId);
+    report.staleDropped.push(recordId);
+    if (!dryRun) {
+      // Fire-and-forget — DB write must not block the agentic run.
+      markRecordStalePending(module, recordId).catch((dbErr) => {
+        logger.warn("[merge-executor] mark-stale-pending failed", {
+          recordId,
+          error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+        });
+      });
+    }
   };
 
   const fail = (step: string, e: unknown, recordId?: string) => {
+    if (recordId && isGhostRecordError(e)) {
+      markGhost(recordId);
+      return;
+    }
     const message = e instanceof Error ? e.message : String(e);
     report.errors.push({ step, recordId, message });
     logger.error(`[merge-executor] ${step} failed`, { recordId, message });
@@ -190,6 +239,7 @@ export async function executeMergePlan(
         fail("link-account", e, masterId);
       }
       for (const dupId of dups) {
+        if (ghostIds.has(dupId)) continue;
         try {
           await updateZohoRecord(module, dupId, {
             Account_Name: { id: plan.linkAccountZohoId },
@@ -213,6 +263,7 @@ export async function executeMergePlan(
 
   // 2) Reparent each duplicate's related records onto the survivor.
   for (const dupId of dups) {
+    if (ghostIds.has(dupId)) continue;
     // Module-specific lookup children (Accounts→Deals/Contacts via Account_Name;
     // Contacts→Deals via Contact_Name; Leads/Deals→none). Repoint the lookup.
     for (const rp of MODULE_REPARENT[module]) {
@@ -302,6 +353,7 @@ export async function executeMergePlan(
       fail("stamp-master", e, masterId);
     }
     for (const dupId of dups) {
+      if (ghostIds.has(dupId)) continue;
       try {
         await addZohoNote(
           module,
@@ -381,10 +433,21 @@ export async function executeMergePlan(
     }).catch(() => {});
   }
 
+  if (report.staleDropped.length > 0) {
+    const idsPreview = report.staleDropped.slice(0, 5).join(", ");
+    const more =
+      report.staleDropped.length > 5
+        ? ` (+${report.staleDropped.length - 5} more)`
+        : "";
+    report.warnings.push(
+      `${report.staleDropped.length} duplicate record(s) auto-cleaned — already deleted in Zoho (${idsPreview}${more}). Tagged stale_pending locally; the next sync will purge them. ${dryRun ? "" : "No further apply attempts will be made against these ids."}`.trim(),
+    );
+  }
+
   logger.info(
     `[merge-executor] ${dryRun ? "DRY-RUN" : "APPLIED"} cluster ${plan.clusterId}: ` +
       `${report.fieldsMigrated.length} field(s), reparented ${report.reparented.deals}D/${report.reparented.contacts}C/${report.reparented.notes}N, ` +
-      `tagged ${report.taggedRecordIds.length}, errors ${report.errors.length}`,
+      `tagged ${report.taggedRecordIds.length}, errors ${report.errors.length}, stale-dropped ${report.staleDropped.length}`,
   );
 
   return report;

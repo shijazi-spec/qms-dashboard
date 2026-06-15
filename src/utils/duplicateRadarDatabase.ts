@@ -2603,6 +2603,31 @@ export async function markStaleRecords(): Promise<number> {
   return result.rowCount || 0;
 }
 
+/**
+ * Targeted version of markStaleRecords for a single Zoho record id. Used by
+ * the agentic merge executor when Zoho responds 400 "the related id given
+ * seems to be invalid" — that record is already gone from Zoho and our
+ * local copy is a ghost; tagging stale_pending hands it to the existing
+ * cleanupStaleRecords sweep so the next tick purges it. Returns true if a
+ * row was actually flipped (false = no local match, or already stale).
+ */
+export async function markRecordStalePending(
+  module: string,
+  zohoRecordId: string,
+): Promise<boolean> {
+  if (!zohoRecordId) return false;
+  const result = await pool.query(
+    `UPDATE duplicate_records
+        SET match_signals = match_signals || '["stale_pending"]'::jsonb
+      WHERE zoho_record_id = $1
+        AND zoho_module    = $2
+        AND is_mock_data   = false
+        AND NOT (match_signals @> '["stale_pending"]'::jsonb)`,
+    [zohoRecordId, module],
+  );
+  return (result.rowCount || 0) > 0;
+}
+
 // A1: Remove records that were stale and not refreshed
 export async function cleanupStaleRecords(): Promise<number> {
   const result = await pool.query(`
