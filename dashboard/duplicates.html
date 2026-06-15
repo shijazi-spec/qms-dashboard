@@ -373,10 +373,14 @@
                  number and the delta vs. the previous week so a stakeholder
                  can answer "are we getting better or worse?" at a glance. -->
             <div class="bg-white rounded-lg shadow p-6 mb-6">
-                <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 class="text-lg font-semibold">Duplicate Creation Trend</h3>
-                        <p class="text-xs text-gray-500">New duplicate records created per week — leading indicator of prevention effectiveness.</p>
+                <div class="flex items-start justify-between mb-3 gap-3 flex-wrap">
+                    <div class="flex-1 min-w-[260px]">
+                        <div class="flex items-center gap-3 flex-wrap">
+                            <h3 class="text-lg font-semibold">Duplicate Creation Trend</h3>
+                            <span id="trendVerdictChip" class="hidden px-3 py-1 rounded-full text-xs font-bold border" data-testid="chip-trend-verdict"></span>
+                        </div>
+                        <p id="trendHeadline" class="text-sm text-gray-700 mt-1" data-testid="text-trend-headline">—</p>
+                        <p class="text-xs text-gray-500 mt-0.5">New duplicate records created PER WEEK — a leading indicator of how well your prevention work is keeping bad data out of Zoho. Falling line = prevention is working. Compare against the 2% target on the right-hand cards.</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <label class="text-xs text-gray-500" for="trendWeeks">Window</label>
@@ -388,25 +392,40 @@
                         </select>
                     </div>
                 </div>
+                <details class="mb-3 text-xs text-gray-600 bg-gray-50 rounded p-2 border border-gray-200">
+                    <summary class="cursor-pointer font-semibold text-gray-800">How to read this chart</summary>
+                    <ul class="list-disc list-inside mt-2 space-y-1 text-gray-600">
+                        <li><strong class="text-red-700">Red filled area — "New duplicates"</strong>: how many NEW records added to Zoho this week landed in a duplicate cluster. Lower = better.</li>
+                        <li><strong class="text-gray-500">Grey dashed line — "New records (total)"</strong>: how many new records came in total this week. Context for the red line.</li>
+                        <li><strong class="text-blue-700">Blue line — "Duplicate rate %"</strong> (right axis): red ÷ grey × 100. The headline metric. Target ≤ 2%.</li>
+                        <li><strong>Latest bucket</strong> = the most recent week. <strong>Window total</strong> = sum across the whole period selected above (4 / 12 / 26 / 52 weeks).</li>
+                        <li><strong>Reading the trend:</strong> a falling red area + falling blue line = prevention is winning. A rising line means new bad data is still flowing in faster than you're cleaning the existing pile.</li>
+                    </ul>
+                </details>
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <div class="lg:col-span-3">
                         <div class="chart-container"><canvas id="creationTrendChart" role="img" aria-label="Duplicate creation trend: line chart showing new duplicate records per week" aria-describedby="creationTrendChart-summary"></canvas><table id="creationTrendChart-summary" class="sr-only"><caption>Duplicate Creation Trend</caption><thead><tr><th scope="col">Week</th><th scope="col">New duplicates</th><th scope="col">Duplicate rate</th></tr></thead><tbody></tbody></table></div>
                     </div>
                     <div class="lg:col-span-1 space-y-3">
-                        <div class="bg-gray-50 rounded p-3">
-                            <div class="text-xs text-gray-500">Latest bucket</div>
+                        <div class="bg-gray-50 rounded p-3" title="How many NEW Zoho records created in the latest week ended up in a duplicate cluster. Lower is better.">
+                            <div class="text-xs text-gray-500">New duplicates this week</div>
                             <div id="trendLatestCount" class="text-2xl font-bold text-gray-900" data-testid="text-trend-latest-count">—</div>
-                            <div id="trendLatestDelta" class="text-xs font-medium text-gray-500" data-testid="text-trend-delta">vs previous: —</div>
+                            <div id="trendLatestDelta" class="text-xs font-medium text-gray-500" data-testid="text-trend-delta">vs previous week: —</div>
                         </div>
-                        <div class="bg-gray-50 rounded p-3">
-                            <div class="text-xs text-gray-500">Latest dup rate</div>
+                        <div class="bg-gray-50 rounded p-3" title="The latest week's duplicate creation rate = new duplicates ÷ all new records that week. Target ≤ 2%. This is the leading indicator — when it drops below 2% your prevention is working.">
+                            <div class="text-xs text-gray-500">Last week's dup rate</div>
                             <div id="trendLatestRate" class="text-2xl font-bold text-gray-900" data-testid="text-trend-latest-rate">—</div>
-                            <div class="text-[11px] text-gray-400">Industry target ≤ 2%</div>
+                            <div id="trendRateVsTarget" class="text-[11px] text-gray-400">Target ≤ 2%</div>
                         </div>
-                        <div class="bg-gray-50 rounded p-3">
+                        <div class="bg-gray-50 rounded p-3" title="Total new duplicates created across the whole window selected above. Useful for total volume sanity checks.">
                             <div class="text-xs text-gray-500">Window total</div>
                             <div id="trendWindowTotal" class="text-2xl font-bold text-gray-900" data-testid="text-trend-window-total">—</div>
                             <div class="text-[11px] text-gray-400">New duplicates in window</div>
+                        </div>
+                        <div class="bg-gray-50 rounded p-3" title="Average new duplicates per week over the selected window. The baseline you're trying to beat.">
+                            <div class="text-xs text-gray-500">Weekly average (window)</div>
+                            <div id="trendWindowAvg" class="text-2xl font-bold text-gray-900" data-testid="text-trend-window-avg">—</div>
+                            <div id="trendVsAvg" class="text-[11px] text-gray-400">Latest vs avg: —</div>
                         </div>
                     </div>
                 </div>
@@ -2169,22 +2188,95 @@
             const deltaEl = document.getElementById('trendLatestDelta');
             const rateEl = document.getElementById('trendLatestRate');
             const totalEl = document.getElementById('trendWindowTotal');
+            const avgEl = document.getElementById('trendWindowAvg');
+            const vsAvgEl = document.getElementById('trendVsAvg');
+            const rateVsTargetEl = document.getElementById('trendRateVsTarget');
+            const verdictEl = document.getElementById('trendVerdictChip');
+            const headlineEl = document.getElementById('trendHeadline');
+
             if (latestEl) latestEl.textContent = latest ? _fn(latest.new_duplicates) : '—';
             if (rateEl) rateEl.textContent = latest ? (_fn(latest.duplicate_rate_pct) + '%') : '—';
             const windowTotal = dupCounts.reduce((a, b) => a + b, 0);
+            const windowAvg = dupCounts.length > 0 ? Math.round(windowTotal / dupCounts.length) : 0;
             if (totalEl) totalEl.textContent = _fn(windowTotal);
+            if (avgEl) avgEl.textContent = _fn(windowAvg);
 
             // Delta vs previous bucket — improvement (down) is green.
             if (deltaEl) {
                 if (!latest || !prev) {
-                    deltaEl.textContent = 'vs previous: —';
+                    deltaEl.textContent = 'vs previous week: —';
                     deltaEl.className = 'text-xs font-medium text-gray-500';
                 } else {
                     const diff = latest.new_duplicates - prev.new_duplicates;
                     const sign = diff > 0 ? '+' : '';
-                    deltaEl.textContent = 'vs previous: ' + sign + _fn(diff);
+                    deltaEl.textContent = 'vs previous week: ' + sign + _fn(diff);
                     deltaEl.className = 'text-xs font-medium ' + (diff > 0 ? 'text-red-600' : diff < 0 ? 'text-emerald-600' : 'text-gray-500');
                 }
+            }
+
+            // Latest vs window average — context for whether this week is
+            // typical or an outlier.
+            if (vsAvgEl) {
+                if (!latest || windowAvg === 0) {
+                    vsAvgEl.textContent = 'Latest vs avg: —';
+                } else {
+                    const delta = latest.new_duplicates - windowAvg;
+                    const sign = delta > 0 ? '+' : '';
+                    const pct = Math.round((delta / windowAvg) * 100);
+                    vsAvgEl.textContent = 'Latest vs avg: ' + sign + _fn(delta) + ' (' + sign + pct + '%)';
+                    vsAvgEl.className = 'text-[11px] font-semibold ' + (delta > 0 ? 'text-red-600' : delta < 0 ? 'text-emerald-600' : 'text-gray-400');
+                }
+            }
+
+            // Rate vs 2% target context line.
+            if (rateVsTargetEl && latest) {
+                const r = Number(latest.duplicate_rate_pct || 0);
+                if (r <= 2) {
+                    rateVsTargetEl.textContent = '✓ At or under the 2% target';
+                    rateVsTargetEl.className = 'text-[11px] text-emerald-600 font-semibold';
+                } else if (r <= 5) {
+                    rateVsTargetEl.textContent = 'Above 2% target (amber band)';
+                    rateVsTargetEl.className = 'text-[11px] text-amber-600 font-semibold';
+                } else {
+                    rateVsTargetEl.textContent = (Math.round(r / 2 * 10) / 10) + '× the 2% target';
+                    rateVsTargetEl.className = 'text-[11px] text-red-600 font-semibold';
+                }
+            }
+
+            // Verdict chip + plain-English headline.
+            // Compare the average of the latest 3 buckets to the average of
+            // the 3 buckets before them. Smoothed comparison resists a single
+            // noisy week from misleading the verdict either direction.
+            // "Improving" requires a >=15% drop, "Worsening" a >=15% rise,
+            // anything else is "Holding steady".
+            if (verdictEl && headlineEl && buckets.length >= 6) {
+                const tail = dupCounts.slice(-3);
+                const prevTail = dupCounts.slice(-6, -3);
+                const avgT = tail.reduce((a, b) => a + b, 0) / tail.length;
+                const avgP = prevTail.reduce((a, b) => a + b, 0) / prevTail.length;
+                const denomSafe = avgP === 0 ? 1 : avgP;
+                const pctChange = ((avgT - avgP) / denomSafe) * 100;
+                let label, cls, headline;
+                if (avgP === 0 && avgT === 0) {
+                    label = 'No activity'; cls = 'border-gray-300 bg-gray-100 text-gray-700';
+                    headline = 'No new duplicates created in the last 6 weeks. Either prevention is excellent or sync activity has paused.';
+                } else if (pctChange <= -15) {
+                    label = '✓ Improving'; cls = 'border-emerald-400 bg-emerald-50 text-emerald-700';
+                    headline = 'Prevention is winning — new duplicates dropped ' + Math.abs(Math.round(pctChange)) + '% over the last 3 weeks vs the prior 3. Keep cleansing.';
+                } else if (pctChange >= 15) {
+                    label = '✗ Worsening'; cls = 'border-red-400 bg-red-50 text-red-700';
+                    headline = 'New duplicates rose ' + Math.round(pctChange) + '% over the last 3 weeks vs the prior 3. Investigate which source channel is leaking in (check the Duplicates by Source chart below).';
+                } else {
+                    label = '~ Holding steady'; cls = 'border-amber-300 bg-amber-50 text-amber-700';
+                    headline = 'Trend is roughly flat (' + (pctChange >= 0 ? '+' : '') + Math.round(pctChange) + '% over 3 weeks). Prevention is keeping pace with new inflow but not gaining ground.';
+                }
+                verdictEl.className = 'px-3 py-1 rounded-full text-xs font-bold border ' + cls;
+                verdictEl.textContent = label;
+                verdictEl.classList.remove('hidden');
+                headlineEl.textContent = headline;
+            } else if (verdictEl && headlineEl) {
+                verdictEl.classList.add('hidden');
+                headlineEl.textContent = 'Need at least 6 weeks of data for a smoothed trend verdict — widen the Window selector if you have older data.';
             }
 
             // Chart
