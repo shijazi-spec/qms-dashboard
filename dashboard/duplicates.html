@@ -8233,7 +8233,7 @@
                     const range = (s.warnDays != null && s.critDays != null)
                         ? (s.warnDays + '–' + s.critDays + ' calendar days')
                         : ('≤ ' + s.sla + ' ' + unitLabel);
-                    return '<div class="bg-gray-50 border border-gray-200 rounded p-2"><div class="font-semibold text-gray-800">' + _esc(s.stage) + '</div><div class="text-gray-600">' + _esc(range) + '</div><div class="text-[10px] text-gray-500 mt-1">Sales SOP §' + _esc(s.clauseRef) + '</div></div>';
+                    return '<div class="bg-gray-50 border border-gray-200 rounded p-2"><div class="font-semibold text-gray-800">' + escapeHtml(s.stage) + '</div><div class="text-gray-600">' + escapeHtml(range) + '</div><div class="text-[10px] text-gray-500 mt-1">Sales SOP §' + escapeHtml(s.clauseRef) + '</div></div>';
                 }).join('');
             }
 
@@ -8242,7 +8242,7 @@
             if (stageSelect) {
                 const stages = Array.from(new Set((data.violations || []).map(v => v.stage).filter(Boolean))).sort();
                 const cur = window._dealLifecycleStageFilter || '';
-                stageSelect.innerHTML = '<option value="">All stages</option>' + stages.map(s => '<option value="' + _esc(s) + '"' + (s === cur ? ' selected' : '') + '>' + _esc(s) + '</option>').join('');
+                stageSelect.innerHTML = '<option value="">All stages</option>' + stages.map(s => '<option value="' + escapeHtml(s) + '"' + (s === cur ? ' selected' : '') + '>' + escapeHtml(s) + '</option>').join('');
             }
 
             const body = document.getElementById('dealLifecycleTable');
@@ -8258,20 +8258,20 @@
                 const slaLabel = v.unit === 'business_days'
                     ? (v.sla_units + ' BD')
                     : (v.sla_units + ' days');
-                const dealCell = (r.deal_name ? '<div class="font-medium text-gray-900">' + _esc(r.deal_name) + '</div>' : '')
-                    + (r.account_name ? '<div class="text-xs text-gray-500">' + _esc(r.account_name) + '</div>' : '');
-                const ownerCell = (r.owner_name ? '<div>' + _esc(r.owner_name) + '</div>' : '<span class="text-gray-400">—</span>')
-                    + (r.owner_email ? '<div class="text-[10px] text-gray-500 font-mono">' + _esc(r.owner_email) + '</div>' : '');
-                const stageCell = '<div class="font-medium text-gray-800">' + _esc(r.stage) + '</div>'
-                    + (r.pipeline ? '<div class="text-[10px] text-gray-500">' + _esc(r.pipeline) + '</div>' : '');
+                const dealCell = (r.deal_name ? '<div class="font-medium text-gray-900">' + escapeHtml(r.deal_name) + '</div>' : '')
+                    + (r.account_name ? '<div class="text-xs text-gray-500">' + escapeHtml(r.account_name) + '</div>' : '');
+                const ownerCell = (r.owner_name ? '<div>' + escapeHtml(r.owner_name) + '</div>' : '<span class="text-gray-400">—</span>')
+                    + (r.owner_email ? '<div class="text-[10px] text-gray-500 font-mono">' + escapeHtml(r.owner_email) + '</div>' : '');
+                const stageCell = '<div class="font-medium text-gray-800">' + escapeHtml(r.stage) + '</div>'
+                    + (r.pipeline ? '<div class="text-[10px] text-gray-500">' + escapeHtml(r.pipeline) + '</div>' : '');
                 return '<tr class="hover:bg-orange-50">'
                     + '<td class="px-2 py-2 align-top">' + dealLifeSeverityBadge(v.severity) + '</td>'
                     + '<td class="px-2 py-2 align-top">' + dealCell + '</td>'
                     + '<td class="px-2 py-2 align-top">' + stageCell + '</td>'
                     + '<td class="px-2 py-2 align-top text-xs text-gray-700">' + ownerCell + '</td>'
                     + '<td class="px-2 py-2 align-top text-end font-semibold ' + (v.severity === 'critical' ? 'text-red-700' : v.severity === 'warning' ? 'text-amber-700' : 'text-gray-700') + '">' + (v.aging_units ?? '—') + ' ' + unitLabel + '<div class="text-[10px] font-normal text-gray-500">' + (v.aging_calendar_days ?? '—') + ' calendar d</div></td>'
-                    + '<td class="px-2 py-2 align-top text-xs"><div class="font-mono text-gray-800">≤ ' + _esc(slaLabel) + '</div><div class="text-[10px] text-gray-500">Sales SOP §' + _esc(v.clause_ref) + '</div></td>'
-                    + '<td class="px-2 py-2 align-top text-xs text-gray-700">' + _esc(v.suggested_action || v.message || '') + '</td>'
+                    + '<td class="px-2 py-2 align-top text-xs"><div class="font-mono text-gray-800">≤ ' + escapeHtml(slaLabel) + '</div><div class="text-[10px] text-gray-500">Sales SOP §' + escapeHtml(v.clause_ref) + '</div></td>'
+                    + '<td class="px-2 py-2 align-top text-xs text-gray-700">' + escapeHtml(v.suggested_action || v.message || '') + '</td>'
                     + '</tr>';
             }).join('');
         }
