@@ -403,6 +403,11 @@ export async function getAllPolicies(filters?: {
   status?: string;
   category?: string;
   document_type?: string;
+  /** OR-set of document types — used by the Document Master List boxes
+   *  on /policies (Processes / Documents / Policies / Forms / Controls)
+   *  where each box groups 1-3 underlying types. Mutually compatible
+   *  with `document_type` (single value): both filters fire when set. */
+  document_types?: string[];
   owner_department?: string;
   search?: string;
   limit?: number;
@@ -428,6 +433,11 @@ export async function getAllPolicies(filters?: {
   if (filters?.document_type) {
     whereConditions.push(`document_type = $${paramCount}`);
     values.push(filters.document_type);
+    paramCount++;
+  }
+  if (filters?.document_types && filters.document_types.length > 0) {
+    whereConditions.push(`document_type = ANY($${paramCount}::text[])`);
+    values.push(filters.document_types);
     paramCount++;
   }
   if (filters?.owner_department) {

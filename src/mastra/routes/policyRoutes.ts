@@ -62,6 +62,18 @@ export const policyRoutes = [
           const category = url.searchParams.get("category") || undefined;
           const document_type =
             url.searchParams.get("document_type") || undefined;
+          // Multi-type filter for the Document Master List boxes: a box
+          // groups 1-3 underlying types (e.g. "Processes" = sop +
+          // procedure + work_instruction). Comma-separated in the URL,
+          // becomes a SQL ANY($::text[]) in the DB layer.
+          const document_typesRaw =
+            url.searchParams.get("document_types") || "";
+          const document_types = document_typesRaw
+            ? document_typesRaw
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : undefined;
           const owner_department =
             url.searchParams.get("owner_department") || undefined;
           const search = url.searchParams.get("search") || undefined;
@@ -79,6 +91,7 @@ export const policyRoutes = [
             status,
             category,
             document_type,
+            document_types,
             owner_department,
             search,
             limit,
