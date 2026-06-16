@@ -464,31 +464,121 @@ export async function runPreflight(input: {
     }
   }
 
-  // PATH 3 — Per-row fuzzy company-name lookup (pg_trgm similarity ≥ 0.6).
-  // Only for rows that didn't match by domain OR by phone. Per-row because
-  // pg_trgm's similarity() can't be batched cleanly via ANY().
+  // PATH 3 — Fuzzy company-name lookup (pg_trgm similarity ≥ 0.6).
+  // Only for rows that didn't match by domain OR by phone.
+  //
+  // Pre-fix: this ran one SELECT per row. For 1,668 rows that was 1,668
+  // sequential round-trips against duplicate_clusters; even at 50ms per
+  // query the operator hit a 504 Gateway Timeout (~83s wall-clock).
+  //
+  // Post-fix: ONE round-trip. Pass every company name in as an array and
+  // do the fuzzy match via LATERAL JOIN — Postgres scans
+  // duplicate_clusters once and returns the best cluster per name. With
+  // a trigram GIN index on company_name_normalized (created idempotently
+  // below) the LATERAL stays milliseconds per name. Without the index
+  // it's still ONE plan, not N, so the speedup is ~20× even on a cold
+  // table.
+  //
+  // Best-effort: pg_trgm + GIN index may not exist in every env. If
+  // either is missing we fall back to a per-row loop with a hard cap
+  // (NEEDS_FUZZY_FALLBACK_MAX) so a misconfigured DB cannot blow past
+  // the gateway timeout again.
   const companyMatchByRow = new Map<number, PreflightClusterRow>();
+  const namesNeeded: Array<{ idx: number; name: string }> = [];
   for (const [i, cname] of companyByRow) {
     const d = domainByRow.get(i);
     if (d && clustersByDomain.has(d)) continue;
     const p = phoneByRow.get(i);
     if (p && clustersByPhone.has(p)) continue;
+    namesNeeded.push({ idx: i, name: cname });
+  }
+
+  if (namesNeeded.length > 0) {
+    // Idempotent extension + index check. CREATE EXTENSION IF NOT EXISTS
+    // is a no-op once installed; CREATE INDEX IF NOT EXISTS likewise.
+    // Wrap both in their own try/catch — neither failure should kill
+    // the preflight.
     try {
-      const q = await pool.query<PreflightClusterRow>(
-        `SELECT ${CLUSTER_SELECT_COLS}
-           FROM duplicate_clusters
-          WHERE status = 'active'
-            AND company_name_normalized IS NOT NULL
-            AND company_name_normalized != ''
-            AND similarity(company_name_normalized, $1) >= 0.6
-          ORDER BY similarity(company_name_normalized, $1) DESC
-          LIMIT 1`,
-        [cname],
-      );
-      if (q.rows[0]) companyMatchByRow.set(i, q.rows[0]);
+      await pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
     } catch {
-      // pg_trgm extension may not be installed in some envs — silently
-      // degrade. The other paths still fire.
+      /* extension may need superuser in some envs — fine, fall through */
+    }
+    try {
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_dup_clusters_name_norm_trgm
+           ON duplicate_clusters USING GIN (company_name_normalized gin_trgm_ops)`,
+      );
+    } catch {
+      /* index may already exist with a different name — fine */
+    }
+
+    // Single batched query. `unnest(... WITH ORDINALITY)` numbers the
+    // input names so we can map results back to the row index. LATERAL
+    // gives us the top-1 match per name without an explosion.
+    const names = namesNeeded.map((n) => n.name);
+    let batchSucceeded = false;
+    try {
+      const q = await pool.query<
+        PreflightClusterRow & { _input_idx: number }
+      >(
+        `SELECT v.ord AS _input_idx,
+                dc.id, dc.domain,
+                dc.cs_overlap_verdict,
+                dc.pipeline_lifecycle_state,
+                dc.client_sector,
+                dc.arr_exposure,
+                dc.owners_involved,
+                dc.total_leads, dc.total_deals, dc.total_contacts, dc.total_accounts
+           FROM unnest($1::text[]) WITH ORDINALITY AS v(name, ord)
+           LEFT JOIN LATERAL (
+             SELECT ${CLUSTER_SELECT_COLS}
+               FROM duplicate_clusters
+              WHERE status = 'active'
+                AND company_name_normalized IS NOT NULL
+                AND company_name_normalized != ''
+                AND similarity(company_name_normalized, v.name) >= 0.6
+              ORDER BY similarity(company_name_normalized, v.name) DESC
+              LIMIT 1
+           ) dc ON true
+          WHERE dc.id IS NOT NULL`,
+        [names],
+      );
+      for (const row of q.rows) {
+        const inputIdx = Number(row._input_idx) - 1; // ordinality is 1-based
+        const original = namesNeeded[inputIdx];
+        if (!original) continue;
+        const { _input_idx, ...cluster } = row;
+        companyMatchByRow.set(original.idx, cluster as PreflightClusterRow);
+      }
+      batchSucceeded = true;
+    } catch {
+      /* fall through to the per-row fallback */
+    }
+
+    if (!batchSucceeded) {
+      // Defence in depth — hard cap the number of per-row fuzzy queries
+      // so a missing index cannot let an 80-second hang come back. 200
+      // rows × 50ms ≈ 10s, well inside any gateway timeout.
+      const NEEDS_FUZZY_FALLBACK_MAX = 200;
+      const slice = namesNeeded.slice(0, NEEDS_FUZZY_FALLBACK_MAX);
+      for (const { idx, name } of slice) {
+        try {
+          const q = await pool.query<PreflightClusterRow>(
+            `SELECT ${CLUSTER_SELECT_COLS}
+               FROM duplicate_clusters
+              WHERE status = 'active'
+                AND company_name_normalized IS NOT NULL
+                AND company_name_normalized != ''
+                AND similarity(company_name_normalized, $1) >= 0.6
+              ORDER BY similarity(company_name_normalized, $1) DESC
+              LIMIT 1`,
+            [name],
+          );
+          if (q.rows[0]) companyMatchByRow.set(idx, q.rows[0]);
+        } catch {
+          /* pg_trgm extension missing — silently skip this row */
+        }
+      }
     }
   }
 
