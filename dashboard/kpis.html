@@ -123,6 +123,11 @@
                 <h2 class="font-semibold text-gray-900" data-i18n="kpis.kpi_catalog">KPI Catalog</h2>
                 <div class="flex gap-2">
                     <input type="text" id="searchInput" placeholder="Search KPIs..." class="border rounded px-3 py-1 text-sm" data-on-input="filterKPIs">
+                    <select id="kpiSort" class="border rounded px-2 py-1 text-sm" data-on-change="filterKPIs" title="Sort by name" aria-label="Sort KPIs by name">
+                        <option value="">Sort: Default</option>
+                        <option value="name_asc">Name A → Z</option>
+                        <option value="name_desc">Name Z → A</option>
+                    </select>
                 </div>
             </div>
             <div id="kpiList" class="divide-y">
@@ -337,7 +342,6 @@
 
         async function loadKPIs() {
             const owner = document.getElementById('ownerFilter').value;
-            const statusFilter = document.getElementById('statusFilter')?.value || '';
             const url = owner ? `/api/kpis?owner=${owner}` : '/api/kpis/summary';
             
             try {
@@ -350,12 +354,8 @@
                     allKPIs = data.kpiDetails || [];
                 }
 
-                let filtered = allKPIs;
-                if (statusFilter) {
-                    filtered = allKPIs.filter(k => k.status === statusFilter);
-                }
-
-                renderKPIList(filtered);
+                // Apply status filter + search + sort via the shared view function.
+                filterKPIs();
 
                 if (!owner) {
                     updateStats(data);
@@ -475,14 +475,22 @@
             }).join('');
         }
 
+        // Single source of truth for the catalog view: status filter + search + sort.
+        // Called by the search box, the sort dropdown, loadKPIs, and language change.
         function filterKPIs() {
-            const search = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allKPIs.filter(k => 
-                k.kpi_name.toLowerCase().includes(search) || 
+            const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
+            const statusFilter = document.getElementById('statusFilter')?.value || '';
+            let list = allKPIs;
+            if (statusFilter) list = list.filter(k => k.status === statusFilter);
+            if (search) list = list.filter(k =>
+                k.kpi_name.toLowerCase().includes(search) ||
                 k.kpi_code.toLowerCase().includes(search) ||
                 (k.description && k.description.toLowerCase().includes(search))
             );
-            renderKPIList(filtered);
+            const sort = document.getElementById('kpiSort')?.value || '';
+            if (sort === 'name_asc') list = [...list].sort((a, b) => (a.kpi_name || '').localeCompare(b.kpi_name || ''));
+            else if (sort === 'name_desc') list = [...list].sort((a, b) => (b.kpi_name || '').localeCompare(a.kpi_name || ''));
+            renderKPIList(list);
         }
 
         async function showDetail(id) {
@@ -927,10 +935,7 @@
         // is fast — destroy() guards against duplicate canvases.
         document.addEventListener('walaPlusLanguageChange', function () {
             try {
-                const statusFilter = document.getElementById('statusFilter')?.value || '';
-                let filtered = allKPIs;
-                if (statusFilter) filtered = allKPIs.filter(k => k.status === statusFilter);
-                renderKPIList(filtered);
+                filterKPIs();
                 if (window._lastKPIChartData) renderCharts(window._lastKPIChartData);
             } catch (_) {}
         });
