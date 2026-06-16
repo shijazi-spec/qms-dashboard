@@ -252,6 +252,9 @@ export async function initKPITables(): Promise<void> {
      WHERE owner_type IN ('sdr_team', 'sales_team') AND (calc_mode IS NULL OR calc_mode = 'manual')`,
   );
 
+  // "How to Monitor" navigation playbooks (sample batch).
+  await seedKpiNavigationMaps();
+
   logger.info("✅ [KPIDB] KPI Engine tables initialized");
 }
 
@@ -1091,6 +1094,49 @@ export async function assignLeftoverKPIsToSpecialist(): Promise<void> {
       `👤 [KPIDB] Assigned ${res.rowCount} leftover KPIs (Mohammed's + Shared) to AlHanouf (GRQ Specialist)`,
     );
   }
+}
+
+/**
+ * "How to Monitor This KPI" navigation playbooks (navigation_map) for the
+ * canonical KPIs — Definition + Thresholds already render; these add the
+ * Screen → What to check → If result → Then action steps. Authored per KPI's
+ * real data source. SAMPLE BATCH (3): one auto, one checklist, one manual — the
+ * format Sarah approved; the rest follow once she signs off. Idempotent: only
+ * sets navigation_map where it's still empty (never clobbers manual edits).
+ */
+const KPI_NAVIGATION_MAPS: Record<string, NavigationStep[]> = {
+  // AUTO — Sales Conversion (computed from the Deals pipeline)
+  "SALES-KPI-02": [
+    { step: 1, action: "Review win/loss", screen: "Duplicate Radar — Deals", route: "/duplicates", what_to_check: "Deals that reached Signed / Agreement Signed / Paid vs Closed Lost this period.", if_result: "Conversion below the 30% target", then_action: "Run a win/loss review with the Sales lead and capture the loss reasons." },
+    { step: 2, action: "Clear stalled deals", screen: "Deal Stage Aging", route: "/duplicates", what_to_check: "Open deals stuck in Proposal / Agreement Sent past their SLA.", if_result: "Many deals aging in interim stages", then_action: "Push each stalled deal to a decision or mark it Closed Lost so the funnel is accurate." },
+    { step: 3, action: "Fix stage hygiene", screen: "Deal Compliance", route: "/duplicates", what_to_check: "Won deals are tagged Signed / Agreement Signed / Paid (not left mid-stage).", if_result: "Won deals mis-staged in Zoho", then_action: "Correct the Stage so the conversion number reflects reality." },
+  ],
+  // CHECKLIST — BU Framework Completion (per-BU action plans)
+  "QM-KPI-015": [
+    { step: 1, action: "Open the BU action plans", screen: "KPIs — BU Framework Completion", route: "/kpis", what_to_check: "Each BU's action-plan progress (process mapping → docs drafted → reviewed → published → trained → pilot audit).", if_result: "A BU is behind on its action plan", then_action: "Assign the open action items to the BU owner with a due date." },
+    { step: 2, action: "Confirm documents published", screen: "Documents Library", route: "/qms-docs", what_to_check: "The BU's governance documents are approved and published in QMS.", if_result: "Documents drafted but not published", then_action: "Route them through review/approval and publish, then tick the item." },
+    { step: 3, action: "Verify pilot audit", screen: "Internal Audits", route: "/audits", what_to_check: "A pilot audit was run for the BU and its gaps are closed.", if_result: "Pilot audit pending or gaps still open", then_action: "Schedule the pilot audit / close the findings, then tick the BU's final item." },
+  ],
+  // MANUAL — Regulatory Response Timeliness (no auto source; this IS the method)
+  "GRC-KPI-012": [
+    { step: 1, action: "List regulatory requests", screen: "Compliance", route: "/compliance", what_to_check: "Regulatory requests / inquiries received and their response deadlines.", if_result: "A request is near or past its deadline", then_action: "Assign an owner and respond before the deadline." },
+    { step: 2, action: "Attach the response evidence", screen: "Audit Readiness", route: "/audit-readiness", what_to_check: "Each request has a documented response / evidence on file.", if_result: "Response sent but not documented", then_action: "Upload the response so it's auditable." },
+    { step: 3, action: "Record the score", screen: "KPIs — Regulatory Response Timeliness", route: "/kpis", what_to_check: "% of requests answered within deadline this quarter.", if_result: "Below the 100% target", then_action: "Use Record Value to log it and note the breached request + root cause." },
+  ],
+};
+
+export async function seedKpiNavigationMaps(): Promise<void> {
+  for (const [code, steps] of Object.entries(KPI_NAVIGATION_MAPS)) {
+    await pool.query(
+      `UPDATE kpi_definitions
+          SET navigation_map = $1::jsonb, updated_at = NOW()
+        WHERE kpi_code = $2 AND navigation_map IS NULL`,
+      [JSON.stringify(steps), code],
+    );
+  }
+  logger.info(
+    `🧭 [KPIDB] Seeded How-to-Monitor navigation maps for ${Object.keys(KPI_NAVIGATION_MAPS).length} KPI(s)`,
+  );
 }
 
 /**
