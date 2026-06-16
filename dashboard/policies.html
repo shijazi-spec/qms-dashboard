@@ -129,7 +129,22 @@
             </div>
         </div>
 
-        <div id="docTypeSummary" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6"></div>
+        <!-- Document Master List — 5 prominent category boxes. Each box
+             groups one or more underlying document_type values and acts
+             as a one-click filter on the Document Register below. -->
+        <div class="bg-white rounded-lg shadow p-4 mb-6">
+            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">Document Master List</h2>
+                    <p class="text-xs text-gray-500">Click a category to filter the register below. Click again to clear.</p>
+                </div>
+                <button data-on-click="clearMasterGroup" id="masterGroupClearBtn" data-testid="button-master-clear" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">✕ Show all</button>
+            </div>
+            <div id="masterListGroups" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <!-- Populated by renderMasterList() — 5 boxes -->
+            </div>
+        </div>
+        <div id="docTypeSummary" class="hidden"></div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <div class="lg:col-span-2 bg-white rounded-lg shadow">
@@ -390,28 +405,102 @@
             }
         }
 
+        // Document Master List — 5 prominent category boxes.
+        // Each box groups one or more underlying document_type values
+        // so the operator sees the documents the way they file them
+        // (Processes / Documents / Policies / Forms / Controls)
+        // rather than the engineer-level type taxonomy.
+        const MASTER_GROUPS = [
+            { key: 'processes',  label: 'Processes',                   sub: 'SOPs · Procedures · Work Instructions', types: ['sop', 'procedure', 'work_instruction'], icon: '⚙️', color: 'blue' },
+            { key: 'documents',  label: 'Documents',                   sub: 'Guidelines · Manuals · Documents',       types: ['document', 'guideline', 'manual'],     icon: '📘', color: 'indigo' },
+            { key: 'policies',   label: 'Policies',                    sub: 'Governance & corporate policies',         types: ['policy'],                              icon: '📜', color: 'purple' },
+            { key: 'forms',      label: 'Forms',                       sub: 'Forms · Templates',                       types: ['form', 'template'],                    icon: '📝', color: 'amber' },
+            { key: 'controls',   label: 'Controls',                    sub: 'Internal controls (ISO / NCA / PCI)',    types: ['control'],                             icon: '🛡️', color: 'red' },
+        ];
+        const MASTER_COLORS = {
+            blue:   { border: 'border-blue-500',   bg: 'bg-blue-50',   text: 'text-blue-700',   active: 'bg-blue-600 text-white' },
+            indigo: { border: 'border-indigo-500', bg: 'bg-indigo-50', text: 'text-indigo-700', active: 'bg-indigo-600 text-white' },
+            purple: { border: 'border-purple-500', bg: 'bg-purple-50', text: 'text-purple-700', active: 'bg-purple-600 text-white' },
+            amber:  { border: 'border-amber-500',  bg: 'bg-amber-50',  text: 'text-amber-700',  active: 'bg-amber-600 text-white' },
+            red:    { border: 'border-red-500',    bg: 'bg-red-50',    text: 'text-red-700',    active: 'bg-red-600 text-white' },
+        };
+        // Active master-group filter (null = show all). Mutually exclusive
+        // with the existing filterDocType single-type dropdown — selecting
+        // a group clears the dropdown and vice versa.
+        let _activeMasterGroup = null;
+
         async function loadDocTypeSummary() {
             try {
                 const res = await fetch('/api/policies/by-type-summary');
                 const data = await res.json();
-                const container = document.getElementById('docTypeSummary');
-                if (!data.summary || data.summary.length === 0) {
-                    container.innerHTML = '';
-                    return;
-                }
-                container.innerHTML = data.summary.map(s => `
-                    <div class="bg-white rounded-lg shadow p-3 cursor-pointer hover:ring-2 hover:ring-blue-300 transition" data-on-click="filterByDocType" data-args="[&quot;${escAttr(s.document_type)}&quot;]" data-testid="card-doctype-${escAttr(s.document_type)}">
-                        <div class="flex items-center justify-between mb-1">
-                            <span class="doc-type-badge doc-${escAttr(s.document_type)}">${escapeHtml(docTypeLabels[s.document_type] || s.document_type)}</span>
-                            <span class="text-lg font-bold text-gray-900">${s.count}</span>
-                        </div>
-                        <div class="text-xs text-gray-500">${s.published || 0} published</div>
-                    </div>
-                `).join('');
+                renderMasterList(Array.isArray(data.summary) ? data.summary : []);
             } catch (e) { console.error('Error loading doc type summary:', e); }
         }
 
+        function renderMasterList(summary) {
+            const byType = {};
+            for (const s of summary) {
+                byType[(s.document_type || '').toLowerCase()] = {
+                    count: Number(s.count) || 0,
+                    published: Number(s.published) || 0,
+                };
+            }
+            const host = document.getElementById('masterListGroups');
+            if (!host) return;
+            host.innerHTML = MASTER_GROUPS.map(g => {
+                const totals = g.types.reduce((acc, t) => {
+                    const v = byType[t] || { count: 0, published: 0 };
+                    acc.count += v.count;
+                    acc.published += v.published;
+                    return acc;
+                }, { count: 0, published: 0 });
+                const isActive = _activeMasterGroup === g.key;
+                const c = MASTER_COLORS[g.color] || MASTER_COLORS.blue;
+                const ringCls = isActive ? 'ring-2 ring-offset-1 ' + c.border.replace('border-', 'ring-') : 'hover:shadow-md';
+                const headerCls = isActive ? c.active : (c.bg + ' ' + c.text);
+                return ''
+                  + '<div class="bg-white rounded-lg shadow border-s-4 ' + c.border + ' cursor-pointer transition ' + ringCls + '" data-on-click="selectMasterGroup" data-args="[&quot;' + g.key + '&quot;]" data-testid="card-master-' + g.key + '">'
+                  +   '<div class="px-3 py-2 ' + headerCls + ' rounded-t-lg flex items-center gap-2">'
+                  +     '<span class="text-lg" aria-hidden="true">' + g.icon + '</span>'
+                  +     '<span class="text-sm font-semibold">' + escapeHtml(g.label) + '</span>'
+                  +   '</div>'
+                  +   '<div class="p-3">'
+                  +     '<div class="text-3xl font-bold text-gray-900 leading-none">' + totals.count.toLocaleString() + '</div>'
+                  +     '<div class="text-[10px] text-gray-500 mt-1">' + totals.published.toLocaleString() + ' published · ' + Math.max(0, totals.count - totals.published).toLocaleString() + ' in workflow</div>'
+                  +     '<div class="text-[11px] text-gray-500 mt-2">' + escapeHtml(g.sub) + '</div>'
+                  +   '</div>'
+                  + '</div>';
+            }).join('');
+            const clearBtn = document.getElementById('masterGroupClearBtn');
+            if (clearBtn) clearBtn.classList.toggle('hidden', !_activeMasterGroup);
+        }
+
+        function selectMasterGroup(key) {
+            // Toggle: clicking the active group again clears the filter.
+            if (_activeMasterGroup === key) {
+                clearMasterGroup();
+                return;
+            }
+            _activeMasterGroup = key;
+            // Group filter and single-type dropdown are mutually exclusive —
+            // either you grouped or you picked one specific type, not both.
+            const sel = document.getElementById('filterDocType');
+            if (sel) sel.value = '';
+            // Repaint the boxes so the active one highlights.
+            loadDocTypeSummary();
+            applyFilters();
+        }
+
+        function clearMasterGroup() {
+            _activeMasterGroup = null;
+            loadDocTypeSummary();
+            applyFilters();
+        }
+
         function filterByDocType(type) {
+            // Single-type pick — clears any active master group so the two
+            // filters don't fight each other.
+            _activeMasterGroup = null;
             document.getElementById('filterDocType').value = type;
             applyFilters();
         }
@@ -455,6 +544,14 @@
             if (status) url += `&status=${status}`;
             if (category) url += `&category=${category}`;
             if (document_type) url += `&document_type=${document_type}`;
+            // Multi-type filter from the Document Master List boxes —
+            // server-side this becomes a SQL ANY($::text[]).
+            if (_activeMasterGroup) {
+                const g = (MASTER_GROUPS || []).find(x => x.key === _activeMasterGroup);
+                if (g && Array.isArray(g.types) && g.types.length > 0) {
+                    url += '&document_types=' + encodeURIComponent(g.types.join(','));
+                }
+            }
             if (search) url += `&search=${encodeURIComponent(search)}`;
 
             try {
