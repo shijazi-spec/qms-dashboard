@@ -1076,6 +1076,19 @@
                     <p class="text-[11px] text-gray-500 mt-1">
                         Excel file must contain at least one column named <code>domain</code>, <code>website</code>, <code>url</code>, or <code>email</code>. Optional: <code>company_name</code>. First worksheet only. Max 10&nbsp;MB.
                     </p>
+                    <!-- Sarah 2026-06-17 — opt-in CS-verdict refresh.
+                         Batch runs reuse the cluster's cached
+                         cs_overlap_verdict (set by the 6h sync). If a
+                         deal was just promoted to Paid in Zoho the
+                         cached verdict lags by up to 6 hours. Flip this
+                         on for an authoritative-but-slower run (one
+                         Zoho-free recompute per UNIQUE matched cluster,
+                         not per row). Use for the vendor-list briefing
+                         that goes to Sales. -->
+                    <label class="flex items-center gap-2 mt-2 text-xs text-gray-700" title="Re-runs the CS overlap scan on every matched cluster before classifying, so the verdict reflects the LATEST Zoho CS section. Adds ~1s per unique matched company.">
+                        <input type="checkbox" id="preflightRefreshOverlap" data-testid="checkbox-preflight-refresh-overlap" />
+                        <span>Refresh CS verdict from Zoho before classifying (slower, but reflects deals promoted to Paid in the last 6 hours)</span>
+                    </label>
                 </div>
 
                 <!-- Summary -->
@@ -8540,11 +8553,14 @@
         const PREFLIGHT_CHUNK_SIZE = 250;
         const PREFLIGHT_CHUNK_CONCURRENCY = 4;
 
-        async function _preflightOneChunk(chunkRows) {
+        async function _preflightOneChunk(chunkRows, refreshOverlap) {
             const res = await fetch('/api/duplicates/preflight', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rows: chunkRows }),
+                body: JSON.stringify({
+                    rows: chunkRows,
+                    refresh_overlap: !!refreshOverlap,
+                }),
             });
             if (!res.ok) {
                 const txt = await res.text();
@@ -8639,6 +8655,7 @@
             btn.disabled = true;
             btn.textContent = 'Checking…';
             try {
+                const refreshOverlap = !!(document.getElementById('preflightRefreshOverlap') || {}).checked;
                 // Split into chunks. Even with one row we go through this
                 // path so the merge code is the single source of truth.
                 const chunks = [];
@@ -8667,7 +8684,7 @@
                         const myIdx = cursor++;
                         if (myIdx >= total) return;
                         try {
-                            const data = await _preflightOneChunk(chunks[myIdx]);
+                            const data = await _preflightOneChunk(chunks[myIdx], refreshOverlap);
                             results[myIdx] = data;
                         } catch (e) {
                             if (!firstError) firstError = e;
