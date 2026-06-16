@@ -6988,6 +6988,276 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Populate the Layout picker on the "Push PASS rows to Zoho" modal.
+    // Returns one entry per layout configured on the requested Zoho
+    // module (default Leads). Admin-gated because it touches Zoho
+    // credentials.
+    path: "/api/duplicates/preflight/zoho-layouts",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const user = await requireAdminOrKey(c);
+          if (!user) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const module = (url.searchParams.get("module") || "Leads").trim();
+          const { fetchZohoLayouts } = await import("../../utils/zohoCRM");
+          const layouts = await fetchZohoLayouts(module);
+          return c.json({ success: true, module, layouts });
+        } catch (error: any) {
+          logger.error("Error fetching Zoho layouts:", error);
+          return c.json(
+            { error: "Failed to fetch Zoho layouts — " + (error?.message || "unknown") },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    // Populate the Owner picker on the Push-to-Zoho modal.
+    path: "/api/duplicates/preflight/zoho-users",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const user = await requireAdminOrKey(c);
+          if (!user) return unauthorizedResponse(c);
+          const { fetchZohoUsers } = await import("../../utils/zohoCRM");
+          const users = await fetchZohoUsers("ActiveUsers");
+          // Return only the operator-relevant fields, sorted by name.
+          const trimmed = users
+            .map((u) => ({
+              id: u.id,
+              name: u.full_name,
+              email: u.email,
+              role: u.role,
+            }))
+            .sort((a, b) =>
+              (a.name || "").localeCompare(b.name || ""),
+            );
+          return c.json({ success: true, users: trimmed });
+        } catch (error: any) {
+          logger.error("Error fetching Zoho users:", error);
+          return c.json(
+            { error: "Failed to fetch Zoho users — " + (error?.message || "unknown") },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
+    // Push the PASS rows from a Preflight run into Zoho as new Leads.
+    // Admin-gated (HIGH risk write — creates records in production CRM).
+    //
+    // Body:
+    //   {
+    //     rows: PreflightResultRow[]  // typically the verdict='pass' subset
+    //     layout_id: string            // required — Zoho Layout to land on
+    //     owner_mode: 'self' | 'round_robin' | 'custom'
+    //     owner_id?: string            // required when owner_mode='custom'
+    //     round_robin_user_ids?: string[]  // required when owner_mode='round_robin'
+    //     source: string               // stamped on every Lead's Lead_Source
+    //     dry_run?: boolean            // default TRUE — caller must pass false to actually write
+    //     max_batch?: number           // hard cap, default 5000
+    //   }
+    //
+    // Server-side defense in depth:
+    //   - Only rows with verdict='pass' are pushed (block/review/warn/
+    //     duplicate are dropped with an explanatory outcome).
+    //   - At least one of (domain, email, company_name) must be present
+    //     per row, or it's dropped.
+    //   - Hard cap at max_batch — refuses a load larger than the cap.
+    //   - Source string is stamped onto Lead_Source so an auditor can
+    //     find every record this push created.
+    //   - Audit row written to event_logs with the count + layout +
+    //     source + dry_run flag.
+    path: "/api/duplicates/preflight/push-to-zoho",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const body = await c.req.json().catch(() => ({}));
+          const allRows: any[] = Array.isArray(body?.rows) ? body.rows : [];
+          if (allRows.length === 0) {
+            return c.json({ error: "rows array required" }, 400);
+          }
+          const layoutId = String(body?.layout_id || "").trim();
+          if (!layoutId) {
+            return c.json({ error: "layout_id is required" }, 400);
+          }
+          const ownerMode = String(body?.owner_mode || "self").trim();
+          const ownerId = body?.owner_id ? String(body.owner_id).trim() : null;
+          const roundRobinIds: string[] = Array.isArray(body?.round_robin_user_ids)
+            ? body.round_robin_user_ids.map((x: any) => String(x).trim()).filter(Boolean)
+            : [];
+          if (ownerMode === "custom" && !ownerId) {
+            return c.json(
+              { error: "owner_id required when owner_mode='custom'" },
+              400,
+            );
+          }
+          if (ownerMode === "round_robin" && roundRobinIds.length === 0) {
+            return c.json(
+              { error: "round_robin_user_ids required when owner_mode='round_robin'" },
+              400,
+            );
+          }
+          const source = (
+            body?.source || `Preflight Push — ${new Date().toISOString().slice(0, 10)}`
+          ).toString().trim();
+          const dryRun = body?.dry_run !== false;
+          const MAX_BATCH_HARD = 5000;
+          const maxBatch =
+            typeof body?.max_batch === "number" && body.max_batch > 0
+              ? Math.min(MAX_BATCH_HARD, Math.floor(body.max_batch))
+              : MAX_BATCH_HARD;
+
+          // Defense in depth: drop any row that didn't get a PASS verdict.
+          // Drop rows that lack ANY identifier the operator could push.
+          const eligible: any[] = [];
+          const dropped: Array<{ row_index: number; reason: string }> = [];
+          for (const r of allRows) {
+            if (r?.verdict && r.verdict !== "pass") {
+              dropped.push({
+                row_index: r.row_index ?? -1,
+                reason: "not_pass_verdict",
+              });
+              continue;
+            }
+            const dom = (r?.input?.domain ?? r?.domain ?? "").toString().trim();
+            const email = (r?.email ?? "").toString().trim();
+            const company = (r?.input?.company_name ?? r?.company_name ?? "").toString().trim();
+            if (!dom && !email && !company) {
+              dropped.push({
+                row_index: r.row_index ?? -1,
+                reason: "no_identifier",
+              });
+              continue;
+            }
+            eligible.push(r);
+          }
+
+          if (eligible.length > maxBatch) {
+            return c.json(
+              {
+                error: `Eligible rows (${eligible.length}) exceed max_batch (${maxBatch}). Split client-side.`,
+                eligible_count: eligible.length,
+              },
+              400,
+            );
+          }
+
+          // Build the Zoho Lead payloads.
+          const payloads: Array<Record<string, any>> = eligible.map((r, i) => {
+            const dom = (r?.input?.domain ?? r?.domain ?? "").toString().trim() || null;
+            const email = (r?.email ?? "").toString().trim() || null;
+            const company = (r?.input?.company_name ?? r?.company_name ?? "").toString().trim() || null;
+            const phone = (r?.phone ?? "").toString().trim() || null;
+            const ownerForRow =
+              ownerMode === "self"
+                ? sessionUser?.email || null
+                : ownerMode === "round_robin"
+                  ? roundRobinIds[i % roundRobinIds.length]
+                  : ownerId;
+            const p: Record<string, any> = {
+              Company: company || dom || "(unknown)",
+              Last_Name: company || dom || "(unknown)",
+              Lead_Source: source,
+              Description: `Imported via QMS Preflight Push — ${new Date().toISOString()}. Operator: ${sessionUser?.email || "unknown"}.`,
+              Layout: { id: layoutId },
+            };
+            if (email) p.Email = email;
+            if (phone) p.Phone = phone;
+            if (dom) p.Website = dom.startsWith("http") ? dom : `https://${dom}`;
+            if (ownerForRow && ownerMode !== "self") {
+              p.Owner = { id: ownerForRow };
+            }
+            return p;
+          });
+
+          if (dryRun) {
+            // No Zoho calls. Return what WOULD happen.
+            return c.json({
+              success: true,
+              dry_run: true,
+              eligible_count: eligible.length,
+              dropped_count: dropped.length,
+              dropped_sample: dropped.slice(0, 10),
+              would_create_count: payloads.length,
+              sample_payload: payloads[0] || null,
+              source,
+              layout_id: layoutId,
+              owner_mode: ownerMode,
+            });
+          }
+
+          const { createZohoRecordsBulk } = await import(
+            "../../utils/zohoCRM"
+          );
+          const outcomes = await createZohoRecordsBulk("Leads", payloads);
+          const created = outcomes.filter((o) => o.status === "success").length;
+          const failed = outcomes.filter((o) => o.status === "error").length;
+
+          // Audit log — every push gets one row in event_logs.
+          try {
+            const { logEvent } = await import(
+              "../../utils/eventLogsDatabase"
+            );
+            await logEvent({
+              userId: sessionUser?.userId ?? 0,
+              userEmail: sessionUser?.email ?? "system",
+              userRole: sessionUser?.role,
+              actionType: "PUSH_TO_ZOHO",
+              entityType: "Leads",
+              entityId: layoutId,
+              entityName: source,
+              description: `Preflight Push: created ${created} of ${payloads.length} Leads (${failed} failed) into Layout ${layoutId}, source "${source}", owner_mode=${ownerMode}.`,
+              aiInvolved: false,
+              severity: failed > 0 ? "WARNING" : "INFO",
+              module: "duplicate-radar",
+            });
+          } catch {
+            /* non-fatal */
+          }
+
+          return c.json({
+            success: true,
+            dry_run: false,
+            eligible_count: eligible.length,
+            dropped_count: dropped.length,
+            attempted: payloads.length,
+            created,
+            failed,
+            outcomes_sample: outcomes.slice(0, 20),
+            source,
+            layout_id: layoutId,
+            owner_mode: ownerMode,
+          });
+        } catch (error: any) {
+          logger.error("Error in preflight push-to-zoho:", error);
+          return c.json(
+            { error: "Push to Zoho failed — " + (error?.message || "unknown") },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     // Formatted Excel export for the Preflight Check tab. Takes either a
     // PreflightResponse the client already rendered (preferred — no
     // re-run) or `rows` to re-run server-side. Returns an .xlsx with:

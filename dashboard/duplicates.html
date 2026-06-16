@@ -1049,6 +1049,7 @@
                         <!-- Executive report toolbar — appears after a successful run. -->
                         <button data-on-click="exportPreflightExcel" id="preflightExportXlsxBtn" data-testid="button-preflight-export-xlsx" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-700 text-white hover:bg-emerald-800" title="Download a polished Excel report — Summary cover sheet + colour-coded Findings sheet. Designed to attach to a Head-of-Sales email.">📊 Export Excel report</button>
                         <button data-on-click="copyPreflightEmailBody" id="preflightCopyEmailBtn" data-testid="button-preflight-copy-email" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-100 text-blue-900 hover:bg-blue-200" title="Copy a ready-to-paste email body with the run's headline numbers and top reasons. Pair with the Excel attachment for the Head-of-Sales briefing.">📋 Copy email body</button>
+                        <button data-on-click="openPushToZohoModal" id="preflightPushBtn" data-testid="button-preflight-push" class="hidden px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700" title="Push the PASS rows into Zoho CRM as new Leads on a Layout you pick. Defense in depth: dry-run by default, only PASS rows ever sent, every push audit-logged.">📤 Push PASS rows to Zoho</button>
                         <span id="preflightParsedCount" class="ml-auto text-xs text-gray-500"></span>
                     </div>
                     <p class="text-[11px] text-gray-500 mt-1">
@@ -1115,6 +1116,75 @@
                         <tr><td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Push PASS rows to Zoho — modal. Sits inside the Preflight tab. -->
+            <div id="pushZohoModal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center" data-style="z-index:60" data-testid="modal-push-zoho">
+                <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[88vh] overflow-y-auto">
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900">📤 Push PASS rows to Zoho CRM</h3>
+                                <p class="text-xs text-gray-500 mt-1">Creates new Leads in Zoho on the Layout you pick. Only PASS rows are sent. Defaults to a <strong>dry-run</strong> — flip the switch below to actually write.</p>
+                            </div>
+                            <button data-on-click="closePushZohoModal" data-testid="button-close-push-zoho" class="text-gray-400 hover:text-gray-600" aria-label="Close push modal">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="bg-purple-50 border border-purple-200 rounded p-2 text-xs text-purple-900">
+                                <span id="pushZohoEligibleCount" class="font-semibold">0</span> PASS row(s) eligible to push. Rows with verdict BLOCK / REVIEW / WARN / DUPLICATE are never sent.
+                            </div>
+
+                            <div>
+                                <label for="pushZohoLayout" class="block text-xs font-medium text-gray-700 mb-1">Zoho Layout / Pipeline</label>
+                                <select id="pushZohoLayout" class="w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="select-push-zoho-layout">
+                                    <option value="">Loading layouts…</option>
+                                </select>
+                                <p class="text-[11px] text-gray-500 mt-0.5">Each Zoho Layout has its own required fields. If creation fails, check the Layout's mandatory fields.</p>
+                            </div>
+
+                            <div>
+                                <span class="block text-xs font-medium text-gray-700 mb-1">Owner assignment</span>
+                                <label class="flex items-center gap-2 text-sm py-1">
+                                    <input type="radio" name="pushZohoOwnerMode" value="self" checked data-on-change="onPushZohoOwnerModeChange" data-testid="radio-push-zoho-self" />
+                                    <span>Assign all to me (default)</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-sm py-1">
+                                    <input type="radio" name="pushZohoOwnerMode" value="custom" data-on-change="onPushZohoOwnerModeChange" data-testid="radio-push-zoho-custom" />
+                                    <span>Assign all to one specific Zoho user…</span>
+                                </label>
+                                <select id="pushZohoOwnerCustom" class="w-full text-sm border rounded-lg px-3 py-2 mt-1 hidden" data-testid="select-push-zoho-owner">
+                                    <option value="">Loading users…</option>
+                                </select>
+                                <label class="flex items-center gap-2 text-sm py-1">
+                                    <input type="radio" name="pushZohoOwnerMode" value="round_robin" data-on-change="onPushZohoOwnerModeChange" data-testid="radio-push-zoho-rr" />
+                                    <span>Round-robin across a list of users…</span>
+                                </label>
+                                <select id="pushZohoOwnerRR" multiple size="4" class="w-full text-sm border rounded-lg px-3 py-2 mt-1 hidden" data-testid="select-push-zoho-rr"></select>
+                                <p class="text-[11px] text-gray-500 mt-0.5">Round-robin cycles through the selected users in order (row 1 → user 1, row 2 → user 2, …).</p>
+                            </div>
+
+                            <div>
+                                <label for="pushZohoSource" class="block text-xs font-medium text-gray-700 mb-1">Lead_Source stamp</label>
+                                <input type="text" id="pushZohoSource" class="w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-400" data-testid="input-push-zoho-source" />
+                                <p class="text-[11px] text-gray-500 mt-0.5">Stamped on every Lead's <code>Lead_Source</code> so you can find this batch later.</p>
+                            </div>
+
+                            <label class="flex items-center gap-2 text-sm py-2 px-3 bg-amber-50 border border-amber-200 rounded">
+                                <input type="checkbox" id="pushZohoDryRun" checked data-testid="checkbox-push-zoho-dryrun" />
+                                <span><strong>Dry-run</strong> — returns what WOULD be created without touching Zoho. Uncheck to actually write.</span>
+                            </label>
+
+                            <div class="flex items-center justify-end gap-2 pt-2 border-t">
+                                <button data-on-click="closePushZohoModal" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200" data-testid="button-cancel-push-zoho">Cancel</button>
+                                <button data-on-click="runPushToZoho" id="pushZohoRunBtn" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-600 text-white hover:bg-purple-700" data-testid="button-run-push-zoho">Push to Zoho</button>
+                            </div>
+
+                            <div id="pushZohoResult" class="hidden text-xs bg-gray-50 border border-gray-200 rounded p-3 max-h-60 overflow-y-auto"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -9809,11 +9879,18 @@
                     + '</div>').join('') || '<div class="text-xs text-gray-500 col-span-full">No actionable matches in this batch.</div>';
             }
 
-            // Show export / copy-email buttons now that there is a result.
+            // Show export / copy-email / push buttons now that there is a result.
             const xlsxBtn = document.getElementById('preflightExportXlsxBtn');
             const copyBtn = document.getElementById('preflightCopyEmailBtn');
+            const pushBtn = document.getElementById('preflightPushBtn');
             if (xlsxBtn) xlsxBtn.classList.remove('hidden');
             if (copyBtn) copyBtn.classList.remove('hidden');
+            // Push is only useful if there's at least one PASS row.
+            if (pushBtn) {
+                const passCount = (data.rows || []).filter(r => r.verdict === 'pass').length;
+                if (passCount > 0) pushBtn.classList.remove('hidden');
+                else pushBtn.classList.add('hidden');
+            }
 
             const body = document.getElementById('preflightResultTable');
             const rows = data.rows || [];
@@ -9874,6 +9951,131 @@
                 setTimeout(() => URL.revokeObjectURL(a.href), 1000);
             } catch (e) {
                 alert('Excel export failed: ' + (e.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
+        async function openPushToZohoModal() {
+            const data = window._preflightLastResult;
+            if (!data) { alert('Run a Preflight check first.'); return; }
+            const passRows = (data.rows || []).filter(r => r.verdict === 'pass');
+            if (passRows.length === 0) {
+                alert('No PASS rows in this run — nothing to push.');
+                return;
+            }
+            window._preflightPushPassRows = passRows;
+
+            // Seed the source field with a stamp the operator can edit.
+            const stamp = new Date().toISOString().slice(0, 10);
+            const srcEl = document.getElementById('pushZohoSource');
+            if (srcEl) srcEl.value = 'Preflight Push — ' + stamp;
+            const eligEl = document.getElementById('pushZohoEligibleCount');
+            if (eligEl) eligEl.textContent = passRows.length.toLocaleString();
+            const resultBox = document.getElementById('pushZohoResult');
+            if (resultBox) { resultBox.classList.add('hidden'); resultBox.innerHTML = ''; }
+            document.getElementById('pushZohoDryRun').checked = true;
+            document.querySelector('input[name="pushZohoOwnerMode"][value="self"]').checked = true;
+            onPushZohoOwnerModeChange();
+
+            document.getElementById('pushZohoModal').classList.remove('hidden');
+
+            // Lazy-load layouts + users (one fetch per modal-open is fine).
+            try {
+                const [layoutsRes, usersRes] = await Promise.all([
+                    fetch('/api/duplicates/preflight/zoho-layouts?module=Leads'),
+                    fetch('/api/duplicates/preflight/zoho-users'),
+                ]);
+                const layouts = layoutsRes.ok ? (await layoutsRes.json()).layouts || [] : [];
+                const users = usersRes.ok ? (await usersRes.json()).users || [] : [];
+                const layoutSel = document.getElementById('pushZohoLayout');
+                if (layoutSel) {
+                    layoutSel.innerHTML = '<option value="">Select layout…</option>' +
+                        layouts.map(l => '<option value="' + escAttr(l.id) + '">' + escapeHtml(l.name) + '</option>').join('');
+                }
+                const customSel = document.getElementById('pushZohoOwnerCustom');
+                const rrSel = document.getElementById('pushZohoOwnerRR');
+                const userOpts = users.map(u => '<option value="' + escAttr(u.id) + '">' + escapeHtml(u.name + ' (' + (u.email || '—') + ')') + '</option>').join('');
+                if (customSel) customSel.innerHTML = '<option value="">Select user…</option>' + userOpts;
+                if (rrSel) rrSel.innerHTML = userOpts;
+            } catch (e) {
+                console.error('Push-to-Zoho metadata load failed:', e);
+            }
+        }
+
+        function closePushZohoModal() {
+            const m = document.getElementById('pushZohoModal');
+            if (m) m.classList.add('hidden');
+        }
+
+        function onPushZohoOwnerModeChange() {
+            const mode = (document.querySelector('input[name="pushZohoOwnerMode"]:checked') || {}).value || 'self';
+            const customSel = document.getElementById('pushZohoOwnerCustom');
+            const rrSel = document.getElementById('pushZohoOwnerRR');
+            if (customSel) customSel.classList.toggle('hidden', mode !== 'custom');
+            if (rrSel) rrSel.classList.toggle('hidden', mode !== 'round_robin');
+        }
+
+        async function runPushToZoho() {
+            const rows = window._preflightPushPassRows || [];
+            if (rows.length === 0) { alert('Reopen the modal — no rows in memory.'); return; }
+            const layoutId = (document.getElementById('pushZohoLayout') || {}).value || '';
+            if (!layoutId) { alert('Pick a Zoho Layout first.'); return; }
+            const mode = (document.querySelector('input[name="pushZohoOwnerMode"]:checked') || {}).value || 'self';
+            const dryRun = !!(document.getElementById('pushZohoDryRun') || {}).checked;
+            const source = ((document.getElementById('pushZohoSource') || {}).value || '').trim();
+
+            const body = {
+                rows,
+                layout_id: layoutId,
+                owner_mode: mode,
+                source,
+                dry_run: dryRun,
+            };
+            if (mode === 'custom') {
+                body.owner_id = (document.getElementById('pushZohoOwnerCustom') || {}).value || '';
+                if (!body.owner_id) { alert('Pick the Zoho user to assign all rows to.'); return; }
+            } else if (mode === 'round_robin') {
+                const sel = document.getElementById('pushZohoOwnerRR');
+                body.round_robin_user_ids = sel ? Array.from(sel.selectedOptions).map(o => o.value).filter(Boolean) : [];
+                if (body.round_robin_user_ids.length === 0) { alert('Pick at least one user for round-robin.'); return; }
+            }
+
+            const btn = document.getElementById('pushZohoRunBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = (dryRun ? 'Dry-running…' : 'Pushing…'); }
+            const resultBox = document.getElementById('pushZohoResult');
+            try {
+                const res = await fetch('/api/duplicates/preflight/push-to-zoho', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+                if (resultBox) {
+                    resultBox.classList.remove('hidden');
+                    if (data.dry_run) {
+                        resultBox.innerHTML = ''
+                            + '<div class="font-semibold text-purple-800 mb-1">✓ Dry-run complete</div>'
+                            + '<div>Would create ' + (data.would_create_count || 0) + ' Lead(s) on Layout ' + escapeHtml(data.layout_id || '') + '.</div>'
+                            + '<div>Dropped: ' + (data.dropped_count || 0) + ' (non-PASS or no identifier).</div>'
+                            + (data.sample_payload ? '<div class="mt-2 font-mono text-[10px] bg-white border rounded p-2">Sample payload:<br>' + escapeHtml(JSON.stringify(data.sample_payload, null, 2)) + '</div>' : '')
+                            + '<div class="mt-2 text-amber-700">Uncheck the Dry-run box and Push again to actually create the records.</div>';
+                    } else {
+                        resultBox.innerHTML = ''
+                            + '<div class="font-semibold text-emerald-800 mb-1">✓ Push complete</div>'
+                            + '<div>Created: ' + (data.created || 0) + ' / ' + (data.attempted || 0) + '</div>'
+                            + '<div>Failed: ' + (data.failed || 0) + '</div>'
+                            + '<div>Dropped: ' + (data.dropped_count || 0) + ' (non-PASS or no identifier).</div>'
+                            + '<div class="mt-1 text-gray-500">Audit-logged. Source: ' + escapeHtml(data.source || '') + '.</div>';
+                    }
+                }
+            } catch (e) {
+                if (resultBox) {
+                    resultBox.classList.remove('hidden');
+                    resultBox.innerHTML = '<div class="font-semibold text-red-700">✗ Push failed</div><div>' + escapeHtml(e.message || String(e)) + '</div>';
+                }
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
