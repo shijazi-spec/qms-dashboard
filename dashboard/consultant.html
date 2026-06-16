@@ -1138,7 +1138,9 @@
                         bubble.innerHTML = renderMarkdown(fullText);
                     }
 
-                if (isArabic(fullText)) bubble.setAttribute('dir', 'rtl');
+                // Direction is handled by dir="auto" on the bubble (LTR for an
+                // English reply, RTL for Arabic) — do NOT force rtl on any Arabic
+                // char, or an English answer that mentions an Arabic name flips.
                 chatMessages.push({ role: 'assistant', content: fullText, time: new Date().toISOString() });
                 if (fullText.trim()) {
                     attachFeedbackUI(bubble, capturedMessageId, text, fullText, assistantCallId, assistantPromptVersion);
@@ -1238,7 +1240,7 @@
                         try { console.error('[Consultant] non-stream error envelope:', data); } catch (_) {}
                         bubble = createAssistantMessage();
                         bubble.innerHTML = renderMarkdown(respText);
-                        if (isArabic(respText)) bubble.setAttribute('dir', 'rtl');
+                        // direction via dir="auto" (LTR for EN, RTL for AR)
                         chatMessages.push({ role: 'assistant', content: respText, time: new Date().toISOString() });
                         // Only attach the feedback UI when we actually got
                         // a real model answer (data.response). Attaching
@@ -1353,7 +1355,7 @@
                 var scanResult = data.summary || data.result || data.message || JSON.stringify(data, null, 2);
                 if (typeof scanResult === 'object') scanResult = '```json\n' + JSON.stringify(scanResult, null, 2) + '\n```';
                 bubble.innerHTML = renderMarkdown(scanResult);
-                if (isArabic(scanResult)) bubble.setAttribute('dir', 'rtl');
+                // direction via dir="auto" (LTR for EN, RTL for AR)
                 chatMessages.push({ role: 'assistant', content: scanResult, time: new Date().toISOString() });
 
                 setTimeout(function() { scanArea.classList.add('hidden'); }, 2000);
@@ -1974,7 +1976,7 @@
                     } else if (m.role === 'assistant') {
                         var bubble = createAssistantMessage();
                         bubble.innerHTML = renderMarkdown(m.content);
-                        if (isArabic(m.content)) bubble.setAttribute('dir', 'rtl');
+                        // direction via dir="auto" (LTR for EN, RTL for AR)
                         chatMessages.push({ role: 'assistant', content: m.content, time: m.createdAt || new Date().toISOString() });
                         if (m.messageId && m.content && m.content.trim()) {
                             attachFeedbackUI(bubble, m.messageId, '', m.content, null, pv);
