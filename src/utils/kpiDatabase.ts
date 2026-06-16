@@ -1600,11 +1600,8 @@ export async function seedSDRKPIsManual(): Promise<void> {
  * live values are computed by the auto-calc engine (Phase C). Idempotent.
  */
 async function seedSalesKPIs(): Promise<void> {
-  const exists = await pool.query(
-    "SELECT COUNT(*) FROM kpi_definitions WHERE owner_type = 'sales_team'",
-  );
-  if (parseInt(exists.rows[0].count) > 0) return;
-
+  // No early-return guard: the per-row ON CONFLICT DO NOTHING makes this idempotent,
+  // so newly-added Sales KPIs (e.g. SALES-KPI-09) seed onto already-populated DBs too.
   logger.info("🌱 [KPIDB] Seeding Sales Team KPIs...");
 
   const salesKPIs: Array<Partial<KPIDefinition>> = [
@@ -1616,6 +1613,7 @@ async function seedSalesKPIs(): Promise<void> {
     { kpi_code: "SALES-KPI-06", kpi_name: "CRM Data Accuracy (Deals)", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 95, threshold_green: 95, threshold_amber: 85, threshold_red: 70, threshold_direction: "higher_is_better", frequency: "monthly", description: "Deals passing the Sales-SOP governance field checks.", formula: "(Clean deals ÷ total deals) × 100" },
     { kpi_code: "SALES-KPI-07", kpi_name: "Follow-Up Effectiveness", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 80, threshold_green: 80, threshold_amber: 60, threshold_red: 40, threshold_direction: "higher_is_better", frequency: "weekly", description: "Open deals with an upcoming / on-time follow-up task.", formula: "(Deals with on-time follow-up ÷ open deals) × 100" },
     { kpi_code: "SALES-KPI-08", kpi_name: "First-Contact SLA", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 90, threshold_green: 90, threshold_amber: 75, threshold_red: 60, threshold_direction: "higher_is_better", frequency: "weekly", description: "New deals contacted within the first-contact SLA window.", formula: "(Deals contacted within SLA ÷ new deals) × 100" },
+    { kpi_code: "SALES-KPI-09", kpi_name: "Duplicate Rate (Sales)", owner_type: "sales_team", owner_name: "Sales Team", category: "quality", unit: "%", target_value: 2, threshold_green: 2, threshold_amber: 5, threshold_red: 10, threshold_direction: "lower_is_better", frequency: "monthly", description: "Deals duplicated in the CRM (same deal logged more than once) — the Sales BU's slice of the Duplicate Radar.", formula: "(Duplicate deals ÷ total deals) × 100" },
   ];
 
   for (const k of salesKPIs) {
@@ -1628,7 +1626,7 @@ async function seedSalesKPIs(): Promise<void> {
     );
   }
 
-  logger.info("✅ [KPIDB] Seeded 8 Sales Team KPIs");
+  logger.info("✅ [KPIDB] Seeded 9 Sales Team KPIs");
 }
 
 export async function seedSalesKPIsManual(): Promise<void> {

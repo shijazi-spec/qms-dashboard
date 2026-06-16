@@ -325,6 +325,30 @@ export async function calcSalesCrmAccuracy(): Promise<ProcessKpiValue> {
   return cleanShare(await localRawRecords("Deals"), "Deals");
 }
 
+/** SALES-KPI-09 Duplicate Rate (Sales) — non-primary Deals in multi-record clusters ÷ all Deals. */
+export async function calcSalesDuplicateRate(): Promise<ProcessKpiValue> {
+  const res = await pool.query(
+    `WITH deal_clusters AS (
+       SELECT cluster_id FROM duplicate_records
+        WHERE zoho_module = 'Deals' AND cluster_id IS NOT NULL
+        GROUP BY cluster_id HAVING COUNT(*) > 1
+     )
+     SELECT
+       (SELECT COUNT(*) FROM duplicate_records WHERE zoho_module = 'Deals')::int AS total,
+       (SELECT COUNT(*) FROM duplicate_records r
+          JOIN deal_clusters dc ON r.cluster_id = dc.cluster_id
+         WHERE r.zoho_module = 'Deals' AND r.is_primary = false)::int AS dups`,
+  );
+  const total = Number(res.rows[0]?.total || 0);
+  const dups = Number(res.rows[0]?.dups || 0);
+  if (total === 0) return EMPTY;
+  return {
+    value: Math.round((dups / total) * 1000) / 10,
+    dataAvailable: true,
+    details: { duplicate_deals: dups, total_deals: total },
+  };
+}
+
 /**
  * SALES-KPI-03 Proposal Cycle Time + SALES-KPI-04 Agreement Cycle Time — from
  * Zoho Stage_History (per Sarah's choice). Zoho gives Stage_Duration (days spent
@@ -491,6 +515,7 @@ export const PROCESS_CALCULATORS: Record<
   "SALES-KPI-02": calcSalesConversionRate,
   "SALES-KPI-05": calcSalesDocCompliance,
   "SALES-KPI-06": calcSalesCrmAccuracy,
+  "SALES-KPI-09": calcSalesDuplicateRate,
   // GRC — driven by the Document Mapping framework coverage
   "GRC-KPI-002": calcCertificationMilestones,
   // Quality — driven by the Integrated QMS document lifecycle
