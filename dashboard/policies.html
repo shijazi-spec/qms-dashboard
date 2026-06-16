@@ -160,8 +160,11 @@
                         <option value="sop" data-i18n="policies.t_sop">SOP</option>
                         <option value="form" data-i18n="policies.t_form">Form</option>
                         <option value="template" data-i18n="policies.t_template">Template</option>
+                        <option value="document">Document</option>
                         <option value="manual" data-i18n="policies.t_manual">Manual</option>
                         <option value="guideline" data-i18n="policies.t_guideline">Guideline</option>
+                        <option value="control">Control</option>
+                        <option value="security_control">Security Control</option>
                     </select>
                     <select id="filterStatus" aria-label="Filter by document status" data-on-change="applyFilters" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-status">
                         <option value="" data-i18n="policies.all_status">All Status</option>
@@ -248,8 +251,11 @@
                             <option value="sop" data-i18n="policies.t_sop">SOP</option>
                             <option value="form" data-i18n="policies.t_form">Form</option>
                             <option value="template" data-i18n="policies.t_template">Template</option>
+                            <option value="document">Document</option>
                             <option value="manual" data-i18n="policies.t_manual">Manual</option>
                             <option value="guideline" data-i18n="policies.t_guideline">Guideline</option>
+                            <option value="control">Control</option>
+                            <option value="security_control">Security Control</option>
                         </select>
                     </div>
                     <div>
@@ -374,7 +380,8 @@
 
         const docTypeLabels = {
             'policy': 'Policy', 'procedure': 'Procedure', 'work_instruction': 'Work Instruction',
-            'sop': 'SOP', 'form': 'Form', 'template': 'Template', 'manual': 'Manual', 'guideline': 'Guideline'
+            'sop': 'SOP', 'form': 'Form', 'template': 'Template', 'manual': 'Manual', 'guideline': 'Guideline',
+            'control': 'Control', 'security_control': 'Security Control', 'document': 'Document'
         };
         const confLabels = { 'public': 'Public', 'internal': 'Internal', 'confidential': 'Confidential', 'restricted': 'Restricted' };
         const confColors = { 'public': 'text-green-600', 'internal': 'text-gray-600', 'confidential': 'text-amber-600', 'restricted': 'text-red-600' };
@@ -415,7 +422,7 @@
             { key: 'documents',  label: 'Documents',                   sub: 'Guidelines · Manuals · Documents',       types: ['document', 'guideline', 'manual'],     icon: '📘', color: 'indigo' },
             { key: 'policies',   label: 'Policies',                    sub: 'Governance & corporate policies',         types: ['policy'],                              icon: '📜', color: 'purple' },
             { key: 'forms',      label: 'Forms',                       sub: 'Forms · Templates',                       types: ['form', 'template'],                    icon: '📝', color: 'amber' },
-            { key: 'controls',   label: 'Controls',                    sub: 'Internal controls (ISO / NCA / PCI)',    types: ['control'],                             icon: '🛡️', color: 'red' },
+            { key: 'controls',   label: 'Controls',                    sub: 'Internal controls · Security controls',   types: ['control', 'security_control'],         icon: '🛡️', color: 'red' },
         ];
         const MASTER_COLORS = {
             blue:   { border: 'border-blue-500',   bg: 'bg-blue-50',   text: 'text-blue-700',   active: 'bg-blue-600 text-white' },
