@@ -433,6 +433,40 @@ export async function calcCertificationMilestones(): Promise<ProcessKpiValue> {
   };
 }
 
+// ───────────────────── Quality — Documentation Lifecycle ────────────────────
+/**
+ * QM-KPI-010 Documentation Lifecycle Compliance — driven by the Integrated QMS
+ * document register (`policies` table, the /policies "Document Lifecycle" page)
+ * per Sarah (2026-06-16). NOTE: this is the document REVIEW CYCLE (Draft → Review
+ * → Approval → Published → Annual Review), NOT the AI Approvals Queue. Value =
+ * controlled documents that completed the lifecycle (Published) AND are current
+ * (review not overdue) ÷ active controlled documents.
+ */
+export async function calcDocumentationLifecycle(): Promise<ProcessKpiValue> {
+  let res;
+  try {
+    res = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE status NOT IN ('archived','retired'))::int AS active_total,
+         COUNT(*) FILTER (WHERE status = 'published')::int AS published,
+         COUNT(*) FILTER (WHERE status = 'published' AND review_date < NOW())::int AS overdue
+       FROM policies`,
+    );
+  } catch {
+    return EMPTY;
+  }
+  const activeTotal = Number(res.rows[0]?.active_total || 0);
+  const published = Number(res.rows[0]?.published || 0);
+  const overdue = Number(res.rows[0]?.overdue || 0);
+  if (activeTotal === 0) return EMPTY;
+  const compliant = Math.max(0, published - overdue);
+  return {
+    value: Math.round((compliant / activeTotal) * 1000) / 10,
+    dataAvailable: true,
+    details: { active_total: activeTotal, published, overdue_reviews: overdue, compliant },
+  };
+}
+
 /**
  * Map of canonical SDR/Sales KPI code → LOCAL-only calculator (no Zoho calls).
  * Cycle-time KPIs (SALES-KPI-03/04) are handled separately via
@@ -459,6 +493,8 @@ export const PROCESS_CALCULATORS: Record<
   "SALES-KPI-06": calcSalesCrmAccuracy,
   // GRC — driven by the Document Mapping framework coverage
   "GRC-KPI-002": calcCertificationMilestones,
+  // Quality — driven by the Integrated QMS document lifecycle
+  "QM-KPI-010": calcDocumentationLifecycle,
 };
 
 /**
