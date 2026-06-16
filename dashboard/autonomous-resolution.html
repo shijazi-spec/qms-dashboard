@@ -65,6 +65,23 @@
             <div id="execBriefMeta" class="text-[11px] text-gray-400 mt-1"></div>
         </section>
 
+        <!-- Queued proposals: safe-tier vs escalated + clear -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">Queued proposals</h2>
+                <div class="flex items-center gap-2">
+                    <button data-on-click="loadProposalTiers" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+                    <button data-on-click="clearShadowProposals" id="clearShadowBtn" title="Bulk-reject all pending shadow proposals — they were never applied to Zoho; this only clears the review backlog." class="px-3 py-1.5 text-xs rounded-lg bg-gray-700 text-white hover:bg-gray-800">🧹 Clear shadow proposals</button>
+                </div>
+            </div>
+            <div id="proposalTiers" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div class="text-gray-500">Loading…</div>
+            </div>
+            <p class="text-xs text-gray-500 mt-3">
+                <strong>Safe-tier</strong> = high-confidence, single-company, no deal value / field conflicts / attachments — exactly what the agent auto-applies in <strong>assisted</strong> mode. <strong>Needs review</strong> = escalated for a human. Flipping to <strong>assisted</strong> (Status panel below) auto-applies the safe tier going forward and queues only the escalated ones — it does NOT execute the proposals already listed here, which you can clear.
+            </p>
+        </section>
+
         <!-- Status panel -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <h2 class="text-lg font-semibold text-gray-900 mb-3">Status</h2>
@@ -589,7 +606,47 @@
             }
         }
 
-        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); }
+        async function loadProposalTiers() {
+            var box = document.getElementById('proposalTiers');
+            if (!box) return;
+            try {
+                var d = await getJSON('/api/duplicates/autonomous/proposal-tiers');
+                var card = function (label, value, cls, sub) {
+                    return '<div class="rounded-lg border border-gray-200 p-3">' +
+                        '<div class="text-xs text-gray-500">' + esc(label) + '</div>' +
+                        '<div class="text-2xl font-bold ' + cls + '">' + Number(value || 0).toLocaleString() + '</div>' +
+                        (sub ? '<div class="text-[11px] text-gray-400 mt-0.5">' + esc(sub) + '</div>' : '') +
+                        '</div>';
+                };
+                box.innerHTML =
+                    card('Safe-tier (agent confident)', d.safeTier, 'text-emerald-700', 'auto-applies in assisted mode') +
+                    card('Needs review (escalated)', d.escalated, 'text-amber-700', 'a human decides') +
+                    card('Total queued', d.total, 'text-gray-800', (d.other ? d.other + ' other' : ''));
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+
+        async function clearShadowProposals() {
+            if (!confirm('Clear ALL pending shadow proposals from the queue?\n\nThese were never applied to Zoho (shadow mode) — this only empties the review backlog so the queue shows real escalations. No CRM changes.')) return;
+            var btn = document.getElementById('clearShadowBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Clearing…'; }
+            try {
+                var res = await fetch('/api/duplicates/autonomous/clear-shadow-proposals', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                var data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                if (btn) { btn.textContent = '✓ Cleared ' + (data.cleared || 0); setTimeout(function () { btn.textContent = '🧹 Clear shadow proposals'; btn.disabled = false; }, 2500); }
+                loadProposalTiers();
+            } catch (e) {
+                if (btn) { btn.textContent = 'Failed'; btn.disabled = false; }
+                alert('Could not clear: ' + (e && e.message || e));
+            }
+        }
+
+        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); loadProposalTiers(); }
 
         document.addEventListener('DOMContentLoaded', refreshAll);
     </script>
