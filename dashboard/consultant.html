@@ -2386,6 +2386,22 @@
             if (!key || !key.trim()) return;
             actOnApproval(a.action_code, 'approve', null, container, key.trim());
         });
+
+        // Requested UX: when Adam prepares a write, just pop up for the admin
+        // password right away (no need to interact with the card). Auto-fire the
+        // admin-key prompt ONCE per action (guarded so the background poll/re-render
+        // can't re-open it). If the user cancels, the button stays for a retry.
+        if (a.status === 'pending' && approveKeyBtn) {
+            window._cmKeyPrompted = window._cmKeyPrompted || {};
+            if (!window._cmKeyPrompted[a.action_code]) {
+                window._cmKeyPrompted[a.action_code] = true;
+                setTimeout(function () {
+                    var key = prompt('Adam prepared this change: "' + (a.tool_label || 'action') + '".\nEnter the admin password to apply it now (or Cancel to skip):');
+                    if (!key || !key.trim()) return;
+                    actOnApproval(a.action_code, 'approve', null, container, key.trim());
+                }, 60);
+            }
+        }
     }
 
     function actOnApproval(code, action, reason, container, adminKey) {
