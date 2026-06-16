@@ -457,6 +457,37 @@ export async function calcCertificationMilestones(): Promise<ProcessKpiValue> {
   };
 }
 
+// ───────────────────── Quality — Quality→GRC Handoff SLA ─────────────────────
+/**
+ * QM-KPI-006 Quality→GRC Handoff SLA — % of handoffs PROCESSED WITHIN the SLA
+ * window (NOT the average cycle time the leadership feed computes). Excel formula
+ * = "Handoffs Within SLA ÷ Total Handoffs × 100". SLA window = 5 calendar days
+ * (Quality SOP). Reads handoff_events (created_at → processed_at).
+ */
+const HANDOFF_SLA_DAYS = 5;
+export async function calcHandoffSlaCompliance(): Promise<ProcessKpiValue> {
+  let res;
+  try {
+    res = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE processed_at IS NOT NULL)::int AS total,
+         COUNT(*) FILTER (WHERE processed_at IS NOT NULL
+           AND EXTRACT(EPOCH FROM (processed_at - created_at)) / 86400.0 <= ${HANDOFF_SLA_DAYS})::int AS within_sla
+       FROM handoff_events`,
+    );
+  } catch {
+    return EMPTY;
+  }
+  const total = Number(res.rows[0]?.total || 0);
+  const within = Number(res.rows[0]?.within_sla || 0);
+  if (total === 0) return EMPTY;
+  return {
+    value: Math.round((within / total) * 1000) / 10,
+    dataAvailable: true,
+    details: { within_sla: within, total_handoffs: total, sla_days: HANDOFF_SLA_DAYS },
+  };
+}
+
 // ───────────────────── Quality — Documentation Lifecycle ────────────────────
 /**
  * QM-KPI-010 Documentation Lifecycle Compliance — driven by the Integrated QMS
@@ -520,6 +551,8 @@ export const PROCESS_CALCULATORS: Record<
   "GRC-KPI-002": calcCertificationMilestones,
   // Quality — driven by the Integrated QMS document lifecycle
   "QM-KPI-010": calcDocumentationLifecycle,
+  // Quality — % of handoffs processed within the SLA window
+  "QM-KPI-006": calcHandoffSlaCompliance,
 };
 
 /**

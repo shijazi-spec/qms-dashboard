@@ -35,8 +35,8 @@ const CANONICAL_TO_FEED: Record<string, string> = {
   "QM-KPI-002": "QM-KPI-002", // Audit Execution Rate
   "QM-KPI-008": "QM-KPI-008", // BU Coverage Rate
   "QM-KPI-003": "QM-KPI-003", // Gap Closure Rate
-  "QM-KPI-009": "QM-KPI-010", // Repeat Findings Rate
-  "QM-KPI-006": "QM-KPI-006", // Quality↔GRC Handoff SLA ← Handoff Cycle Time
+  // QM-KPI-009 Repeat Findings → manual (feed calc was a capture table, not findings).
+  // QM-KPI-006 Handoff SLA → calcHandoffSlaCompliance (% within SLA), NOT the days-based feed calc.
   // GRC (Maram)
   "GRC-KPI-009": "GRC-KPI-010", // High-Risk Items with Treatment Plan
   "GRC-KPI-010": "GRC-KPI-009", // Risk Assessment Coverage (BUs)
