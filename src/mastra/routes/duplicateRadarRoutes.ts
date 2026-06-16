@@ -1096,6 +1096,95 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Safe-tier vs escalated breakdown of the autonomous resolver's PENDING
+    // proposals. verdict 'auto' = the agent is confident (would auto-apply once
+    // in assisted mode); 'escalate' = needs a human. Lets an operator see the
+    // scope before flipping shadow → assisted.
+    //   GET /api/duplicates/autonomous/proposal-tiers
+    path: "/api/duplicates/autonomous/proposal-tiers",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const { pool } = await import("../../utils/duplicateRadarDatabase");
+          const r = await pool.query(
+            `SELECT COALESCE(payload->>'verdict','unknown') AS verdict, COUNT(*)::int AS n
+               FROM ai_pending_actions
+              WHERE tool_id = 'duplicate-resolution' AND status = 'pending'
+              GROUP BY 1`,
+          );
+          let safeTier = 0,
+            escalated = 0,
+            other = 0;
+          for (const row of r.rows) {
+            if (row.verdict === "auto") safeTier = Number(row.n);
+            else if (row.verdict === "escalate") escalated = Number(row.n);
+            else other += Number(row.n);
+          }
+          return c.json({
+            success: true,
+            total: safeTier + escalated + other,
+            safeTier,
+            escalated,
+            other,
+          });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Clear the autonomous resolver's stale SHADOW proposals — bulk-reject every
+    // PENDING 'duplicate-resolution' card in one call. Management-tier. These were
+    // never applied to Zoho (shadow), so this writes NOTHING to the CRM — it just
+    // empties the review backlog so the queue shows only real escalations.
+    // Optional onlyVerdict ('auto'|'escalate') clears just one tier.
+    //   POST /api/duplicates/autonomous/clear-shadow-proposals
+    path: "/api/duplicates/autonomous/clear-shadow-proposals",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRoleOrKey(c, [...AUTONOMOUS_RESOLUTION_MANAGE_ROLES]);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const onlyVerdict =
+            body?.onlyVerdict === "auto" || body?.onlyVerdict === "escalate"
+              ? body.onlyVerdict
+              : null;
+          const { pool } = await import("../../utils/duplicateRadarDatabase");
+          const params: any[] = [
+            (user as any)?.email || "admin",
+            (user as any)?.name || "admin",
+          ];
+          let verdictClause = "";
+          if (onlyVerdict) {
+            verdictClause = " AND payload->>'verdict' = $3";
+            params.push(onlyVerdict);
+          }
+          const r = await pool.query(
+            `UPDATE ai_pending_actions
+                SET status = 'rejected',
+                    rejection_reason = 'Shadow proposal cleared in bulk — never applied to Zoho.',
+                    reviewed_by_email = $1,
+                    reviewed_by_name = $2,
+                    reviewed_at = NOW()
+              WHERE tool_id = 'duplicate-resolution'
+                AND status = 'pending'${verdictClause}`,
+            params,
+          );
+          return c.json({ success: true, cleared: r.rowCount ?? 0 });
+        } catch (e: any) {
+          logger.error("Error clearing shadow proposals:", e);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // "Post operational digest now" — manually fire the SAME twice-daily apply
     // digest (per-tab status board) on demand, so you can see it immediately
     // instead of waiting for the 09:00 / 17:00 KSA run. Posts to the resolution

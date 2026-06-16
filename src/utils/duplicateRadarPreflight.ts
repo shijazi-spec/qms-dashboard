@@ -227,12 +227,29 @@ const SUGGESTED_ACTIONS: Record<PreflightVerdict, string> = {
 /**
  * Extract a normalized domain from a row using whichever signal is present
  * (explicit domain first, then domain part of an email).
+ *
+ * The "domain" column in operator-pasted CSVs is frequently NOT a real
+ * domain — it's a slug, ref, or company shorthand (e.g. `mitsui`,
+ * `saso`, `kfshrc`) because the source spreadsheet treats it as an
+ * internal id. If the explicit value has no dot OR contains whitespace,
+ * it cannot be a real domain — we fall through to the email's domain
+ * instead. Without this fallback PATH 1 misses on almost every row of
+ * a real marketing list, and the request gets pushed into the slower
+ * PATH 2/3 paths until the Replit gateway 504s.
  */
 export function resolveDomain(row: PreflightInputRow): string | null {
   const explicit = (row.domain ?? "").trim().toLowerCase();
-  if (explicit) return normalizeDomain(explicit);
+  const looksLikeDomain =
+    explicit.length > 0 &&
+    explicit.includes(".") &&
+    !/\s/.test(explicit);
+  if (looksLikeDomain) return normalizeDomain(explicit);
   const fromEmail = extractDomain(row.email ?? "");
-  return fromEmail ? normalizeDomain(fromEmail) : null;
+  if (fromEmail) return normalizeDomain(fromEmail);
+  // Last resort: an explicit non-empty value that didn't pass the
+  // looksLikeDomain check still gets normalised — better to attempt the
+  // lookup (it just won't hit) than drop the row's signal entirely.
+  return explicit ? normalizeDomain(explicit) : null;
 }
 
 /**
@@ -522,6 +539,52 @@ const CLUSTER_SELECT_COLS = `id, domain,
               owners_involved,
               total_leads, total_deals, total_contacts, total_accounts`;
 
+/**
+ * Per-query statement timeout (ms). Each preflight DB call runs inside a
+ * dedicated pooled connection with this timeout set — if any one path
+ * hangs (missing index, stale stats, table lock), it errors out fast and
+ * the next path still runs. Total request stays well inside the Replit
+ * ~60s gateway window even in the worst case.
+ *
+ * 12s is generous for the indexed PATH 1/2 calls (sub-second on healthy
+ * indexes) and enough for PATH 3 fuzzy lookups on a few hundred names.
+ * The frontend additionally chunks 1.6k-row batches into 250-row pieces
+ * (concurrency 4) so even pathological data can't reach this cap.
+ */
+const PREFLIGHT_QUERY_TIMEOUT_MS = 12000;
+
+/**
+ * Run a single SQL on a dedicated client with `SET LOCAL statement_timeout`
+ * so a slow query can't drag the whole preflight under the gateway window.
+ * Returns `null` rows on timeout instead of throwing — the caller falls
+ * back gracefully (PATH 3 has its per-row fallback; PATHs 1/2 just won't
+ * find a match for that batch).
+ */
+async function queryWithTimeout<T = any>(
+  sql: string,
+  params: any[],
+  setup?: string[],
+): Promise<{ rows: T[] } | null> {
+  const client = await (pool as any).connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `SET LOCAL statement_timeout = ${PREFLIGHT_QUERY_TIMEOUT_MS}`,
+    );
+    if (Array.isArray(setup)) {
+      for (const s of setup) await client.query(s);
+    }
+    const r = (await client.query(sql, params)) as { rows: T[] };
+    await client.query("COMMIT");
+    return r;
+  } catch {
+    try { await client.query("ROLLBACK"); } catch { /* ignore */ }
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
 export async function runPreflight(input: {
   rows: PreflightInputRow[];
   max_check?: number;
@@ -565,14 +628,14 @@ export async function runPreflight(input: {
   // PATH 1 — Batch lookup by domain (the dominant case).
   const clustersByDomain = new Map<string, PreflightClusterRow>();
   if (domainSet.size > 0) {
-    const q = await pool.query<PreflightClusterRow>(
+    const q = await queryWithTimeout<PreflightClusterRow>(
       `SELECT ${CLUSTER_SELECT_COLS}
          FROM duplicate_clusters
         WHERE domain = ANY($1::text[])
           AND status = 'active'`,
       [Array.from(domainSet)],
     );
-    for (const row of q.rows) {
+    for (const row of (q?.rows ?? [])) {
       const existing = clustersByDomain.get(row.domain);
       if (
         !existing ||
@@ -594,7 +657,7 @@ export async function runPreflight(input: {
   }
   const clustersByPhone = new Map<string, PreflightClusterRow>();
   if (phonesNeeded.size > 0) {
-    const q = await pool.query<PreflightClusterRow & { matched_phone: string }>(
+    const q = await queryWithTimeout<PreflightClusterRow & { matched_phone: string }>(
       `SELECT DISTINCT ON (dr.phone_normalized)
               dr.phone_normalized AS matched_phone,
               dc.id, dc.domain,
@@ -617,7 +680,7 @@ export async function runPreflight(input: {
                  END DESC`,
       [Array.from(phonesNeeded)],
     );
-    for (const row of q.rows) {
+    for (const row of (q?.rows ?? [])) {
       const { matched_phone, ...cluster } = row;
       clustersByPhone.set(matched_phone, cluster as PreflightClusterRow);
     }
@@ -674,34 +737,43 @@ export async function runPreflight(input: {
     // Single batched query. `unnest(... WITH ORDINALITY)` numbers the
     // input names so we can map results back to the row index. LATERAL
     // gives us the top-1 match per name without an explosion.
+    //
+    // PERF — using the `%` operator with `set_limit(0.6)` is what lets
+    // Postgres actually USE the GIN trigram index. The older
+    // `similarity(col, name) >= 0.6` form is correct but the planner
+    // often can't push it down into the LATERAL subquery; on a 1.6k-row
+    // batch that turned into a sequential rescan per name and dominated
+    // the 504. `% v.name` with the threshold pinned to 0.6 via the
+    // session function gets the same answer in one indexed pass.
     const names = namesNeeded.map((n) => n.name);
     let batchSucceeded = false;
-    try {
-      const q = await pool.query<
-        PreflightClusterRow & { _input_idx: number }
-      >(
-        `SELECT v.ord AS _input_idx,
-                dc.id, dc.domain,
-                dc.cs_overlap_verdict,
-                dc.pipeline_lifecycle_state,
-                dc.client_sector,
-                dc.arr_exposure,
-                dc.owners_involved,
-                dc.total_leads, dc.total_deals, dc.total_contacts, dc.total_accounts
-           FROM unnest($1::text[]) WITH ORDINALITY AS v(name, ord)
-           LEFT JOIN LATERAL (
-             SELECT ${CLUSTER_SELECT_COLS}
-               FROM duplicate_clusters
-              WHERE status = 'active'
-                AND company_name_normalized IS NOT NULL
-                AND company_name_normalized != ''
-                AND similarity(company_name_normalized, v.name) >= 0.6
-              ORDER BY similarity(company_name_normalized, v.name) DESC
-              LIMIT 1
-           ) dc ON true
-          WHERE dc.id IS NOT NULL`,
-        [names],
-      );
+    const q = await queryWithTimeout<
+      PreflightClusterRow & { _input_idx: number }
+    >(
+      `SELECT v.ord AS _input_idx,
+              dc.id, dc.domain,
+              dc.cs_overlap_verdict,
+              dc.pipeline_lifecycle_state,
+              dc.client_sector,
+              dc.arr_exposure,
+              dc.owners_involved,
+              dc.total_leads, dc.total_deals, dc.total_contacts, dc.total_accounts
+         FROM unnest($1::text[]) WITH ORDINALITY AS v(name, ord)
+         LEFT JOIN LATERAL (
+           SELECT ${CLUSTER_SELECT_COLS}
+             FROM duplicate_clusters
+            WHERE status = 'active'
+              AND company_name_normalized IS NOT NULL
+              AND company_name_normalized != ''
+              AND company_name_normalized % v.name
+            ORDER BY similarity(company_name_normalized, v.name) DESC
+            LIMIT 1
+         ) dc ON true
+        WHERE dc.id IS NOT NULL`,
+      [names],
+      [`SELECT set_limit(0.6)`],
+    );
+    if (q && Array.isArray(q.rows)) {
       for (const row of q.rows) {
         const inputIdx = Number(row._input_idx) - 1; // ordinality is 1-based
         const original = namesNeeded[inputIdx];
@@ -710,8 +782,6 @@ export async function runPreflight(input: {
         companyMatchByRow.set(original.idx, cluster as PreflightClusterRow);
       }
       batchSucceeded = true;
-    } catch {
-      /* fall through to the per-row fallback */
     }
 
     if (!batchSucceeded) {
