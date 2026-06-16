@@ -82,6 +82,22 @@ export interface PreflightResultRow {
    *   null           — no match (PASS rows) or no fallback path
    */
   matched_via: "domain" | "phone" | "company_name" | null;
+  /**
+   * Business-language recommendation for this row — what a Head of Sales
+   * needs to read in one line. Derived deterministically from verdict +
+   * lifecycle_state + owners; engineer-language reason/code stays in
+   * `reason`/`suggested_action` so existing integrations don't break.
+   *
+   * Examples:
+   *   "Existing customer in Onboarding — do not pursue. Route to CS (Sara)."
+   *   "Active open Sales deal — coordinate with owner Ahmed before contacting."
+   *   "Already a duplicate in pipeline (3 records). Assign to existing
+   *    owner Mohammed; do not create a new lead."
+   *   "Safe to import."
+   */
+  executive_action: string;
+  /** info | low | medium | high | critical — drives row colouring. */
+  executive_severity: "info" | "low" | "medium" | "high" | "critical";
 }
 
 export interface PreflightSummary {
@@ -92,6 +108,14 @@ export interface PreflightSummary {
   pass: number;
 }
 
+export interface PreflightTopReason {
+  /** Business-language label, ready for the email body. */
+  label: string;
+  count: number;
+  /** Percent of EXAMINED rows. */
+  pct: number;
+}
+
 export interface PreflightResponse {
   total_rows: number;
   examined: number;
@@ -99,6 +123,85 @@ export interface PreflightResponse {
   summary: PreflightSummary;
   total_arr_exposure_blocked: number;
   rows: PreflightResultRow[];
+  /**
+   * Top reasons rows hit duplicate verdicts, ranked. Email-ready
+   * "12 leads matched existing customers" style labels — caller can
+   * drop straight into a paragraph without further string work.
+   */
+  top_reasons: PreflightTopReason[];
+  /**
+   * Generated at — UTC ISO. Lets the Excel cover sheet stamp
+   * "Preflight check — generated 2026-06-16 12:00 UTC".
+   */
+  generated_at: string;
+  /** Share of examined rows that returned a non-pass verdict (0–100). */
+  pct_actionable: number;
+}
+
+/**
+ * Map verdict + lifecycle + owners to executive-language recommendation.
+ * Pure function so it stays testable and the email body never sees the
+ * engineering codes (block / review / warn / duplicate / pass).
+ */
+export function buildExecutiveAction(input: {
+  verdict: PreflightVerdict;
+  lifecycle_state?: PreflightResultRow["lifecycle_state"];
+  module_counts?: PreflightResultRow["module_counts"];
+  owners?: string[];
+  arr_exposure?: number | null;
+  sector?: PreflightResultRow["sector"];
+}): { text: string; severity: PreflightResultRow["executive_severity"] } {
+  const ownerStr =
+    Array.isArray(input.owners) && input.owners.length > 0
+      ? input.owners.slice(0, 2).join(", ") +
+        (input.owners.length > 2 ? ` +${input.owners.length - 2}` : "")
+      : null;
+  const ownerSuffix = ownerStr ? ` (current owner: ${ownerStr})` : "";
+
+  if (input.verdict === "block") {
+    const phase =
+      input.lifecycle_state === "onboarding"
+        ? "in Onboarding"
+        : input.lifecycle_state === "adoption"
+          ? "in Adoption"
+          : input.lifecycle_state === "renewal"
+            ? "in Renewal"
+            : "active";
+    return {
+      text: `Existing customer ${phase} — DO NOT pursue. Route to Customer Success${ownerSuffix}.`,
+      severity: "critical",
+    };
+  }
+  if (input.verdict === "review") {
+    return {
+      text: `Recent CS termination — within churn cool-off window (${
+        input.sector === "government" ? "365" : "180"
+      } days). Coordinate with CS before contacting${ownerSuffix}.`,
+      severity: "high",
+    };
+  }
+  if (input.verdict === "warn") {
+    return {
+      text: `Past CS cool-off — Sales may re-engage, but notify CS owner first${ownerSuffix}.`,
+      severity: "medium",
+    };
+  }
+  if (input.verdict === "duplicate") {
+    const recs = input.module_counts?.total || 0;
+    const dealsN = input.module_counts?.deals || 0;
+    const hasOpenDeal = dealsN > 0;
+    if (hasOpenDeal) {
+      return {
+        text: `Active deal already in pipeline (${dealsN} deal${dealsN === 1 ? "" : "s"}, ${recs} total record${recs === 1 ? "" : "s"}). Assign to existing owner${ownerSuffix.replace("current ", "")}; do NOT create a new lead.`,
+        severity: "high",
+      };
+    }
+    return {
+      text: `Already in CRM as a duplicate (${recs} record${recs === 1 ? "" : "s"}). Resolve in Duplicate Radar before importing${ownerSuffix}.`,
+      severity: "medium",
+    };
+  }
+  return { text: "Safe to import.", severity: "info" };
 }
 
 const VERDICT_REASONS: Record<PreflightVerdict, string> = {
@@ -240,6 +343,8 @@ export function classifyPreflightRows(input: {
         owners: [],
         reason: domain ? VERDICT_REASONS.pass : "no_domain_resolved",
         suggested_action: SUGGESTED_ACTIONS.pass,
+        executive_action: "Safe to import.",
+        executive_severity: "info",
         module_counts: null,
         matched_via: null,
       });
@@ -288,30 +393,81 @@ export function classifyPreflightRows(input: {
         : matched.matched_via === "company_name"
           ? "company_fuzzy_match__"
           : "";
+    const owners = extractOwners(c.owners_involved);
+    const moduleCounts = {
+      leads: leadsN,
+      deals: dealsN,
+      contacts: contactsN,
+      accounts: accountsN,
+      total: leadsN + dealsN + contactsN + accountsN,
+    };
+    const lifecycle =
+      (c.pipeline_lifecycle_state as PreflightResultRow["lifecycle_state"]) ??
+      null;
+    const sectorVal = (c.client_sector as PreflightResultRow["sector"]) ?? null;
+    const execAction = buildExecutiveAction({
+      verdict,
+      lifecycle_state: lifecycle,
+      module_counts: moduleCounts,
+      owners,
+      arr_exposure: arr,
+      sector: sectorVal,
+    });
     out.push({
       row_index: i,
       ref,
       input: { domain, company_name: row.company_name ?? null },
       verdict,
       cluster_id: c.id,
-      lifecycle_state:
-        (c.pipeline_lifecycle_state as PreflightResultRow["lifecycle_state"]) ??
-        null,
-      sector: (c.client_sector as PreflightResultRow["sector"]) ?? null,
+      lifecycle_state: lifecycle,
+      sector: sectorVal,
       arr_exposure: arr,
-      owners: extractOwners(c.owners_involved),
+      owners,
       reason: matchedViaPrefix + VERDICT_REASONS[verdict],
       suggested_action: SUGGESTED_ACTIONS[verdict],
-      module_counts: {
-        leads: leadsN,
-        deals: dealsN,
-        contacts: contactsN,
-        accounts: accountsN,
-        total: leadsN + dealsN + contactsN + accountsN,
-      },
+      module_counts: moduleCounts,
       matched_via: matched.matched_via,
+      executive_action: execAction.text,
+      executive_severity: execAction.severity,
     });
   }
+
+  // Email-ready top reasons — group every non-pass row by a stable,
+  // business-language label so the cover sheet / email body can drop in
+  // "12 leads matched existing customers (do not pursue)" without the
+  // caller doing string work.
+  const reasonBuckets = new Map<string, number>();
+  for (const r of out) {
+    if (r.verdict === "pass") continue;
+    let label: string;
+    if (r.verdict === "block") {
+      label = "Existing active customer — do not pursue";
+    } else if (r.verdict === "review") {
+      label = "Recent CS termination — within cool-off window";
+    } else if (r.verdict === "warn") {
+      label = "Past CS cool-off — Sales may re-engage with CS sign-off";
+    } else if (r.verdict === "duplicate") {
+      label = (r.module_counts?.deals || 0) > 0
+        ? "Active deal already in pipeline — assign to existing owner"
+        : "Duplicate already in CRM — resolve before importing";
+    } else {
+      label = "Other";
+    }
+    reasonBuckets.set(label, (reasonBuckets.get(label) ?? 0) + 1);
+  }
+  const topReasons: PreflightTopReason[] = Array.from(reasonBuckets.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([label, count]) => ({
+      label,
+      count,
+      pct: examineCount > 0 ? Math.round((count / examineCount) * 1000) / 10 : 0,
+    }));
+
+  const actionable =
+    summary.block + summary.review + summary.warn + summary.duplicate;
+  const pctActionable =
+    examineCount > 0 ? Math.round((actionable / examineCount) * 1000) / 10 : 0;
 
   return {
     total_rows: rows.length,
@@ -320,6 +476,9 @@ export function classifyPreflightRows(input: {
     summary,
     total_arr_exposure_blocked: arrBlocked,
     rows: out,
+    top_reasons: topReasons,
+    generated_at: new Date().toISOString(),
+    pct_actionable: pctActionable,
   };
 }
 

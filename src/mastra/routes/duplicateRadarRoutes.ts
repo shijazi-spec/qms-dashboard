@@ -6988,6 +6988,242 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Formatted Excel export for the Preflight Check tab. Takes either a
+    // PreflightResponse the client already rendered (preferred — no
+    // re-run) or `rows` to re-run server-side. Returns an .xlsx with:
+    //   - "Summary" cover sheet (totals, % blocked/duplicate, SAR exposure,
+    //     top reasons, generated-at)
+    //   - "Findings" sheet (color-coded severity rows, frozen header,
+    //     business-language "Recommended Action" column, owner column,
+    //     module counts, reason code)
+    // Designed to be the attachment for an executive email — drop straight
+    // into a "Hi [Head of Sales], …" body.
+    path: "/api/duplicates/preflight/export-xlsx",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+
+          // Prefer the client-supplied result (no extra DB load); fall
+          // back to re-running over `rows` if the caller wants the server
+          // to compute fresh.
+          let result: any = null;
+          if (body?.result && typeof body.result === "object") {
+            result = body.result;
+          } else if (Array.isArray(body?.rows)) {
+            const { runPreflight } = await import(
+              "../../utils/duplicateRadarPreflight"
+            );
+            result = await runPreflight({
+              rows: body.rows,
+              max_check:
+                typeof body.max_check === "number"
+                  ? body.max_check
+                  : undefined,
+              refresh_overlap: body.refresh_overlap === true,
+            });
+          } else {
+            return c.json(
+              { error: "Provide either `result` or `rows`." },
+              400,
+            );
+          }
+
+          const ExcelJS = (await import("exceljs")).default;
+          const wb = new ExcelJS.Workbook();
+          wb.creator = "WalaPlus QMS — Duplicate Radar";
+          wb.created = new Date();
+
+          // ── Summary sheet ────────────────────────────────────────────
+          const summary = wb.addWorksheet("Summary", {
+            properties: { tabColor: { argb: "FF4F46E5" } },
+          });
+          summary.columns = [
+            { header: "Metric", key: "k", width: 50 },
+            { header: "Value", key: "v", width: 28 },
+          ];
+          const headerRow = summary.getRow(1);
+          headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+          headerRow.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FF4F46E5" },
+          };
+          summary.getRow(1).alignment = { vertical: "middle" };
+          summary.views = [{ state: "frozen", ySplit: 1 }];
+
+          const add = (k: string, v: any) => summary.addRow({ k, v });
+          add("Generated at (UTC)", result.generated_at || new Date().toISOString());
+          add("Total rows submitted", result.total_rows || 0);
+          add("Rows examined", result.examined || 0);
+          add("Rows skipped (over cap)", result.skipped || 0);
+          add(
+            "Share that would have created a duplicate (%)",
+            (result.pct_actionable ?? 0) + "%",
+          );
+          summary.addRow({});
+          const sHdr = summary.addRow({
+            k: "Verdict breakdown",
+            v: "Count",
+          });
+          sHdr.font = { bold: true };
+          add("✗ BLOCK — active CS customer", result.summary?.block || 0);
+          add("⚠ REVIEW — within CS cool-off", result.summary?.review || 0);
+          add("✓ WARN — past CS cool-off", result.summary?.warn || 0);
+          add(
+            "≡ DUPLICATE — already in CRM",
+            result.summary?.duplicate || 0,
+          );
+          add("✓ PASS — safe to import", result.summary?.pass || 0);
+          summary.addRow({});
+          add(
+            "Pipeline SAR exposure of BLOCK rows (if imported)",
+            "SAR " +
+              new Intl.NumberFormat("en-US").format(
+                Math.round(result.total_arr_exposure_blocked || 0),
+              ),
+          );
+
+          if (Array.isArray(result.top_reasons) && result.top_reasons.length > 0) {
+            summary.addRow({});
+            const tHdr = summary.addRow({
+              k: "Top reasons (business language)",
+              v: "Count / %",
+            });
+            tHdr.font = { bold: true };
+            for (const r of result.top_reasons) {
+              add(r.label, r.count + " rows (" + r.pct + "%)");
+            }
+          }
+
+          // Cell border + alternating row tint for the summary sheet.
+          summary.eachRow((row: any, idx: number) => {
+            if (idx > 1 && idx % 2 === 0) {
+              row.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFF8FAFC" },
+              };
+            }
+            row.eachCell((cell: any) => {
+              cell.border = {
+                top: { style: "thin", color: { argb: "FFE2E8F0" } },
+                left: { style: "thin", color: { argb: "FFE2E8F0" } },
+                bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+                right: { style: "thin", color: { argb: "FFE2E8F0" } },
+              };
+            });
+          });
+
+          // ── Findings sheet ───────────────────────────────────────────
+          const findings = wb.addWorksheet("Findings");
+          findings.columns = [
+            { header: "#", key: "i", width: 6 },
+            { header: "Verdict", key: "verdict", width: 12 },
+            { header: "Severity", key: "sev", width: 10 },
+            { header: "Recommended Action", key: "exec", width: 60 },
+            { header: "Domain", key: "domain", width: 26 },
+            { header: "Company", key: "company", width: 32 },
+            { header: "Existing Owner(s)", key: "owners", width: 28 },
+            { header: "CRM Modules (L·D·C·A)", key: "modules", width: 22 },
+            { header: "CS Phase", key: "phase", width: 16 },
+            {
+              header: "ARR Exposure (SAR)",
+              key: "arr",
+              width: 18,
+              style: { numFmt: "#,##0" },
+            },
+            { header: "Reason (engineer)", key: "reason", width: 32 },
+            { header: "Matched via", key: "matched_via", width: 16 },
+          ];
+          const fHdr = findings.getRow(1);
+          fHdr.font = { bold: true, color: { argb: "FFFFFFFF" } };
+          fHdr.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FF1E293B" },
+          };
+          findings.views = [{ state: "frozen", ySplit: 1 }];
+
+          const severityFill: Record<string, string> = {
+            critical: "FFFEE2E2",
+            high: "FFFEF3C7",
+            medium: "FFFEF9C3",
+            low: "FFDBEAFE",
+            info: "FFDCFCE7",
+          };
+
+          const fmtModules = (mc: any) =>
+            mc
+              ? `${mc.leads || 0}·${mc.deals || 0}·${mc.contacts || 0}·${mc.accounts || 0}`
+              : "—";
+
+          for (const r of result.rows || []) {
+            const row = findings.addRow({
+              i: (r.row_index ?? 0) + 1,
+              verdict: r.verdict?.toUpperCase() || "PASS",
+              sev: r.executive_severity?.toUpperCase() || "INFO",
+              exec: r.executive_action || r.suggested_action || "",
+              domain: r.input?.domain || "",
+              company: r.input?.company_name || "",
+              owners: Array.isArray(r.owners) ? r.owners.join(", ") : "",
+              modules: fmtModules(r.module_counts),
+              phase: r.lifecycle_state || "",
+              arr: r.arr_exposure || 0,
+              reason: r.reason || "",
+              matched_via: r.matched_via || "",
+            });
+            const fill = severityFill[r.executive_severity] || null;
+            if (fill) {
+              row.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: fill },
+              };
+            }
+            row.alignment = { vertical: "top", wrapText: true };
+          }
+
+          findings.eachRow((row: any) => {
+            row.eachCell((cell: any) => {
+              cell.border = {
+                top: { style: "thin", color: { argb: "FFE2E8F0" } },
+                left: { style: "thin", color: { argb: "FFE2E8F0" } },
+                bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+                right: { style: "thin", color: { argb: "FFE2E8F0" } },
+              };
+            });
+          });
+
+          const buf = await wb.xlsx.writeBuffer();
+          const stamp = new Date()
+            .toISOString()
+            .slice(0, 16)
+            .replace("T", "_")
+            .replace(":", "");
+          c.header(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          );
+          c.header(
+            "Content-Disposition",
+            `attachment; filename="preflight-report_${stamp}.xlsx"`,
+          );
+          return c.body(buf as ArrayBuffer);
+        } catch (error: any) {
+          logger.error("Error exporting preflight xlsx:", error);
+          return c.json(
+            { error: "Failed to export — " + (error?.message || "unknown") },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/duplicates/preflight",
     method: "POST" as const,
     createHandler: async () => {
