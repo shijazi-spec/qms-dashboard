@@ -130,39 +130,53 @@ const WalaPlusNav = {
         { label: 'Audit Reports', href: '/qms', icon: 'shield-check', id: 'qms' }
       ]
     },
+    // Document Control — promoted to its own top-level group per Sarah's
+    // ask 2026-06-16. The 3 items below were previously buried inside
+    // GRC; pulling them out gives the document lifecycle (master
+    // register → uploaded files → AI-mapped to compliance clauses) its
+    // own discoverable section, and keeps GRC focused on
+    // audits + risk/oversight.
     {
-      id: 'grc',
-      label: 'GRC',
-      icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>`,
-      color: 'teal',
+      id: 'document-control',
+      label: 'Document Control',
+      icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>`,
+      color: 'indigo',
       items: [
-        { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
-        { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
-        { label: 'Risk Mgmt', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
         // Integrated QMS — centralised governance document register
         // (Policies / Procedures / Work Instructions / SOPs / Forms with
         // version control) rendered by /policies → policies.html.
-        // Belongs in GRC because it's the governance side of document
-        // control; sits directly above Documents Library so an operator
-        // sees the lifecycle in order: master register → uploaded files
-        // → compliance mapping → audit readiness.
         { label: 'Integrated QMS', href: '/policies', icon: 'document-text', id: 'policies' },
         // QMS document library — categorised upload boxes for Documents,
         // Policies, Forms, Security Controls and SOPs. Files uploaded here
         // are staged for future mapping to the regulations tracked in the
         // Compliance module (PDPL, ISO 9001, ISO 27001, PCI DSS, …).
         { label: 'Documents Library', href: '/qms-docs', icon: 'document-text', id: 'qms-docs' },
-        { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
-        // Compliance v2 — Audit Readiness lives between Compliance and
-        // Document Mapping so the GRC user sees the full lifecycle in
-        // order: define obligations -> run audits -> link evidence.
-        { label: 'Audit Readiness', href: '/audit-readiness', icon: 'clipboard-check', id: 'audit-readiness' },
         // Document Mapping: AI-assisted workspace for mapping uploaded
         // documents to compliance clauses. Coverage tiles, suggest console,
         // AI-judged findings, and audit-readiness PDFs live here so the
         // Compliance page stays focused on governance/assessment workflow.
         { label: 'Document Mapping', href: '/document-mapping', icon: 'duplicate', id: 'document-mapping' },
+      ]
+    },
+    {
+      id: 'grc',
+      label: 'GRC',
+      icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>`,
+      color: 'teal',
+      items: [
+        // ── External Audits sub-group ──
+        { type: 'subheader', label: 'External Audits' },
+        { label: 'Compliance', href: '/compliance', icon: 'check-circle', id: 'compliance' },
+        // Compliance v2 — Audit Readiness lives between Compliance and
+        // Document Mapping so the GRC user sees the full lifecycle in
+        // order: define obligations -> run audits -> link evidence.
+        { label: 'Audit Readiness', href: '/audit-readiness', icon: 'clipboard-check', id: 'audit-readiness' },
         { label: 'External Audits', href: '/external-audits', icon: 'clipboard-check', id: 'external-audits' },
+        // ── Risk & Oversight sub-group ──
+        { type: 'subheader', label: 'Risk & Oversight' },
+        { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
+        { label: 'Risk Mgmt', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
+        { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
         { label: 'Vendors', href: '/vendors', icon: 'users', id: 'vendors' },
         { label: 'Mgmt Review', href: '/reviews', icon: 'clipboard-list', id: 'reviews' },
         // Trigger Alerts: previously a stray standalone group at the bottom
@@ -372,6 +386,8 @@ const WalaPlusNav = {
     this.navigationGroups.forEach(function (group) {
       if (!self._canSeeGroup(group)) return;
       group.items.forEach(function (item) {
+        // Skip sub-headers — they're visual dividers without id/href.
+        if (item.type === 'subheader' || !item.id) return;
         if (!self._canSeeItem(item)) return;
         idx[item.id] = { item: item, group: group };
       });
@@ -1157,7 +1173,14 @@ const WalaPlusNav = {
           <span id="tooltip-group-${this.escapeHtml(group.id)}" role="tooltip" class="wp-nav-tooltip">${this.escapeHtml(label)}</span>
         </button>
         <div class="wp-group-items mt-0.5 gap-y-0.5 ps-1" role="group" aria-label="${this.escapeHtml(label)}">
-          ${group.items.filter(item => this._canSeeItem(item)).map(item => this.renderRailItem(item, colors, { showPin: true })).join('')}
+          ${group.items
+            .filter(item => item.type === 'subheader' || this._canSeeItem(item))
+            .map(item =>
+              item.type === 'subheader'
+                ? this.renderRailSubheader(item)
+                : this.renderRailItem(item, colors, { showPin: true }),
+            )
+            .join('')}
         </div>
       </div>
     `;
@@ -1214,6 +1237,20 @@ const WalaPlusNav = {
         <div class="wp-group-items mt-0.5 gap-y-0.5 ps-1" role="group" aria-label="${this.escapeHtml(label)}">
           ${recentItems.map(e => this.renderRailItem(e.item, this.getColorClasses(e.group.color), { showPin: false, idSuffix: 'recent' })).join('')}
         </div>
+      </div>
+    `;
+  },
+
+  // Render an in-group sub-header (e.g. "External Audits" inside GRC).
+  // Visual: small uppercase label + thin divider above. Non-interactive.
+  // Used to break a long group into named clusters without inventing a
+  // whole nested data model — keeps Pinned/Recent/RBAC lookups working
+  // because subheaders never carry an `id`/`href`.
+  renderRailSubheader(item) {
+    const label = item.label || '';
+    return `
+      <div class="px-2 pt-2 pb-1 mt-1 first:mt-0 border-t border-gray-100 first:border-t-0">
+        <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">${this.escapeHtml(label)}</span>
       </div>
     `;
   },
