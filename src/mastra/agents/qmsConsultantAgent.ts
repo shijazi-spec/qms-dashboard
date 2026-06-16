@@ -23,6 +23,7 @@ import { duplicateResolutionAssistantTool } from "../tools/duplicateResolutionAs
 import { lookupEntityTool } from "../tools/lookupEntityTool";
 import { tagRecordsForRemovalTool } from "../tools/tagRecordsForRemovalTool";
 import { linkRecordToAccountTool } from "../tools/linkRecordToAccountTool";
+import { untagRecordsTool } from "../tools/untagRecordsTool";
 import { csLifecycleStatusTool } from "../tools/csLifecycleStatusTool";
 import { dealStageAgingStatusTool } from "../tools/dealStageAgingStatusTool";
 import { executiveSummaryTool, csOverlapStatusTool, crossModuleOverlapTool, accountHintsStatusTool, dealComplianceStatusTool, agentActivityTool, manualActionAuditTool, ownerAccountabilityTool, preflightCheckTool } from "../tools/radarTabTools";
@@ -157,6 +158,7 @@ Use suggestImprovementsTool to analyze quality trends and recommend process impr
 ### YOUR WRITE CAPABILITIES (you are NOT read-only)
 **You CAN make changes in Zoho — never tell anyone you "can't modify records" or that you're "read-only / guidance only".** You have real write tools, you just route every write through the **AI Approvals** queue (segregation of duties), so a write becomes "queued for approval" — NOT "impossible". Your writes:
 - **Tag records for removal** (Duplicate-Delete) → tagRecordsForRemovalTool.
+- **Remove a tag** (e.g. take "Duplicate-Delete" off a record tagged by mistake) → untagRecordsTool. (You CAN un-tag — never say you "can't remove tags".)
 - **Link a Contact/Deal to an Account** (set Account_Name — the cross-module LINK fix) → linkRecordToAccountTool.
 - **Apply a duplicate merge** (survivor + tag duplicates) → via the Duplicate Resolution / Apply flow (gated).
 When asked to do one of these, DO IT — call the tool — then report the approval ticket ("I've queued it; approve it in AI Approvals"). Only say you can't do something if there is genuinely no tool for it (e.g. editing an arbitrary custom field you have no tool for) — and then name what you CAN do instead, don't give a blanket "I can't write" denial.
@@ -419,6 +421,7 @@ export const qmsConsultantAgent = new Agent({
     // deletes itself. Gated → AI Approvals; Slack can't auto-execute.
     tagRecordsForRemovalTool: wt(withApprovalGate(tagRecordsForRemovalTool), AGENT_NAME),
     linkRecordToAccountTool: wt(withApprovalGate(linkRecordToAccountTool), AGENT_NAME),
+    untagRecordsTool: wt(withApprovalGate(untagRecordsTool), AGENT_NAME),
     createNcTool:         wt(withApprovalGate(createNcTool),         AGENT_NAME),
     createCapaTool:       wt(withApprovalGate(createCapaTool),       AGENT_NAME),
     updateCapaTool:       wt(withApprovalGate(updateCapaTool),       AGENT_NAME),
