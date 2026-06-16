@@ -145,12 +145,19 @@ const WalaPlusNav = {
         // Integrated QMS — centralised governance document register
         // (Policies / Procedures / Work Instructions / SOPs / Forms with
         // version control) rendered by /policies → policies.html.
+        // Handles upload, lifecycle (Draft → Review → Approval →
+        // Published → Annual Review), versioning, and Type/Category
+        // filtering — i.e. everything Documents Library was supposed to.
         { label: 'Integrated QMS', href: '/policies', icon: 'document-text', id: 'policies' },
-        // QMS document library — categorised upload boxes for Documents,
-        // Policies, Forms, Security Controls and SOPs. Files uploaded here
-        // are staged for future mapping to the regulations tracked in the
-        // Compliance module (PDPL, ISO 9001, ISO 27001, PCI DSS, …).
-        { label: 'Documents Library', href: '/qms-docs', icon: 'document-text', id: 'qms-docs' },
+        // Documents Library (URL /qms-docs) was removed from the sidebar
+        // 2026-06-16 per Sarah — it duplicated Integrated QMS without
+        // delivering the promised compliance-mapping wiring (the page's
+        // own subtitle deferred that to "a future release"). The URL
+        // still serves the legacy page for any bookmarks; operators are
+        // now funnelled to Integrated QMS as the single source of truth
+        // for governance documents. If the compliance-mapping feature
+        // ever gets built, fold it into Integrated QMS as a tab rather
+        // than reviving the separate page.
         // Document Mapping: AI-assisted workspace for mapping uploaded
         // documents to compliance clauses. Coverage tiles, suggest console,
         // AI-judged findings, and audit-readiness PDFs live here so the
