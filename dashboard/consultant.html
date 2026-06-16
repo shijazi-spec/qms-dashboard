@@ -2316,14 +2316,21 @@
 
         var actionsHtml = '';
         if (a.status === 'pending') {
+            // Admin-password fast-path — apply immediately with the shared admin
+            // key (same as Split/Rebuild), bypassing the queue + self-approval
+            // block. Always offered on pending cards, even when normal approve is
+            // blocked (e.g. you requested it yourself).
+            var adminKeyBtn =
+                '<button data-action="approve-key" class="px-3 py-1.5 bg-emerald-700 text-white rounded hover:bg-emerald-800 text-xs font-medium ms-2">Approve with admin password 🔑</button>';
             if (data.can_approve) {
                 actionsHtml =
                     '<button data-action="approve" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">Approve ✓</button>' +
-                    '<button data-action="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-2">Reject ✗</button>';
+                    '<button data-action="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-2">Reject ✗</button>' +
+                    adminKeyBtn;
             } else {
-                actionsHtml = '<div class="text-xs text-gray-600 italic">' +
+                actionsHtml = '<div class="text-xs text-gray-600 italic mb-1">' +
                     (data.can_approve_blocker || 'Only approved reviewers can action this.') +
-                    '</div>';
+                    '</div>' + adminKeyBtn;
             }
         } else if (a.status === 'approved') {
             actionsHtml = '<div class="text-xs text-blue-700">Approved by ' + escapeHtml(a.reviewed_by_name || a.reviewed_by_email || 'reviewer') + ' — executing…</div>';
@@ -2367,22 +2374,30 @@
 
         var approveBtn = container.querySelector('[data-action="approve"]');
         var rejectBtn = container.querySelector('[data-action="reject"]');
+        var approveKeyBtn = container.querySelector('[data-action="approve-key"]');
         if (approveBtn) approveBtn.addEventListener('click', function () { actOnApproval(a.action_code, 'approve', null, container); });
         if (rejectBtn)  rejectBtn.addEventListener('click', function () {
             var reason = prompt('Reason for rejection (required, min 3 chars):');
             if (!reason || reason.trim().length < 3) { alert('A rejection reason is required for audit purposes.'); return; }
             actOnApproval(a.action_code, 'reject', reason.trim(), container);
         });
+        if (approveKeyBtn) approveKeyBtn.addEventListener('click', function () {
+            var key = prompt('Enter the admin password to apply this change now:');
+            if (!key || !key.trim()) return;
+            actOnApproval(a.action_code, 'approve', null, container, key.trim());
+        });
     }
 
-    function actOnApproval(code, action, reason, container) {
+    function actOnApproval(code, action, reason, container, adminKey) {
         var actionsEl = container.querySelector('[data-actions]');
         if (actionsEl) actionsEl.innerHTML = '<span class="text-xs text-gray-500">Processing…</span>';
         var payload = action === 'reject' ? { reason: reason } : {};
+        var headers = { 'Content-Type': 'application/json' };
+        if (adminKey) headers['x-admin-key'] = adminKey;
         fetch('/api/ai/approvals/' + encodeURIComponent(code) + '/' + action, {
             method: 'POST',
             credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify(payload)
         })
         .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })

@@ -51,6 +51,7 @@ import {
   unauthorizedResponse,
   forbiddenResponse,
   gateApiRoute,
+  hasValidAdminApiKey,
 } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
 
@@ -670,8 +671,25 @@ const _aiApprovalRoutesRaw = [
       return async (c: any) => {
         try {
           await ensureTable();
-          const user = getSessionUser(c);
-          if (!user) return unauthorizedResponse(c);
+          // Admin-password fast-path: a valid x-admin-key (the same shared admin
+          // key used by Split / Rebuild in the Duplicate Radar) grants admin
+          // authority — so the approver gets the role gate + segregation-of-duties
+          // exemption and can apply the action immediately, without the
+          // /ai-approvals queue or a second person. Keeps the session user's
+          // identity for the audit trail when present.
+          const viaAdminKey = hasValidAdminApiKey(c);
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser && !viaAdminKey) return unauthorizedResponse(c);
+          const user = viaAdminKey
+            ? {
+                ...(sessionUser || {
+                  userId: 0,
+                  email: "api-key@system",
+                  name: "Admin Key",
+                }),
+                role: "admin" as UserRole,
+              }
+            : sessionUser!;
 
           const code = c.req.param("code");
           const action = await getPendingActionByCode(code);

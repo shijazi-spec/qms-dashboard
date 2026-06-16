@@ -741,7 +741,8 @@
         if (a.status === 'pending') {
             actionsHtml =
                 '<button data-code="' + a.action_code + '" data-act="approve" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">Approve</button>' +
-                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-1">Reject</button>';
+                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-1">Reject</button>' +
+                '<button data-code="' + a.action_code + '" data-act="approve-key" class="px-3 py-1.5 bg-emerald-700 text-white rounded hover:bg-emerald-800 text-xs font-medium ms-1" title="Apply immediately with the admin password (bypasses the queue + self-approval block)">Approve with admin password 🔑</button>';
         } else if (a.status === 'executed') {
             actionsHtml = '<span class="text-xs text-green-700">' + (a.result_entity_id ? '→ ' + escapeHtml(a.result_entity_id) : 'Done') + '</span>';
         } else if (a.status === 'rejected') {
@@ -798,6 +799,10 @@
                     var reason = prompt(_t('dyn.ai_approvals.prompt_rejection_reason'));
                     if (!reason || reason.trim().length < 3) { alert(_t('dyn.ai_approvals.reason_required')); return; }
                     postAction(code, 'reject', { reason: reason.trim() }, actionsEl);
+                } else if (act === 'approve-key') {
+                    var key = prompt('Enter the admin password to apply this change now:');
+                    if (!key || !key.trim()) return;
+                    postAction(code, 'approve', {}, actionsEl, key.trim());
                 } else {
                     postAction(code, 'approve', {}, actionsEl);
                 }
@@ -1171,12 +1176,14 @@
         });
     }
 
-    function postAction(code, act, payload, actionsEl) {
+    function postAction(code, act, payload, actionsEl, adminKey) {
         actionsEl.innerHTML = '<span class="text-xs text-gray-500">' + _t('dyn.ai_approvals.processing') + '</span>';
+        var headers = { 'Content-Type': 'application/json' };
+        if (adminKey) headers['x-admin-key'] = adminKey;
         fetch('/api/ai/approvals/' + encodeURIComponent(code) + '/' + act, {
             method: 'POST',
             credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify(payload)
         })
         .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
