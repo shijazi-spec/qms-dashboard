@@ -116,6 +116,7 @@ export async function initAuditTables(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS audits (
       id VARCHAR PRIMARY KEY,
+      public_id UUID DEFAULT gen_random_uuid(),
       title TEXT NOT NULL,
       audit_number TEXT,
       type TEXT,

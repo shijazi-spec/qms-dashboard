@@ -160,18 +160,18 @@
                         <option value="sop" data-i18n="policies.t_sop">SOP</option>
                         <option value="form" data-i18n="policies.t_form">Form</option>
                         <option value="template" data-i18n="policies.t_template">Template</option>
-                        <option value="document">Document</option>
+                        <option value="document" data-i18n="policies.t_document">Document</option>
                         <option value="manual" data-i18n="policies.t_manual">Manual</option>
                         <option value="guideline" data-i18n="policies.t_guideline">Guideline</option>
-                        <option value="control">Control</option>
-                        <option value="security_control">Security Control</option>
+                        <option value="control" data-i18n="policies.t_control">Control</option>
+                        <option value="security_control" data-i18n="policies.t_security_control">Security Control</option>
                     </select>
                     <select id="filterStatus" aria-label="Filter by document status" data-on-change="applyFilters" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-status">
                         <option value="" data-i18n="policies.all_status">All Status</option>
-                        <option value="draft">Draft</option>
-                        <option value="review">In Review</option>
-                        <option value="approval">Pending Approval</option>
-                        <option value="published">Published</option>
+                        <option value="draft" data-i18n="policies.draft">Draft</option>
+                        <option value="review" data-i18n="policies.in_review">In Review</option>
+                        <option value="approval" data-i18n="policies.pending_approval">Pending Approval</option>
+                        <option value="published" data-i18n="policies.published">Published</option>
                         <option value="archived" data-i18n="policies.s_archived">Archived</option>
                     </select>
                     <select id="filterCategory" aria-label="Filter by category" data-on-change="applyFilters" class="border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-filter-category">
@@ -197,11 +197,12 @@
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="policies.col_ver">Ver</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="policies.col_confid">Confid.</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.status">Status</th>
+                                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="policies.col_next_review">Next Review</th>
                                 <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="common.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="policiesTableBody" class="bg-white divide-y divide-gray-200">
-                            <tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">Loading documents...</td></tr>
+                            <tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">Loading documents...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -251,11 +252,11 @@
                             <option value="sop" data-i18n="policies.t_sop">SOP</option>
                             <option value="form" data-i18n="policies.t_form">Form</option>
                             <option value="template" data-i18n="policies.t_template">Template</option>
-                            <option value="document">Document</option>
+                            <option value="document" data-i18n="policies.t_document">Document</option>
                             <option value="manual" data-i18n="policies.t_manual">Manual</option>
                             <option value="guideline" data-i18n="policies.t_guideline">Guideline</option>
-                            <option value="control">Control</option>
-                            <option value="security_control">Security Control</option>
+                            <option value="control" data-i18n="policies.t_control">Control</option>
+                            <option value="security_control" data-i18n="policies.t_security_control">Security Control</option>
                         </select>
                     </div>
                     <div>
@@ -271,7 +272,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="policies.f_category">Category *</label>
                         <select name="category" required class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="select-category">
-                            <option value="">Select category</option>
+                            <option value="" data-i18n="policies.opt_select_category">Select category</option>
                             <option value="governance" data-i18n="policies.cat_governance">Governance</option>
                             <option value="operational" data-i18n="policies.cat_operational">Operational</option>
                             <option value="hr" data-i18n="policies.cat_hr">HR</option>
@@ -299,14 +300,14 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="policies.f_owner_dept">Owner Department</label>
                         <select name="owner_department" class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="select-owner-dept">
-                            <option value="">Select department</option>
-                            <option value="Operations">Operations</option>
-                            <option value="IT">IT</option>
-                            <option value="Finance">Finance</option>
-                            <option value="Legal">Legal</option>
-                            <option value="HR">HR</option>
-                            <option value="Quality">Quality</option>
-                            <option value="Compliance">Compliance</option>
+                            <option value="" data-i18n="policies.opt_select_dept">Select department</option>
+                            <option value="Operations" data-i18n="policies.dept_operations">Operations</option>
+                            <option value="IT" data-i18n="policies.dept_it">IT</option>
+                            <option value="Finance" data-i18n="policies.dept_finance">Finance</option>
+                            <option value="Legal" data-i18n="policies.dept_legal">Legal</option>
+                            <option value="HR" data-i18n="policies.dept_hr">HR</option>
+                            <option value="Quality" data-i18n="policies.dept_quality">Quality</option>
+                            <option value="Compliance" data-i18n="policies.dept_compliance">Compliance</option>
                         </select>
                     </div>
                 </div>
@@ -314,10 +315,10 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="policies.f_confidentiality">Confidentiality</label>
                         <select name="confidentiality" class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="select-confidentiality">
-                            <option value="internal">Internal</option>
-                            <option value="public">Public</option>
-                            <option value="confidential">Confidential</option>
-                            <option value="restricted">Restricted</option>
+                            <option value="internal" data-i18n="policies.conf_internal">Internal</option>
+                            <option value="public" data-i18n="policies.conf_public">Public</option>
+                            <option value="confidential" data-i18n="policies.conf_confidential">Confidential</option>
+                            <option value="restricted" data-i18n="policies.conf_restricted">Restricted</option>
                         </select>
                     </div>
                     <div>
@@ -337,21 +338,21 @@
                     <div>
                         <label class="flex items-center gap-2">
                             <input type="checkbox" name="requires_acknowledgment" class="rounded border-gray-300" data-testid="checkbox-requires-ack">
-                            <span class="text-sm text-gray-700">Requires Acknowledgment</span>
+                            <span class="text-sm text-gray-700" data-i18n="policies.f_requires_ack">Requires Acknowledgment</span>
                         </label>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="policies.f_ack_frequency">Ack. Frequency</label>
                         <select name="acknowledgment_frequency" class="w-full border border-gray-300 rounded-lg px-3 py-2" data-testid="select-ack-freq">
-                            <option value="annual">Annual</option>
-                            <option value="semi_annual">Semi-Annual</option>
-                            <option value="quarterly">Quarterly</option>
-                            <option value="once">Once Only</option>
+                            <option value="annual" data-i18n="policies.ack_annual">Annual</option>
+                            <option value="semi_annual" data-i18n="policies.ack_semi_annual">Semi-Annual</option>
+                            <option value="quarterly" data-i18n="policies.ack_quarterly">Quarterly</option>
+                            <option value="once" data-i18n="policies.ack_once">Once Only</option>
                         </select>
                     </div>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" data-on-click="closeModal" data-args="[&quot;addPolicyModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-testid="button-cancel-create">Cancel</button>
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;addPolicyModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-testid="button-cancel-create" data-i18n="policies.cancel">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800" data-testid="button-submit-create" data-i18n="policies.create_btn">Create Document</button>
                 </div>
             </form>
@@ -383,7 +384,6 @@
             'sop': 'SOP', 'form': 'Form', 'template': 'Template', 'manual': 'Manual', 'guideline': 'Guideline',
             'control': 'Control', 'security_control': 'Security Control', 'document': 'Document'
         };
-        const confLabels = { 'public': 'Public', 'internal': 'Internal', 'confidential': 'Confidential', 'restricted': 'Restricted' };
         const confColors = { 'public': 'text-green-600', 'internal': 'text-gray-600', 'confidential': 'text-amber-600', 'restricted': 'text-red-600' };
 
         async function loadSummary() {
@@ -569,7 +569,7 @@
                 updatePagination();
             } catch (error) {
                 console.error('Error loading documents:', error);
-                document.getElementById('policiesTableBody').innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-red-500">' + WalaPlusI18n.t('dyn.policies.error_loading_docs') + '</td></tr>';
+                document.getElementById('policiesTableBody').innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-red-500">' + WalaPlusI18n.t('dyn.policies.error_loading_docs') + '</td></tr>';
             }
         }
 
@@ -587,7 +587,7 @@
         function renderPoliciesTable(policies) {
             const tbody = document.getElementById('policiesTableBody');
             if (!policies || policies.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.policies.no_docs_found') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">' + WalaPlusI18n.t('dyn.policies.no_docs_found') + '</td></tr>';
                 return;
             }
 
@@ -601,14 +601,15 @@
                         ${policy.document_number && policy.policy_number !== policy.document_number ? `<div class="text-xs text-gray-400">${escapeHtml(policy.policy_number)}</div>` : ''}
                     </td>
                     <td class="px-4 py-3">
-                        <div class="text-sm font-medium text-gray-900 truncate max-w-xs">${escapeHtml(policy.title)}</div>
-                        <div class="text-xs text-gray-500">${escapeHtml(policy.owner_name || 'No owner')}${policy.file_name ? ' · <span class="text-blue-500">📎</span>' : ''}</div>
+                        <div class="text-sm font-medium text-gray-900 truncate max-w-md">${escapeHtml(policy.title)}</div>
+                        <div class="text-xs text-gray-500">${escapeHtml(policy.owner_name || WalaPlusI18n.t('policies.d_no_owner'))}${policy.file_name ? ' · <span class="text-blue-500">📎</span>' : ''}</div>
                     </td>
                     <td class="px-4 py-3 text-center"><span class="doc-type-badge doc-${escAttr(dt)}">${escapeHtml(docTypeLabels[dt] || dt)}</span></td>
                     <td class="px-4 py-3 text-sm text-gray-600 capitalize">${escapeHtml(policy.category)}</td>
                     <td class="px-4 py-3 text-center text-sm text-gray-600">${escapeHtml(String(policy.version))}</td>
-                    <td class="px-4 py-3 text-center text-xs font-medium ${confColors[conf] || ''}">${escapeHtml(confLabels[conf] || conf)}</td>
+                    <td class="px-4 py-3 text-center text-xs font-medium ${confColors[conf] || ''}">${escapeHtml(WalaPlusI18n.t('policies.conf_' + conf) || conf)}</td>
                     <td class="px-4 py-3 text-center">${formatStatus(policy.status)}</td>
+                    <td class="px-4 py-3 text-center">${formatReviewDate(policy)}</td>
                     <td class="px-4 py-3 text-center">
                         <div class="flex items-center justify-center gap-2">
                             <button data-on-click="viewPolicyDetail" data-args="[&quot;${policy.id}&quot;]" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-testid="button-view-document-${policy.id}">View</button>
@@ -619,14 +620,43 @@
             }).join('');
         }
 
+        // Per-document review indicator — brings the old "Upcoming Reviews"
+        // panel down to the row level so EVERY document type (not just
+        // policies) shows when its next annual review is due.
+        //   • no date            → "—"
+        //   • past due           → red "Overdue" + date
+        //   • within 30 days     → amber "Due in Nd" + date
+        //   • further out        → plain date
+        function formatReviewDate(policy) {
+            const raw = policy.review_date || policy.next_review_date;
+            if (!raw) return '<span class="text-gray-300">—</span>';
+            const d = new Date(raw);
+            if (isNaN(d.getTime())) return '<span class="text-gray-300">—</span>';
+            const today = new Date();
+            const days = Math.ceil((d - today) / 86400000);
+            const dateStr = d.toLocaleDateString();
+            if (days < 0) {
+                return '<span class="inline-flex flex-col items-center">'
+                    + '<span class="px-2 py-0.5 text-xs rounded-full status-retired font-medium">' + WalaPlusI18n.t('dyn.policies.review_overdue') + '</span>'
+                    + '<span class="text-[11px] text-gray-500 mt-0.5">' + escapeHtml(dateStr) + '</span></span>';
+            }
+            if (days <= 30) {
+                return '<span class="inline-flex flex-col items-center">'
+                    + '<span class="px-2 py-0.5 text-xs rounded-full status-approval font-medium">' + WalaPlusI18n.t('dyn.policies.review_due_in', { days: days }) + '</span>'
+                    + '<span class="text-[11px] text-gray-500 mt-0.5">' + escapeHtml(dateStr) + '</span></span>';
+            }
+            return '<span class="text-sm text-gray-600">' + escapeHtml(dateStr) + '</span>';
+        }
+
         function formatStatus(status) {
+            const t = (k) => WalaPlusI18n.t('policies.' + k);
             const map = {
-                'draft': '<span class="px-2 py-1 text-xs rounded-full status-draft">Draft</span>',
-                'review': '<span class="px-2 py-1 text-xs rounded-full status-review">In Review</span>',
-                'approval': '<span class="px-2 py-1 text-xs rounded-full status-approval">Pending Approval</span>',
-                'published': '<span class="px-2 py-1 text-xs rounded-full status-published">Published</span>',
-                'archived': '<span class="px-2 py-1 text-xs rounded-full status-archived">Archived</span>',
-                'retired': '<span class="px-2 py-1 text-xs rounded-full status-retired">Retired</span>'
+                'draft': '<span class="px-2 py-1 text-xs rounded-full status-draft">' + t('draft') + '</span>',
+                'review': '<span class="px-2 py-1 text-xs rounded-full status-review">' + t('in_review') + '</span>',
+                'approval': '<span class="px-2 py-1 text-xs rounded-full status-approval">' + t('pending_approval') + '</span>',
+                'published': '<span class="px-2 py-1 text-xs rounded-full status-published">' + t('published') + '</span>',
+                'archived': '<span class="px-2 py-1 text-xs rounded-full status-archived">' + t('s_archived') + '</span>',
+                'retired': '<span class="px-2 py-1 text-xs rounded-full status-retired">' + t('s_retired') + '</span>'
             };
             return map[status] || status;
         }
@@ -717,35 +747,35 @@
                                 <span class="text-sm text-blue-600 font-medium">${escapeHtml(policy.document_number || policy.policy_number)}</span>
                             </div>
                             <h4 class="text-xl font-semibold text-gray-900">${escapeHtml(policy.title)}</h4>
-                            <p class="text-sm text-gray-500 mt-1 capitalize">${escapeHtml(policy.category)} | Version ${escapeHtml(String(policy.version))} | <span class="${confColors[conf]}">${escapeHtml(confLabels[conf])}</span></p>
+                            <p class="text-sm text-gray-500 mt-1 capitalize">${escapeHtml(policy.category)} | ${WalaPlusI18n.t('policies.d_version')} ${escapeHtml(String(policy.version))} | <span class="${confColors[conf]}">${escapeHtml(WalaPlusI18n.t('policies.conf_' + conf))}</span></p>
                         </div>
                         <div>${formatStatus(policy.status)}</div>
                     </div>
 
                     ${tags.length > 0 ? `<div class="flex flex-wrap gap-1">${tags.map(t => `<span class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
 
-                    ${policy.description ? `<div><h5 class="text-sm font-medium text-gray-700">Description</h5><p class="text-sm text-gray-600 mt-1">${escapeHtml(policy.description)}</p></div>` : ''}
+                    ${policy.description ? `<div><h5 class="text-sm font-medium text-gray-700">${WalaPlusI18n.t('policies.f_description')}</h5><p class="text-sm text-gray-600 mt-1">${escapeHtml(policy.description)}</p></div>` : ''}
 
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div class="bg-gray-50 p-3 rounded">
-                            <div class="text-xs text-gray-500">Owner</div>
-                            <div class="font-semibold text-sm">${escapeHtml(policy.owner_name || 'Unassigned')}</div>
+                            <div class="text-xs text-gray-500">${WalaPlusI18n.t('policies.d_owner')}</div>
+                            <div class="font-semibold text-sm">${escapeHtml(policy.owner_name || WalaPlusI18n.t('policies.d_unassigned'))}</div>
                         </div>
                         <div class="bg-gray-50 p-3 rounded">
-                            <div class="text-xs text-gray-500">Department</div>
+                            <div class="text-xs text-gray-500">${WalaPlusI18n.t('policies.d_department')}</div>
                             <div class="font-semibold text-sm">${escapeHtml(policy.owner_department || '-')}</div>
                         </div>
                         <div class="bg-gray-50 p-3 rounded">
-                            <div class="text-xs text-gray-500">Effective Date</div>
-                            <div class="font-semibold text-sm">${policy.effective_date ? new Date(policy.effective_date).toLocaleDateString() : 'Not set'}</div>
+                            <div class="text-xs text-gray-500">${WalaPlusI18n.t('policies.d_effective_date')}</div>
+                            <div class="font-semibold text-sm">${policy.effective_date ? new Date(policy.effective_date).toLocaleDateString() : WalaPlusI18n.t('policies.d_not_set')}</div>
                         </div>
                         <div class="bg-gray-50 p-3 rounded">
-                            <div class="text-xs text-gray-500">Next Review</div>
-                            <div class="font-semibold text-sm ${policy.review_date && new Date(policy.review_date) < new Date() ? 'text-red-600' : ''}">${policy.review_date ? new Date(policy.review_date).toLocaleDateString() : 'Not set'}</div>
+                            <div class="text-xs text-gray-500">${WalaPlusI18n.t('policies.col_next_review')}</div>
+                            <div class="font-semibold text-sm ${policy.review_date && new Date(policy.review_date) < new Date() ? 'text-red-600' : ''}">${policy.review_date ? new Date(policy.review_date).toLocaleDateString() : WalaPlusI18n.t('policies.d_not_set')}</div>
                         </div>
                     </div>
 
-                    ${policy.retention_period ? `<div class="text-sm text-gray-600"><span class="font-medium">Retention:</span> ${escapeHtml(policy.retention_period)}</div>` : ''}
+                    ${policy.retention_period ? `<div class="text-sm text-gray-600"><span class="font-medium">${WalaPlusI18n.t('policies.d_retention')}:</span> ${escapeHtml(policy.retention_period)}</div>` : ''}
 
                     ${policy.file_name ? `
                     <div class="bg-blue-50 p-4 rounded-lg flex items-center justify-between">
@@ -756,13 +786,13 @@
                                 <div class="text-xs text-blue-600">${policy.file_mime_type || ''} ${policy.file_size ? '· ' + formatFileSize(policy.file_size) : ''}</div>
                             </div>
                         </div>
-                        <a href="/api/policies/${policy.id}/download" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700" data-testid="link-download-file">Download</a>
+                        <a href="/api/policies/${policy.id}/download" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700" data-testid="link-download-file">${WalaPlusI18n.t('policies.d_download')}</a>
                     </div>` : `
                     <div class="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-300">
                         <div class="text-center">
-                            <p class="text-sm text-gray-500 mb-2">No file attached</p>
+                            <p class="text-sm text-gray-500 mb-2">${WalaPlusI18n.t('policies.d_no_file')}</p>
                             <label class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 cursor-pointer" data-testid="button-upload-file">
-                                Upload File
+                                ${WalaPlusI18n.t('policies.d_upload_file')}
                                 <input type="file" class="hidden" data-on-change="uploadFile" data-args="[${policy.id},&quot;@this&quot;]" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg">
                             </label>
                         </div>
@@ -770,23 +800,23 @@
 
                     ${policy.requires_acknowledgment ? `
                     <div class="bg-blue-50 p-4 rounded-lg">
-                        <h5 class="text-sm font-medium text-blue-800">Acknowledgment Status</h5>
+                        <h5 class="text-sm font-medium text-blue-800">${WalaPlusI18n.t('policies.d_ack_status')}</h5>
                         <div class="flex items-center gap-6 mt-2">
-                            <div class="text-sm"><span class="font-bold text-green-600">${ackStats.current || 0}</span> Current</div>
-                            <div class="text-sm"><span class="font-bold text-red-600">${ackStats.expired || 0}</span> Expired</div>
-                            <div class="text-sm"><span class="font-bold">${ackStats.total_acknowledged || 0}</span> Total</div>
+                            <div class="text-sm"><span class="font-bold text-green-600">${ackStats.current || 0}</span> ${WalaPlusI18n.t('policies.d_current')}</div>
+                            <div class="text-sm"><span class="font-bold text-red-600">${ackStats.expired || 0}</span> ${WalaPlusI18n.t('policies.d_expired')}</div>
+                            <div class="text-sm"><span class="font-bold">${ackStats.total_acknowledged || 0}</span> ${WalaPlusI18n.t('policies.d_total')}</div>
                         </div>
                     </div>` : ''}
 
                     ${policy.content_text ? `
                     <div>
-                        <h5 class="text-sm font-medium text-gray-700 mb-2">Document Content</h5>
+                        <h5 class="text-sm font-medium text-gray-700 mb-2">${WalaPlusI18n.t('policies.f_content')}</h5>
                         <div class="bg-gray-50 p-4 rounded border text-sm whitespace-pre-wrap max-h-60 overflow-y-auto">${escapeHtml(policy.content_text)}</div>
                     </div>` : ''}
 
                     ${versions.length > 0 ? `
                     <div>
-                        <h5 class="text-sm font-medium text-gray-700 mb-2">Version History</h5>
+                        <h5 class="text-sm font-medium text-gray-700 mb-2">${WalaPlusI18n.t('policies.d_version_history')}</h5>
                         <div class="space-y-2 max-h-40 overflow-y-auto">
                             ${versions.map(v => `
                                 <div class="border rounded p-2 text-sm">
@@ -794,7 +824,7 @@
                                         <span class="font-medium">v${escapeHtml(String(v.version))}</span>
                                         <span class="text-xs text-gray-500">${new Date(v.created_at).toLocaleDateString()}</span>
                                     </div>
-                                    <div class="text-xs text-gray-600 mt-1">${escapeHtml(v.change_summary || 'No notes')} - by ${escapeHtml(v.changed_by)}</div>
+                                    <div class="text-xs text-gray-600 mt-1">${escapeHtml(v.change_summary || WalaPlusI18n.t('policies.d_no_notes'))} - ${WalaPlusI18n.t('policies.d_by')} ${escapeHtml(v.changed_by)}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -833,21 +863,22 @@
 
         function getTransitionButtons(status, id, policy) {
             const grcApproved = policy?.compliance_approved || false;
+            const t = (k) => WalaPlusI18n.t('policies.' + k);
             const transitions = {
-                'draft': [{ label: 'Submit for Review', target: 'review', color: 'blue' }],
+                'draft': [{ label: t('tr_submit_review'), target: 'review', color: 'blue' }],
                 'review': [
-                    { label: 'Return to Draft', target: 'draft', color: 'gray' },
-                    { label: 'Submit for Approval', target: 'approval', color: 'amber' }
+                    { label: t('tr_return_draft'), target: 'draft', color: 'gray' },
+                    { label: t('tr_submit_approval'), target: 'approval', color: 'amber' }
                 ],
                 'approval': [
-                    { label: 'Return to Review', target: 'review', color: 'gray' },
-                    ...(grcApproved ? [{ label: 'Publish', target: 'published', color: 'green' }] : [])
+                    { label: t('tr_return_review'), target: 'review', color: 'gray' },
+                    ...(grcApproved ? [{ label: t('tr_publish'), target: 'published', color: 'green' }] : [])
                 ],
                 'published': [
-                    { label: 'Send for Review', target: 'review', color: 'blue' },
-                    { label: 'Archive', target: 'archived', color: 'gray' }
+                    { label: t('tr_send_review'), target: 'review', color: 'blue' },
+                    { label: t('tr_archive'), target: 'archived', color: 'gray' }
                 ],
-                'archived': [{ label: 'Republish', target: 'published', color: 'green' }]
+                'archived': [{ label: t('tr_republish'), target: 'published', color: 'green' }]
             };
 
             let buttons = transitions[status] || [];
@@ -864,11 +895,11 @@
                     <button data-on-click="requestGrcApproval" data-args="[&quot;${id}&quot;]" 
                         class="px-4 py-2 bg-slate-700 text-white hover:bg-slate-800 rounded-lg flex items-center gap-2" data-testid="button-grc-approval">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                        Request GRC Approval
+                        ${WalaPlusI18n.t('policies.tr_request_grc')}
                     </button>`;
             }
             if (status === 'approval' && grcApproved) {
-                html += `<span class="px-3 py-2 text-sm bg-green-100 text-green-800 rounded-lg">GRC Approved</span>`;
+                html += `<span class="px-3 py-2 text-sm bg-green-100 text-green-800 rounded-lg">${WalaPlusI18n.t('policies.d_grc_approved')}</span>`;
             }
             return html;
         }

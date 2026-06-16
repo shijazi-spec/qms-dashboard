@@ -124,6 +124,14 @@ export async function initComplianceTables(): Promise<void> {
       status VARCHAR(20) DEFAULT 'active',
       version VARCHAR(50),
       source_url TEXT,
+      public_id UUID DEFAULT gen_random_uuid(),
+      source_document_id INTEGER,
+      clause_source VARCHAR(20) DEFAULT 'curated',
+      document_path TEXT,
+      document_filename TEXT,
+      document_size BIGINT,
+      document_uploaded_at TIMESTAMP,
+      document_uploaded_by VARCHAR(255),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
@@ -152,6 +160,10 @@ export async function initComplianceTables(): Promise<void> {
       exemption_reason TEXT,
       exemption_expiry TIMESTAMP,
       priority VARCHAR(20) DEFAULT 'medium',
+      public_id UUID DEFAULT gen_random_uuid(),
+      section_domain VARCHAR(100),
+      section_order INTEGER,
+      clause_number VARCHAR(50),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
@@ -174,6 +186,7 @@ export async function initComplianceTables(): Promise<void> {
       remediation_status VARCHAR(20),
       comments TEXT,
       next_assessment_date TIMESTAMP,
+      public_id UUID DEFAULT gen_random_uuid(),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )

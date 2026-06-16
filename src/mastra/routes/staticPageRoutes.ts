@@ -473,17 +473,30 @@ export const staticPageRoutes = [
         `To access the Import Review screen, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
-  // /policies → /api/policies GET — broad QMS read set.
+  // /integrated-qms → /api/policies GET — broad QMS read set.
+  // This is the canonical URL for the Integrated QMS document register
+  // (policies, procedures, SOPs, forms, controls — everything documentation).
   {
-    path: "/policies",
+    path: "/integrated-qms",
     method: "GET",
     createHandler: async () =>
       serveDashboardPageWithRoleGate(
         "policies.html",
         POLICIES_READ_ROLES,
-        "Policies Setup Required",
-        `To access the Policies dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+        "Integrated QMS Setup Required",
+        `To access the Integrated QMS dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
+  },
+  // /policies → legacy alias. The page was renamed to "Integrated QMS" and
+  // its canonical URL is now /integrated-qms. This path permanently
+  // redirects (301) so old bookmarks / deep links land on the new URL and
+  // the address bar reflects the new name. The role gate lives on the
+  // /integrated-qms target — a redirect leaks nothing, so no gating here.
+  {
+    path: "/policies",
+    method: "GET",
+    createHandler: async () => async (c: any) =>
+      c.redirect("/integrated-qms", 301),
   },
   // /reviews → /api/management-reviews GET — governance + executive.
   {
@@ -860,10 +873,13 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
     backingApiPath: "/api/compliance",
   },
   {
-    path: "/policies",
+    path: "/integrated-qms",
     allowedRoles: POLICIES_READ_ROLES,
     backingApiPath: "/api/policies",
   },
+  // /policies is intentionally NOT listed here — it is a 301 redirect to
+  // /integrated-qms (see the route above), not a gated page shell. The
+  // role gate it inherits lives on the /integrated-qms target.
   {
     path: "/reviews",
     allowedRoles: GOVERNANCE_AND_EXECUTIVE,

@@ -2077,4 +2077,254 @@ export const complianceRoutes = [
       };
     },
   },
+  {
+    // Backfill: project + clause-map every Integrated QMS document into the
+    // Document-Mapping engine. Powers the "Run mapping now" button on the
+    // Document Mapping screen. Bounded admin/governance action.
+    path: "/api/compliance/document-mapping/backfill",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse, getSessionUser } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, [
+            "admin",
+            "grc_manager",
+            "quality_manager",
+            "head_of_operations_quality",
+          ]);
+          if (!sessionUser) {
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(
+              c,
+              "Permission denied: only document-governance roles can run mapping",
+            );
+          }
+          const { backfillPolicyMappings } = await import(
+            "../../utils/policyMappingBridge"
+          );
+          // `?force=true` re-maps every document; default is incremental
+          // (skips documents whose mapping inputs are unchanged).
+          const force =
+            new URL(c.req.url).searchParams.get("force") === "true";
+          const summary = await backfillPolicyMappings({ force });
+          return c.json({ success: true, ...summary });
+        } catch (err) {
+          safeLogger.error(
+            "❌ [ComplianceAPI] document-mapping backfill failed:",
+            err,
+          );
+          return c.json({ error: "Failed to run document mapping" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // "Map this framework" — targeted AI semantic scan scoped to one
+    // framework's clauses, touching only documents not yet linked to it.
+    // `?estimate=true` returns the document count for the confirmation
+    // dialog WITHOUT spending tokens. Governance/admin only.
+    path: "/api/compliance/document-mapping/map-framework",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse, getSessionUser } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, [
+            "admin",
+            "grc_manager",
+            "quality_manager",
+            "head_of_operations_quality",
+          ]);
+          if (!sessionUser) {
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(
+              c,
+              "Permission denied: only document-governance roles can run mapping",
+            );
+          }
+          let body: any = {};
+          try {
+            body = await c.req.json();
+          } catch {
+            body = {};
+          }
+          const { sharedPool } = await import("../../utils/sharedPool");
+          let regulationCode: string | null = null;
+          if (body.regulation_code) {
+            regulationCode = String(body.regulation_code);
+          } else if (body.regulation_id) {
+            const rr = await sharedPool.query(
+              `SELECT regulation_code FROM regulations WHERE id = $1`,
+              [parseInt(String(body.regulation_id), 10)],
+            );
+            regulationCode = rr.rows[0]?.regulation_code || null;
+          }
+          if (!regulationCode) {
+            return c.json(
+              { error: "regulation_id or regulation_code required" },
+              400,
+            );
+          }
+
+          const {
+            estimateFrameworkMapping,
+            mapFrameworkPolicies,
+            semanticFallbackEnabled,
+          } = await import("../../utils/policyMappingBridge");
+
+          const estimate =
+            new URL(c.req.url).searchParams.get("estimate") === "true";
+          if (estimate) {
+            const est = await estimateFrameworkMapping(regulationCode);
+            return c.json({ success: true, ...est });
+          }
+          if (!semanticFallbackEnabled()) {
+            return c.json(
+              {
+                error:
+                  "AI mapping is disabled on this environment (DOCUMENT_MAPPING_LLM_FALLBACK=false).",
+              },
+              400,
+            );
+          }
+          const summary = await mapFrameworkPolicies(regulationCode);
+          return c.json({ success: true, ...summary });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] map-framework failed:", err);
+          return c.json({ error: "Failed to map framework" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Consolidated gaps (JSON, grouped by framework) for the inline
+    // "Open Gaps" panel on the Document Mapping screen. Same underlying
+    // query as gaps.csv. Read-only; covered by the generic /api/compliance
+    // GET allowlist.
+    path: "/api/compliance/document-mapping/gaps",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { initComplianceTables } = await import(
+            "../../utils/complianceDatabase"
+          );
+          const { initObligationDocumentsTable } = await import(
+            "../../utils/obligationDocumentsDatabase"
+          );
+          await initComplianceTables();
+          await initObligationDocumentsTable();
+          const { sharedPool } = await import("../../utils/sharedPool");
+          const r = await sharedPool.query(
+            `SELECT r.regulation_code, r.name AS regulation_name, r.id AS regulation_id,
+                    o.id AS obligation_id, o.obligation_code, o.title
+               FROM obligations o
+               JOIN regulations r ON r.id = o.regulation_id
+              WHERE o.status = 'applicable' AND r.status = 'active'
+                AND NOT EXISTS (
+                  SELECT 1 FROM obligation_documents od WHERE od.obligation_id = o.id
+                )
+              ORDER BY r.regulation_code, COALESCE(o.section_order, 0), o.obligation_code`,
+          );
+          const groups: Record<string, any> = {};
+          for (const row of r.rows) {
+            const key = row.regulation_code;
+            if (!groups[key]) {
+              groups[key] = {
+                regulation_code: row.regulation_code,
+                regulation_name: row.regulation_name,
+                regulation_id: row.regulation_id,
+                count: 0,
+                clauses: [],
+              };
+            }
+            groups[key].count++;
+            groups[key].clauses.push({
+              obligation_id: row.obligation_id,
+              obligation_code: row.obligation_code,
+              title: row.title,
+            });
+          }
+          const frameworks = Object.values(groups).sort(
+            (a: any, b: any) => b.count - a.count,
+          );
+          return c.json({ total: r.rows.length, frameworks });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] gaps (json) failed:", err);
+          return c.json({ error: "Failed to fetch gaps" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Consolidated gap export: every applicable clause across every active
+    // framework that has NO linked evidence — the full gap list in one CSV.
+    // Read-only; covered by the generic /api/compliance GET allowlist.
+    path: "/api/compliance/document-mapping/gaps.csv",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { initComplianceTables } = await import(
+            "../../utils/complianceDatabase"
+          );
+          const { initObligationDocumentsTable } = await import(
+            "../../utils/obligationDocumentsDatabase"
+          );
+          await initComplianceTables();
+          await initObligationDocumentsTable();
+          const { sharedPool } = await import("../../utils/sharedPool");
+          const r = await sharedPool.query(
+            `SELECT r.regulation_code, r.name AS regulation_name,
+                    o.obligation_code, o.title, o.description
+               FROM obligations o
+               JOIN regulations r ON r.id = o.regulation_id
+              WHERE o.status = 'applicable' AND r.status = 'active'
+                AND NOT EXISTS (
+                  SELECT 1 FROM obligation_documents od WHERE od.obligation_id = o.id
+                )
+              ORDER BY r.regulation_code, COALESCE(o.section_order, 0), o.obligation_code`,
+          );
+          const esc = (v: any) => {
+            const s = v == null ? "" : String(v);
+            return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+          };
+          const header = "Framework,Framework Name,Clause Code,Clause Title,Description\n";
+          const body = r.rows
+            .map((row: any) =>
+              [
+                row.regulation_code,
+                row.regulation_name,
+                row.obligation_code,
+                row.title,
+                (row.description || "").slice(0, 500),
+              ]
+                .map(esc)
+                .join(","),
+            )
+            .join("\n");
+          // UTF-8 BOM so Excel renders Arabic clause text correctly.
+          const csv = "﻿" + header + body + (body ? "\n" : "");
+          return new Response(csv, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition":
+                'attachment; filename="compliance-gaps.csv"',
+              "Cache-Control": "private, max-age=0, no-cache",
+            },
+          });
+        } catch (err) {
+          safeLogger.error(
+            "❌ [ComplianceAPI] gaps.csv export failed:",
+            err,
+          );
+          return c.json({ error: "Failed to export gaps" }, 500);
+        }
+      };
+    },
+  },
 ];

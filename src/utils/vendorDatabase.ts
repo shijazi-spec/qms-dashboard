@@ -95,6 +95,7 @@ export async function initVendorTables(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS vendors (
       id SERIAL PRIMARY KEY,
+      public_id UUID DEFAULT gen_random_uuid(),
       vendor_code VARCHAR(50) UNIQUE NOT NULL,
       name VARCHAR(500) NOT NULL,
       description TEXT,

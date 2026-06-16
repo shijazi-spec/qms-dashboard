@@ -144,11 +144,12 @@ const WalaPlusNav = {
       items: [
         // Integrated QMS — centralised governance document register
         // (Policies / Procedures / Work Instructions / SOPs / Forms with
-        // version control) rendered by /policies → policies.html.
+        // version control) rendered by /integrated-qms → policies.html.
+        // (/policies is kept as a legacy alias serving the same shell.)
         // Handles upload, lifecycle (Draft → Review → Approval →
         // Published → Annual Review), versioning, and Type/Category
         // filtering — i.e. everything Documents Library was supposed to.
-        { label: 'Integrated QMS', href: '/policies', icon: 'document-text', id: 'policies' },
+        { label: 'Integrated QMS', href: '/integrated-qms', icon: 'document-text', id: 'policies' },
         // Documents Library (URL /qms-docs) was removed from the sidebar
         // 2026-06-16 per Sarah — it duplicated Integrated QMS without
         // delivering the promised compliance-mapping wiring (the page's

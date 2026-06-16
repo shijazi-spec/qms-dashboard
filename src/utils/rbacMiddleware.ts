@@ -669,6 +669,16 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST", "DELETE"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  {
+    // Document-Mapping write actions — "Run mapping now" (backfill) and the
+    // per-framework "Map this framework" AI scan. Both are bulk projection +
+    // clause auto-map over Integrated QMS documents. Governance/admin only;
+    // mirrors the in-handler requireRole gate. Must precede the generic
+    // /api/compliance write catch-all below.
+    pattern: /^\/api\/compliance\/document-mapping\/(backfill|map-framework)$/,
+    methods: ["POST"],
+    roles: ["admin", "grc_manager", "quality_manager", "head_of_operations_quality"],
+  },
   // Audit-readiness PDF download — restricted (no executive read like the
   // CSV export endpoint).
   {
@@ -859,9 +869,15 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
   {
+    // AI Consultant alert actions (ack/resolve/dismiss). Kept in sync with
+    // the alerts GET rule below and with the /consultant.html page gate
+    // (CONSULTANT_ROLES in staticPageRoutes.ts). The two governance leads
+    // are admitted to the consultant management page and the page renders
+    // these action buttons unconditionally, so they must be able to act on
+    // the alerts they can see — otherwise every button 403s.
     pattern: /^\/api\/consultant\/alerts\/\d+\/(acknowledge|resolve|dismiss)$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist"],
+    roles: ["admin", "ai_specialist", "grc_manager", "head_of_operations_quality"],
   },
 
   {
@@ -1533,10 +1549,14 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // Consultant — alerts/feedback (CONSULTANT_ROLES; stats/trend = AI insiders).
   // Alerts contain cross-module operational detail (risk scores, PDPL incidents,
   // AI-ops failures) — restrict reads and mutations to privileged roles only.
+  // The privileged set mirrors the /consultant.html page gate (CONSULTANT_ROLES
+  // in staticPageRoutes.ts): admin + ai_specialist + the two governance leads
+  // (grc_manager, head_of_operations_quality) who oversee the consultant. Keep
+  // this in sync with the alert-action POST rule above.
   {
     pattern: /^\/api\/consultant\/alerts(\/count)?$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist"],
+    roles: ["admin", "ai_specialist", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/consultant\/feedback$/,

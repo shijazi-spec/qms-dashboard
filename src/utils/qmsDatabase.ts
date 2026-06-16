@@ -90,6 +90,7 @@ async function initQmsSchema(): Promise<void> {
       attachments            JSONB,
       metadata               JSONB,
       created_by             TEXT,
+      closure_approved_by    TEXT,
       created_at             TIMESTAMPTZ DEFAULT NOW(),
       updated_at             TIMESTAMPTZ DEFAULT NOW()
     );
@@ -136,6 +137,7 @@ async function initQmsSchema(): Promise<void> {
       attachments         JSONB,
       metadata            JSONB,
       created_by          TEXT,
+      closure_approved_by TEXT,
       created_at          TIMESTAMPTZ DEFAULT NOW(),
       updated_at          TIMESTAMPTZ DEFAULT NOW()
     );

@@ -561,6 +561,26 @@ export const policyRoutes = [
           });
 
           logger?.info("✅ [PolicyAPI] Policy created", { id: policy.id });
+
+          // Project the new document into the Compliance Document-Mapping
+          // engine (best-effort — never block or fail the create on a
+          // mapping hiccup). Maps content_text at this point; a later file
+          // upload re-syncs with the file's extracted text.
+          try {
+            const { syncPolicyToMapping } = await import(
+              "../../utils/policyMappingBridge"
+            );
+            // Citation-only on save (instant, no token spend, no risk of a
+            // slow LLM call delaying the create). The AI semantic pass runs
+            // on the explicit "Run mapping now" / "Map with AI" actions.
+            await syncPolicyToMapping(policy.id!, { semantic: false });
+          } catch (mapErr) {
+            safeLogger.error(
+              "⚠️ [PolicyAPI] document-mapping sync failed (create):",
+              mapErr,
+            );
+          }
+
           return c.json({ success: true, policy });
         } catch (error: any) {
           safeLogger.error("❌ [PolicyAPI] Error creating policy:", error);
@@ -641,6 +661,22 @@ export const policyRoutes = [
           });
 
           logger?.info("✅ [PolicyAPI] Policy updated", { id });
+
+          // Re-sync the Document-Mapping projection so edited content text
+          // re-runs the clause auto-mapper (best-effort, citation-only — the
+          // AI semantic pass is reserved for the explicit mapping buttons).
+          try {
+            const { syncPolicyToMapping } = await import(
+              "../../utils/policyMappingBridge"
+            );
+            await syncPolicyToMapping(id, { semantic: false });
+          } catch (mapErr) {
+            safeLogger.error(
+              "⚠️ [PolicyAPI] document-mapping sync failed (update):",
+              mapErr,
+            );
+          }
+
           return c.json({ success: true, policy: updatedPolicy });
         } catch (error) {
           safeLogger.error("❌ [PolicyAPI] Error updating policy:", error);
@@ -1163,6 +1199,21 @@ export const policyRoutes = [
           }
 
           await deletePolicy(id);
+
+          // Tear down the Document-Mapping projection for this document; its
+          // auto-mapped links cascade away with it (best-effort).
+          try {
+            const { removePolicyMapping } = await import(
+              "../../utils/policyMappingBridge"
+            );
+            await removePolicyMapping(id);
+          } catch (mapErr) {
+            safeLogger.error(
+              "⚠️ [PolicyAPI] document-mapping cleanup failed (delete):",
+              mapErr,
+            );
+          }
+
           await logEvent({
             entityType: "DOCUMENT",
             entityId: id.toString(),
@@ -1316,6 +1367,22 @@ export const policyRoutes = [
           // slowly exhausted by repeated attachment replacements.
           if (oldFilePath && oldFilePath !== fileInfo.filePath) {
             deleteUploadedFile(oldFilePath);
+          }
+
+          // Re-sync the Document-Mapping projection now that a file is
+          // attached — the bridge extracts the file's text and re-runs the
+          // clause auto-mapper (best-effort, citation-only; AI semantic pass
+          // runs on the explicit mapping buttons).
+          try {
+            const { syncPolicyToMapping } = await import(
+              "../../utils/policyMappingBridge"
+            );
+            await syncPolicyToMapping(id, { semantic: false });
+          } catch (mapErr) {
+            safeLogger.error(
+              "⚠️ [PolicyAPI] document-mapping sync failed (upload):",
+              mapErr,
+            );
           }
 
           return c.json({ success: true, file: fileInfo });

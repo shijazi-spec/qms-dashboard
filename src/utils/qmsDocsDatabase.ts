@@ -67,7 +67,22 @@ export async function initQmsDocsTable(): Promise<void> {
       notes           TEXT,
       regulation_codes TEXT[],
       uploaded_by     VARCHAR(255)  NOT NULL,
-      uploaded_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
+      uploaded_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      -- Set when this row is a projection of an Integrated QMS document
+      -- (policies.id) created by the Document-Mapping bridge. NULL for
+      -- regular GRC uploads. Declared here (not only via the runtime ALTER
+      -- in policyMappingBridge.ts) so the canonical schema matches prod and
+      -- the deploy schema-diff never proposes to DROP it.
+      source_policy_id INTEGER,
+      -- Phase 2.1 text-extraction columns. Declared here too (they are also
+      -- added via the idempotent ALTERs below for pre-existing DBs) so the
+      -- canonical schema matches prod and the deploy schema-diff never
+      -- proposes to DROP them — these hold every uploaded document's
+      -- extracted text and would be catastrophic to lose.
+      extracted_text  TEXT,
+      extraction_status VARCHAR(20) DEFAULT 'pending',
+      extracted_at    TIMESTAMP,
+      extracted_hash  VARCHAR(64)
     );
   `);
   await pool.query(`

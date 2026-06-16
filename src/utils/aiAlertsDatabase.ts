@@ -66,7 +66,11 @@ export async function initAIAlertsTable(): Promise<void> {
       related_record_id VARCHAR(100),
       status VARCHAR(20) DEFAULT 'open',
       acknowledged_by VARCHAR(255),
+      acknowledged_at TIMESTAMP,
       resolved_at TIMESTAMP,
+      resolution_note TEXT,
+      notified_at TIMESTAMP,
+      notified_channel VARCHAR(50),
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);

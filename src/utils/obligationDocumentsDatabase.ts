@@ -36,6 +36,8 @@ export async function initObligationDocumentsTable(): Promise<void> {
       document_id     INTEGER       NOT NULL REFERENCES qms_uploaded_documents(id) ON DELETE CASCADE,
       linked_by       VARCHAR(255)  NOT NULL,
       linked_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      link_method     VARCHAR(20)   DEFAULT 'manual',
+      awaiting_review BOOLEAN       DEFAULT FALSE,
       UNIQUE(obligation_id, document_id)
     );
   `);

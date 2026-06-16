@@ -113,6 +113,7 @@ export async function initRiskTables(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS enterprise_risks (
       id SERIAL PRIMARY KEY,
+      public_id UUID DEFAULT gen_random_uuid(),
       risk_title VARCHAR(500) NOT NULL,
       risk_description TEXT,
       risk_category VARCHAR(50) NOT NULL,
@@ -159,6 +160,7 @@ export async function initRiskTables(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS risk_treatment_actions (
       id SERIAL PRIMARY KEY,
+      public_id UUID DEFAULT gen_random_uuid(),
       risk_id INTEGER REFERENCES enterprise_risks(id) ON DELETE CASCADE,
       action_title VARCHAR(500) NOT NULL,
       action_description TEXT,

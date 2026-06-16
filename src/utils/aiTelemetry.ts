@@ -379,7 +379,8 @@ export async function ensureAiMetricsTable(): Promise<void> {
           user_hash          TEXT,
           session_hash       TEXT,
           started_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          metadata           JSONB     DEFAULT '{}'::jsonb
+          metadata           JSONB     DEFAULT '{}'::jsonb,
+          previews_redacted_at TIMESTAMPTZ
         );
 
         ALTER TABLE ai_call_metrics
@@ -1950,6 +1951,8 @@ export async function ensureFeedbackTable(): Promise<void> {
           call_id     BIGINT NOT NULL REFERENCES ai_call_metrics(id) ON DELETE CASCADE,
           rating      TEXT   NOT NULL CHECK (rating IN ('thumbs_up','thumbs_down')),
           user_hash   TEXT   NOT NULL DEFAULT 'anonymous',
+          comment     TEXT,
+          metadata    JSONB  NOT NULL DEFAULT '{}'::jsonb,
           created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           CONSTRAINT uq_ai_call_feedback_call_user UNIQUE (call_id, user_hash)
         );

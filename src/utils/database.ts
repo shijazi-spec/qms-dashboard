@@ -1712,6 +1712,7 @@ async function ensureFeedbackTable(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS team_feedback (
       id SERIAL PRIMARY KEY,
+      public_id UUID DEFAULT gen_random_uuid(),
       submitter_name VARCHAR(255) NOT NULL,
       submitter_role VARCHAR(100),
       dashboard VARCHAR(100) NOT NULL,

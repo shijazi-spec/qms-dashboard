@@ -136,7 +136,8 @@ export async function initToolHealthConfigTables(): Promise<void> {
         latency_high_ms         INTEGER,
         latency_critical_ms     INTEGER,
         updated_by              VARCHAR(255),
-        updated_at              TIMESTAMP DEFAULT NOW()
+        updated_at              TIMESTAMP DEFAULT NOW(),
+        expires_at              TIMESTAMP
       )
     `);
 
@@ -154,7 +155,8 @@ export async function initToolHealthConfigTables(): Promise<void> {
         changed_by    VARCHAR(255) NOT NULL,
         before_values JSONB NOT NULL,
         after_values  JSONB NOT NULL,
-        note          TEXT
+        note          TEXT,
+        breach_diff   JSONB
       )
     `);
 

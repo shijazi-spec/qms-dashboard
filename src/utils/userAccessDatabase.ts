@@ -86,6 +86,7 @@ async function ensureOidcAuthTables(): Promise<void> {
         google_id VARCHAR(255),
         picture TEXT,
         auth_provider VARCHAR(50) DEFAULT 'local',
+        ui_language VARCHAR(10) DEFAULT 'en',
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
@@ -556,6 +557,7 @@ export async function initUserAccessTables(): Promise<void> {
       denial_reason TEXT,
       last_login_at TIMESTAMP,
       login_count INTEGER DEFAULT 0,
+      ui_language VARCHAR(10) DEFAULT 'en',
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )

@@ -127,6 +127,7 @@ export async function initKPITables(): Promise<void> {
       is_active BOOLEAN DEFAULT true,
       is_north_star BOOLEAN DEFAULT false,
       calc_mode VARCHAR(20) DEFAULT 'manual',
+      navigation_map JSONB,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )

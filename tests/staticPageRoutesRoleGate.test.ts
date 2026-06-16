@@ -3,7 +3,7 @@
  * Task #461 (extended in Task #471) in
  * `src/mastra/routes/staticPageRoutes.ts`:
  *
- *   /sandbox, /audits, /compliance, /policies, /reviews, /risks,
+ *   /sandbox, /audits, /compliance, /integrated-qms, /reviews, /risks,
  *   /grc, /pdpl, /feedback, /guide, /migration, /logs, /ai-approvals,
  *   /intake, /external-audits, /vendors, /tablef, /infographic,
  *   /executive.html, /grc.html, /consultant.html
@@ -176,8 +176,11 @@ await suite.test("matrix includes every route named by Task #461 + Task #471", (
   // /crm was removed on 2026-05-22 alongside its page-shell — see the
   // file header comment for the rationale. Don't re-add it without
   // restoring the page and a backing API rule.
+  // /policies was renamed to /integrated-qms on 2026-06-17. /policies is now
+  // a 301 redirect to /integrated-qms (covered by its own test below), so it
+  // is no longer a gated page shell and must NOT appear in this matrix.
   const required = [
-    "/sandbox", "/audits", "/compliance", "/policies", "/reviews",
+    "/sandbox", "/audits", "/compliance", "/integrated-qms", "/reviews",
     "/risks", "/grc", "/pdpl", "/feedback", "/guide", "/migration",
     "/logs", "/ai-approvals", "/intake", "/external-audits", "/vendors",
     "/tablef", "/infographic", "/executive.html", "/grc.html",
@@ -186,6 +189,28 @@ await suite.test("matrix includes every route named by Task #461 + Task #471", (
   const present = new Set(ROLE_GATED_DASHBOARD_ROUTES.map((r) => r.path));
   for (const p of required) {
     suite.expect(present.has(p), `expected ${p} in ROLE_GATED_DASHBOARD_ROUTES`);
+  }
+});
+
+// /policies is a permanent (301) redirect to its renamed canonical URL
+// /integrated-qms. It must NOT serve a page shell (gated or otherwise) and
+// must NOT depend on the caller's role — a redirect leaks nothing, and the
+// role gate is enforced on the /integrated-qms target. Assert the redirect
+// fires regardless of credentials.
+await suite.test("GET /policies — 301-redirects to /integrated-qms for every caller", async () => {
+  const cases: CaseInput[] = [
+    {}, // no session, no key
+    { cookie: sessionCookieFor("department_viewer") }, // low-priv session
+    { cookie: sessionCookieFor("admin") }, // admin session
+  ];
+  for (const input of cases) {
+    const res = await callRoute("/policies", input);
+    suite.expectEqual(res.status, 301, "/policies redirect status");
+    suite.expectEqual(
+      res.headers?.["Location"],
+      "/integrated-qms",
+      "/policies redirect Location",
+    );
   }
 });
 

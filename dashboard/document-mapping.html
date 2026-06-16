@@ -40,6 +40,14 @@
                 <p class="text-sm text-gray-500 mt-1" data-i18n="docmap.subtitle">AI-assisted mapping of uploaded documents to compliance clauses, with automated quality judgement and audit-ready reports.</p>
             </div>
             <div class="flex gap-3">
+                <button type="button" data-on-click="runMapping" id="runMappingBtn" class="px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 font-medium flex items-center gap-2 disabled:opacity-60" data-testid="button-run-mapping">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    <span id="runMappingLabel" data-i18n="docmap.run_mapping">Run mapping now</span>
+                </button>
+                <a href="/api/compliance/document-mapping/gaps.csv" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium flex items-center gap-2" data-testid="link-download-gaps">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    <span data-i18n="docmap.download_gaps">Download gaps (CSV)</span>
+                </a>
                 <button type="button" data-on-click="reloadAll" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium flex items-center gap-2" data-testid="button-refresh-all">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                     <span data-i18n="docmap.refresh_all">Refresh</span>
@@ -107,6 +115,20 @@
                     </thead>
                     <tbody id="unmappedTableBody" class="bg-white divide-y divide-gray-200"></tbody>
                 </table>
+            </div>
+        </section>
+
+        <!-- Consolidated open gaps across every framework (inline) -->
+        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-gaps">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.gaps_title">Open Compliance Gaps</h2>
+                    <p class="text-xs text-gray-500"><span id="gapsTotal">0</span> <span data-i18n="docmap.gaps_subtitle">clauses across all frameworks have no linked document yet. Expand a framework to see its gaps.</span></p>
+                </div>
+                <a href="/api/compliance/document-mapping/gaps.csv" class="text-xs px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium" data-testid="link-download-gaps-inline" data-i18n="docmap.download_gaps">Download gaps (CSV)</a>
+            </div>
+            <div id="gapsList" class="p-4 space-y-2">
+                <div class="text-sm text-gray-400 text-center py-6" data-i18n="docmap.gaps_loading">Loading gaps…</div>
             </div>
         </section>
 
@@ -271,6 +293,10 @@
                                     + '<span data-i18n="docmap.tile_pdf">Audit PDF</span>'
                                 + '</a>'
                             + '</div>'
+                            + '<button type="button" data-on-click="mapFramework" data-args="[' + (c.regulation_id || 0) + ', &quot;' + safeCode + '&quot;]" class="mt-2 w-full text-xs px-2 py-1 rounded bg-emerald-700 text-white hover:bg-emerald-800 font-medium flex items-center justify-center gap-1 disabled:opacity-60" data-testid="button-mapfw-' + safeCode + '">'
+                                + '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>'
+                                + '<span data-i18n="docmap.tile_map_ai">Map with AI</span>'
+                            + '</button>'
                         + '</div>';
                 }).join('');
                 if (window.WalaPlusI18n && window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM(grid);
@@ -508,9 +534,156 @@
         async function reloadAll() {
             await loadFrameworks();
             await loadCoverage();
+            await loadGaps();
             await loadFindings();
             await loadConsoleClauses();
             await loadAutoMapped();
+        }
+
+        // Inline consolidated gaps: every framework's unmapped clauses in one
+        // place (collapsible), so you don't have to drill into each tile.
+        async function loadGaps() {
+            var host = document.getElementById('gapsList');
+            if (!host) return;
+            var tg = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            try {
+                var res = await fetch('/api/compliance/document-mapping/gaps');
+                var data = await res.json();
+                var totalEl = document.getElementById('gapsTotal');
+                if (totalEl) totalEl.textContent = data.total || 0;
+                var fws = data.frameworks || [];
+                if (!fws.length) {
+                    host.innerHTML = '<div class="text-sm text-emerald-700 text-center py-6">' + escAttr(tg('docmap.gaps_none', 'No open gaps — every applicable clause has linked evidence.')) + '</div>';
+                    return;
+                }
+                host.innerHTML = fws.map(function (fw) {
+                    var clauses = (fw.clauses || []).map(function (cl) {
+                        return '<li>'
+                            + '<button type="button" data-on-click="gapToConsole" data-args="[' + Number(fw.regulation_id || 0) + ',' + Number(cl.obligation_id || 0) + ']" class="w-full text-start flex gap-2 py-1 px-1 rounded hover:bg-emerald-50 border-b border-gray-50 last:border-0" title="' + escAttr(tg('docmap.gap_find_docs', 'Find documents for this clause')) + '" data-testid="gap-clause-' + Number(cl.obligation_id || 0) + '">'
+                            + '<code class="text-[11px] bg-gray-100 text-gray-700 px-1 rounded font-mono shrink-0">' + escAttr(cl.obligation_code || '—') + '</code>'
+                            + '<span class="text-xs text-gray-700">' + escAttr(cl.title || '') + '</span>'
+                            + '<span class="ms-auto text-[10px] text-emerald-700 shrink-0 opacity-0 group-hover:opacity-100">→</span>'
+                            + '</button></li>';
+                    }).join('');
+                    return '<details class="border border-gray-200 rounded-lg">'
+                        + '<summary class="cursor-pointer select-none px-3 py-2 flex items-center justify-between hover:bg-gray-50">'
+                            + '<span class="text-sm font-medium text-gray-900"><span class="font-mono text-emerald-700">' + escAttr(fw.regulation_code || '—') + '</span> · ' + escAttr(fw.regulation_name || '') + '</span>'
+                            + '<span class="text-xs font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded-full">' + (fw.count || 0) + '</span>'
+                        + '</summary>'
+                        + '<ul class="px-3 py-2 max-h-72 overflow-y-auto">' + clauses + '</ul>'
+                    + '</details>';
+                }).join('');
+            } catch (e) {
+                host.innerHTML = '<div class="text-sm text-red-600 text-center py-6">Error: ' + escAttr(e.message) + '</div>';
+            }
+        }
+
+        // Jump from a gap clause straight into the Mapping Console: preselect
+        // its framework + clause, scroll there, and ask the AI for candidate
+        // documents — closing the see-gap → fill-gap loop in one click.
+        async function gapToConsole(regulationId, obligationId) {
+            var fwSel = document.getElementById('consoleFramework');
+            var clSel = document.getElementById('consoleClause');
+            // Select "All Frameworks" and load every clause: the framework
+            // dropdown is keyed by obfuscated public_id (UUID) while our gaps
+            // feed carries the real regulation id, so they won't match — but
+            // the clause dropdown + suggest endpoint both use the REAL
+            // obligation id, which our gaps feed also carries. Loading all
+            // clauses guarantees the target clause is present and selectable.
+            if (fwSel) fwSel.value = '';
+            await loadConsoleClauses();
+            if (clSel) clSel.value = String(obligationId || '');
+            var sec = document.querySelector('[data-testid="section-mapping-console"]');
+            if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Only auto-suggest if the clause actually selected (guards against
+            // a clause not present in the framework's list for any reason).
+            if (clSel && clSel.value) {
+                await runConsoleSuggest();
+            }
+        }
+
+        // Per-framework targeted AI mapping. Professional flow: pre-flight
+        // count → explicit cost-aware confirmation → run → refresh. Only
+        // scans documents not yet linked to this framework (server-side).
+        async function mapFramework(regulationId, regCode) {
+            var tf = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            var btn = document.querySelector('[data-testid="button-mapfw-' + regCode + '"]');
+            try {
+                // 1) Pre-flight estimate (no tokens spent).
+                var est = await fetch('/api/compliance/document-mapping/map-framework?estimate=true', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ regulation_id: regulationId })
+                });
+                var estData = await est.json().catch(function () { return {}; });
+                if (!est.ok) {
+                    alert(tf('docmap.mapfw_error', 'AI mapping failed') + (estData.error ? ': ' + estData.error : ''));
+                    return;
+                }
+                var n = estData.candidate_documents || 0;
+                if (n === 0) {
+                    alert(tf('docmap.mapfw_none', 'No documents left to scan for this framework — every document is already linked or has no text.'));
+                    return;
+                }
+                // 2) Cost-aware confirmation.
+                var msg = tf('docmap.mapfw_confirm', 'Run an AI mapping scan of {n} document(s) against {fw}? This uses AI and may take a moment.')
+                    .replace('{n}', n).replace('{fw}', regCode);
+                if (!confirm(msg)) return;
+                // 3) Run.
+                if (btn) btn.disabled = true;
+                var r = await fetch('/api/compliance/document-mapping/map-framework', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ regulation_id: regulationId })
+                });
+                var data = await r.json().catch(function () { return {}; });
+                if (!r.ok) {
+                    alert(tf('docmap.mapfw_error', 'AI mapping failed') + (data.error ? ': ' + data.error : ''));
+                } else {
+                    alert(tf('docmap.mapfw_done', 'AI mapping complete for {fw}.').replace('{fw}', regCode)
+                        + '\n' + (data.scanned || 0) + ' ' + tf('docmap.mapfw_scanned', 'documents scanned')
+                        + ', ' + (data.links_created || 0) + ' ' + tf('docmap.mapfw_links', 'new links for review') + '.');
+                }
+            } catch (e) {
+                alert(tf('docmap.mapfw_error', 'AI mapping failed') + ': ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) btn.disabled = false;
+                await reloadAll();
+            }
+        }
+
+        // Run-mapping ("Run mapping now"): projects every Integrated QMS
+        // document into the mapping engine and runs the clause auto-mapper,
+        // then refreshes every panel so new coverage + auto-mapped links show.
+        async function runMapping() {
+            const t = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            const btn = document.getElementById('runMappingBtn');
+            const label = document.getElementById('runMappingLabel');
+            const prev = label ? label.textContent : '';
+            if (btn) btn.disabled = true;
+            if (label) label.textContent = t('docmap.run_mapping_running', 'Mapping…');
+            try {
+                const r = await fetch('/api/compliance/document-mapping/backfill', {
+                    method: 'POST', credentials: 'same-origin'
+                });
+                const data = await r.json().catch(function () { return {}; });
+                if (!r.ok) {
+                    alert(t('docmap.run_mapping_error', 'Mapping failed') + (data && data.error ? ': ' + data.error : ''));
+                } else {
+                    alert(t('docmap.run_mapping_done', 'Mapping complete.')
+                        + '\n' + (data.processed || 0) + ' ' + t('docmap.rm_processed', 'documents processed')
+                        + ', ' + (data.mapped || 0) + ' ' + t('docmap.rm_mapped', 'mapped')
+                        + ', ' + (data.unchanged || 0) + ' ' + t('docmap.rm_unchanged', 'unchanged (skipped)')
+                        + ', ' + (data.links_created || 0) + ' ' + t('docmap.rm_links', 'new links for review')
+                        + ' (' + (data.semantic_links || 0) + ' ' + t('docmap.rm_ai', 'by AI') + ').');
+                }
+            } catch (e) {
+                alert(t('docmap.run_mapping_error', 'Mapping failed') + ': ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) btn.disabled = false;
+                if (label) label.textContent = prev;
+                await reloadAll();
+            }
         }
 
         // ── Compliance v2: Auto-mapped citations review queue ──
@@ -530,12 +703,16 @@
                     tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">No auto-mapped links awaiting review.</td></tr>';
                     return;
                 }
+                var tt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
                 tbody.innerHTML = items.map(function (it) {
+                    var methodCell = (it.link_method === 'llm_semantic')
+                        ? '<span class="bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded text-[11px] font-medium" title="' + escAttr(tt('docmap.method_ai_title', 'Matched by AI semantic judgement')) + '">' + escAttr(tt('docmap.method_ai', 'AI match')) + '</span>'
+                        : '<code class="bg-indigo-50 text-indigo-800 px-1 rounded">' + escAttr(it.raw_citation || '—') + '</code>';
                     return '<tr class="hover:bg-gray-50">'
                         + '<td class="px-4 py-2 text-xs font-mono">' + escAttr(it.regulation_code || '—') + '</td>'
                         + '<td class="px-4 py-2 text-xs"><span class="font-mono">' + escAttr(it.obligation_code || '—') + '</span><br><span class="text-gray-500 text-[11px]">' + escAttr((it.obligation_title || '').slice(0, 80)) + '</span></td>'
                         + '<td class="px-4 py-2 text-xs">' + escAttr(it.document_title || it.file_name || ('Doc #' + it.document_id)) + '</td>'
-                        + '<td class="px-4 py-2 text-xs"><code class="bg-indigo-50 text-indigo-800 px-1 rounded">' + escAttr(it.raw_citation || '—') + '</code></td>'
+                        + '<td class="px-4 py-2 text-xs">' + methodCell + '</td>'
                         + '<td class="px-4 py-2 text-xs text-gray-600">' + escAttr((it.source_excerpt || '').slice(0, 180)) + '</td>'
                         + '<td class="px-4 py-2 text-center">'
                             + '<button data-on-click="confirmAutoMap" data-args="[' + Number(it.link_id) + ']" class="text-xs text-emerald-700 hover:text-emerald-900 font-medium me-2" data-i18n="docmap.confirm">Confirm</button>'

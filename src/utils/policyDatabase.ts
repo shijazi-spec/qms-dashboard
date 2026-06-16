@@ -130,7 +130,18 @@ export async function initPolicyTables(): Promise<void> {
       change_summary TEXT,
       created_by VARCHAR(255),
       created_at TIMESTAMP DEFAULT NOW(),
-      updated_at TIMESTAMP DEFAULT NOW()
+      updated_at TIMESTAMP DEFAULT NOW(),
+      public_id UUID DEFAULT gen_random_uuid(),
+      document_type VARCHAR(20) DEFAULT 'policy',
+      document_number VARCHAR(50),
+      file_name VARCHAR(500),
+      file_size INTEGER,
+      file_mime_type VARCHAR(100),
+      confidentiality VARCHAR(20) DEFAULT 'internal',
+      retention_period VARCHAR(50),
+      distribution_list TEXT[],
+      supersedes_id INTEGER,
+      tags TEXT[]
     )
   `);
 
