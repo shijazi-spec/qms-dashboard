@@ -7500,6 +7500,7 @@ export const duplicateRadarRoutes = [
             { header: "Domain", key: "domain", width: 26 },
             { header: "Company", key: "company", width: 32 },
             { header: "Existing Owner(s)", key: "owners", width: 28 },
+            { header: "CS Owner", key: "cs_owner", width: 22 },
             { header: "CRM Modules (L·D·C·A)", key: "modules", width: 22 },
             { header: "CS Phase", key: "phase", width: 16 },
             {
@@ -7508,6 +7509,8 @@ export const duplicateRadarRoutes = [
               width: 18,
               style: { numFmt: "#,##0" },
             },
+            { header: "Churn Date", key: "churn_date", width: 14 },
+            { header: "Days Since Churn", key: "churn_days", width: 14 },
             { header: "Reason (engineer)", key: "reason", width: 32 },
             { header: "Matched via", key: "matched_via", width: 16 },
           ];
@@ -7542,9 +7545,12 @@ export const duplicateRadarRoutes = [
               domain: r.input?.domain || "",
               company: r.input?.company_name || "",
               owners: Array.isArray(r.owners) ? r.owners.join(", ") : "",
+              cs_owner: r.cs_owner || "",
               modules: fmtModules(r.module_counts),
               phase: r.lifecycle_state || "",
               arr: r.arr_exposure || 0,
+              churn_date: r.churn_date || "",
+              churn_days: r.churn_days != null ? r.churn_days : "",
               reason: r.reason || "",
               matched_via: r.matched_via || "",
             });
