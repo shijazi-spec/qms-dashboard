@@ -1,6 +1,117 @@
 import { logger as safeLogger } from "../../utils/logger";
 export const auditRoutes = [
   {
+    // Diagnostic endpoint: show the EFFECTIVE governance rule set the
+    // quality audit would use right now, per module — including the
+    // hash that gets stamped on every new audit row. Side-by-side with
+    // the rule-count from DEFAULT_GOVERNANCE_RULES so an operator can
+    // tell whether the DB-stored override has shrunk the rule list.
+    // Admin-gated. Built 2026-06-16 after the dashboard showed People
+    // jumping to 100% — the cause was a per-module rules_json override
+    // that no longer included any required-field rules, so the audit
+    // found zero missing_required_field issues and decayScore(0)=100.
+    path: "/api/quality/audit-rule-snapshot",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+
+          const { DEFAULT_GOVERNANCE_RULES } = await import(
+            "../../utils/zohoCRM"
+          );
+          const { getGovernanceDocumentByModule } = await import(
+            "../../utils/database"
+          );
+          const { computeAuditRulesHash } = await import(
+            "../../utils/directAuditRunner"
+          );
+
+          const modules = ["Leads", "Deals", "Contacts", "Accounts"];
+          const perModule: Record<string, any> = {};
+          const effective: Record<string, any[]> = {};
+
+          for (const moduleName of modules) {
+            const moduleGovDoc =
+              await getGovernanceDocumentByModule(moduleName);
+            let rules = DEFAULT_GOVERNANCE_RULES as any[];
+            let source: "default" | "governance_doc_override" = "default";
+            let parseError: string | null = null;
+            if (moduleGovDoc?.rules_json) {
+              try {
+                const docRules =
+                  typeof moduleGovDoc.rules_json === "string"
+                    ? JSON.parse(moduleGovDoc.rules_json)
+                    : moduleGovDoc.rules_json;
+                if (Array.isArray(docRules)) {
+                  rules = docRules;
+                  source = "governance_doc_override";
+                } else if (docRules.rules && Array.isArray(docRules.rules)) {
+                  rules = docRules.rules;
+                  source = "governance_doc_override";
+                }
+              } catch (e: any) {
+                parseError = e?.message || String(e);
+              }
+            }
+            effective[moduleName] = rules;
+            const ruleTypeCounts: Record<string, number> = {};
+            for (const r of rules) {
+              const t = r?.ruleType || "unknown";
+              ruleTypeCounts[t] = (ruleTypeCounts[t] || 0) + 1;
+            }
+            perModule[moduleName] = {
+              source,
+              governance_doc_id: moduleGovDoc?.id ?? null,
+              governance_doc_updated_at:
+                (moduleGovDoc as any)?.updated_at ?? null,
+              rule_count: rules.length,
+              default_rule_count_for_module: (
+                DEFAULT_GOVERNANCE_RULES as any[]
+              ).filter((r: any) => r.module === moduleName).length,
+              rule_types: ruleTypeCounts,
+              has_required_rules: (ruleTypeCounts["required"] || 0) > 0,
+              parse_error: parseError,
+              module_hash: computeAuditRulesHash({ [moduleName]: rules }),
+            };
+          }
+
+          const overallHash = computeAuditRulesHash(effective);
+
+          return c.json({
+            success: true,
+            generated_at: new Date().toISOString(),
+            overall_rules_hash: overallHash,
+            per_module: perModule,
+            interpretation: {
+              all_modules_have_required:
+                Object.values(perModule).every(
+                  (m: any) => m.has_required_rules,
+                ),
+              any_module_uses_override: Object.values(perModule).some(
+                (m: any) => m.source === "governance_doc_override",
+              ),
+              note: "If has_required_rules is FALSE for any module, that module will report zero missing_required_field issues — which drives the People score to 100% (decayScore(0) = 100). Check whether the governance_doc_override for that module intentionally dropped required-field rules.",
+            },
+          });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [QualityAPI] Error generating audit-rule snapshot:",
+            error,
+          );
+          return c.json(
+            { error: "Failed to generate audit-rule snapshot" },
+            500,
+          );
+        }
+      };
+    },
+  },
+  {
     path: "/api/audits",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {

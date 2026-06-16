@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import {
   fetchAllZohoRecords,
   fetchRecordAttachments,
@@ -10,6 +11,50 @@ import {
 } from "./zohoCRM";
 import { walaPlusAttachmentAuditRules } from "./governanceRules";
 import { saveAuditResult, getGovernanceDocumentByModule } from "./database";
+
+/**
+ * Stable sha256 fingerprint of the EFFECTIVE rule set used for a quality
+ * audit. Walks each module's rules in alphabetical order, captures only
+ * the load-bearing fields (module, fieldName, ruleType, severity,
+ * stageCondition, allowedValues), and serialises with sorted keys. The
+ * same rule set always produces the same hash, regardless of object-key
+ * order or extraneous fields, so two audits can be compared safely.
+ *
+ * Exported so the diagnostic endpoint can re-hash the current rules and
+ * compare against any historical audit row's stored hash.
+ */
+export function computeAuditRulesHash(
+  rulesByModule: Record<string, any[]>,
+): string {
+  const modules = Object.keys(rulesByModule).sort();
+  const canonical: Record<string, any[]> = {};
+  for (const m of modules) {
+    const rules = Array.isArray(rulesByModule[m]) ? rulesByModule[m] : [];
+    canonical[m] = rules
+      .map((r: any) => ({
+        module: r.module ?? null,
+        fieldName: r.fieldName ?? null,
+        ruleType: r.ruleType ?? null,
+        severity: r.severity ?? null,
+        stageCondition: Array.isArray(r.stageCondition)
+          ? [...r.stageCondition].sort()
+          : null,
+        allowedValues: Array.isArray(r.allowedValues)
+          ? [...r.allowedValues].sort()
+          : null,
+        pattern: r.pattern ?? null,
+      }))
+      .sort((a: any, b: any) => {
+        const ak = `${a.module}|${a.fieldName}|${a.ruleType}|${a.severity}`;
+        const bk = `${b.module}|${b.fieldName}|${b.ruleType}|${b.severity}`;
+        return ak < bk ? -1 : ak > bk ? 1 : 0;
+      });
+  }
+  return createHash("sha256")
+    .update(JSON.stringify(canonical))
+    .digest("hex")
+    .slice(0, 16); // 64-bit prefix — collision-resistant for this scale
+}
 
 const BATCH_SIZE = 500;
 const MAX_RECORDS_PER_MODULE = 50000;
@@ -465,6 +510,9 @@ export async function runDirectAudit(
   let lowIssues = 0;
   const moduleBreakdown: Array<{ module: string; recordsAudited: number; issuesFound: number }> = [];
   const topIssues: Array<{ module: string; issueType: string; count: number; severity: string }> = [];
+  // Function-scoped so the rules_hash computation at save time can see
+  // it regardless of which try-block populated it.
+  const rulesByModule: Record<string, any[]> = {};
   let allFindingTypes: Array<{ module: string; issueType: string; count: number; severity: string }> = [];
   let auditSuccess = false;
   let skipReason = "";
@@ -553,6 +601,7 @@ export async function runDirectAudit(
               logger?.warn(`⚠️ [DirectAudit] Could not parse governance rules for ${moduleName}, using defaults`);
             }
           }
+          rulesByModule[moduleName] = governanceRules as any[];
 
           let moduleIssueCount = 0;
           let moduleCritical = 0, moduleHigh = 0, moduleMedium = 0, moduleLow = 0;
@@ -673,6 +722,19 @@ export async function runDirectAudit(
       },
     };
 
+    // Fingerprint the rule set used for this audit so the trend logic
+    // can detect when the goalposts moved. Computed across every module
+    // we actually audited (defaults if the audit fell back to the mock
+    // path and never populated rulesByModule).
+    const rulesHash = Object.keys(rulesByModule).length > 0
+      ? computeAuditRulesHash(rulesByModule)
+      : computeAuditRulesHash({
+          Leads: DEFAULT_GOVERNANCE_RULES as any[],
+          Deals: DEFAULT_GOVERNANCE_RULES as any[],
+          Contacts: DEFAULT_GOVERNANCE_RULES as any[],
+          Accounts: DEFAULT_GOVERNANCE_RULES as any[],
+        });
+
     const savedResult = await saveAuditResult({
       ...auditData,
       // Persist the user-selected period (from the upper-area Created /
@@ -682,6 +744,7 @@ export async function runDirectAudit(
       period_created_end: dateFilters?.created?.end ?? null,
       period_modified_start: dateFilters?.modified?.start ?? null,
       period_modified_end: dateFilters?.modified?.end ?? null,
+      rules_hash: rulesHash,
     });
     logger?.info("✅ [DirectAudit] Audit results saved to database successfully");
 

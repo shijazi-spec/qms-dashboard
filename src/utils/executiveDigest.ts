@@ -100,7 +100,17 @@ export interface DigestData {
   audit_summary: {
     last_score: number | null;
     last_date: string | null;
-    trend: "improving" | "declining" | "stable";
+    trend:
+      | "improving"
+      | "declining"
+      | "stable"
+      | "rules_changed"
+      | "scope_changed";
+    /** Plain-English context for the trend, surfaced in the Slack digest
+     *  so leadership never sees "Trend improving" when the rules under
+     *  it actually moved. Null when trend was a clean apples-to-apples
+     *  comparison. */
+    trend_caveat?: string | null;
   };
   kpi_summary: { green: number; amber: number; red: number; total: number };
   compliance_summary: { met: number; partial: number; not_met: number; total: number };
@@ -809,7 +819,8 @@ export async function generateDigestData(
     ),
     safeQuery(
       `SELECT overall_score, people_score, process_score, governance_score,
-              total_records_audited, total_issues_found, dimension_details, audit_date
+              total_records_audited, total_issues_found, dimension_details, audit_date,
+              rules_hash
        FROM quality_audit_results
        ORDER BY audit_date DESC LIMIT 3`,
     ),
@@ -854,12 +865,47 @@ export async function generateDigestData(
     fetchWindowedBusinessRecords(window),
   ]);
 
-  let auditTrend: "improving" | "declining" | "stable" = "stable";
+  let auditTrend:
+    | "improving"
+    | "declining"
+    | "stable"
+    | "rules_changed"
+    | "scope_changed" = "stable";
+  let auditTrendCaveat: string | null = null;
   if (auditRows.length >= 2) {
-    const diff =
-      parseFloat(auditRows[0]?.overall_score || "0") -
-      parseFloat(auditRows[1]?.overall_score || "0");
-    auditTrend = diff > 2 ? "improving" : diff < -2 ? "declining" : "stable";
+    const latest = auditRows[0] || {};
+    const prior = auditRows[1] || {};
+    const hashA = latest?.rules_hash ?? null;
+    const hashB = prior?.rules_hash ?? null;
+    const recordsA = parseInt(latest?.total_records_audited ?? "0", 10) || 0;
+    const recordsB = parseInt(prior?.total_records_audited ?? "0", 10) || 0;
+    const recordsBase = Math.max(1, recordsB);
+    const recordsSwingPct = Math.abs((recordsA - recordsB) / recordsBase) * 100;
+
+    // Trust the comparison only when BOTH rows used the same rule set
+    // AND the audit covered roughly the same number of records (within
+    // 10%). Either condition violated and the diff is meaningless: the
+    // score change is from a different ruler / different scope, not
+    // from quality changing. Surface this honestly instead of saying
+    // "improving" / "declining" on apples-to-oranges data.
+    if (!hashA || !hashB) {
+      auditTrend = "rules_changed";
+      auditTrendCaveat =
+        "Latest audits don't both carry a rule-set fingerprint — historical comparisons paused until we have two audits run on the same rules.";
+    } else if (hashA !== hashB) {
+      auditTrend = "rules_changed";
+      auditTrendCaveat =
+        "The governance rule set changed between the last two audits — score difference is not directly comparable.";
+    } else if (recordsSwingPct > 10) {
+      auditTrend = "scope_changed";
+      auditTrendCaveat =
+        `The audit scope changed (${recordsB.toLocaleString()} → ${recordsA.toLocaleString()} records, ${recordsSwingPct.toFixed(0)}% swing) — score difference is not directly comparable.`;
+    } else {
+      const diff =
+        parseFloat(latest?.overall_score || "0") -
+        parseFloat(prior?.overall_score || "0");
+      auditTrend = diff > 2 ? "improving" : diff < -2 ? "declining" : "stable";
+    }
   }
 
   const sectionRules = options.sectionRules || resolveDigestSectionRules();
@@ -974,6 +1020,7 @@ export async function generateDigestData(
       last_score: auditRows[0]?.overall_score ? parseFloat(auditRows[0].overall_score) : null,
       last_date: auditRows[0]?.audit_date || null,
       trend: auditTrend,
+      trend_caveat: auditTrendCaveat,
     },
     kpi_summary: {
       green: parseInt(kpiRows[0]?.green || "0", 10),
@@ -1827,13 +1874,20 @@ export function buildDigestHTML(data: DigestData): string {
       ? "UP"
       : data.audit_summary.trend === "declining"
         ? "DOWN"
-        : "STABLE";
+        : data.audit_summary.trend === "rules_changed"
+          ? "RULES CHANGED"
+          : data.audit_summary.trend === "scope_changed"
+            ? "SCOPE CHANGED"
+            : "STABLE";
   const trendColor =
     data.audit_summary.trend === "improving"
       ? "#047857"
       : data.audit_summary.trend === "declining"
         ? "#B91C1C"
-        : "#6B7280";
+        : data.audit_summary.trend === "rules_changed" ||
+            data.audit_summary.trend === "scope_changed"
+          ? "#B45309"
+          : "#6B7280";
   const businessSectionsHtml = data.business_sections
     .map(
       (section) => `<div class="metric-row"><span>${section.title}</span><span class="metric-value">${section.total} (L:${section.leads} / D:${section.deals})</span></div>
@@ -2021,7 +2075,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         },
         {
           type: "mrkdwn",
-          text: `*Audit Snapshot*\nScore ${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"} - Trend ${data.audit_summary.trend}\nHealth ${healthEmoji(data.health_score)} *${data.health_score}%*`,
+          text: `*Audit Snapshot*\nScore ${data.audit_summary.last_score !== null ? `${data.audit_summary.last_score}%` : "N/A"} - Trend ${data.audit_summary.trend}${data.audit_summary.trend_caveat ? `\n_${data.audit_summary.trend_caveat}_` : ""}\nHealth ${healthEmoji(data.health_score)} *${data.health_score}%*`,
         },
       ],
     },
