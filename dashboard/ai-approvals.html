@@ -1110,6 +1110,81 @@
                   rows + '</ol>';
     }
 
+    // For a duplicate-resolution request, render the full merge plan so the
+    // reviewer can decide: the survivor (kept), the duplicates to tag, the
+    // field conflicts (survivor value vs the differing ones), and why it was
+    // escalated. Returns '' for non-duplicate actions or when no plan is present.
+    function renderResolutionDetail(a) {
+        var p = a && a.payload;
+        if (!p || !p.plan || a.tool_id !== 'duplicate-resolution') return '';
+        var plan = p.plan;
+        var module = p.module || plan.module || '';
+        var tab = module === 'Deals' ? 'Potentials' : module;
+        function zlink(id) {
+            if (!id) return '';
+            var s = String(id);
+            if (/^(test_|LEAD_|DEAL_|CONTACT_|ACCOUNT_)/.test(s)) return '';
+            return ' <a href="https://crm.zoho.com/crm/org766568398/tab/' + tab + '/' + encodeURIComponent(s) +
+                '" target="_blank" class="text-blue-600 hover:underline text-[11px]">↗ Zoho</a>';
+        }
+        var reasons = Array.isArray(p.reasons) ? p.reasons : [];
+        var records = Array.isArray(plan.records) ? plan.records : [];
+        var conflicts = (Array.isArray(plan.fieldDecisions) ? plan.fieldDecisions : [])
+            .filter(function (f) { return f && f.action === 'conflict'; });
+
+        var recRows = records.map(function (r) {
+            var role = r.isMaster
+                ? '<span class="text-emerald-700 font-semibold">SURVIVOR (keep)</span>'
+                : (r.included === false
+                    ? '<span class="text-gray-500">excluded</span>'
+                    : '<span class="text-amber-700">tag Duplicate-Delete</span>');
+            var meta = [];
+            if (r.owner) meta.push('owner ' + escapeHtml(r.owner));
+            if (r.layout) meta.push(escapeHtml(r.layout));
+            if (r.stage) meta.push('stage ' + escapeHtml(r.stage));
+            if (r.accountName) meta.push('acct ' + escapeHtml(r.accountName));
+            if (typeof r.completeness === 'number') meta.push(Math.round(r.completeness * 100) + '% complete');
+            return '<tr class="border-t border-gray-100"><td class="px-2 py-1">' +
+                escapeHtml(r.name || '(no name)') + zlink(r.zohoId) + '</td>' +
+                '<td class="px-2 py-1 text-xs whitespace-nowrap">' + role + '</td>' +
+                '<td class="px-2 py-1 text-[11px] text-gray-500">' + meta.join(' · ') + '</td></tr>';
+        }).join('');
+
+        var confRows = conflicts.map(function (f) {
+            var alts = (Array.isArray(f.alternatives) ? f.alternatives : []).map(function (al) {
+                return escapeHtml(String(al && al.value != null ? al.value : '—')) +
+                    (al && al.recordName ? ' <span class="text-gray-400">(' + escapeHtml(al.recordName) + ')</span>' : '');
+            }).join(' · ');
+            return '<tr class="border-t border-gray-100"><td class="px-2 py-1 font-medium">' +
+                escapeHtml(f.label || f.field || '') + '</td>' +
+                '<td class="px-2 py-1 text-emerald-700">' + escapeHtml(String(f.chosenValue == null ? '—' : f.chosenValue)) + '</td>' +
+                '<td class="px-2 py-1 text-amber-700">' + alts + '</td></tr>';
+        }).join('');
+
+        var html = '<section class="mb-4">' +
+            '<h3 class="text-sm font-semibold text-gray-900 mb-1">What this would do</h3>';
+        if (plan.rationale) html += '<p class="text-xs text-gray-700 mb-2">' + escapeHtml(plan.rationale) + '</p>';
+        html += '<div class="text-xs text-gray-600 mb-2">Module: <strong>' + escapeHtml(module) + '</strong>' +
+            ' · cluster #' + escapeHtml(String(p.clusterId || plan.clusterId || '')) +
+            ' · survivor kept, ' + (Array.isArray(plan.duplicateZohoIds) ? plan.duplicateZohoIds.length : 0) + ' tagged Duplicate-Delete' +
+            (plan.linkAccountZohoId ? ' · link to account ' + escapeHtml(String(plan.linkAccountZohoId)) : '') +
+            '</div>';
+        if (recRows) html += '<div class="overflow-x-auto mb-3"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>' +
+            '<th class="px-2 py-1 text-start font-medium text-gray-600">Record</th>' +
+            '<th class="px-2 py-1 text-start font-medium text-gray-600">Action</th>' +
+            '<th class="px-2 py-1 text-start font-medium text-gray-600">Details</th></tr></thead><tbody>' + recRows + '</tbody></table></div>';
+        if (confRows) html += '<div class="text-xs font-semibold text-gray-900 mb-1">Field conflicts (' + conflicts.length + ') — survivor value kept, other values differ</div>' +
+            '<div class="overflow-x-auto mb-3"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>' +
+            '<th class="px-2 py-1 text-start font-medium text-gray-600">Field</th>' +
+            '<th class="px-2 py-1 text-start font-medium text-gray-600">Kept (survivor)</th>' +
+            '<th class="px-2 py-1 text-start font-medium text-gray-600">Other values</th></tr></thead><tbody>' + confRows + '</tbody></table></div>';
+        if (reasons.length) html += '<div class="text-xs font-semibold text-gray-900 mb-1">Why it needs your review</div>' +
+            '<ul class="list-disc ms-5 text-xs text-amber-800">' +
+            reasons.map(function (rs) { return '<li>' + escapeHtml(String(rs)) + '</li>'; }).join('') + '</ul>';
+        html += '</section>';
+        return html;
+    }
+
     function renderActionDetail(data) {
         if (!data || !data.action) {
             detailBody.innerHTML = '<div class="text-sm text-red-600 py-6 text-center" role="alert">' +
@@ -1150,6 +1225,8 @@
                    '</div>'
                  : '') +
             '</section>' +
+
+            renderResolutionDetail(a) +
 
             '<section aria-labelledby="actionDetailViewersHeading">' +
               '<div class="flex items-baseline justify-between mb-2">' +
