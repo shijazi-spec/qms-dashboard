@@ -389,30 +389,33 @@
             }
         }
 
-        // Map a KPI to the Leadership Platform's 7-status taxonomy from its value vs
-        // target + RAG thresholds (direction-aware). The QMS engine grades by absolute
-        // thresholds (not baseline-pace like leadership), so a KPI can read slightly
-        // differently between the two tools — but the status vocabulary now matches.
+        // Leadership 7-status taxonomy — mirrors leadershipStatus()/BASELINES/progressPct()
+        // in src/utils/leadershipKpiFeed.ts (the baseline→target pace logic we defined
+        // earlier). Behind vs Off Track is split by progress < 50% of the baseline→target
+        // span, NOT a flat threshold. Baselines default to 0; the seeded ones mirror the
+        // leadership-tracked KPIs (single conceptual source = leadershipKpiFeed.ts).
+        const _KPI_BASELINES = { 'QM-KPI-002': 40, 'QM-KPI-008': 0, 'GRC-KPI-008': 45, 'QM-KPI-015': 0 };
+        function _progressPct(value, baseline, target) {
+            const span = target - baseline;
+            if (span === 0) return value >= target ? 100 : 0;
+            return Math.max(0, Math.min(100, Math.round(((value - baseline) / span) * 1000) / 10));
+        }
         function _leadershipStatus(kpi) {
             const v = kpi.latestValue;
             if (v === null || v === undefined) return 'Not Started';
-            const t = kpi.target_value;
+            const nv = Number(v);
+            const t = (kpi.target_value !== null && kpi.target_value !== undefined && kpi.target_value !== '') ? Number(kpi.target_value) : null;
             const higher = (kpi.threshold_direction || 'higher_is_better') === 'higher_is_better';
-            if (t !== null && t !== undefined && t !== '') {
-                const tv = Number(t), nv = Number(v);
-                if (higher ? nv > tv : nv < tv) return 'Exceeded';
-                if (Math.abs(nv - tv) < 1e-9) return 'Completed';
+            if (t !== null) {
+                if (higher ? nv > t : nv < t) return 'Exceeded';
+                if (higher ? nv >= t : nv <= t) return 'Completed';
             }
             const s = kpi.status;
             if (s === 'green') return 'On Track';
             if (s === 'amber') return 'At Risk';
             if (s === 'red') {
-                const tr = kpi.threshold_red;
-                if (tr !== null && tr !== undefined && tr !== '') {
-                    const nv = Number(v), ntr = Number(tr);
-                    if (higher ? nv < ntr : nv > ntr) return 'Behind';
-                }
-                return 'Off Track';
+                const baseline = _KPI_BASELINES[kpi.kpi_code] != null ? _KPI_BASELINES[kpi.kpi_code] : 0;
+                return (t !== null && _progressPct(nv, baseline, t) < 50) ? 'Behind' : 'Off Track';
             }
             return 'Not Started';
         }
@@ -534,6 +537,7 @@
                                 </div>
                                 <div class="text-xs text-gray-500">${WalaPlusI18n.t('dyn.kpis.target_label', { value: (kpi.target_value !== null && kpi.target_value !== undefined ? _fn(kpi.target_value) : '--') + (kpi.unit || '%') })}</div>
                                 <div class="mt-1">${_leadershipStatusBadge(_leadershipStatus(kpi))}</div>
+                                ${(kpi.latestValue !== null && kpi.latestValue !== undefined && kpi.target_value !== null && kpi.target_value !== undefined && kpi.target_value !== '') ? `<div class="mt-1 text-[11px] text-gray-400">${_progressPct(Number(kpi.latestValue), (_KPI_BASELINES[kpi.kpi_code] != null ? _KPI_BASELINES[kpi.kpi_code] : 0), Number(kpi.target_value))}% to target</div>` : ''}
                             </div>
                         </div>
                     </div>
