@@ -91,6 +91,7 @@ import {
   clearAllDuplicateData,
   truncateAllDuplicateData,
   backfillResolutionLedger,
+  restoreLedgerResolvedClusterStatus,
   cleanupStaleRecords,
   cleanupOrphanClusters,
   removeRecordsByZohoIds,
@@ -872,6 +873,18 @@ async function scanZohoCRMForDuplicates(
         );
       }
     }
+
+    // Layer-2 of Mark-Handled persistence (Sarah 2026-06-16). Every scan
+    // re-clusters records and the new cluster row defaults to status='active'
+    // even when the survivor Zoho ids are in the resolution ledger from a
+    // prior Mark Handled click. Walk active clusters now and flip status back
+    // to 'resolved' when every present module has a ledger match — this is
+    // the durable counterpart to the view-time filter in getCrossModuleOverlaps.
+    await restoreLedgerResolvedClusterStatus().catch((e) =>
+      logger.warn(
+        `[DuplicateRadar] post-scan ledger restore skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
 
     const summary = await getEnhancedSummary();
     const duration = Date.now() - startTime;

@@ -1723,6 +1723,87 @@ export async function backfillResolutionLedger(): Promise<void> {
     });
 }
 
+/**
+ * Layer-2 of Sarah's "Mark Handled survives the 6h sync" fix (2026-06-16).
+ *
+ * Walk every status='active' cluster and flip it to status='resolved' when
+ * EVERY module present in the cluster has a matching entry in
+ * `duplicate_resolution_ledger` (keyed by the survivor's stable Zoho id +
+ * module). Run this at the end of every scanZohoCRMForDuplicates pass —
+ * right after updateClusterStats — so the cluster that the sync just
+ * created for a previously-handled overlap doesn't show back up in the
+ * Open queue under a fresh cluster_id.
+ *
+ * Mechanics: array-set inclusion. `modules_present` is what record_types
+ * the cluster has; `modules_ledger_resolved` is the subset of those
+ * record_types whose Zoho id is in the ledger for the matching module.
+ * Since modules_ledger_resolved ⊆ modules_present by construction, equal
+ * cardinalities mean every present module is covered.
+ *
+ * Best-effort + idempotent: replays don't move anything (only `status =
+ * 'active'` rows are candidates). resolved_by is stamped "ledger-restore"
+ * so the audit trail distinguishes auto-resolved from manual.
+ */
+export async function restoreLedgerResolvedClusterStatus(): Promise<{
+  candidates_examined: number;
+  clusters_restored: number;
+}> {
+  try {
+    const examineQ = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM duplicate_clusters WHERE status = 'active'`,
+    );
+    const examined = Number(examineQ.rows[0]?.count ?? 0);
+
+    const r = await pool.query<{ id: number }>(
+      `WITH cluster_modules AS (
+         SELECT cluster_id,
+                array_agg(DISTINCT record_type)
+                  FILTER (WHERE record_type IS NOT NULL)                       AS present,
+                array_agg(DISTINCT record_type)
+                  FILTER (WHERE EXISTS (
+                    SELECT 1 FROM duplicate_resolution_ledger lg
+                    WHERE lg.master_zoho_id = duplicate_records.zoho_record_id
+                      AND lg.module = CASE duplicate_records.record_type
+                                        WHEN 'lead'    THEN 'Leads'
+                                        WHEN 'deal'    THEN 'Deals'
+                                        WHEN 'contact' THEN 'Contacts'
+                                        WHEN 'account' THEN 'Accounts'
+                                      END
+                      AND lg.action_type IN ('resolve','module_resolved')
+                  ))                                                            AS resolved_modules
+           FROM duplicate_records
+          WHERE zoho_record_id IS NOT NULL
+          GROUP BY cluster_id
+       )
+       UPDATE duplicate_clusters dc
+          SET status      = 'resolved',
+              resolved_by = COALESCE(dc.resolved_by, 'ledger-restore'),
+              resolved_at = COALESCE(dc.resolved_at, NOW()),
+              updated_at  = NOW()
+         FROM cluster_modules cm
+        WHERE dc.id = cm.cluster_id
+          AND dc.status = 'active'
+          AND COALESCE(array_length(cm.present, 1), 0) > 0
+          AND COALESCE(array_length(cm.resolved_modules, 1), 0) =
+              COALESCE(array_length(cm.present, 1), 0)
+        RETURNING dc.id`,
+    );
+    const restored = r.rowCount ?? 0;
+    if (restored > 0) {
+      logger.info(
+        `🔁 [DuplicateRadar] Ledger-restore: ${restored} cluster(s) flipped back to status='resolved' (of ${examined} active candidates)`,
+      );
+    }
+    return { candidates_examined: examined, clusters_restored: restored };
+  } catch (e) {
+    logger.warn(
+      "[DuplicateRadar] restoreLedgerResolvedClusterStatus skipped (non-fatal)",
+      { error: e instanceof Error ? e.message : String(e) },
+    );
+    return { candidates_examined: 0, clusters_restored: 0 };
+  }
+}
+
 // Hard reset for the "Rebuild Clusters" admin action.
 // Wipes all clusters + records so the next scan starts from a clean slate.
 export async function truncateAllDuplicateData(): Promise<void> {
@@ -5470,6 +5551,78 @@ export function getClusterRecordTypeMeta(records: DuplicateRecord[]): {
  * net-new pipeline that need disposition, so a "Lead + something" pair is
  * always read as "what do we do with the Lead?".
  */
+// ─── Cross-module lifecycle helpers ──────────────────────────────────────
+//
+// Sarah's refined rules (2026-06-16):
+//   • Lead has no "link to Account/Contact" field in Zoho — the only
+//     action on a Lead in a cross-module cluster is CLOSE, and that's
+//     already handled by the Leads Duplicates tab. So Lead↔Contact and
+//     Lead↔Account add NOISE to this tab and must be hidden.
+//   • Lead↔Deal IS surfaced — only when BOTH sides are still live
+//     (active Lead + active Deal = wasted prospecting effort).
+//   • "Existing client" = a Paid / Agreement Signed style Deal (those
+//     are CS-owned). A Contact alone is NOT customer evidence.
+//   • Contact↔Account, Deal↔Account, Contact↔Deal are the real LINK
+//     queue — these CAN be wired up in Zoho via Account_Name /
+//     Contact_Name and that's the actionable work on this tab.
+//
+// Stage / status string sets are lowercased + frozen at module load so
+// the membership check is allocation-free in the hot path. Kept in sync
+// with sdrCallLinking.JUNK_LEAD_STATUSES and dealComplianceCheck stages.
+
+const INACTIVE_LEAD_STATUSES_LOWER: ReadonlySet<string> = new Set([
+  "junk lead",
+  "bogus lead",
+  "lost lead",
+  "not qualified",
+  "disqualified",
+  "converted",
+]);
+
+const INACTIVE_DEAL_STAGES_LOWER: ReadonlySet<string> = new Set([
+  "closed lost",
+  "lost",
+  "dropped",
+  "cancelled",
+  "canceled",
+]);
+
+const CLIENT_DEAL_STAGES_LOWER: ReadonlySet<string> = new Set([
+  "paid",
+  "agreement signed",
+  "closed won",
+  "agreement sent",
+  "awaiting po",
+  "client activated",
+  "transferred to cs",
+]);
+
+/** A Lead is "active" when its Lead_Status is not in the disqualified /
+ *  closed / converted set. Empty / null status counts as active (raw
+ *  records from Zoho occasionally lack the field). */
+export function isActiveLead(leadStatus: string | null | undefined): boolean {
+  const v = String(leadStatus ?? "").trim().toLowerCase();
+  if (!v) return true;
+  return !INACTIVE_LEAD_STATUSES_LOWER.has(v);
+}
+
+/** A Deal is "active" when its Stage is not Closed Lost / Lost / Dropped /
+ *  Cancelled. Empty / null stage counts as active. */
+export function isActiveDeal(stage: string | null | undefined): boolean {
+  const v = String(stage ?? "").trim().toLowerCase();
+  if (!v) return true;
+  return !INACTIVE_DEAL_STAGES_LOWER.has(v);
+}
+
+/** A "client deal" is one whose Stage indicates we already have this
+ *  customer (Paid / Agreement Signed / Closed Won / Agreement Sent /
+ *  etc.). Such clusters are CS-owned — Sales should not pursue. */
+export function isClientDeal(stage: string | null | undefined): boolean {
+  const v = String(stage ?? "").trim().toLowerCase();
+  if (!v) return false;
+  return CLIENT_DEAL_STAGES_LOWER.has(v);
+}
+
 export type CrossModulePairing =
   | "lead_contact"
   | "lead_account"
@@ -5535,11 +5688,36 @@ export interface CrossModuleClusterRow {
   stages?: string[]; // Deal stages present in the cluster
   layouts?: string[];
   pipelines?: string[];
+  // Refined-rule lifecycle flags (Sarah 2026-06-16). Derived from the
+  // member records' Lead_Status / Stage so the tab can reason in business
+  // terms (active vs. dead Lead, active vs. dead Deal, existing client).
+  has_active_lead?: boolean;
+  has_active_deal?: boolean;
+  has_client_deal?: boolean;
+  // True when ALL modules present in the cluster have a matching entry in
+  // duplicate_resolution_ledger — i.e. the operator already clicked Mark
+  // Handled on this overlap on a prior cluster row, and the next 6h sync
+  // re-clustered the records into a new row that lost the status flag.
+  // The tab treats these as "effectively resolved" and hides them from
+  // the Open queue even though duplicate_clusters.status='active'.
+  ledger_resolved?: boolean;
 }
 
 export interface CrossModuleOverlapsResponse {
   total: number;
   by_pairing: Record<string, number>;
+  // Action-oriented counts that power the headline tiles. A single cluster
+  // can fall into multiple buckets (a 3+ modules cluster might be both a
+  // Lead↔ActiveDeal AND a Deal↔Account link gap) — this is intentional:
+  // each tile asks a different operator question.
+  by_action: {
+    lead_vs_active_deal: number;
+    contact_account_link: number;
+    deal_account_link: number;
+    contact_deal_link: number;
+    three_plus_modules: number;
+    existing_client_cs_owned: number;
+  };
   arr_exposure_total: number;
   clusters: CrossModuleClusterRow[];
 }
@@ -5630,6 +5808,16 @@ export async function getCrossModuleOverlaps(opts: {
   // the already-bounded cluster set — owner_name is a column; stage/layout/
   // pipeline are read out of raw_data (Layout arrives as { name }). Best-effort:
   // any failure just leaves the dimensions empty (filters skip them, no crash).
+  //
+  // Also derives the refined-rule lifecycle flags inline:
+  //   • has_active_lead / has_active_deal / has_client_deal — drive the
+  //     Lead↔ActiveDeal filter + the "Existing client → CS" badge.
+  //   • modules_ledger_resolved — which of the cluster's modules already
+  //     have a matching `duplicate_resolution_ledger` entry. When every
+  //     module-present has a ledger match, the cluster is "effectively
+  //     resolved" (the operator clicked Mark Handled on a prior incarnation
+  //     of this cluster before the 6h sync re-clustered) and must drop
+  //     out of the Open queue.
   if (realOverlaps.length > 0) {
     try {
       const ids = realOverlaps.map((c) => c.id);
@@ -5645,7 +5833,23 @@ export async function getCrossModuleOverlaps(opts: {
                 array_agg(DISTINCT COALESCE(raw_data#>>'{Layout,name}', raw_data->>'Layout'))
                   FILTER (WHERE COALESCE(raw_data#>>'{Layout,name}', raw_data->>'Layout','') <> '') AS layouts,
                 array_agg(DISTINCT (raw_data->>'Pipeline'))
-                  FILTER (WHERE COALESCE(raw_data->>'Pipeline','') <> '')      AS pipelines
+                  FILTER (WHERE COALESCE(raw_data->>'Pipeline','') <> '')      AS pipelines,
+                array_agg(DISTINCT LOWER(COALESCE(raw_data->>'Lead_Status','')))
+                  FILTER (WHERE record_type = 'lead')                          AS lead_statuses,
+                array_agg(DISTINCT LOWER(COALESCE(raw_data->>'Stage','')))
+                  FILTER (WHERE record_type = 'deal')                          AS deal_stages_lower,
+                array_agg(DISTINCT record_type)
+                  FILTER (WHERE EXISTS (
+                    SELECT 1 FROM duplicate_resolution_ledger lg
+                    WHERE lg.master_zoho_id = duplicate_records.zoho_record_id
+                      AND lg.module = CASE duplicate_records.record_type
+                                        WHEN 'lead'    THEN 'Leads'
+                                        WHEN 'deal'    THEN 'Deals'
+                                        WHEN 'contact' THEN 'Contacts'
+                                        WHEN 'account' THEN 'Accounts'
+                                      END
+                      AND lg.action_type IN ('resolve','module_resolved')
+                  ))                                                            AS modules_ledger_resolved
            FROM duplicate_records
           WHERE cluster_id = ANY($1::int[])
           GROUP BY cluster_id`,
@@ -5662,6 +5866,35 @@ export async function getCrossModuleOverlaps(opts: {
         c.stages = a.stages ?? [];
         c.layouts = a.layouts ?? [];
         c.pipelines = a.pipelines ?? [];
+
+        // Lifecycle flags (string sets already lowercased by the SQL).
+        const leadStatuses: string[] = a.lead_statuses ?? [];
+        const dealStagesLower: string[] = a.deal_stages_lower ?? [];
+        c.has_active_lead =
+          (Number(c.total_leads) || 0) > 0 &&
+          (leadStatuses.length === 0
+            ? true // no statuses captured → assume active (raw_data gap)
+            : leadStatuses.some((s) => isActiveLead(s)));
+        c.has_active_deal =
+          (Number(c.total_deals) || 0) > 0 &&
+          (dealStagesLower.length === 0
+            ? true
+            : dealStagesLower.some((s) => isActiveDeal(s)));
+        c.has_client_deal =
+          (Number(c.total_deals) || 0) > 0 &&
+          dealStagesLower.some((s) => isClientDeal(s));
+
+        // Ledger-resolved heuristic: every module present in the cluster
+        // has a matching ledger entry. Empty cluster (no modules) doesn't
+        // qualify (nothing to be resolved AGAINST).
+        const modulesPresent: string[] = c.modules_present ?? [];
+        const modulesLedgerResolved: string[] = a.modules_ledger_resolved ?? [];
+        c.ledger_resolved =
+          modulesPresent.length > 0 &&
+          modulesLedgerResolved.length > 0 &&
+          modulesPresent.every((m: string) =>
+            modulesLedgerResolved.includes(m),
+          );
       }
     } catch (e) {
       logger.warn(
@@ -5671,21 +5904,126 @@ export async function getCrossModuleOverlaps(opts: {
     }
   }
 
-  const filtered = opts.pairing
-    ? realOverlaps.filter((c) => c.pairing === opts.pairing)
-    : realOverlaps;
+  // ─── Refined-rule filter (Sarah 2026-06-16) ───────────────────────────
+  //
+  // Hide clusters whose ONLY cross-module relationship is Lead↔Contact or
+  // Lead↔Account — those have no Zoho action available on this tab (a
+  // Lead can't be linked to anything), and CLOSE-the-Lead is the job of
+  // the Leads Duplicates tab anyway. Keep the cluster if ANY of these
+  // actionable conditions are true:
+  //   • Active Lead alongside an active Deal (wasted prospecting).
+  //   • Contact + Account (potential Account_Name link gap).
+  //   • Deal + Account (potential Account_Name link gap).
+  //   • Contact + Deal (potential Contact_Name link gap).
+  //
+  // Also drop "effectively resolved" clusters from the Open queue (status
+  // 'active' callers only) — these are clusters where the survivor records
+  // are all in the resolution ledger, meaning a prior Mark Handled click
+  // is being re-displayed because the 6h sync re-clustered.
+  const isActionable = (c: any): boolean => {
+    const leads = Number(c.total_leads || 0);
+    const contacts = Number(c.total_contacts || 0);
+    const accounts = Number(c.total_accounts || 0);
+    const deals = Number(c.total_deals || 0);
+    const activeLead = !!c.has_active_lead;
+    const activeDeal = !!c.has_active_deal;
+    const leadVsActiveDeal = leads > 0 && deals > 0 && activeLead && activeDeal;
+    const contactAccount = contacts > 0 && accounts > 0;
+    const dealAccount = deals > 0 && accounts > 0;
+    const contactDeal = contacts > 0 && deals > 0;
+    return leadVsActiveDeal || contactAccount || dealAccount || contactDeal;
+  };
+  const visible = realOverlaps.filter((c) => {
+    if (!isActionable(c)) return false;
+    if (statusOpt === "active" && (c as any).ledger_resolved) return false;
+    return true;
+  });
 
+  // Pairing chip filter: a chip click sends pairing=lead_deal /
+  // contact_account / etc. Under the refined rules a "Contact ↔ Account"
+  // chip should ALSO include 3+ modules clusters that carry a Contact +
+  // Account pair, not just the strict 2-module case. Likewise Lead ↔
+  // Active Deal must require BOTH sides active. The match table below
+  // mirrors the headline-tile semantics so chip filtering and tile
+  // counts agree.
+  const matchesPairingChip = (c: any, pairing: CrossModulePairing): boolean => {
+    const leads = Number(c.total_leads || 0);
+    const contacts = Number(c.total_contacts || 0);
+    const accounts = Number(c.total_accounts || 0);
+    const deals = Number(c.total_deals || 0);
+    switch (pairing) {
+      case "lead_deal":
+        return (
+          leads > 0 &&
+          deals > 0 &&
+          !!c.has_active_lead &&
+          !!c.has_active_deal
+        );
+      case "contact_account":
+        return contacts > 0 && accounts > 0;
+      case "deal_account":
+        return deals > 0 && accounts > 0;
+      case "contact_deal":
+        return contacts > 0 && deals > 0;
+      case "mixed":
+        return c.pairing === "mixed";
+      // lead_contact / lead_account chips are deprecated under the
+      // refined rules — they have no actionable home on this tab — so
+      // the chip filters never match. The frontend hides those chips
+      // entirely; this just makes the backend safe if an old client
+      // still sends them.
+      case "lead_contact":
+      case "lead_account":
+        return false;
+      default:
+        return false;
+    }
+  };
+  const filtered = opts.pairing
+    ? visible.filter((c) => matchesPairingChip(c, opts.pairing!))
+    : visible;
+
+  // Counts: by_pairing keeps shape for back-compat (Adam tool etc.) but
+  // is now computed over `visible` (the actionable set), so lead_contact
+  // and lead_account always read 0 — operators should look at by_action.
   const byPairing: Record<string, number> = {};
   let arrTotal = 0;
-  for (const c of realOverlaps) {
+  for (const c of visible) {
     const key = c.pairing ?? "unknown";
     byPairing[key] = (byPairing[key] ?? 0) + 1;
     arrTotal += Number(c.estimated_pipeline_value ?? 0);
+  }
+  const byAction = {
+    lead_vs_active_deal: 0,
+    contact_account_link: 0,
+    deal_account_link: 0,
+    contact_deal_link: 0,
+    three_plus_modules: 0,
+    existing_client_cs_owned: 0,
+  };
+  for (const c of visible as any[]) {
+    const leads = Number(c.total_leads || 0);
+    const contacts = Number(c.total_contacts || 0);
+    const accounts = Number(c.total_accounts || 0);
+    const deals = Number(c.total_deals || 0);
+    if (
+      leads > 0 &&
+      deals > 0 &&
+      c.has_active_lead &&
+      c.has_active_deal
+    )
+      byAction.lead_vs_active_deal++;
+    if (contacts > 0 && accounts > 0) byAction.contact_account_link++;
+    if (deals > 0 && accounts > 0) byAction.deal_account_link++;
+    if (contacts > 0 && deals > 0) byAction.contact_deal_link++;
+    if (c.pairing === "mixed") byAction.three_plus_modules++;
+    if (c.has_client_deal) byAction.existing_client_cs_owned++;
   }
 
   return {
     total: filtered.length,
     by_pairing: byPairing,
+    by_action: byAction,
     arr_exposure_total: arrTotal,
     clusters: filtered,
   };

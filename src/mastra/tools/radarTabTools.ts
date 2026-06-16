@@ -527,7 +527,7 @@ export const executiveSummaryTool = createTool({
 export const crossModuleOverlapTool = createTool({
   id: "cross-module-overlap-status",
   description:
-    "Check the Cross-Module Overlap tab — duplicate clusters where the same company shows up in 2+ Zoho modules at once (Lead + Contact, Lead + Account, Contact + Account, Lead + Deal, etc.). Returns counts by pairing type, total ARR exposure across the open overlaps, and totals by triage status (open / handled / dismissed). Use when asked how many cross-module overlaps are open, how many Lead-vs-Account conflicts exist, what the cross-module ARR exposure is, or for a snapshot of the cross-module triage queue. The remediation in Zoho for Lead-vs-anything-else is usually CLOSE the duplicate Lead (Zoho doesn't allow cross-module merges); for Contact↔Account / Deal↔Account it's LINK (set Account_Name); for Contact↔Deal it's LINK (set Contact_Name).",
+    "Check the Cross-Module Overlap tab — duplicate clusters where the same company shows up in 2+ Zoho modules at once AND there's an action available on this tab. Refined rules (Sarah 2026-06-16): pure Lead↔Contact and Lead↔Account clusters are HIDDEN — Zoho has no field to link a Lead to anything, so the only action is CLOSE the Lead and that's the Leads Duplicates tab's job. The remaining buckets are: Lead↔Active Deal (close the redundant Lead — active = Lead not in Junk/Lost/Bogus/Disqualified/Not Qualified/Converted AND Deal not in Closed Lost/Lost/Dropped/Cancelled), Contact↔Account / Deal↔Account (LINK via Account_Name), Contact↔Deal (LINK via Contact_Name), 3+ modules (compound). 'Existing client' = a Paid / Agreement Signed / Closed Won / Agreement Sent / Awaiting PO / Client Activated / Transferred to CS deal in the cluster — those are CS-owned, route to Customer Success. Contact alone is NOT customer evidence. Use when asked how many overlaps are open, Lead↔Active Deal count, existing-client / CS-owned count, cross-module ARR exposure, etc.",
   inputSchema: z.object({
     status: z
       .enum(["active", "resolved", "ignored", "all"])
@@ -540,7 +540,8 @@ export const crossModuleOverlapTool = createTool({
     success: z.boolean(),
     status: z.string().optional(),
     totalClusters: z.number().optional(),
-    byPairing: z.record(z.number()).optional(), // { lead_contact: N, lead_account: N, ... }
+    byPairing: z.record(z.number()).optional(), // back-compat: lead_contact / lead_account always 0
+    byAction: z.record(z.number()).optional(),  // refined-rule headline counts
     arrExposureTotalSar: z.number().optional(),
     error: z.string().optional(),
   }),
@@ -554,13 +555,15 @@ export const crossModuleOverlapTool = createTool({
       const r: any = await getCrossModuleOverlaps({
         status: status as "active" | "resolved" | "ignored" | "all",
       });
-      // The engine already aggregates by_pairing and arr_exposure_total;
-      // Adam just needs the headline numbers (not the full cluster list).
+      // The engine already aggregates by_pairing / by_action and
+      // arr_exposure_total; Adam just needs the headline numbers (not
+      // the full cluster list).
       return {
         success: true,
         status,
         totalClusters: Number(r?.total ?? 0),
         byPairing: r?.by_pairing ?? {},
+        byAction: r?.by_action ?? {},
         arrExposureTotalSar: Number(r?.arr_exposure_total ?? 0),
       };
     } catch (e: any) {
