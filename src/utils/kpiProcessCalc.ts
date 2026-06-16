@@ -457,6 +457,88 @@ export async function calcCertificationMilestones(): Promise<ProcessKpiValue> {
   };
 }
 
+// ──────────── GRC / Specialist "auto-ready" — fill once their data exists ─────
+// Each reads an existing platform table and returns "--" (dataAvailable:false)
+// until rows are added, so they auto-fill the moment the register is populated.
+// Wrapped in try/catch so a schema mismatch degrades to "--" rather than erroring.
+
+async function ratioKpi(
+  sql: string,
+  totalKey = "total",
+  goodKey = "good",
+): Promise<ProcessKpiValue> {
+  let res;
+  try {
+    res = await pool.query(sql);
+  } catch {
+    return EMPTY;
+  }
+  const total = Number(res.rows[0]?.[totalKey] || 0);
+  const good = Number(res.rows[0]?.[goodKey] || 0);
+  if (total === 0) return EMPTY;
+  return { value: Math.round((good / total) * 1000) / 10, dataAvailable: true, details: { good, total } };
+}
+
+/** GRC-KPI-017 Risk Register Hygiene — risks with owner + department + treatment ÷ total. */
+export const calcRiskRegisterHygiene = () =>
+  ratioKpi(
+    `SELECT COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE risk_owner IS NOT NULL AND trim(risk_owner) <> ''
+         AND owner_department IS NOT NULL AND trim(owner_department) <> ''
+         AND treatment_strategy IS NOT NULL)::int AS good
+     FROM enterprise_risks`,
+  );
+
+/** GRC-KPI-019 TPRA SLA — vendor assessments completed ÷ total assessments. */
+export const calcTpraSla = () =>
+  ratioKpi(
+    `SELECT COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE status IN ('approved','completed','reviewed','submitted'))::int AS good
+     FROM vendor_assessments`,
+  );
+
+/** GRC-KPI-018 Vendor Risk Posture — critical vendors with acceptable status ÷ critical. */
+export const calcVendorRiskPosture = () =>
+  ratioKpi(
+    `SELECT COUNT(*) FILTER (WHERE criticality = 'critical')::int AS total,
+       COUNT(*) FILTER (WHERE criticality = 'critical' AND status IN ('approved','active'))::int AS good
+     FROM vendors`,
+  );
+
+/** SPEC-KPI-02 Compliance Obligation Tracking — applicable obligations with a responsible dept ÷ applicable. */
+export const calcComplianceObligationTracking = () =>
+  ratioKpi(
+    `SELECT COUNT(*) FILTER (WHERE status = 'applicable')::int AS total,
+       COUNT(*) FILTER (WHERE status = 'applicable' AND responsible_department IS NOT NULL
+         AND trim(responsible_department) <> '')::int AS good
+     FROM obligations`,
+  );
+
+/** SPEC-KPI-04 Quality→GRC Handoff Effectiveness — accepted/processed handoffs ÷ total. */
+export const calcHandoffEffectiveness = () =>
+  ratioKpi(
+    `SELECT COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE status IN ('processed','accepted','completed') OR processed_at IS NOT NULL)::int AS good
+     FROM handoff_events`,
+  );
+
+/** SPEC-KPI-06 CAPA Follow-Up Compliance — treatment actions completed on/before due date ÷ non-cancelled. */
+export const calcCapaFollowUp = () =>
+  ratioKpi(
+    `SELECT COUNT(*) FILTER (WHERE status <> 'cancelled')::int AS total,
+       COUNT(*) FILTER (WHERE status = 'completed' AND completion_date IS NOT NULL
+         AND completion_date <= due_date)::int AS good
+     FROM risk_treatment_actions`,
+  );
+
+/** SPEC-KPI-07 Regulatory Evidence Availability — ready evidence packs ÷ total. */
+export const calcRegulatoryEvidenceAvailability = () =>
+  ratioKpi(
+    `SELECT COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE status IN ('compiled','reviewed','submitted'))::int AS good
+     FROM evidence_packs`,
+  );
+
 // ───────────────────── Quality — Quality→GRC Handoff SLA ─────────────────────
 /**
  * QM-KPI-006 Quality→GRC Handoff SLA — % of handoffs PROCESSED WITHIN the SLA
@@ -553,6 +635,14 @@ export const PROCESS_CALCULATORS: Record<
   "QM-KPI-010": calcDocumentationLifecycle,
   // Quality — % of handoffs processed within the SLA window
   "QM-KPI-006": calcHandoffSlaCompliance,
+  // GRC / Specialist "auto-ready" — fill once their registers carry data
+  "GRC-KPI-017": calcRiskRegisterHygiene,
+  "GRC-KPI-019": calcTpraSla,
+  "GRC-KPI-018": calcVendorRiskPosture,
+  "SPEC-KPI-02": calcComplianceObligationTracking,
+  "SPEC-KPI-04": calcHandoffEffectiveness,
+  "SPEC-KPI-06": calcCapaFollowUp,
+  "SPEC-KPI-07": calcRegulatoryEvidenceAvailability,
 };
 
 /**
