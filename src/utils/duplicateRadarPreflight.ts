@@ -98,6 +98,22 @@ export interface PreflightResultRow {
   executive_action: string;
   /** info | low | medium | high | critical — drives row colouring. */
   executive_severity: "info" | "low" | "medium" | "high" | "critical";
+  /**
+   * Latest Churn_Date observed on the matched cluster's Deal records
+   * (ISO date string). Surfaces in the Excel "Churn date" column + the
+   * executive_action body. Null on PASS rows and clusters without a
+   * terminated Deal.
+   */
+  churn_date?: string | null;
+  /** Days since the latest churn. Null when churn_date is null. */
+  churn_days?: number | null;
+  /**
+   * CS owner name when the cluster has a CS-side Deal (Paid /
+   * Agreement Signed / Termination). Empty string when the cluster's
+   * deals are all sales-side. Lets the email say "coordinate with CS
+   * owner X" instead of guessing from the generic owner list.
+   */
+  cs_owner?: string | null;
 }
 
 export interface PreflightSummary {
@@ -158,6 +174,12 @@ export function buildExecutiveAction(input: {
    * "Active deal already in pipeline" — the wording that misled Sales.
    */
   has_active_deal?: boolean;
+  /** Latest Churn_Date on the cluster (ISO yyyy-mm-dd). */
+  churn_date?: string | null;
+  /** Days since the latest churn. */
+  churn_days?: number | null;
+  /** CS owner name (when the cluster has CS-side deals). */
+  cs_owner?: string | null;
 }): { text: string; severity: PreflightResultRow["executive_severity"] } {
   const ownerStr =
     Array.isArray(input.owners) && input.owners.length > 0
@@ -165,6 +187,13 @@ export function buildExecutiveAction(input: {
         (input.owners.length > 2 ? ` +${input.owners.length - 2}` : "")
       : null;
   const ownerSuffix = ownerStr ? ` (current owner: ${ownerStr})` : "";
+  const csOwnerSuffix = input.cs_owner
+    ? ` (CS owner: ${input.cs_owner})`
+    : ownerSuffix;
+  const sectorLabel =
+    input.sector === "government" ? "Government" : "Private";
+  const cooloffDays = input.sector === "government" ? 365 : 180;
+  const churnDate = (input.churn_date || "").trim();
 
   if (input.verdict === "block") {
     const phase =
@@ -176,27 +205,51 @@ export function buildExecutiveAction(input: {
             ? "in Renewal"
             : "active";
     return {
-      text: `Existing customer ${phase} — DO NOT pursue. Route to Customer Success${ownerSuffix}.`,
+      text: `EXISTING ${sectorLabel} CUSTOMER — ${phase}. DO NOT pursue, do NOT load as a new lead. Route to Customer Success${csOwnerSuffix}.`,
       severity: "critical",
     };
   }
   if (input.verdict === "review") {
+    // Within the sector cool-off window — CS-side action required.
+    const daysPart = input.churn_days != null && input.churn_days >= 0
+      ? `${input.churn_days} day${input.churn_days === 1 ? "" : "s"} ago`
+      : null;
+    const datePart = churnDate ? `on ${churnDate}` : null;
+    const churnSentence = daysPart || datePart
+      ? `Churned ${[daysPart, datePart].filter(Boolean).join(" ")} — within the ${cooloffDays}-day ${sectorLabel} cool-off (${cooloffDays - (input.churn_days ?? 0)} day${cooloffDays - (input.churn_days ?? 0) === 1 ? "" : "s"} remaining).`
+      : `Within the ${cooloffDays}-day ${sectorLabel} cool-off.`;
     return {
-      text: `Recent CS termination — within churn cool-off window (${
-        input.sector === "government" ? "365" : "180"
-      } days). Coordinate with CS before contacting${ownerSuffix}.`,
+      text: `RECENT CS TERMINATION — ${churnSentence} CS must sign off before any outreach${csOwnerSuffix}.`,
       severity: "high",
     };
   }
   if (input.verdict === "warn") {
+    // Past cool-off — Sales MAY re-engage, but must notify CS owner and
+    // tag the row so the briefing carries the historical context.
+    const daysPart = input.churn_days != null && input.churn_days >= 0
+      ? `${input.churn_days} day${input.churn_days === 1 ? "" : "s"} ago`
+      : null;
+    const datePart = churnDate ? `on ${churnDate}` : null;
+    const churnSentence = daysPart || datePart
+      ? `Already churned ${[daysPart, datePart].filter(Boolean).join(" ")} — past the ${cooloffDays}-day ${sectorLabel} cool-off.`
+      : `Past the ${cooloffDays}-day ${sectorLabel} cool-off.`;
     return {
-      text: `Past CS cool-off — Sales may re-engage, but notify CS owner first${ownerSuffix}.`,
+      text: `PRIOR CS CUSTOMER — Sales MAY re-engage. ${churnSentence} Notify ${input.cs_owner ? `CS owner ${input.cs_owner}` : "the CS owner"} first; carry the churn history into the conversation.`,
       severity: "medium",
     };
   }
   if (input.verdict === "duplicate") {
     const recs = input.module_counts?.total || 0;
     const dealsN = input.module_counts?.deals || 0;
+    const leadsN = input.module_counts?.leads || 0;
+    const contactsN = input.module_counts?.contacts || 0;
+    const accountsN = input.module_counts?.accounts || 0;
+    const modBreakdown = [
+      leadsN ? `${leadsN} lead${leadsN === 1 ? "" : "s"}` : null,
+      dealsN ? `${dealsN} deal${dealsN === 1 ? "" : "s"}` : null,
+      contactsN ? `${contactsN} contact${contactsN === 1 ? "" : "s"}` : null,
+      accountsN ? `${accountsN} account${accountsN === 1 ? "" : "s"}` : null,
+    ].filter(Boolean).join(", ");
     // Only claim "Active deal in pipeline" when the cluster actually
     // contains a Deal in a live Stage. has_active_deal === undefined
     // = legacy caller without the enrichment; fall back to "any deal"
@@ -207,7 +260,7 @@ export function buildExecutiveAction(input: {
         : input.has_active_deal === true;
     if (hasActiveDeal) {
       return {
-        text: `Active deal already in pipeline (${dealsN} deal${dealsN === 1 ? "" : "s"}, ${recs} total record${recs === 1 ? "" : "s"}). Assign to existing owner${ownerSuffix.replace("current ", "")}; do NOT create a new lead.`,
+        text: `ACTIVE SALES DEAL IN PIPELINE — ${modBreakdown} on file (${recs} total record${recs === 1 ? "" : "s"}). Assign to existing owner${ownerSuffix.replace("current ", "")}; do NOT create a new lead, it will become a duplicate.`,
         severity: "high",
       };
     }
@@ -215,13 +268,16 @@ export function buildExecutiveAction(input: {
       // Cluster has deals but ALL of them are dead (Closed Lost,
       // Dropped, …). Surfaces honestly so the HoS knows the company
       // is known to us but Sales has no active motion on it.
+      const churnNote = churnDate
+        ? ` Last activity ${churnDate} (${input.churn_days ? `${input.churn_days}d ago` : "date on file"}).`
+        : "";
       return {
-        text: `Company already in CRM — ${dealsN} prior deal${dealsN === 1 ? "" : "s"} (all closed/lost), ${recs} total record${recs === 1 ? "" : "s"}. Coordinate with existing owner${ownerSuffix} before re-opening.`,
+        text: `KNOWN COMPANY — ALL prior deals closed/lost: ${modBreakdown} (${recs} record${recs === 1 ? "" : "s"}).${churnNote} Coordinate with existing owner${ownerSuffix} before re-opening — do NOT create a parallel lead.`,
         severity: "medium",
       };
     }
     return {
-      text: `Already in CRM as a duplicate (${recs} record${recs === 1 ? "" : "s"}). Resolve in Duplicate Radar before importing${ownerSuffix}.`,
+      text: `ALREADY IN CRM AS DUPLICATE — ${modBreakdown || `${recs} record${recs === 1 ? "" : "s"}`}. Resolve in Duplicate Radar before importing${ownerSuffix}.`,
       severity: "medium",
     };
   }
@@ -316,10 +372,33 @@ export interface PreflightClusterRow {
    * is NOT in {Closed Lost, Lost, Dropped, Cancelled}. Drives the
    * "Active deal in pipeline" line in buildExecutiveAction so the HoS
    * email never claims an active deal exists when the only deal is dead.
-   * Populated by enrichClustersWithDealActivity() after the 3 lookup
-   * paths complete — runs once over the matched cluster id set.
+   * Populated by the cluster-enrichment block after the 3 lookup paths
+   * complete — runs once over the matched cluster id set.
    */
   has_active_deal?: boolean;
+  /**
+   * The latest Churn_Date observed across the cluster's Deal records
+   * (ISO date string, e.g. "2024-11-03"). Surfaces in the WARN /
+   * REVIEW executive_action so the operator sees the actual date the
+   * customer churned — not just "past cool-off". When the verdict is
+   * BLOCK the date is still shown if present (gives context for the
+   * "existing customer" call). Null when no Deal has a Churn_Date.
+   */
+  churn_date?: string | null;
+  /**
+   * Days since the latest churn (today − churn_date). Computed only
+   * when churn_date is present. Used by buildExecutiveAction to say
+   * "churned 412 days ago — past 365-day Government cool-off" without
+   * the operator doing the arithmetic.
+   */
+  churn_days?: number | null;
+  /**
+   * The CS owner's name (if the cluster has a CS-side Deal). Surfaces
+   * in BLOCK / REVIEW actions so the email tells the HoS WHO in CS to
+   * coordinate with — currently was relying on the generic
+   * `owners_involved` array which mixes Sales reps with CS owners.
+   */
+  cs_owner?: string | null;
 }
 
 /**
@@ -455,6 +534,7 @@ export function classifyPreflightRows(input: {
       (c.pipeline_lifecycle_state as PreflightResultRow["lifecycle_state"]) ??
       null;
     const sectorVal = (c.client_sector as PreflightResultRow["sector"]) ?? null;
+    const cAny = c as any;
     const execAction = buildExecutiveAction({
       verdict,
       lifecycle_state: lifecycle,
@@ -462,9 +542,12 @@ export function classifyPreflightRows(input: {
       owners,
       arr_exposure: arr,
       sector: sectorVal,
-      has_active_deal: (c as any).has_active_deal === true ? true
-        : (c as any).has_active_deal === false ? false
+      has_active_deal: cAny.has_active_deal === true ? true
+        : cAny.has_active_deal === false ? false
         : undefined,
+      churn_date: cAny.churn_date ?? null,
+      churn_days: cAny.churn_days ?? null,
+      cs_owner: cAny.cs_owner ?? null,
     });
     out.push({
       row_index: i,
@@ -482,6 +565,9 @@ export function classifyPreflightRows(input: {
       matched_via: matched.matched_via,
       executive_action: execAction.text,
       executive_severity: execAction.severity,
+      churn_date: cAny.churn_date ?? null,
+      churn_days: cAny.churn_days ?? null,
+      cs_owner: cAny.cs_owner ?? null,
     });
   }
 
@@ -862,38 +948,84 @@ export async function runPreflight(input: {
     }
   }
 
-  // Enrich every matched cluster with `has_active_deal` so the duplicate
-  // verdict's "Active deal already in pipeline" claim only fires when a
-  // truly live Deal exists. Mirrors INACTIVE_DEAL_STAGES_LOWER /
-  // isActiveDeal from duplicateRadarDatabase — Closed Lost / Lost /
-  // Dropped / Cancelled don't count as "active". One batched query over
-  // the matched cluster id set; populates the maps in place.
+  // Enrich every matched cluster with:
+  //   • has_active_deal — drives the honest "active deal" wording
+  //   • churn_date     — the latest Churn_Date observed on any Deal in
+  //                      the cluster (raw_data->>'Churn_Date'). Lets
+  //                      WARN/REVIEW verdicts say "churned on 2024-09-15"
+  //                      instead of vague "past cool-off".
+  //   • cs_owner       — Deal Owner of the CS-side deal (Paid /
+  //                      Agreement Signed / Termination phase). Better
+  //                      routing than the generic owners_involved blob.
+  // One batched query covers all three over the matched cluster id set.
   {
     const ids = new Set<number>();
     for (const c of clustersByDomain.values()) ids.add(c.id);
     for (const c of clustersByPhone.values()) ids.add(c.id);
     for (const c of companyMatchByRow.values()) ids.add(c.id);
     if (ids.size > 0) {
-      const flagsQ = await queryWithTimeout<{ cluster_id: number; has_active_deal: boolean }>(
+      const flagsQ = await queryWithTimeout<{
+        cluster_id: number;
+        has_active_deal: boolean;
+        churn_date: string | null;
+        cs_owner: string | null;
+      }>(
         `SELECT cluster_id,
                 BOOL_OR(
                   record_type = 'deal'
                   AND LOWER(COALESCE(raw_data->>'Stage','')) NOT IN
                       ('closed lost','lost','dropped','cancelled','canceled')
-                ) AS has_active_deal
+                ) AS has_active_deal,
+                MAX(NULLIF(raw_data->>'Churn_Date','')) AS churn_date,
+                (
+                  ARRAY_AGG(owner_name)
+                    FILTER (WHERE record_type = 'deal'
+                            AND LOWER(COALESCE(raw_data->>'Stage','')) IN
+                                ('paid','agreement signed','closed won','agreement sent',
+                                 'awaiting po','client activated','transferred to cs',
+                                 'termination')
+                            AND owner_name IS NOT NULL
+                            AND owner_name <> '')
+                )[1] AS cs_owner
            FROM duplicate_records
           WHERE cluster_id = ANY($1::int[])
           GROUP BY cluster_id`,
         [Array.from(ids)],
       );
-      const flagsById = new Map<number, boolean>();
+      const byId = new Map<number, {
+        has_active_deal: boolean;
+        churn_date: string | null;
+        cs_owner: string | null;
+      }>();
       if (flagsQ && Array.isArray(flagsQ.rows)) {
         for (const r of flagsQ.rows) {
-          flagsById.set(Number(r.cluster_id), !!r.has_active_deal);
+          byId.set(Number(r.cluster_id), {
+            has_active_deal: !!r.has_active_deal,
+            churn_date: r.churn_date || null,
+            cs_owner: r.cs_owner || null,
+          });
         }
       }
+      const todayMs = Date.now();
       const apply = (c: PreflightClusterRow) => {
-        c.has_active_deal = flagsById.get(c.id) === true;
+        const v = byId.get(c.id);
+        c.has_active_deal = v?.has_active_deal === true;
+        // Normalise the churn date to yyyy-mm-dd (Zoho can return
+        // datetimes). Compute churn_days off whatever parses.
+        const raw = v?.churn_date ?? null;
+        const iso = raw ? String(raw).slice(0, 10) : null;
+        c.churn_date = iso;
+        if (iso) {
+          const t = Date.parse(iso);
+          if (Number.isFinite(t)) {
+            c.churn_days = Math.max(0, Math.floor((todayMs - t) / 86400000));
+          } else {
+            c.churn_days = null;
+          }
+        } else {
+          c.churn_days = null;
+        }
+        c.cs_owner = v?.cs_owner ?? null;
       };
       for (const c of clustersByDomain.values()) apply(c);
       for (const c of clustersByPhone.values()) apply(c);
