@@ -824,6 +824,339 @@ const _aiApprovalRoutesRaw = [
   },
 
   /* -------------------------------------------------------------------- */
+  /* POST /api/ai/approvals/bulk-approve                                  */
+  /*                                                                      */
+  /* Same role gate + Segregation-of-Duties enforcement as the single     */
+  /* approve handler, applied per-item. Caller passes an explicit list of */
+  /* action_code values (max 500 per request); each is checked, claimed   */
+  /* and executed independently. dryRun=true (default) returns what       */
+  /* WOULD happen without writing.                                        */
+  /* -------------------------------------------------------------------- */
+  {
+    path: "/api/ai/approvals/bulk-approve",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          await ensureTable();
+          const viaAdminKey = hasValidAdminApiKey(c);
+          const sessionUser = getSessionUser(c);
+          if (!sessionUser && !viaAdminKey) return unauthorizedResponse(c);
+          const user = viaAdminKey
+            ? {
+                ...(sessionUser || {
+                  userId: 0,
+                  email: "api-key@system",
+                  name: "Admin Key",
+                }),
+                role: "admin" as UserRole,
+              }
+            : sessionUser!;
+
+          const body = await c.req.json().catch(() => ({}));
+          const codes: string[] = Array.isArray(body?.codes)
+            ? body.codes.filter((x: any) => typeof x === "string" && x.trim())
+            : [];
+          if (codes.length === 0) {
+            return c.json(
+              { error: "codes[] array is required" },
+              400,
+            );
+          }
+          const MAX_BATCH = 500;
+          if (codes.length > MAX_BATCH) {
+            return c.json(
+              {
+                error: `Too many codes — max ${MAX_BATCH} per request. Split into multiple calls.`,
+              },
+              400,
+            );
+          }
+          const dryRun = body?.dryRun !== false;
+
+          const skipped = {
+            notFound: 0,
+            status: 0,
+            role: 0,
+            sod: 0,
+            notGated: 0,
+            claimFailed: 0,
+          };
+          let approved = 0;
+          let failed = 0;
+          const items: Array<Record<string, any>> = [];
+
+          for (const code of codes) {
+            const action = await getPendingActionByCode(code);
+            if (!action) {
+              skipped.notFound++;
+              items.push({ code, result: "skipped", reason: "not_found" });
+              continue;
+            }
+            if (action.status !== "pending") {
+              skipped.status++;
+              items.push({
+                code,
+                result: "skipped",
+                reason: "status",
+                currentStatus: action.status,
+              });
+              continue;
+            }
+            if (!isAllowedApprover(action.risk_level, user.role)) {
+              skipped.role++;
+              items.push({
+                code,
+                result: "skipped",
+                reason: "role",
+                required: getApproverRolesFor(action.risk_level),
+              });
+              continue;
+            }
+            if (
+              !SELF_APPROVE_EXEMPT_ROLES.has(user.role) &&
+              action.requested_by_user_id != null &&
+              action.requested_by_user_id === user.userId
+            ) {
+              skipped.sod++;
+              items.push({
+                code,
+                result: "skipped",
+                reason: "segregation_of_duties",
+              });
+              continue;
+            }
+            if (!isToolGated(action.tool_id)) {
+              skipped.notGated++;
+              items.push({
+                code,
+                result: "skipped",
+                reason: "tool_no_longer_gated",
+              });
+              continue;
+            }
+
+            if (dryRun) {
+              items.push({ code, result: "would_approve" });
+              approved++;
+              continue;
+            }
+
+            const claimed = await claimForApproval(action.action_code, {
+              userId: user.userId,
+              email: user.email,
+              name: user.name,
+            });
+            if (!claimed) {
+              skipped.claimFailed++;
+              items.push({
+                code,
+                result: "skipped",
+                reason: "claim_lost",
+              });
+              continue;
+            }
+            await logEvent({
+              userId: user.userId,
+              userEmail: user.email,
+              userRole: user.role,
+              actionType: "AI_ACTION",
+              entityType: "SYSTEM",
+              entityId: claimed.action_code,
+              entityName: claimed.tool_label,
+              description: `Bulk-approved AI action ${claimed.action_code} (${claimed.tool_label})`,
+              aiInvolved: true,
+              severity:
+                claimed.risk_level === "critical" || claimed.risk_level === "high"
+                  ? "WARNING"
+                  : "INFO",
+              module: "ai-governance",
+              correlationId: claimed.action_code,
+            }).catch(() => {
+              /* non-fatal */
+            });
+            const outcome = await executeApprovedAction(claimed);
+            if (outcome.ok) {
+              approved++;
+              items.push({
+                code,
+                result: "approved",
+                actionCode: claimed.action_code,
+              });
+            } else {
+              failed++;
+              items.push({
+                code,
+                result: "failed",
+                actionCode: claimed.action_code,
+                error:
+                  typeof outcome.error === "string"
+                    ? (redactSecretLikeStrings(outcome.error) as string)
+                    : "execution failed",
+              });
+            }
+          }
+
+          return c.json({
+            success: true,
+            dryRun,
+            total: codes.length,
+            approved,
+            failed,
+            skipped,
+            items,
+          });
+        } catch (error: any) {
+          logger.error("[AI-Approval] bulk-approve error:", error);
+          const safeDetails =
+            typeof error?.message === "string"
+              ? (redactSecretLikeStrings(error.message) as string)
+              : undefined;
+          return c.json(
+            { error: "Failed to bulk-approve", details: safeDetails },
+            500,
+          );
+        }
+      };
+    },
+  },
+
+  /* -------------------------------------------------------------------- */
+  /* POST /api/ai/approvals/bulk-reject                                   */
+  /*                                                                      */
+  /* Same per-item authorization as single-reject: requester may cancel   */
+  /* their own drafts, approvers may reject any. dryRun=true (default).   */
+  /* Requires reason >=3 chars (applied to every rejected item).          */
+  /* -------------------------------------------------------------------- */
+  {
+    path: "/api/ai/approvals/bulk-reject",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          await ensureTable();
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+
+          const body = await c.req.json().catch(() => ({}));
+          const codes: string[] = Array.isArray(body?.codes)
+            ? body.codes.filter((x: any) => typeof x === "string" && x.trim())
+            : [];
+          if (codes.length === 0) {
+            return c.json({ error: "codes[] array is required" }, 400);
+          }
+          const MAX_BATCH = 500;
+          if (codes.length > MAX_BATCH) {
+            return c.json(
+              {
+                error: `Too many codes — max ${MAX_BATCH} per request.`,
+              },
+              400,
+            );
+          }
+          const reason = (body?.reason || "").toString().trim();
+          if (!reason || reason.length < 3) {
+            return c.json(
+              {
+                error:
+                  "A rejection reason (>=3 chars) is required for audit purposes.",
+              },
+              400,
+            );
+          }
+          const dryRun = body?.dryRun !== false;
+
+          const skipped = { notFound: 0, status: 0, authz: 0, claimFailed: 0 };
+          let rejected = 0;
+          const items: Array<Record<string, any>> = [];
+
+          for (const code of codes) {
+            const action = await getPendingActionByCode(code);
+            if (!action) {
+              skipped.notFound++;
+              items.push({ code, result: "skipped", reason: "not_found" });
+              continue;
+            }
+            if (action.status !== "pending") {
+              skipped.status++;
+              items.push({
+                code,
+                result: "skipped",
+                reason: "status",
+                currentStatus: action.status,
+              });
+              continue;
+            }
+            const isRequester = action.requested_by_user_id === user.userId;
+            const isApprover = isAllowedApprover(action.risk_level, user.role);
+            if (!isRequester && !isApprover) {
+              skipped.authz++;
+              items.push({ code, result: "skipped", reason: "not_authorized" });
+              continue;
+            }
+            if (dryRun) {
+              items.push({ code, result: "would_reject" });
+              rejected++;
+              continue;
+            }
+            const result = await rejectAction(
+              action.action_code,
+              { userId: user.userId, email: user.email, name: user.name },
+              reason,
+            );
+            if (!result) {
+              skipped.claimFailed++;
+              items.push({ code, result: "skipped", reason: "claim_lost" });
+              continue;
+            }
+            await logEvent({
+              userId: user.userId,
+              userEmail: user.email,
+              userRole: user.role,
+              actionType: "AI_ACTION",
+              entityType: "SYSTEM",
+              entityId: result.action_code,
+              entityName: result.tool_label,
+              description: `Bulk-rejected AI action ${result.action_code}: ${result.rejection_reason}`,
+              aiInvolved: true,
+              severity: "INFO",
+              module: "ai-governance",
+              correlationId: result.action_code,
+            }).catch(() => {
+              /* non-fatal */
+            });
+            rejected++;
+            items.push({
+              code,
+              result: "rejected",
+              actionCode: result.action_code,
+            });
+          }
+
+          return c.json({
+            success: true,
+            dryRun,
+            total: codes.length,
+            rejected,
+            skipped,
+            items,
+          });
+        } catch (error: any) {
+          logger.error("[AI-Approval] bulk-reject error:", error);
+          const safeDetails =
+            typeof error?.message === "string"
+              ? (redactSecretLikeStrings(error.message) as string)
+              : undefined;
+          return c.json(
+            { error: "Failed to bulk-reject", details: safeDetails },
+            500,
+          );
+        }
+      };
+    },
+  },
+
+  /* -------------------------------------------------------------------- */
   /* POST /api/ai/approvals/:code/reject                                  */
   /* -------------------------------------------------------------------- */
   {
