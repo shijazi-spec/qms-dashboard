@@ -106,7 +106,12 @@ export const lookupEntityTool = createTool({
 
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
-    const query = (context.query || "").trim();
+    // Normalize the search term. Users paste domains as "@nozomtechs.com" — the
+    // leading "@" breaks Zoho's indexed word search, so strip it (and any
+    // surrounding angle brackets/whitespace). A real email like
+    // "x@nozomtechs.com" keeps its mid-string "@" (Zoho matches emails).
+    const raw = (context.query || "").trim();
+    const query = raw.replace(/^[<@\s]+/, "").replace(/[>\s]+$/, "").trim();
     if (!query) {
       return {
         success: false,
