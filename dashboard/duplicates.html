@@ -8530,6 +8530,90 @@
             if (exportBtn) exportBtn.classList.add('hidden');
         }
 
+        // Replit's gateway returns HTTP 504 if a single request runs past
+        // its ~60s ceiling — sending all 1,668 rows at once hit that wall
+        // no matter how fast the backend got. Solution: split into 250-row
+        // chunks (≈10-row groups × 25 = well under the per-request budget),
+        // run 4 chunks concurrently to keep wall-clock low, merge results
+        // client-side. The same engine runs server-side per chunk — only
+        // the framing changes. Progress is shown on the Check button.
+        const PREFLIGHT_CHUNK_SIZE = 250;
+        const PREFLIGHT_CHUNK_CONCURRENCY = 4;
+
+        async function _preflightOneChunk(chunkRows) {
+            const res = await fetch('/api/duplicates/preflight', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows: chunkRows }),
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error('HTTP ' + res.status + ': ' + (txt || '').slice(0, 200));
+            }
+            return res.json();
+        }
+
+        // Merge N chunk responses back into the shape renderPreflight expects.
+        // Row indices are RE-NUMBERED to be globally unique across chunks so
+        // the export / push-to-Zoho flows that key off row_index don't
+        // collide. top_reasons + pct_actionable are recomputed because they
+        // are derived from the merged totals, not summable.
+        function _preflightMergeChunks(parts, totalRows) {
+            const summary = { block: 0, review: 0, warn: 0, duplicate: 0, pass: 0 };
+            const rowsOut = [];
+            let examined = 0;
+            let skipped = 0;
+            let arrBlocked = 0;
+            const reasonCounts = new Map();
+            for (const part of parts) {
+                if (!part) continue;
+                if (part.summary) {
+                    summary.block    += part.summary.block    || 0;
+                    summary.review   += part.summary.review   || 0;
+                    summary.warn     += part.summary.warn     || 0;
+                    summary.duplicate += part.summary.duplicate || 0;
+                    summary.pass     += part.summary.pass     || 0;
+                }
+                examined += part.examined || 0;
+                skipped  += part.skipped  || 0;
+                arrBlocked += Number(part.total_arr_exposure_blocked || 0);
+                if (Array.isArray(part.rows)) {
+                    for (const r of part.rows) rowsOut.push(r);
+                }
+                if (Array.isArray(part.top_reasons)) {
+                    for (const tr of part.top_reasons) {
+                        const key = tr.label || '';
+                        reasonCounts.set(key, (reasonCounts.get(key) || 0) + (tr.count || 0));
+                    }
+                }
+            }
+            // Re-index globally so downstream consumers (push-to-Zoho,
+            // Excel export) can address rows uniquely.
+            for (let i = 0; i < rowsOut.length; i++) rowsOut[i].row_index = i;
+            const totalActionable = summary.block + summary.review + summary.warn + summary.duplicate;
+            const pctActionable = examined > 0 ? Math.round((totalActionable / examined) * 100) : 0;
+            const topReasons = [];
+            for (const [label, count] of reasonCounts) {
+                topReasons.push({
+                    label,
+                    count,
+                    pct: examined > 0 ? Math.round((count / examined) * 100) : 0,
+                });
+            }
+            topReasons.sort((a, b) => b.count - a.count);
+            return {
+                total_rows: totalRows,
+                examined,
+                skipped,
+                summary,
+                total_arr_exposure_blocked: arrBlocked,
+                rows: rowsOut,
+                top_reasons: topReasons.slice(0, 10),
+                generated_at: new Date().toISOString(),
+                pct_actionable: pctActionable,
+            };
+        }
+
         async function runPreflight() {
             const btn = document.getElementById('preflightRunBtn');
             const original = btn.textContent;
@@ -8551,16 +8635,50 @@
             btn.disabled = true;
             btn.textContent = 'Checking…';
             try {
-                const res = await fetch('/api/duplicates/preflight', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ rows }),
-                });
-                if (!res.ok) {
-                    const txt = await res.text();
-                    throw new Error('HTTP ' + res.status + ': ' + txt);
+                // Split into chunks. Even with one row we go through this
+                // path so the merge code is the single source of truth.
+                const chunks = [];
+                for (let i = 0; i < rows.length; i += PREFLIGHT_CHUNK_SIZE) {
+                    chunks.push(rows.slice(i, i + PREFLIGHT_CHUNK_SIZE));
                 }
-                const data = await res.json();
+                const total = chunks.length;
+                const results = new Array(total);
+                let completed = 0;
+                let firstError = null;
+
+                const updateProgress = () => {
+                    if (firstError) return;
+                    const done = Math.min(completed * PREFLIGHT_CHUNK_SIZE, rows.length);
+                    btn.textContent = 'Checking ' + done.toLocaleString() + '/' + rows.length.toLocaleString() + '…';
+                };
+                updateProgress();
+
+                // Bounded-concurrency worker pool. Up to N in-flight
+                // requests at once; the next index is pulled off `cursor`
+                // when a worker finishes.
+                let cursor = 0;
+                const workerCount = Math.min(PREFLIGHT_CHUNK_CONCURRENCY, total);
+                const worker = async () => {
+                    while (!firstError) {
+                        const myIdx = cursor++;
+                        if (myIdx >= total) return;
+                        try {
+                            const data = await _preflightOneChunk(chunks[myIdx]);
+                            results[myIdx] = data;
+                        } catch (e) {
+                            if (!firstError) firstError = e;
+                            return;
+                        }
+                        completed++;
+                        updateProgress();
+                    }
+                };
+                const workers = [];
+                for (let i = 0; i < workerCount; i++) workers.push(worker());
+                await Promise.all(workers);
+                if (firstError) throw firstError;
+
+                const data = _preflightMergeChunks(results, rows.length);
                 preflightLastResult = data; // stash for "Download PASS rows"
                 renderPreflight(data);
                 // Show the export button only when we have an upload
