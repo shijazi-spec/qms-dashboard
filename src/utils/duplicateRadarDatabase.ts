@@ -4655,15 +4655,25 @@ export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOvervie
     logs,
   ] = await Promise.all([
     _safeSnapshot(async () => {
+      // Cross-module overlaps are NOT a separate column — they're clusters
+      // whose total_<kind> > 0 for ≥2 record types. Lifecycle uses the
+      // cluster's existing `status` column. Matches the shape of
+      // getCrossModuleOverlaps().
+      const crossModuleFilter = `(
+        (CASE WHEN total_leads    > 0 THEN 1 ELSE 0 END +
+         CASE WHEN total_contacts > 0 THEN 1 ELSE 0 END +
+         CASE WHEN total_accounts > 0 THEN 1 ELSE 0 END +
+         CASE WHEN total_deals    > 0 THEN 1 ELSE 0 END) >= 2
+      )`;
       const r = await pool.query(
         `SELECT
-           COUNT(*) FILTER (WHERE cross_module_status = 'active')::int   AS open_count,
-           COUNT(*) FILTER (WHERE cross_module_status = 'resolved')::int AS handled_count,
-           COUNT(*) FILTER (WHERE cross_module_status = 'ignored')::int  AS dismissed_count,
+           COUNT(*) FILTER (WHERE status = 'active')::int   AS open_count,
+           COUNT(*) FILTER (WHERE status = 'resolved')::int AS handled_count,
+           COUNT(*) FILTER (WHERE status = 'ignored')::int  AS dismissed_count,
            COALESCE(SUM(estimated_pipeline_value)
-             FILTER (WHERE cross_module_status = 'active'), 0)::float    AS arr_sar
+             FILTER (WHERE status = 'active'), 0)::float    AS arr_sar
          FROM duplicate_clusters
-         WHERE cross_module_status IS NOT NULL`,
+         WHERE ${crossModuleFilter}`,
       );
       const row = r.rows[0] || {};
       const open = Number(row.open_count || 0);
@@ -4746,10 +4756,11 @@ export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOvervie
     }),
 
     _safeSnapshot(async () => {
+      // deal_doc_compliance schema: compliant BOOLEAN (not result->>compliant).
       const r = await pool.query(
         `SELECT
-           COUNT(*)::int                                                            AS checked,
-           COUNT(*) FILTER (WHERE COALESCE((result->>'compliant')::boolean,false))::int AS compliant
+           COUNT(*)::int                                AS checked,
+           COUNT(*) FILTER (WHERE compliant = true)::int AS compliant
          FROM deal_doc_compliance`,
       );
       const row = r.rows[0] || {};
@@ -4839,11 +4850,12 @@ export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOvervie
     }),
 
     _safeSnapshot(async () => {
+      // Both tables use created_at (not performed_at) for the timestamp.
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const r = await pool.query(
         `SELECT
            (SELECT COUNT(*)::int FROM duplicate_resolution_feedback WHERE created_at >= $1) AS agent_24h,
-           (SELECT COUNT(*)::int FROM duplicate_merge_actions       WHERE performed_at >= $1) AS manual_24h`,
+           (SELECT COUNT(*)::int FROM duplicate_merge_actions       WHERE created_at >= $1) AS manual_24h`,
         [since24h],
       );
       const agent = Number(r.rows[0]?.agent_24h || 0);
