@@ -150,6 +150,14 @@ export function buildExecutiveAction(input: {
   owners?: string[];
   arr_exposure?: number | null;
   sector?: PreflightResultRow["sector"];
+  /**
+   * True iff the matched cluster has a Deal whose Stage is NOT in
+   * {Closed Lost, Lost, Dropped, Cancelled}. When undefined, falls back
+   * to "any deal counts" (legacy behaviour). Without this flag, a
+   * company whose only deal is Closed Lost was falsely reported as
+   * "Active deal already in pipeline" — the wording that misled Sales.
+   */
+  has_active_deal?: boolean;
 }): { text: string; severity: PreflightResultRow["executive_severity"] } {
   const ownerStr =
     Array.isArray(input.owners) && input.owners.length > 0
@@ -189,11 +197,27 @@ export function buildExecutiveAction(input: {
   if (input.verdict === "duplicate") {
     const recs = input.module_counts?.total || 0;
     const dealsN = input.module_counts?.deals || 0;
-    const hasOpenDeal = dealsN > 0;
-    if (hasOpenDeal) {
+    // Only claim "Active deal in pipeline" when the cluster actually
+    // contains a Deal in a live Stage. has_active_deal === undefined
+    // = legacy caller without the enrichment; fall back to "any deal"
+    // so the line still appears, just less precisely.
+    const hasActiveDeal =
+      input.has_active_deal === undefined
+        ? dealsN > 0
+        : input.has_active_deal === true;
+    if (hasActiveDeal) {
       return {
         text: `Active deal already in pipeline (${dealsN} deal${dealsN === 1 ? "" : "s"}, ${recs} total record${recs === 1 ? "" : "s"}). Assign to existing owner${ownerSuffix.replace("current ", "")}; do NOT create a new lead.`,
         severity: "high",
+      };
+    }
+    if (dealsN > 0) {
+      // Cluster has deals but ALL of them are dead (Closed Lost,
+      // Dropped, …). Surfaces honestly so the HoS knows the company
+      // is known to us but Sales has no active motion on it.
+      return {
+        text: `Company already in CRM — ${dealsN} prior deal${dealsN === 1 ? "" : "s"} (all closed/lost), ${recs} total record${recs === 1 ? "" : "s"}. Coordinate with existing owner${ownerSuffix} before re-opening.`,
+        severity: "medium",
       };
     }
     return {
@@ -287,6 +311,15 @@ export interface PreflightClusterRow {
   total_deals?: number;
   total_contacts?: number;
   total_accounts?: number;
+  /**
+   * True when the matched cluster contains at least one Deal whose Stage
+   * is NOT in {Closed Lost, Lost, Dropped, Cancelled}. Drives the
+   * "Active deal in pipeline" line in buildExecutiveAction so the HoS
+   * email never claims an active deal exists when the only deal is dead.
+   * Populated by enrichClustersWithDealActivity() after the 3 lookup
+   * paths complete — runs once over the matched cluster id set.
+   */
+  has_active_deal?: boolean;
 }
 
 /**
@@ -429,6 +462,9 @@ export function classifyPreflightRows(input: {
       owners,
       arr_exposure: arr,
       sector: sectorVal,
+      has_active_deal: (c as any).has_active_deal === true ? true
+        : (c as any).has_active_deal === false ? false
+        : undefined,
     });
     out.push({
       row_index: i,
@@ -464,9 +500,13 @@ export function classifyPreflightRows(input: {
     } else if (r.verdict === "warn") {
       label = "Past CS cool-off — Sales may re-engage with CS sign-off";
     } else if (r.verdict === "duplicate") {
-      label = (r.module_counts?.deals || 0) > 0
+      // Use the executive_severity we just stamped — 'high' = real
+      // active deal (has_active_deal=true), 'medium' = either no deal
+      // or only closed/lost deals. This keeps the email's top-reasons
+      // bucket honest with the per-row text.
+      label = r.executive_severity === "high"
         ? "Active deal already in pipeline — assign to existing owner"
-        : "Duplicate already in CRM — resolve before importing";
+        : "Existing company in CRM — coordinate with current owner";
     } else {
       label = "Other";
     }
@@ -626,13 +666,24 @@ export async function runPreflight(input: {
   }
 
   // PATH 1 — Batch lookup by domain (the dominant case).
+  //
+  // Sarah 2026-06-17 — status filter widened from `= 'active'` to
+  // `IN ('active','resolved')`. `'resolved'` in our radar means the
+  // duplicate cluster was already worked: the survivor record STAYS in
+  // CRM. A new submission for the same company is still a real duplicate
+  // and must surface — the old `'active'`-only filter was returning 0
+  // rows for cleaned-up companies and we incorrectly stamped them PASS.
+  // That's the root of the "vendor list looked clean but Sales found
+  // dupes" pattern. `'ignored'` (operator-dismissed false positives) is
+  // still excluded — those clusters are legitimately "not the same
+  // company" and shouldn't trigger.
   const clustersByDomain = new Map<string, PreflightClusterRow>();
   if (domainSet.size > 0) {
     const q = await queryWithTimeout<PreflightClusterRow>(
       `SELECT ${CLUSTER_SELECT_COLS}
          FROM duplicate_clusters
         WHERE domain = ANY($1::text[])
-          AND status = 'active'`,
+          AND status IN ('active','resolved')`,
       [Array.from(domainSet)],
     );
     for (const row of (q?.rows ?? [])) {
@@ -670,7 +721,7 @@ export async function runPreflight(input: {
          FROM duplicate_records dr
          JOIN duplicate_clusters dc ON dc.id = dr.cluster_id
         WHERE dr.phone_normalized = ANY($1::text[])
-          AND dc.status = 'active'
+          AND dc.status IN ('active','resolved')
         ORDER BY dr.phone_normalized,
                  CASE dc.cs_overlap_verdict
                    WHEN 'block'  THEN 4
@@ -762,7 +813,7 @@ export async function runPreflight(input: {
          LEFT JOIN LATERAL (
            SELECT ${CLUSTER_SELECT_COLS}
              FROM duplicate_clusters
-            WHERE status = 'active'
+            WHERE status IN ('active','resolved')
               AND company_name_normalized IS NOT NULL
               AND company_name_normalized != ''
               AND company_name_normalized % v.name
@@ -795,7 +846,7 @@ export async function runPreflight(input: {
           const q = await pool.query<PreflightClusterRow>(
             `SELECT ${CLUSTER_SELECT_COLS}
                FROM duplicate_clusters
-              WHERE status = 'active'
+              WHERE status IN ('active','resolved')
                 AND company_name_normalized IS NOT NULL
                 AND company_name_normalized != ''
                 AND similarity(company_name_normalized, $1) >= 0.6
@@ -808,6 +859,45 @@ export async function runPreflight(input: {
           /* pg_trgm extension missing — silently skip this row */
         }
       }
+    }
+  }
+
+  // Enrich every matched cluster with `has_active_deal` so the duplicate
+  // verdict's "Active deal already in pipeline" claim only fires when a
+  // truly live Deal exists. Mirrors INACTIVE_DEAL_STAGES_LOWER /
+  // isActiveDeal from duplicateRadarDatabase — Closed Lost / Lost /
+  // Dropped / Cancelled don't count as "active". One batched query over
+  // the matched cluster id set; populates the maps in place.
+  {
+    const ids = new Set<number>();
+    for (const c of clustersByDomain.values()) ids.add(c.id);
+    for (const c of clustersByPhone.values()) ids.add(c.id);
+    for (const c of companyMatchByRow.values()) ids.add(c.id);
+    if (ids.size > 0) {
+      const flagsQ = await queryWithTimeout<{ cluster_id: number; has_active_deal: boolean }>(
+        `SELECT cluster_id,
+                BOOL_OR(
+                  record_type = 'deal'
+                  AND LOWER(COALESCE(raw_data->>'Stage','')) NOT IN
+                      ('closed lost','lost','dropped','cancelled','canceled')
+                ) AS has_active_deal
+           FROM duplicate_records
+          WHERE cluster_id = ANY($1::int[])
+          GROUP BY cluster_id`,
+        [Array.from(ids)],
+      );
+      const flagsById = new Map<number, boolean>();
+      if (flagsQ && Array.isArray(flagsQ.rows)) {
+        for (const r of flagsQ.rows) {
+          flagsById.set(Number(r.cluster_id), !!r.has_active_deal);
+        }
+      }
+      const apply = (c: PreflightClusterRow) => {
+        c.has_active_deal = flagsById.get(c.id) === true;
+      };
+      for (const c of clustersByDomain.values()) apply(c);
+      for (const c of clustersByPhone.values()) apply(c);
+      for (const c of companyMatchByRow.values()) apply(c);
     }
   }
 
