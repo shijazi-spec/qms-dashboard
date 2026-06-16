@@ -839,25 +839,41 @@
              grouped by pairing type. -->
         <div id="content-cross-module" class="tab-content hidden">
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-900">
-                <div class="font-semibold mb-1">Cross-module overlaps</div>
-                <p>Clusters where the same company appears across multiple Zoho modules (Leads, Contacts, Accounts, Deals). Zoho does NOT allow merging across modules, and a <strong>Lead cannot be linked</strong> to anything — so when a Contact/Account/Deal already exists for that company, the right action is to <strong>CLOSE</strong> the duplicate Lead (or convert it into the existing Account without creating a second Contact). For Contact ↔ Account / Deal ↔ Account / Contact ↔ Deal pairs, <strong>LINK</strong> by setting Account_Name / Contact_Name. Open any cluster below for the per-record recommendation.</p>
+                <div class="font-semibold mb-1">Cross-module overlaps — actionable work only</div>
+                <p>Clusters where the same company appears across multiple Zoho modules AND there is something to do <strong>here</strong>. We surface only the cases that have a Zoho action available on this tab:</p>
+                <ul class="list-disc ms-5 mt-1 space-y-0.5">
+                    <li><strong>Lead ↔ Active Deal</strong> — close the redundant Lead, Sales is already pursuing it.</li>
+                    <li><strong>Contact ↔ Account · Deal ↔ Account</strong> — LINK by setting <code class="bg-blue-100 px-1 rounded">Account_Name</code>.</li>
+                    <li><strong>Contact ↔ Deal</strong> — LINK by setting <code class="bg-blue-100 px-1 rounded">Contact_Name</code> on the Deal.</li>
+                </ul>
+                <p class="mt-1 text-blue-800">Pure Lead ↔ Contact and Lead ↔ Account overlaps are <strong>not</strong> shown — Zoho has no field to link a Lead to anything, so the only action is CLOSE the Lead, which is handled directly in the <em>Leads</em> Duplicates tab. A red <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700 align-middle">Existing client · CS owns</span> badge means a Paid / Agreement Signed deal is in the cluster — route to Customer Success, do not pursue.</p>
             </div>
 
-            <!-- KPI summary -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <!-- KPI summary — action-oriented tiles. A cluster can fall in
+                 multiple buckets (a 3+ modules cluster might be both a
+                 Lead↔ActiveDeal AND a Deal↔Account link gap). The headline
+                 numbers are recomputed from the filtered cluster list when
+                 the operator narrows by Advanced Filters / chip / search. -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
                 <div class="bg-white rounded-lg shadow p-4">
                     <div class="text-xs text-gray-500">Total open</div>
                     <div id="cmoTotal" class="text-2xl font-bold text-gray-900 mt-1" data-testid="text-cmo-total">—</div>
+                    <div class="text-[10px] text-gray-400">Actionable clusters</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500">Lead ↔ Contact</div>
-                    <div id="cmoLeadContact" class="text-2xl font-bold text-indigo-700 mt-1" data-testid="text-cmo-lead-contact">—</div>
-                    <div class="text-[10px] text-gray-400">Convert Lead to Contact</div>
+                    <div class="text-xs text-gray-500">Lead ↔ Active Deal</div>
+                    <div id="cmoLeadActiveDeal" class="text-2xl font-bold text-rose-700 mt-1" data-testid="text-cmo-lead-active-deal">—</div>
+                    <div class="text-[10px] text-gray-400">Close the redundant Lead</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-xs text-gray-500">Lead ↔ Account</div>
-                    <div id="cmoLeadAccount" class="text-2xl font-bold text-indigo-700 mt-1" data-testid="text-cmo-lead-account">—</div>
-                    <div class="text-[10px] text-gray-400">Close Lead, link to Account</div>
+                    <div class="text-xs text-gray-500">Link gaps</div>
+                    <div id="cmoLinkGaps" class="text-2xl font-bold text-indigo-700 mt-1" data-testid="text-cmo-link-gaps">—</div>
+                    <div class="text-[10px] text-gray-400">Set Account_Name / Contact_Name</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500">Existing clients</div>
+                    <div id="cmoExistingClients" class="text-2xl font-bold text-red-700 mt-1" data-testid="text-cmo-existing-clients">—</div>
+                    <div class="text-[10px] text-gray-400">CS owns — do not pursue</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4">
                     <div class="text-xs text-gray-500">ARR exposure</div>
@@ -885,16 +901,21 @@
                 <button data-on-click="setCrossModuleStatus" data-args="[&quot;all&quot;]" id="cmoStatus-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">All</button>
             </div>
 
-            <!-- Filter chips per pairing type -->
+            <!-- Filter chips — refined rules (Sarah 2026-06-16):
+                 Pure Lead↔Contact / Lead↔Account chips dropped — no Zoho
+                 action available on this tab (close-the-Lead lives in the
+                 Leads Duplicates tab). Lead↔Active Deal requires BOTH
+                 sides still alive. The "Existing clients" chip surfaces
+                 clusters where any member is a Paid / Agreement Signed
+                 deal (CS-owned). -->
             <div class="flex flex-wrap gap-2 mb-4" id="cmoChips">
                 <button data-on-click="filterCrossModule" data-args="[&quot;all&quot;]" id="cmoChip-all" data-testid="cmo-chip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;lead_contact&quot;]" id="cmoChip-lead_contact" data-testid="cmo-chip-lead-contact" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Lead ↔ Contact</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;lead_account&quot;]" id="cmoChip-lead_account" data-testid="cmo-chip-lead-account" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Lead ↔ Account</button>
-                <button data-on-click="filterCrossModule" data-args="[&quot;lead_deal&quot;]" id="cmoChip-lead_deal" data-testid="cmo-chip-lead-deal" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Lead ↔ Deal</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;lead_deal&quot;]" id="cmoChip-lead_deal" data-testid="cmo-chip-lead-deal" class="px-3 py-1.5 text-xs font-medium rounded-full bg-rose-100 text-rose-700 hover:bg-rose-200">Lead ↔ Active Deal</button>
                 <button data-on-click="filterCrossModule" data-args="[&quot;contact_account&quot;]" id="cmoChip-contact_account" data-testid="cmo-chip-contact-account" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Contact ↔ Account</button>
                 <button data-on-click="filterCrossModule" data-args="[&quot;contact_deal&quot;]" id="cmoChip-contact_deal" data-testid="cmo-chip-contact-deal" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Contact ↔ Deal</button>
                 <button data-on-click="filterCrossModule" data-args="[&quot;deal_account&quot;]" id="cmoChip-deal_account" data-testid="cmo-chip-deal-account" class="px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Deal ↔ Account</button>
                 <button data-on-click="filterCrossModule" data-args="[&quot;mixed&quot;]" id="cmoChip-mixed" data-testid="cmo-chip-mixed" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">3+ modules</button>
+                <button data-on-click="filterCrossModule" data-args="[&quot;existing_clients&quot;]" id="cmoChip-existing_clients" data-testid="cmo-chip-existing-clients" class="px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200">Existing clients · CS</button>
             </div>
 
             <!-- Follow-up 3: bulk-close action bar. Visible only when 1+
@@ -1850,14 +1871,18 @@
 
         // R6: pairing labels and per-pairing recommended action — kept in
         // one place so the badge / chip / table all stay consistent.
+        // Refined-rule labels (Sarah 2026-06-16). lead_contact / lead_account
+        // entries are kept ONLY so a stale cluster carrying those pairings
+        // still renders without crashing — they should no longer leave the
+        // backend filter, and the chips for them have been removed.
         const CROSS_MODULE_PAIRING_LABELS = {
-            lead_contact:   { label: 'Lead ↔ Contact',   chip: 'cmoChip-lead_contact',   action: 'Close the duplicate Lead — a Contact already exists. A Lead can\'t be linked; converting would create a 2nd Contact.' },
-            lead_account:   { label: 'Lead ↔ Account',   chip: 'cmoChip-lead_account',   action: 'Close the duplicate Lead — an Account already exists (or convert the Lead into that existing Account).' },
-            lead_deal:      { label: 'Lead ↔ Deal',      chip: 'cmoChip-lead_deal',      action: 'Close the duplicate Lead — the Deal is the canonical record.' },
-            contact_account:{ label: 'Contact ↔ Account', chip: 'cmoChip-contact_account', action: 'Link Contact: set Account_Name to the existing Account' },
-            contact_deal:   { label: 'Contact ↔ Deal',   chip: 'cmoChip-contact_deal',   action: 'Link Deal: set Contact_Name to the existing Contact' },
-            deal_account:   { label: 'Deal ↔ Account',   chip: 'cmoChip-deal_account',   action: 'Link Deal: set Account_Name to the existing Account' },
-            mixed:          { label: '3+ modules',       chip: 'cmoChip-mixed',          action: 'Compound case — open the cluster to see per-record recommendations' },
+            lead_contact:   { label: 'Lead ↔ Contact',   chip: 'cmoChip-lead_contact',   action: 'Handle in the Leads Duplicates tab (close the Lead).' },
+            lead_account:   { label: 'Lead ↔ Account',   chip: 'cmoChip-lead_account',   action: 'Handle in the Leads Duplicates tab (close the Lead).' },
+            lead_deal:      { label: 'Lead ↔ Active Deal', chip: 'cmoChip-lead_deal',    action: 'Close the redundant Lead — Sales is already pursuing the active Deal.' },
+            contact_account:{ label: 'Contact ↔ Account', chip: 'cmoChip-contact_account', action: 'Link Contact: set Account_Name to the existing Account.' },
+            contact_deal:   { label: 'Contact ↔ Deal',   chip: 'cmoChip-contact_deal',   action: 'Link Deal: set Contact_Name to the existing Contact.' },
+            deal_account:   { label: 'Deal ↔ Account',   chip: 'cmoChip-deal_account',   action: 'Link Deal: set Account_Name to the existing Account.' },
+            mixed:          { label: '3+ modules',       chip: 'cmoChip-mixed',          action: 'Compound case — open the cluster to see per-record recommendations.' },
         };
 
         // Tracks the last load outcome so the empty-state row can explain
@@ -1916,16 +1941,62 @@
             }
         }
 
+        // Refined-rule tile painter — reads action counts produced by the
+        // backend (by_action) and falls back to recomputing from clusters if
+        // an older response shape is in the cache.
+        function _cmoComputeActionCountsFromList(list) {
+            const arr = Array.isArray(list) ? list : [];
+            const counts = {
+                lead_vs_active_deal: 0,
+                contact_account_link: 0,
+                deal_account_link: 0,
+                contact_deal_link: 0,
+                three_plus_modules: 0,
+                existing_client_cs_owned: 0,
+            };
+            let arrSum = 0;
+            for (const c of arr) {
+                const leads = Number(c.total_leads || 0);
+                const contacts = Number(c.total_contacts || 0);
+                const accounts = Number(c.total_accounts || 0);
+                const deals = Number(c.total_deals || 0);
+                if (leads > 0 && deals > 0 && c.has_active_lead && c.has_active_deal) counts.lead_vs_active_deal++;
+                if (contacts > 0 && accounts > 0) counts.contact_account_link++;
+                if (deals > 0 && accounts > 0) counts.deal_account_link++;
+                if (contacts > 0 && deals > 0) counts.contact_deal_link++;
+                if (c.pairing === 'mixed') counts.three_plus_modules++;
+                if (c.has_client_deal) counts.existing_client_cs_owned++;
+                arrSum += Number(c.estimated_pipeline_value || 0);
+            }
+            return { counts, arrSum };
+        }
+
+        function _cmoPaintTiles(totalClusters, counts, arrSum) {
+            const totalEl    = document.getElementById('cmoTotal');
+            const ladEl      = document.getElementById('cmoLeadActiveDeal');
+            const linkEl     = document.getElementById('cmoLinkGaps');
+            const clientsEl  = document.getElementById('cmoExistingClients');
+            const arrEl      = document.getElementById('cmoArr');
+            const linkGaps =
+                (counts.contact_account_link || 0) +
+                (counts.deal_account_link || 0) +
+                (counts.contact_deal_link || 0);
+            if (totalEl)   totalEl.textContent   = _fn(totalClusters);
+            if (ladEl)     ladEl.textContent     = _fn(counts.lead_vs_active_deal || 0);
+            if (linkEl)    linkEl.textContent    = _fn(linkGaps);
+            if (clientsEl) clientsEl.textContent = _fn(counts.existing_client_cs_owned || 0);
+            if (arrEl)     arrEl.textContent     = formatCurrency(Number(arrSum || 0));
+        }
+
         function updateCrossModuleKpis(data) {
-            const by = data.by_pairing || {};
-            const totalEl = document.getElementById('cmoTotal');
-            const lcEl    = document.getElementById('cmoLeadContact');
-            const laEl    = document.getElementById('cmoLeadAccount');
-            const arrEl   = document.getElementById('cmoArr');
-            if (totalEl) totalEl.textContent = _fn(Array.isArray(data.clusters) ? data.clusters.length : 0);
-            if (lcEl)    lcEl.textContent    = _fn(by.lead_contact || 0);
-            if (laEl)    laEl.textContent    = _fn(by.lead_account || 0);
-            if (arrEl)   arrEl.textContent   = formatCurrency(Number(data.arr_exposure_total || 0));
+            const clusters = Array.isArray(data.clusters) ? data.clusters : [];
+            // Prefer backend by_action (authoritative); fall back to recompute
+            // for older response shapes still in flight after a deploy.
+            const counts = (data && data.by_action)
+                ? data.by_action
+                : _cmoComputeActionCountsFromList(clusters).counts;
+            const arrSum = Number(data.arr_exposure_total || 0);
+            _cmoPaintTiles(clusters.length, counts, arrSum);
         }
 
         // Recompute the KPI cards from a (filtered) cluster list so the amounts
@@ -1933,20 +2004,8 @@
         // pairing chip are applied. Called from renderCrossModuleTable.
         function updateCrossModuleKpisFromList(list) {
             const arr = Array.isArray(list) ? list : [];
-            const totalEl = document.getElementById('cmoTotal');
-            const lcEl    = document.getElementById('cmoLeadContact');
-            const laEl    = document.getElementById('cmoLeadAccount');
-            const arrEl   = document.getElementById('cmoArr');
-            let lc = 0, la = 0, arrSum = 0;
-            for (const c of arr) {
-                if (c.pairing === 'lead_contact') lc++;
-                if (c.pairing === 'lead_account') la++;
-                arrSum += Number(c.estimated_pipeline_value || 0);
-            }
-            if (totalEl) totalEl.textContent = _fn(arr.length);
-            if (lcEl)    lcEl.textContent    = _fn(lc);
-            if (laEl)    laEl.textContent    = _fn(la);
-            if (arrEl)   arrEl.textContent   = formatCurrency(arrSum);
+            const { counts, arrSum } = _cmoComputeActionCountsFromList(arr);
+            _cmoPaintTiles(arr.length, counts, arrSum);
         }
 
         // Status filter (Open / Resolved / Dismissed / All). Re-fetches with the
@@ -1997,9 +2056,39 @@
             }
         }
 
+        // Refined-rule chip matcher — mirrors the backend matchesPairingChip:
+        // a chip click filters by ACTION, not by strict 2-module pairing. A
+        // 3+ modules cluster that carries an active Lead + active Deal also
+        // matches the Lead↔Active Deal chip, etc.
+        function _cmoClusterMatchesChip(c, key) {
+            if (!key || key === 'all') return true;
+            const leads = Number(c.total_leads || 0);
+            const contacts = Number(c.total_contacts || 0);
+            const accounts = Number(c.total_accounts || 0);
+            const deals = Number(c.total_deals || 0);
+            switch (key) {
+                case 'lead_deal':
+                    return leads > 0 && deals > 0 && !!c.has_active_lead && !!c.has_active_deal;
+                case 'contact_account':
+                    return contacts > 0 && accounts > 0;
+                case 'deal_account':
+                    return deals > 0 && accounts > 0;
+                case 'contact_deal':
+                    return contacts > 0 && deals > 0;
+                case 'mixed':
+                    return c.pairing === 'mixed';
+                case 'existing_clients':
+                    return !!c.has_client_deal;
+                default:
+                    return false;
+            }
+        }
+
         function filterCrossModule(pairing) {
             crossModuleFilter = pairing || 'all';
-            // Repaint chip styles
+            // Repaint chip styles — rose for the strategic "Lead ↔ Active
+            // Deal", red for "Existing clients" (CS routing), amber for "3+
+            // modules", indigo for the LINK queue, neutral for All.
             const allChips = document.querySelectorAll('#cmoChips button');
             allChips.forEach(btn => {
                 const isAll = btn.id === 'cmoChip-all';
@@ -2011,6 +2100,10 @@
                     btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300';
                 } else if (btn.id === 'cmoChip-mixed') {
                     btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200';
+                } else if (btn.id === 'cmoChip-lead_deal') {
+                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-rose-100 text-rose-700 hover:bg-rose-200';
+                } else if (btn.id === 'cmoChip-existing_clients') {
+                    btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200';
                 } else {
                     btn.className = 'px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200';
                 }
@@ -2023,7 +2116,7 @@
             if (!tbody) return;
             const _cmSpec = getAdvancedFilterSpec();
             const list = (crossModuleClusters || []).filter(c => {
-                if (crossModuleFilter !== 'all' && c.pairing !== crossModuleFilter) return false;
+                if (!_cmoClusterMatchesChip(c, crossModuleFilter)) return false;
                 // Advanced Filter — match a cross-module CLUSTER by what its
                 // member records hold. Owner/Stage/Layout/Pipeline are
                 // aggregated onto the cluster by the backend (owners[]/stages[]
@@ -2081,9 +2174,17 @@
                 if (c.total_contacts > 0) modules.push('Contacts(' + c.total_contacts + ')');
                 if (c.total_accounts > 0) modules.push('Accounts(' + c.total_accounts + ')');
                 if (c.total_deals    > 0) modules.push('Deals(' + c.total_deals + ')');
-                const pairingChip = c.pairing === 'mixed'
-                    ? '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">' + escapeHtml(meta.label) + '</span>'
-                    : '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700">' + escapeHtml(meta.label) + '</span>';
+                // Refined-rule chip colour: mixed=amber, lead↔active-deal=
+                // rose (strategic), LINK queue=indigo. The Existing-client
+                // badge is shown OUT-OF-BAND beside the pairing chip when
+                // any deal is in Paid / Agreement Signed (CS-owned).
+                let chipBg = 'bg-indigo-100 text-indigo-700';
+                if (c.pairing === 'mixed') chipBg = 'bg-amber-100 text-amber-700';
+                else if (c.pairing === 'lead_deal') chipBg = 'bg-rose-100 text-rose-700';
+                const pairingChip = '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold ' + chipBg + '">' + escapeHtml(meta.label) + '</span>'
+                    + (c.has_client_deal
+                        ? ' <span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700" title="Cluster contains a Paid / Agreement Signed deal — owned by Customer Success. Do NOT pursue from Sales.">Existing client · CS</span>'
+                        : '');
                 // Follow-up 3: checkbox cell only when the cluster has a
                 // Lead — leads are what the bulk action closes; a row with
                 // no lead has nothing for the action to do.
@@ -2155,7 +2256,7 @@
             const checked = !!(cb && cb.checked);
             // Apply only to currently-visible (post-filter) rows that have a Lead.
             const visible = (crossModuleClusters || []).filter(c => {
-                if (crossModuleFilter !== 'all' && c.pairing !== crossModuleFilter) return false;
+                if (!_cmoClusterMatchesChip(c, crossModuleFilter)) return false;
                 return (c.total_leads || 0) > 0;
             });
             for (const c of visible) {
