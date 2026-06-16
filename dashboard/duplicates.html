@@ -1396,6 +1396,7 @@
                     <button data-on-click="filterDealLifecycle" data-args="[&quot;all&quot;]" id="dealLifeChip-all" class="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-900 text-white">All</button>
                     <button data-on-click="filterDealLifecycle" data-args="[&quot;critical&quot;]" id="dealLifeChip-critical" class="px-3 py-1.5 text-xs font-medium rounded-full bg-red-100 text-red-700 hover:bg-red-200">Critical</button>
                     <button data-on-click="filterDealLifecycle" data-args="[&quot;warning&quot;]" id="dealLifeChip-warning" class="px-3 py-1.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">Warning</button>
+                    <button data-on-click="filterDealLifecycle" data-args="[&quot;info&quot;]" id="dealLifeChip-info" class="px-3 py-1.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200">Info</button>
                 </div>
                 <div class="flex items-center gap-1 ms-2">
                     <label for="dealLifeStageFilter" class="text-xs font-medium text-gray-600">Stage:</label>
@@ -1405,7 +1406,8 @@
                 </div>
                 <div class="flex-1"></div>
                 <button data-on-click="exportDealLifecycle" id="dealLifeExportBtn" data-testid="button-export-deal-lifecycle" title="Download a CSV of the deal-stage-aging violations currently shown." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 me-2">⬇ Export CSV</button>
-                <button data-on-click="loadDealLifecycle" data-testid="button-refresh-deal-lifecycle" title="Recompute the scan from the latest synced Deal data." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-200 text-orange-900 hover:bg-orange-300 me-2">🔄 Refresh</button>
+                <button data-on-click="refreshDealLifecycleFromZoho" id="dealLifeZohoRefreshBtn" title="Pull live Stage / Modified_Time values from Zoho for every deal currently shown. Use this when the CRM has been updated but the table still shows old aging." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400 me-2">🔃 Refresh from Zoho (live)</button>
+                <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters and refresh every deal's Stage." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 me-2">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;deal-lifecycle&quot;]" data-testid="button-open-capa-deal-lifecycle" title="Open a corrective-action record (CAPA) on one of the stage-aging breaches." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
             </div>
 
@@ -8541,10 +8543,16 @@
                 }).join('');
             }
 
-            // Populate the stage filter dropdown from the violations actually present
+            // Populate the stage filter dropdown — show ALL stages from
+            // the Sales SOP spec so the operator can filter to a stage
+            // that currently has zero violations (the next sync might
+            // surface some). Falls back to violation-derived stages if
+            // the spec isn't on the response yet.
             const stageSelect = document.getElementById('dealLifeStageFilter');
             if (stageSelect) {
-                const stages = Array.from(new Set((data.violations || []).map(v => v.stage).filter(Boolean))).sort();
+                const specStages = Array.isArray(data.spec) ? data.spec.map(s => s.stage).filter(Boolean) : [];
+                const violationStages = (data.violations || []).map(v => v.stage).filter(Boolean);
+                const stages = Array.from(new Set([...specStages, ...violationStages])).sort();
                 const cur = window._dealLifecycleStageFilter || '';
                 stageSelect.innerHTML = '<option value="">All stages</option>' + stages.map(s => '<option value="' + escapeHtml(s) + '"' + (s === cur ? ' selected' : '') + '>' + escapeHtml(s) + '</option>').join('');
             }
@@ -8582,17 +8590,55 @@
 
         function filterDealLifecycle(severity) {
             window._dealLifecycleSeverityFilter = severity || 'all';
-            // Repaint chip highlight
-            ['all','critical','warning'].forEach(k => {
+            // Repaint chip highlight — All / Critical / Warning / Info
+            // (Info matches CS Lifecycle's chip set; for Deals Lifecycle
+            // it currently picks up only within-SLA stages that the
+            // scanner emits as info-severity context rows.)
+            ['all','critical','warning','info'].forEach(k => {
                 const el = document.getElementById('dealLifeChip-' + k);
                 if (!el) return;
                 if (k === window._dealLifecycleSeverityFilter) {
-                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + (k === 'critical' ? 'bg-red-600 text-white' : k === 'warning' ? 'bg-amber-500 text-white' : 'bg-gray-900 text-white');
+                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + (k === 'critical' ? 'bg-red-600 text-white' : k === 'warning' ? 'bg-amber-500 text-white' : k === 'info' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white');
                 } else {
-                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + (k === 'critical' ? 'bg-red-100 text-red-700 hover:bg-red-200' : k === 'warning' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-gray-200 text-gray-700 hover:bg-gray-300');
+                    el.className = 'px-3 py-1.5 text-xs font-medium rounded-full ' + (k === 'critical' ? 'bg-red-100 text-red-700 hover:bg-red-200' : k === 'warning' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : k === 'info' ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-gray-200 text-gray-700 hover:bg-gray-300');
                 }
             });
             loadDealLifecycle();
+        }
+
+        async function refreshDealLifecycleFromZoho(opts) {
+            // Pulls a live copy of every Deal currently visible in the
+            // Deals Lifecycle table from Zoho, re-upserts so the next scan
+            // reflects the latest Stage / Modified_Time. Mirrors the
+            // existing refreshCsLifecycleFromZoho. The underlying endpoint
+            // (/api/duplicates/cs-lifecycle/refresh-deals) is module-
+            // agnostic — it refreshes any Deal zoho_record_id passed in.
+            const data = window._dealLifecycleData || {};
+            const ids = Array.from(new Set((data.violations || [])
+                .map(v => v.zoho_record_id)
+                .filter(Boolean))).slice(0, 50); // endpoint caps at 50
+            if (ids.length === 0) {
+                if (!opts || !opts.silent) alert('No deals on screen to refresh.');
+                return;
+            }
+            const btn = document.getElementById('dealLifeZohoRefreshBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '🔄 Refreshing from Zoho…'; }
+            try {
+                const res = await fetch('/api/duplicates/cs-lifecycle/refresh-deals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ zohoIds: ids }),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                // Recompute the scan over the just-refreshed records.
+                await loadDealLifecycle();
+            } catch (e) {
+                try { console.error('Deals Lifecycle live refresh failed:', e); } catch (_) {}
+                if (!opts || !opts.silent) alert('Refresh from Zoho failed: ' + (e.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
         }
 
         function onDealLifecycleStageChange() {
