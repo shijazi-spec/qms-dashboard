@@ -73,6 +73,15 @@ const AI_APPROVAL_APPROVE_ROLES: UserRole[] = [
   "grc_manager",
   "head_of_operations_quality",
 ];
+// Roles exempt from the WP-DOC-005 self-approval block (break-glass): they may
+// approve their OWN AI proposals. "admin" is the platform break-glass role;
+// "head_of_operations_quality" (the GRQ lead who owns the SoD policy and is the
+// primary operator) was added per Sarah's governance decision 2026-06-16 so the
+// duplicate-cleanup workflow isn't stalled waiting for a second approver.
+const SELF_APPROVE_EXEMPT_ROLES = new Set<string>([
+  "admin",
+  "head_of_operations_quality",
+]);
 const AI_APPROVAL_REJECT_ROLES: UserRole[] = [
   "admin",
   "quality_manager",
@@ -617,15 +626,17 @@ const _aiApprovalRoutesRaw = [
 
           // Indicate to the UI whether the current user is ALLOWED to approve
           // (role matches) AND is NOT the requester (segregation of duties).
+          const isSelfRequest = action.requested_by_user_id === user.userId;
+          const selfApproveExempt = SELF_APPROVE_EXEMPT_ROLES.has(user.role);
           const canApprove =
             isAllowedApprover(action.risk_level, user.role) &&
-            action.requested_by_user_id !== user.userId;
+            (!isSelfRequest || selfApproveExempt);
           const canApproveReason = !isAllowedApprover(
             action.risk_level,
             user.role,
           )
             ? `Your role (${user.role}) is not in the approver list for ${action.risk_level} risk. Required: ${getApproverRolesFor(action.risk_level).join(", ")}.`
-            : action.requested_by_user_id === user.userId
+            : isSelfRequest && !selfApproveExempt
               ? "You cannot approve your own AI proposal (WP-DOC-005 Segregation of Duties)."
               : null;
 
@@ -682,9 +693,10 @@ const _aiApprovalRoutesRaw = [
             );
           }
 
-          // Segregation of duties (WP-DOC-005). Admins are exempt as break-glass.
+          // Segregation of duties (WP-DOC-005). Break-glass roles
+          // (SELF_APPROVE_EXEMPT_ROLES) may approve their own proposals.
           if (
-            user.role !== "admin" &&
+            !SELF_APPROVE_EXEMPT_ROLES.has(user.role) &&
             action.requested_by_user_id != null &&
             action.requested_by_user_id === user.userId
           ) {

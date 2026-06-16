@@ -122,6 +122,12 @@ export interface QualityAuditResult {
   period_created_end?: string | null;
   period_modified_start?: string | null;
   period_modified_end?: string | null;
+  // Stable fingerprint of the EFFECTIVE governance rule set used for this
+  // audit (per-module rules resolved + concatenated + sha256). Lets the
+  // trend logic detect that the goalposts moved between two runs and
+  // refuse to call a score change "improving" when it's really just a
+  // different ruler. Null on rows written before this column existed.
+  rules_hash?: string | null;
 }
 
 export async function getActiveGovernanceDocument(): Promise<GovernanceDocument | null> {
@@ -263,13 +269,24 @@ export async function saveScorecard(
 export async function saveAuditResult(
   audit: QualityAuditResult,
 ): Promise<QualityAuditResult> {
+  // Boot-time idempotent migration: column was added 2026-06-16 so the
+  // trend logic can detect rule-set changes between audits and refuse to
+  // call a goalpost-shift "improving". Safe on existing rows (defaults
+  // to NULL ⇒ "unknown ruler" and the trend logic treats NULL as a
+  // forced "rules changed" verdict).
+  await pool.query(
+    `ALTER TABLE quality_audit_results
+       ADD COLUMN IF NOT EXISTS rules_hash TEXT`,
+  );
+
   const result = await pool.query(
-    `INSERT INTO quality_audit_results 
-     (scorecard_id, governance_doc_id, total_records_audited, total_issues_found, 
-      people_score, process_score, governance_score, overall_score, 
+    `INSERT INTO quality_audit_results
+     (scorecard_id, governance_doc_id, total_records_audited, total_issues_found,
+      people_score, process_score, governance_score, overall_score,
       dimension_details, issues_by_category, recommendations, calendar_events_count, raw_audit_data,
-      period_created_start, period_created_end, period_modified_start, period_modified_end)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      period_created_start, period_created_end, period_modified_start, period_modified_end,
+      rules_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
      RETURNING *`,
     [
       audit.scorecard_id,
@@ -289,6 +306,7 @@ export async function saveAuditResult(
       audit.period_created_end ?? null,
       audit.period_modified_start ?? null,
       audit.period_modified_end ?? null,
+      audit.rules_hash ?? null,
     ],
   );
 
