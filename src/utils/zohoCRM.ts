@@ -1512,7 +1512,7 @@ export async function createZohoRecord(
   recordData: Record<string, any>
 ): Promise<any> {
   logger.info(`➕ [ZohoCRM] Creating record in ${module}`, { fields: Object.keys(recordData) });
-  
+
   return makeZohoRequest(
     async (config) => {
       const url = `${config.apiDomain}/crm/v2/${module}`;
@@ -1533,11 +1533,150 @@ export async function createZohoRecord(
         logger.error('❌ [ZohoCRM] Failed to create record', { error });
         throw new Error(`Zoho API error: ${response.status} - ${error.message || response.statusText}`);
       }
-      
+
       const data = await response.json();
       logger.info('✅ [ZohoCRM] Record created successfully');
       return data.data?.[0]?.details || data.data?.[0] || data;
     }
+  );
+}
+
+export interface BulkCreateOutcome {
+  index: number; // input index
+  status: 'success' | 'error';
+  id?: string;
+  code?: string;
+  message?: string;
+  details?: any;
+}
+
+/**
+ * Bulk create records in a Zoho module. Zoho's POST /crm/v2/<module>
+ * accepts up to 100 records in a single payload — this helper chunks a
+ * larger input into 100-record batches and concatenates the per-record
+ * outcomes so the caller sees one outcome per input row.
+ *
+ * Partial success is fine: Zoho returns 207 (multi-status) when some
+ * rows succeed and some fail; the outcomes array carries per-row
+ * status. We do NOT throw on a partial batch — the caller decides
+ * whether to retry the failures.
+ */
+export async function createZohoRecordsBulk(
+  module: string,
+  records: Array<Record<string, any>>,
+): Promise<BulkCreateOutcome[]> {
+  if (records.length === 0) return [];
+  const BATCH = 100;
+  const outcomes: BulkCreateOutcome[] = [];
+  for (let start = 0; start < records.length; start += BATCH) {
+    const chunk = records.slice(start, start + BATCH);
+    logger.info(
+      `➕ [ZohoCRM] Bulk creating ${chunk.length} ${module} (offset ${start}/${records.length})`,
+    );
+    try {
+      const data: any = await makeZohoRequest(
+        async (config) => {
+          const url = `${config.apiDomain}/crm/v2/${module}`;
+          return fetch(url, {
+            method: 'POST',
+            headers: {
+              Authorization: `Zoho-oauthtoken ${config.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ data: chunk }),
+          });
+        },
+        async (response) => {
+          // Zoho returns 200 (all success), 201 (created), 207 (partial),
+          // or non-2xx on a full failure. Parse the body regardless so
+          // we capture per-row outcomes from the data[] array.
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok && response.status !== 207) {
+            throw new Error(
+              `Zoho bulk create error: ${response.status} - ${body?.message || response.statusText}`,
+            );
+          }
+          return body;
+        },
+      );
+      const rows: any[] = Array.isArray(data?.data) ? data.data : [];
+      for (let i = 0; i < chunk.length; i++) {
+        const r = rows[i] || {};
+        if (r.status === 'success') {
+          outcomes.push({
+            index: start + i,
+            status: 'success',
+            id: r.details?.id ?? undefined,
+            code: r.code,
+            message: r.message,
+            details: r.details,
+          });
+        } else {
+          outcomes.push({
+            index: start + i,
+            status: 'error',
+            code: r.code || 'UNKNOWN',
+            message: r.message || 'Failed',
+            details: r.details,
+          });
+        }
+      }
+    } catch (e: any) {
+      // Entire batch failed (network / auth / rate-limit). Mark every
+      // row in the chunk as errored so the caller can retry.
+      for (let i = 0; i < chunk.length; i++) {
+        outcomes.push({
+          index: start + i,
+          status: 'error',
+          code: 'BATCH_ERROR',
+          message: e?.message || String(e),
+        });
+      }
+    }
+  }
+  return outcomes;
+}
+
+/**
+ * Fetch the layouts available on a Zoho module — used by the
+ * Preflight Push-to-Zoho picker so the operator chooses where new
+ * Leads land. Returns just the operator-facing fields (id, name,
+ * status).
+ */
+export interface ZohoLayout {
+  id: string;
+  name: string;
+  status: number | null;
+}
+export async function fetchZohoLayouts(module: string): Promise<ZohoLayout[]> {
+  return makeZohoRequest(
+    async (config) => {
+      const url = `${config.apiDomain}/crm/v2/settings/layouts?module=${encodeURIComponent(module)}`;
+      return fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Zoho-oauthtoken ${config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(
+          `Zoho Layouts API error: ${response.status} - ${error.message || response.statusText}`,
+        );
+      }
+      if (response.status === 204) return [];
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return (data.layouts || []).map((l: any) => ({
+        id: String(l.id || ''),
+        name: l.name || '(unnamed)',
+        status: typeof l.status === 'number' ? l.status : null,
+      }));
+    },
   );
 }
 
