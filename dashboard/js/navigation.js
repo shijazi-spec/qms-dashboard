@@ -120,13 +120,20 @@ const WalaPlusNav = {
       color: 'blue',
       items: [
         { label: 'Dashboard', href: '/', icon: 'chart-bar', id: 'dashboard' },
+        // Integrated QMS = the centralised governance document register
+        // (Policies / Procedures / Work Instructions / SOPs / Forms with
+        // version control) rendered by /policies → policies.html. It's
+        // the foundational layer the rest of the Quality workflow rests
+        // on (every audit cites the policy version that was active at
+        // the time), so it sits at the top of the group.
+        { label: 'Integrated QMS', href: '/policies', icon: 'document-text', id: 'policies' },
         { label: 'Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Call Evaluation', href: '/calls', icon: 'phone', id: 'calls' },
         { label: 'Duplicates Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' },
-        // Audit Reports: this is the existing Integrated QMS dashboard
-        // (URL kept as /qms for backward compatibility) — the page houses
-        // CAPA / Nonconformance / coaching workflows so it lives under
-        // Quality alongside the operator's day-to-day audit tools.
+        // Audit Reports (URL /qms): the audit-report dashboard — CAPA /
+        // Nonconformance / coaching workflows. Distinct from the
+        // Integrated QMS document register above. The /qms URL is kept
+        // for backward compatibility with bookmarks.
         { label: 'Audit Reports', href: '/qms', icon: 'shield-check', id: 'qms' }
       ]
     },
