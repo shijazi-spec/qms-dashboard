@@ -8591,13 +8591,17 @@
             // Excel export) can address rows uniquely.
             for (let i = 0; i < rowsOut.length; i++) rowsOut[i].row_index = i;
             const totalActionable = summary.block + summary.review + summary.warn + summary.duplicate;
-            const pctActionable = examined > 0 ? Math.round((totalActionable / examined) * 100) : 0;
+            // Match backend precision (.1 decimal, e.g. 78.5%) so chunked
+            // and non-chunked runs produce visually identical numbers.
+            const pctActionable = examined > 0
+                ? Math.round((totalActionable / examined) * 1000) / 10
+                : 0;
             const topReasons = [];
             for (const [label, count] of reasonCounts) {
                 topReasons.push({
                     label,
                     count,
-                    pct: examined > 0 ? Math.round((count / examined) * 100) : 0,
+                    pct: examined > 0 ? Math.round((count / examined) * 1000) / 10 : 0,
                 });
             }
             topReasons.sort((a, b) => b.count - a.count);
@@ -10346,22 +10350,66 @@
             }
         }
 
-        function copyPreflightEmailBody() {
+        // Cache for the operator's display name — used in the email signature
+        // so a Preflight briefing doesn't go out signed by a previous user.
+        // Best-effort fetch on first use; falls through to "[Your name]"
+        // placeholder when /api/auth/me is unavailable.
+        window._preflightAuthorCache = null;
+        async function _resolvePreflightAuthorName() {
+            if (window._preflightAuthorCache !== null) return window._preflightAuthorCache;
+            try {
+                const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                if (r.ok) {
+                    const j = await r.json();
+                    if (j && j.authenticated && j.user) {
+                        const u = j.user;
+                        const name =
+                            (u.first_name && (u.first_name + (u.last_name ? ' ' + u.last_name : ''))) ||
+                            u.name || u.display_name || u.email || null;
+                        window._preflightAuthorCache = name ? String(name).trim() : '';
+                        return window._preflightAuthorCache;
+                    }
+                }
+            } catch (_) { /* fall through */ }
+            window._preflightAuthorCache = '';
+            return '';
+        }
+
+        async function copyPreflightEmailBody() {
             const data = window._preflightLastResult;
             if (!data) { alert('Run a Preflight check first.'); return; }
             const s = data.summary || {};
             const actionable = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0);
             const examined = data.examined || 0;
-            const pctAct = data.pct_actionable != null ? data.pct_actionable : (examined > 0 ? Math.round(actionable / examined * 1000) / 10 : 0);
+            // Use the result's own pct_actionable when present (.1 precision
+            // from the backend), else recompute the same way.
+            const pctAct = data.pct_actionable != null
+                ? data.pct_actionable
+                : (examined > 0 ? Math.round(actionable / examined * 1000) / 10 : 0);
             const arrBlocked = Math.round(data.total_arr_exposure_blocked || 0);
             const reasons = (Array.isArray(data.top_reasons) ? data.top_reasons : []).slice(0, 5);
             const bullet = reasons.length === 0
                 ? '  (no actionable matches in this batch)'
                 : reasons.map(r => '  • ' + r.label + ' — ' + r.count + ' (' + r.pct + '%)').join('\n');
+            const author = await _resolvePreflightAuthorName();
+            const signature = author || '[Your name]';
+            // Subject + greeting placeholder live AT THE TOP so the operator
+            // can paste the subject into the subject line and the body
+            // below into the body of their mail client. The placeholder
+            // `[Head of Sales]` nudges them to personalise before sending.
+            const stamp = data.generated_at
+                ? data.generated_at.slice(0, 10)
+                : new Date().toISOString().slice(0, 10);
+            const subject = 'Preflight check — '
+                + examined.toLocaleString() + ' records · '
+                + actionable.toLocaleString() + ' actionable ('
+                + pctAct + '%) — ' + stamp;
             const lines = [
-                'Hi,',
+                'Subject: ' + subject,
                 '',
-                'Ran a pre-import duplicate check on a batch of ' + examined.toLocaleString() + ' record(s) via the WalaPlus QMS Duplicate Radar.',
+                'Hi [Head of Sales],',
+                '',
+                'Ran a pre-import duplicate check on a batch of ' + examined.toLocaleString() + ' record(s) via the WalaPlus QMS Duplicate Radar — sharing the numbers below before we hand the list to the Sales floor.',
                 '',
                 'Headline numbers:',
                 '  • Actionable (would create a duplicate or hit an existing customer): ' + actionable.toLocaleString() + ' (' + pctAct + '% of the batch)',
@@ -10372,12 +10420,18 @@
                 'Top reasons:',
                 bullet,
                 '',
-                'Full breakdown with owners, modules, and recommended action per row attached as Excel.',
+                'Full breakdown — domain, company, existing owner, modules touched, recommended action per row — attached as the Preflight Excel report.',
                 '',
-                'Generated ' + (data.generated_at ? data.generated_at.slice(0, 16).replace('T', ' ') + ' UTC' : new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC') + ' from the Preflight Check tab.',
+                'Recommended next steps:',
+                '  • Drop the BLOCK rows from the import — those are active customers, route the relationship through Customer Success.',
+                '  • Hold the REVIEW rows until CS confirms (within churn cool-off).',
+                '  • Re-assign the DUPLICATE rows to the existing owner instead of creating a new lead.',
+                '  • Push only the PASS rows (' + (s.pass || 0).toLocaleString() + ') — happy to load them directly into Zoho on the right Layout from the same tab.',
+                '',
+                'Generated ' + (data.generated_at ? data.generated_at.slice(0, 16).replace('T', ' ') + ' UTC' : new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC') + ' from the Preflight Check tab in WalaPlus QMS.',
                 '',
                 'Best,',
-                'Sarah',
+                signature,
             ].filter(Boolean);
             const body = lines.join('\n');
             const ok = (txt) => {
