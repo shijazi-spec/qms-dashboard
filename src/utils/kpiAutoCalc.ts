@@ -164,8 +164,121 @@ export async function runKPIAutoCalc(
     logger.error(`[KPIAutoCalc] checklist step failed: ${(e as Error).message}`);
   }
 
+  // 4) Roll-up composite scores — computed LAST, from the component KPIs' freshly
+  //    recorded values (achievement % vs target). EMPTY until components have data.
+  try {
+    const comp = await recordRollupComposites();
+    for (const c of comp) {
+      if (c.value === undefined) {
+        skipped++;
+        details.push({ code: c.code, reason: c.reason });
+      } else {
+        recorded++;
+        details.push({ code: c.code, value: c.value });
+      }
+    }
+  } catch (e) {
+    logger.error(`[KPIAutoCalc] composite step failed: ${(e as Error).message}`);
+  }
+
   logger.info(
     `📊 [KPIAutoCalc] Recorded ${recorded} live KPI value(s), skipped ${skipped} (no data/manual).`,
   );
   return { recorded, skipped, details };
+}
+
+/** Achievement % of a KPI vs its target (direction-aware), clamped 0–100. */
+function achievementPct(
+  value: number,
+  target: number,
+  direction: string,
+): number | null {
+  const v = Number(value), t = Number(target);
+  if (!Number.isFinite(v) || !Number.isFinite(t) || t <= 0) return null;
+  const a = direction === "lower_is_better" ? (v <= 0 ? 100 : (t / v) * 100) : (v / t) * 100;
+  return Math.max(0, Math.min(100, a));
+}
+
+const COMPOSITE_CODES = ["GRQ-KPI-01", "GRQ-KPI-04", "SPEC-KPI-01", "LEG-KPI-01"];
+
+/**
+ * Compute and record the 4 roll-up composites from their component KPIs'
+ * achievement %. Per-owner average excludes the composites themselves. Weighted
+ * composites (GRQ Health, Executive GRQ) renormalize over owners that actually
+ * have data, so they reflect what's measured rather than being dragged to 0 by
+ * empty registers. Each is EMPTY until at least one component has a value.
+ */
+async function recordRollupComposites(): Promise<
+  Array<{ code: string; value?: number; reason?: string }>
+> {
+  const rows = await pool.query(
+    `SELECT d.kpi_code, d.owner_type, d.target_value, d.threshold_direction, d.is_active,
+            v.actual_value
+       FROM kpi_definitions d
+       LEFT JOIN LATERAL (
+         SELECT actual_value FROM kpi_values vv WHERE vv.kpi_id = d.id
+         ORDER BY period_end DESC, id DESC LIMIT 1
+       ) v ON true
+      WHERE d.is_active = true`,
+  );
+
+  // achievements grouped by owner_type (composites excluded)
+  const byOwner: Record<string, number[]> = {};
+  const byCode: Record<string, number | null> = {};
+  for (const r of rows.rows) {
+    const ach =
+      r.actual_value === null || r.actual_value === undefined
+        ? null
+        : achievementPct(r.actual_value, r.target_value, r.threshold_direction);
+    byCode[r.kpi_code] = ach;
+    if (ach === null || COMPOSITE_CODES.includes(r.kpi_code)) continue;
+    (byOwner[r.owner_type] ??= []).push(ach);
+  }
+  const avg = (xs?: number[]): number | null =>
+    xs && xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  const q = avg(byOwner["quality_manager"]);
+  const g = avg(byOwner["grc_manager"]);
+  const s = avg(byOwner["grq_specialist"]);
+  const l = avg(byOwner["legal_specialist"]);
+
+  /** Weighted avg over the parts that have data (weights renormalized). */
+  const weighted = (parts: Array<[number | null, number]>): number | null => {
+    let num = 0, den = 0;
+    for (const [val, w] of parts) if (val !== null) { num += val * w; den += w; }
+    return den === 0 ? null : num / den;
+  };
+
+  const targets: Record<string, number | null> = {
+    "GRQ-KPI-01": weighted([[q, 35], [g, 35], [s, 15], [l, 15]]),
+    "GRQ-KPI-04": weighted([[q, 50], [g, 50]]),
+    "SPEC-KPI-01": s,
+    "LEG-KPI-01": l,
+  };
+
+  const now = new Date();
+  const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const out: Array<{ code: string; value?: number; reason?: string }> = [];
+  for (const code of COMPOSITE_CODES) {
+    const def = await getKPIByCode(code);
+    if (!def || !def.is_active || !def.id) {
+      out.push({ code, reason: "definition missing/inactive" });
+      continue;
+    }
+    const val = targets[code];
+    if (val === null || val === undefined) {
+      out.push({ code, reason: "no component data yet" });
+      continue;
+    }
+    const rounded = Math.round(val * 10) / 10;
+    await recordKPIValue({
+      kpi_id: def.id,
+      period_start: periodStart,
+      period_end: periodEnd,
+      actual_value: rounded,
+      calculated_by: "system_auto",
+    });
+    out.push({ code, value: rounded });
+  }
+  return out;
 }
