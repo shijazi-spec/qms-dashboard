@@ -120,13 +120,6 @@ const WalaPlusNav = {
       color: 'blue',
       items: [
         { label: 'Dashboard', href: '/', icon: 'chart-bar', id: 'dashboard' },
-        // Integrated QMS = the centralised governance document register
-        // (Policies / Procedures / Work Instructions / SOPs / Forms with
-        // version control) rendered by /policies → policies.html. It's
-        // the foundational layer the rest of the Quality workflow rests
-        // on (every audit cites the policy version that was active at
-        // the time), so it sits at the top of the group.
-        { label: 'Integrated QMS', href: '/policies', icon: 'document-text', id: 'policies' },
         { label: 'Internal Audits', href: '/audits', icon: 'clipboard-check', id: 'audits' },
         { label: 'Call Evaluation', href: '/calls', icon: 'phone', id: 'calls' },
         { label: 'Duplicates Radar', href: '/duplicates', icon: 'duplicate', id: 'duplicates' },
@@ -146,6 +139,14 @@ const WalaPlusNav = {
         { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },
         { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
         { label: 'Risk Mgmt', href: '/risks', icon: 'exclamation-triangle', id: 'risks' },
+        // Integrated QMS — centralised governance document register
+        // (Policies / Procedures / Work Instructions / SOPs / Forms with
+        // version control) rendered by /policies → policies.html.
+        // Belongs in GRC because it's the governance side of document
+        // control; sits directly above Documents Library so an operator
+        // sees the lifecycle in order: master register → uploaded files
+        // → compliance mapping → audit readiness.
+        { label: 'Integrated QMS', href: '/policies', icon: 'document-text', id: 'policies' },
         // QMS document library — categorised upload boxes for Documents,
         // Policies, Forms, Security Controls and SOPs. Files uploaded here
         // are staged for future mapping to the regulations tracked in the
