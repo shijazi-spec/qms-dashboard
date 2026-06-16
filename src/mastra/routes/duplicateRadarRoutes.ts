@@ -90,6 +90,7 @@ import {
   createCluster,
   clearAllDuplicateData,
   truncateAllDuplicateData,
+  backfillResolutionLedger,
   cleanupStaleRecords,
   cleanupOrphanClusters,
   removeRecordsByZohoIds,
@@ -578,6 +579,20 @@ async function scanZohoCRMForDuplicates(
   broadcastSSE("scan", { status: "started", timestamp: startTime });
 
   try {
+    // ── Persist "solved" BEFORE we re-cluster ────────────────────────────
+    // Every scan (incremental OR full) re-clusters, which reassigns cluster_ids
+    // and can drop status='resolved' / merge_actions — so the per-module
+    // "solved" scoreboard kept collapsing to 0 each 6-hourly sync. Snapshot the
+    // current solved-state into the durable resolution-ledger (keyed by survivor
+    // Zoho id) FIRST, so the breakdown's ledger join re-credits "solved" to
+    // whatever cluster each survivor lands in after this scan. Idempotent +
+    // best-effort (never blocks the scan).
+    await backfillResolutionLedger().catch((e) =>
+      logger.warn(
+        `[DuplicateRadar] pre-scan ledger snapshot skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
+
     // ── Decide FULL vs INCREMENTAL ───────────────────────────────────────
     // Incremental = fetch only records modified since each module's last
     // successful sync (Zoho If-Modified-Since header) and DON'T wipe existing
