@@ -39,7 +39,9 @@ export interface KPIDefinition {
     | "quality"
     | "vendor"
     | "training"
-    | "ai";
+    | "ai"
+    | "individual"
+    | "process";
   formula?: string;
   data_source?: string;
   unit: string;

@@ -197,6 +197,8 @@
                             <option value="vendor" data-i18n="kpis.c_vendor">Vendor</option>
                             <option value="training" data-i18n="kpis.c_training">Training</option>
                             <option value="ai" data-i18n="kpis.c_ai">AI</option>
+                            <option value="individual">Individual</option>
+                            <option value="process">Process</option>
                         </select>
                     </div>
                 </div>
@@ -308,9 +310,17 @@
                 case 'vendor':     return WalaPlusI18n.t('kpis.c_vendor', fb);
                 case 'training':   return WalaPlusI18n.t('kpis.c_training', fb);
                 case 'ai':         return WalaPlusI18n.t('kpis.c_ai', fb);
+                case 'individual': return 'Individual';
+                case 'process':    return 'Process';
             }
             return fb;
         }
+        // Category options for the inline "Category" editor in the detail modal.
+        const _KPI_CATEGORY_OPTIONS = [
+            ['governance', 'Governance'], ['risk', 'Risk'], ['compliance', 'Compliance'],
+            ['audit', 'Audit'], ['quality', 'Quality'], ['vendor', 'Vendor'],
+            ['training', 'Training'], ['ai', 'AI'], ['individual', 'Individual'], ['process', 'Process'],
+        ];
         function _kpiOwnerLabel(owner) {
             switch (owner) {
                 case 'quality_manager':    return 'Sarah';
@@ -663,10 +673,14 @@
                         ` : '<p class="text-gray-500 text-sm">' + WalaPlusI18n.t('dyn.kpis.no_history') + '</p>'}
                     </div>
                     <div class="mt-6 flex flex-wrap justify-between items-center gap-2">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
                             <label class="text-sm text-gray-600">Owner:</label>
                             <select data-on-change="reassignOwner" data-args="[${kpi.id}, &quot;@this.value&quot;]" class="border rounded px-2 py-1.5 text-sm">
                                 ${_KPI_OWNER_OPTIONS.map(([val, lbl]) => `<option value="${val}" ${kpi.owner_type === val ? 'selected' : ''}>${lbl}</option>`).join('')}
+                            </select>
+                            <label class="text-sm text-gray-600 ms-2">Category:</label>
+                            <select data-on-change="changeCategory" data-args="[${kpi.id}, &quot;@this.value&quot;]" class="border rounded px-2 py-1.5 text-sm">
+                                ${_KPI_CATEGORY_OPTIONS.map(([val, lbl]) => `<option value="${val}" ${kpi.category === val ? 'selected' : ''}>${lbl}</option>`).join('')}
                             </select>
                         </div>
                         <div class="flex gap-2">
@@ -850,6 +864,27 @@
             } catch (e) {
                 console.error('Reassign owner error:', e);
                 alert('Failed to reassign KPI owner.');
+            }
+        }
+
+        // Quick category change from the detail modal — updates kpi_definitions.category.
+        async function changeCategory(kpiId, category) {
+            try {
+                const res = await fetch(`/api/kpis/${kpiId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category })
+                });
+                if (res.ok) {
+                    closeDetailModal();
+                    await loadKPIs();
+                } else {
+                    const d = await res.json().catch(() => ({}));
+                    alert(d.error || 'Failed to change category.');
+                }
+            } catch (e) {
+                console.error('Change category error:', e);
+                alert('Failed to change category.');
             }
         }
 
