@@ -75,22 +75,39 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div class="bg-white rounded-xl shadow p-4">
-                <div class="text-3xl font-bold text-gray-900" id="totalKPIs">0</div>
-                <div class="text-sm text-gray-600" data-i18n="kpis.total_kpis">Total KPIs</div>
+        <!-- Leadership-platform status taxonomy (Total + 7 statuses) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-gray-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-gray-900" id="totalKPIs">0</div><div class="text-xs text-gray-600">Total KPIs</div></div>
             </div>
-            <div class="bg-white rounded-xl shadow p-4">
-                <div class="text-3xl font-bold text-green-700" id="greenCount">0</div>
-                <div class="text-sm text-gray-600">On Track</div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-green-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-green-700" id="statOnTrack">0</div><div class="text-xs text-gray-600">On Track</div></div>
             </div>
-            <div class="bg-white rounded-xl shadow p-4">
-                <div class="text-3xl font-bold text-amber-600" id="amberCount">0</div>
-                <div class="text-sm text-gray-600">At Risk</div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-teal-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-teal-700" id="statExceeded">0</div><div class="text-xs text-gray-600">Exceeded</div></div>
             </div>
-            <div class="bg-white rounded-xl shadow p-4">
-                <div class="text-3xl font-bold text-red-700" id="redCount">0</div>
-                <div class="text-sm text-gray-600">Off Track</div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-amber-600" id="statAtRisk">0</div><div class="text-xs text-gray-600">At Risk</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-red-700" id="statOffTrack">0</div><div class="text-xs text-gray-600">Off Track</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-orange-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-orange-600" id="statBehind">0</div><div class="text-xs text-gray-600">Behind</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-slate-400 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-slate-600" id="statNotStarted">0</div><div class="text-xs text-gray-600">Not Started</div></div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0"></span>
+                <div><div class="text-2xl font-bold text-blue-700" id="statCompleted">0</div><div class="text-xs text-gray-600">Completed</div></div>
             </div>
         </div>
 
@@ -372,11 +389,59 @@
             }
         }
 
+        // Map a KPI to the Leadership Platform's 7-status taxonomy from its value vs
+        // target + RAG thresholds (direction-aware). The QMS engine grades by absolute
+        // thresholds (not baseline-pace like leadership), so a KPI can read slightly
+        // differently between the two tools — but the status vocabulary now matches.
+        function _leadershipStatus(kpi) {
+            const v = kpi.latestValue;
+            if (v === null || v === undefined) return 'Not Started';
+            const t = kpi.target_value;
+            const higher = (kpi.threshold_direction || 'higher_is_better') === 'higher_is_better';
+            if (t !== null && t !== undefined && t !== '') {
+                const tv = Number(t), nv = Number(v);
+                if (higher ? nv > tv : nv < tv) return 'Exceeded';
+                if (Math.abs(nv - tv) < 1e-9) return 'Completed';
+            }
+            const s = kpi.status;
+            if (s === 'green') return 'On Track';
+            if (s === 'amber') return 'At Risk';
+            if (s === 'red') {
+                const tr = kpi.threshold_red;
+                if (tr !== null && tr !== undefined && tr !== '') {
+                    const nv = Number(v), ntr = Number(tr);
+                    if (higher ? nv < ntr : nv > ntr) return 'Behind';
+                }
+                return 'Off Track';
+            }
+            return 'Not Started';
+        }
+        function _leadershipStatusBadge(status) {
+            const map = {
+                'On Track':    'bg-green-100 text-green-800',
+                'Exceeded':    'bg-teal-100 text-teal-800',
+                'At Risk':     'bg-amber-100 text-amber-800',
+                'Off Track':   'bg-red-100 text-red-800',
+                'Behind':      'bg-orange-100 text-orange-800',
+                'Not Started': 'bg-slate-100 text-slate-600',
+                'Completed':   'bg-blue-100 text-blue-800',
+            };
+            const cls = map[status] || 'bg-slate-100 text-slate-600';
+            return `<span class="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${cls}">${status}</span>`;
+        }
         function updateStats(data) {
-            document.getElementById('totalKPIs').textContent = _fn(data.total || allKPIs.length);
-            document.getElementById('greenCount').textContent = _fn(data.byStatus?.green || 0);
-            document.getElementById('amberCount').textContent = _fn(data.byStatus?.amber || 0);
-            document.getElementById('redCount').textContent = _fn(data.byStatus?.red || 0);
+            const details = data.kpiDetails || allKPIs || [];
+            document.getElementById('totalKPIs').textContent = _fn(data.total || details.length);
+            const counts = { 'On Track': 0, 'Exceeded': 0, 'At Risk': 0, 'Off Track': 0, 'Behind': 0, 'Not Started': 0, 'Completed': 0 };
+            details.forEach(k => { const s = _leadershipStatus(k); if (counts[s] !== undefined) counts[s]++; });
+            const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = _fn(n); };
+            set('statOnTrack', counts['On Track']);
+            set('statExceeded', counts['Exceeded']);
+            set('statAtRisk', counts['At Risk']);
+            set('statOffTrack', counts['Off Track']);
+            set('statBehind', counts['Behind']);
+            set('statNotStarted', counts['Not Started']);
+            set('statCompleted', counts['Completed']);
         }
 
         function renderCharts(data) {
@@ -468,6 +533,7 @@
                                     ${kpi.latestValue !== null && kpi.latestValue !== undefined ? _fn(kpi.latestValue) + (kpi.unit || '%') : '--'}
                                 </div>
                                 <div class="text-xs text-gray-500">${WalaPlusI18n.t('dyn.kpis.target_label', { value: (kpi.target_value !== null && kpi.target_value !== undefined ? _fn(kpi.target_value) : '--') + (kpi.unit || '%') })}</div>
+                                <div class="mt-1">${_leadershipStatusBadge(_leadershipStatus(kpi))}</div>
                             </div>
                         </div>
                     </div>
