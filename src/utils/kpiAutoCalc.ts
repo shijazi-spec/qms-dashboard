@@ -32,7 +32,8 @@ import { computeProcessKPIs } from "./kpiProcessCalc";
  */
 const CANONICAL_TO_FEED: Record<string, string> = {
   // Quality (Sarah)
-  "QM-KPI-002": "QM-KPI-002", // BU Audit Execution Rate ← Audit Execution Rate
+  "QM-KPI-002": "QM-KPI-002", // Audit Execution Rate
+  "QM-KPI-008": "QM-KPI-008", // BU Coverage Rate
   "QM-KPI-003": "QM-KPI-003", // Gap Closure Rate
   "QM-KPI-009": "QM-KPI-010", // Repeat Findings Rate
   "QM-KPI-006": "QM-KPI-006", // Quality↔GRC Handoff SLA ← Handoff Cycle Time

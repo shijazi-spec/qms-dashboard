@@ -25,6 +25,7 @@ export interface KPIDefinition {
     | "grc_manager"
     | "governance_officer"
     | "grq_specialist"
+    | "legal_specialist"
     | "sdr_team"
     | "sales_team"
     | "shared";
@@ -210,7 +211,7 @@ export async function initKPITables(): Promise<void> {
     DO $$ BEGIN
       ALTER TABLE kpi_definitions DROP CONSTRAINT IF EXISTS kpi_definitions_owner_type_check;
       ALTER TABLE kpi_definitions ADD CONSTRAINT kpi_definitions_owner_type_check
-        CHECK (owner_type IN ('quality_manager', 'grc_manager', 'governance_officer', 'grq_specialist', 'shared', 'sdr_team', 'sales_team'));
+        CHECK (owner_type IN ('quality_manager', 'grc_manager', 'governance_officer', 'grq_specialist', 'legal_specialist', 'shared', 'sdr_team', 'sales_team'));
     EXCEPTION WHEN others THEN NULL;
     END $$;
   `);
@@ -235,11 +236,13 @@ export async function initKPITables(): Promise<void> {
   // Hide the stale legacy QM/GRC KPIs superseded by the new QM-KPI/GRC-KPI set.
   await deactivateStaleLegacyKPIs();
 
-  // Seed the agreed GRQ scorecard KPIs onto the KPI Engine (first /kpis page).
-  await seedGrqScorecardKPIs();
-
-  // Leftover pre-Excel KPIs (Mohammed's 6 + 3 Shared) → AlHanouf (GRQ Specialist).
-  await assignLeftoverKPIsToSpecialist();
+  // Seed the FINAL canonical GRQ KPI set (from "GRQ Final KPIs_2.xlsx"):
+  // Quality / GRC / GRQ Specialist / Legal / GRQ-Team roll-ups. Upserts the agreed
+  // list and deactivates any older GRQ codes (the previous scorecard, Mohammed's
+  // MAM-*, Shared SHR-*, old composites). Supersedes seedGrqScorecardKPIs +
+  // assignLeftoverKPIsToSpecialist.
+  const { seedFinalGrqKpis } = await import("./finalGrqKpiSeed");
+  await seedFinalGrqKpis();
 
   // SDR + Sales KPIs are derived from the platform's own process data. Each has
   // its own existence guard, so calling them independently (seedDefaultKPIs
@@ -1059,6 +1062,7 @@ export const OWNER_NAME_BY_TYPE: Record<string, string> = {
   quality_manager: "Sarah",
   grc_manager: "Maram",
   grq_specialist: "AlHanouf",
+  legal_specialist: "Ali Fahad",
   sdr_team: "SDR Team",
   sales_team: "Sales Team",
   shared: "Shared",
@@ -1854,7 +1858,7 @@ export async function getKPIDashboardSummary(): Promise<any> {
   const kpis = await getAllKPIDefinitions();
   const summary: any = {
     total: kpis.length,
-    byOwner: { quality_manager: 0, grc_manager: 0, grq_specialist: 0, sdr_team: 0, sales_team: 0, shared: 0 },
+    byOwner: { quality_manager: 0, grc_manager: 0, grq_specialist: 0, legal_specialist: 0, sdr_team: 0, sales_team: 0, shared: 0 },
     byStatus: { green: 0, amber: 0, red: 0, no_data: 0 },
     byCategory: {},
     kpiDetails: [],

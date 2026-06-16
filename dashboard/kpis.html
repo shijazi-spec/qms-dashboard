@@ -49,9 +49,10 @@
                     <option value="quality_manager">Sarah (Quality Manager)</option>
                     <option value="grc_manager">Maram (GRC Manager)</option>
                     <option value="grq_specialist">AlHanouf (GRQ Specialist)</option>
+                    <option value="legal_specialist">Ali Fahad (Legal Specialist)</option>
                     <option value="sdr_team">SDR Team</option>
                     <option value="sales_team">Sales Team</option>
-                    <option value="shared" data-i18n="kpis.o_shared_kpis">Shared KPIs</option>
+                    <option value="shared">GRQ Team (Shared)</option>
                 </select>
                 <select id="statusFilter" class="border rounded px-3 py-2 text-sm" data-on-change="loadKPIs" data-testid="select-status-filter">
                     <option value="" data-i18n="common.all_statuses">All Statuses</option>
@@ -181,9 +182,10 @@
                             <option value="quality_manager">Sarah (Quality Manager)</option>
                             <option value="grc_manager">Maram (GRC Manager)</option>
                             <option value="grq_specialist">AlHanouf (GRQ Specialist)</option>
+                            <option value="legal_specialist">Ali Fahad (Legal Specialist)</option>
                             <option value="sdr_team">SDR Team</option>
                             <option value="sales_team">Sales Team</option>
-                            <option value="shared">Shared</option>
+                            <option value="shared">GRQ Team (Shared)</option>
                         </select>
                     </div>
                     <div>
@@ -327,9 +329,10 @@
                 case 'grc_manager':        return 'Maram';
                 case 'grq_specialist':     return 'AlHanouf';
                 case 'governance_officer': return 'AlHanouf';
+                case 'legal_specialist':   return 'Ali Fahad';
                 case 'sdr_team':           return 'SDR Team';
                 case 'sales_team':         return 'Sales Team';
-                case 'shared':             return 'Shared';
+                case 'shared':             return 'GRQ Team';
             }
             return owner;
         }
@@ -339,9 +342,10 @@
                 case 'grc_manager':        return 'Maram (GRC Manager)';
                 case 'grq_specialist':     return 'AlHanouf (GRQ Specialist)';
                 case 'governance_officer': return 'AlHanouf (GRQ Specialist)';
+                case 'legal_specialist':   return 'Ali Fahad (Legal Specialist)';
                 case 'sdr_team':           return 'SDR Team';
                 case 'sales_team':         return 'Sales Team';
-                case 'shared':             return 'Shared';
+                case 'shared':             return 'GRQ Team (Shared)';
             }
             return owner;
         }
@@ -350,9 +354,10 @@
             ['quality_manager', 'Sarah (Quality Manager)'],
             ['grc_manager', 'Maram (GRC Manager)'],
             ['grq_specialist', 'AlHanouf (GRQ Specialist)'],
+            ['legal_specialist', 'Ali Fahad (Legal Specialist)'],
             ['sdr_team', 'SDR Team'],
             ['sales_team', 'Sales Team'],
-            ['shared', 'Shared'],
+            ['shared', 'GRQ Team (Shared)'],
         ];
         function _kpiCalcModeBadge(mode) {
             switch (mode) {
@@ -465,10 +470,10 @@
             charts.owner = new Chart(document.getElementById('ownerChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: ['Sarah (Quality)', 'Maram (GRC)', 'AlHanouf (Specialist)', 'SDR Team', 'Sales Team', 'Shared'],
+                    labels: ['Sarah (Quality)', 'Maram (GRC)', 'AlHanouf (Specialist)', 'Ali Fahad (Legal)', 'SDR Team', 'Sales Team', 'GRQ Team'],
                     datasets: [{
-                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.grq_specialist || 0, data.byOwner?.sdr_team || 0, data.byOwner?.sales_team || 0, data.byOwner?.shared || 0],
-                        backgroundColor: ['#1E3A8A', '#1E293B', '#7C3AED', '#0891B2', '#0E7490', '#6D28D9']
+                        data: [data.byOwner?.quality_manager || 0, data.byOwner?.grc_manager || 0, data.byOwner?.grq_specialist || 0, data.byOwner?.legal_specialist || 0, data.byOwner?.sdr_team || 0, data.byOwner?.sales_team || 0, data.byOwner?.shared || 0],
+                        backgroundColor: ['#1E3A8A', '#1E293B', '#7C3AED', '#B45309', '#0891B2', '#0E7490', '#6D28D9']
                     }]
                 },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
