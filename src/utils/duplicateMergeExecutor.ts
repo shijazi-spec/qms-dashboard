@@ -331,16 +331,27 @@ export async function executeMergePlan(
     );
   }
 
-  // 3) Tag the duplicates for the admin to delete.
-  if (dups.length > 0 && !dryRun) {
+  // 3) Tag the duplicates for the admin to delete. Exclude any ids already
+  //    detected as ghosts (deleted in Zoho during the migrate/reparent steps)
+  //    — Zoho's add_tags 400s on a deleted record id, which otherwise surfaces
+  //    as a spurious "Applied with 1 error" even though there was nothing left
+  //    to tag. Those ids are handled as stale_pending instead.
+  const liveDups = dups.filter((d) => !ghostIds.has(d));
+  if (liveDups.length > 0 && !dryRun) {
     try {
-      await addZohoTags(module, dups, [plan.tagName]);
-      report.taggedRecordIds = [...dups];
+      await addZohoTags(module, liveDups, [plan.tagName]);
+      report.taggedRecordIds = [...liveDups];
     } catch (e) {
-      fail("tag-duplicates", e);
+      // If the whole batch 400s because the ids are deleted ghosts, mark them
+      // stale rather than reporting a hard error.
+      if (isGhostRecordError(e)) {
+        for (const d of liveDups) markGhost(d);
+      } else {
+        fail("tag-duplicates", e);
+      }
     }
-  } else if (dups.length > 0) {
-    report.taggedRecordIds = [...dups]; // dry-run: would tag these
+  } else if (liveDups.length > 0) {
+    report.taggedRecordIds = [...liveDups]; // dry-run: would tag these
   }
 
   // 4) Stamp audit notes (survivor + each duplicate).
