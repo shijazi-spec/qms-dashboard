@@ -2327,4 +2327,166 @@ export const complianceRoutes = [
       };
     },
   },
+  {
+    // AI gap remediation — recommend what to create/implement for ONE
+    // unmapped clause (web-grounded). Governance/admin only.
+    path: "/api/compliance/document-mapping/recommend-clause",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse, getSessionUser } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, [
+            "admin",
+            "grc_manager",
+            "quality_manager",
+            "head_of_operations_quality",
+          ]);
+          if (!sessionUser) {
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(c, "Permission denied: governance roles only");
+          }
+          let body: any = {};
+          try {
+            body = await c.req.json();
+          } catch {
+            body = {};
+          }
+          const obligationId = parseInt(String(body.obligation_id), 10);
+          if (!Number.isFinite(obligationId)) {
+            return c.json({ error: "obligation_id required" }, 400);
+          }
+          const { recommendForClause } = await import(
+            "../../utils/gapRecommendationAdvisor"
+          );
+          const rec = await recommendForClause(obligationId, {
+            force: body.force === true,
+            generatedBy: sessionUser.email || sessionUser.role || "ai",
+          });
+          if (!rec) return c.json({ error: "Could not generate a recommendation" }, 502);
+          return c.json({ success: true, recommendation: rec });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] recommend-clause failed:", err);
+          return c.json({ error: "Failed to generate recommendation" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // AI gap remediation — bulk. Processes ONE batch of gap clauses lacking a
+    // recommendation per call (so the request never times out on hundreds of
+    // clauses); the UI loops until remaining === 0. `?estimate=true` returns
+    // the outstanding count for the confirmation dialog. Governance/admin only.
+    path: "/api/compliance/document-mapping/recommend-gaps",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse, getSessionUser } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, [
+            "admin",
+            "grc_manager",
+            "quality_manager",
+            "head_of_operations_quality",
+          ]);
+          if (!sessionUser) {
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(c, "Permission denied: governance roles only");
+          }
+          const {
+            recommendNextGapBatch,
+            countGapsNeedingRecommendation,
+          } = await import("../../utils/gapRecommendationAdvisor");
+
+          const estimate =
+            new URL(c.req.url).searchParams.get("estimate") === "true";
+          if (estimate) {
+            const remaining = await countGapsNeedingRecommendation();
+            return c.json({ success: true, remaining });
+          }
+          const summary = await recommendNextGapBatch({
+            limit: 10,
+            generatedBy: sessionUser.email || sessionUser.role || "ai",
+          });
+          return c.json({ success: true, ...summary });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] recommend-gaps failed:", err);
+          return c.json({ error: "Failed to generate recommendations" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Cached gap recommendations (JSON) for the inline report. Read-only.
+    path: "/api/compliance/document-mapping/recommendations",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { listRecommendations } = await import(
+            "../../utils/gapRecommendationAdvisor"
+          );
+          const items = await listRecommendations();
+          return c.json({ items, count: items.length });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] recommendations list failed:", err);
+          return c.json({ error: "Failed to list recommendations" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Cached gap recommendations as a CSV remediation report. Read-only.
+    path: "/api/compliance/document-mapping/recommendations.csv",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { listRecommendations } = await import(
+            "../../utils/gapRecommendationAdvisor"
+          );
+          const rows = await listRecommendations();
+          const esc = (v: any) => {
+            const s = v == null ? "" : String(v);
+            return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+          };
+          const header =
+            "Framework,Clause Code,Clause Title,Priority,What Required,Recommended Action,Suggested Document,Document Type,Key Criteria,Sources\n";
+          const body = rows
+            .map((r: any) =>
+              [
+                r.regulation_code,
+                r.obligation_code,
+                r.obligation_title,
+                r.priority,
+                r.what_required,
+                r.recommended_action,
+                r.suggested_document_title,
+                r.document_type,
+                (r.key_criteria || []).join(" | "),
+                (r.sources || []).map((s: any) => s.url).join(" | "),
+              ]
+                .map(esc)
+                .join(","),
+            )
+            .join("\n");
+          const csv = "﻿" + header + body + (body ? "\n" : "");
+          return new Response(csv, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition":
+                'attachment; filename="gap-recommendations.csv"',
+              "Cache-Control": "private, max-age=0, no-cache",
+            },
+          });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] recommendations.csv failed:", err);
+          return c.json({ error: "Failed to export recommendations" }, 500);
+        }
+      };
+    },
+  },
 ];

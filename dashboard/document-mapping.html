@@ -132,6 +132,26 @@
             </div>
         </section>
 
+        <!-- AI gap remediation: recommend what to create/implement for each gap -->
+        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-recommendations">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.rec_title">AI Gap Recommendations</h2>
+                    <p class="text-xs text-gray-500"><span id="recTotal">0</span> <span data-i18n="docmap.rec_subtitle">recommendations generated. The AI researches each unmapped clause (web-grounded) and recommends what to create to satisfy it.</span></p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a href="/api/compliance/document-mapping/recommendations.csv" class="text-xs px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium" data-testid="link-download-recs" data-i18n="docmap.rec_download">Download (CSV)</a>
+                    <button type="button" data-on-click="runRecommendGaps" id="recAllBtn" class="text-xs px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 font-medium flex items-center gap-1 disabled:opacity-60" data-testid="button-recommend-all">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                        <span id="recAllLabel" data-i18n="docmap.rec_all">Recommend fixes for all gaps</span>
+                    </button>
+                </div>
+            </div>
+            <div id="recList" class="p-4 space-y-2">
+                <div class="text-sm text-gray-400 text-center py-6" data-i18n="docmap.rec_idle">No recommendations yet. Click <strong>Recommend fixes for all gaps</strong>, or the 💡 on any gap clause above.</div>
+            </div>
+        </section>
+
         <!-- Mapping Console: pick a clause → AI suggests documents → Link -->
         <section class="bg-white rounded-lg shadow mb-6" data-testid="section-mapping-console">
             <div class="p-4 border-b border-gray-200">
@@ -219,6 +239,22 @@
             </div>
         </section>
     </main>
+
+    <!-- AI gap-recommendation detail modal -->
+    <div id="recModal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[88vh] overflow-y-auto">
+            <div class="p-4 border-b border-gray-200 flex items-start justify-between gap-3">
+                <div>
+                    <div class="text-[11px] uppercase tracking-wide text-amber-700 font-semibold" data-i18n="docmap.rec_modal_kicker">AI Remediation</div>
+                    <h3 id="recModalTitle" class="text-base font-semibold text-gray-900"></h3>
+                </div>
+                <button type="button" data-on-click="closeRecModal" class="text-gray-400 hover:text-gray-600 shrink-0" aria-label="Close">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="recModalBody" class="p-4"></div>
+        </div>
+    </div>
 
     <script>
         let frameworks = [];                  // cached list of regulations
@@ -536,6 +572,7 @@
             await loadFrameworks();
             await loadCoverage();
             await loadGaps();
+            await loadRecommendations();
             await loadFindings();
             await loadConsoleClauses();
             await loadAutoMapped();
@@ -559,12 +596,15 @@
                 }
                 host.innerHTML = fws.map(function (fw) {
                     var clauses = (fw.clauses || []).map(function (cl) {
-                        return '<li>'
-                            + '<button type="button" data-on-click="gapToConsole" data-args="[' + Number(fw.regulation_id || 0) + ',' + Number(cl.obligation_id || 0) + ']" class="w-full text-start flex gap-2 py-1 px-1 rounded hover:bg-emerald-50 border-b border-gray-50 last:border-0" title="' + escAttr(tg('docmap.gap_find_docs', 'Find documents for this clause')) + '" data-testid="gap-clause-' + Number(cl.obligation_id || 0) + '">'
+                        var oid = Number(cl.obligation_id || 0);
+                        var label = (cl.obligation_code || '') + ' — ' + (cl.title || '');
+                        return '<li class="flex items-center gap-1 border-b border-gray-50 last:border-0">'
+                            + '<button type="button" data-on-click="gapToConsole" data-args="[' + Number(fw.regulation_id || 0) + ',' + oid + ']" class="flex-1 min-w-0 text-start flex gap-2 py-1 px-1 rounded hover:bg-emerald-50" title="' + escAttr(tg('docmap.gap_find_docs', 'Find documents for this clause')) + '" data-testid="gap-clause-' + oid + '">'
                             + '<code class="text-[11px] bg-gray-100 text-gray-700 px-1 rounded font-mono shrink-0">' + escAttr(cl.obligation_code || '—') + '</code>'
-                            + '<span class="text-xs text-gray-700">' + escAttr(cl.title || '') + '</span>'
-                            + '<span class="ms-auto text-[10px] text-emerald-700 shrink-0 opacity-0 group-hover:opacity-100">→</span>'
-                            + '</button></li>';
+                            + '<span class="text-xs text-gray-700 truncate">' + escAttr(cl.title || '') + '</span>'
+                            + '</button>'
+                            + '<button type="button" data-on-click="recommendClause" data-args="' + escAttr(JSON.stringify([oid, label])) + '" class="shrink-0 text-sm px-1.5 py-1 rounded hover:bg-amber-50" title="' + escAttr(tg('docmap.rec_clause_tip', 'AI: how to satisfy this clause')) + '" data-testid="rec-clause-' + oid + '">💡</button>'
+                            + '</li>';
                     }).join('');
                     return '<details class="border border-gray-200 rounded-lg">'
                         + '<summary class="cursor-pointer select-none px-3 py-2 flex items-center justify-between hover:bg-gray-50">'
@@ -650,6 +690,132 @@
             } finally {
                 if (btn) btn.disabled = false;
                 await reloadAll();
+            }
+        }
+
+        // ──────────────── AI gap remediation recommendations ────────────────
+        function recT(k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; }
+        function closeRecModal() { var m = document.getElementById('recModal'); if (m) m.classList.remove('active'); }
+        function recPriorityChip(p) {
+            var cls = p === 'high' ? 'bg-red-100 text-red-700' : (p === 'low' ? 'bg-gray-100 text-gray-600' : 'bg-amber-100 text-amber-700');
+            return '<span class="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full ' + cls + '">' + escAttr(p || 'medium') + '</span>';
+        }
+        function renderRecBody(rec, err) {
+            if (err) return '<div class="text-sm text-red-600 py-4">' + escAttr(err) + '</div>';
+            if (!rec) return '<div class="text-sm text-gray-500 py-6 text-center">' + escAttr(recT('docmap.rec_loading', 'Researching the clause and drafting a recommendation…')) + '</div>';
+            var criteria = (rec.key_criteria || []).map(function (c) { return '<li class="text-xs text-gray-700">' + escAttr(c) + '</li>'; }).join('');
+            var sources = (rec.sources || []).map(function (s) {
+                return '<li><a href="' + escAttr(s.url) + '" target="_blank" rel="noopener" class="text-xs text-blue-600 hover:underline break-all">' + escAttr(s.title || s.url) + '</a></li>';
+            }).join('');
+            return ''
+                + '<div class="flex items-center gap-2 mb-3">' + recPriorityChip(rec.priority)
+                    + (rec.web_grounded ? '<span class="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full">' + escAttr(recT('docmap.rec_web', 'web-grounded')) + '</span>' : '')
+                + '</div>'
+                + '<div class="mb-3"><div class="text-[11px] uppercase text-gray-400 font-semibold">' + escAttr(recT('docmap.rec_required', 'What the clause requires')) + '</div><div class="text-sm text-gray-800 mt-0.5">' + escAttr(rec.what_required || '') + '</div></div>'
+                + '<div class="mb-3"><div class="text-[11px] uppercase text-gray-400 font-semibold">' + escAttr(recT('docmap.rec_action', 'Recommended action')) + '</div><div class="text-sm text-gray-800 mt-0.5">' + escAttr(rec.recommended_action || '') + '</div></div>'
+                + '<div class="mb-3 p-3 bg-amber-50 rounded-lg"><div class="text-[11px] uppercase text-amber-700 font-semibold">' + escAttr(recT('docmap.rec_create', 'Create this document')) + '</div><div class="text-sm font-medium text-gray-900 mt-0.5">' + escAttr(rec.suggested_document_title || '') + '</div><div class="text-[11px] text-gray-500">' + escAttr(rec.document_type || '') + '</div></div>'
+                + (criteria ? '<div class="mb-3"><div class="text-[11px] uppercase text-gray-400 font-semibold mb-1">' + escAttr(recT('docmap.rec_criteria', 'Key criteria to include')) + '</div><ul class="list-disc ps-5 space-y-0.5">' + criteria + '</ul></div>' : '')
+                + (sources ? '<div><div class="text-[11px] uppercase text-gray-400 font-semibold mb-1">' + escAttr(recT('docmap.rec_sources', 'Sources')) + '</div><ul class="space-y-0.5">' + sources + '</ul></div>' : '');
+        }
+        function openRecModal(title, rec, err) {
+            var m = document.getElementById('recModal');
+            var t = document.getElementById('recModalTitle');
+            var b = document.getElementById('recModalBody');
+            if (t) t.textContent = title || '';
+            if (b) b.innerHTML = renderRecBody(rec, err);
+            if (m) m.classList.add('active');
+        }
+        async function recommendClause(obligationId, label) {
+            openRecModal(label, null);
+            try {
+                var r = await fetch('/api/compliance/document-mapping/recommend-clause', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ obligation_id: obligationId })
+                });
+                var data = await r.json().catch(function () { return {}; });
+                if (!r.ok || !data.recommendation) {
+                    openRecModal(label, null, (data && data.error) || recT('docmap.rec_error', 'Could not generate a recommendation'));
+                    return;
+                }
+                openRecModal(label, data.recommendation);
+                await loadRecommendations();
+            } catch (e) {
+                openRecModal(label, null, (e && e.message) || 'error');
+            }
+        }
+        async function loadRecommendations() {
+            var host = document.getElementById('recList');
+            if (!host) return;
+            try {
+                var res = await fetch('/api/compliance/document-mapping/recommendations');
+                var data = await res.json();
+                var items = data.items || [];
+                var totalEl = document.getElementById('recTotal');
+                if (totalEl) totalEl.textContent = items.length;
+                if (!items.length) {
+                    host.innerHTML = '<div class="text-sm text-gray-400 text-center py-6">' + escAttr(recT('docmap.rec_idle_short', 'No recommendations yet.')) + '</div>';
+                    return;
+                }
+                var groups = {};
+                items.forEach(function (it) {
+                    (groups[it.regulation_code] = groups[it.regulation_code] || []).push(it);
+                });
+                host.innerHTML = Object.keys(groups).map(function (code) {
+                    var rows = groups[code].map(function (it) {
+                        var label = (it.obligation_code || '') + ' — ' + (it.obligation_title || '');
+                        return '<li class="flex items-center gap-2 py-1 border-b border-gray-50 last:border-0">'
+                            + recPriorityChip(it.priority)
+                            + '<code class="text-[11px] bg-gray-100 text-gray-700 px-1 rounded font-mono shrink-0">' + escAttr(it.obligation_code || '—') + '</code>'
+                            + '<span class="text-xs text-gray-700 truncate flex-1 min-w-0">' + escAttr(it.suggested_document_title || it.obligation_title || '') + '</span>'
+                            + '<button type="button" data-on-click="recommendClause" data-args="' + escAttr(JSON.stringify([it.obligation_id, label])) + '" class="shrink-0 text-[11px] text-amber-700 hover:underline font-medium">' + escAttr(recT('docmap.rec_view', 'View')) + '</button>'
+                            + '</li>';
+                    }).join('');
+                    return '<details class="border border-gray-200 rounded-lg">'
+                        + '<summary class="cursor-pointer select-none px-3 py-2 flex items-center justify-between hover:bg-gray-50">'
+                            + '<span class="text-sm font-medium text-gray-900"><span class="font-mono text-amber-700">' + escAttr(code) + '</span></span>'
+                            + '<span class="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">' + groups[code].length + '</span>'
+                        + '</summary>'
+                        + '<ul class="px-3 py-2 max-h-72 overflow-y-auto">' + rows + '</ul>'
+                    + '</details>';
+                }).join('');
+            } catch (e) {
+                host.innerHTML = '<div class="text-sm text-red-600 text-center py-6">Error: ' + escAttr(e.message) + '</div>';
+            }
+        }
+        async function runRecommendGaps() {
+            var btn = document.getElementById('recAllBtn');
+            var label = document.getElementById('recAllLabel');
+            var prev = label ? label.textContent : '';
+            try {
+                var est = await fetch('/api/compliance/document-mapping/recommend-gaps?estimate=true', {
+                    method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                var ed = await est.json().catch(function () { return {}; });
+                if (!est.ok) { alert(recT('docmap.rec_error', 'Failed') + (ed.error ? ': ' + ed.error : '')); return; }
+                var remaining = ed.remaining || 0;
+                if (remaining === 0) { alert(recT('docmap.rec_all_done', 'Every gap clause already has a recommendation.')); await loadRecommendations(); return; }
+                if (!confirm(recT('docmap.rec_confirm', 'Generate AI remediation recommendations for {n} gap clause(s)? This uses AI + web search and may take a few minutes.').replace('{n}', remaining))) return;
+                if (btn) btn.disabled = true;
+                var generated = 0;
+                for (var guard = 0; guard < 500; guard++) {
+                    var r = await fetch('/api/compliance/document-mapping/recommend-gaps', {
+                        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                    });
+                    var d = await r.json().catch(function () { return {}; });
+                    if (!r.ok) { alert(recT('docmap.rec_error', 'Failed') + (d.error ? ': ' + d.error : '')); break; }
+                    generated += (d.generated || 0);
+                    if (label) label.textContent = recT('docmap.rec_progress', 'Recommending… {r} left').replace('{r}', d.remaining || 0);
+                    await loadRecommendations();
+                    if ((d.remaining || 0) <= 0 || (d.processed || 0) === 0) break;
+                }
+                alert(recT('docmap.rec_done', 'AI recommendations ready.') + ' ' + generated + ' ' + recT('docmap.rec_generated', 'generated.'));
+            } catch (e) {
+                alert(recT('docmap.rec_error', 'Failed') + ': ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) btn.disabled = false;
+                if (label) label.textContent = prev || recT('docmap.rec_all', 'Recommend fixes for all gaps');
+                await loadRecommendations();
             }
         }
 

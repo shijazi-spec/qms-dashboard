@@ -670,12 +670,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
   {
-    // Document-Mapping write actions — "Run mapping now" (backfill) and the
-    // per-framework "Map this framework" AI scan. Both are bulk projection +
-    // clause auto-map over Integrated QMS documents. Governance/admin only;
-    // mirrors the in-handler requireRole gate. Must precede the generic
+    // Document-Mapping write/AI actions — "Run mapping now" (backfill), the
+    // per-framework "Map this framework" AI scan, and the AI gap-remediation
+    // advisors (recommend a clause / recommend all gaps). Governance/admin
+    // only; mirrors the in-handler requireRole gate. Must precede the generic
     // /api/compliance write catch-all below.
-    pattern: /^\/api\/compliance\/document-mapping\/(backfill|map-framework)$/,
+    pattern: /^\/api\/compliance\/document-mapping\/(backfill|map-framework|recommend-clause|recommend-gaps)$/,
     methods: ["POST"],
     roles: ["admin", "grc_manager", "quality_manager", "head_of_operations_quality"],
   },
