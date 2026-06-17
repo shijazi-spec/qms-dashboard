@@ -2483,17 +2483,45 @@ export async function getDuplicatesBySource(): Promise<
     total: number;
   }>
 > {
+  // 2026-06-17 — "Duplicates by Source" was counting EVERY record (no cluster
+  // join), so it showed ~90k for the whole CRM, not duplicates. And empty /
+  // whitespace `source` values each became their own blank-labelled bar
+  // because GROUP BY used the raw column while only NULL was coalesced.
+  // Fixes: (a) count only records that belong to an ACTIVE duplicate cluster
+  // (total_records > 1); (b) fold NULL/empty/whitespace into "Unknown" and
+  // GROUP BY the same expression so there are no blank bars; (c) cap the long
+  // tail into an "Other" bucket so the chart stays readable.
   const result = await pool.query(`
-    SELECT 
-      COALESCE(source, 'Unknown') as source,
-      COUNT(*) FILTER (WHERE record_type = 'lead') as lead_count,
-      COUNT(*) FILTER (WHERE record_type = 'deal') as deal_count,
-      COUNT(*) as total
-    FROM duplicate_records
-    GROUP BY source
+    SELECT
+      COALESCE(NULLIF(TRIM(dr.source), ''), 'Unknown') AS source,
+      COUNT(*) FILTER (WHERE dr.record_type = 'lead') AS lead_count,
+      COUNT(*) FILTER (WHERE dr.record_type = 'deal') AS deal_count,
+      COUNT(*) AS total
+    FROM duplicate_records dr
+    JOIN duplicate_clusters dc ON dr.cluster_id = dc.id
+    WHERE dc.status = 'active' AND dc.total_records > 1
+    GROUP BY COALESCE(NULLIF(TRIM(dr.source), ''), 'Unknown')
     ORDER BY total DESC
   `);
-  return result.rows;
+  const rows = result.rows.map((r) => ({
+    source: r.source as string,
+    lead_count: parseInt(r.lead_count) || 0,
+    deal_count: parseInt(r.deal_count) || 0,
+    total: parseInt(r.total) || 0,
+  }));
+  const TOP_N = 15;
+  if (rows.length <= TOP_N) return rows;
+  const top = rows.slice(0, TOP_N);
+  const other = rows.slice(TOP_N).reduce(
+    (acc, r) => ({
+      source: "Other",
+      lead_count: acc.lead_count + r.lead_count,
+      deal_count: acc.deal_count + r.deal_count,
+      total: acc.total + r.total,
+    }),
+    { source: "Other", lead_count: 0, deal_count: 0, total: 0 },
+  );
+  return [...top, other];
 }
 
 export async function updateClusterStatus(
