@@ -21,6 +21,22 @@ import { searchClustersByText } from "../../utils/duplicateRadarDatabase";
 const ALL_MODULES = ["Accounts", "Deals", "Contacts", "Leads"] as const;
 type ZModule = (typeof ALL_MODULES)[number];
 
+/**
+ * Build the Zoho CRM *UI* deep-link for a record so Adam can hand the user a
+ * clickable "open this in the CRM" link. The API host (zohoapis.<tld>) maps to
+ * the CRM web host (crm.zoho.<tld>); the org is resolved by Zoho from the
+ * logged-in session, so the org-less /crm/tab/<Module>/<id> form redirects to
+ * the right org. Returns null if we have no record id.
+ */
+function zohoRecordUrl(module: ZModule, id?: string | null): string | null {
+  if (!id) return null;
+  const apiDomain = process.env.ZOHO_API_DOMAIN || "https://www.zohoapis.com";
+  // ".com", ".eu", ".in", ".com.au", ".com.cn", ".jp" …
+  const m = apiDomain.match(/zohoapis(\.[a-z.]+)/i);
+  const tld = m ? m[1] : ".com";
+  return `https://crm.zoho${tld}/crm/tab/${module}/${id}`;
+}
+
 function nameOf(v: any): string | null {
   if (!v) return null;
   if (typeof v === "string") return v;
@@ -35,7 +51,11 @@ function joinName(first?: string, last?: string): string | null {
 
 function summarize(module: ZModule, rec: any): Record<string, any> {
   const d = rec.data || {};
-  const base = { id: rec.id, owner: rec.owner || nameOf(d.Owner) || null };
+  const base = {
+    id: rec.id,
+    owner: rec.owner || nameOf(d.Owner) || null,
+    crmLink: zohoRecordUrl(module, rec.id),
+  };
   switch (module) {
     case "Accounts":
       return { ...base, name: d.Account_Name || null, phone: d.Phone || null, website: d.Website || null };
