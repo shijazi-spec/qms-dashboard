@@ -211,6 +211,43 @@ export async function listLinksPendingJudgement(opts?: {
   return result.rows as { obligation_id: number; document_id: number }[];
 }
 
+/**
+ * List existing non-compliance findings (partial / missing_topic /
+ * needs_review) that should be RE-judged — e.g. after the judge prompt was
+ * improved to produce more actionable rationales. Bounded by a `before`
+ * cutoff so a UI loop terminates: each re-judge stamps judged_at = NOW()
+ * (> before), so the row drops out of the next batch.
+ */
+export async function listFindingsToRejudge(opts: {
+  before: string;
+  limit?: number;
+}): Promise<{ obligation_id: number; document_id: number }[]> {
+  await initEvidenceQualityTable();
+  const limit = Math.min(40, Math.max(1, opts.limit ?? 8));
+  const result = await pool.query(
+    `SELECT obligation_id, document_id
+       FROM obligation_evidence_quality
+      WHERE status IN ('partial','missing_topic','needs_review')
+        AND judged_at < $1
+   ORDER BY judged_at ASC
+      LIMIT $2`,
+    [opts.before, limit],
+  );
+  return result.rows as { obligation_id: number; document_id: number }[];
+}
+
+export async function countFindingsToRejudge(before: string): Promise<number> {
+  await initEvidenceQualityTable();
+  const r = await pool.query(
+    `SELECT COUNT(*)::int AS n
+       FROM obligation_evidence_quality
+      WHERE status IN ('partial','missing_topic','needs_review')
+        AND judged_at < $1`,
+    [before],
+  );
+  return r.rows[0]?.n || 0;
+}
+
 export async function logLlmCall(input: {
   caller: string;
   model?: string | null;

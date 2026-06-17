@@ -202,7 +202,10 @@
                     <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.findings_title">AI-Judged Findings</h2>
                     <p class="text-xs text-gray-500" data-i18n="docmap.findings_subtitle">Document/clause links the AI judge marked as partial, missing topic, or needs review. Add stronger evidence or revise the clause owner.</p>
                 </div>
-                <button type="button" data-on-click="reloadFindings" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium" data-testid="button-findings-reload" data-i18n="common.refresh">Refresh</button>
+                <div class="flex items-center gap-3">
+                    <button type="button" id="rejudgeFindingsBtn" data-on-click="rejudgeFindings" class="text-sm text-indigo-700 hover:text-indigo-900 font-medium" data-testid="button-findings-rejudge" title="Re-run the AI judge so each comment names exactly what to add to the document" data-i18n="docmap.rejudge_findings">Refresh AI comments</button>
+                    <button type="button" data-on-click="reloadFindings" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium" data-testid="button-findings-reload" data-i18n="common.refresh">Refresh</button>
+                </div>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -569,12 +572,21 @@
                     const safeDocTitle = (f.document_title || '').replace(/</g, '&lt;');
                     const safeObTitle = (f.obligation_title || '').replace(/</g, '&lt;');
                     const dt = f.judged_at ? new Date(f.judged_at).toLocaleDateString() : '—';
+                    // Concrete "what to add to the document" items from the judge.
+                    var aspects = f.missing_aspects;
+                    if (typeof aspects === 'string') { try { aspects = JSON.parse(aspects); } catch (e) { aspects = aspects ? [aspects] : []; } }
+                    if (!Array.isArray(aspects)) aspects = [];
+                    var addLabel = (window.WalaPlusI18n ? window.WalaPlusI18n.t('docmap.to_add') : null) || 'To add to the document';
+                    var aspectsHtml = aspects.length
+                        ? '<div class="mt-1 text-[11px] text-gray-700"><span class="font-semibold text-indigo-700">' + addLabel + ':</span><ul class="list-disc ms-4">'
+                            + aspects.map(function (a) { return '<li>' + String(a).replace(/</g, '&lt;') + '</li>'; }).join('') + '</ul></div>'
+                        : '';
                     return '<tr data-testid="finding-' + f.id + '">'
                         + '<td class="px-4 py-2 text-xs font-mono text-gray-700">' + (f.regulation_code || '') + '</td>'
                         + '<td class="px-4 py-2 text-sm text-gray-900"><div class="font-mono text-xs text-gray-500">' + (f.obligation_code || '') + '</div>' + safeObTitle + '</td>'
                         + '<td class="px-4 py-2 text-sm text-gray-700">' + safeDocTitle + '</td>'
                         + '<td class="px-4 py-2 text-xs"><span class="px-2 py-1 rounded-full ' + statusBadge + '">' + (f.status || '—') + '</span></td>'
-                        + '<td class="px-4 py-2 text-xs text-gray-600 max-w-md">' + safeRationale + '</td>'
+                        + '<td class="px-4 py-2 text-xs text-gray-600 max-w-md">' + safeRationale + aspectsHtml + '</td>'
                         + '<td class="px-4 py-2 text-xs text-gray-500">' + dt + '</td>'
                         + '</tr>';
                 }).join('');
@@ -584,6 +596,36 @@
         }
 
         function reloadFindings() { loadFindings(); }
+
+        // Re-judge existing findings so each comment names exactly what to add
+        // to the document (uses the latest, more-actionable judge prompt).
+        async function rejudgeFindings() {
+            var btn = document.getElementById('rejudgeFindingsBtn');
+            var rt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            var prev = btn ? btn.textContent : '';
+            try {
+                var est = await fetch('/api/compliance/non-compliance-findings/rejudge', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estimate: true }) });
+                var ed = await est.json().catch(function () { return {}; });
+                if (!est.ok) { alert(rt('docmap.rejudge_error', 'Re-judge failed') + (ed.error ? ': ' + ed.error : '')); return; }
+                var before = ed.before;
+                var remaining = ed.remaining || 0;
+                if (remaining === 0) { alert(rt('docmap.rejudge_none', 'No findings to refresh.')); return; }
+                if (!confirm(rt('docmap.rejudge_confirm', 'Re-run the AI judge on {n} finding(s) so each comment states what to add to the document? Runs in batches.').replace('{n}', remaining))) return;
+                if (btn) btn.disabled = true;
+                for (var guard = 0; guard < 500; guard++) {
+                    var r = await fetch('/api/compliance/non-compliance-findings/rejudge', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ before: before }) });
+                    var d = await r.json().catch(function () { return {}; });
+                    if (!r.ok) { alert(rt('docmap.rejudge_error', 'Re-judge failed') + (d.error ? ': ' + d.error : '')); break; }
+                    if (btn) btn.textContent = rt('docmap.rejudge_progress', 'Refreshing… {n} left').replace('{n}', d.remaining || 0);
+                    if (!d.remaining || d.remaining <= 0) break;
+                }
+                await loadFindings();
+            } catch (e) {
+                alert(rt('docmap.rejudge_error', 'Re-judge failed') + ': ' + e.message);
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = prev || rt('docmap.rejudge_findings', 'Refresh AI comments'); }
+            }
+        }
 
         // ──────────────────────── Boot ────────────────────────────────
         function escAttr(s) {

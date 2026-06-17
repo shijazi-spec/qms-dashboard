@@ -554,6 +554,66 @@ export const obligationDocumentsRoutes = [
     },
   },
 
+  // Re-judge existing non-compliance findings so their AI rationales are
+  // regenerated with the latest (more actionable) judge prompt. Batched +
+  // bounded by a `before` cutoff so the UI can loop to completion. Write
+  // action → gov roles only.
+  {
+    path: "/api/compliance/non-compliance-findings/rejudge",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const g = await gate(c, WRITE_ROLES);
+          if (g.error) return g.error;
+          const body = await c.req.json().catch(() => ({}));
+          const before =
+            typeof body.before === "string" && body.before
+              ? body.before
+              : new Date().toISOString();
+          const {
+            listFindingsToRejudge,
+            countFindingsToRejudge,
+          } = await import("../../utils/complianceQualityDatabase");
+
+          if (body.estimate) {
+            return c.json({
+              success: true,
+              before,
+              remaining: await countFindingsToRejudge(before),
+            });
+          }
+
+          const { judgeEvidence } = await import("../../utils/complianceJudge");
+          const batch = await listFindingsToRejudge({ before, limit: 6 });
+          const votes = Number(process.env.DOCUMENT_MAPPING_JUDGE_VOTES) || 3;
+          const by = g.user?.email || "ai-review";
+          let processed = 0;
+          for (const f of batch) {
+            try {
+              await judgeEvidence(
+                Number(f.obligation_id),
+                Number(f.document_id),
+                by,
+                { votes },
+              );
+              processed++;
+            } catch (err) {
+              safeLogger.warn(
+                `[ObligationDocs] rejudge failed ob=${f.obligation_id} doc=${f.document_id}: ${(err as Error).message}`,
+              );
+            }
+          }
+          const remaining = await countFindingsToRejudge(before);
+          return c.json({ success: true, before, processed, remaining });
+        } catch (error) {
+          safeLogger.error("❌ [ObligationDocs] rejudge error:", error);
+          return c.json({ error: "Failed to re-judge findings" }, 500);
+        }
+      };
+    },
+  },
+
   {
     path: "/api/compliance/obligations/:id/suggest-documents",
     method: "POST" as const,
