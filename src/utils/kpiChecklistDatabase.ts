@@ -70,14 +70,21 @@ export const FRAMEWORK_BUSINESS_UNITS = [
   "Quality",
 ];
 
-/** Standard framework-build action plan applied to every BU (ends with pilot audit). */
+/**
+ * Standard framework-build action plan applied to every BU — Sarah's actual
+ * methodology (generalized from the CS Action Plan, 2026-06-17). 9 phases ending
+ * in the trial audit + report.
+ */
 export const BU_FRAMEWORK_ACTION_PLAN = [
-  "Process mapping & current-state assessment",
-  "Governance documents drafted (policies / procedures / SOPs)",
-  "Documents reviewed & approved",
-  "Published in QMS",
-  "BU staff trained on the framework",
-  "Pilot audit conducted & gaps closed",
+  "One-to-One Meetings (BU Team)",
+  "Process Drafting",
+  "Process Revision",
+  "One-to-One Meetings (Relevant Parties)",
+  "Platform Review",
+  "Process Releasing",
+  "Training on Pilot Phase",
+  "Trial Audit",
+  "Trial Audit Report",
 ];
 
 /**
@@ -90,11 +97,29 @@ export const BU_FRAMEWORK_ACTION_PLAN = [
 export async function seedBuFrameworkChecklist(): Promise<void> {
   const kpi = await getKPIByCode("QM-KPI-015");
   if (!kpi || !kpi.id) return;
-  const existing = await pool.query(
-    `SELECT COUNT(*)::int AS n FROM kpi_checklist_items WHERE kpi_id = $1`,
+  const cur = await pool.query(
+    `SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE is_done)::int AS done
+       FROM kpi_checklist_items WHERE kpi_id = $1`,
     [kpi.id],
   );
-  if (Number(existing.rows[0]?.n || 0) > 0) return;
+  const n = Number(cur.rows[0]?.n || 0);
+  const done = Number(cur.rows[0]?.done || 0);
+
+  if (n > 0) {
+    // Does the existing checklist already match the current action plan?
+    const texts = await pool.query(
+      `SELECT DISTINCT item_text FROM kpi_checklist_items WHERE kpi_id = $1`,
+      [kpi.id],
+    );
+    const existing = new Set(texts.rows.map((r: any) => r.item_text));
+    const matches =
+      existing.size === BU_FRAMEWORK_ACTION_PLAN.length &&
+      BU_FRAMEWORK_ACTION_PLAN.every((s) => existing.has(s));
+    if (matches) return; // already current
+    if (done > 0) return; // someone has started ticking — never disturb their progress
+    // Untouched + outdated → rebuild with the current plan.
+    await pool.query(`DELETE FROM kpi_checklist_items WHERE kpi_id = $1`, [kpi.id]);
+  }
 
   for (const bu of FRAMEWORK_BUSINESS_UNITS) {
     for (const step of BU_FRAMEWORK_ACTION_PLAN) {
