@@ -1124,6 +1124,7 @@
                              Excel — exports PASS rows back out with the
                              operator's original column structure intact. -->
                         <button data-on-click="downloadPreflightPassRows" id="preflightExportPassBtn" data-testid="button-preflight-export-pass" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">⬇ Download PASS rows</button>
+                        <button data-on-click="downloadPreflightFlaggedRows" id="preflightExportFlaggedBtn" data-testid="button-preflight-export-flagged" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700" title="Download ONLY the flagged rows (Block / Review / Warn / Duplicate) as a CSV — Company, Contact, Email, Phone, Verdict, Existing Owner, CS Phase, and the Recommended Action. This is the file to send the Head of Sales.">⚑ Download flagged rows (for Head of Sales)</button>
                         <!-- Executive report toolbar — appears after a successful run. -->
                         <button data-on-click="exportPreflightExcel" id="preflightExportXlsxBtn" data-testid="button-preflight-export-xlsx" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-700 text-white hover:bg-emerald-800" title="Download a polished Excel report — Summary cover sheet + colour-coded Findings sheet. Designed to attach to a Head-of-Sales email.">📊 Export Excel report</button>
                         <button data-on-click="copyPreflightEmailBody" id="preflightCopyEmailBtn" data-testid="button-preflight-copy-email" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-100 text-blue-900 hover:bg-blue-200" title="Copy a ready-to-paste email body with the run's headline numbers and top reasons. Pair with the Excel attachment for the Head-of-Sales briefing.">📋 Copy email body</button>
@@ -8835,6 +8836,94 @@
             }, 100);
         }
 
+        // Download ONLY the flagged rows (Block / Review / Warn / Duplicate)
+        // as a self-contained CSV for the Head of Sales. Unlike the Excel
+        // report (which lists every PASS row too), this is the exact
+        // hand-off file: who the contact is + why it's flagged + who owns
+        // it + what to do. Contact columns are merged from the uploaded
+        // file by row_index when an upload backs the run; the verdict
+        // columns always come from the preflight result.
+        function _pfOwnersToStr(owners) {
+            if (!owners) return '';
+            if (Array.isArray(owners)) {
+                return owners.map(o => {
+                    if (!o) return '';
+                    if (typeof o === 'string') return o;
+                    return o.name || o.email || o.owner_name || '';
+                }).filter(Boolean).join('; ');
+            }
+            return String(owners);
+        }
+        function _pfModulesToStr(mc) {
+            if (!mc) return '';
+            const parts = [];
+            if (mc.leads)    parts.push('Leads ' + mc.leads);
+            if (mc.deals)    parts.push('Deals ' + mc.deals);
+            if (mc.contacts) parts.push('Contacts ' + mc.contacts);
+            if (mc.accounts) parts.push('Accounts ' + mc.accounts);
+            return parts.join(' · ');
+        }
+        async function downloadPreflightFlaggedRows() {
+            if (!preflightLastResult || !Array.isArray(preflightLastResult.rows)) {
+                alert('Run the preflight Check first.');
+                return;
+            }
+            const flagged = preflightLastResult.rows.filter(r => r && r.verdict && r.verdict !== 'pass');
+            if (flagged.length === 0) {
+                alert('No flagged rows (Block / Review / Warn / Duplicate) in the last run — nothing to send.');
+                return;
+            }
+            // Optional contact info from the original upload, keyed by row_index.
+            const origByIdx = {};
+            if (preflightLastUpload && Array.isArray(preflightLastUpload.originalRows)) {
+                preflightLastUpload.originalRows.forEach((row, idx) => { origByIdx[idx] = row || {}; });
+            }
+            const pick = (obj, keys) => {
+                for (const k of keys) {
+                    for (const ok of Object.keys(obj)) {
+                        if (ok.toLowerCase().replace(/[^a-z]/g, '') === k) return obj[ok];
+                    }
+                }
+                return '';
+            };
+            const headers = ['Verdict','Severity','Company','Domain','Contact Name','Email','Phone','Existing Owner(s)','CS Phase','CRM Matches','Recommended Action'];
+            const quote = (v) => {
+                const s = v == null ? '' : String(v);
+                return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+            };
+            const lines = [headers.map(quote).join(',')];
+            for (const r of flagged) {
+                const orig = origByIdx[r.row_index] || {};
+                const inp = r.input || {};
+                const contactName = pick(orig, ['fullname','name','contactname'])
+                    || [pick(orig, ['firstname']), pick(orig, ['lastname'])].filter(Boolean).join(' ').trim();
+                const email = pick(orig, ['email','emailaddress']);
+                const phone = pick(orig, ['phone','mobile','mobilephone','phonenumber']);
+                lines.push([
+                    (r.verdict || '').toUpperCase(),
+                    r.executive_severity || '',
+                    inp.company_name || pick(orig, ['companyname','company']) || '',
+                    inp.domain || pick(orig, ['domain','website']) || '',
+                    contactName,
+                    email,
+                    phone,
+                    _pfOwnersToStr(r.owners),
+                    r.lifecycle_state || '',
+                    _pfModulesToStr(r.module_counts),
+                    r.executive_action || r.suggested_action || '',
+                ].map(quote).join(','));
+            }
+            const csvBlob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+            const baseName = (preflightLastUpload && preflightLastUpload.fileName ? preflightLastUpload.fileName : 'preflight').replace(/\.[^.]+$/, '');
+            const outName = baseName + '__FLAGGED__' + flagged.length + '.csv';
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(csvBlob);
+            a.download = outName;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+        }
+
         function clearPreflight() {
             document.getElementById('preflightInput').value = '';
             document.getElementById('preflightParsedCount').textContent = '';
@@ -8851,6 +8940,8 @@
             preflightLastResult = null;
             const exportBtn = document.getElementById('preflightExportPassBtn');
             if (exportBtn) exportBtn.classList.add('hidden');
+            const flaggedBtn = document.getElementById('preflightExportFlaggedBtn');
+            if (flaggedBtn) flaggedBtn.classList.add('hidden');
         }
 
         // Replit's gateway returns HTTP 504 if a single request runs past
@@ -9025,6 +9116,20 @@
                         exportBtn.textContent = '⬇ Download ' + passCount + ' PASS row(s) as CSV';
                     } else {
                         exportBtn.classList.add('hidden');
+                    }
+                }
+                // Flagged-rows button — show whenever the run produced any
+                // Block/Review/Warn/Duplicate row (works for typed-in runs
+                // too; contact columns are just blank without an upload).
+                const flaggedBtn = document.getElementById('preflightExportFlaggedBtn');
+                if (flaggedBtn) {
+                    const s = (data && data.summary) || {};
+                    const flaggedCount = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0);
+                    if (flaggedCount > 0) {
+                        flaggedBtn.classList.remove('hidden');
+                        flaggedBtn.textContent = '⚑ Download ' + flaggedCount + ' flagged row(s) — for Head of Sales';
+                    } else {
+                        flaggedBtn.classList.add('hidden');
                     }
                 }
             } catch (e) {

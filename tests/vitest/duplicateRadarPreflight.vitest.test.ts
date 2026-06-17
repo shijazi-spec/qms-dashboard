@@ -264,8 +264,11 @@ describe("resolveCompany", () => {
   test("normalises a company name", () => {
     expect(resolveCompany({ company_name: "Schlumberger SLB" })).toMatch(/schlumberger/);
   });
-  test("drops names with <5 normalised chars", () => {
-    expect(resolveCompany({ company_name: "ABC" })).toBeNull();
+  test("drops names with <3 normalised chars", () => {
+    expect(resolveCompany({ company_name: "AB" })).toBeNull();
+  });
+  test("keeps 3-char brand names (STC/PIF/NDMC) so they attempt a match", () => {
+    expect(resolveCompany({ company_name: "STC" })).not.toBeNull();
   });
   test("returns null when missing", () => {
     expect(resolveCompany({})).toBeNull();

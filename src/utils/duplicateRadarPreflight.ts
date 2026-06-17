@@ -581,12 +581,15 @@ export interface PreflightClusterRow {
    */
   has_active_lead?: boolean;
   /**
-   * True when the cluster contains at least one record whose
-   * layout_name = 'Corporate Sales (WalaPlus Layout)' OR account_type
-   * / lead_type = 'Customer'. Marketplace and merchant records are
-   * OUT OF SCOPE for the Duplicate Radar — when a cluster has zero
-   * corporate records the Preflight treats the match as a non-match
-   * (PASS) so the vendor list isn't graded against marketplace rules.
+   * True when the cluster contains at least one corporate Lead/Deal/Account
+   * — i.e. a record NOT on a merchant layout (see MERCHANT_LAYOUT_NAMES:
+   * "Marketplace" / "Partner Accounts"). Scope is INVERTED: everything is
+   * corporate unless explicitly merchant, so Corporate-Accounts, Standard-
+   * layout records and legacy marker-less rows all count. Contacts are
+   * deliberately NOT counted here (Standard layout = no B2B/merchant
+   * signal). When a cluster has zero corporate Lead/Deal/Account the
+   * Preflight treats the match as out-of-scope (PASS) so the vendor list
+   * isn't graded against marketplace rules.
    */
   has_corporate_records?: boolean;
   /**
@@ -922,13 +925,20 @@ export function classifyPreflightRows(input: {
     } else if (r.verdict === "warn") {
       label = "Past CS cool-off — Sales may re-engage with CS sign-off";
     } else if (r.verdict === "duplicate") {
-      // Use the executive_severity we just stamped — 'high' = real
-      // active deal (has_active_deal=true), 'medium' = either no deal
-      // or only closed/lost deals. This keeps the email's top-reasons
-      // bucket honest with the per-row text.
-      label = r.executive_severity === "high"
-        ? "Active deal already in pipeline — assign to existing owner"
-        : "Existing company in CRM — coordinate with current owner";
+      // Key off the per-row executive_action text so the summary bucket
+      // matches exactly what the row says — active LEAD rejects and active
+      // DEAL warnings are distinct motions and must not collapse into one
+      // "active deal" label (they did before, mislabeling lead rejects).
+      const ea = (r.executive_action || "").toUpperCase();
+      if (ea.startsWith("REJECT — ACTIVE LEAD") || ea.includes("ACTIVE LEAD ALREADY IN PIPELINE")) {
+        label = "Active lead already in pipeline — SDR working it, do NOT re-import";
+      } else if (ea.includes("ACTIVE SALES DEAL")) {
+        label = "Active deal already in pipeline — assign to existing owner";
+      } else if (ea.includes("PRIOR LOST OPPORTUNITY")) {
+        label = "Prior lost opportunity — Sales may re-engage; link to existing Account";
+      } else {
+        label = "Existing company in CRM — coordinate with current owner";
+      }
     } else {
       label = "Other";
     }
@@ -1361,6 +1371,11 @@ export async function runPreflight(input: {
   {
     const ids = new Set<number>();
     for (const c of clustersByDomain.values()) ids.add(c.id);
+    // 2026-06-17 — fuzzy-domain (PATH 1B) matches MUST be enriched too,
+    // otherwise a row matched only via the fuzzy fallback gets
+    // has_corporate_records=false and is silently scoped-out to PASS
+    // (the verdict gate treats missing enrichment as out-of-scope).
+    for (const c of clustersByDomainFuzzy.values()) ids.add(c.id);
     for (const c of clustersByPhone.values()) ids.add(c.id);
     for (const c of companyMatchByRow.values()) ids.add(c.id);
     if (ids.size > 0) {
@@ -1385,12 +1400,13 @@ export async function runPreflight(input: {
         account_name_link: string | null;
       }>(
         // Sarah 2026-06-17 — three things this query does:
-        // (1) Corporate-scope filter — only records whose
-        //     layout_name = 'Corporate Sales (WalaPlus Layout)' OR
-        //     account_type/lead_type = 'Customer' count toward the
-        //     active/lead/deal flags and module counts. Marketplace
-        //     and merchant records are OUT OF SCOPE for the Duplicate
-        //     Radar and must not influence the verdict.
+        // (1) Corporate-scope filter (INVERTED 2026-06-17) — a record is
+        //     corporate UNLESS it is on a merchant layout
+        //     (MERCHANT_LAYOUT_NAMES: "Marketplace" / "Partner Accounts").
+        //     So Corporate-Accounts, Corporate Sales, Standard-layout and
+        //     legacy marker-less records all count; only explicit merchant
+        //     Leads/Deals/Accounts are OUT OF SCOPE. has_corporate_records
+        //     ignores contacts (Standard layout = no merchant signal).
         // (2) has_active_deal — widened to NOT fire on any "lost" /
         //     "won" / "closed*" / "dropped" / "cancel" stage variant
         //     plus the CS handoff stages. Empty Stage = conservative
