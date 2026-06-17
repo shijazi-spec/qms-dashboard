@@ -44,22 +44,6 @@
                 <span id="lastCalcTimestamp" class="text-xs text-gray-400"></span>
             </div>
             <div class="flex gap-2">
-                <select id="ownerFilter" class="border rounded px-3 py-2 text-sm" data-on-change="loadKPIs">
-                    <option value="" data-i18n="kpis.all_owners">All Owners</option>
-                    <option value="quality_manager">Sarah (Quality Manager)</option>
-                    <option value="grc_manager">Maram (GRC Manager)</option>
-                    <option value="grq_specialist">AlHanouf (GRQ Specialist)</option>
-                    <option value="legal_specialist">Ali Fahad (Legal Specialist)</option>
-                    <option value="sdr_team">SDR Team</option>
-                    <option value="sales_team">Sales Team</option>
-                    <option value="shared">GRQ Team (Shared)</option>
-                </select>
-                <select id="statusFilter" class="border rounded px-3 py-2 text-sm" data-on-change="loadKPIs" data-testid="select-status-filter">
-                    <option value="" data-i18n="common.all_statuses">All Statuses</option>
-                    <option value="green">On Track</option>
-                    <option value="amber">At Risk</option>
-                    <option value="red">Off Track</option>
-                </select>
                 <button data-on-click="navigateTo" data-args="[&quot;/api/kpis/export-xlsx&quot;]" class="border border-emerald-700 text-emerald-700 px-3 py-2 rounded text-sm hover:bg-emerald-50 flex items-center gap-1" data-testid="button-export-xlsx" title="Multi-sheet workbook by category">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Excel
@@ -139,7 +123,23 @@
         <div class="bg-white rounded-xl shadow">
             <div class="p-4 border-b flex justify-between items-center">
                 <h2 class="font-semibold text-gray-900" data-i18n="kpis.kpi_catalog">KPI Catalog</h2>
-                <div class="flex gap-2">
+                <div class="flex gap-2 items-center flex-wrap">
+                    <select id="ownerFilter" class="border rounded px-2 py-1 text-sm" data-on-change="loadKPIs">
+                        <option value="" data-i18n="kpis.all_owners">All Owners</option>
+                        <option value="quality_manager">Sarah (Quality Manager)</option>
+                        <option value="grc_manager">Maram (GRC Manager)</option>
+                        <option value="grq_specialist">AlHanouf (GRQ Specialist)</option>
+                        <option value="legal_specialist">Ali Fahad (Legal Specialist)</option>
+                        <option value="sdr_team">SDR Team</option>
+                        <option value="sales_team">Sales Team</option>
+                        <option value="shared">GRQ Team (Shared)</option>
+                    </select>
+                    <select id="statusFilter" class="border rounded px-2 py-1 text-sm" data-on-change="loadKPIs" data-testid="select-status-filter">
+                        <option value="" data-i18n="common.all_statuses">All Statuses</option>
+                        <option value="green">On Track</option>
+                        <option value="amber">At Risk</option>
+                        <option value="red">Off Track</option>
+                    </select>
                     <input type="text" id="searchInput" placeholder="Search KPIs..." class="border rounded px-3 py-1 text-sm" data-on-input="filterKPIs">
                     <select id="kpiSort" class="border rounded px-2 py-1 text-sm" data-on-change="filterKPIs" title="Sort by name" aria-label="Sort KPIs by name">
                         <option value="">Sort: Default</option>

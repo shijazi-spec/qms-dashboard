@@ -129,6 +129,15 @@ export const kpiRoutes = [
           } else {
             kpis = await getAllKPIDefinitions();
           }
+          // Attach the latest recorded value to each KPI so owner-filtered cards
+          // show real numbers (parity with /api/kpis/summary, which the "All"
+          // view uses). Without this, selecting an owner blanks every value.
+          kpis = await Promise.all(
+            (kpis as any[]).map(async (k) => ({
+              ...k,
+              latestValue: k?.id ? await getLatestKPIValue(k.id) : null,
+            })),
+          );
           return c.json(kpis);
         } catch (error) {
           safeLogger.error("Error fetching KPIs:", error);
