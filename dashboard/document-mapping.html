@@ -1121,7 +1121,7 @@
             var rt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
             if (!confirm(rt(confirmKey, fallbackMsg))) return;
             try {
-                var r = await fetch('/api/compliance/auto-mapped/bulk-action', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }) });
+                var r = await fetch('/api/compliance/auto-mapped/bulk-action?action=' + encodeURIComponent(action), { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }) });
                 var d = await r.json().catch(function () { return {}; });
                 if (!r.ok) { alert(rt('docmap.review_error', 'Failed') + (d.error ? ': ' + d.error : '')); return; }
                 alert((d.affected || 0) + ' ' + rt('docmap.bulk_applied', 'link(s) updated.'));

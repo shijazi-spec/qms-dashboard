@@ -2136,7 +2136,18 @@ export const complianceRoutes = [
           } catch {
             body = {};
           }
-          const action = String(body.action || "");
+          // Accept the action from the JSON body OR the query string (robust
+          // against a runtime body-parse edge case) and normalise loosely so a
+          // stale/variant frontend ('confirm…' / 'reject…') still works — the
+          // two actions are unambiguous by keyword.
+          const raw = String(
+            body.action || new URL(c.req.url).searchParams.get("action") || "",
+          ).toLowerCase();
+          const action = raw.includes("confirm")
+            ? "confirm-satisfied"
+            : raw.includes("reject")
+              ? "reject-missing"
+              : "";
           if (action !== "confirm-satisfied" && action !== "reject-missing") {
             return c.json({ error: "action must be confirm-satisfied or reject-missing" }, 400);
           }
