@@ -387,14 +387,81 @@ export function resolvePhone(row: PreflightInputRow): string | null {
 }
 
 /**
- * Normalized company name (≥5 chars) for the fuzzy-match fallback path.
- * Below 5 chars the trigram similarity threshold collapses to noise.
+ * Normalized company name for the fuzzy-match fallback path.
+ *
+ * Sarah 2026-06-17 — char floor lowered from 5 to 3 so well-known
+ * short brand names ("STC", "PIF", "NDMC", "SDB") attempt a match
+ * instead of silently falling through to PASS. The trigram threshold
+ * is also lowered (PATH 3 SQL drops from 0.6 to 0.55) so 3-character
+ * names actually find their cluster. Empty / 1-2 char garbage is
+ * still dropped.
  */
 export function resolveCompany(row: PreflightInputRow): string | null {
   const raw = (row.company_name ?? "").trim();
   if (!raw) return null;
   const normalized = normalizeCompanyName(raw);
-  return normalized && normalized.length >= 5 ? normalized : null;
+  return normalized && normalized.length >= 3 ? normalized : null;
+}
+
+/**
+ * Free-mail / public email domains. Rows whose email is in this set
+ * never make a usable PATH 1 (domain) lookup — domain points to the
+ * email provider, not the company. Sarah 2026-06-17 — even if every
+ * lookup path misses, these rows must NOT auto-PASS: the operator
+ * must verify by company name or phone before importing. The list is
+ * a superset of what's commonly seen on Saudi vendor lists; kept here
+ * (not env-tunable) so the rule travels with the code.
+ */
+const FREE_MAIL_DOMAINS: ReadonlySet<string> = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "yahoo.com",
+  "ymail.com",
+  "rocketmail.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "aol.com",
+  "protonmail.com",
+  "proton.me",
+  "mail.ru",
+  "yandex.com",
+  "yandex.ru",
+  "msn.com",
+  "qq.com",
+  "163.com",
+  "126.com",
+]);
+
+/**
+ * Strategic-domain suffixes (Saudi government and education). Sarah
+ * 2026-06-17 — even when no CRM cluster matches, any vendor row whose
+ * resolved domain ends in one of these gets a REVIEW verdict so it
+ * routes through the Head of Sales before SDR touches it. These
+ * accounts are too strategic to silently auto-import.
+ */
+const STRATEGIC_TLD_SUFFIXES: ReadonlyArray<string> = [
+  ".gov.sa",
+  ".edu.sa",
+];
+
+/** True iff the input row's email domain is a free-mail provider. */
+export function isFreeMailRow(row: PreflightInputRow): boolean {
+  const e = (row.email ?? "").trim().toLowerCase();
+  if (!e || !e.includes("@")) return false;
+  const dom = e.split("@").pop() || "";
+  return FREE_MAIL_DOMAINS.has(dom);
+}
+
+/** True iff the resolved domain ends in a strategic-account suffix. */
+export function isStrategicDomain(domain: string | null | undefined): boolean {
+  if (!domain) return false;
+  const d = String(domain).trim().toLowerCase();
+  if (!d) return false;
+  return STRATEGIC_TLD_SUFFIXES.some((s) => d.endsWith(s));
 }
 
 export interface PreflightClusterRow {
@@ -540,6 +607,75 @@ export function classifyPreflightRows(input: {
       matched.cluster.has_corporate_records === false;
 
     if (!matched || isOutOfScope) {
+      // Sarah 2026-06-17 safety shields — before letting a row PASS,
+      // check whether it falls into one of two "verify-by-hand" buckets:
+      //
+      // (1) Free-mail email rows (gmail / hotmail / yahoo / etc.). Even
+      //     if no CRM cluster matched, an @gmail.com row whose Company
+      //     Name reads "STC" or "Al Rajhi Bank" almost certainly belongs
+      //     to an existing customer — the lookup just failed because the
+      //     company's records don't have THIS mobile number indexed.
+      //     Pushes the verdict to REVIEW so the HoS / SDR pair check it
+      //     by company / phone before importing.
+      //
+      // (2) Strategic Saudi domains (.gov.sa, .edu.sa). These are
+      //     ministries, universities, sovereign-funded institutions —
+      //     even if not in CRM yet, they're too strategic to silently
+      //     auto-import. REVIEW + route through Head of Sales first.
+      //
+      // Out-of-scope (marketplace/merchant) still PASSes — those rules
+      // aren't ours to enforce.
+      const inputDomain = domain;
+      const isFreeMail = !isOutOfScope && isFreeMailRow(row);
+      const isStrategic = !isOutOfScope && isStrategicDomain(inputDomain);
+      if (isFreeMail) {
+        const co = (row.company_name || "").trim();
+        const coPart = co ? ` Company on the row: "${co}".` : "";
+        out.push({
+          row_index: i,
+          ref,
+          input: { domain: inputDomain, company_name: row.company_name ?? null },
+          verdict: "review",
+          cluster_id: null,
+          lifecycle_state: null,
+          sector: null,
+          arr_exposure: null,
+          owners: [],
+          reason: "free_mail_email_unverified",
+          suggested_action:
+            "Free-mail email (gmail/hotmail/yahoo/…). Cannot match by domain. Verify the company in CRM by name and phone before importing — likely belongs to an existing customer / lead.",
+          executive_action:
+            `REVIEW — free-mail email; cannot match by domain.${coPart} Check CRM by company name and phone before SDR contact (existing customer / active lead very likely).`,
+          executive_severity: "medium",
+          module_counts: null,
+          matched_via: null,
+        });
+        summary.review++;
+        continue;
+      }
+      if (isStrategic) {
+        out.push({
+          row_index: i,
+          ref,
+          input: { domain: inputDomain, company_name: row.company_name ?? null },
+          verdict: "review",
+          cluster_id: null,
+          lifecycle_state: null,
+          sector: null,
+          arr_exposure: null,
+          owners: [],
+          reason: "strategic_account_no_match",
+          suggested_action:
+            "Strategic Saudi Government / Education entity (.gov.sa / .edu.sa). Route through Head of Sales before any SDR contact.",
+          executive_action:
+            "REVIEW — STRATEGIC Government / Education entity. No CRM cluster matched yet but these accounts are too strategic to auto-import. Route to Head of Sales for go/no-go before SDR contact.",
+          executive_severity: "high",
+          module_counts: null,
+          matched_via: null,
+        });
+        summary.review++;
+        continue;
+      }
       out.push({
         row_index: i,
         ref,
@@ -881,6 +1017,62 @@ export async function runPreflight(input: {
     }
   }
 
+  // PATH 1B — Sarah 2026-06-17 — Domain fuzzy fallback. The exact-
+  // domain lookup misses on variants like alrajhi-capital.sa vs
+  // alrajhi.com.sa, www.foo.com vs foo.com, sdb.gov.sa vs sdb-bank.com.sa.
+  // For every row that didn't hit PATH 1 exact, do a single batched
+  // pg_trgm lookup at similarity ≥ 0.7 against duplicate_clusters.domain
+  // (GIN index already exists on company_name_normalized, but the
+  // similarity operator still works without a dedicated index — it's
+  // bounded by the small per-batch domain set, so a seq scan is fine).
+  // The match is treated as `matched_via = "domain"` downstream so the
+  // verdict ladder behaves identically to an exact hit.
+  const clustersByDomainFuzzy = new Map<number, PreflightClusterRow>();
+  const fuzzyDomainsNeeded: Array<{ idx: number; domain: string }> = [];
+  for (const [i, d] of domainByRow) {
+    if (clustersByDomain.has(d)) continue;
+    fuzzyDomainsNeeded.push({ idx: i, domain: d });
+  }
+  if (fuzzyDomainsNeeded.length > 0) {
+    const names = fuzzyDomainsNeeded.map((x) => x.domain);
+    const q = await queryWithTimeout<
+      PreflightClusterRow & { _input_idx: number }
+    >(
+      `SELECT v.ord AS _input_idx,
+              dc.id, dc.domain,
+              dc.company_name,
+              dc.cs_overlap_verdict,
+              dc.pipeline_lifecycle_state,
+              dc.client_sector,
+              dc.arr_exposure,
+              dc.owners_involved,
+              dc.total_leads, dc.total_deals, dc.total_contacts, dc.total_accounts
+         FROM unnest($1::text[]) WITH ORDINALITY AS v(d, ord)
+         LEFT JOIN LATERAL (
+           SELECT ${CLUSTER_SELECT_COLS}
+             FROM duplicate_clusters
+            WHERE status IN ('active','resolved')
+              AND domain IS NOT NULL
+              AND domain <> ''
+              AND domain % v.d
+            ORDER BY similarity(domain, v.d) DESC
+            LIMIT 1
+         ) dc ON true
+        WHERE dc.id IS NOT NULL`,
+      [names],
+      [`SELECT set_limit(0.7)`],
+    );
+    if (q && Array.isArray(q.rows)) {
+      for (const row of q.rows) {
+        const inputIdx = Number(row._input_idx) - 1;
+        const original = fuzzyDomainsNeeded[inputIdx];
+        if (!original) continue;
+        const { _input_idx, ...cluster } = row;
+        clustersByDomainFuzzy.set(original.idx, cluster as PreflightClusterRow);
+      }
+    }
+  }
+
   // PATH 2 — Batch lookup by phone for the rows that didn't hit on domain.
   // Joins through duplicate_records → duplicate_clusters because the phone
   // lives on the record row, not the cluster row.
@@ -888,6 +1080,10 @@ export async function runPreflight(input: {
   for (const [i, p] of phoneByRow) {
     const d = domainByRow.get(i);
     if (d && clustersByDomain.has(d)) continue;
+    // Sarah 2026-06-17 — also skip rows that already matched via the
+    // PATH 1B domain-fuzzy fallback so we don't pay the PATH 2 cost
+    // unnecessarily.
+    if (clustersByDomainFuzzy.has(i)) continue;
     phonesNeeded.add(p);
   }
   const clustersByPhone = new Map<string, PreflightClusterRow>();
@@ -945,6 +1141,9 @@ export async function runPreflight(input: {
   for (const [i, cname] of companyByRow) {
     const d = domainByRow.get(i);
     if (d && clustersByDomain.has(d)) continue;
+    // Sarah 2026-06-17 — skip rows already matched by PATH 1B
+    // (domain fuzzy) so PATH 3 doesn't double-resolve.
+    if (clustersByDomainFuzzy.has(i)) continue;
     const p = phoneByRow.get(i);
     if (p && clustersByPhone.has(p)) continue;
     namesNeeded.push({ idx: i, name: cname });
@@ -1006,7 +1205,7 @@ export async function runPreflight(input: {
          ) dc ON true
         WHERE dc.id IS NOT NULL`,
       [names],
-      [`SELECT set_limit(0.6)`],
+      [`SELECT set_limit(0.55)`],
     );
     if (q && Array.isArray(q.rows)) {
       for (const row of q.rows) {
@@ -1033,7 +1232,7 @@ export async function runPreflight(input: {
               WHERE status IN ('active','resolved')
                 AND company_name_normalized IS NOT NULL
                 AND company_name_normalized != ''
-                AND similarity(company_name_normalized, $1) >= 0.6
+                AND similarity(company_name_normalized, $1) >= 0.55
               ORDER BY similarity(company_name_normalized, $1) DESC
               LIMIT 1`,
             [name],
@@ -1191,13 +1390,14 @@ export async function runPreflight(input: {
         c.cs_owner = v?.cs_owner ?? null;
       };
       for (const c of clustersByDomain.values()) apply(c);
+      for (const c of clustersByDomainFuzzy.values()) apply(c);
       for (const c of clustersByPhone.values()) apply(c);
       for (const c of companyMatchByRow.values()) apply(c);
     }
   }
 
   // Build the per-row match map by walking the fallback chain in priority
-  // order: domain → phone → company.
+  // order: domain exact → domain fuzzy → phone → company.
   const matchByRow = new Map<number, PreflightRowMatch>();
   for (let i = 0; i < examineCount; i++) {
     const d = domainByRow.get(i);
@@ -1207,6 +1407,13 @@ export async function runPreflight(input: {
         matchByRow.set(i, { cluster: c, matched_via: "domain" });
         continue;
       }
+    }
+    // PATH 1B fuzzy domain — same matched_via as exact so downstream
+    // reads / verdict ladder behave identically.
+    const fuzzy = clustersByDomainFuzzy.get(i);
+    if (fuzzy) {
+      matchByRow.set(i, { cluster: fuzzy, matched_via: "domain" });
+      continue;
     }
     const p = phoneByRow.get(i);
     if (p) {
