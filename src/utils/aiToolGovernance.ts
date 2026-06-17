@@ -403,6 +403,15 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     entityType: 'crm_lookup',
     buildPreview: (p: any) => `Lookup: ${trim(p?.query, 80)}`,
   },
+  'check-domains-batch': {
+    toolId: 'check-domains-batch',
+    label: 'Batch domain CRM-presence check (many domains at once)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only batched query over synced data; creates nothing
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only batched domain presence check over synced CRM data'],
+    entityType: 'crm_lookup',
+    buildPreview: (p: any) => `Batch domain check: ${Array.isArray(p?.domains) ? p.domains.length : 0} domains`,
+  },
   'cs-lifecycle-status': {
     toolId: 'cs-lifecycle-status',
     label: 'CS Lifecycle status (deals by phase / renewal)',
