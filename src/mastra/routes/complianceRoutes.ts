@@ -1,4 +1,40 @@
 import { logger as safeLogger } from "../../utils/logger";
+
+// Boot-time table creation (2026-06-17). document_framework_scans and
+// obligation_gap_recommendations are otherwise created LAZILY (on first use
+// of the document-mapping / gap-advisor features). That leaves the DEV
+// database missing them, so Replit's publish-time dev→prod schema sync
+// generates `DROP TABLE … CASCADE` to make prod match dev — permanent data
+// loss (e.g. 420 framework-scan rows). Creating them at boot, the same way
+// the Duplicate Radar tables are (duplicateRadarRoutes.ts), keeps every
+// environment's schema in lockstep so no destructive diff is ever produced.
+// Both inits are idempotent (CREATE TABLE IF NOT EXISTS); this module is
+// registered at boot in mastra/index.ts.
+void (async () => {
+  try {
+    const { initPolicyMappingBridge } = await import(
+      "../../utils/policyMappingBridge"
+    );
+    await initPolicyMappingBridge();
+  } catch (err) {
+    safeLogger.error(
+      "Failed to initialize document_framework_scans table at boot:",
+      err,
+    );
+  }
+  try {
+    const { initGapRecommendationsTable } = await import(
+      "../../utils/gapRecommendationAdvisor"
+    );
+    await initGapRecommendationsTable();
+  } catch (err) {
+    safeLogger.error(
+      "Failed to initialize obligation_gap_recommendations table at boot:",
+      err,
+    );
+  }
+})();
+
 export const complianceRoutes = [
   {
     path: "/api/compliance/regulations",
