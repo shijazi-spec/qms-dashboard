@@ -509,28 +509,45 @@
                 <button data-on-click="clearSearch" data-testid="button-clear-search" class="text-sm text-gray-500 hover:text-gray-700">Clear All</button>
             </div>
             <div id="searchResults" class="hidden">
-                <div class="flex justify-between items-center mb-4">
+                <div class="flex justify-between items-center mb-2">
                     <div class="flex items-center gap-2">
                         <h4 class="text-lg font-semibold text-gray-900">Search Results</h4>
                         <span id="searchResultsCount" class="px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">0 records</span>
                     </div>
                     <div class="text-sm text-gray-500" id="searchClusterInfo">Found in 0 clusters</div>
                 </div>
+                <!-- Cluster-type legend — explains the difference between a
+                     real Domain cluster (mergeable) and a Solo Contact stub
+                     (legitimately distinct person; LINK to Account is the
+                     right action, NOT merge). Per the contact-merge rule:
+                     two contacts only count as duplicates when ≥2 of
+                     {email, phone, full name} match. -->
+                <div id="searchClusterLegend" class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4 text-xs text-slate-800">
+                    <div class="font-semibold mb-1">Cluster types in the results</div>
+                    <ul class="space-y-1">
+                        <li><span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700 me-1">Domain</span> — the main cluster for that company. Records here have already been grouped as real duplicates. Click to open the merge view.</li>
+                        <li><span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-200 text-gray-700 me-1">Solo contact</span> — a single contact whose email shares the company domain BUT is a different person (different name / phone / email). Per the contact-merge rule (≥2 of email/phone/name) they're NOT duplicates and must not be merged. The correct action when their <code class="bg-gray-100 px-1 rounded">Account_Name</code> is empty is to <strong>LINK</strong> them to the company's Account (Cross-Module tab → Contact ↔ Account).</li>
+                        <li><span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 me-1">Lead</span> · <span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700 me-1">Deal</span> · <span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700 me-1">Account</span> — module breakdown of each cluster's records. The badge tells you what's inside before you click.</li>
+                    </ul>
+                </div>
                 <div id="searchClustersSection" class="mb-6">
                     <h5 class="text-md font-medium text-gray-700 mb-3">Related Clusters</h5>
                     <div id="searchClustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
                 </div>
-                <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="bg-white rounded-lg shadow overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Name</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
-                                <th scope="col" class="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase">Similarity</th>
+                                <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase">Name</th>
+                                <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase">Company</th>
+                                <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase">Domain</th>
+                                <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase">Email</th>
+                                <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Mobile / Phone / Corporate phone — whichever the record has">Phone</th>
+                                <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="Lead_Status (Leads) · Stage (Deals) · or blank (Contacts/Accounts)">Status / Stage</th>
+                                <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase">Owner</th>
+                                <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase" title="The cluster this record belongs to. Click to open the cluster modal.">Cluster</th>
+                                <th scope="col" class="px-3 py-3 text-start text-xs font-medium text-gray-500 uppercase">Conf.</th>
                             </tr>
                         </thead>
                         <tbody id="searchResultsTable" class="bg-white divide-y divide-gray-200"></tbody>
@@ -7220,16 +7237,97 @@
                 document.getElementById('searchResultsCount').textContent = WalaPlusI18n.t('dyn.duplicates.search_results_count', { n: _fn(data.records.length) });
                 document.getElementById('searchClusterInfo').textContent = WalaPlusI18n.t('dyn.duplicates.search_clusters_count', { n: _fn(data.clusters?.length || 0) });
 
-                document.getElementById('searchClustersGrid').innerHTML = (data.clusters || []).map(c => `
-                    <div class="bg-gray-50 border rounded-lg p-3 cursor-pointer hover:bg-gray-100" data-on-click="showClusterDetails" data-args="[${c.id}]">
-                        <div class="font-medium">${escapeHtml(c.domain)}</div>
-                        <div class="text-xs text-gray-500">${escapeHtml(WalaPlusI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) }))} | ${_fn(c.confidence_score)}%</div>
-                    </div>
-                `).join('');
+                // ── Cluster cards ───────────────────────────────────────
+                // Each card now carries:
+                //   • a Type chip — "Domain" for the canonical company
+                //     cluster vs "Solo contact" for a single-contact stub
+                //     (.solo-suffixed domain — these are not mergeable per
+                //     the contact-merge rule, they're distinct people).
+                //   • a module-mix chip strip — L · D · C · A counts so the
+                //     operator sees what's inside before clicking.
+                //   • record total + confidence + a clear "Open" affordance.
+                const _isSoloContactCluster = (c) => typeof c.domain === 'string' && /\.solo$/i.test(c.domain);
+                const _clusterTypeChip = (c) => _isSoloContactCluster(c)
+                    ? '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-200 text-gray-700" title="A single contact whose email shares the company domain but is a different person. Per the contact-merge rule (≥2 of email/phone/name) these are NOT duplicates — link to the company Account instead of merging.">Solo contact</span>'
+                    : '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700" title="The main cluster for this company. Records inside have been grouped as real duplicates.">Domain</span>';
+                const _moduleChips = (c) => {
+                    const chips = [];
+                    if ((c.total_leads || 0) > 0)    chips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 me-1">L ' + (c.total_leads||0) + '</span>');
+                    if ((c.total_deals || 0) > 0)    chips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700 me-1">D ' + (c.total_deals||0) + '</span>');
+                    if ((c.total_contacts || 0) > 0) chips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-700 me-1">C ' + (c.total_contacts||0) + '</span>');
+                    if ((c.total_accounts || 0) > 0) chips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700 me-1">A ' + (c.total_accounts||0) + '</span>');
+                    return chips.length > 0 ? chips.join('') : '<span class="text-[10px] text-gray-400">no module breakdown</span>';
+                };
+                document.getElementById('searchClustersGrid').innerHTML = (data.clusters || []).map(c => {
+                    // Trim the .solo suffix from the display label — keeps
+                    // the operator's eye on the email itself, not the marker.
+                    const displayDomain = _isSoloContactCluster(c)
+                        ? String(c.domain).replace(/^contact:/, '').replace(/\.solo$/i, '')
+                        : c.domain;
+                    return ''
+                        + '<div class="bg-white border border-gray-200 rounded-lg p-3 cursor-pointer hover:bg-gray-50 hover:border-blue-300 transition" data-on-click="showClusterDetails" data-args="[' + Number(c.id) + ']" title="Open cluster #' + Number(c.id) + ' — merge view, per-record recommendations, snapshots, undo">'
+                        +   '<div class="flex items-center justify-between gap-2 mb-1">'
+                        +     _clusterTypeChip(c)
+                        +     '<span class="text-[10px] text-gray-400 font-mono">#' + Number(c.id) + '</span>'
+                        +   '</div>'
+                        +   '<div class="font-medium text-sm text-gray-900 break-all">' + escapeHtml(displayDomain || '—') + '</div>'
+                        +   (c.company_name && c.company_name !== c.domain ? '<div class="text-[11px] text-gray-500 mt-0.5">' + escapeHtml(c.company_name) + '</div>' : '')
+                        +   '<div class="mt-2 flex flex-wrap items-center gap-1">' + _moduleChips(c) + '</div>'
+                        +   '<div class="mt-2 flex items-center justify-between text-xs text-gray-500">'
+                        +     '<span>' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) })) + '</span>'
+                        +     '<span class="text-blue-600 font-medium">Open →</span>'
+                        +   '</div>'
+                        + '</div>';
+                }).join('');
 
-                document.getElementById('searchResultsTable').innerHTML = data.records.map(r => `
-                    <tr><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.record_type)}</span></td><td class="px-4 py-3 text-sm">${escapeHtml(r.record_name)}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.company_name||'-')}</td><td class="px-4 py-3 text-sm text-blue-600">${escapeHtml(r.domain||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.email||'-')}</td><td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="confidence-${getConfidenceLevel(r.confidence_score)} px-2 py-1 rounded text-xs">${r.confidence_score}%</span></td></tr>
-                `).join('');
+                // ── Record rows ─────────────────────────────────────────
+                // Adds Phone + Status/Stage + a Cluster button that opens
+                // the cluster modal directly (operator was previously
+                // having to scroll back up to the cluster card). The
+                // confidence column drops to a compact "Conf." header.
+                const _statusOrStage = (r) => {
+                    // Leads use `status` (Lead_Status). Deals use `stage`.
+                    // Both stored on the duplicate_records row.
+                    if (r.record_type === 'lead'  && r.status) return r.status;
+                    if (r.record_type === 'deal'  && r.stage)  return r.stage;
+                    if (r.record_type === 'deal'  && r.status) return r.status;
+                    if (r.record_type === 'lead'  && r.stage)  return r.stage;
+                    return '';
+                };
+                const _phoneCell = (r) => {
+                    const p = (r.phone || r.mobile || '').toString().trim();
+                    return p ? '<span class="font-mono text-[11px]">' + escapeHtml(p) + '</span>' : '<span class="text-gray-300">—</span>';
+                };
+                const _typeBadge = (t) => {
+                    const map = {
+                        lead:    'bg-amber-100 text-amber-700',
+                        deal:    'bg-purple-100 text-purple-700',
+                        contact: 'bg-gray-100 text-gray-700',
+                        account: 'bg-green-100 text-green-700',
+                    };
+                    const cls = map[t] || 'bg-gray-100 text-gray-700';
+                    return '<span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase ' + cls + '">' + escapeHtml(t || '—') + '</span>';
+                };
+                document.getElementById('searchResultsTable').innerHTML = data.records.map(r => {
+                    const stat = _statusOrStage(r);
+                    return ''
+                        + '<tr class="hover:bg-gray-50">'
+                        +   '<td class="px-3 py-2 text-xs">' + _typeBadge(r.record_type) + '</td>'
+                        +   '<td class="px-3 py-2 text-xs text-gray-900">' + escapeHtml(r.record_name || '—') + '</td>'
+                        +   '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(r.company_name || '—') + '</td>'
+                        +   '<td class="px-3 py-2 text-xs text-blue-700 font-mono">' + escapeHtml(r.domain || '—') + '</td>'
+                        +   '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.email || '—') + '</td>'
+                        +   '<td class="px-3 py-2 text-xs text-gray-600">' + _phoneCell(r) + '</td>'
+                        +   '<td class="px-3 py-2 text-xs text-gray-700">' + (stat ? escapeHtml(stat) : '<span class="text-gray-300">—</span>') + '</td>'
+                        +   '<td class="px-3 py-2 text-xs text-gray-600">' + escapeHtml(r.owner_name || '—') + '</td>'
+                        +   '<td class="px-3 py-2 text-xs">'
+                        +     (r.cluster_id
+                                ? '<button type="button" data-on-click="showClusterDetails" data-args="[' + Number(r.cluster_id) + ']" class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-[11px]" title="Open cluster #' + Number(r.cluster_id) + '">#' + Number(r.cluster_id) + ' →</button>'
+                                : '<span class="text-gray-300">—</span>')
+                        +   '</td>'
+                        +   '<td class="px-3 py-2 text-xs"><span class="confidence-' + getConfidenceLevel(r.confidence_score) + ' px-2 py-0.5 rounded">' + (r.confidence_score != null ? r.confidence_score : 0) + '%</span></td>'
+                        + '</tr>';
+                }).join('');
             } else {
                 document.getElementById('searchResults').classList.add('hidden');
                 document.getElementById('noSearchResults').classList.remove('hidden');
