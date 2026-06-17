@@ -684,10 +684,10 @@
                     <option value="low">Weak (<60%)</option>
                 </select>
                 <select id="statusFilter" aria-label="Filter by status" data-on-change="loadClusters" data-testid="select-status-filter" class="border rounded-lg px-3 py-2">
-                    <option value="">All Statuses</option>
-                    <option value="active">Active</option>
+                    <option value="active" selected>Active</option>
+                    <option value="all">All statuses</option>
                     <option value="resolved">Resolved</option>
-                    <option value="ignored">Ignored</option>
+                    <option value="ignored">Ignored (dismissed)</option>
                 </select>
                 <select id="layoutFilter" aria-label="Filter by Zoho layout" data-on-change="loadClusters" data-testid="select-layout-filter" class="border rounded-lg px-3 py-2 min-w-[180px]" title="Filter by Zoho layout (Corporate Accounts, Standard, Marketplace, ...)">
                     <option value="">All Layouts</option>

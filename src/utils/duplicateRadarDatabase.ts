@@ -1483,9 +1483,18 @@ function buildClusterFilterClause(
   let paramIndex = startIndex;
   let clause = "";
 
-  if (filters?.status) {
+  // 2026-06-17 — DEFAULT excludes handled clusters so resolved (merged) and
+  // ignored (dismissed) clusters never resurface in the clusters list or the
+  // per-owner drill modal (which passes no status). Explicit 'all' opts back
+  // in to every status; a specific status (active/resolved/ignored) filters
+  // to exactly that one (the audit chips still work).
+  if (filters?.status === "all") {
+    /* explicit opt-in — no status filter */
+  } else if (filters?.status) {
     clause += ` AND status = $${paramIndex++}`;
     params.push(filters.status);
+  } else {
+    clause += ` AND status NOT IN ('resolved', 'ignored')`;
   }
   if (filters?.confidence_level) {
     clause += ` AND confidence_level = $${paramIndex++}`;
@@ -2157,7 +2166,7 @@ export async function findSameDomainClusterDuplicates(opts: {
             COUNT(*)::text AS cluster_count,
             SUM(total_records)::text AS total_records
        FROM duplicate_clusters
-      WHERE status IN ('active','resolved')
+      WHERE status = 'active'
         AND domain IS NOT NULL
         AND domain <> ''
         AND domain <> '${PLACEHOLDER_CLUSTER_DOMAIN}'
@@ -2193,7 +2202,7 @@ export async function findSameDomainClusterDuplicates(opts: {
             confidence_score, status, created_at
        FROM duplicate_clusters
       WHERE domain = ANY($1::text[])
-        AND status IN ('active','resolved')
+        AND status = 'active'
       ORDER BY domain ASC, total_records DESC, id ASC`,
     [domains],
   );
@@ -2378,16 +2387,22 @@ export async function getDuplicatesByOwner(): Promise<
     total_duplicates: number;
   }>
 > {
+  // 2026-06-17 — only count records whose cluster is still ACTIVE. Resolved
+  // (merged) and ignored (dismissed) clusters are handled and must not keep
+  // inflating an owner's outstanding-duplicate count on the Owner
+  // Accountability tab.
   const result = await pool.query(`
     SELECT
-      owner_name,
-      owner_email,
-      COUNT(*) FILTER (WHERE record_type = 'lead') as lead_count,
-      COUNT(*) FILTER (WHERE record_type = 'deal') as deal_count,
+      dr.owner_name,
+      dr.owner_email,
+      COUNT(*) FILTER (WHERE dr.record_type = 'lead') as lead_count,
+      COUNT(*) FILTER (WHERE dr.record_type = 'deal') as deal_count,
       COUNT(*) as total_duplicates
-    FROM duplicate_records
-    WHERE owner_name IS NOT NULL
-    GROUP BY owner_name, owner_email
+    FROM duplicate_records dr
+    JOIN duplicate_clusters dc ON dc.id = dr.cluster_id
+    WHERE dr.owner_name IS NOT NULL
+      AND dc.status = 'active'
+    GROUP BY dr.owner_name, dr.owner_email
     ORDER BY total_duplicates DESC
   `);
 
