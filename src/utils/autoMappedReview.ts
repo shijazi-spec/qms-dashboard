@@ -65,10 +65,13 @@ export async function reviewNextBatch(
       if (!job) return;
       result.processed++;
       try {
+        // 3-vote consensus (self-consistency) for audit-grade reliability —
+        // the benchmark flagged single-pass LLM judges as prompt-sensitive.
         const v = await judgeEvidence(
           Number(job.obligation_id),
           Number(job.document_id),
           opts.judgedBy || "ai-review",
+          { votes: Number(process.env.DOCUMENT_MAPPING_JUDGE_VOTES) || 3 },
         );
         if (v.status === "satisfied") result.satisfied++;
         else if (v.status === "partial") result.partial++;

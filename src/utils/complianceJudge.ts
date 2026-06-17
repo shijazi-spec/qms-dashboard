@@ -137,7 +137,44 @@ export function parseJudgeResponse(raw: string): JudgeVerdict {
 }
 
 /**
+ * Pure: aggregate N independent judge verdicts into one (self-consistency
+ * voting). Reduces the prompt-sensitivity / sampling variance documented for
+ * LLM-as-judge. Majority status wins; ties break CONSERVATIVELY (away from
+ * 'satisfied') so multi-vote never makes confirming evidence easier than a
+ * single pass — audit-grade bias. The chosen verdict keeps the rationale +
+ * missing_aspects of a vote that matched the winning status. Exported for tests.
+ */
+export function aggregateVerdicts(verdicts: JudgeVerdict[]): JudgeVerdict {
+  if (!verdicts.length) {
+    return { status: "needs_review", rationale: "No verdicts", missing_aspects: [] };
+  }
+  if (verdicts.length === 1) return verdicts[0];
+  const counts: Record<string, number> = {};
+  for (const v of verdicts) counts[v.status] = (counts[v.status] || 0) + 1;
+  const max = Math.max(...Object.values(counts));
+  const top = Object.keys(counts).filter((s) => counts[s] === max);
+  // Conservative tie-break order (least → most favourable to confirming).
+  const conservative: EvidenceQualityStatus[] = [
+    "missing_topic",
+    "partial",
+    "needs_review",
+    "satisfied",
+  ];
+  const chosen =
+    top.length === 1 ? top[0] : conservative.find((s) => top.includes(s)) || top[0];
+  const match = verdicts.find((v) => v.status === chosen) || verdicts[0];
+  return {
+    status: chosen as EvidenceQualityStatus,
+    rationale:
+      `[${verdicts.length}-vote consensus: ${chosen} (${counts[chosen]}/${verdicts.length})] ` +
+      (match.rationale || ""),
+    missing_aspects: match.missing_aspects,
+  };
+}
+
+/**
  * End-to-end: load obligation + document, call the LLM, persist verdict.
+ * `votes` > 1 runs the judge multiple times and takes a conservative majority.
  *
  * Returns the persisted row.
  */
@@ -145,6 +182,7 @@ export async function judgeEvidence(
   obligationId: number,
   documentId: number,
   judgedBy?: string,
+  opts: { votes?: number } = {},
 ): Promise<JudgeVerdict & { persisted: boolean }> {
   const obRes = await pool.query(
     `SELECT obligation_code, title, description, evidence_requirements
@@ -236,6 +274,7 @@ export async function judgeEvidence(
   });
 
   const start = Date.now();
+  const votes = Math.max(1, Math.min(opts.votes ?? 1, 5));
   let verdict: JudgeVerdict;
   let tokensUsed: number | null = null;
   let llmError: string | null = null;
@@ -249,18 +288,26 @@ export async function judgeEvidence(
     // post-analysis hot path, so one bare call here breaks every call's
     // full pipeline.
     const { generateChatText } = await import("./openaiChatHelper");
-    const result = await generateChatText({
-      model: JUDGE_MODEL,
-      prompt,
-      maxTokens: 600,
-    });
-    verdict = parseJudgeResponse(result.text);
-    const usage: any = (result.raw as any)?.usage || {};
-    tokensUsed =
-      Number(usage.totalTokens || usage.total_tokens) ||
-      (Number(usage.promptTokens || usage.prompt_tokens) || 0) +
-        (Number(usage.completionTokens || usage.completion_tokens) || 0) ||
-      null;
+    // Self-consistency: run the judge `votes` times concurrently and take a
+    // conservative majority (see aggregateVerdicts) to damp the documented
+    // prompt-sensitivity of LLM judges.
+    const results = await Promise.all(
+      Array.from({ length: votes }, () =>
+        generateChatText({ model: JUDGE_MODEL, prompt, maxTokens: 600 }),
+      ),
+    );
+    const verdicts = results.map((r) => parseJudgeResponse(r.text));
+    verdict = aggregateVerdicts(verdicts);
+    let tot = 0;
+    for (const r of results) {
+      const usage: any = (r.raw as any)?.usage || {};
+      tot +=
+        Number(usage.totalTokens || usage.total_tokens) ||
+        (Number(usage.promptTokens || usage.prompt_tokens) || 0) +
+          (Number(usage.completionTokens || usage.completion_tokens) || 0) ||
+        0;
+    }
+    tokensUsed = tot || null;
   } catch (err) {
     llmError = (err as Error).message;
     logger.warn(
