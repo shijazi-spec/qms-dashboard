@@ -1145,10 +1145,9 @@
                              Excel — exports PASS rows back out with the
                              operator's original column structure intact. -->
                         <button data-on-click="downloadPreflightPassRows" id="preflightExportPassBtn" data-testid="button-preflight-export-pass" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">⬇ Download PASS rows</button>
-                        <button data-on-click="downloadPreflightFlaggedRows" id="preflightExportFlaggedBtn" data-testid="button-preflight-export-flagged" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700" title="Download ONLY the flagged rows (Block / Review / Warn / Duplicate) as a CSV — Company, Contact, Email, Phone, Verdict, Existing Owner, CS Phase, and the Recommended Action. This is the file to send the Head of Sales.">⚑ Download flagged rows (for Head of Sales)</button>
-                        <!-- Executive report toolbar — appears after a successful run. -->
-                        <button data-on-click="exportPreflightExcel" id="preflightExportXlsxBtn" data-testid="button-preflight-export-xlsx" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-700 text-white hover:bg-emerald-800" title="Download a polished Excel report — Summary cover sheet + colour-coded Findings sheet. Designed to attach to a Head-of-Sales email.">📊 Export Excel report</button>
-                        <button data-on-click="copyPreflightEmailBody" id="preflightCopyEmailBtn" data-testid="button-preflight-copy-email" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-100 text-blue-900 hover:bg-blue-200" title="Copy a ready-to-paste email body with the run's headline numbers and top reasons. Pair with the Excel attachment for the Head-of-Sales briefing.">📋 Copy email body</button>
+                        <button data-on-click="downloadPreflightFlaggedRows" id="preflightExportFlaggedBtn" data-testid="button-preflight-export-flagged" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700" title="Download ONLY the flagged rows (Block / Review / Warn / Duplicate) as a native Excel file — Company, Contact, Email, Phone, Verdict, Existing Owner, CS Phase, Churn Date, and the Recommended Action. This is the file to send the Head of Sales.">⚑ Download flagged rows (for Head of Sales)</button>
+                        <!-- Executive toolbar — appears after a successful run. -->
+                        <button data-on-click="copyPreflightEmailBody" id="preflightCopyEmailBtn" data-testid="button-preflight-copy-email" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-100 text-blue-900 hover:bg-blue-200" title="Copy a ready-to-paste email body with the run's headline numbers and top reasons.">📋 Copy email body</button>
                         <button data-on-click="openPushToZohoModal" id="preflightPushBtn" data-testid="button-preflight-push" class="hidden px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700" title="Push the PASS rows into Zoho CRM as new Leads on a Layout you pick. Defense in depth: dry-run by default, only PASS rows ever sent, every push audit-logged.">📤 Push PASS rows to Zoho</button>
                         <span id="preflightParsedCount" class="ml-auto text-xs text-gray-500"></span>
                     </div>
@@ -10581,11 +10580,9 @@
                     + '</div>').join('') || '<div class="text-xs text-gray-500 col-span-full">No actionable matches in this batch.</div>';
             }
 
-            // Show export / copy-email / push buttons now that there is a result.
-            const xlsxBtn = document.getElementById('preflightExportXlsxBtn');
+            // Show copy-email / push buttons now that there is a result.
             const copyBtn = document.getElementById('preflightCopyEmailBtn');
             const pushBtn = document.getElementById('preflightPushBtn');
-            if (xlsxBtn) xlsxBtn.classList.remove('hidden');
             if (copyBtn) copyBtn.classList.remove('hidden');
             // Push is only useful if there's at least one PASS row.
             if (pushBtn) {
@@ -10631,35 +10628,10 @@
             }).join('');
         }
 
-        async function exportPreflightExcel() {
-            const data = window._preflightLastResult;
-            if (!data) { alert('Run a Preflight check first.'); return; }
-            const btn = document.getElementById('preflightExportXlsxBtn');
-            const orig = btn ? btn.innerHTML : '';
-            if (btn) { btn.disabled = true; btn.innerHTML = 'Building…'; }
-            try {
-                const res = await fetch('/api/duplicates/preflight/export-xlsx', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ result: data }),
-                });
-                if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    throw new Error(err.error || ('HTTP ' + res.status));
-                }
-                const blob = await res.blob();
-                const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '');
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = 'preflight-report_' + stamp + '.xlsx';
-                document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-            } catch (e) {
-                alert('Excel export failed: ' + (e.message || e));
-            } finally {
-                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
-            }
-        }
+        // (exportPreflightExcel removed 2026-06-17 — the all-rows Excel report
+        // button was dropped from the Preflight view; the "Download flagged
+        // rows (for Head of Sales)" button covers the hand-off. The server
+        // endpoint /api/duplicates/preflight/export-xlsx is still used by it.)
 
         async function openPushToZohoModal() {
             const data = window._preflightLastResult;
