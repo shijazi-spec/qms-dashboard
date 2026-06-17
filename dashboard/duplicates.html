@@ -8837,91 +8837,71 @@
         }
 
         // Download ONLY the flagged rows (Block / Review / Warn / Duplicate)
-        // as a self-contained CSV for the Head of Sales. Unlike the Excel
-        // report (which lists every PASS row too), this is the exact
-        // hand-off file: who the contact is + why it's flagged + who owns
-        // it + what to do. Contact columns are merged from the uploaded
-        // file by row_index when an upload backs the run; the verdict
-        // columns always come from the preflight result.
-        function _pfOwnersToStr(owners) {
-            if (!owners) return '';
-            if (Array.isArray(owners)) {
-                return owners.map(o => {
-                    if (!o) return '';
-                    if (typeof o === 'string') return o;
-                    return o.name || o.email || o.owner_name || '';
-                }).filter(Boolean).join('; ');
-            }
-            return String(owners);
-        }
-        function _pfModulesToStr(mc) {
-            if (!mc) return '';
-            const parts = [];
-            if (mc.leads)    parts.push('Leads ' + mc.leads);
-            if (mc.deals)    parts.push('Deals ' + mc.deals);
-            if (mc.contacts) parts.push('Contacts ' + mc.contacts);
-            if (mc.accounts) parts.push('Accounts ' + mc.accounts);
-            return parts.join(' · ');
-        }
+        // as a native .xlsx for the Head of Sales. 2026-06-17 — switched from
+        // a client-built CSV to the server's native-xlsx endpoint: the manual
+        // CSV→Excel conversion was shifting cells and dropping the header row.
+        // We merge the uploaded file's Contact / Email / Phone columns (keyed
+        // by row_index) and let the server emit a proper workbook with the
+        // Churn Date column already present — no conversion step, no shifts.
         async function downloadPreflightFlaggedRows() {
-            if (!preflightLastResult || !Array.isArray(preflightLastResult.rows)) {
+            const data = preflightLastResult || window._preflightLastResult;
+            if (!data || !Array.isArray(data.rows)) {
                 alert('Run the preflight Check first.');
                 return;
             }
-            const flagged = preflightLastResult.rows.filter(r => r && r.verdict && r.verdict !== 'pass');
+            const flagged = data.rows.filter(r => r && r.verdict && r.verdict !== 'pass');
             if (flagged.length === 0) {
                 alert('No flagged rows (Block / Review / Warn / Duplicate) in the last run — nothing to send.');
                 return;
             }
-            // Optional contact info from the original upload, keyed by row_index.
-            const origByIdx = {};
+            // Build a row_index → {name,email,phone} map from the uploaded file.
+            const contacts = {};
             if (preflightLastUpload && Array.isArray(preflightLastUpload.originalRows)) {
-                preflightLastUpload.originalRows.forEach((row, idx) => { origByIdx[idx] = row || {}; });
-            }
-            const pick = (obj, keys) => {
-                for (const k of keys) {
-                    for (const ok of Object.keys(obj)) {
-                        if (ok.toLowerCase().replace(/[^a-z]/g, '') === k) return obj[ok];
+                const pick = (obj, keys) => {
+                    for (const k of keys) {
+                        for (const ok of Object.keys(obj || {})) {
+                            if (ok.toLowerCase().replace(/[^a-z]/g, '') === k) return obj[ok];
+                        }
                     }
-                }
-                return '';
-            };
-            const headers = ['Verdict','Severity','Company','Domain','Contact Name','Email','Phone','Existing Owner(s)','CS Phase','CRM Matches','Recommended Action'];
-            const quote = (v) => {
-                const s = v == null ? '' : String(v);
-                return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-            };
-            const lines = [headers.map(quote).join(',')];
-            for (const r of flagged) {
-                const orig = origByIdx[r.row_index] || {};
-                const inp = r.input || {};
-                const contactName = pick(orig, ['fullname','name','contactname'])
-                    || [pick(orig, ['firstname']), pick(orig, ['lastname'])].filter(Boolean).join(' ').trim();
-                const email = pick(orig, ['email','emailaddress']);
-                const phone = pick(orig, ['phone','mobile','mobilephone','phonenumber']);
-                lines.push([
-                    (r.verdict || '').toUpperCase(),
-                    r.executive_severity || '',
-                    inp.company_name || pick(orig, ['companyname','company']) || '',
-                    inp.domain || pick(orig, ['domain','website']) || '',
-                    contactName,
-                    email,
-                    phone,
-                    _pfOwnersToStr(r.owners),
-                    r.lifecycle_state || '',
-                    _pfModulesToStr(r.module_counts),
-                    r.executive_action || r.suggested_action || '',
-                ].map(quote).join(','));
+                    return '';
+                };
+                preflightLastUpload.originalRows.forEach((o, idx) => {
+                    o = o || {};
+                    const name = pick(o, ['fullname','name','contactname'])
+                        || [pick(o, ['firstname']), pick(o, ['lastname'])].filter(Boolean).join(' ').trim();
+                    contacts[idx] = {
+                        name: name,
+                        email: pick(o, ['email','emailaddress']),
+                        phone: pick(o, ['phone','mobile','mobilephone','phonenumber']),
+                    };
+                });
             }
-            const csvBlob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-            const baseName = (preflightLastUpload && preflightLastUpload.fileName ? preflightLastUpload.fileName : 'preflight').replace(/\.[^.]+$/, '');
-            const outName = baseName + '__FLAGGED__' + flagged.length + '.csv';
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(csvBlob);
-            a.download = outName;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+            const btn = document.getElementById('preflightExportFlaggedBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Building…'; }
+            try {
+                const res = await fetch('/api/duplicates/preflight/export-xlsx', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ result: data, flaggedOnly: true, contacts: contacts }),
+                });
+                if (!res.ok) {
+                    const e = await res.json().catch(() => ({}));
+                    throw new Error(e.error || ('HTTP ' + res.status));
+                }
+                const blob = await res.blob();
+                const baseName = (preflightLastUpload && preflightLastUpload.fileName ? preflightLastUpload.fileName : 'preflight').replace(/\.[^.]+$/, '');
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = baseName + '__FLAGGED__' + flagged.length + '.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+            } catch (e) {
+                alert('Flagged export failed: ' + (e.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
         }
 
         function clearPreflight() {

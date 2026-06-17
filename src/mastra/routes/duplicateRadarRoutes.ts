@@ -7404,6 +7404,20 @@ export const duplicateRadarRoutes = [
             );
           }
 
+          // 2026-06-17 — flagged-only export for the Head-of-Sales hand-off
+          // (no PASS rows) + optional per-row contact columns merged from the
+          // uploaded file (keyed by row_index). Sending a native .xlsx avoids
+          // the CSV→Excel conversion that was shifting cells / dropping the
+          // header on the client-built file.
+          const flaggedOnly = body?.flaggedOnly === true;
+          const contacts =
+            body?.contacts && typeof body.contacts === "object"
+              ? body.contacts
+              : null;
+          const rowsToEmit = (Array.isArray(result.rows) ? result.rows : []).filter(
+            (r: any) => (flaggedOnly ? r && r.verdict && r.verdict !== "pass" : true),
+          );
+
           const ExcelJS = (await import("exceljs")).default;
           const wb = new ExcelJS.Workbook();
           wb.creator = "WalaPlus QMS — Duplicate Radar";
@@ -7499,6 +7513,13 @@ export const duplicateRadarRoutes = [
             { header: "Comment / Reason", key: "exec", width: 60 },
             { header: "Domain", key: "domain", width: 26 },
             { header: "Company", key: "company", width: 32 },
+            ...(contacts
+              ? [
+                  { header: "Contact Name", key: "contact_name", width: 24 },
+                  { header: "Email", key: "contact_email", width: 30 },
+                  { header: "Phone", key: "contact_phone", width: 18 },
+                ]
+              : []),
             { header: "Existing Owner(s)", key: "owners", width: 28 },
             { header: "CS Owner", key: "cs_owner", width: 22 },
             { header: "CRM Modules (L·D·C·A)", key: "modules", width: 22 },
@@ -7552,7 +7573,10 @@ export const duplicateRadarRoutes = [
             lk && lk.url
               ? { text: lk.label || "Open in Zoho", hyperlink: lk.url, tooltip: lk.url }
               : "";
-          for (const r of result.rows || []) {
+          for (const r of rowsToEmit) {
+            const ct = contacts
+              ? contacts[r.row_index] || contacts[String(r.row_index)] || {}
+              : {};
             const row = findings.addRow({
               i: (r.row_index ?? 0) + 1,
               verdict: r.verdict?.toUpperCase() || "PASS",
@@ -7560,6 +7584,9 @@ export const duplicateRadarRoutes = [
               exec: r.executive_action || r.suggested_action || "",
               domain: r.input?.domain || "",
               company: r.input?.company_name || "",
+              contact_name: ct.name || "",
+              contact_email: ct.email || "",
+              contact_phone: ct.phone || "",
               owners: Array.isArray(r.owners) ? r.owners.join(", ") : "",
               cs_owner: r.cs_owner || "",
               modules: fmtModules(r.module_counts),

@@ -809,6 +809,74 @@ export function classifyPreflightRows(input: {
     }
     const c = matched.cluster;
 
+    // ── Sarah / Ahmad 2026-06-17 — unreliable non-domain match guard ──
+    // The "wrong churn date" bug: a lead whose only identity is a free-mail
+    // or missing domain (gmail / hotmail / #N/A) matched a CRM cluster ONLY
+    // by phone (or fuzzy company name), then inherited that cluster's churn
+    // date / CS verdict — data that belongs to whatever record the phone
+    // happened to hit, not to this lead. Two unrelated companies both
+    // matching one 1,300-contact catch-all cluster is the signature.
+    // Such a match is NOT trustworthy enough to assert a confident
+    // BLOCK / WARN / DUPLICATE. Downgrade to REVIEW (verify by hand) and do
+    // NOT surface the matched cluster's churn date as if it were this lead's.
+    const _num = (v: unknown): number => {
+      const n = typeof v === "number" ? v : parseInt(String(v ?? ""), 10);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const _clusterSize =
+      _num(c.total_leads) + _num(c.total_deals) +
+      _num(c.total_contacts) + _num(c.total_accounts);
+    // A non-domain match (phone / company-name) is unreliable when it lands
+    // in a CATCH-ALL cluster (the signature of the wrong-churn-date rows:
+    // two unrelated companies both matching one 1,300-contact cluster), or
+    // when an UNVERIFIED lead (free-mail / missing domain) lands in a
+    // non-trivial cluster. Tight, small-cluster phone matches are kept as-is.
+    const CATCHALL_CLUSTER_SIZE = 75;
+    const UNVERIFIED_NONTRIVIAL_SIZE = 20;
+    const _rowHasRealDomain =
+      !!domain && domain.includes(".") && !isFreeMailRow(row);
+    const _unreliableMatch =
+      matched.matched_via !== "domain" &&
+      (_clusterSize > CATCHALL_CLUSTER_SIZE ||
+        (!_rowHasRealDomain && _clusterSize > UNVERIFIED_NONTRIVIAL_SIZE));
+    if (_unreliableMatch) {
+      const co = (row.company_name || "").trim();
+      const via =
+        matched.matched_via === "phone" ? "phone number" : "company-name similarity";
+      out.push({
+        row_index: i,
+        ref,
+        input: { domain, company_name: row.company_name ?? null },
+        verdict: "review",
+        cluster_id: c.id,
+        lifecycle_state: null,
+        sector: null,
+        arr_exposure: null,
+        owners: [],
+        reason: "weak_match_verify_by_hand",
+        suggested_action:
+          "Matched an existing CRM record by " +
+          via +
+          " into a large / ambiguous cluster (" +
+          _clusterSize +
+          " records). Likely a false grouping — verify the company by name and phone in CRM before importing. Any churn / CS history shown may belong to a DIFFERENT company.",
+        executive_action:
+          "REVIEW — weak match (" +
+          via +
+          " into a " +
+          _clusterSize +
+          "-record cluster" +
+          (_rowHasRealDomain ? "" : ", no verified domain") +
+          (co ? `; row company "${co}"` : "") +
+          "). Likely a false match into an unrelated / catch-all record — verify by hand. Churn / CS data intentionally NOT shown (it may belong to a different company).",
+        executive_severity: "medium",
+        module_counts: null,
+        matched_via: matched.matched_via,
+      });
+      summary.review++;
+      continue;
+    }
+
     let verdict: PreflightVerdict;
     if (c.cs_overlap_verdict === "block") verdict = "block";
     else if (c.cs_overlap_verdict === "review") verdict = "review";
