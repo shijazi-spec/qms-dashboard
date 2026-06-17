@@ -5068,6 +5068,10 @@ export interface RadarTabSnapshot {
 export interface DuplicateRadarOverview {
   generatedAt: string;
   tabs: {
+    leadDuplicates: RadarTabSnapshot;
+    dealDuplicates: RadarTabSnapshot;
+    contactDuplicates: RadarTabSnapshot;
+    accountDuplicates: RadarTabSnapshot;
     crossModule: RadarTabSnapshot;
     csOverlap: RadarTabSnapshot;
     csLifecycle: RadarTabSnapshot;
@@ -5097,7 +5101,45 @@ async function _safeSnapshot(
 export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOverview> {
   const generatedAt = new Date().toISOString();
 
+  // 2026-06-17 — per-module duplicate snapshot for the at-a-glance grid so the
+  // Executive Summary covers the 4 core duplicate tabs too (Lead / Deal /
+  // Contact / Account Duplicates), not just the supporting tabs. `field` is a
+  // fixed column name (never user input) so the interpolation is safe.
+  const _moduleDupSnapshot = (
+    field: "total_leads" | "total_deals" | "total_contacts" | "total_accounts",
+    noun: string,
+  ) =>
+    _safeSnapshot(async () => {
+      const r = await pool.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE status = 'active'   AND ${field} > 1)::int AS open_clusters,
+           COUNT(*) FILTER (WHERE status = 'resolved' AND ${field} > 1)::int AS handled,
+           COALESCE(SUM(${field}) FILTER (WHERE status = 'active' AND ${field} > 1), 0)::int AS dup_records
+         FROM duplicate_clusters`,
+      );
+      const row = r.rows[0] || {};
+      const open = Number(row.open_clusters || 0);
+      const handled = Number(row.handled || 0);
+      const records = Number(row.dup_records || 0);
+      const verdict: RadarTabSnapshot["verdict"] =
+        open === 0 ? "green" : open > 50 ? "red" : "amber";
+      return {
+        verdict,
+        headline:
+          open.toLocaleString() +
+          " duplicate cluster(s) · " +
+          records.toLocaleString() +
+          " " +
+          noun,
+        metrics: { openClusters: open, handled, dupRecords: records },
+      };
+    });
+
   const [
+    leadDuplicates,
+    dealDuplicates,
+    contactDuplicates,
+    accountDuplicates,
     crossModule,
     csOverlap,
     csLifecycle,
@@ -5107,6 +5149,10 @@ export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOvervie
     ownerAccountability,
     logs,
   ] = await Promise.all([
+    _moduleDupSnapshot("total_leads", "lead records"),
+    _moduleDupSnapshot("total_deals", "deal records"),
+    _moduleDupSnapshot("total_contacts", "contact records"),
+    _moduleDupSnapshot("total_accounts", "account records"),
     _safeSnapshot(async () => {
       // Cross-module overlaps are NOT a separate column — they're clusters
       // whose total_<kind> > 0 for ≥2 record types. Lifecycle uses the
@@ -5330,6 +5376,10 @@ export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOvervie
   return {
     generatedAt,
     tabs: {
+      leadDuplicates,
+      dealDuplicates,
+      contactDuplicates,
+      accountDuplicates,
       crossModule,
       csOverlap,
       csLifecycle,

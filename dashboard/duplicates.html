@@ -2471,6 +2471,10 @@
         // tab. Loads on first Exec-Summary paint and on the Refresh
         // button in the section header.
         const _RADAR_TAB_META = [
+            { key: 'leadDuplicates',       label: 'Lead Duplicates',       icon: '🟠', tab: 'leads',            desc: 'Duplicate Leads grouped into clusters.' },
+            { key: 'dealDuplicates',       label: 'Deal Duplicates',       icon: '🟣', tab: 'deals',            desc: 'Duplicate Deals grouped into clusters.' },
+            { key: 'contactDuplicates',    label: 'Contact Duplicates',    icon: '⚪', tab: 'contacts',         desc: 'Duplicate Contacts grouped into clusters.' },
+            { key: 'accountDuplicates',    label: 'Account Duplicates',    icon: '🟢', tab: 'accounts',         desc: 'Duplicate Accounts grouped into clusters.' },
             { key: 'crossModule',          label: 'Cross-Module',          icon: '🔗', tab: 'cross-module',     desc: 'Same company across ≥2 Zoho modules.' },
             { key: 'csOverlap',            label: 'CS Pipeline Overlap',   icon: '🛑', tab: 'cs-overlap',       desc: 'Open Sales Deal + Paid/Agreement-Signed handoff on the same customer.' },
             { key: 'csLifecycle',          label: 'CS Lifecycle',          icon: '🌱', tab: 'cs-lifecycle',     desc: 'Customer Success deals deviating from GRQ-defined lifecycle rules.' },
