@@ -945,6 +945,17 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["PUT", "DELETE"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  // BU Coverage tracker — read (governance roles + viewer) and write (governance write roles).
+  {
+    pattern: /^\/api\/kpis\/\d+\/bu-coverage$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+  },
+  {
+    pattern: /^\/api\/kpis\/bu-coverage\/\d+$/,
+    methods: ["PUT"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
   // KPI value entry — governance write roles only.
   {
     pattern: /^\/api\/kpis\/\d+\/values$/,

@@ -24,7 +24,7 @@ interface FinalKpi {
   target: number;
   direction: "higher_is_better" | "lower_is_better";
   frequency: "daily" | "weekly" | "monthly" | "quarterly" | "annual";
-  calc_mode: "auto" | "checklist" | "manual";
+  calc_mode: "auto" | "checklist" | "manual" | "bu_coverage";
   north_star?: boolean;
   description: string;
   formula: string;
@@ -51,7 +51,7 @@ function bands(target: number, dir: "higher_is_better" | "lower_is_better") {
 const FINAL_KPIS: FinalKpi[] = [
   // ───────────── Quality — Sarah Hijazi (quality_manager) ─────────────
   { code: "QM-KPI-002", name: "Audit Execution Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "audit", unit: "%", target: 90, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "How much of the planned audit programme was actually completed in the period.", formula: "Completed Audits ÷ Planned Audits × 100", data_source: "Internal Audits module (/audits) + completed AI-audit runs (audit_runs)" },
-  { code: "QM-KPI-008", name: "BU Coverage Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "governance", unit: "%", target: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Share of business units fully onboarded onto the governance framework (implemented, trained, and operating it).", formula: "Audited BUs ÷ Total BUs × 100", data_source: "QMS Platform" },
+  { code: "QM-KPI-008", name: "BU Coverage Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "governance", unit: "%", target: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "bu_coverage", north_star: true, description: "Share of business units fully onboarded onto the governance framework (implemented, trained, and operating it).", formula: "Average coverage % across all BUs (partial credit per BU)", data_source: "Per-BU coverage tracker (completion % + due date per Business Unit)" },
   { code: "QM-KPI-003", name: "Gap Closure Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "audit", unit: "%", target: 80, direction: "higher_is_better", frequency: "monthly", calc_mode: "auto", description: "Share of audit findings closed within their agreed deadline.", formula: "Closed Findings Within SLA ÷ Total Findings Due × 100", data_source: "CAPA Register on QMS Platform" },
   { code: "QM-KPI-009", name: "Repeat Findings Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "audit", unit: "%", target: 10, direction: "lower_is_better", frequency: "quarterly", calc_mode: "manual", description: "Findings that recur from earlier audits - shows whether root causes are truly fixed (lower is better).", formula: "Repeat Findings ÷ Total Findings × 100", data_source: "Audit Findings Log on QMS Platform" },
   { code: "QM-KPI-004", name: "QMS Adoption Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "quality", unit: "%", target: 70, direction: "higher_is_better", frequency: "quarterly", calc_mode: "checklist", description: "How widely the QMS processes are actually used across the business units.", formula: "Active QMS Users/Processes ÷ Target Scope × 100", data_source: "QMS Platform" },

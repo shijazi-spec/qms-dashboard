@@ -30,8 +30,8 @@ export interface KPIDefinition {
     | "sales_team"
     | "shared";
   owner_name?: string;
-  /** How the live value is produced: auto (computed), checklist (% done), or manual entry. */
-  calc_mode?: "auto" | "checklist" | "manual";
+  /** How the live value is produced: auto (computed), checklist (% done), bu_coverage (per-BU tracker), or manual. */
+  calc_mode?: "auto" | "checklist" | "manual" | "bu_coverage";
   category:
     | "governance"
     | "risk"

@@ -257,13 +257,27 @@ async function calcBuCoverageRate() {
     )
   `);
 
-  // Seed the canonical 13 BUs from the Quality Plan 2026 (idempotent).
+  // Seed the canonical 13 BUs from the Quality Plan 2026 (idempotent). NOTE: this
+  // seeding is relied on by calcRiskAssessmentCoverage too — keep it here.
   for (const bu of CANONICAL_BUSINESS_UNITS) {
     await pool.query(
       `INSERT INTO business_units (bu_name, is_commercial)
        VALUES ($1, $2) ON CONFLICT (bu_name) DO NOTHING`,
       [bu.name, bu.commercial],
     );
+  }
+
+  // Prefer the per-BU coverage tracker (avg completion %, with partial credit) so
+  // /kpis and the leadership platform show the SAME value. Falls back to the
+  // published-policy proxy below only if the tracker has no data.
+  try {
+    const { buCoverageRateForFeed } = await import("./kpiBuCoverageDatabase");
+    const tracked = await buCoverageRateForFeed();
+    if (tracked !== null) {
+      return { value: tracked, dataAvailable: true, details: { source: "bu_coverage_tracker" } };
+    }
+  } catch {
+    /* tracker not ready — use the policy proxy */
   }
 
   const r = await pool.query(`

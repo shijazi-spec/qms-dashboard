@@ -299,6 +299,33 @@
         </div>
     </div>
 
+    <!-- BU Coverage modal (for calc_mode='bu_coverage', e.g. BU Coverage Rate) -->
+    <div id="buCoverageModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b flex justify-between items-center">
+                <div>
+                    <h3 class="font-semibold text-gray-900" id="buCoverageTitle">BU Coverage</h3>
+                    <p class="text-xs text-gray-500">KPI value = average coverage % across the Business Units</p>
+                </div>
+                <button data-on-click="closeBuCoverageModal" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div class="p-4">
+                <div id="buCoverageAvg" class="mb-3 text-sm font-medium text-gray-700"></div>
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-xs text-gray-500 border-b">
+                            <th class="text-start py-1.5">Business Unit</th>
+                            <th class="text-start py-1.5 w-24">Coverage %</th>
+                            <th class="text-start py-1.5 w-36">Due date</th>
+                            <th class="text-start py-1.5 w-32">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="buCoverageRows"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script>
         let allKPIs = [];
 
@@ -364,6 +391,7 @@
                 case 'auto':      return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium" title="Calculated automatically from platform data">⚙️ Auto</span>';
                 case 'checklist': return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-medium" title="Value = % of checklist items done">📋 Checklist</span>';
                 case 'manual':    return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium" title="Entered manually">✍️ Manual</span>';
+                case 'bu_coverage': return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-medium" title="Value = average coverage % across the Business Units">🏢 BU Coverage</span>';
             }
             return '';
         }
@@ -690,6 +718,7 @@
                         </div>
                         <div class="flex gap-2">
                             ${kpi.calc_mode === 'checklist' ? `<button data-on-click="openChecklistModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm">📋 Manage Checklist</button>` : ''}
+                            ${kpi.calc_mode === 'bu_coverage' ? `<button data-on-click="openBuCoverageModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm">🏢 Manage BU Coverage</button>` : ''}
                             <button data-on-click="openRecordValueModal" data-args="[${kpi.id}]" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">${WalaPlusI18n.t('dyn.kpis.record_value_btn')}</button>
                             <button data-on-click="editKPI" data-args="[${kpi.id}]" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">${WalaPlusI18n.t('dyn.kpis.edit_kpi_btn')}</button>
                         </div>
@@ -1020,6 +1049,51 @@
                 if (res.ok) { input.value = ''; await loadChecklist(); }
                 else { const d = await res.json().catch(()=>({})); alert(d.error || 'Failed to add BU.'); }
             } catch (e) { console.error('Add BU error:', e); }
+        }
+
+        // ===== BU Coverage modal (per-BU completion % + due date) =====
+        let _buCoverageKpiId = null;
+        const _BU_STATUS = [['not_started','Not started'],['in_progress','In progress'],['postponed','Postponed'],['done','Done']];
+        async function openBuCoverageModal(kpiId) {
+            _buCoverageKpiId = kpiId;
+            const kpi = allKPIs.find(k => k.id === kpiId);
+            document.getElementById('buCoverageTitle').textContent = 'BU Coverage — ' + (kpi ? kpi.kpi_name : ('KPI #' + kpiId));
+            document.getElementById('buCoverageModal').classList.remove('hidden');
+            await loadBuCoverage();
+        }
+        function closeBuCoverageModal() {
+            document.getElementById('buCoverageModal').classList.add('hidden');
+            _buCoverageKpiId = null;
+            loadKPIs();
+        }
+        async function loadBuCoverage() {
+            if (_buCoverageKpiId == null) return;
+            try {
+                const res = await fetch(`/api/kpis/${_buCoverageKpiId}/bu-coverage`);
+                const data = await res.json();
+                const rows = data.rows || [];
+                document.getElementById('buCoverageAvg').innerHTML =
+                    `Average coverage: <span class="text-gray-900">${data.average != null ? data.average : 0}%</span> across ${rows.length} BUs`;
+                document.getElementById('buCoverageRows').innerHTML = rows.map(r => `
+                    <tr class="border-b">
+                        <td class="py-2 text-gray-800">${_esc(r.bu_name)}</td>
+                        <td class="py-2"><input type="number" min="0" max="100" value="${r.completion_pct || 0}" data-on-change="saveBuCoverage" data-args="[${r.id}, &quot;completion_pct&quot;, &quot;@this.value&quot;]" class="border rounded px-2 py-1 w-20 text-sm" /></td>
+                        <td class="py-2"><input type="date" value="${r.due_date ? String(r.due_date).slice(0,10) : ''}" data-on-change="saveBuCoverage" data-args="[${r.id}, &quot;due_date&quot;, &quot;@this.value&quot;]" class="border rounded px-2 py-1 text-sm" /></td>
+                        <td class="py-2"><select data-on-change="saveBuCoverage" data-args="[${r.id}, &quot;status&quot;, &quot;@this.value&quot;]" class="border rounded px-2 py-1 text-sm">${_BU_STATUS.map(([v, l]) => `<option value="${v}" ${r.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+                    </tr>`).join('');
+            } catch (e) { console.error('Load BU coverage error:', e); }
+        }
+        async function saveBuCoverage(rowId, field, value) {
+            try {
+                const body = {};
+                body[field] = (field === 'completion_pct') ? Number(value) : value;
+                const res = await fetch(`/api/kpis/bu-coverage/${rowId}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) await loadBuCoverage();
+                else alert('Failed to save BU coverage.');
+            } catch (e) { console.error('Save BU coverage error:', e); }
         }
         async function toggleChecklistItem(itemId, isDone) {
             try {

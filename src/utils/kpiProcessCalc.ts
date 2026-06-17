@@ -539,6 +539,19 @@ export const calcRegulatoryEvidenceAvailability = () =>
      FROM evidence_packs`,
   );
 
+// ───────────────────── Quality — BU Coverage (per-BU tracker) ────────────────
+/** QM-KPI-008 BU Coverage Rate — average coverage % across the per-BU tracker. */
+export async function calcBuCoverageTracked(): Promise<ProcessKpiValue> {
+  try {
+    const { buCoverageRateForFeed } = await import("./kpiBuCoverageDatabase");
+    const v = await buCoverageRateForFeed();
+    if (v === null) return EMPTY;
+    return { value: v, dataAvailable: true };
+  } catch {
+    return EMPTY;
+  }
+}
+
 // ───────────────────── Quality — Quality→GRC Handoff SLA ─────────────────────
 /**
  * QM-KPI-006 Quality→GRC Handoff SLA — % of handoffs PROCESSED WITHIN the SLA
@@ -635,6 +648,8 @@ export const PROCESS_CALCULATORS: Record<
   "QM-KPI-010": calcDocumentationLifecycle,
   // Quality — % of handoffs processed within the SLA window
   "QM-KPI-006": calcHandoffSlaCompliance,
+  // Quality — BU Coverage Rate from the per-BU coverage tracker
+  "QM-KPI-008": calcBuCoverageTracked,
   // GRC / Specialist "auto-ready" — fill once their registers carry data
   "GRC-KPI-017": calcRiskRegisterHygiene,
   "GRC-KPI-019": calcTpraSla,

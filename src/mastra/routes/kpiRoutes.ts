@@ -32,9 +32,17 @@ import {
   deleteChecklistItem,
   recordChecklistKPIValue,
 } from "../../utils/kpiChecklistDatabase";
+import {
+  initKpiBuCoverageTables,
+  getBuCoverage,
+  buCoverageAverage,
+  updateBuCoverage,
+  recordBuCoverageValue,
+} from "../../utils/kpiBuCoverageDatabase";
 
 initKPITables()
   .then(() => initKPIChecklistTables())
+  .then(() => initKpiBuCoverageTables())
   .catch((err) =>
     safeLogger.error("[KpiRoutes] KPI table init failed", err),
   );
@@ -754,6 +762,63 @@ export const kpiRoutes = [
         } catch (error) {
           safeLogger.error("Error deleting checklist item:", error);
           return c.json({ error: "Failed to delete checklist item" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // BU Coverage tracker (QM-KPI-008): list the BUs with completion % + due date.
+    path: "/api/kpis/:id{[0-9]+}/bu-coverage",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user)
+            return forbiddenResponse(c, "Insufficient permissions for BU coverage");
+          const kpiId = parseInt(c.req.param("id"));
+          const rows = await getBuCoverage(kpiId);
+          return c.json({ rows, average: buCoverageAverage(rows) });
+        } catch (error) {
+          safeLogger.error("Error fetching BU coverage:", error);
+          return c.json({ error: "Failed to fetch BU coverage" }, 500);
+        }
+      };
+    },
+  },
+  {
+    path: "/api/kpis/bu-coverage/:rowId{[0-9]+}",
+    method: "PUT" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(c, "Insufficient permissions to edit BU coverage");
+          const rowId = parseInt(c.req.param("rowId"));
+          const body = await c.req.json();
+          const by = user?.email || "system";
+          const row = await updateBuCoverage(
+            rowId,
+            {
+              completion_pct: body?.completion_pct,
+              due_date: body?.due_date,
+              status: body?.status,
+              note: body?.note,
+            },
+            by,
+          );
+          if (!row) return c.json({ error: "BU coverage row not found" }, 404);
+          // Re-record the KPI value (avg coverage %) immediately.
+          await recordBuCoverageValue(row.kpi_id);
+          return c.json({ success: true, row });
+        } catch (error) {
+          safeLogger.error("Error updating BU coverage:", error);
+          return c.json({ error: "Failed to update BU coverage" }, 500);
         }
       };
     },
