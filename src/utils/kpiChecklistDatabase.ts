@@ -48,6 +48,10 @@ export async function initKPIChecklistTables(): Promise<void> {
   // Seed the BU Framework Completion KPI (QM-KPI-015) with the Business Units +
   // their standard framework action plan, so it opens ready-to-use. Idempotent.
   await seedBuFrameworkChecklist();
+  // Pre-fill the agreed FY2026 baseline (Sales/SDR done, Marketplace ~35%) on
+  // still-untouched phases, so BU Coverage (which is derived from this checklist)
+  // reads correctly out of the box. Idempotent + never overrides a human tick.
+  await backfillInitialFrameworkProgress();
 }
 
 /**
@@ -263,4 +267,83 @@ export async function recordChecklistKPIValue(
     calculated_by: "system_auto",
   });
   return pct;
+}
+
+/**
+ * Per-BU framework progress from the QM-KPI-015 checklist: BU name → {done,total,pct}.
+ * This is the single source of truth that BU Coverage (QM-KPI-008) is derived from.
+ */
+export async function getFrameworkProgressByBU(): Promise<
+  Record<string, { done: number; total: number; pct: number }>
+> {
+  const out: Record<string, { done: number; total: number; pct: number }> = {};
+  const kpi = await getKPIByCode("QM-KPI-015");
+  if (!kpi || !kpi.id) return out;
+  const items = await getChecklistItems(kpi.id);
+  for (const sec of groupChecklistBySection(items)) {
+    const name = (sec.section || "").trim();
+    if (!name) continue;
+    out[name] = { done: sec.done, total: sec.total, pct: sec.pct };
+  }
+  return out;
+}
+
+/**
+ * One-time pre-fill of the agreed FY2026 baseline on the Framework checklist:
+ * Sales & SDR were completed in 2025 (all 9 phases done); Marketplace is postponed
+ * at ~35% (first 3 of 9 phases). Customer Success and every other BU are driven by
+ * live ticks. Only touches UNTOUCHED system-seeded phases (never overrides a human
+ * tick), and skips any BU that already has a phase done — so it's idempotent and
+ * safe to run on every boot.
+ */
+export async function backfillInitialFrameworkProgress(): Promise<void> {
+  const kpi = await getKPIByCode("QM-KPI-015");
+  if (!kpi || !kpi.id) return;
+  const markAll = ["Sales", "SDR"];
+  const markFirst: Record<string, number> = { Marketplace: 3 };
+
+  const alreadyStarted = async (bu: string): Promise<boolean> => {
+    const r = await pool.query(
+      `SELECT COUNT(*) FILTER (WHERE is_done)::int AS done
+         FROM kpi_checklist_items WHERE kpi_id = $1 AND section = $2`,
+      [kpi.id, bu],
+    );
+    return Number(r.rows[0]?.done || 0) > 0;
+  };
+
+  let changed = false;
+  for (const bu of markAll) {
+    if (await alreadyStarted(bu)) continue;
+    const r = await pool.query(
+      `UPDATE kpi_checklist_items SET is_done = true, updated_at = NOW()
+        WHERE kpi_id = $1 AND section = $2
+          AND (updated_by IS NULL OR updated_by = 'system')`,
+      [kpi.id, bu],
+    );
+    if ((r.rowCount ?? 0) > 0) changed = true;
+  }
+  for (const [bu, n] of Object.entries(markFirst)) {
+    if (await alreadyStarted(bu)) continue;
+    const r = await pool.query(
+      `UPDATE kpi_checklist_items SET is_done = true, updated_at = NOW()
+        WHERE id IN (
+          SELECT id FROM kpi_checklist_items
+           WHERE kpi_id = $1 AND section = $2
+             AND (updated_by IS NULL OR updated_by = 'system')
+           ORDER BY id ASC LIMIT $3
+        )`,
+      [kpi.id, bu, n],
+    );
+    if ((r.rowCount ?? 0) > 0) changed = true;
+  }
+  if (changed) {
+    try {
+      await recordChecklistKPIValue(kpi.id);
+    } catch {
+      /* recorded on the next recalc otherwise */
+    }
+    logger.info(
+      "🌱 [KPIChecklist] Backfilled FY2026 framework baseline (Sales/SDR=100%, Marketplace~33%)",
+    );
+  }
 }

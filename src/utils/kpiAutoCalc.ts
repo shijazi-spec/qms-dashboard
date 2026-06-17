@@ -69,6 +69,17 @@ export async function runKPIAutoCalc(
   const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
+  // 0) BU Coverage (QM-KPI-008) is derived from the BU Framework checklist
+  //    (QM-KPI-015) — refresh it first so a Recalculate reflects any phase ticks.
+  try {
+    const { syncBuCoverageFromChecklist } = await import(
+      "./kpiBuCoverageDatabase"
+    );
+    await syncBuCoverageFromChecklist();
+  } catch (e) {
+    logger.error(`[KPIAutoCalc] BU coverage sync failed: ${(e as Error).message}`);
+  }
+
   // 1) Quality / GRC via the leadership feed.
   try {
     const feed = await buildLeadershipKpiFeed();

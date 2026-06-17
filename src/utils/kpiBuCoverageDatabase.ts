@@ -12,7 +12,10 @@ import {
   getKPIById,
   recordKPIValue,
 } from "./kpiDatabase";
-import { FRAMEWORK_BUSINESS_UNITS } from "./kpiChecklistDatabase";
+import {
+  FRAMEWORK_BUSINESS_UNITS,
+  getFrameworkProgressByBU,
+} from "./kpiChecklistDatabase";
 
 export type BuCoverageStatus =
   | "not_started"
@@ -93,11 +96,13 @@ export async function seedBuCoverage(): Promise<void> {
       [kpi.id, init.bu, init.pct, init.status, init.due ?? null],
     );
   }
-  // Record the rolled-up value so QM-KPI-008 shows a number immediately.
+  // Each BU's % is DERIVED from its Framework checklist (QM-KPI-015) — the single
+  // source of truth — then the rolled-up value is recorded so QM-KPI-008 shows a
+  // number immediately. (INITIAL_BU_COVERAGE above still seeds status/due dates.)
   try {
-    await recordBuCoverageValue(kpi.id);
+    await syncBuCoverageFromChecklist();
   } catch {
-    /* recorded on the next recalc otherwise */
+    /* fall back to recorded-on-next-recalc */
   }
 }
 
@@ -179,6 +184,29 @@ export async function recordBuCoverageValue(
     calculated_by: "system_auto",
   });
   return avg;
+}
+
+/**
+ * Derive each BU's coverage % from its Framework checklist (QM-KPI-015) — the
+ * single source of truth — then re-record QM-KPI-008. completion_pct = phases
+ * done ÷ phases × 100; status / due date / notes are left as manually set (e.g.
+ * Marketplace stays 'postponed'). Called at boot, on every checklist tick, and on
+ * recalc, so the coverage number always tracks the checklist with no double entry.
+ * BUs without a checklist section keep their existing value.
+ */
+export async function syncBuCoverageFromChecklist(): Promise<number | null> {
+  const kpi = await getKPIByCode("QM-KPI-008");
+  if (!kpi || !kpi.id) return null;
+  const progress = await getFrameworkProgressByBU();
+  for (const [bu, p] of Object.entries(progress)) {
+    if (!bu) continue;
+    await pool.query(
+      `UPDATE kpi_bu_coverage SET completion_pct = $3, updated_at = NOW()
+        WHERE kpi_id = $1 AND bu_name = $2`,
+      [kpi.id, bu, p.pct],
+    );
+  }
+  return recordBuCoverageValue(kpi.id);
 }
 
 /** Avg coverage % for QM-KPI-008 (used by the leadership feed + auto-calc). */

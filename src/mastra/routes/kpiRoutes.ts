@@ -7,6 +7,7 @@ import {
   getAllKPIDefinitions,
   getKPIsByOwner,
   getKPIById,
+  getKPIByCode,
   createKPIDefinition,
   updateKPIDefinition,
   recordKPIValue,
@@ -750,6 +751,20 @@ export const kpiRoutes = [
           if (!item) return c.json({ error: "Checklist item not found" }, 404);
           // Recompute the parent KPI's value after a tick/edit.
           await recordChecklistKPIValue(item.kpi_id);
+          // If this is the BU Framework checklist (QM-KPI-015), BU Coverage Rate
+          // (QM-KPI-008) is derived from it — keep them in sync so ticking a BU's
+          // phases moves its coverage % immediately (single source of truth).
+          try {
+            const fw = await getKPIByCode("QM-KPI-015");
+            if (fw?.id === item.kpi_id) {
+              const { syncBuCoverageFromChecklist } = await import(
+                "../../utils/kpiBuCoverageDatabase"
+              );
+              await syncBuCoverageFromChecklist();
+            }
+          } catch (e) {
+            safeLogger.error("[KpiRoutes] BU coverage sync after tick failed", e);
+          }
           return c.json({ success: true, item });
         } catch (error) {
           safeLogger.error("Error updating checklist item:", error);
