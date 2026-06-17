@@ -400,6 +400,7 @@
         function _runWhenI18nReady(fn) { if (window.WalaPlusI18n && typeof WalaPlusI18n.onReady === 'function') WalaPlusI18n.onReady(fn); else fn(); }
         let charts = {};
 
+        let _autoRecalcTried = false;
         async function loadKPIs() {
             const owner = document.getElementById('ownerFilter').value;
             const url = owner ? `/api/kpis?owner=${owner}` : '/api/kpis/summary';
@@ -423,6 +424,25 @@
                     renderCharts(data);
                 } else {
                     updateStats({ kpiDetails: allKPIs.map(k => ({ ...k, status: 'no_data' })) });
+                }
+
+                // Self-heal: if no value has ever been computed (fresh deploy / new
+                // period — the scheduled job's 24h stale-gate may not have fired yet),
+                // run the engine once silently and reload so real numbers appear without
+                // the user having to find/click "Recalculate".
+                if (!_autoRecalcTried) {
+                    const anyValue = (allKPIs || []).some(k => k.latestValue !== null && k.latestValue !== undefined);
+                    if (!anyValue) {
+                        _autoRecalcTried = true;
+                        try {
+                            await fetch('/api/kpis/recalc', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ includeCycleTimes: false }),
+                            });
+                        } catch (e) { /* manual Recalculate remains available */ }
+                        return loadKPIs();
+                    }
                 }
 
                 const tsEl = document.getElementById('lastCalcTimestamp');
