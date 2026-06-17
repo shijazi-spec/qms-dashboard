@@ -1106,6 +1106,27 @@
                 <strong>Pre-import check.</strong> Paste your incoming lead/deal list (CSV with a <code>domain</code> column, or a JSON array) and click <em>Check</em>. Each row is matched against existing CRM data and gets a verdict so you don't push duplicates or active customers as fresh leads.
             </div>
 
+            <!-- Rejection rules note — the logic the Check applies, for the operator. -->
+            <details class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 text-sm text-slate-800">
+                <summary class="cursor-pointer font-semibold text-slate-900">📋 How a row is screened — rejection rules (click to expand)</summary>
+                <div class="mt-2 space-y-2">
+                    <p><strong>Scope:</strong> corporate / B2B only. Marketplace &amp; merchant records (layouts <code>Marketplace</code> / <code>Partner Accounts</code>) are out of scope and pass through.</p>
+                    <p class="font-semibold text-slate-900">Tier 1 — is the <u>company</u> already ours? <span class="font-normal">(matched by website / domain → corporate phone → company name; checked against all CRM records, not just clusters)</span></p>
+                    <ul class="list-disc ml-5 space-y-1">
+                        <li><strong>BLOCK</strong> — existing customer: a Deal at <em>Agreement Signed / Paid / Closed Won / Client Activated / Transferred to CS</em> with <strong>no churn date</strong>. Do not pursue; route to CS.</li>
+                        <li><strong>REVIEW / WARN</strong> — churned customer (same stages but with a churn date): within cool-off (<strong>180 days Private / 365 days Government</strong>) → REVIEW (CS sign-off); past cool-off → WARN (may re-engage, notify CS).</li>
+                        <li><strong>DUPLICATE</strong> — active open Deal (Proposal, Negotiation, Agreement Sent, Awaiting PO…) or active Lead: already in the pipeline → route to the existing owner, don't re-import.</li>
+                        <li><strong>DUPLICATE (low) → LINK</strong> — only Closed-Lost deals on file: Sales may re-engage; link the new lead to the existing Account instead of forking a new record.</li>
+                    </ul>
+                    <p class="font-semibold text-slate-900">Tier 2 — is this exact <u>person</u> already in CRM? <span class="font-normal">(only if Tier 1 finds nothing)</span></p>
+                    <ul class="list-disc ml-5 space-y-1">
+                        <li><strong>DUPLICATE</strong> — contact <em>email (exact)</em> already on file: update the existing record, don't create a new one.</li>
+                        <li><strong>REVIEW</strong> — only the <em>mobile / second phone</em> matches (no email): likely the same person, but verify before importing.</li>
+                    </ul>
+                    <p class="text-xs text-slate-600"><strong>Match reliability:</strong> website/domain &amp; exact email are strong (confident). Phone and company-name are weaker — a single weak signal, or a match into an oversized catch-all cluster, is downgraded to <strong>REVIEW</strong> (verify by hand) and the matched record's churn/CS data is withheld, so it never shows another company's churn date. Free-mail (gmail/hotmail) is never used to identify a company. No match → <strong>PASS</strong> (safe to import).</p>
+                </div>
+            </details>
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
                 <div>
                     <label for="preflightInput" class="block text-xs font-medium text-gray-700 mb-1">Input (CSV or JSON)</label>

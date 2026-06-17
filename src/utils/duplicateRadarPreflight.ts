@@ -102,11 +102,12 @@ export interface PreflightResultRow {
    * How the row's cluster was found. Added 2026-06-11 when Preflight
    * grew phone + company-name fallback lookups:
    *   "domain"       — domain or email-domain match (the original path)
+   *   "email"        — exact contact email matched a CRM record (Tier 2, strong)
    *   "phone"        — normalized phone hit a duplicate_records row
    *   "company_name" — normalized company name fuzzy-matched a cluster
    *   null           — no match (PASS rows) or no fallback path
    */
-  matched_via: "domain" | "phone" | "company_name" | null;
+  matched_via: "domain" | "email" | "phone" | "company_name" | null;
   /**
    * Business-language recommendation for this row — what a Head of Sales
    * needs to read in one line. Derived deterministically from verdict +
@@ -435,11 +436,34 @@ export function resolvePhone(row: PreflightInputRow): string | null {
  * names actually find their cluster. Empty / 1-2 char garbage is
  * still dropped.
  */
+/**
+ * Generic / placeholder company names that must NEVER be used for fuzzy
+ * matching — they collide unrelated companies into one cluster (the
+ * "Confidential" catch-all that produced false rejects). Compared against the
+ * normalised name. 2026-06-17 per the Preflight Rejection Rules spec §1/§4.
+ */
+const GENERIC_COMPANY_NAMES = new Set([
+  "confidential",
+  "confidencial",
+  "na",
+  "n a",
+  "nan",
+  "unknown",
+  "none",
+  "null",
+  "test",
+  "company",
+  "tbd",
+  "private",
+]);
+
 export function resolveCompany(row: PreflightInputRow): string | null {
   const raw = (row.company_name ?? "").trim();
   if (!raw) return null;
   const normalized = normalizeCompanyName(raw);
-  return normalized && normalized.length >= 3 ? normalized : null;
+  if (!normalized || normalized.length < 3) return null;
+  if (GENERIC_COMPANY_NAMES.has(normalized)) return null; // placeholder → no match
+  return normalized;
 }
 
 /**
@@ -650,7 +674,160 @@ export interface PreflightClusterRow {
  */
 export interface PreflightRowMatch {
   cluster: PreflightClusterRow;
-  matched_via: "domain" | "phone" | "company_name";
+  matched_via: "domain" | "email" | "phone" | "company_name";
+}
+
+/**
+ * One CRM record pulled for the all-records (Tier-1 / Tier-2) fallback — the
+ * fix for companies that ARE in the CRM but have no formed duplicate-cluster
+ * (the false-pass gap). Aggregated by `buildClusterFromRecords` into a
+ * synthetic PreflightClusterRow so the existing verdict ladder applies.
+ */
+export interface PreflightRecordRow {
+  cluster_id: number | null;
+  domain: string | null;
+  record_type: string | null;
+  stage: string | null;
+  status: string | null;
+  lead_status: string | null;
+  churn_date: string | null;
+  gov_type: string | null;
+  owner_name: string | null;
+  record_name: string | null;
+  company_name: string | null;
+  zoho_record_id: string | null;
+  layout_name: string | null;
+  account_type: string | null;
+  lead_type: string | null;
+}
+
+// Tier-1 stage vocabulary (Preflight Rejection Rules spec §2).
+const PF_CUSTOMER_STAGES = new Set([
+  "paid",
+  "agreement signed",
+  "closed won",
+  "client activated",
+  "transferred to cs",
+]);
+const PF_DEAD_STAGE_RE = /lost|dropped|cancel/;
+const PF_DEAD_LEAD_STATUS = new Set([
+  "junk lead",
+  "bogus lead",
+  "lost lead",
+  "not qualified",
+  "disqualified",
+  "converted",
+]);
+
+/** A record is corporate UNLESS it sits on an explicit merchant layout. */
+function _recordIsCorporate(r: PreflightRecordRow): boolean {
+  if ((r.record_type || "").toLowerCase() === "contact") return true; // Standard layout = no signal
+  const layout = (r.layout_name || "").toLowerCase();
+  const merchant = MERCHANT_LAYOUT_NAMES.map((n) => n.toLowerCase());
+  if (!merchant.includes(layout)) return true;
+  if ((r.account_type || "").toLowerCase() === "customer") return true;
+  if ((r.lead_type || "").toLowerCase() === "customer") return true;
+  return false;
+}
+
+/**
+ * PURE — aggregate the CRM records sharing one domain into a synthetic
+ * PreflightClusterRow and apply the Tier-1 rules (current customer / churned
+ * cool-off / active pipeline / closed-lost). Returns null when the company is
+ * entirely marketplace/merchant (out of scope). Unit-tested without a DB.
+ */
+export function buildClusterFromRecords(
+  domain: string,
+  records: PreflightRecordRow[],
+  todayMs: number,
+): PreflightClusterRow | null {
+  const corp = records.filter(_recordIsCorporate);
+  const isLDA = (r: PreflightRecordRow) =>
+    ["lead", "deal", "account"].includes((r.record_type || "").toLowerCase());
+  if (!corp.some(isLDA)) return null; // no corporate Lead/Deal/Account → out of scope
+
+  const ofType = (t: string) =>
+    corp.filter((r) => (r.record_type || "").toLowerCase() === t);
+  const deals = ofType("deal");
+  const leads = ofType("lead");
+  const stageOf = (r: PreflightRecordRow) => (r.stage || "").toLowerCase().trim();
+
+  const customerDeals = deals.filter((d) => PF_CUSTOMER_STAGES.has(stageOf(d)));
+  const activeDeals = deals.filter((d) => {
+    const s = stageOf(d);
+    return s !== "" && !PF_CUSTOMER_STAGES.has(s) && !PF_DEAD_STAGE_RE.test(s);
+  });
+  const hasActiveDeal = activeDeals.length > 0;
+  const hasActiveLead = leads.some(
+    (l) => !PF_DEAD_LEAD_STATUS.has((l.lead_status || l.status || "").toLowerCase()),
+  );
+
+  const churnDates = deals
+    .map((d) => (d.churn_date || "").trim())
+    .filter((s) => s !== "")
+    .sort();
+  const churnDate = churnDates.length ? churnDates[churnDates.length - 1]! : null;
+  let churnDays: number | null = null;
+  if (churnDate) {
+    const t = Date.parse(churnDate);
+    if (Number.isFinite(t)) churnDays = Math.max(0, Math.floor((todayMs - t) / 86400000));
+  }
+  const isGov = records.some((r) => (r.gov_type || "").trim() !== "");
+  const coolOff = isGov ? 365 : 180;
+
+  // Tier-1 cs_overlap_verdict: current customer / churned-in-cool-off / past.
+  let cs: string | null = null;
+  if (customerDeals.length > 0) {
+    if (churnDate) cs = churnDays != null && churnDays <= coolOff ? "review" : "warn";
+    else cs = "block";
+  }
+
+  const pick = (
+    rs: PreflightRecordRow[],
+    field: "zoho_record_id" | "record_name",
+  ) => rs.map((r) => r[field]).find((v) => v != null && v !== "") ?? null;
+  const owners = Array.from(
+    new Set(corp.map((r) => (r.owner_name || "").trim()).filter(Boolean)),
+  );
+  const repId = (records.find((r) => r.cluster_id != null)?.cluster_id) ?? 0;
+  const companyName =
+    corp.map((r) => (r.company_name || r.record_name || "").trim()).find(Boolean) || null;
+
+  return {
+    id: repId,
+    domain,
+    company_name: companyName,
+    cs_overlap_verdict: cs,
+    pipeline_lifecycle_state: null,
+    client_sector: isGov ? "government" : "private",
+    arr_exposure: null,
+    owners_involved: owners,
+    total_leads: leads.length,
+    total_deals: deals.length,
+    total_contacts: ofType("contact").length,
+    total_accounts: ofType("account").length,
+    has_active_deal: hasActiveDeal,
+    has_active_lead: hasActiveLead,
+    has_corporate_records: true,
+    corporate_leads: leads.length,
+    corporate_deals: deals.length,
+    corporate_contacts: ofType("contact").length,
+    corporate_accounts: ofType("account").length,
+    active_lead_zoho_id: pick(
+      leads.filter((l) => !PF_DEAD_LEAD_STATUS.has((l.lead_status || l.status || "").toLowerCase())),
+      "zoho_record_id",
+    ),
+    active_lead_name: pick(leads, "record_name"),
+    active_deal_zoho_id: pick(activeDeals, "zoho_record_id"),
+    active_deal_name: pick(activeDeals, "record_name"),
+    client_deal_zoho_id: pick(customerDeals, "zoho_record_id"),
+    client_deal_name: pick(customerDeals, "record_name"),
+    account_zoho_id_link: pick(ofType("account"), "zoho_record_id"),
+    account_name_link: pick(ofType("account"), "record_name"),
+    churn_date: churnDate,
+    churn_days: churnDays,
+    cs_owner: pick(customerDeals, "record_name") ? owners[0] ?? null : null,
+  };
 }
 
 /**
@@ -835,8 +1012,13 @@ export function classifyPreflightRows(input: {
     const UNVERIFIED_NONTRIVIAL_SIZE = 20;
     const _rowHasRealDomain =
       !!domain && domain.includes(".") && !isFreeMailRow(row);
+    // Domain and exact-email are STRONG signals (never downgraded). Phone and
+    // company-name are weak — unreliable into a catch-all, or from an
+    // unverified lead into a non-trivial cluster.
+    const _strongSignal =
+      matched.matched_via === "domain" || matched.matched_via === "email";
     const _unreliableMatch =
-      matched.matched_via !== "domain" &&
+      !_strongSignal &&
       (_clusterSize > CATCHALL_CLUSTER_SIZE ||
         (!_rowHasRealDomain && _clusterSize > UNVERIFIED_NONTRIVIAL_SIZE));
     if (_unreliableMatch) {
@@ -923,7 +1105,9 @@ export function classifyPreflightRows(input: {
         ? "phone_match__"
         : matched.matched_via === "company_name"
           ? "company_fuzzy_match__"
-          : "";
+          : matched.matched_via === "email"
+            ? "email_match__"
+            : "";
     const owners = extractOwners(c.owners_involved);
     const moduleCounts = {
       leads: leadsN,
@@ -1719,6 +1903,117 @@ export async function runPreflight(input: {
     if (c) {
       matchByRow.set(i, { cluster: c, matched_via: "company_name" });
     }
+  }
+
+  // ── PATH 4 — all-records fallback (Tier 1 + Tier 2) ─────────────────────
+  // Rows still unmatched after the cluster paths: match against the FULL
+  // duplicate_records set (NOT just formed duplicate_clusters) by domain,
+  // exact contact email, or phone. This is the fix for companies that ARE in
+  // the CRM but have no formed cluster (the false-pass gap — saib, sdb, …).
+  // Records are aggregated per domain via buildClusterFromRecords so the
+  // existing verdict ladder applies. Fully defensive: any failure degrades to
+  // the prior (cluster-only) behavior and never breaks the working preflight.
+  try {
+    const unmatched: number[] = [];
+    for (let i = 0; i < examineCount; i++) if (!matchByRow.has(i)) unmatched.push(i);
+    if (unmatched.length > 0) {
+      const todayMs = Date.now();
+      const emailByRow = new Map<number, string>();
+      const domSet = new Set<string>();
+      const emailSet = new Set<string>();
+      const phoneSet = new Set<string>();
+      for (const i of unmatched) {
+        const d = domainByRow.get(i);
+        if (d && d.includes(".")) domSet.add(d);
+        const em = (rows[i]!.email || "").trim().toLowerCase();
+        if (em.includes("@")) {
+          emailByRow.set(i, em);
+          emailSet.add(em);
+        }
+        const p = phoneByRow.get(i);
+        if (p) phoneSet.add(p);
+      }
+      if (domSet.size > 0 || emailSet.size > 0 || phoneSet.size > 0) {
+        const recQ = await queryWithTimeout<
+          PreflightRecordRow & {
+            email?: string | null;
+            phone_normalized?: string | null;
+            mobile_normalized?: string | null;
+          }
+        >(
+          `SELECT cluster_id, domain, record_type,
+                  raw_data->>'Stage'        AS stage,
+                  status,
+                  raw_data->>'Lead_Status'  AS lead_status,
+                  NULLIF(raw_data->>'Churn_Date','') AS churn_date,
+                  gov_type, owner_name, record_name, company_name, zoho_record_id,
+                  layout_name, account_type, lead_type,
+                  LOWER(email) AS email, phone_normalized, mobile_normalized
+             FROM duplicate_records
+            WHERE (domain IS NOT NULL AND LOWER(domain) = ANY($1::text[]))
+               OR (email  IS NOT NULL AND LOWER(email)  = ANY($2::text[]))
+               OR (phone_normalized  = ANY($3::text[]))
+               OR (mobile_normalized = ANY($3::text[]))
+            LIMIT 20000`,
+          [Array.from(domSet), Array.from(emailSet), Array.from(phoneSet)],
+        );
+        const recs = recQ?.rows ?? [];
+        const recsByDomain = new Map<string, PreflightRecordRow[]>();
+        const emailToDomain = new Map<string, string>();
+        const phoneToDomain = new Map<string, string>();
+        for (const r of recs) {
+          const dom = (r.domain || "").trim().toLowerCase();
+          if (!dom) continue;
+          if (!recsByDomain.has(dom)) recsByDomain.set(dom, []);
+          recsByDomain.get(dom)!.push(r);
+          const em = (r as any).email as string | null | undefined;
+          if (em && !emailToDomain.has(em)) emailToDomain.set(em, dom);
+          const pn = (r as any).phone_normalized as string | null | undefined;
+          const mn = (r as any).mobile_normalized as string | null | undefined;
+          if (pn && !phoneToDomain.has(pn)) phoneToDomain.set(pn, dom);
+          if (mn && !phoneToDomain.has(mn)) phoneToDomain.set(mn, dom);
+        }
+        const clusterCache = new Map<string, PreflightClusterRow | null>();
+        const buildFor = (dom: string): PreflightClusterRow | null => {
+          if (!clusterCache.has(dom)) {
+            clusterCache.set(
+              dom,
+              buildClusterFromRecords(dom, recsByDomain.get(dom) || [], todayMs),
+            );
+          }
+          return clusterCache.get(dom) ?? null;
+        };
+        for (const i of unmatched) {
+          const d = domainByRow.get(i);
+          let dom: string | null = null;
+          let via: "domain" | "email" | "phone" = "domain";
+          if (d && recsByDomain.has(d)) {
+            dom = d;
+            via = "domain";
+          } else {
+            const em = emailByRow.get(i);
+            const p = phoneByRow.get(i);
+            if (em && emailToDomain.has(em)) {
+              dom = emailToDomain.get(em)!;
+              via = "email";
+            } else if (p && phoneToDomain.has(p)) {
+              dom = phoneToDomain.get(p)!;
+              via = "phone";
+            }
+          }
+          if (dom) {
+            const cl = buildFor(dom);
+            if (cl) matchByRow.set(i, { cluster: cl, matched_via: via });
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Degrade gracefully — the cluster paths already populated matchByRow.
+    console.warn(
+      "[preflight] all-records fallback skipped:",
+      (e as any)?.message || e,
+    );
   }
 
   // OPT-IN — refresh the CS overlap verdict on every matched cluster.

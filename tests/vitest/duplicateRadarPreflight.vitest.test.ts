@@ -15,8 +15,10 @@ import {
   resolvePhone,
   resolveCompany,
   shouldCreateForVerdict,
+  buildClusterFromRecords,
   type PreflightClusterRow,
   type PreflightRowMatch,
+  type PreflightRecordRow,
 } from "../../src/utils/duplicateRadarPreflight";
 
 describe("resolveDomain", () => {
@@ -372,5 +374,76 @@ describe("shouldCreateForVerdict (R5 — webhook decision policy)", () => {
     expect(shouldCreateForVerdict("" as any)).toBe(false);
     expect(shouldCreateForVerdict(null)).toBe(false);
     expect(shouldCreateForVerdict(undefined)).toBe(false);
+  });
+});
+
+describe("buildClusterFromRecords — Tier-1 company state engine", () => {
+  const TODAY = Date.parse("2026-06-17T00:00:00Z");
+  const rec = (o: Partial<PreflightRecordRow>): PreflightRecordRow => ({
+    cluster_id: 5, domain: "acme.com", record_type: "deal", stage: null, status: null,
+    lead_status: null, churn_date: null, gov_type: null, owner_name: "Owner A",
+    record_name: "Acme", company_name: "Acme Corp", zoho_record_id: "1",
+    layout_name: null, account_type: null, lead_type: null, ...o,
+  });
+
+  test("current customer (Paid, no churn) → BLOCK", () => {
+    const c = buildClusterFromRecords("acme.com", [rec({ stage: "Paid" })], TODAY)!;
+    expect(c.cs_overlap_verdict).toBe("block");
+    expect(c.has_corporate_records).toBe(true);
+  });
+
+  test("churned within Private 180-day cool-off → REVIEW", () => {
+    const c = buildClusterFromRecords("acme.com",
+      [rec({ stage: "Paid", churn_date: "2026-05-01" })], TODAY)!;
+    expect(c.cs_overlap_verdict).toBe("review");
+  });
+
+  test("churned past Private cool-off → WARN", () => {
+    const c = buildClusterFromRecords("acme.com",
+      [rec({ stage: "Agreement Signed", churn_date: "2024-01-01" })], TODAY)!;
+    expect(c.cs_overlap_verdict).toBe("warn");
+  });
+
+  test("government churn within 365-day window → REVIEW (not WARN)", () => {
+    const c = buildClusterFromRecords("acme.gov.sa",
+      [rec({ stage: "Paid", churn_date: "2025-10-01", gov_type: "Government" })], TODAY)!;
+    expect(c.cs_overlap_verdict).toBe("review");
+    expect(c.client_sector).toBe("government");
+  });
+
+  test("active open deal (Proposal) → no cs verdict, has_active_deal", () => {
+    const c = buildClusterFromRecords("acme.com", [rec({ stage: "Proposal" })], TODAY)!;
+    expect(c.cs_overlap_verdict).toBeNull();
+    expect(c.has_active_deal).toBe(true);
+  });
+
+  test("closed-lost only → no cs verdict, no active deal, deals counted", () => {
+    const c = buildClusterFromRecords("acme.com", [rec({ stage: "Closed Lost" })], TODAY)!;
+    expect(c.cs_overlap_verdict).toBeNull();
+    expect(c.has_active_deal).toBe(false);
+    expect(c.total_deals).toBe(1);
+  });
+
+  test("active lead detected from Lead_Status", () => {
+    const c = buildClusterFromRecords("acme.com",
+      [rec({ record_type: "lead", stage: null, lead_status: "Attempted to Contact" })], TODAY)!;
+    expect(c.has_active_lead).toBe(true);
+  });
+
+  test("entirely marketplace/merchant → out of scope (null)", () => {
+    const c = buildClusterFromRecords("shop.com",
+      [rec({ record_type: "account", stage: null, layout_name: "Marketplace" })], TODAY);
+    expect(c).toBeNull();
+  });
+});
+
+describe("resolveCompany — generic-name blacklist", () => {
+  test("drops placeholder company names", () => {
+    expect(resolveCompany({ company_name: "Confidential" })).toBeNull();
+    expect(resolveCompany({ company_name: "N/A" })).toBeNull();
+    expect(resolveCompany({ company_name: "Unknown" })).toBeNull();
+  });
+  test("keeps a real company name", () => {
+    expect(resolveCompany({ company_name: "Saudi Aramco" })).not.toBeNull();
   });
 });
