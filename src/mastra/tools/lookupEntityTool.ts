@@ -37,6 +37,34 @@ function zohoRecordUrl(module: ZModule, id?: string | null): string | null {
   return `https://crm.zoho${tld}/crm/tab/${module}/${id}`;
 }
 
+/**
+ * Race a promise against a timeout so a single hanging Zoho call can never
+ * stall the whole lookup. Without this, one slow module search leaves the
+ * Promise.all pending forever → the agent waits → the user gets a blank reply
+ * / endless spinner. On timeout we reject so the caller's try/catch records it
+ * as a per-module error and still returns a usable answer.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)),
+      ms,
+    );
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
+const SEARCH_TIMEOUT_MS = 12_000;
+
 function nameOf(v: any): string | null {
   if (!v) return null;
   if (typeof v === "string") return v;
@@ -155,7 +183,11 @@ export const lookupEntityTool = createTool({
     await Promise.all(
       wanted.map(async (m) => {
         try {
-          const recs = await searchZohoRecordsByWord(m, query);
+          const recs = await withTimeout(
+            searchZohoRecordsByWord(m, query),
+            SEARCH_TIMEOUT_MS,
+            `${m} search`,
+          );
           counts[m] = recs.length;
           records[m] = recs.slice(0, cap).map((r) => summarize(m, r));
         } catch (e: any) {
@@ -168,7 +200,11 @@ export const lookupEntityTool = createTool({
 
     let clusters: any[] = [];
     try {
-      clusters = await searchClustersByText(query, 10);
+      clusters = await withTimeout(
+        searchClustersByText(query, 10),
+        SEARCH_TIMEOUT_MS,
+        "cluster search",
+      );
     } catch (e: any) {
       errors.push(`clusters: ${e?.message || String(e)}`);
     }
