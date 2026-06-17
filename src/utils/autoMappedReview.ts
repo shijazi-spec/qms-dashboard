@@ -93,17 +93,29 @@ export async function reviewNextBatch(
   return result;
 }
 
-export type BulkReviewAction = "confirm-satisfied" | "reject-missing";
+export type BulkReviewAction = "confirm-satisfied" | "reject-missing" | "confirm-all";
 
 /**
- * Bulk-apply the AI verdicts to the pending queue:
+ * Bulk-apply to the pending queue:
  *   confirm-satisfied → confirm every pending link the judge rated 'satisfied'
  *   reject-missing    → delete every pending link the judge rated 'missing_topic'
+ *   confirm-all       → confirm EVERY pending link regardless of verdict (owner
+ *                       override; overrides the audit-grade filter — use with care)
  */
 export async function bulkActionByVerdict(
   action: BulkReviewAction,
   by: string,
 ): Promise<{ affected: number }> {
+  if (action === "confirm-all") {
+    const r = await pool.query(
+      `UPDATE obligation_documents
+          SET awaiting_review = FALSE, link_method = 'bulk_confirmed', linked_by = $1
+        WHERE awaiting_review = TRUE
+        RETURNING id`,
+      [by],
+    );
+    return { affected: r.rowCount || 0 };
+  }
   if (action === "confirm-satisfied") {
     const r = await pool.query(
       `UPDATE obligation_documents od

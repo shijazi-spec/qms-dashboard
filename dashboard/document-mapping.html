@@ -237,6 +237,7 @@
                     </button>
                     <button type="button" data-on-click="bulkConfirmReviewed" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 font-medium" data-testid="button-bulk-confirm" data-i18n="docmap.bulk_confirm">Confirm AI-approved</button>
                     <button type="button" data-on-click="bulkRejectReviewed" class="text-xs px-3 py-1.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-medium" data-testid="button-bulk-reject" data-i18n="docmap.bulk_reject">Reject AI-rejected</button>
+                    <button type="button" data-on-click="bulkConfirmAll" class="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 font-medium" data-testid="button-bulk-confirm-all" title="Confirms every pending link regardless of the AI verdict" data-i18n="docmap.bulk_confirm_all">Confirm all</button>
                     <button type="button" data-on-click="loadAutoMapped" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium" data-testid="button-automapped-reload" data-i18n="common.refresh">Refresh</button>
                 </div>
             </div>
@@ -1132,6 +1133,7 @@
         }
         function bulkConfirmReviewed() { bulkReview('confirm-satisfied', 'docmap.bulk_confirm_confirm', 'Confirm every pending link the AI rated "Satisfied"?'); }
         function bulkRejectReviewed() { bulkReview('reject-missing', 'docmap.bulk_reject_confirm', 'Reject (delete) every pending link the AI rated "Off-topic"?'); }
+        function bulkConfirmAll() { bulkReview('confirm-all', 'docmap.bulk_confirm_all_confirm', 'Confirm ALL pending links regardless of the AI verdict (including Off-topic ones)? Not recommended for audit-grade — review the verdicts first.'); }
         async function confirmAutoMap(linkId) {
             const r = await fetch('/api/compliance/auto-mapped/' + linkId + '/confirm', { method: 'POST', credentials: 'same-origin' });
             if (r.ok) loadAutoMapped();

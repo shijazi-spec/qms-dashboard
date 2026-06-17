@@ -1937,6 +1937,8 @@
     "bulk_applied": "link(s) updated.",
     "bulk_confirm_confirm": "Confirm every pending link the AI rated \"Satisfied\"?",
     "bulk_reject_confirm": "Reject (delete) every pending link the AI rated \"Off-topic\"?",
+    "bulk_confirm_all": "Confirm all",
+    "bulk_confirm_all_confirm": "Confirm ALL pending links regardless of the AI verdict (including Off-topic ones)? Not recommended for audit-grade — review the verdicts first.",
     "method_ai": "AI match",
     "method_ai_title": "Matched by AI semantic judgement",
     "refresh_all": "Refresh",

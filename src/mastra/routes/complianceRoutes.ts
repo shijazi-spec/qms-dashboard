@@ -436,9 +436,26 @@ export const complianceRoutes = [
           const status = url.searchParams.get("status") || undefined;
           const priority = url.searchParams.get("priority") || undefined;
           const department = url.searchParams.get("department") || undefined;
-          const regulation_id = url.searchParams.get("regulation_id")
-            ? parseInt(url.searchParams.get("regulation_id")!)
-            : undefined;
+          // The regulation_id param may be a real integer id OR an obfuscated
+          // public_id (UUID) — the regulations list endpoint obfuscates ids, so
+          // the Mapping Console's framework dropdown holds UUIDs. Resolve a UUID
+          // to its real id; otherwise the filter would be dropped and clauses
+          // from every framework would show (the reported bug).
+          const regParam = url.searchParams.get("regulation_id") || "";
+          let regulation_id: number | undefined;
+          if (regParam) {
+            const n = parseInt(regParam, 10);
+            if (Number.isFinite(n) && String(n) === regParam) {
+              regulation_id = n;
+            } else {
+              const { sharedPool } = await import("../../utils/sharedPool");
+              const rr = await sharedPool.query(
+                `SELECT id FROM regulations WHERE public_id = $1 LIMIT 1`,
+                [regParam],
+              );
+              regulation_id = rr.rows[0]?.id;
+            }
+          }
 
           logger?.info("📋 [ComplianceAPI] GET /api/compliance/obligations");
 
@@ -2143,13 +2160,20 @@ export const complianceRoutes = [
           const raw = String(
             body.action || new URL(c.req.url).searchParams.get("action") || "",
           ).toLowerCase();
-          const action = raw.includes("confirm")
-            ? "confirm-satisfied"
-            : raw.includes("reject")
-              ? "reject-missing"
-              : "";
-          if (action !== "confirm-satisfied" && action !== "reject-missing") {
-            return c.json({ error: "action must be confirm-satisfied or reject-missing" }, 400);
+          const action =
+            raw.includes("confirm") && raw.includes("all")
+              ? "confirm-all"
+              : raw.includes("confirm")
+                ? "confirm-satisfied"
+                : raw.includes("reject")
+                  ? "reject-missing"
+                  : "";
+          if (
+            action !== "confirm-satisfied" &&
+            action !== "reject-missing" &&
+            action !== "confirm-all"
+          ) {
+            return c.json({ error: "action must be confirm-satisfied, confirm-all or reject-missing" }, 400);
           }
           const { bulkActionByVerdict } = await import(
             "../../utils/autoMappedReview"
