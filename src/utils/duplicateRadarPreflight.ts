@@ -114,6 +114,20 @@ export interface PreflightResultRow {
    * owner X" instead of guessing from the generic owner list.
    */
   cs_owner?: string | null;
+  /**
+   * Sarah 2026-06-17 — clickable Zoho links for the EXISTING records
+   * the rejection points at. The Excel report exposes each one in its
+   * own column so the operator clicks straight to the live Lead /
+   * Deal / Account in Zoho without re-querying the radar. Up to four
+   * fields are populated depending on what the matched cluster
+   * contains. Empty / null on PASS rows.
+   */
+  crm_links?: {
+    active_lead?: { url: string; label: string } | null;
+    active_deal?: { url: string; label: string } | null;
+    client_deal?: { url: string; label: string } | null;
+    account?: { url: string; label: string } | null;
+  } | null;
 }
 
 export interface PreflightSummary {
@@ -412,6 +426,51 @@ export function resolveCompany(row: PreflightInputRow): string | null {
  * a superset of what's commonly seen on Saudi vendor lists; kept here
  * (not env-tunable) so the rule travels with the code.
  */
+/**
+ * Sarah 2026-06-17 — the WalaPlus Zoho org id, used to build clickable
+ * record URLs in the rejected-row briefing. Same id used across the
+ * rest of the dashboard (calls.html, ai-approvals.html etc.); kept
+ * hardcoded here so the helper is dependency-free.
+ */
+const ZOHO_ORG_ID = "org766568398";
+
+/**
+ * Build a clickable Zoho CRM URL for one record. Zoho's URL tab names
+ * differ from the module names — Deals use the "Potentials" tab path.
+ */
+export function buildZohoRecordUrl(
+  module: "Leads" | "Deals" | "Contacts" | "Accounts",
+  zohoRecordId: string,
+): string {
+  const tab =
+    module === "Deals" ? "Potentials"
+    : module === "Leads" ? "Leads"
+    : module === "Contacts" ? "Contacts"
+    : "Accounts";
+  return `https://crm.zoho.com/crm/${ZOHO_ORG_ID}/tab/${tab}/${encodeURIComponent(
+    zohoRecordId,
+  )}`;
+}
+
+/**
+ * Build the per-row crm_links payload from a matched cluster. Each
+ * sub-field is null when the cluster doesn't carry a record of that
+ * type (or when the record has no Zoho id). The Excel export reads
+ * this directly to populate hyperlink cells.
+ */
+function _buildCrmLinks(c: any): PreflightResultRow["crm_links"] {
+  const mk = (mod: "Leads" | "Deals" | "Accounts", zid?: string | null, name?: string | null) =>
+    zid
+      ? { url: buildZohoRecordUrl(mod, zid), label: (name || "").trim() || zid }
+      : null;
+  return {
+    active_lead:  mk("Leads",    c?.active_lead_zoho_id,  c?.active_lead_name),
+    active_deal:  mk("Deals",    c?.active_deal_zoho_id,  c?.active_deal_name),
+    client_deal:  mk("Deals",    c?.client_deal_zoho_id,  c?.client_deal_name),
+    account:      mk("Accounts", c?.account_zoho_id_link, c?.account_name_link),
+  };
+}
+
 const FREE_MAIL_DOMAINS: ReadonlySet<string> = new Set([
   "gmail.com",
   "googlemail.com",
@@ -514,6 +573,24 @@ export interface PreflightClusterRow {
   corporate_deals?: number;
   corporate_contacts?: number;
   corporate_accounts?: number;
+  /**
+   * Sarah 2026-06-17 — representative Zoho record per type so the
+   * briefing artifacts (Excel report rows, copy-email body) can carry
+   * a CLICKABLE link straight to the existing Lead / Deal / Account
+   * on every rejected row. Pick rule per type: prefer ACTIVE over
+   * closed/lost; for the "client deal" link use a Paid / Agreement
+   * Signed / Closed Won / Awaiting PO / Client Activated / Transferred
+   * to CS / Agreement Sent deal. Used by buildZohoRecordUrl + the
+   * Excel export's hyperlink columns.
+   */
+  active_lead_zoho_id?: string | null;
+  active_lead_name?: string | null;
+  active_deal_zoho_id?: string | null;
+  active_deal_name?: string | null;
+  client_deal_zoho_id?: string | null;
+  client_deal_name?: string | null;
+  account_zoho_id_link?: string | null;
+  account_name_link?: string | null;
   /**
    * The latest Churn_Date observed across the cluster's Deal records
    * (ISO date string, e.g. "2024-11-03"). Surfaces in the WARN /
@@ -801,6 +878,7 @@ export function classifyPreflightRows(input: {
       churn_date: cAny.churn_date ?? null,
       churn_days: cAny.churn_days ?? null,
       cs_owner: cAny.cs_owner ?? null,
+      crm_links: _buildCrmLinks(cAny),
     });
   }
 
@@ -1272,6 +1350,14 @@ export async function runPreflight(input: {
         corporate_accounts: string;
         churn_date: string | null;
         cs_owner: string | null;
+        active_lead_zoho_id: string | null;
+        active_lead_name: string | null;
+        active_deal_zoho_id: string | null;
+        active_deal_name: string | null;
+        client_deal_zoho_id: string | null;
+        client_deal_name: string | null;
+        account_zoho_id_link: string | null;
+        account_name_link: string | null;
       }>(
         // Sarah 2026-06-17 — three things this query does:
         // (1) Corporate-scope filter — only records whose
@@ -1322,7 +1408,61 @@ export async function runPreflight(input: {
                                  'termination')
                             AND owner_name IS NOT NULL
                             AND owner_name <> '')
-                )[1] AS cs_owner
+                )[1] AS cs_owner,
+                -- Sarah 2026-06-17 — representative Zoho ids for the
+                -- briefing's clickable CRM links. Prefer ACTIVE Lead
+                -- and ACTIVE Deal over closed/lost; the "client_deal"
+                -- pick covers Paid / Agreement Signed / Closed Won /
+                -- handoff variants so the email tells Sales where the
+                -- customer relationship actually lives.
+                MAX(CASE WHEN _is_corporate AND record_type = 'lead'
+                          AND COALESCE(LOWER(raw_data->>'Lead_Status'), LOWER(status), '')
+                              NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted')
+                          AND zoho_record_id IS NOT NULL
+                         THEN zoho_record_id END) AS active_lead_zoho_id,
+                MAX(CASE WHEN _is_corporate AND record_type = 'lead'
+                          AND COALESCE(LOWER(raw_data->>'Lead_Status'), LOWER(status), '')
+                              NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted')
+                          AND record_name IS NOT NULL
+                         THEN record_name END) AS active_lead_name,
+                MAX(CASE WHEN _is_corporate AND record_type = 'deal'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%lost%'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%won%'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE 'closed%'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%dropped%'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%cancel%'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT IN
+                              ('paid','agreement signed','client activated','transferred to cs','awaiting po')
+                          AND zoho_record_id IS NOT NULL
+                         THEN zoho_record_id END) AS active_deal_zoho_id,
+                MAX(CASE WHEN _is_corporate AND record_type = 'deal'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%lost%'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%won%'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE 'closed%'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%dropped%'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%cancel%'
+                          AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT IN
+                              ('paid','agreement signed','client activated','transferred to cs','awaiting po')
+                          AND record_name IS NOT NULL
+                         THEN record_name END) AS active_deal_name,
+                MAX(CASE WHEN _is_corporate AND record_type = 'deal'
+                          AND LOWER(COALESCE(raw_data->>'Stage','')) IN
+                              ('paid','agreement signed','closed won','agreement sent',
+                               'awaiting po','client activated','transferred to cs')
+                          AND zoho_record_id IS NOT NULL
+                         THEN zoho_record_id END) AS client_deal_zoho_id,
+                MAX(CASE WHEN _is_corporate AND record_type = 'deal'
+                          AND LOWER(COALESCE(raw_data->>'Stage','')) IN
+                              ('paid','agreement signed','closed won','agreement sent',
+                               'awaiting po','client activated','transferred to cs')
+                          AND record_name IS NOT NULL
+                         THEN record_name END) AS client_deal_name,
+                MAX(CASE WHEN _is_corporate AND record_type = 'account'
+                          AND zoho_record_id IS NOT NULL
+                         THEN zoho_record_id END) AS account_zoho_id_link,
+                MAX(CASE WHEN _is_corporate AND record_type = 'account'
+                          AND record_name IS NOT NULL
+                         THEN record_name END) AS account_name_link
            FROM (
              SELECT *,
                     (
@@ -1346,6 +1486,14 @@ export async function runPreflight(input: {
         corporate_accounts: number;
         churn_date: string | null;
         cs_owner: string | null;
+        active_lead_zoho_id: string | null;
+        active_lead_name: string | null;
+        active_deal_zoho_id: string | null;
+        active_deal_name: string | null;
+        client_deal_zoho_id: string | null;
+        client_deal_name: string | null;
+        account_zoho_id_link: string | null;
+        account_name_link: string | null;
       }>();
       if (flagsQ && Array.isArray(flagsQ.rows)) {
         for (const r of flagsQ.rows) {
@@ -1359,6 +1507,14 @@ export async function runPreflight(input: {
             corporate_accounts: Number(r.corporate_accounts ?? 0),
             churn_date: r.churn_date || null,
             cs_owner: r.cs_owner || null,
+            active_lead_zoho_id:  r.active_lead_zoho_id  || null,
+            active_lead_name:     r.active_lead_name     || null,
+            active_deal_zoho_id:  r.active_deal_zoho_id  || null,
+            active_deal_name:     r.active_deal_name     || null,
+            client_deal_zoho_id:  r.client_deal_zoho_id  || null,
+            client_deal_name:     r.client_deal_name     || null,
+            account_zoho_id_link: r.account_zoho_id_link || null,
+            account_name_link:    r.account_name_link    || null,
           });
         }
       }
@@ -1372,6 +1528,14 @@ export async function runPreflight(input: {
         c.corporate_deals    = v?.corporate_deals    ?? 0;
         c.corporate_contacts = v?.corporate_contacts ?? 0;
         c.corporate_accounts = v?.corporate_accounts ?? 0;
+        c.active_lead_zoho_id  = v?.active_lead_zoho_id  ?? null;
+        c.active_lead_name     = v?.active_lead_name     ?? null;
+        c.active_deal_zoho_id  = v?.active_deal_zoho_id  ?? null;
+        c.active_deal_name     = v?.active_deal_name     ?? null;
+        c.client_deal_zoho_id  = v?.client_deal_zoho_id  ?? null;
+        c.client_deal_name     = v?.client_deal_name     ?? null;
+        c.account_zoho_id_link = v?.account_zoho_id_link ?? null;
+        c.account_name_link    = v?.account_name_link    ?? null;
         // Normalise the churn date to yyyy-mm-dd (Zoho can return
         // datetimes). Compute churn_days off whatever parses.
         const raw = v?.churn_date ?? null;

@@ -7496,7 +7496,7 @@ export const duplicateRadarRoutes = [
             { header: "#", key: "i", width: 6 },
             { header: "Verdict", key: "verdict", width: 12 },
             { header: "Severity", key: "sev", width: 10 },
-            { header: "Recommended Action", key: "exec", width: 60 },
+            { header: "Comment / Reason", key: "exec", width: 60 },
             { header: "Domain", key: "domain", width: 26 },
             { header: "Company", key: "company", width: 32 },
             { header: "Existing Owner(s)", key: "owners", width: 28 },
@@ -7511,6 +7511,15 @@ export const duplicateRadarRoutes = [
             },
             { header: "Churn Date", key: "churn_date", width: 14 },
             { header: "Days Since Churn", key: "churn_days", width: 14 },
+            // Sarah 2026-06-17 — clickable Zoho links per rejected row.
+            // Operator clicks straight to the existing Lead / Deal /
+            // Account to verify the rejection without going back into
+            // the dashboard. Empty cell when the cluster has no
+            // matching record of that type.
+            { header: "Existing Active Lead",         key: "link_active_lead",  width: 36 },
+            { header: "Existing Active Deal",         key: "link_active_deal",  width: 36 },
+            { header: "Existing Customer Deal (CS)",  key: "link_client_deal",  width: 36 },
+            { header: "Existing Account",             key: "link_account",      width: 36 },
             { header: "Reason (engineer)", key: "reason", width: 32 },
             { header: "Matched via", key: "matched_via", width: 16 },
           ];
@@ -7536,6 +7545,13 @@ export const duplicateRadarRoutes = [
               ? `${mc.leads || 0}·${mc.deals || 0}·${mc.contacts || 0}·${mc.accounts || 0}`
               : "—";
 
+          // Sarah 2026-06-17 — hyperlink helper. ExcelJS understands
+          // a cell value of { text, hyperlink, tooltip } as a clickable
+          // link. Empty cell when there's no matching record.
+          const mkLink = (lk: any) =>
+            lk && lk.url
+              ? { text: lk.label || "Open in Zoho", hyperlink: lk.url, tooltip: lk.url }
+              : "";
           for (const r of result.rows || []) {
             const row = findings.addRow({
               i: (r.row_index ?? 0) + 1,
@@ -7551,9 +7567,22 @@ export const duplicateRadarRoutes = [
               arr: r.arr_exposure || 0,
               churn_date: r.churn_date || "",
               churn_days: r.churn_days != null ? r.churn_days : "",
+              link_active_lead:  mkLink(r.crm_links?.active_lead),
+              link_active_deal:  mkLink(r.crm_links?.active_deal),
+              link_client_deal:  mkLink(r.crm_links?.client_deal),
+              link_account:      mkLink(r.crm_links?.account),
               reason: r.reason || "",
               matched_via: r.matched_via || "",
             });
+            // Apply Excel hyperlink styling (blue underline) to the
+            // four CRM-link cells when populated. Skip cells where
+            // the value is plain text ("").
+            for (const key of ["link_active_lead","link_active_deal","link_client_deal","link_account"]) {
+              const cell = row.getCell(key);
+              if (cell.value && typeof cell.value === "object" && "hyperlink" in (cell.value as any)) {
+                cell.font = { color: { argb: "FF1D4ED8" }, underline: true };
+              }
+            }
             const fill = severityFill[r.executive_severity] || null;
             if (fill) {
               row.fill = {
