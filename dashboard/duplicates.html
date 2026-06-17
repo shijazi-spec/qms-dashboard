@@ -6089,6 +6089,59 @@
             previewMergePlan(module, window.__planClusterId);
         }
 
+        // Move a single Deal/Contact under an Account NOW (sets Account_Name in
+        // Zoho via the proven link primitive). Powers the per-row "move to →"
+        // buttons in the Deals/Contacts merge pop-up and the Account pop-up's
+        // deal list. Confirm-gated; writes live, deletes nothing.
+        async function linkRecordToAccount(module, recordZohoId, accountZohoId, accountName) {
+            const noun = String(module).replace(/s$/, '');
+            if (!confirm('Move this ' + noun + ' under "' + (accountName || 'the selected account') + '"?\n\nThis sets the ' + noun + "'s Account_Name in Zoho. Nothing is deleted.")) return;
+            try {
+                const res = await fetch('/api/duplicates/link-record-to-account', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ module: module, record_zoho_id: String(recordZohoId), account_zoho_id: String(accountZohoId) })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                alert('Done — linked to "' + (accountName || accountZohoId) + '" in Zoho. The next sync will reflect it.');
+                if (window.__planClusterId) previewMergePlan(module, window.__planClusterId);
+            } catch (e) {
+                alert('Could not link: ' + (e && e.message || e) + (/403|401|admin/i.test(String(e && e.message || e)) ? '\n(Admin access is required to link records.)' : ''));
+            }
+        }
+
+        // Account pop-up: lazily list the Deals under each Account in the cluster
+        // and let the operator move any Deal to another Account in the same
+        // cluster. Fetches /account-deals once per open; renders into #accountDealsPanel-<clusterId>.
+        async function loadAccountDealsMover(clusterId) {
+            const panel = document.getElementById('accountDealsPanel-' + clusterId);
+            if (!panel) return;
+            panel.innerHTML = '<div class="text-xs text-gray-500 p-2">Loading deals…</div>';
+            try {
+                const res = await fetch('/api/duplicates/clusters/' + clusterId + '/account-deals', { credentials: 'same-origin' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                const accounts = data.accounts || [];
+                const deals = data.deals || {};
+                if (!accounts.length) { panel.innerHTML = '<div class="text-xs text-gray-500 p-2">No accounts in this cluster.</div>'; return; }
+                const esc = (s) => escapeHtml(String(s == null ? '' : s));
+                panel.innerHTML = accounts.map(function (a) {
+                    const ds = deals[a.zohoId] || [];
+                    const others = accounts.filter(function (x) { return x.zohoId !== a.zohoId; });
+                    const rows = ds.length ? ds.map(function (d) {
+                        const moveBtns = others.map(function (o) {
+                            return '<button data-on-click="linkRecordToAccount" data-args=\'["Deals","' + esc(d.id) + '","' + esc(o.zohoId) + '","' + esc(String(o.name).replace(/"/g, '')) + '"]\' class="px-1.5 py-0.5 rounded text-[10px] bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 ms-1" title="Move this deal under ' + esc(o.name) + '">→ ' + esc(o.name) + '</button>';
+                        }).join('');
+                        return '<div class="flex flex-wrap items-center gap-1 py-1 border-t border-gray-100"><span class="text-xs text-gray-800">' + esc(d.name) + '</span>' + (d.stage ? '<span class="text-[10px] text-gray-500">(' + esc(d.stage) + ')</span>' : '') + '<span class="ms-auto"></span>' + moveBtns + '</div>';
+                    }).join('') : '<div class="text-[11px] text-gray-400 py-1">No deals on this account.</div>';
+                    return '<div class="mb-2"><div class="text-xs font-semibold text-gray-700">' + esc(a.name) + ' <span class="text-gray-400">(' + ds.length + ' deal' + (ds.length === 1 ? '' : 's') + ')</span></div>' + rows + '</div>';
+                }).join('');
+            } catch (e) {
+                panel.innerHTML = '<div class="text-xs text-red-600 p-2">Could not load deals: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+            }
+        }
+
         // Split the TICKED records into a brand-new cluster — for name-collision
         // false positives (two real companies sharing a word). Platform-only:
         // re-points cluster membership; no Zoho writes.
@@ -6313,6 +6366,16 @@
                 } else {
                     outcome = '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-xs font-medium">Duplicate-Delete</span>' + makeSurvivorBtn;
                 }
+                // Per-row "move to account" — Deals/Contacts only. Sets THIS
+                // record's Account_Name to any cluster account immediately (not
+                // just the survivor). Writes live via linkRecordToAccount.
+                const perRowLink = (r.zohoId && (plan.module === 'Deals' || plan.module === 'Contacts') && Array.isArray(plan.accountCandidates) && plan.accountCandidates.length)
+                    ? '<div class="mt-1 flex flex-wrap items-center gap-1"><span class="text-[10px] text-gray-400">move to:</span>'
+                        + plan.accountCandidates.map(function (a) {
+                            return '<button data-on-click="linkRecordToAccount" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '","' + esc(a.zohoId) + '","' + esc(String(a.name).replace(/"/g, '')) + '"]\' class="px-1.5 py-0.5 rounded text-[10px] bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50" title="Set this record\'s Account_Name to ' + esc(a.name) + ' in Zoho">→ ' + esc(a.name) + '</button>';
+                        }).join('')
+                        + '</div>'
+                    : '';
                 const cb = r.zohoId
                     ? '<input type="checkbox" data-on-click="toggleMergeRecord" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '"]\'' + (included ? ' checked' : '') + ' class="cursor-pointer w-4 h-4" title="' + (linkOnlyMode ? 'Include this contact in the link cascade' : 'Include this record in the merge') + '">'
                     : '<span class="text-gray-300" title="No Zoho id — cannot be ' + (linkOnlyMode ? 'linked' : 'merged') + '">—</span>';
@@ -6342,7 +6405,7 @@
                     : '<td class="px-3 py-2 text-gray-300 text-xs">—</td>';
                 return '<tr class="border-t' + (included ? '' : ' opacity-50') + '">' +
                     '<td class="px-3 py-2 text-center">' + cb + '</td>' +
-                    '<td class="px-3 py-2">' + outcome + '</td>' +
+                    '<td class="px-3 py-2">' + outcome + perRowLink + '</td>' +
                     '<td class="px-3 py-2">' + esc(r.name) + '</td>' +
                     idCell +
                     midCell +
@@ -6383,6 +6446,14 @@
             const reparentSlot = (plan.module === 'Accounts' || plan.module === 'Contacts')
                 ? '<div class="mb-3 p-2 rounded-lg border border-indigo-100 bg-indigo-50 text-xs text-indigo-900"><span class="uppercase tracking-wide text-indigo-700 font-semibold">Cascade to survivor</span> · <span id="reparent-preview-' + esc(plan.module) + '">Checking Zoho related records…</span></div>'
                 : '';
+            // Account pop-up only — list the Deals under each Account and move
+            // any Deal to another Account in this cluster (sets Account_Name).
+            const accountDealsMover = (plan.module === 'Accounts')
+                ? '<div class="mb-3 p-2 rounded-lg border border-emerald-100 bg-emerald-50">'
+                    + '<button data-on-click="loadAccountDealsMover" data-args=\'[' + plan.clusterId + ']\' class="text-xs font-semibold text-emerald-800 hover:underline" title="List the Deals under each Account and move any Deal to another Account in this cluster (sets Account_Name in Zoho).">💼 Move deals between these accounts ▾</button>'
+                    + '<div id="accountDealsPanel-' + plan.clusterId + '" class="mt-2"></div>'
+                    + '</div>'
+                : '';
             // LINK-ONLY copy overrides — applied when 0 contacts qualify as
             // duplicates of the survivor. Sarah Hijazi (2026-06-10): "no
             // merge action here — it shall be Link, not Merge". When this
@@ -6407,6 +6478,7 @@
                 headerBanner +
                 '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">' + (linkOnlyMode ? 'Surviving contact' : 'Survivor') + '</span><div class="font-semibold">' + esc(plan.masterName) + survivorIdLink + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
                 reparentSlot +
+                accountDealsMover +
                 linkControl +
                 instructionLine +
                 '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500">' + mergeColHeader + '<th scope="col" class="px-3 py-2 text-start">Outcome</th><th scope="col" class="px-3 py-2 text-start">Record</th><th scope="col" class="px-3 py-2 text-start">Zoho ID</th>' + (

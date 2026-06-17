@@ -1516,6 +1516,117 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    //   GET /api/duplicates/clusters/:id/account-deals
+    //   Lists the Deals linked to each Account in the cluster, so the Account
+    //   merge pop-up can show them and let the operator move a Deal from one
+    //   Account to another. Response: { accounts:[{zohoId,name}], deals:{<acct>:[{id,name,stage}]} }
+    path: "/api/duplicates/clusters/:id/account-deals",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const id = parseInt(c.req.param("id"));
+          if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
+          const records = await getRecordsByClusterId(id);
+          const accounts = records
+            .filter((r) => r.record_type === "account" && r.zoho_record_id)
+            .map((r) => ({
+              zohoId: r.zoho_record_id as string,
+              name: r.record_name || r.company_name || "Account",
+            }))
+            .slice(0, 25);
+          const deals: Record<
+            string,
+            Array<{ id: string; name: string; stage: string }>
+          > = {};
+          await Promise.all(
+            accounts.map(async (a) => {
+              try {
+                const ds = await fetchZohoRelatedRecords(
+                  "Accounts",
+                  a.zohoId,
+                  "Deals",
+                  { perPage: 200 },
+                );
+                deals[a.zohoId] = (Array.isArray(ds) ? ds : []).map(
+                  (d: any) => ({
+                    id: String(d.id),
+                    name: d.Deal_Name || d.Name || "Deal",
+                    stage: d.Stage || "",
+                  }),
+                );
+              } catch {
+                deals[a.zohoId] = [];
+              }
+            }),
+          );
+          return c.json({ accounts, deals });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    //   POST /api/duplicates/link-record-to-account
+    //   Move a single Deal or Contact under an Account by setting its
+    //   Account_Name lookup in Zoho. Reuses the same primitive the merge
+    //   executor uses for "link survivor to account". Admin-gated; supports
+    //   dry_run. Body: { module:'Deals'|'Contacts', record_zoho_id, account_zoho_id, dry_run? }
+    path: "/api/duplicates/link-record-to-account",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: ua } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return ua(c);
+          const body = await c.req.json().catch(() => ({}));
+          const module = String(body?.module || "");
+          const recordId = String(body?.record_zoho_id || "");
+          const accountId = String(body?.account_zoho_id || "");
+          const dryRun = body?.dry_run === true;
+          if (!["Deals", "Contacts"].includes(module)) {
+            return c.json({ error: "module must be 'Deals' or 'Contacts'" }, 400);
+          }
+          if (!recordId || !accountId) {
+            return c.json(
+              { error: "record_zoho_id and account_zoho_id are required" },
+              400,
+            );
+          }
+          if (dryRun) {
+            return c.json({
+              success: true,
+              dry_run: true,
+              message: `Would set ${module} ${recordId} Account_Name → ${accountId}`,
+            });
+          }
+          const { updateZohoRecord } = await import("../../utils/zohoCRM");
+          await updateZohoRecord(module, recordId, {
+            Account_Name: { id: accountId },
+          });
+          logger.info(
+            `🔗 [DuplicateRadar] Linked ${module} ${recordId} → Account ${accountId} by ${sessionUser.email || "admin"}`,
+          );
+          return c.json({
+            success: true,
+            module,
+            record_zoho_id: recordId,
+            account_zoho_id: accountId,
+          });
+        } catch (error: any) {
+          logger.error("Error linking record to account:", error);
+          return c.json({ error: error?.message || "Link failed" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Post-merge verification — re-query Zoho for every record this cluster
     // has tagged Duplicate-Delete (via prior merge_actions). Reports how many
     // the admin has actually deleted vs. still pending. Closes the "did the
