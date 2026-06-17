@@ -4845,6 +4845,11 @@ export async function getEnhancedSummary(): Promise<{
   topSignals: Record<string, number>;
   duplicateLeadRate: number;
   duplicateDealRate: number;
+  /** Whole-system duplicate rate — actionable duplicate records across ALL
+   *  modules (Leads + Deals + Contacts + Accounts) over the total record
+   *  count across all modules. The Executive Summary gauge uses this so the
+   *  headline reflects every module's duplication, not just Leads. */
+  duplicateOverallRate: number;
   topClustersByInflation: any[];
   lastScanInfo: any;
   /** ISO timestamp of the most recent successful sync across all modules
@@ -4993,6 +4998,11 @@ export async function getEnhancedSummary(): Promise<{
     topSignals,
     duplicateLeadRate: Math.round((dupLeads / tLeads) * 100),
     duplicateDealRate: Math.round((dupDeals / tDeals) * 100),
+    duplicateOverallRate: Math.round(
+      ((dupLeads + dupDeals + dupContacts + dupAccounts) /
+        Math.max(1, tLeads + tDeals + tContacts + tAccounts)) *
+        100,
+    ),
     topClustersByInflation: topClustersResult.rows,
     lastScanInfo: lastScanResult.rows[0] || null,
     lastSyncAt,

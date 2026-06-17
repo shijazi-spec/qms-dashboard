@@ -325,21 +325,21 @@
                     <div class="text-xs text-gray-400 mt-1"><span id="resolvedCount">0</span> resolved + <span id="ignoredCount">0</span> ignored</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4">
-                    <div class="text-sm font-medium text-gray-500 mb-2" title="The gauge tracks SDR-KPI-09 — the share of NEW Leads created in a state that triggers a duplicate cluster. Target ≤2%. Deal / Contact / Account rates are tracked separately on the Owner Accountability tab.">SDR Duplicate Lead Rate vs 2% KPI Target</div>
+                    <div class="text-sm font-medium text-gray-500 mb-2" title="Whole-system duplicate rate — actionable duplicate records across ALL modules (Leads + Deals + Contacts + Accounts) over the total record count. Company target is ≤2% (SDR-KPI-09). The Leads-only rate is on the Dup Leads card above; per-module rates are on the Owner Accountability tab.">Overall Duplicate Rate — all modules (target ≤ 2%)</div>
                     <div class="flex items-end gap-4">
                         <div>
                             <div id="kpiGaugeValue" data-testid="text-kpi-gauge" class="text-3xl font-bold text-blue-600">-</div>
-                            <div class="text-xs text-gray-400">current rate</div>
+                            <div class="text-xs text-gray-400">all modules · current rate</div>
                         </div>
                         <div class="flex-1">
                             <div class="w-full bg-gray-200 rounded-full h-4 relative">
                                 <div id="kpiGaugeBar" class="h-4 rounded-full transition-all duration-500 w-0 bg-green-500"></div>
-                                <div class="absolute top-0 start-[50%] h-4 w-0.5 bg-red-500" title="2% KPI target"></div>
+                                <div class="absolute top-0 start-[2%] h-4 w-0.5 bg-red-500" title="2% KPI target"></div>
                             </div>
                             <div class="flex justify-between text-xs text-gray-400 mt-1">
                                 <span>0%</span>
-                                <span class="text-red-600 font-medium">2% target</span>
-                                <span>4%+</span>
+                                <span class="text-red-600 font-medium" title="Company duplicate-rate target (SDR-KPI-09)">2% target</span>
+                                <span>100%</span>
                             </div>
                         </div>
                     </div>
@@ -2825,10 +2825,16 @@
             document.getElementById('resolvedCount').textContent = _fn(data.resolvedCount || 0);
             document.getElementById('ignoredCount').textContent = _fn(data.ignoredCount || 0);
 
-            // D4: KPI Gauge
-            const overallDupRate = data.duplicateLeadRate || data.kpis?.duplicateLeadRate || 0;
+            // D4: KPI Gauge — WHOLE-SYSTEM duplicate rate (all modules), not
+            // just Leads. Falls back to the lead rate only if the backend
+            // hasn't been redeployed with duplicateOverallRate yet. Bar is a
+            // direct 0–100% scale (the overall rate runs well above the 2%
+            // lead target, so the old 0–4% scale would just peg at full red).
+            const overallDupRate = (data.duplicateOverallRate != null ? data.duplicateOverallRate
+                : (data.kpis?.duplicateOverallRate != null ? data.kpis.duplicateOverallRate
+                : (data.duplicateLeadRate || data.kpis?.duplicateLeadRate || 0)));
             document.getElementById('kpiGaugeValue').textContent = _fn(overallDupRate) + '%';
-            const gaugePct = Math.min(overallDupRate / 4 * 100, 100);
+            const gaugePct = Math.min(overallDupRate, 100);
             const gaugeBar = document.getElementById('kpiGaugeBar');
             gaugeBar.style.width = gaugePct + '%';
             gaugeBar.style.background = overallDupRate <= 2 ? '#22C55E' : overallDupRate <= 5 ? '#F59E0B' : '#EF4444';
