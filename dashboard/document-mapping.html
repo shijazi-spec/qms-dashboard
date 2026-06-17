@@ -646,6 +646,7 @@
             await loadFindings();
             await loadConsoleClauses();
             await loadAutoMapped();
+            await loadEmbedStatus();
         }
 
         // Inline consolidated gaps: every framework's unmapped clauses in one
@@ -1047,6 +1048,56 @@
             } finally {
                 if (btn) btn.disabled = false;
                 if (label) label.textContent = prev || recT('docmap.map_all', 'Map all frameworks with AI');
+            }
+        }
+
+        // Show the embedding-cache coverage ("420 / 600 clauses embedded · on/off").
+        async function loadEmbedStatus() {
+            var el = document.getElementById('embedStatus');
+            if (!el) return;
+            try {
+                var r = await fetch('/api/compliance/document-mapping/embeddings-status', { credentials: 'same-origin' });
+                if (!r.ok) { el.textContent = ''; return; }
+                var d = await r.json();
+                var lbl = recT('docmap.embed_coverage', '{e}/{t} clauses embedded').replace('{e}', d.embedded || 0).replace('{t}', d.total || 0);
+                var state = d.enabled ? recT('docmap.embed_on', 'shortlist ON') : recT('docmap.embed_off', 'shortlist OFF');
+                el.textContent = lbl + ' · ' + state;
+                el.className = 'text-[11px] ' + (d.enabled ? 'text-indigo-700' : 'text-gray-500');
+            } catch (e) { el.textContent = ''; }
+        }
+
+        // Pre-warm the clause-embedding cache so the retrieve-then-verify
+        // shortlist is fast + accurate. Batched; loops until remaining === 0.
+        async function buildEmbeddings() {
+            var btn = document.getElementById('buildEmbedBtn');
+            var label = document.getElementById('buildEmbedLabel');
+            var prev = label ? label.textContent : '';
+            try {
+                var est = await fetch('/api/compliance/document-mapping/embeddings-backfill', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estimate: true }) });
+                var ed = await est.json().catch(function () { return {}; });
+                if (!est.ok) { alert(recT('docmap.embed_error', 'Building embeddings failed') + (ed.error ? ': ' + ed.error : '')); return; }
+                var remaining = ed.remaining || 0;
+                if (remaining === 0) { alert(recT('docmap.embed_done_all', 'All clauses are already embedded.')); await loadEmbedStatus(); return; }
+                if (!confirm(recT('docmap.embed_confirm', 'Compute embeddings for {n} clause(s)? This is a one-time pre-warm (uses the OpenAI embeddings API) so the semantic shortlist is fast. Runs in batches.').replace('{n}', remaining))) return;
+                if (btn) btn.disabled = true;
+                var failed = 0;
+                for (var guard = 0; guard < 2000; guard++) {
+                    var r = await fetch('/api/compliance/document-mapping/embeddings-backfill', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                    var d = await r.json().catch(function () { return {}; });
+                    if (!r.ok) { alert(recT('docmap.embed_error', 'Building embeddings failed') + (d.error ? ': ' + d.error : '')); break; }
+                    failed += (d.failed || 0);
+                    if (label) label.textContent = recT('docmap.embed_progress', 'Embedding… {n} left').replace('{n}', d.remaining || 0);
+                    await loadEmbedStatus();
+                    if ((d.remaining || 0) <= 0 || (d.processed || 0) === 0) break;
+                }
+                await loadEmbedStatus();
+                if (failed > 0) alert(recT('docmap.embed_partial', '{n} clause(s) could not be embedded (check the OpenAI API key).').replace('{n}', failed));
+                else alert(recT('docmap.embed_complete', 'Embeddings built. Set DOCUMENT_MAPPING_EMBEDDINGS=true to turn the shortlist on.'));
+            } catch (e) {
+                alert(recT('docmap.embed_error', 'Building embeddings failed') + ': ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) btn.disabled = false;
+                if (label) label.textContent = prev || recT('docmap.build_embeddings', 'Build embeddings');
             }
         }
 
