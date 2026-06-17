@@ -113,6 +113,17 @@
             <div id="moduleBreakdown" class="space-y-2 text-sm"><div class="text-gray-500">Loading…</div></div>
         </section>
 
+        <!-- Progress by tab (daily burndown) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">📊 Progress by tab (daily)</h2>
+                <button data-on-click="loadProgress" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+            </div>
+            <p class="text-xs text-gray-500 mb-3"><strong>Total</strong> = open + solved (the count from the beginning, which grows as new duplicates are detected). <strong>Solved</strong> = clusters no longer active. <strong>Merged</strong> = real Zoho merges (survives a Rebuild). Recorded daily so the trend below shows real progress over time.</p>
+            <div id="progressTable" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm mb-4"><div class="text-gray-500">Loading…</div></div>
+            <div><canvas id="progressChart" height="120"></canvas></div>
+        </section>
+
         <!-- Notification schedule (Adam's Slack cadence) — reviewed monthly -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <h2 class="text-lg font-semibold text-gray-900 mb-1">🗓️ Adam — Notification Schedule (KSA)</h2>
@@ -646,7 +657,72 @@
             }
         }
 
-        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); loadProposalTiers(); }
+        var _progressChart = null;
+        async function loadProgress() {
+            var table = document.getElementById('progressTable');
+            if (!table) return;
+            var mods = ['Leads', 'Deals', 'Contacts', 'Accounts'];
+            var nfmt = function (x) { return Number(x || 0).toLocaleString(); };
+            try {
+                var d = await getJSON('/api/duplicates/progress?days=30');
+                var cards = mods.map(function (m) {
+                    var b = d.byModule && d.byModule[m];
+                    var l = b && b.latest;
+                    if (!l) return '';
+                    var prevSolved = (b.previous && b.previous.solved != null) ? b.previous.solved : l.solved;
+                    var delta = l.solved - prevSolved;
+                    var deltaTxt = delta > 0
+                        ? '<span class="text-emerald-700 font-medium">+' + nfmt(delta) + ' today</span>'
+                        : '<span class="text-gray-400">no change today</span>';
+                    var pct = l.total > 0 ? Math.round((l.solved / l.total) * 100) : 0;
+                    return '<div class="rounded-lg border border-gray-200 p-3">' +
+                        '<div class="flex items-center justify-between"><span class="font-semibold text-gray-900">' + esc(m) + '</span>' +
+                        '<span class="text-xs">' + deltaTxt + '</span></div>' +
+                        '<div class="mt-1 text-gray-700">' + nfmt(l.solved) + ' solved / ' + nfmt(l.total) + ' total · ' + nfmt(l.open) + ' left · ' + nfmt(l.merged) + ' merged</div>' +
+                        '<div class="mt-2 h-2 w-full bg-gray-100 rounded-full overflow-hidden"><div class="progress-bar-fill h-2 bg-emerald-500 rounded-full" data-pct="' + pct + '"></div></div>' +
+                        '<div class="text-[11px] text-gray-400 mt-1">' + pct + '% solved</div>' +
+                        '</div>';
+                }).join('');
+                table.innerHTML = cards || '<div class="text-gray-500">No snapshots yet — the first is recorded after the next scan.</div>';
+                // Set bar widths via JS (CSP-safe — no inline style attributes in markup).
+                Array.prototype.forEach.call(table.querySelectorAll('.progress-bar-fill'), function (el) {
+                    el.style.width = (Number(el.getAttribute('data-pct')) || 0) + '%';
+                });
+                renderProgressChart(d, mods, nfmt);
+            } catch (e) {
+                table.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+        function renderProgressChart(d, mods, nfmt) {
+            var canvas = document.getElementById('progressChart');
+            if (!canvas || typeof Chart === 'undefined') return;
+            var dateSet = {};
+            mods.forEach(function (m) {
+                var b = d.byModule && d.byModule[m];
+                ((b && b.series) || []).forEach(function (p) { dateSet[p.date] = true; });
+            });
+            var dates = Object.keys(dateSet).sort();
+            var colors = { Leads: '#6366f1', Deals: '#f59e0b', Contacts: '#10b981', Accounts: '#ef4444' };
+            var datasets = mods.map(function (m) {
+                var b = d.byModule && d.byModule[m];
+                var map = {};
+                ((b && b.series) || []).forEach(function (p) { map[p.date] = p.solved; });
+                return {
+                    label: m + ' solved',
+                    data: dates.map(function (dt) { return map[dt] != null ? map[dt] : null; }),
+                    borderColor: colors[m], backgroundColor: colors[m],
+                    spanGaps: true, tension: 0.25, pointRadius: 2, borderWidth: 2,
+                };
+            });
+            if (_progressChart) { _progressChart.destroy(); }
+            _progressChart = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: { labels: dates, datasets: datasets },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); loadProposalTiers(); loadProgress(); }
 
         document.addEventListener('DOMContentLoaded', refreshAll);
     </script>

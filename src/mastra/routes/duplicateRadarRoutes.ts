@@ -92,6 +92,8 @@ import {
   truncateAllDuplicateData,
   backfillResolutionLedger,
   restoreLedgerResolvedClusterStatus,
+  captureDuplicateProgressSnapshot,
+  getDuplicateProgressSeries,
   cleanupStaleRecords,
   cleanupOrphanClusters,
   removeRecordsByZohoIds,
@@ -886,6 +888,15 @@ async function scanZohoCRMForDuplicates(
       ),
     );
 
+    // Record today's per-tab progress snapshot (open / solved / total) so the
+    // Duplicate Radar has a daily burndown per module, not just a live number.
+    // Upsert-per-day: this keeps today's row current on every scan.
+    await captureDuplicateProgressSnapshot().catch((e) =>
+      logger.warn(
+        `[DuplicateRadar] post-scan progress snapshot skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
+
     const summary = await getEnhancedSummary();
     const duration = Date.now() - startTime;
 
@@ -1130,6 +1141,32 @@ export const duplicateRadarRoutes = [
             escalated,
             other,
           });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Per-tab daily PROGRESS burndown (Sarah 2026-06-17): for each module
+    // (Leads/Deals/Contacts/Accounts) returns the daily series of open / solved
+    // / total (+ durable merged) plus the latest snapshot and the day-over-day
+    // delta. "solved" = clusters no longer active; "total" = open + solved (the
+    // denominator, which grows as new duplicates are detected). Read-only.
+    //   GET /api/duplicates/progress?days=30
+    path: "/api/duplicates/progress",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const days = parseInt(url.searchParams.get("days") || "30", 10);
+          const data = await getDuplicateProgressSeries(
+            Number.isFinite(days) && days > 0 ? days : 30,
+          );
+          return c.json({ success: true, ...data });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }

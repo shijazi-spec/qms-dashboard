@@ -636,6 +636,28 @@ export async function buildRadarTabStatus(): Promise<string> {
       .join(" · ");
     if (ml) parts.push(`›  *Duplicates:* ${ml}`);
   } catch { /* skip */ }
+  // Per-tab PROGRESS burndown (Sarah 2026-06-17) — total / solved / left per
+  // module with the day-over-day change, from the daily snapshot table. This is
+  // the "progress of each duplication tab" line: how many duplicates there are
+  // and how many got solved, tracked over time (not reset by a Rebuild — older
+  // days stay frozen as history).
+  try {
+    const { getDuplicateProgressSeries } = await import("./duplicateRadarDatabase");
+    const prog = await getDuplicateProgressSeries(2);
+    const pl = (["Leads", "Deals", "Contacts", "Accounts"] as const)
+      .map((m) => {
+        const b = prog.byModule[m];
+        const l = b?.latest;
+        if (!l || l.total === 0) return null;
+        const prevSolved = b?.previous?.solved ?? l.solved;
+        const delta = l.solved - prevSolved;
+        const arrow = delta > 0 ? ` (+${n(delta)} today)` : "";
+        return `${m} ${n(l.solved)}/${n(l.total)} solved${arrow}`;
+      })
+      .filter(Boolean)
+      .join(" · ");
+    if (pl) parts.push(`›  *Progress (solved/total):* ${pl}`);
+  } catch { /* skip */ }
   // Account Hints — pending / applied / dismissed.
   try {
     const { listAccountInferenceHints } = await import("./accountInference");

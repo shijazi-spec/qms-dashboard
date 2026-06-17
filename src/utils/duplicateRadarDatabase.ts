@@ -1133,6 +1133,29 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     )
   `);
 
+  // Daily progress snapshot — one row per module per day so the Duplicate Radar
+  // can show a BURNDOWN per tab (Leads/Deals/Contacts/Accounts) over time, not
+  // just a "right now" number. open = active clusters with that module; solved =
+  // clusters no longer active (Sarah's chosen definition, 2026-06-17); total =
+  // open + solved (the "from the beginning" denominator, which grows as new
+  // duplicates are detected). merged = durable real-merge count from the
+  // append-only ledger (survives Rebuild Clusters — the honest "data merged"
+  // line). Upserted per (date, module): the last write of the day wins, so the
+  // 6-hourly scan keeps today's row current while older days stay frozen as
+  // history. See captureDuplicateProgressSnapshot / getDuplicateProgressSeries.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS duplicate_progress_daily (
+      snapshot_date DATE NOT NULL,
+      module VARCHAR(16) NOT NULL,
+      open_count INTEGER NOT NULL DEFAULT 0,
+      solved_count INTEGER NOT NULL DEFAULT 0,
+      total_count INTEGER NOT NULL DEFAULT 0,
+      merged_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (snapshot_date, module)
+    )
+  `);
+
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_domain ON duplicate_clusters(domain)`,
   );
@@ -1757,6 +1780,169 @@ export async function backfillResolutionLedger(): Promise<void> {
         error: e instanceof Error ? e.message : String(e),
       });
     });
+}
+
+// ── Daily progress snapshot (per-tab burndown) ────────────────────────────────
+
+const PROGRESS_MODULES: Array<{ col: string; module: string }> = [
+  { col: "total_leads", module: "Leads" },
+  { col: "total_deals", module: "Deals" },
+  { col: "total_contacts", module: "Contacts" },
+  { col: "total_accounts", module: "Accounts" },
+];
+
+export interface DuplicateProgressRow {
+  module: string;
+  open: number; // active clusters with this module
+  solved: number; // clusters no longer active (Sarah's definition)
+  total: number; // open + solved (the "from the beginning" denominator)
+  merged: number; // durable real-merge count (ledger; survives rebuilds)
+}
+
+/**
+ * Capture today's per-module progress and UPSERT one row per (date, module)
+ * into duplicate_progress_daily. Idempotent within a day — the last write wins,
+ * so the 6-hourly scan keeps today's row current while older days stay frozen
+ * as history. Returns the snapshot it wrote. Best-effort: never throws (a
+ * snapshot failure must not abort a scan).
+ *
+ * Definitions (locked with Sarah 2026-06-17):
+ *   open   = clusters with status='active' that contain this module
+ *   solved = clusters with status<>'active' that contain this module (closed
+ *            for ANY reason — merged, linked, marked-resolved, ignored)
+ *   total  = open + solved (all clusters that contain this module)
+ *   merged = distinct durable real merges for this module from the ledger
+ */
+export async function captureDuplicateProgressSnapshot(): Promise<DuplicateProgressRow[]> {
+  const out: DuplicateProgressRow[] = PROGRESS_MODULES.map((m) => ({
+    module: m.module,
+    open: 0,
+    solved: 0,
+    total: 0,
+    merged: 0,
+  }));
+  try {
+    const selects = PROGRESS_MODULES.map(
+      (o) =>
+        `COUNT(*) FILTER (WHERE dc.${o.col} > 0)::int AS ${o.col}_t,
+         COUNT(*) FILTER (WHERE dc.${o.col} > 0 AND dc.status = 'active')::int AS ${o.col}_o`,
+    ).join(",\n");
+    const r = await pool.query(`SELECT ${selects} FROM duplicate_clusters dc`);
+    const row = r.rows[0] || {};
+
+    // Durable real merges per module (ledger survives Rebuild Clusters).
+    const lg = await pool.query<{ module: string; n: string }>(
+      `SELECT module, COUNT(*)::text AS n
+         FROM duplicate_resolution_ledger
+        WHERE master_zoho_id IS NOT NULL
+        GROUP BY module`,
+    );
+    const mergedByModule = new Map<string, number>(
+      lg.rows.map((x) => [x.module, Number(x.n) || 0]),
+    );
+
+    PROGRESS_MODULES.forEach((o, i) => {
+      const total = Number(row[`${o.col}_t`] || 0);
+      const open = Number(row[`${o.col}_o`] || 0);
+      out[i].total = total;
+      out[i].open = open;
+      out[i].solved = Math.max(0, total - open);
+      out[i].merged = mergedByModule.get(o.module) || 0;
+    });
+
+    for (const p of out) {
+      await pool.query(
+        `INSERT INTO duplicate_progress_daily
+           (snapshot_date, module, open_count, solved_count, total_count, merged_count, created_at)
+         VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (snapshot_date, module) DO UPDATE SET
+           open_count = EXCLUDED.open_count,
+           solved_count = EXCLUDED.solved_count,
+           total_count = EXCLUDED.total_count,
+           merged_count = EXCLUDED.merged_count,
+           created_at = NOW()`,
+        [p.module, p.open, p.solved, p.total, p.merged],
+      );
+    }
+  } catch (e) {
+    logger.warn("[DuplicateRadar] captureDuplicateProgressSnapshot skipped (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+  return out;
+}
+
+export interface DuplicateProgressSeriesPoint {
+  date: string; // YYYY-MM-DD
+  open: number;
+  solved: number;
+  total: number;
+  merged: number;
+}
+
+/**
+ * Read the per-module daily progress series for the last `days` days, plus the
+ * latest snapshot per module and the day-over-day deltas. Powers the "Progress
+ * by tab" panel + the digest line. If today has no row yet (e.g. first boot
+ * before a scan), it captures one on the fly so the caller always sees current
+ * numbers.
+ */
+export async function getDuplicateProgressSeries(days = 30): Promise<{
+  byModule: Record<
+    string,
+    {
+      latest: DuplicateProgressSeriesPoint | null;
+      previous: DuplicateProgressSeriesPoint | null;
+      series: DuplicateProgressSeriesPoint[];
+    }
+  >;
+  generatedAt: string;
+}> {
+  const lookback = Math.max(1, Math.min(Math.floor(days) || 30, 365));
+  const byModule: Record<string, any> = {};
+  for (const m of PROGRESS_MODULES) {
+    byModule[m.module] = { latest: null, previous: null, series: [] };
+  }
+  try {
+    // Make sure today's row exists so "latest" is never stale.
+    const todayCheck = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM duplicate_progress_daily WHERE snapshot_date = CURRENT_DATE`,
+    );
+    if (Number(todayCheck.rows[0]?.n || 0) === 0) {
+      await captureDuplicateProgressSnapshot();
+    }
+
+    const r = await pool.query(
+      `SELECT to_char(snapshot_date, 'YYYY-MM-DD') AS date, module,
+              open_count, solved_count, total_count, merged_count
+         FROM duplicate_progress_daily
+        WHERE snapshot_date >= CURRENT_DATE - ($1::int - 1)
+        ORDER BY module, snapshot_date ASC`,
+      [lookback],
+    );
+    for (const row of r.rows) {
+      const bucket = byModule[row.module];
+      if (!bucket) continue;
+      const point: DuplicateProgressSeriesPoint = {
+        date: row.date,
+        open: Number(row.open_count) || 0,
+        solved: Number(row.solved_count) || 0,
+        total: Number(row.total_count) || 0,
+        merged: Number(row.merged_count) || 0,
+      };
+      bucket.series.push(point);
+    }
+    for (const m of PROGRESS_MODULES) {
+      const s = byModule[m.module].series as DuplicateProgressSeriesPoint[];
+      byModule[m.module].latest = s.length ? s[s.length - 1] : null;
+      byModule[m.module].previous = s.length > 1 ? s[s.length - 2] : null;
+    }
+  } catch (e) {
+    logger.warn("[DuplicateRadar] getDuplicateProgressSeries failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+  return { byModule, generatedAt: new Date().toISOString() };
 }
 
 /**
