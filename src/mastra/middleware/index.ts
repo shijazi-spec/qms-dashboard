@@ -371,8 +371,12 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
  */
 const MAX_JSON_BODY_BYTES = (() => {
   const raw = process.env.MAX_JSON_BODY_BYTES;
-  const n = parseInt(raw ?? String(1 * 1024 * 1024), 10);
-  return Number.isFinite(n) && n > 0 ? n : 1 * 1024 * 1024;
+  // 8 MB default (2026-06-17): legitimate authenticated bulk operations — e.g.
+  // the Preflight flagged-rows export, which POSTs ~1,300+ matched rows with
+  // their recommended-action text and CRM links — exceed the old 1 MB cap.
+  // Still a sane DoS guard for JSON APIs; override via MAX_JSON_BODY_BYTES.
+  const n = parseInt(raw ?? String(8 * 1024 * 1024), 10);
+  return Number.isFinite(n) && n > 0 ? n : 8 * 1024 * 1024;
 })();
 
 /**

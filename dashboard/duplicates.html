@@ -9022,7 +9022,43 @@
                 alert('No flagged rows (Block / Review / Warn / Duplicate) in the last run — nothing to send.');
                 return;
             }
-            // Build a row_index → {name,email,phone} map from the uploaded file.
+            // 2026-06-17 — SLIM the POST. Previously we sent the ENTIRE result
+            // (all ~1,668 rows + a contacts map for every row), which froze the
+            // browser building the JSON and blew past the 1 MB body cap
+            // ("Request body too large"). Now we send ONLY the flagged rows,
+            // ONLY the fields the server's Findings sheet uses, and contacts for
+            // ONLY the flagged row_indexes.
+            const flaggedIdx = new Set(flagged.map(r => r.row_index));
+            const slimRows = flagged.map(r => ({
+                row_index: r.row_index,
+                verdict: r.verdict,
+                executive_severity: r.executive_severity,
+                executive_action: r.executive_action,
+                suggested_action: r.suggested_action,
+                input: { domain: r.input && r.input.domain, company_name: r.input && r.input.company_name },
+                owners: r.owners,
+                cs_owner: r.cs_owner,
+                module_counts: r.module_counts,
+                lifecycle_state: r.lifecycle_state,
+                arr_exposure: r.arr_exposure,
+                churn_date: r.churn_date,
+                churn_days: r.churn_days,
+                crm_links: r.crm_links,
+                reason: r.reason,
+                matched_via: r.matched_via,
+            }));
+            const slimResult = {
+                generated_at: data.generated_at,
+                total_rows: data.total_rows,
+                examined: data.examined,
+                skipped: data.skipped,
+                summary: data.summary,
+                total_arr_exposure_blocked: data.total_arr_exposure_blocked,
+                pct_actionable: data.pct_actionable,
+                top_reasons: data.top_reasons,
+                rows: slimRows,
+            };
+            // Contacts only for the flagged rows (keyed by row_index).
             const contacts = {};
             if (preflightLastUpload && Array.isArray(preflightLastUpload.originalRows)) {
                 const pick = (obj, keys) => {
@@ -9034,6 +9070,7 @@
                     return '';
                 };
                 preflightLastUpload.originalRows.forEach((o, idx) => {
+                    if (!flaggedIdx.has(idx)) return;
                     o = o || {};
                     const name = pick(o, ['fullname','name','contactname'])
                         || [pick(o, ['firstname']), pick(o, ['lastname'])].filter(Boolean).join(' ').trim();
@@ -9051,7 +9088,7 @@
                 const res = await fetch('/api/duplicates/preflight/export-xlsx', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ result: data, flaggedOnly: true, contacts: contacts }),
+                    body: JSON.stringify({ result: slimResult, flaggedOnly: true, contacts: contacts }),
                 });
                 if (!res.ok) {
                     const e = await res.json().catch(() => ({}));
