@@ -138,24 +138,25 @@
                 <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.console_title">Mapping Console</h2>
                 <p class="text-xs text-gray-500" data-i18n="docmap.console_subtitle">Select a clause and ask the AI consultant which uploaded documents likely satisfy it. Accepted suggestions are linked, audit-logged, and auto-judged.</p>
             </div>
-            <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                <div>
+            <!-- Flexbox (not md:grid) so the Suggest button always hugs the
+                 controls — the built tailwind.css lacks the md:grid-cols-3 /
+                 md:col-span-2 variants, which left the button floating. -->
+            <div class="p-4 flex flex-wrap items-end gap-3">
+                <div class="flex-1 min-w-0">
                     <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="docmap.console_framework">Framework</label>
                     <select id="consoleFramework" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" data-on-change="loadConsoleClauses">
                         <option value="" data-i18n="docmap.all_frameworks">All Frameworks</option>
                     </select>
                 </div>
-                <div class="md:col-span-2">
+                <div class="flex-1 min-w-0">
                     <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="docmap.console_clause">Clause</label>
-                    <div class="flex gap-2">
-                        <select id="consoleClause" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-console-clause">
-                            <option value="" data-i18n="docmap.console_pick_clause">Select a clause…</option>
-                        </select>
-                        <button type="button" data-on-click="runConsoleSuggest" class="px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 text-sm font-medium whitespace-nowrap" data-testid="button-console-suggest">
-                            <span data-i18n="docmap.console_suggest_btn">Suggest Documents</span>
-                        </button>
-                    </div>
+                    <select id="consoleClause" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" data-testid="select-console-clause">
+                        <option value="" data-i18n="docmap.console_pick_clause">Select a clause…</option>
+                    </select>
                 </div>
+                <button type="button" data-on-click="runConsoleSuggest" class="px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 text-sm font-medium whitespace-nowrap" data-testid="button-console-suggest">
+                    <span data-i18n="docmap.console_suggest_btn">Suggest Documents</span>
+                </button>
             </div>
             <div id="consoleResults" class="px-4 pb-4">
                 <div class="text-sm text-gray-400 text-center py-6" data-i18n="docmap.console_idle">Pick a framework and clause above, then click <strong>Suggest Documents</strong> to ask the AI for candidates.</div>

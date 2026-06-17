@@ -147,6 +147,17 @@ async function regulationCodesForPolicy(
 export const SEMANTIC_MAX_OBLIGATIONS = 200;
 export const SEMANTIC_TOP_N = 8;
 
+/**
+ * Confidence bar for the LLM semantic auto-mapper. Deliberately LOWER than
+ * the citation bar (AUTO_MAP_CONFIDENCE_THRESHOLD = 80) — during the pilot we
+ * want maximal coverage ("map everything") and the HITL review queue is the
+ * safety net. Override with DOCUMENT_MAPPING_SEMANTIC_THRESHOLD. Combined with
+ * the best-effort fallback in runSemanticAutoMap (link the single best match
+ * when nothing clears the bar), this maps nearly every document to ≥1 clause.
+ */
+export const SEMANTIC_AUTO_MAP_THRESHOLD =
+  Number(process.env.DOCUMENT_MAPPING_SEMANTIC_THRESHOLD) || 40;
+
 /** LLM semantic fallback is on by default; set DOCUMENT_MAPPING_LLM_FALLBACK=false to disable platform-wide (cost kill-switch). */
 export function semanticFallbackEnabled(): boolean {
   return process.env.DOCUMENT_MAPPING_LLM_FALLBACK !== "false";
@@ -167,9 +178,14 @@ export function semanticFallbackEnabled(): boolean {
  */
 export async function runSemanticAutoMap(
   documentId: number,
-  opts: { confidenceThreshold?: number; topN?: number; regulationCode?: string } = {},
+  opts: {
+    confidenceThreshold?: number;
+    topN?: number;
+    regulationCode?: string;
+    bestEffort?: boolean;
+  } = {},
 ): Promise<{ suggested: number; auto_mapped: number; reason?: string }> {
-  const threshold = opts.confidenceThreshold ?? AUTO_MAP_CONFIDENCE_THRESHOLD;
+  const threshold = opts.confidenceThreshold ?? SEMANTIC_AUTO_MAP_THRESHOLD;
   const topN = opts.topN ?? SEMANTIC_TOP_N;
   try {
     const docRes = await pool.query(
@@ -240,13 +256,12 @@ export async function runSemanticAutoMap(
     const byId = new Map<number, any>();
     for (const c of candidates) byId.set(c.id, c);
 
-    let auto_mapped = 0;
-    for (const s of suggestions) {
-      if (s.confidence < threshold) continue;
+    // Write one suggestion as an awaiting-review link (+ a display citation
+    // row carrying the LLM rationale). Returns true if a NEW link was created.
+    const linkOne = async (s: any): Promise<boolean> => {
       const ob = byId.get(s.obligation_id);
-      if (!ob) continue;
+      if (!ob) return false;
       try {
-        // Display row so the review queue shows the LLM's rationale.
         await pool.query(
           `INSERT INTO document_clause_citations
              (document_id, regulation_id, obligation_id, raw_citation, source_excerpt, confidence, method)
@@ -272,12 +287,26 @@ export async function runSemanticAutoMap(
            RETURNING id`,
           [s.obligation_id, documentId],
         );
-        if (ins.rowCount && ins.rowCount > 0) auto_mapped++;
+        return !!(ins.rowCount && ins.rowCount > 0);
       } catch (err) {
         logger.warn(
           `[policyMappingBridge] semantic auto-map write failed doc=${documentId} ob=${s.obligation_id}: ${(err as Error).message}`,
         );
+        return false;
       }
+    };
+
+    let auto_mapped = 0;
+    for (const s of suggestions) {
+      if (s.confidence < threshold) continue;
+      if (await linkOne(s)) auto_mapped++;
+    }
+    // Pilot "map everything": if nothing cleared the bar but the LLM did
+    // return candidates, link the single best match anyway so every document
+    // ends up mapped to ≥1 clause. The HITL review queue lets you refine
+    // later. Disable per-call with bestEffort:false.
+    if (auto_mapped === 0 && (opts.bestEffort ?? true) && suggestions.length > 0) {
+      if (await linkOne(suggestions[0])) auto_mapped++;
     }
     return { suggested: suggestions.length, auto_mapped };
   } catch (err) {
@@ -299,11 +328,21 @@ export interface PolicySyncResult {
   reason?: string;
 }
 
+/**
+ * Bump this whenever the mapping POLICY changes (thresholds, best-effort,
+ * candidate scope) so the incremental fingerprint check invalidates and the
+ * next "Run mapping now" re-maps every document under the new rules. v2 =
+ * lowered semantic threshold + best-effort "map everything" (2026-06-17).
+ */
+export const MAPPING_FINGERPRINT_VERSION = "v2";
+
 /** Stable fingerprint of the inputs that affect a document's mapping. Exported for unit testing. */
 export function mappingFingerprint(text: string, regCodes: string[] | null): string {
   return createHash("sha256")
+    .update(MAPPING_FINGERPRINT_VERSION)
+    .update("|")
     .update(text)
-    .update(" ")
+    .update(" ")
     .update((regCodes || []).slice().sort().join(","))
     .digest("hex");
 }
