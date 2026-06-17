@@ -130,13 +130,20 @@ export const kpiRoutes = [
             kpis = await getAllKPIDefinitions();
           }
           // Attach the latest recorded value to each KPI so owner-filtered cards
-          // show real numbers (parity with /api/kpis/summary, which the "All"
-          // view uses). Without this, selecting an owner blanks every value.
+          // show real numbers + RAG status (parity with /api/kpis/summary, which
+          // the "All" view uses). The card expects latestValue = the numeric
+          // actual_value and a separate status, not the raw kpi_values row.
           kpis = await Promise.all(
-            (kpis as any[]).map(async (k) => ({
-              ...k,
-              latestValue: k?.id ? await getLatestKPIValue(k.id) : null,
-            })),
+            (kpis as any[]).map(async (k) => {
+              const lv = k?.id ? await getLatestKPIValue(k.id) : null;
+              return {
+                ...k,
+                latestValue: lv ? lv.actual_value : null,
+                status: lv ? lv.status : "no_data",
+                trend: lv ? lv.trend : null,
+                lastUpdated: lv ? lv.period_end : null,
+              };
+            }),
           );
           return c.json(kpis);
         } catch (error) {

@@ -423,7 +423,10 @@
                     window._lastKPIChartData = data;
                     renderCharts(data);
                 } else {
-                    updateStats({ kpiDetails: allKPIs.map(k => ({ ...k, status: 'no_data' })) });
+                    // Owner-filtered: the endpoint now returns real latestValue + status
+                    // per KPI, so compute the summary tiles from them (was forced to
+                    // no_data before, which under-counted On Track / Behind / etc.).
+                    updateStats({ kpiDetails: allKPIs });
                 }
 
                 // Self-heal: if no value has ever been computed (fresh deploy / new
