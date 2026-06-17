@@ -39,7 +39,11 @@
                 <h1 class="text-2xl font-bold text-gray-900" data-i18n="docmap.title">Document Mapping</h1>
                 <p class="text-sm text-gray-500 mt-1" data-i18n="docmap.subtitle">AI-assisted mapping of uploaded documents to compliance clauses, with automated quality judgement and audit-ready reports.</p>
             </div>
-            <div class="flex gap-3">
+            <div class="flex gap-3 flex-wrap">
+                <button type="button" data-on-click="linkEverything" id="linkAllBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold flex items-center gap-2 disabled:opacity-60 shadow" data-testid="button-link-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                    <span id="linkAllLabel" data-i18n="docmap.link_all">Link all documents to all clauses</span>
+                </button>
                 <button type="button" data-on-click="runMapping" id="runMappingBtn" class="px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 font-medium flex items-center gap-2 disabled:opacity-60" data-testid="button-run-mapping">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                     <span id="runMappingLabel" data-i18n="docmap.run_mapping">Run mapping now</span>
@@ -908,6 +912,49 @@
                 if (btn) btn.disabled = false;
                 if (label) label.textContent = prev || recT('docmap.rec_all', 'Recommend fixes for all gaps');
                 await loadRecommendations();
+            }
+        }
+
+        // "Link all documents to all clauses" — one-click end-to-end: project +
+        // citation-map every document (backfill), then comprehensively link
+        // every document to every framework's clauses (map-all). One progress
+        // flow; you review the result in the Auto-Mapped queue afterwards.
+        async function linkEverything() {
+            var btn = document.getElementById('linkAllBtn');
+            var label = document.getElementById('linkAllLabel');
+            var prev = label ? label.textContent : '';
+            var lt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            if (!confirm(lt('docmap.link_all_confirm', 'Link every document to every clause of every certificate with AI? This runs the full pass (it can take several minutes) and you review the results afterwards.'))) return;
+            if (btn) btn.disabled = true;
+            try {
+                // Step 1 — project + citation-map all documents.
+                if (label) label.textContent = lt('docmap.link_all_step1', 'Step 1/2 · preparing documents…');
+                var bf = await fetch('/api/compliance/document-mapping/backfill', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                if (!bf.ok) { var bd = await bf.json().catch(function () { return {}; }); alert(lt('docmap.link_all_error', 'Linking failed') + (bd.error ? ': ' + bd.error : '')); return; }
+                await loadCoverage();
+                // Step 2 — comprehensive all-framework AI linking (batched loop).
+                var est = await fetch('/api/compliance/document-mapping/map-all?estimate=true', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                var ed = await est.json().catch(function () { return {}; });
+                var links = 0;
+                if (est.ok && (ed.remaining || 0) > 0) {
+                    for (var guard = 0; guard < 3000; guard++) {
+                        var r = await fetch('/api/compliance/document-mapping/map-all', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                        var d = await r.json().catch(function () { return {}; });
+                        if (!r.ok) { alert(lt('docmap.link_all_error', 'Linking failed') + (d.error ? ': ' + d.error : '')); break; }
+                        links += (d.links_created || 0);
+                        if (label) label.textContent = lt('docmap.link_all_step2', 'Step 2/2 · linking… {r} checks left').replace('{r}', d.remaining || 0);
+                        await loadCoverage();
+                        if ((d.remaining || 0) <= 0 || (d.processed || 0) === 0) break;
+                    }
+                }
+                await reloadAll();
+                alert(lt('docmap.link_all_done', 'Done — documents linked across every certificate.') + ' ' + links + ' ' + lt('docmap.mapall_links', 'new links for review.')
+                    + '\n' + lt('docmap.link_all_next', 'Now use “AI review queue” in the Auto-Mapped section to grade and confirm them.'));
+            } catch (e) {
+                alert(lt('docmap.link_all_error', 'Linking failed') + ': ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) btn.disabled = false;
+                if (label) label.textContent = prev || lt('docmap.link_all', 'Link all documents to all clauses');
             }
         }
 
