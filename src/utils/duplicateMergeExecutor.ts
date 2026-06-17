@@ -24,6 +24,7 @@ import type { MergePlan, CrmModule } from "./duplicateMergePlanner";
 import {
   updateZohoRecord,
   fetchZohoRelatedRecords,
+  fetchZohoRecordById,
   addZohoTags,
   addZohoNote,
   zohoWritesAllowedInEnv,
@@ -342,12 +343,42 @@ export async function executeMergePlan(
       await addZohoTags(module, liveDups, [plan.tagName]);
       report.taggedRecordIds = [...liveDups];
     } catch (e) {
-      // If the whole batch 400s because the ids are deleted ghosts, mark them
-      // stale rather than reporting a hard error.
+      // The batch add_tags failed. Zoho's add_tags returns a generic 400 with
+      // no per-id detail, so we can't tell deleted-record from a real problem
+      // from the message alone. Re-VERIFY each id: ones that are actually gone
+      // (fetchZohoRecordById → null on 404/204) are marked stale (a deleted
+      // record can't be tagged — that's fine); ones still alive are retried,
+      // and only a failure on a LIVE record is reported as a hard error.
       if (isGhostRecordError(e)) {
         for (const d of liveDups) markGhost(d);
       } else {
-        fail("tag-duplicates", e);
+        const stillAlive: string[] = [];
+        for (const d of liveDups) {
+          let alive = true;
+          try {
+            alive = (await fetchZohoRecordById(module, d)) !== null;
+          } catch (verifyErr) {
+            // Couldn't verify — be conservative and keep it as alive so a
+            // genuine tag problem isn't silently swallowed.
+            if (isGhostRecordError(verifyErr)) alive = false;
+          }
+          if (alive) stillAlive.push(d);
+          else markGhost(d);
+        }
+        if (stillAlive.length > 0) {
+          // Retry tagging only the records confirmed to still exist — a
+          // failure here is a genuine tag problem worth surfacing.
+          try {
+            await addZohoTags(module, stillAlive, [plan.tagName]);
+            report.taggedRecordIds = [...stillAlive];
+          } catch (e2) {
+            fail("tag-duplicates", e2);
+          }
+        } else {
+          report.warnings.push(
+            `Tag step skipped — all ${liveDups.length} duplicate(s) were already deleted in Zoho, so there was nothing to tag.`,
+          );
+        }
       }
     }
   } else if (liveDups.length > 0) {
