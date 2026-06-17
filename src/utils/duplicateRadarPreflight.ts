@@ -22,6 +22,31 @@ import {
   normalizeCompanyName,
 } from "./duplicateRadarDatabase";
 
+/**
+ * Marketplace / merchant Zoho layout names — the ONLY records the Duplicate
+ * Radar treats as OUT OF SCOPE (Sarah / Ahmad 2026-06-17, confirmed against
+ * the live layout distribution).
+ *
+ *   - Leads & Deals  → marketplace motion lives on the "Marketplace" layout.
+ *   - Accounts       → merchants live on "Marketplace" OR "Partner Accounts".
+ *   - Contacts       → almost all sit on Zoho's "Standard" layout, which gives
+ *                      NO B2B-vs-merchant signal, so contacts are never used as
+ *                      out-of-scope evidence (see has_corporate_records below).
+ *
+ * SCOPE IS INVERTED ON PURPOSE: a record is corporate (in-scope) UNLESS it
+ * carries one of these explicit merchant markers. The old logic keyed on a
+ * single corporate layout string ("Corporate Sales (WalaPlus Layout)") and so
+ * silently dropped Accounts ("Corporate-Accounts") and every legacy
+ * marker-less record — the root cause of corporate dupes leaking through
+ * Preflight as false PASSes. Keep this list as the single source of truth;
+ * compare case-insensitively so a casing change in Zoho can't break it.
+ */
+export const MERCHANT_LAYOUT_NAMES = ["Marketplace", "Partner Accounts"] as const;
+/** Pre-built lowercased SQL IN-list, e.g. `'marketplace', 'partner accounts'`. */
+const MERCHANT_LAYOUTS_SQL = MERCHANT_LAYOUT_NAMES.map(
+  (n) => `'${n.toLowerCase().replace(/'/g, "''")}'`,
+).join(", ");
+
 export type PreflightVerdict =
   | "block"
   | "review"
@@ -1376,7 +1401,11 @@ export async function runPreflight(input: {
         //     vendor lead is an outright duplicate of an actively
         //     worked Lead and must NOT be imported.
         `SELECT cluster_id,
-                BOOL_OR(_is_corporate) AS has_corporate_records,
+                -- In-scope decision: a cluster is corporate if it has any
+                -- corporate Lead/Deal/Account. Contacts are deliberately
+                -- excluded — they all sit on the Standard layout and would
+                -- otherwise pull a pure-merchant cluster into scope.
+                BOOL_OR(_is_corporate AND record_type IN ('lead','deal','account')) AS has_corporate_records,
                 COUNT(*) FILTER (WHERE _is_corporate AND record_type = 'lead')::text    AS corporate_leads,
                 COUNT(*) FILTER (WHERE _is_corporate AND record_type = 'deal')::text    AS corporate_deals,
                 COUNT(*) FILTER (WHERE _is_corporate AND record_type = 'contact')::text AS corporate_contacts,
@@ -1466,29 +1495,24 @@ export async function runPreflight(input: {
            FROM (
              SELECT *,
                     (
-                      -- Explicit corporate markers Sarah confirmed
-                      -- 2026-06-17 — Layout name or Customer-typed
-                      -- account / lead.
-                      layout_name = 'Corporate Sales (WalaPlus Layout)'
+                      -- Sarah / Ahmad 2026-06-17 — INVERTED scope rule.
+                      -- A record is corporate (in-scope) UNLESS it
+                      -- carries an explicit marketplace / merchant
+                      -- layout marker. The previous logic required the
+                      -- ONE corporate layout string and so dropped
+                      -- Accounts ("Corporate-Accounts"), Standard-layout
+                      -- Contacts, and every legacy marker-less record —
+                      -- the root cause of corporate dupes leaking
+                      -- through Preflight as false PASSes.
+                      --   • Contacts sit on Zoho "Standard" (no signal)
+                      --     → always corporate for counting; excluded
+                      --     from has_corporate_records (see below).
+                      --   • An explicit Customer account/lead type still
+                      --     forces corporate even on an odd layout.
+                      record_type = 'contact'
+                      OR LOWER(COALESCE(layout_name, '')) NOT IN (${MERCHANT_LAYOUTS_SQL})
                       OR LOWER(COALESCE(account_type, '')) = 'customer'
                       OR LOWER(COALESCE(lead_type, '')) = 'customer'
-                      -- Sarah 2026-06-17 — when ALL three markers are
-                      -- null/empty, default to corporate. The Mawsool
-                      -- audit showed 1,398/1,668 rows (84%) being
-                      -- rejected as "out_of_scope_non_corporate"
-                      -- because legacy CRM records pre-date those
-                      -- markers — most existing records simply have
-                      -- nothing in layout_name / account_type /
-                      -- lead_type. Marketplace and merchant motions
-                      -- DO carry explicit markers (Layout/Pipeline
-                      -- name), so absence of any marker is corporate
-                      -- by default. This stops the filter from
-                      -- silently hiding real duplicates.
-                      OR (
-                        COALESCE(layout_name, '')  = ''
-                        AND COALESCE(account_type, '') = ''
-                        AND COALESCE(lead_type, '')    = ''
-                      )
                     ) AS _is_corporate
                FROM duplicate_records
               WHERE cluster_id = ANY($1::int[])
