@@ -345,14 +345,179 @@ export async function listRecommendations(): Promise<any[]> {
        JOIN regulations reg ON reg.id = o.regulation_id
       ORDER BY reg.regulation_code, COALESCE(o.section_order, 0), o.obligation_code`,
   );
-  return r.rows.map((row: any) => ({
-    obligation_id: row.obligation_id,
-    regulation_code: row.regulation_code,
-    regulation_name: row.regulation_name,
-    obligation_code: row.obligation_code,
-    obligation_title: row.obligation_title,
-    web_grounded: row.web_grounded,
-    generated_at: row.generated_at,
-    ...row.recommendation,
-  }));
+  return r.rows.map((row: any) => {
+    // Keep the list/CSV light — surface only whether a draft exists, not the
+    // full document text (fetched per-clause via the draft endpoint).
+    const { draft, draft_at, ...rec } = row.recommendation || {};
+    return {
+      obligation_id: row.obligation_id,
+      regulation_code: row.regulation_code,
+      regulation_name: row.regulation_name,
+      obligation_code: row.obligation_code,
+      obligation_title: row.obligation_title,
+      web_grounded: row.web_grounded,
+      generated_at: row.generated_at,
+      has_draft: !!draft,
+      ...rec,
+    };
+  });
+}
+
+const DRAFT_MODEL =
+  process.env.DOCUMENT_MAPPING_DRAFT_MODEL || RECOMMEND_MODEL;
+
+/** Map a recommendation document_type to a policies.document_type enum value. */
+function mapDraftDocType(t: string): string {
+  const s = (t || "").toLowerCase();
+  if (s.includes("procedure")) return "procedure";
+  if (s.includes("policy")) return "policy";
+  if (s.includes("control")) return "control";
+  if (s.includes("record") || s.includes("form")) return "form";
+  if (s.includes("manual")) return "manual";
+  if (s.includes("guideline")) return "guideline";
+  return "document";
+}
+
+/** Pure: build the document-drafting prompt. Exported for tests. */
+export function buildDraftPrompt(
+  clause: {
+    regulation_code: string;
+    obligation_code: string;
+    title: string;
+    description?: string | null;
+  },
+  rec: { what_required?: string; document_type?: string; suggested_document_title?: string; key_criteria?: string[] },
+): string {
+  return [
+    `You are a GRC documentation specialist drafting a controlled document for [Organisation].`,
+    `Draft a COMPLETE, ready-to-review ${rec.document_type || "document"} titled "${rec.suggested_document_title || clause.title}" that fully satisfies the following compliance requirement.`,
+    ``,
+    `Framework: ${clause.regulation_code}`,
+    `Clause ${clause.obligation_code}: ${clause.title}`,
+    clause.description ? `Clause detail: ${String(clause.description).slice(0, 500)}` : ``,
+    rec.what_required ? `What it requires: ${rec.what_required}` : ``,
+    (rec.key_criteria && rec.key_criteria.length)
+      ? `Required elements to cover:\n- ${rec.key_criteria.join("\n- ")}`
+      : ``,
+    ``,
+    `Write the full document in Markdown with this structure:`,
+    `# <title>`,
+    `**Document control:** Version 0.1 (DRAFT) · Owner: [role] · Approver: [role] · Effective: [date] · Next review: [date]`,
+    `## 1. Purpose`,
+    `## 2. Scope`,
+    `## 3. Definitions`,
+    `## 4. Policy / Requirements   (the substantive statements that satisfy the clause)`,
+    `## 5. Roles & Responsibilities`,
+    `## 6. Records & Evidence`,
+    `## 7. Review`,
+    ``,
+    `Be specific and audit-ready, not generic. Map the substantive section explicitly to what the clause demands. Use [Organisation], [role], [date] placeholders where specifics are unknown. Output ONLY the Markdown document — no preamble.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * Draft the full missing document for a gap clause. Ensures a recommendation
+ * exists first (re-using it for structure), generates the document, and caches
+ * it inside the recommendation JSON (`draft`) so it isn't re-generated.
+ */
+export async function draftDocumentForClause(
+  obligationId: number,
+  opts: { force?: boolean; generatedBy?: string } = {},
+): Promise<{ obligation_id: number; title: string; document_type: string; draft: string } | null> {
+  await initGapRecommendationsTable();
+  // Make sure a recommendation exists (cached or fresh) to anchor the draft.
+  const rec = await recommendForClause(obligationId, { generatedBy: opts.generatedBy });
+  if (!rec) return null;
+
+  if (!opts.force) {
+    const cached = await pool.query(
+      `SELECT recommendation FROM obligation_gap_recommendations WHERE obligation_id = $1`,
+      [obligationId],
+    );
+    const existing = cached.rows[0]?.recommendation;
+    if (existing?.draft) {
+      return {
+        obligation_id: obligationId,
+        title: rec.suggested_document_title,
+        document_type: rec.document_type,
+        draft: existing.draft,
+      };
+    }
+  }
+
+  const clause = await loadClause(obligationId);
+  if (!clause) return null;
+
+  let draft = "";
+  try {
+    const r = await generateChatText({
+      model: DRAFT_MODEL,
+      prompt: buildDraftPrompt(clause, rec),
+      maxTokens: 2800,
+      timeoutMs: 60_000,
+    });
+    draft = (r.text || "").trim();
+  } catch (err) {
+    logger.warn(
+      `[gapRecommendationAdvisor] draft failed for ${clause.obligation_code}: ${(err as Error).message}`,
+    );
+  }
+  if (!draft) return null;
+
+  // Persist the draft inside the cached recommendation JSON.
+  const cur = await pool.query(
+    `SELECT recommendation FROM obligation_gap_recommendations WHERE obligation_id = $1`,
+    [obligationId],
+  );
+  const recJson = cur.rows[0]?.recommendation || {};
+  recJson.draft = draft.slice(0, 60_000);
+  await pool.query(
+    `UPDATE obligation_gap_recommendations SET recommendation = $2 WHERE obligation_id = $1`,
+    [obligationId, JSON.stringify(recJson)],
+  );
+
+  return {
+    obligation_id: obligationId,
+    title: rec.suggested_document_title,
+    document_type: rec.document_type,
+    draft,
+  };
+}
+
+/**
+ * Save a drafted document into the Integrated QMS register as a DRAFT policy,
+ * tagged to the clause's framework so the mapper relates it straight back —
+ * closing the gap. Returns the created policy (or throws on duplicate number).
+ */
+export async function saveDraftAsPolicy(
+  obligationId: number,
+  generatedBy: string,
+): Promise<any> {
+  const d = await draftDocumentForClause(obligationId, { generatedBy });
+  if (!d) return null;
+  const clause = await loadClause(obligationId);
+  if (!clause) return null;
+
+  const { createPolicy, initPolicyTables } = await import("./policyDatabase");
+  await initPolicyTables();
+
+  const policyNumber = ("DRAFT-" + (clause.obligation_code || String(obligationId)))
+    .replace(/[^A-Za-z0-9._-]/g, "-")
+    .slice(0, 50);
+
+  const policy = await createPolicy({
+    policy_number: policyNumber,
+    title: (d.title || `Draft for ${clause.obligation_code}`).slice(0, 500),
+    category: "compliance",
+    document_type: mapDraftDocType(d.document_type) as any,
+    content_text: d.draft,
+    description: `AI-drafted to satisfy ${clause.regulation_code} ${clause.obligation_code}.`,
+    status: "draft",
+    created_by: generatedBy,
+    linked_regulation_ids: clause.regulation_id ? [clause.regulation_id] : undefined,
+  } as any);
+
+  return policy;
 }

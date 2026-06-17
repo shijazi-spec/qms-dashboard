@@ -10,6 +10,7 @@ import {
   buildResearchPrompt,
   buildRecommendationPrompt,
   parseRecommendation,
+  buildDraftPrompt,
 } from "../src/utils/gapRecommendationAdvisor";
 
 const suite = new TestSuite("gapRecommendationAdvisor");
@@ -78,6 +79,26 @@ await suite.test("non-array key_criteria degrades to empty list", async () => {
   const r = parseRecommendation('{"what_required":"x","recommended_action":"y","suggested_document_title":"t","document_type":"Policy","key_criteria":"oops","priority":"low"}');
   suite.expectEqual(r!.key_criteria.length, 0, "empty");
   suite.expectEqual(r!.priority, "low", "low kept");
+});
+
+await suite.test("draft prompt anchors to the clause + recommendation structure", async () => {
+  const p = buildDraftPrompt(clause, {
+    what_required: "Define cryptography rules.",
+    document_type: "Policy",
+    suggested_document_title: "Cryptographic Policy",
+    key_criteria: ["scope", "key lifecycle"],
+  });
+  suite.expect(p.includes("ISO27001-A.8.24"), "clause code");
+  suite.expect(p.includes("Cryptographic Policy"), "title");
+  suite.expect(p.includes("key lifecycle"), "criteria folded in");
+  suite.expect(p.toLowerCase().includes("markdown"), "asks for markdown");
+  suite.expect(p.includes("Purpose") && p.includes("Roles & Responsibilities"), "document structure");
+});
+
+await suite.test("draft prompt tolerates a bare recommendation", async () => {
+  const p = buildDraftPrompt(clause, {});
+  suite.expect(p.includes("ISO-27001"), "framework present");
+  suite.expect(typeof p === "string" && p.length > 0, "non-empty");
 });
 
 const { passed, failed } = suite.summarize();

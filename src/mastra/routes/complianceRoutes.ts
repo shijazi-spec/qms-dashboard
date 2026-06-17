@@ -2421,6 +2421,108 @@ export const complianceRoutes = [
     },
   },
   {
+    // AI gap remediation — DRAFT the full missing document for one clause.
+    // Governance/admin only.
+    path: "/api/compliance/document-mapping/draft-clause",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse, getSessionUser } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, [
+            "admin",
+            "grc_manager",
+            "quality_manager",
+            "head_of_operations_quality",
+          ]);
+          if (!sessionUser) {
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(c, "Permission denied: governance roles only");
+          }
+          let body: any = {};
+          try {
+            body = await c.req.json();
+          } catch {
+            body = {};
+          }
+          const obligationId = parseInt(String(body.obligation_id), 10);
+          if (!Number.isFinite(obligationId)) {
+            return c.json({ error: "obligation_id required" }, 400);
+          }
+          const { draftDocumentForClause } = await import(
+            "../../utils/gapRecommendationAdvisor"
+          );
+          const draft = await draftDocumentForClause(obligationId, {
+            force: body.force === true,
+            generatedBy: sessionUser.email || sessionUser.role || "ai",
+          });
+          if (!draft) return c.json({ error: "Could not draft a document" }, 502);
+          return c.json({ success: true, ...draft });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] draft-clause failed:", err);
+          return c.json({ error: "Failed to draft document" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Save the AI draft into the Integrated QMS register as a DRAFT policy
+    // (tagged to the clause's framework so it maps straight back). Gov/admin.
+    path: "/api/compliance/document-mapping/draft-save",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse, getSessionUser } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, [
+            "admin",
+            "grc_manager",
+            "quality_manager",
+            "head_of_operations_quality",
+          ]);
+          if (!sessionUser) {
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(c, "Permission denied: governance roles only");
+          }
+          let body: any = {};
+          try {
+            body = await c.req.json();
+          } catch {
+            body = {};
+          }
+          const obligationId = parseInt(String(body.obligation_id), 10);
+          if (!Number.isFinite(obligationId)) {
+            return c.json({ error: "obligation_id required" }, 400);
+          }
+          const { saveDraftAsPolicy } = await import(
+            "../../utils/gapRecommendationAdvisor"
+          );
+          try {
+            const policy = await saveDraftAsPolicy(
+              obligationId,
+              sessionUser.email || sessionUser.role || "ai",
+            );
+            if (!policy) return c.json({ error: "No draft to save" }, 502);
+            return c.json({ success: true, policy });
+          } catch (e: any) {
+            if (e?.code === "23505") {
+              return c.json(
+                { error: "A document for this clause was already saved to Integrated QMS." },
+                409,
+              );
+            }
+            throw e;
+          }
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] draft-save failed:", err);
+          return c.json({ error: "Failed to save draft" }, 500);
+        }
+      };
+    },
+  },
+  {
     // AI gap remediation — bulk. Processes ONE batch of gap clauses lacking a
     // recommendation per call (so the request never times out on hundreds of
     // clauses); the UI loops until remaining === 0. `?estimate=true` returns
