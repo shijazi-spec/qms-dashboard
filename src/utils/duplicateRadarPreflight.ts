@@ -174,6 +174,16 @@ export function buildExecutiveAction(input: {
    * "Active deal already in pipeline" — the wording that misled Sales.
    */
   has_active_deal?: boolean;
+  /**
+   * True iff the matched cluster has at least one Lead whose
+   * Lead_Status is NOT in {Junk Lead, Bogus Lead, Lost Lead, Not
+   * Qualified, Disqualified, Converted}. Sarah 2026-06-17 — a
+   * vendor row that hits an active Lead must be REJECTED outright
+   * (severity HIGH, wording "DO NOT re-import"). When undefined,
+   * the active-lead branch is skipped and the function falls
+   * through to the closed/known-company branches.
+   */
+  has_active_lead?: boolean;
   /** Latest Churn_Date on the cluster (ISO yyyy-mm-dd). */
   churn_date?: string | null;
   /** Days since the latest churn. */
@@ -266,6 +276,21 @@ export function buildExecutiveAction(input: {
     if (hasActiveDeal) {
       return {
         text: `ACTIVE SALES DEAL IN PIPELINE — ${modBreakdown} on file (${recs} total record${recs === 1 ? "" : "s"}). Assign to existing owner${ownerSuffix.replace("current ", "")}; do NOT create a new lead, it will become a duplicate.`,
+        severity: "high",
+      };
+    }
+    // Sarah 2026-06-17 — active-lead REJECT rule. If the cluster has at
+    // least one Lead that's still being worked (Lead_Status not in
+    // junk/lost/bogus/disqualified/converted), the vendor row would
+    // create a parallel-lead duplicate and must be flat-out rejected.
+    // SDR is already on it — pushing this in causes double-touch and
+    // the routing-call mess Sarah described.
+    if (input.has_active_lead === true) {
+      const accountSuffix = input.account_name
+        ? ` (existing Account "${input.account_name}")`
+        : "";
+      return {
+        text: `REJECT — ACTIVE LEAD ALREADY IN PIPELINE${accountSuffix}: ${modBreakdown} on file (${recs} total record${recs === 1 ? "" : "s"}). SDR is already working this lead — do NOT re-import. Pass any new contact info to the existing Lead owner${ownerSuffix.replace("current ", "")}.`,
         severity: "high",
       };
     }
@@ -395,6 +420,34 @@ export interface PreflightClusterRow {
    */
   has_active_deal?: boolean;
   /**
+   * True when the matched cluster has at least one Lead whose
+   * Lead_Status is NOT in {Junk Lead, Bogus Lead, Lost Lead, Not
+   * Qualified, Disqualified, Converted}. Sarah 2026-06-17 — a vendor
+   * row that hits an ACTIVE LEAD must be REJECTED outright: SDR is
+   * already working it; importing a parallel record creates a real
+   * duplicate. Severity goes to HIGH and the action is "DO NOT
+   * re-import".
+   */
+  has_active_lead?: boolean;
+  /**
+   * True when the cluster contains at least one record whose
+   * layout_name = 'Corporate Sales (WalaPlus Layout)' OR account_type
+   * / lead_type = 'Customer'. Marketplace and merchant records are
+   * OUT OF SCOPE for the Duplicate Radar — when a cluster has zero
+   * corporate records the Preflight treats the match as a non-match
+   * (PASS) so the vendor list isn't graded against marketplace rules.
+   */
+  has_corporate_records?: boolean;
+  /**
+   * Per-module counts RESTRICTED to corporate records. Used by the
+   * executive_action wording so the briefing only ever mentions the
+   * portion of the cluster that's in-scope.
+   */
+  corporate_leads?: number;
+  corporate_deals?: number;
+  corporate_contacts?: number;
+  corporate_accounts?: number;
+  /**
    * The latest Churn_Date observed across the cluster's Deal records
    * (ISO date string, e.g. "2024-11-03"). Surfaces in the WARN /
    * REVIEW executive_action so the operator sees the actual date the
@@ -477,20 +530,35 @@ export function classifyPreflightRows(input: {
       if (c) matched = { cluster: c, matched_via: "domain" };
     }
 
-    if (!matched) {
+    // Sarah 2026-06-17 corporate-scope rule — a cluster whose
+    // members are entirely marketplace / merchant (no corporate
+    // record at all) is OUT OF SCOPE for the Duplicate Radar. Treat
+    // it the same as no match: PASS with an explicit reason so the
+    // operator can see WHY we let a domain-matched row through.
+    const isOutOfScope =
+      !!matched &&
+      matched.cluster.has_corporate_records === false;
+
+    if (!matched || isOutOfScope) {
       out.push({
         row_index: i,
         ref,
         input: { domain, company_name: row.company_name ?? null },
         verdict: "pass",
-        cluster_id: null,
+        cluster_id: isOutOfScope ? matched!.cluster.id : null,
         lifecycle_state: null,
         sector: null,
         arr_exposure: null,
         owners: [],
-        reason: domain ? VERDICT_REASONS.pass : "no_domain_resolved",
-        suggested_action: SUGGESTED_ACTIONS.pass,
-        executive_action: "Safe to import.",
+        reason: isOutOfScope
+          ? "out_of_scope_non_corporate"
+          : (domain ? VERDICT_REASONS.pass : "no_domain_resolved"),
+        suggested_action: isOutOfScope
+          ? "Matched a non-corporate record (marketplace / merchant). Out of Duplicate Radar scope — safe to import."
+          : SUGGESTED_ACTIONS.pass,
+        executive_action: isOutOfScope
+          ? "Out of scope — matched a non-corporate record (Marketplace / Merchant). Safe to import."
+          : "Safe to import.",
         executive_severity: "info",
         module_counts: null,
         matched_via: null,
@@ -525,10 +593,17 @@ export function classifyPreflightRows(input: {
       const parsed = typeof v === "number" ? v : parseInt(String(v), 10);
       return Number.isFinite(parsed) ? parsed : 0;
     };
-    const leadsN    = _n(c.total_leads);
-    const dealsN    = _n(c.total_deals);
-    const contactsN = _n(c.total_contacts);
-    const accountsN = _n(c.total_accounts);
+    // Sarah 2026-06-17 — when corporate-only counts are available
+    // use them (the briefing must only reflect in-scope records);
+    // fall through to the cluster's total_* legacy fields when the
+    // enrichment didn't populate corporate counts (cluster has no
+    // record rows yet, etc.).
+    const cAnyForCounts = c as any;
+    const useCorporate = c.has_corporate_records === true;
+    const leadsN    = useCorporate ? _n(cAnyForCounts.corporate_leads)    : _n(c.total_leads);
+    const dealsN    = useCorporate ? _n(cAnyForCounts.corporate_deals)    : _n(c.total_deals);
+    const contactsN = useCorporate ? _n(cAnyForCounts.corporate_contacts) : _n(c.total_contacts);
+    const accountsN = useCorporate ? _n(cAnyForCounts.corporate_accounts) : _n(c.total_accounts);
 
     summary[verdict]++;
     // Reason — for non-domain matches, prefix so the operator knows
@@ -562,6 +637,9 @@ export function classifyPreflightRows(input: {
       sector: sectorVal,
       has_active_deal: cAny.has_active_deal === true ? true
         : cAny.has_active_deal === false ? false
+        : undefined,
+      has_active_lead: cAny.has_active_lead === true ? true
+        : cAny.has_active_lead === false ? false
         : undefined,
       churn_date: cAny.churn_date ?? null,
       churn_days: cAny.churn_days ?? null,
@@ -987,20 +1065,40 @@ export async function runPreflight(input: {
       const flagsQ = await queryWithTimeout<{
         cluster_id: number;
         has_active_deal: boolean;
+        has_active_lead: boolean;
+        has_corporate_records: boolean;
+        corporate_leads: string;
+        corporate_deals: string;
+        corporate_contacts: string;
+        corporate_accounts: string;
         churn_date: string | null;
         cs_owner: string | null;
       }>(
-        // Sarah 2026-06-17 — has_active_deal must NOT fire on
-        // "Closed Lost" / "Closed-Lost" / "Lost Lead" / similar
-        // variants. The previous IN-list missed every spelling Zoho
-        // tenants use in the wild. Switching to a positive set of
-        // recognisably-LIVE stage substrings keeps the wording honest:
-        // empty Stage → assume active (raw_data gap, conservative);
-        // matches "lost" / "won" / "paid" / "dropped" / "cancel" /
-        // "closed" prefix / handoff stages → NOT active.
+        // Sarah 2026-06-17 — three things this query does:
+        // (1) Corporate-scope filter — only records whose
+        //     layout_name = 'Corporate Sales (WalaPlus Layout)' OR
+        //     account_type/lead_type = 'Customer' count toward the
+        //     active/lead/deal flags and module counts. Marketplace
+        //     and merchant records are OUT OF SCOPE for the Duplicate
+        //     Radar and must not influence the verdict.
+        // (2) has_active_deal — widened to NOT fire on any "lost" /
+        //     "won" / "closed*" / "dropped" / "cancel" stage variant
+        //     plus the CS handoff stages. Empty Stage = conservative
+        //     assume-active (raw_data gap).
+        // (3) has_active_lead — NEW. The vendor row REJECT rule:
+        //     if a matched cluster has any Lead whose Lead_Status is
+        //     NOT junk/lost/bogus/disqualified/converted, the new
+        //     vendor lead is an outright duplicate of an actively
+        //     worked Lead and must NOT be imported.
         `SELECT cluster_id,
+                BOOL_OR(_is_corporate) AS has_corporate_records,
+                COUNT(*) FILTER (WHERE _is_corporate AND record_type = 'lead')::text    AS corporate_leads,
+                COUNT(*) FILTER (WHERE _is_corporate AND record_type = 'deal')::text    AS corporate_deals,
+                COUNT(*) FILTER (WHERE _is_corporate AND record_type = 'contact')::text AS corporate_contacts,
+                COUNT(*) FILTER (WHERE _is_corporate AND record_type = 'account')::text AS corporate_accounts,
                 BOOL_OR(
-                  record_type = 'deal'
+                  _is_corporate
+                  AND record_type = 'deal'
                   AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%lost%'
                   AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%won%'
                   AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE 'closed%'
@@ -1009,6 +1107,12 @@ export async function runPreflight(input: {
                   AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT IN
                       ('paid','agreement signed','client activated','transferred to cs','awaiting po')
                 ) AS has_active_deal,
+                BOOL_OR(
+                  _is_corporate
+                  AND record_type = 'lead'
+                  AND COALESCE(LOWER(raw_data->>'Lead_Status'), LOWER(status), '')
+                      NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted')
+                ) AS has_active_lead,
                 MAX(NULLIF(raw_data->>'Churn_Date','')) AS churn_date,
                 (
                   ARRAY_AGG(owner_name)
@@ -1020,13 +1124,27 @@ export async function runPreflight(input: {
                             AND owner_name IS NOT NULL
                             AND owner_name <> '')
                 )[1] AS cs_owner
-           FROM duplicate_records
-          WHERE cluster_id = ANY($1::int[])
+           FROM (
+             SELECT *,
+                    (
+                      layout_name = 'Corporate Sales (WalaPlus Layout)'
+                      OR LOWER(COALESCE(account_type, '')) = 'customer'
+                      OR LOWER(COALESCE(lead_type, '')) = 'customer'
+                    ) AS _is_corporate
+               FROM duplicate_records
+              WHERE cluster_id = ANY($1::int[])
+           ) dr
           GROUP BY cluster_id`,
         [Array.from(ids)],
       );
       const byId = new Map<number, {
         has_active_deal: boolean;
+        has_active_lead: boolean;
+        has_corporate_records: boolean;
+        corporate_leads: number;
+        corporate_deals: number;
+        corporate_contacts: number;
+        corporate_accounts: number;
         churn_date: string | null;
         cs_owner: string | null;
       }>();
@@ -1034,6 +1152,12 @@ export async function runPreflight(input: {
         for (const r of flagsQ.rows) {
           byId.set(Number(r.cluster_id), {
             has_active_deal: !!r.has_active_deal,
+            has_active_lead: !!r.has_active_lead,
+            has_corporate_records: !!r.has_corporate_records,
+            corporate_leads:    Number(r.corporate_leads    ?? 0),
+            corporate_deals:    Number(r.corporate_deals    ?? 0),
+            corporate_contacts: Number(r.corporate_contacts ?? 0),
+            corporate_accounts: Number(r.corporate_accounts ?? 0),
             churn_date: r.churn_date || null,
             cs_owner: r.cs_owner || null,
           });
@@ -1043,6 +1167,12 @@ export async function runPreflight(input: {
       const apply = (c: PreflightClusterRow) => {
         const v = byId.get(c.id);
         c.has_active_deal = v?.has_active_deal === true;
+        c.has_active_lead = v?.has_active_lead === true;
+        c.has_corporate_records = v?.has_corporate_records === true;
+        c.corporate_leads    = v?.corporate_leads    ?? 0;
+        c.corporate_deals    = v?.corporate_deals    ?? 0;
+        c.corporate_contacts = v?.corporate_contacts ?? 0;
+        c.corporate_accounts = v?.corporate_accounts ?? 0;
         // Normalise the churn date to yyyy-mm-dd (Zoho can return
         // datetimes). Compute churn_days off whatever parses.
         const raw = v?.churn_date ?? null;
