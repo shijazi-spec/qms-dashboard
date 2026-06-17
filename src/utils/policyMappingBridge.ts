@@ -244,9 +244,20 @@ export async function runSemanticAutoMap(
     const candRes = regCodes
       ? await pool.query(candSql, [regCodes])
       : await pool.query(candSql);
-    const candidates = candRes.rows;
+    let candidates = candRes.rows;
     if (candidates.length === 0)
       return { suggested: 0, auto_mapped: 0, reason: "no candidate obligations" };
+
+    // Retrieve-then-verify (rec #3): when embeddings are enabled, shortlist the
+    // most semantically similar clauses so the LLM verifier sees a focused list
+    // instead of the full candidate set. Best-effort — no-op/passthrough when
+    // embeddings are off or unavailable.
+    try {
+      const { shortlistByEmbedding } = await import("./clauseEmbeddings");
+      candidates = await shortlistByEmbedding(text, candidates);
+    } catch {
+      /* passthrough — keep full candidate list */
+    }
 
     // Reuse the read-only suggest tool's pure prompt/parse helpers (dynamic
     // import avoids a static util→tool cycle at module load).
