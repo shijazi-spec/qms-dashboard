@@ -180,6 +180,11 @@ export function buildExecutiveAction(input: {
   churn_days?: number | null;
   /** CS owner name (when the cluster has CS-side deals). */
   cs_owner?: string | null;
+  /** Name of the existing canonical Account/cluster the new lead should
+   *  be linked to when re-engaged. Used by the Closed-Lost-only and
+   *  no-deal-but-known branches so the email tells Sales exactly which
+   *  Account to set Account_Name to instead of "the existing one". */
+  account_name?: string | null;
 }): { text: string; severity: PreflightResultRow["executive_severity"] } {
   const ownerStr =
     Array.isArray(input.owners) && input.owners.length > 0
@@ -264,21 +269,33 @@ export function buildExecutiveAction(input: {
         severity: "high",
       };
     }
+    // Sarah 2026-06-17 — Closed-Lost-only clusters are NOT a hard block:
+    // the prior deal didn't close, the company is known, and Sales MAY
+    // re-engage. Drop the verdict from "DUPLICATE / medium" to a softer
+    // "PRIOR LOST OPPORTUNITY / low" and tell Sales the right next step:
+    // link the new lead to the existing Account (don't spawn a parallel
+    // record). Surfaces the actual Account name so the cell carries the
+    // routing target without the operator opening the cluster.
     if (dealsN > 0) {
-      // Cluster has deals but ALL of them are dead (Closed Lost,
-      // Dropped, …). Surfaces honestly so the HoS knows the company
-      // is known to us but Sales has no active motion on it.
+      const accountTarget = input.account_name
+        ? `the existing Account "${input.account_name}"`
+        : "the existing Account on this domain";
       const churnNote = churnDate
-        ? ` Last activity ${churnDate} (${input.churn_days ? `${input.churn_days}d ago` : "date on file"}).`
+        ? ` Last activity ${churnDate}${input.churn_days ? ` (${input.churn_days}d ago)` : ""}.`
         : "";
       return {
-        text: `KNOWN COMPANY — ALL prior deals closed/lost: ${modBreakdown} (${recs} record${recs === 1 ? "" : "s"}).${churnNote} Coordinate with existing owner${ownerSuffix} before re-opening — do NOT create a parallel lead.`,
-        severity: "medium",
+        text: `PRIOR LOST OPPORTUNITY — ${dealsN} closed/lost deal${dealsN === 1 ? "" : "s"} on file (${modBreakdown}; ${recs} total record${recs === 1 ? "" : "s"}). Sales MAY re-engage.${churnNote} Link the new lead to ${accountTarget} (set Account_Name) instead of creating a parallel record${ownerSuffix}.`,
+        severity: "low",
       };
     }
+    // Known company, no deal at all — Contact or Account on file but
+    // never a Sales motion. Same prescription: link, don't fork.
+    const accountTarget = input.account_name
+      ? `the existing Account "${input.account_name}"`
+      : "the existing Account on this domain";
     return {
-      text: `ALREADY IN CRM AS DUPLICATE — ${modBreakdown || `${recs} record${recs === 1 ? "" : "s"}`}. Resolve in Duplicate Radar before importing${ownerSuffix}.`,
-      severity: "medium",
+      text: `KNOWN COMPANY — ${modBreakdown || `${recs} record${recs === 1 ? "" : "s"}`} on file but no prior Sales deal. Link the new lead to ${accountTarget} (set Account_Name)${ownerSuffix}; do NOT create a parallel record.`,
+      severity: "low",
     };
   }
   return { text: "Safe to import.", severity: "info" };
@@ -358,6 +375,7 @@ export function resolveCompany(row: PreflightInputRow): string | null {
 export interface PreflightClusterRow {
   id: number;
   domain: string;
+  company_name?: string | null;
   cs_overlap_verdict: string | null;
   pipeline_lifecycle_state: string | null;
   client_sector: string | null;
@@ -548,6 +566,7 @@ export function classifyPreflightRows(input: {
       churn_date: cAny.churn_date ?? null,
       churn_days: cAny.churn_days ?? null,
       cs_owner: cAny.cs_owner ?? null,
+      account_name: (c.company_name || '').trim() || null,
     });
     out.push({
       row_index: i,
@@ -658,6 +677,7 @@ export function shouldCreateForVerdict(
 
 /** SELECT list reused by every cluster lookup so the result rows are shape-stable. */
 const CLUSTER_SELECT_COLS = `id, domain,
+              company_name,
               cs_overlap_verdict,
               pipeline_lifecycle_state,
               client_sector,
@@ -970,11 +990,24 @@ export async function runPreflight(input: {
         churn_date: string | null;
         cs_owner: string | null;
       }>(
+        // Sarah 2026-06-17 — has_active_deal must NOT fire on
+        // "Closed Lost" / "Closed-Lost" / "Lost Lead" / similar
+        // variants. The previous IN-list missed every spelling Zoho
+        // tenants use in the wild. Switching to a positive set of
+        // recognisably-LIVE stage substrings keeps the wording honest:
+        // empty Stage → assume active (raw_data gap, conservative);
+        // matches "lost" / "won" / "paid" / "dropped" / "cancel" /
+        // "closed" prefix / handoff stages → NOT active.
         `SELECT cluster_id,
                 BOOL_OR(
                   record_type = 'deal'
-                  AND LOWER(COALESCE(raw_data->>'Stage','')) NOT IN
-                      ('closed lost','lost','dropped','cancelled','canceled')
+                  AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%lost%'
+                  AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%won%'
+                  AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE 'closed%'
+                  AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%dropped%'
+                  AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%cancel%'
+                  AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT IN
+                      ('paid','agreement signed','client activated','transferred to cs','awaiting po')
                 ) AS has_active_deal,
                 MAX(NULLIF(raw_data->>'Churn_Date','')) AS churn_date,
                 (

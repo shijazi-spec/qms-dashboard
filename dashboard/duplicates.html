@@ -1198,13 +1198,12 @@
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="Sales/CS rep who currently owns the matched record in CRM">Existing owner</th>
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="How many existing CRM records the matched cluster contains, broken down by module">Records</th>
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">CS Phase</th>
-                            <th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">ARR</th>
                             <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="Business-language action — what the Head of Sales / Sales rep should actually do">Recommended action</th>
-                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="Open the cluster detail in the Duplicate Radar — see every underlying record, modules touched, ARR exposure, owners">View</th>
+                            <th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase" title="Open the cluster detail in the Duplicate Radar — see every underlying record, modules touched, owners. ARR exposure (when relevant) is retained in the Excel export.">View</th>
                         </tr>
                     </thead>
                     <tbody id="preflightResultTable" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>
+                        <tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">Paste a list and click <em>Check</em>.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -10492,7 +10491,7 @@
             const body = document.getElementById('preflightResultTable');
             const rows = data.rows || [];
             if (rows.length === 0) {
-                body.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">No rows processed.</td></tr>';
+                body.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">No rows processed.</td></tr>';
                 return;
             }
             const sevTint = {
@@ -10502,6 +10501,10 @@
                 low: 'bg-blue-50',
                 info: '',
             };
+            // Sarah 2026-06-17 — ARR column dropped from the result table
+            // (mostly "—" on a vendor list since ARR only fires on
+            // BLOCK/cs-overlap rows). Still emitted in the Excel export +
+            // executive headline card where it's load-bearing.
             body.innerHTML = rows.map(r => {
                 const ownerStr = Array.isArray(r.owners) && r.owners.length > 0
                     ? r.owners.slice(0, 2).map(o => escapeHtml(o)).join(', ') + (r.owners.length > 2 ? ' <span class="text-gray-400">+' + (r.owners.length - 2) + '</span>' : '')
@@ -10516,7 +10519,6 @@
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + ownerStr + '</td>'
                     + '<td class="px-3 py-2">' + _preflightModulesCell(r.module_counts) + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-700">' + escapeHtml(csPhaseLabel(r.lifecycle_state)) + '</td>'
-                    + '<td class="px-3 py-2 text-xs text-end font-medium">' + (r.arr_exposure ? formatCurrency(r.arr_exposure) : '—') + '</td>'
                     + '<td class="px-3 py-2 text-xs text-gray-800" title="' + escAttr(r.reason || '') + '">' + escapeHtml(execAction) + '</td>'
                     + '<td class="px-3 py-2 whitespace-nowrap">' + _preflightViewCell(r.cluster_id) + '</td>'
                     + '</tr>';
