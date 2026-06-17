@@ -1050,6 +1050,11 @@ export interface ResolutionRunSummary {
   plansBuilt: number;
   applied: number;
   queued: number;
+  /** Sarah 2026-06-17 — plans rejected by the quality gates BEFORE queueing
+   *  (0-duplicate plans, "test" survivors, sprawling low-confidence clusters,
+   *  100+ phone clusters, etc.). Surfaces on /autonomous-resolution + the
+   *  twice-daily digest so the operator can see what the agent declined. */
+  skipped: number;
   errors: number;
   /** Effective write permission AFTER the environment guardrail (dev = false even when enabled). */
   writesAllowed: boolean;
@@ -1087,6 +1092,7 @@ export async function runAutonomousResolution(
     plansBuilt: 0,
     applied: 0,
     queued: 0,
+    skipped: 0,
     errors: 0,
     writesAllowed: false,
     items: [],
@@ -1156,6 +1162,7 @@ export async function runResolutionForCluster(
     enabled: cfg.enabled,
     clustersScanned: 0,
     plansBuilt: 0,
+    skipped: 0,
     applied: 0,
     queued: 0,
     errors: 0,
@@ -1445,6 +1452,83 @@ async function processModule(ctx: {
     reasons,
     action: "skipped",
   };
+
+  // ─── Sarah 2026-06-17 — plan-quality gates ─────────────────────────────
+  //
+  // The bulk-reject sweep (June 17) cleared ~3,600 pending proposals that
+  // were structurally bad: 0-duplicate plans queued anyway after the
+  // Contacts strict-match rule correctly excluded everyone; survivors
+  // literally named "test"; clusters spanning 192 distinct phones across
+  // 3 corporate domains (different companies). The verdict gate caught
+  // these as "escalate" (good — they didn't auto-apply) but the runner
+  // still queued them, flooding the approval queue with junk.
+  //
+  // These gates make the resolver SILENT on these classes instead of
+  // queueing for human review. Each gate is conservative and only
+  // applies when the plan is plainly not actionable. Match leaves an
+  // entry in summary.items so the gate firings are visible on the
+  // /autonomous-resolution screen + the twice-daily digest.
+  const skipReasons: string[] = [];
+  const survivorName = (plan.masterName || "").trim().toLowerCase();
+  const clusterRecordCount = Number(
+    (cluster as any).total_records ?? moduleRecords.length,
+  );
+  const clusterConfidence = Number((cluster as any).confidence_score ?? 0);
+
+  // (1) Nothing to do — no duplicates and no link target.
+  if (plan.duplicateZohoIds.length === 0 && !plan.linkAccountZohoId) {
+    skipReasons.push(
+      "plan has 0 duplicates to tag and no Account_Name link target — nothing actionable",
+    );
+  }
+  // (2) Garbage survivor name — "test", "demo", empty, 1-char, etc.
+  // A survivor named "test" almost certainly means the cluster is built
+  // around a stale test record and shouldn't drive a real merge.
+  if (
+    !survivorName ||
+    survivorName.length < 2 ||
+    /^(test|demo|temp|sample|na|n\/a|none|null|unknown|x|xx|xxx|xxxx|aaa|aaaa|untitled|new|new lead|new contact)$/i.test(
+      survivorName,
+    )
+  ) {
+    skipReasons.push(
+      `survivor name "${plan.masterName}" looks like garbage — cluster needs human review, not auto-resolve`,
+    );
+  }
+  // (3) Sprawling low-confidence cluster — engine grouped too loosely.
+  // Confidence < 30% AND cluster > 10 records means the cluster engine
+  // itself isn't sure these are duplicates; a merge proposal at that
+  // signal-to-noise ratio creates more harm than it prevents.
+  if (clusterConfidence < 30 && clusterRecordCount > 10) {
+    skipReasons.push(
+      `cluster confidence ${clusterConfidence}% is too low for a ${clusterRecordCount}-record cluster — needs cluster-engine re-segmentation, not resolution approval`,
+    );
+  }
+  // (4) Wildly heterogeneous cluster — too many phones / domains for ONE
+  // company. 192 phones at "Ministry of Health" means 192 distinct
+  // employees grouped together; that's a cluster-engine fault, not a
+  // duplicate-resolution task.
+  if (mixed.phones.length > 50) {
+    skipReasons.push(
+      `${mixed.phones.length} distinct phone numbers in the cluster — likely distinct employees, not duplicate records`,
+    );
+  }
+  if (mixed.domains.length > 5) {
+    skipReasons.push(
+      `${mixed.domains.length} distinct corporate domains — different companies grouped together; cluster engine needs re-segmentation`,
+    );
+  }
+  if (skipReasons.length > 0) {
+    item.action = "skipped";
+    item.reasons = [
+      ...item.reasons,
+      ...skipReasons.map((r) => `quality-gate: ${r}`),
+    ];
+    item.detail = "Quality gate fired — plan not queued for approval";
+    summary.items.push(item);
+    summary.skipped++;
+    return;
+  }
 
   // AUTO + writes allowed → apply for real (on behalf of Sarah).
   if (verdict === "auto" && writesAllowed) {
