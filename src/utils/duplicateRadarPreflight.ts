@@ -1466,9 +1466,29 @@ export async function runPreflight(input: {
            FROM (
              SELECT *,
                     (
+                      -- Explicit corporate markers Sarah confirmed
+                      -- 2026-06-17 — Layout name or Customer-typed
+                      -- account / lead.
                       layout_name = 'Corporate Sales (WalaPlus Layout)'
                       OR LOWER(COALESCE(account_type, '')) = 'customer'
                       OR LOWER(COALESCE(lead_type, '')) = 'customer'
+                      -- Sarah 2026-06-17 — when ALL three markers are
+                      -- null/empty, default to corporate. The Mawsool
+                      -- audit showed 1,398/1,668 rows (84%) being
+                      -- rejected as "out_of_scope_non_corporate"
+                      -- because legacy CRM records pre-date those
+                      -- markers — most existing records simply have
+                      -- nothing in layout_name / account_type /
+                      -- lead_type. Marketplace and merchant motions
+                      -- DO carry explicit markers (Layout/Pipeline
+                      -- name), so absence of any marker is corporate
+                      -- by default. This stops the filter from
+                      -- silently hiding real duplicates.
+                      OR (
+                        COALESCE(layout_name, '')  = ''
+                        AND COALESCE(account_type, '') = ''
+                        AND COALESCE(lead_type, '')    = ''
+                      )
                     ) AS _is_corporate
                FROM duplicate_records
               WHERE cluster_id = ANY($1::int[])
