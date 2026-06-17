@@ -2234,6 +2234,85 @@ export const complianceRoutes = [
     },
   },
   {
+    // Embeddings (retrieve-then-verify) cache status — how many clauses are
+    // embedded vs total, the model, and whether the shortlist is enabled.
+    // Read-only; governance roles (mirrors the other mapping reads).
+    path: "/api/compliance/document-mapping/embeddings-status",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse, getSessionUser } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, [
+            "admin",
+            "grc_manager",
+            "quality_manager",
+            "head_of_operations_quality",
+          ]);
+          if (!sessionUser) {
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(c, "Permission denied");
+          }
+          const { embeddingsCoverage } = await import(
+            "../../utils/clauseEmbeddings"
+          );
+          return c.json({ success: true, ...(await embeddingsCoverage()) });
+        } catch (err) {
+          safeLogger.error(
+            "❌ [ComplianceAPI] embeddings-status failed:",
+            err,
+          );
+          return c.json({ error: "Failed to read embeddings status" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Pre-warm the clause-embedding cache (benchmark rec #3). Batched so the
+    // request can't time out; the UI loops until remaining === 0. Lets you
+    // build the cache, then flip DOCUMENT_MAPPING_EMBEDDINGS=true to turn on
+    // the retrieve-then-verify shortlist. Governance/admin only.
+    path: "/api/compliance/document-mapping/embeddings-backfill",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse, getSessionUser } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, [
+            "admin",
+            "grc_manager",
+            "quality_manager",
+            "head_of_operations_quality",
+          ]);
+          if (!sessionUser) {
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(
+              c,
+              "Permission denied: only document-governance roles can build embeddings",
+            );
+          }
+          const { embeddingsCoverage, backfillEmbeddingsBatch } = await import(
+            "../../utils/clauseEmbeddings"
+          );
+          const body = await c.req.json().catch(() => ({}));
+          if (body.estimate) {
+            return c.json({ success: true, ...(await embeddingsCoverage()) });
+          }
+          const r = await backfillEmbeddingsBatch({ limit: 25 });
+          return c.json({ success: true, ...r });
+        } catch (err) {
+          safeLogger.error(
+            "❌ [ComplianceAPI] embeddings-backfill failed:",
+            err,
+          );
+          return c.json({ error: "Failed to build embeddings" }, 500);
+        }
+      };
+    },
+  },
+  {
     // "Map this framework" — targeted AI semantic scan scoped to one
     // framework's clauses, touching only documents not yet linked to it.
     // `?estimate=true` returns the document count for the confirmation

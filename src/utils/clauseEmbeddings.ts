@@ -145,6 +145,103 @@ async function ensureClauseEmbeddings(
 }
 
 /**
+ * Coverage of the embedding cache: how many clauses currently have an embedding
+ * row vs the total. Drives the "Build embeddings" status on the dashboard.
+ */
+export async function embeddingsCoverage(): Promise<{
+  total: number;
+  embedded: number;
+  remaining: number;
+  model: string;
+  enabled: boolean;
+}> {
+  await initClauseEmbeddingsTable();
+  const t = await pool.query(`SELECT COUNT(*)::int AS n FROM obligations`);
+  const e = await pool.query(
+    `SELECT COUNT(*)::int AS n
+       FROM obligation_embeddings oe
+       JOIN obligations o ON o.id = oe.obligation_id`,
+  );
+  const total = t.rows[0]?.n || 0;
+  const embedded = e.rows[0]?.n || 0;
+  return {
+    total,
+    embedded,
+    remaining: Math.max(0, total - embedded),
+    model: EMBED_MODEL,
+    enabled: embeddingsEnabled(),
+  };
+}
+
+/**
+ * Pre-warm the embedding cache for clauses that don't have one yet. Batched +
+ * bounded-concurrency so the request can't time out; the UI loops until
+ * remaining === 0. Runs regardless of the feature flag (so you can build the
+ * cache first, then flip DOCUMENT_MAPPING_EMBEDDINGS=true). Needs the OpenAI
+ * key — without it every embed fails and `failed` reports the count.
+ * Staleness (clause text changed after caching) is still handled lazily by
+ * ensureClauseEmbeddings during a real scan; this only fills the gaps.
+ */
+export async function backfillEmbeddingsBatch(
+  opts: { limit?: number; concurrency?: number } = {},
+): Promise<{ processed: number; embedded: number; failed: number; remaining: number }> {
+  await initClauseEmbeddingsTable();
+  const limit = Math.min(100, Math.max(1, opts.limit ?? 25));
+  const rows = await pool.query(
+    `SELECT o.id, o.obligation_code, o.title, o.description
+       FROM obligations o
+  LEFT JOIN obligation_embeddings oe ON oe.obligation_id = o.id
+      WHERE oe.obligation_id IS NULL
+   ORDER BY o.id
+      LIMIT $1`,
+    [limit],
+  );
+  const queue = rows.rows.slice() as ClauseCandidate[];
+  let processed = 0,
+    embedded = 0,
+    failed = 0;
+  const concurrency = Math.max(1, Math.min(opts.concurrency ?? 4, 8));
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const c = queue.shift();
+      if (!c) return;
+      processed++;
+      const text = clauseEmbedText(c);
+      const vec = await embedText(text);
+      if (!vec) {
+        failed++;
+        continue;
+      }
+      try {
+        await pool.query(
+          `INSERT INTO obligation_embeddings (obligation_id, embedding, model, dim, text_hash)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (obligation_id) DO UPDATE
+             SET embedding = EXCLUDED.embedding, model = EXCLUDED.model,
+                 dim = EXCLUDED.dim, text_hash = EXCLUDED.text_hash, created_at = CURRENT_TIMESTAMP`,
+          [c.id, JSON.stringify(vec), EMBED_MODEL, vec.length, hashText(text)],
+        );
+        embedded++;
+      } catch {
+        failed++;
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, queue.length || 1) }, () => worker()),
+  );
+  const rem = await pool.query(
+    `SELECT COUNT(*)::int AS n
+       FROM obligations o
+  LEFT JOIN obligation_embeddings oe ON oe.obligation_id = o.id
+      WHERE oe.obligation_id IS NULL`,
+  );
+  return { processed, embedded, failed, remaining: rem.rows[0]?.n || 0 };
+}
+
+/**
  * Shortlist the top-K candidate clauses most semantically similar to the
  * document, so the LLM verifier sees a focused list instead of all candidates.
  * Best-effort: on ANY problem (disabled, no embeddings, error) returns the
