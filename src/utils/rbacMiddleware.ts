@@ -1127,6 +1127,18 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
+  // Bulk-approve / bulk-reject — same authorisation envelope as the
+  // single-record variants above. The handlers in aiApprovalRoutes
+  // (lines 1032+ for bulk-reject, similar for bulk-approve) re-check
+  // per-item SoD + per-item status, so the per-route check here just
+  // needs to admit the same role set. Sarah 2026-06-17 — added after
+  // the bulk-reject sweep hit RBAC at the gateway with "Route not
+  // authorised by RBAC policy".
+  {
+    pattern: /^\/api\/ai\/approvals\/bulk-(approve|reject)$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
   {
     pattern: /^\/api\/ai\/approvals/,
     methods: ["GET"],
