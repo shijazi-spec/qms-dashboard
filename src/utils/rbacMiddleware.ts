@@ -675,7 +675,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     // advisors (recommend a clause / recommend all gaps). Governance/admin
     // only; mirrors the in-handler requireRole gate. Must precede the generic
     // /api/compliance write catch-all below.
-    pattern: /^\/api\/compliance\/document-mapping\/(backfill|map-framework|recommend-clause|recommend-gaps)$/,
+    pattern: /^\/api\/compliance\/document-mapping\/(backfill|map-framework|map-all|recommend-clause|recommend-gaps)$/,
     methods: ["POST"],
     roles: ["admin", "grc_manager", "quality_manager", "head_of_operations_quality"],
   },

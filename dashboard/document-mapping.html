@@ -80,11 +80,15 @@
 
         <!-- Per-framework coverage tile grid -->
         <section class="bg-white rounded-lg shadow mb-6" data-testid="section-coverage-grid">
-            <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between gap-3 flex-wrap">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.per_framework_title">Coverage by Framework</h2>
                     <p class="text-xs text-gray-500" data-i18n="docmap.per_framework_subtitle">% of clauses with at least one linked document. Click a tile to drill into unmapped clauses, or download an Audit-Readiness PDF for that framework.</p>
                 </div>
+                <button type="button" data-on-click="runMapAll" id="mapAllBtn" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 font-medium flex items-center gap-1 disabled:opacity-60 whitespace-nowrap" data-testid="button-map-all">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    <span id="mapAllLabel" data-i18n="docmap.map_all">Map all frameworks with AI</span>
+                </button>
             </div>
             <div id="coverageGrid" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading coverage…</div>
@@ -816,6 +820,45 @@
                 if (btn) btn.disabled = false;
                 if (label) label.textContent = prev || recT('docmap.rec_all', 'Recommend fixes for all gaps');
                 await loadRecommendations();
+            }
+        }
+
+        // "Map all frameworks with AI": comprehensive batched pass — compares
+        // every projected document against EVERY framework's clauses (so PDPL/
+        // PCI/SAMA stop being skipped). Loops batches with a live counter.
+        async function runMapAll() {
+            var btn = document.getElementById('mapAllBtn');
+            var label = document.getElementById('mapAllLabel');
+            var prev = label ? label.textContent : '';
+            try {
+                var est = await fetch('/api/compliance/document-mapping/map-all?estimate=true', {
+                    method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                var ed = await est.json().catch(function () { return {}; });
+                if (!est.ok) { alert(recT('docmap.mapall_error', 'Mapping failed') + (ed.error ? ': ' + ed.error : '')); return; }
+                var remaining = ed.remaining || 0;
+                if (remaining === 0) { alert(recT('docmap.mapall_none', 'Nothing left to map — every document has been compared to every framework.')); await reloadAll(); return; }
+                if (!confirm(recT('docmap.mapall_confirm', 'Compare every document against every framework with AI ({n} checks)? This may take several minutes; it runs in batches and you can keep working.').replace('{n}', remaining))) return;
+                if (btn) btn.disabled = true;
+                var links = 0;
+                for (var guard = 0; guard < 2000; guard++) {
+                    var r = await fetch('/api/compliance/document-mapping/map-all', {
+                        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                    });
+                    var d = await r.json().catch(function () { return {}; });
+                    if (!r.ok) { alert(recT('docmap.mapall_error', 'Mapping failed') + (d.error ? ': ' + d.error : '')); break; }
+                    links += (d.links_created || 0);
+                    if (label) label.textContent = recT('docmap.mapall_progress', 'Mapping… {r} checks left').replace('{r}', d.remaining || 0);
+                    await loadCoverage();
+                    if ((d.remaining || 0) <= 0 || (d.processed || 0) === 0) break;
+                }
+                await reloadAll();
+                alert(recT('docmap.mapall_done', 'All-framework mapping complete.') + ' ' + links + ' ' + recT('docmap.mapall_links', 'new links for review.'));
+            } catch (e) {
+                alert(recT('docmap.mapall_error', 'Mapping failed') + ': ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) btn.disabled = false;
+                if (label) label.textContent = prev || recT('docmap.map_all', 'Map all frameworks with AI');
             }
         }
 

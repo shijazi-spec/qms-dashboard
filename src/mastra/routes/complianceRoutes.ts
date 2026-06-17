@@ -2328,6 +2328,53 @@ export const complianceRoutes = [
     },
   },
   {
+    // "Map all frameworks with AI" — the comprehensive pass that compares
+    // every projected document against EVERY framework's clauses (so PDPL /
+    // PCI / SAMA etc. are no longer skipped by the capped single-list
+    // default). Processes ONE batch of doc×framework pairs per call (UI loops
+    // until remaining === 0; ?estimate=true returns the outstanding count for
+    // the confirm). Governance/admin only.
+    path: "/api/compliance/document-mapping/map-all",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, unauthorizedResponse, forbiddenResponse, getSessionUser } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireRole(c, [
+            "admin",
+            "grc_manager",
+            "quality_manager",
+            "head_of_operations_quality",
+          ]);
+          if (!sessionUser) {
+            if (!getSessionUser(c)) return unauthorizedResponse(c);
+            return forbiddenResponse(c, "Permission denied: governance roles only");
+          }
+          const { mapAllNextBatch, countMapAllRemaining, semanticFallbackEnabled } =
+            await import("../../utils/policyMappingBridge");
+          const estimate =
+            new URL(c.req.url).searchParams.get("estimate") === "true";
+          if (estimate) {
+            const remaining = await countMapAllRemaining();
+            return c.json({ success: true, remaining });
+          }
+          if (!semanticFallbackEnabled()) {
+            return c.json(
+              { error: "AI mapping is disabled on this environment (DOCUMENT_MAPPING_LLM_FALLBACK=false)." },
+              400,
+            );
+          }
+          const summary = await mapAllNextBatch({ limit: 12 });
+          return c.json({ success: true, ...summary });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] map-all failed:", err);
+          return c.json({ error: "Failed to map all frameworks" }, 500);
+        }
+      };
+    },
+  },
+  {
     // AI gap remediation — recommend what to create/implement for ONE
     // unmapped clause (web-grounded). Governance/admin only.
     path: "/api/compliance/document-mapping/recommend-clause",

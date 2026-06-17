@@ -56,6 +56,17 @@ export async function initPolicyMappingBridge(): Promise<void> {
        ON qms_uploaded_documents (source_policy_id)
      WHERE source_policy_id IS NOT NULL`,
   );
+  // Tracks which (document, framework) pairs the "Map all frameworks" pass
+  // has already considered, so the batched run terminates and never re-spends
+  // tokens on a doc×framework it already scanned (even if no match was found).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS document_framework_scans (
+      document_id   INTEGER NOT NULL REFERENCES qms_uploaded_documents(id) ON DELETE CASCADE,
+      regulation_id INTEGER NOT NULL REFERENCES regulations(id) ON DELETE CASCADE,
+      scanned_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (document_id, regulation_id)
+    )
+  `);
   bridgeReady = true;
 }
 
@@ -648,5 +659,97 @@ export async function mapFrameworkPolicies(
   logger.info(
     `[policyMappingBridge] framework map complete: ${JSON.stringify(result)}`,
   );
+  return result;
+}
+
+export interface MapAllBatchResult {
+  processed: number;
+  links_created: number;
+  remaining: number;
+}
+
+// (document, framework) pairs still worth scanning: a projected doc with text,
+// an active framework, NOT already linked to that framework, and NOT already
+// scanned. Excluding scanned pairs is what makes the batched loop terminate.
+const MAP_ALL_CANDIDATE_SQL = `
+  FROM qms_uploaded_documents d
+  CROSS JOIN regulations reg
+ WHERE d.source_policy_id IS NOT NULL
+   AND d.extraction_status = 'extracted'
+   AND COALESCE(length(d.extracted_text), 0) >= 50
+   AND reg.status = 'active'
+   AND NOT EXISTS (
+     SELECT 1 FROM document_framework_scans s
+      WHERE s.document_id = d.id AND s.regulation_id = reg.id
+   )
+   AND NOT EXISTS (
+     SELECT 1 FROM obligation_documents od
+       JOIN obligations o ON o.id = od.obligation_id
+      WHERE od.document_id = d.id AND o.regulation_id = reg.id
+   )`;
+
+/** Outstanding (document × framework) pairs the "Map all frameworks" pass would scan. */
+export async function countMapAllRemaining(): Promise<number> {
+  await initPolicyMappingBridge();
+  const r = await pool.query(`SELECT COUNT(*)::int AS n ${MAP_ALL_CANDIDATE_SQL}`);
+  return r.rows[0]?.n || 0;
+}
+
+/**
+ * "Map all frameworks": the comprehensive pass that compares every projected
+ * document against EVERY framework's clauses (scoped per framework so late-
+ * alphabet frameworks like PDPL/PCI/SAMA are no longer skipped by the capped
+ * single-list default). Batched (a chunk of doc×framework pairs per call) so
+ * the request never times out; the UI loops until remaining === 0. Each pair
+ * is marked scanned afterwards so re-runs are cheap and the loop terminates.
+ */
+export async function mapAllNextBatch(
+  opts: { limit?: number; concurrency?: number } = {},
+): Promise<MapAllBatchResult> {
+  await initPolicyMappingBridge();
+  const limit = Math.max(1, Math.min(opts.limit ?? 12, 50));
+  const rows = await pool.query(
+    `SELECT d.id AS document_id, reg.id AS regulation_id, reg.regulation_code
+       ${MAP_ALL_CANDIDATE_SQL}
+      ORDER BY reg.regulation_code, d.id
+      LIMIT $1`,
+    [limit],
+  );
+  const queue = rows.rows.slice();
+  const result: MapAllBatchResult = { processed: 0, links_created: 0, remaining: 0 };
+  const concurrency = Math.max(1, Math.min(opts.concurrency ?? 4, 16));
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const job = queue.shift();
+      if (!job) return;
+      result.processed++;
+      try {
+        const r = await runSemanticAutoMap(Number(job.document_id), {
+          regulationCode: job.regulation_code,
+        });
+        result.links_created += r.auto_mapped || 0;
+      } catch (err) {
+        logger.warn(
+          `[policyMappingBridge] map-all failed doc=${job.document_id} fw=${job.regulation_code}: ${(err as Error).message}`,
+        );
+      }
+      // Mark scanned regardless of whether a match was found.
+      try {
+        await pool.query(
+          `INSERT INTO document_framework_scans (document_id, regulation_id)
+           VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [Number(job.document_id), Number(job.regulation_id)],
+        );
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, queue.length || 1) }, () => worker()),
+  );
+  result.remaining = await countMapAllRemaining();
   return result;
 }
