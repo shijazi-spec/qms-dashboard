@@ -54,6 +54,23 @@ export async function initKpiBuCoverageTables(): Promise<void> {
   await seedBuCoverage();
 }
 
+/**
+ * Initial FY2026 coverage Sarah gave (2026-06-17). Applied ONLY to still-untouched
+ * rows (not yet edited) so it pre-fills the tracker without ever overwriting later
+ * manual edits. SDR & Sales were onboarded in 2025 → carried in at 100%.
+ */
+const INITIAL_BU_COVERAGE: Array<{
+  bu: string;
+  pct: number;
+  status: BuCoverageStatus;
+  due?: string;
+}> = [
+  { bu: "Sales", pct: 100, status: "done" },
+  { bu: "SDR", pct: 100, status: "done" },
+  { bu: "Marketplace", pct: 35, status: "postponed" },
+  { bu: "Customer Success", pct: 0, status: "in_progress", due: "2026-06-30" },
+];
+
 /** Seed the canonical BUs for QM-KPI-008 (idempotent; never overwrites entered values). */
 export async function seedBuCoverage(): Promise<void> {
   const kpi = await getKPIByCode("QM-KPI-008");
@@ -64,6 +81,23 @@ export async function seedBuCoverage(): Promise<void> {
        VALUES ($1, $2) ON CONFLICT (kpi_id, bu_name) DO NOTHING`,
       [kpi.id, bu],
     );
+  }
+  // Pre-fill the agreed starting values on UNTOUCHED rows only (updated_by IS NULL
+  // and still at the default), so it's ready for the meeting but safe to edit.
+  for (const init of INITIAL_BU_COVERAGE) {
+    await pool.query(
+      `UPDATE kpi_bu_coverage
+          SET completion_pct = $3, status = $4, due_date = $5
+        WHERE kpi_id = $1 AND bu_name = $2
+          AND updated_by IS NULL AND completion_pct = 0 AND status = 'not_started'`,
+      [kpi.id, init.bu, init.pct, init.status, init.due ?? null],
+    );
+  }
+  // Record the rolled-up value so QM-KPI-008 shows a number immediately.
+  try {
+    await recordBuCoverageValue(kpi.id);
+  } catch {
+    /* recorded on the next recalc otherwise */
   }
 }
 
