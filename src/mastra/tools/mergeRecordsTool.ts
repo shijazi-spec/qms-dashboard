@@ -24,6 +24,35 @@ import {
  */
 export const DEFAULT_REMOVAL_TAG = "Duplicate-Delete";
 
+/**
+ * Bound every live Zoho call so a single hanging request can never stall the
+ * whole merge. When the merge auto-executes inline (the caller's role tier
+ * covers this risk), an un-timed Zoho call that hangs would leave the agent
+ * waiting forever → the user gets a blank reply / endless spinner. On timeout
+ * we reject so the outer try/catch returns a clear, actionable failure.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)),
+      ms,
+    );
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
+const ZOHO_READ_TIMEOUT_MS = 12_000;
+const ZOHO_WRITE_TIMEOUT_MS = 15_000;
+
 // Never copy from a duplicate and never write to the survivor — system/readonly
 // fields, and name/lookup fields (the survivor keeps its own identity + parent).
 const PROTECTED_FIELDS = new Set<string>([
@@ -126,7 +155,11 @@ export const mergeRecordsTool = createTool({
       };
     }
     try {
-      const survivor = await fetchZohoRecordById(context.module, survivorId);
+      const survivor = await withTimeout(
+        fetchZohoRecordById(context.module, survivorId),
+        ZOHO_READ_TIMEOUT_MS,
+        "survivor fetch",
+      );
       if (!survivor) {
         return {
           success: false,
@@ -143,7 +176,11 @@ export const mergeRecordsTool = createTool({
       const filled: string[] = [];
 
       for (const dupId of ids) {
-        const dup = await fetchZohoRecordById(context.module, dupId).catch(() => null);
+        const dup = await withTimeout(
+          fetchZohoRecordById(context.module, dupId),
+          ZOHO_READ_TIMEOUT_MS,
+          `duplicate ${dupId} fetch`,
+        ).catch(() => null);
         if (!dup) continue;
         const dData = (dup.data || {}) as Record<string, any>;
         for (const key of Object.keys(dData)) {
@@ -157,9 +194,17 @@ export const mergeRecordsTool = createTool({
       }
 
       if (Object.keys(updates).length > 0) {
-        await updateZohoRecord(context.module, survivorId, updates);
+        await withTimeout(
+          updateZohoRecord(context.module, survivorId, updates),
+          ZOHO_WRITE_TIMEOUT_MS,
+          "survivor update",
+        );
       }
-      await addZohoTags(context.module, ids, [DEFAULT_REMOVAL_TAG]);
+      await withTimeout(
+        addZohoTags(context.module, ids, [DEFAULT_REMOVAL_TAG]),
+        ZOHO_WRITE_TIMEOUT_MS,
+        "tag duplicates",
+      );
 
       return {
         success: true,

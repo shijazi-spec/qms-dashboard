@@ -1,6 +1,9 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { addZohoTags, zohoWritesAllowedInEnv } from "../../utils/zohoCRM";
+import { withTimeout } from "../../utils/promiseTimeout";
+
+const ZOHO_WRITE_TIMEOUT_MS = 15_000;
 
 /**
  * Tag Zoho records for removal — the chat-side of the migrate-then-tag rule.
@@ -78,7 +81,11 @@ export const tagRecordsForRemovalTool = createTool({
       };
     }
     try {
-      await addZohoTags(context.module, ids, [tag]);
+      await withTimeout(
+        addZohoTags(context.module, ids, [tag]),
+        ZOHO_WRITE_TIMEOUT_MS,
+        "apply tag",
+      );
       return {
         success: true,
         module: context.module,

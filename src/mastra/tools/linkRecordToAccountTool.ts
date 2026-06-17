@@ -1,6 +1,9 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { updateZohoRecord, zohoWritesAllowedInEnv } from "../../utils/zohoCRM";
+import { withTimeout } from "../../utils/promiseTimeout";
+
+const ZOHO_WRITE_TIMEOUT_MS = 15_000;
 
 /**
  * Link Contacts / Deals to an Account — the chat-side of the cross-module LINK
@@ -84,9 +87,13 @@ export const linkRecordToAccountTool = createTool({
     for (const id of ids) {
       try {
         // Account_Name is a lookup field — Zoho expects the related record id.
-        await updateZohoRecord(context.module, id, {
-          Account_Name: { id: accountId },
-        });
+        await withTimeout(
+          updateZohoRecord(context.module, id, {
+            Account_Name: { id: accountId },
+          }),
+          ZOHO_WRITE_TIMEOUT_MS,
+          `link ${id}`,
+        );
         linked++;
       } catch (e: any) {
         failed++;

@@ -1,6 +1,9 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { removeZohoTags, zohoWritesAllowedInEnv } from "../../utils/zohoCRM";
+import { withTimeout } from "../../utils/promiseTimeout";
+
+const ZOHO_WRITE_TIMEOUT_MS = 15_000;
 
 /**
  * Remove a tag from Zoho records — the inverse of tagRecordsForRemovalTool.
@@ -77,7 +80,11 @@ export const untagRecordsTool = createTool({
       };
     }
     try {
-      await removeZohoTags(context.module, ids, [tag]);
+      await withTimeout(
+        removeZohoTags(context.module, ids, [tag]),
+        ZOHO_WRITE_TIMEOUT_MS,
+        "remove tag",
+      );
       return {
         success: true,
         module: context.module,
