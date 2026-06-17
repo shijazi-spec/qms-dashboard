@@ -1983,11 +1983,15 @@ export const complianceRoutes = [
                       LIMIT 1) AS raw_citation,
                     (SELECT source_excerpt FROM document_clause_citations c
                       WHERE c.document_id = od.document_id AND c.obligation_id = od.obligation_id
-                      LIMIT 1) AS source_excerpt
+                      LIMIT 1) AS source_excerpt,
+                    q.status AS verdict_status,
+                    q.rationale AS verdict_rationale
                FROM obligation_documents od
                JOIN obligations o ON o.id = od.obligation_id
                JOIN regulations r ON r.id = o.regulation_id
                JOIN qms_uploaded_documents d ON d.id = od.document_id
+               LEFT JOIN obligation_evidence_quality q
+                 ON q.obligation_id = od.obligation_id AND q.document_id = od.document_id
               WHERE od.awaiting_review = TRUE
               ORDER BY od.linked_at DESC
               LIMIT 200`,
@@ -2073,6 +2077,80 @@ export const complianceRoutes = [
             err,
           );
           return c.json({ error: "Failed to reject link" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // AI-review the auto-mapped queue: runs the evidence judge over pending
+    // links (satisfied / partial / missing_topic / needs_review). Batched —
+    // one chunk per call, UI loops until remaining === 0. ?estimate=true
+    // returns the count of un-verdicted pending links.
+    path: "/api/compliance/auto-mapped/ai-review",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireWriteRole, unauthorizedResponse } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+          const { reviewNextBatch, countPendingReview } = await import(
+            "../../utils/autoMappedReview"
+          );
+          const estimate =
+            new URL(c.req.url).searchParams.get("estimate") === "true";
+          if (estimate) {
+            const remaining = await countPendingReview();
+            return c.json({ success: true, remaining });
+          }
+          const summary = await reviewNextBatch({
+            limit: 8,
+            judgedBy: sessionUser.email || sessionUser.role || "ai-review",
+          });
+          return c.json({ success: true, ...summary });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] auto-mapped ai-review failed:", err);
+          return c.json({ error: "Failed to review queue" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Bulk-apply AI verdicts: confirm every 'satisfied' pending link, or
+    // reject every 'missing_topic' one.
+    path: "/api/compliance/auto-mapped/bulk-action",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireWriteRole, unauthorizedResponse } = await import(
+            "../../utils/rbacMiddleware"
+          );
+          const sessionUser = requireWriteRole(c);
+          if (!sessionUser) return unauthorizedResponse(c);
+          let body: any = {};
+          try {
+            body = await c.req.json();
+          } catch {
+            body = {};
+          }
+          const action = String(body.action || "");
+          if (action !== "confirm-satisfied" && action !== "reject-missing") {
+            return c.json({ error: "action must be confirm-satisfied or reject-missing" }, 400);
+          }
+          const { bulkActionByVerdict } = await import(
+            "../../utils/autoMappedReview"
+          );
+          const r = await bulkActionByVerdict(
+            action as any,
+            sessionUser.email || sessionUser.role || "ai-review",
+          );
+          return c.json({ success: true, ...r });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] auto-mapped bulk-action failed:", err);
+          return c.json({ error: "Failed to apply bulk action" }, 500);
         }
       };
     },
