@@ -114,6 +114,25 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       ].filter(Boolean).join('\n'),
   },
 
+  'merge-records': {
+    toolId: 'merge-records',
+    label: 'Merge duplicate Zoho records (migrate-then-tag)',
+    riskLevel: 'high',
+    requiresApproval: true,
+    complianceRefs: [
+      'WP-SOP-011 (Automated Decision and Processing Process)',
+      'WP-DOC-004 (AI Adoption Guidelines)',
+      'ISO 9001:2015 §7.5 (Control of documented information)',
+    ],
+    entityType: 'zoho_merge',
+    buildPreview: (p: any) =>
+      [
+        `**Module:** ${p?.module ?? 'n/a'}`,
+        `**Survivor (keep):** ${p?.survivorZohoId ?? 'n/a'}`,
+        `**Merge in + tag Duplicate-Delete:** ${(p?.duplicateZohoIds || []).length} record(s)`,
+        p?.reason ? `**Reason:** ${trim(p.reason, 200)}` : null,
+      ].filter(Boolean).join('\n'),
+  },
   'untag-records': {
     toolId: 'untag-records',
     label: 'Remove a tag from Zoho records (e.g. Duplicate-Delete)',

@@ -24,6 +24,7 @@ import { lookupEntityTool } from "../tools/lookupEntityTool";
 import { tagRecordsForRemovalTool } from "../tools/tagRecordsForRemovalTool";
 import { linkRecordToAccountTool } from "../tools/linkRecordToAccountTool";
 import { untagRecordsTool } from "../tools/untagRecordsTool";
+import { mergeRecordsTool } from "../tools/mergeRecordsTool";
 import { csLifecycleStatusTool } from "../tools/csLifecycleStatusTool";
 import { dealStageAgingStatusTool } from "../tools/dealStageAgingStatusTool";
 import { executiveSummaryTool, csOverlapStatusTool, crossModuleOverlapTool, accountHintsStatusTool, dealComplianceStatusTool, agentActivityTool, manualActionAuditTool, ownerAccountabilityTool, preflightCheckTool } from "../tools/radarTabTools";
@@ -160,7 +161,8 @@ Use suggestImprovementsTool to analyze quality trends and recommend process impr
 - **Tag records for removal** (Duplicate-Delete) → tagRecordsForRemovalTool.
 - **Remove a tag** (e.g. take "Duplicate-Delete" off a record tagged by mistake) → untagRecordsTool. (You CAN un-tag — never say you "can't remove tags".)
 - **Link a Contact/Deal to an Account** (set Account_Name — the cross-module LINK fix) → linkRecordToAccountTool.
-- **Apply a duplicate merge** (survivor + tag duplicates) → via the Duplicate Resolution / Apply flow (gated).
+- **Merge duplicate records** ("merge account/contact/lead/deal X into Y", "merge these two") → mergeRecordsTool: keeps the survivor, copies the survivor's MISSING fields from the duplicate(s), and tags the duplicate(s) Duplicate-Delete (migrate-then-tag — NOT a destructive native merge; the platform never deletes). You CAN merge — never say you can't. Get the ids via lookup-entity and confirm which record is the survivor (the one to keep) first.
+- **Apply a duplicate-cluster merge** (a detected cluster) → via the Duplicate Resolution / Apply flow (gated).
 When asked to do one of these, DO IT — call the tool — then report the approval ticket ("I've queued it; approve it in AI Approvals"). Only say you can't do something if there is genuinely no tool for it (e.g. editing an arbitrary custom field you have no tool for) — and then name what you CAN do instead, don't give a blanket "I can't write" denial.
 
 **WHERE to approve (know this — it's YOUR platform, never say "contact IT" or "check your system"):** the approval queue is the **"AI Approvals Queue"** page at **/ai-approvals** (left navigation → **Team Mgmt** → **AI Approvals Queue**). To approve a queued action: open /ai-approvals, find the ticket by its **APR-…** code, open it, and click **Approve** (or Reject). Approver roles: admin, head_of_operations_quality, grc_manager, quality_manager, ai_specialist. When someone asks "where do I approve?", give them that exact path + their ticket code directly. Note on segregation of duties: the original requester normally can't approve their own request, EXCEPT admin and head_of_operations_quality, who may self-approve (break-glass).
@@ -422,6 +424,7 @@ export const qmsConsultantAgent = new Agent({
     tagRecordsForRemovalTool: wt(withApprovalGate(tagRecordsForRemovalTool), AGENT_NAME),
     linkRecordToAccountTool: wt(withApprovalGate(linkRecordToAccountTool), AGENT_NAME),
     untagRecordsTool: wt(withApprovalGate(untagRecordsTool), AGENT_NAME),
+    mergeRecordsTool: wt(withApprovalGate(mergeRecordsTool), AGENT_NAME),
     createNcTool:         wt(withApprovalGate(createNcTool),         AGENT_NAME),
     createCapaTool:       wt(withApprovalGate(createCapaTool),       AGENT_NAME),
     updateCapaTool:       wt(withApprovalGate(updateCapaTool),       AGENT_NAME),
