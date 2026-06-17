@@ -1862,6 +1862,7 @@
     "rm_ai": "by AI",
     "rm_unchanged": "unchanged (skipped)",
     "download_gaps": "Download gaps (CSV)",
+    "evidence_trail": "Evidence trail (CSV)",
     "gaps_title": "Open Compliance Gaps",
     "gaps_subtitle": "clauses across all frameworks have no linked document yet. Expand a framework to see its gaps.",
     "gaps_loading": "Loading gaps…",

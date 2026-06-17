@@ -2716,4 +2716,77 @@ export const complianceRoutes = [
       };
     },
   },
+  {
+    // Evidence-to-control traceability matrix (benchmark rec #5): every
+    // document↔clause link with full provenance — link method, evidence
+    // excerpt, the AI judge's verdict + rationale, and who confirmed it when.
+    // This is the audit-ready chain an external assessor expects. Read-only.
+    path: "/api/compliance/document-mapping/evidence-trail.csv",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { initObligationDocumentsTable } = await import(
+            "../../utils/obligationDocumentsDatabase"
+          );
+          await initObligationDocumentsTable();
+          const { sharedPool } = await import("../../utils/sharedPool");
+          const r = await sharedPool.query(
+            `SELECT reg.regulation_code, o.obligation_code, o.title AS clause_title,
+                    d.title AS document_title,
+                    CASE WHEN od.awaiting_review THEN 'Pending review' ELSE 'Confirmed' END AS status,
+                    od.link_method, od.linked_by, od.linked_at,
+                    (SELECT source_excerpt FROM document_clause_citations cc
+                       WHERE cc.document_id = od.document_id AND cc.obligation_id = od.obligation_id LIMIT 1) AS excerpt,
+                    q.status AS ai_verdict, q.rationale AS ai_rationale
+               FROM obligation_documents od
+               JOIN obligations o ON o.id = od.obligation_id
+               JOIN regulations reg ON reg.id = o.regulation_id
+               JOIN qms_uploaded_documents d ON d.id = od.document_id
+               LEFT JOIN obligation_evidence_quality q
+                 ON q.obligation_id = od.obligation_id AND q.document_id = od.document_id
+              ORDER BY reg.regulation_code, COALESCE(o.section_order, 0), o.obligation_code, d.title`,
+          );
+          const esc = (v: any) => {
+            const s = v == null ? "" : String(v);
+            return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+          };
+          const header =
+            "Framework,Clause Code,Clause Title,Document,Status,Link Method,Evidence Excerpt,AI Verdict,AI Rationale,Confirmed By,Linked At\n";
+          const body = r.rows
+            .map((row: any) =>
+              [
+                row.regulation_code,
+                row.obligation_code,
+                row.clause_title,
+                row.document_title,
+                row.status,
+                row.link_method,
+                (row.excerpt || "").slice(0, 500),
+                row.ai_verdict || "",
+                (row.ai_rationale || "").slice(0, 500),
+                row.linked_by || "",
+                row.linked_at ? new Date(row.linked_at).toISOString() : "",
+              ]
+                .map(esc)
+                .join(","),
+            )
+            .join("\n");
+          const csv = "﻿" + header + body + (body ? "\n" : "");
+          return new Response(csv, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition":
+                'attachment; filename="evidence-traceability.csv"',
+              "Cache-Control": "private, max-age=0, no-cache",
+            },
+          });
+        } catch (err) {
+          safeLogger.error("❌ [ComplianceAPI] evidence-trail.csv failed:", err);
+          return c.json({ error: "Failed to export evidence trail" }, 500);
+        }
+      };
+    },
+  },
 ];
