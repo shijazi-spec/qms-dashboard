@@ -532,7 +532,13 @@
                     </ul>
                 </div>
                 <div id="searchClustersSection" class="mb-6">
-                    <h5 class="text-md font-medium text-gray-700 mb-3">Related Clusters</h5>
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <h5 class="text-md font-medium text-gray-700">Related Clusters</h5>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-500" title="Tick clusters that are the SAME company, then combine them into one so their Accounts can be merged together. Combining only re-groups the radar records — no Zoho changes. The actual Account merge still happens inside the combined cluster (with Apply in Zoho).">Same company in 2+ clusters? Tick them →</span>
+                            <button type="button" data-on-click="combineSelectedSearchClusters" id="combineClustersBtn" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" title="Combine the ticked clusters into the largest one (re-groups radar records only — no Zoho changes). Then open it to merge the Accounts.">🔗 Combine selected clusters</button>
+                        </div>
+                    </div>
                     <div id="searchClustersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
                 </div>
                 <div class="bg-white rounded-lg shadow overflow-x-auto">
@@ -7324,8 +7330,13 @@
                     const displayDomain = _isSoloContactCluster(c)
                         ? String(c.domain).replace(/^contact:/, '').replace(/\.solo$/i, '')
                         : c.domain;
+                    // Checkbox is a SIBLING of the clickable card (not a child)
+                    // so ticking it never triggers the card's "open cluster"
+                    // action. Ticking 2+ enables "Combine selected clusters".
                     return ''
-                        + '<div class="bg-white border border-gray-200 rounded-lg p-3 cursor-pointer hover:bg-gray-50 hover:border-blue-300 transition" data-on-click="showClusterDetails" data-args="[' + Number(c.id) + ']" title="Open cluster #' + Number(c.id) + ' — merge view, per-record recommendations, snapshots, undo">'
+                        + '<div class="flex items-start gap-2">'
+                        + '<input type="checkbox" class="search-cluster-cb mt-3 shrink-0" data-cid="' + Number(c.id) + '" data-records="' + Number(c.total_records || 0) + '" data-on-click="updateCombineBtn" title="Tick if this is the same company as another cluster, then Combine.">'
+                        + '<div class="flex-1 bg-white border border-gray-200 rounded-lg p-3 cursor-pointer hover:bg-gray-50 hover:border-blue-300 transition" data-on-click="showClusterDetails" data-args="[' + Number(c.id) + ']" title="Open cluster #' + Number(c.id) + ' — merge view, per-record recommendations, snapshots, undo">'
                         +   '<div class="flex items-center justify-between gap-2 mb-1">'
                         +     _clusterTypeChip(c)
                         +     '<span class="text-[10px] text-gray-400 font-mono">#' + Number(c.id) + '</span>'
@@ -7337,8 +7348,10 @@
                         +     '<span>' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.n_records_short', { n: _fn(c.total_records) })) + '</span>'
                         +     '<span class="text-blue-600 font-medium">Open →</span>'
                         +   '</div>'
+                        + '</div>'
                         + '</div>';
                 }).join('');
+                if (typeof updateCombineBtn === 'function') updateCombineBtn();
 
                 // ── Record rows ─────────────────────────────────────────
                 // Adds Phone + Status/Stage + a Cluster button that opens
@@ -7391,6 +7404,59 @@
             } else {
                 document.getElementById('searchResults').classList.add('hidden');
                 document.getElementById('noSearchResults').classList.remove('hidden');
+            }
+        }
+
+        // ── Cross-cluster combine (Search tab) ──────────────────────────────
+        // When the same company is split across separate clusters (different
+        // domain/identity keys), the per-cluster Account merge can't span them.
+        // Tick the clusters and Combine: re-groups their records into the
+        // largest cluster (radar-only, NO Zoho changes — snapshotted + undoable
+        // on the Logs tab), then opens it so the Accounts can be merged with the
+        // normal Apply-in-Zoho flow.
+        function updateCombineBtn() {
+            const btn = document.getElementById('combineClustersBtn');
+            if (!btn) return;
+            const n = document.querySelectorAll('.search-cluster-cb:checked').length;
+            btn.classList.toggle('hidden', n < 1);
+            btn.disabled = n < 2;
+            btn.innerHTML = n >= 2 ? ('🔗 Combine ' + n + ' selected clusters') : '🔗 Combine selected (tick 1 more)';
+        }
+
+        async function combineSelectedSearchClusters() {
+            const boxes = Array.from(document.querySelectorAll('.search-cluster-cb:checked'));
+            const ids = boxes.map(b => Number(b.getAttribute('data-cid'))).filter(Boolean);
+            if (ids.length < 2) { alert('Tick at least 2 clusters that are the SAME company.'); return; }
+            // Target = the ticked cluster with the most records (keeps the richest one).
+            let target = ids[0], best = -1;
+            for (const b of boxes) {
+                const recs = Number(b.getAttribute('data-records') || 0);
+                if (recs > best) { best = recs; target = Number(b.getAttribute('data-cid')); }
+            }
+            const sources = ids.filter(id => id !== target);
+            if (!confirm('Combine ' + sources.length + ' cluster(s) into cluster #' + target + ' (the largest).\n\nThis only RE-GROUPS the radar records so the Accounts can be merged together — it makes NO Zoho changes and is undoable from the Logs tab.\n\nAfterwards #' + target + ' opens so you can merge the Accounts (Apply in Zoho).')) return;
+            const btn = document.getElementById('combineClustersBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Combining…'; }
+            try {
+                const res = await fetch('/api/duplicates/clusters/merge-into', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        target_cluster_id: target,
+                        source_cluster_ids: sources,
+                        notes: 'Combined from Search tab — same company across clusters',
+                    }),
+                });
+                const j = await res.json().catch(() => ({}));
+                if (!res.ok || !j.success) throw new Error(j.error || ('HTTP ' + res.status));
+                alert('Combined into cluster #' + target + ' — ' + (j.records_moved || 0) + ' record(s) moved. Opening it so you can merge the Accounts.');
+                if (typeof showClusterDetails === 'function') showClusterDetails(target);
+                else if (typeof performSearch === 'function') performSearch();
+            } catch (e) {
+                alert('Combine failed: ' + (e.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
         }
 

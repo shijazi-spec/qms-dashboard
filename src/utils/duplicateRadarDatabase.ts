@@ -2906,10 +2906,16 @@ export async function searchDuplicates(params: DuplicateSearchParams): Promise<{
 
   let clustersData: DuplicateCluster[] = [];
   if (clusterIds.length > 0) {
+    // 2026-06-17 — exclude already-handled clusters so dismissed
+    // (status='ignored', e.g. an intentionally-separate Corporate vs
+    // Marketplace account) and merged/resolved (status='resolved') clusters
+    // never reappear in the Search "Related Clusters" cards. Only active,
+    // still-actionable clusters surface here.
     const clustersResult = await pool.query(
       `
-      SELECT * FROM duplicate_clusters 
+      SELECT * FROM duplicate_clusters
       WHERE id = ANY($1)
+        AND status NOT IN ('ignored', 'resolved')
       ORDER BY total_records DESC
     `,
       [clusterIds],
