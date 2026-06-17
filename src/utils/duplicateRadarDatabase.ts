@@ -2083,6 +2083,292 @@ export async function getClusterSummary(): Promise<{
   };
 }
 
+// ─── Same-domain cluster duplicates (Sarah 2026-06-17) ────────────────
+//
+// Root cause: `duplicate_clusters.domain` is NOT covered by a UNIQUE
+// constraint. Concurrent scans (or a deletion that happens between a
+// SELECT and an INSERT in findOrCreateClusterByDomain) can both miss
+// the existing row and BOTH insert one — producing two cluster rows
+// with the EXACT same `domain` string. The operator finds the
+// "duplicate-account-on-another-cluster" pattern when this happens.
+//
+// `findSameDomainClusterDuplicates()` finds every domain that has ≥2
+// active clusters, groups the cluster rows together, and returns one
+// row per group with enough detail for the operator to pick a master
+// without opening every cluster modal.
+//
+// `mergeClustersIntoMaster()` is the structural counterpart: reparents
+// every record from the source clusters to the target, captures a
+// pre-merge snapshot per source (so the merge is undo-able), logs to
+// duplicate_merge_actions, recomputes the target's stats, and deletes
+// the now-empty source cluster rows. Idempotent within reason — a
+// repeat call after success simply finds the source clusters empty and
+// no-ops on them.
+
+export interface SameDomainClusterGroup {
+  domain: string;
+  cluster_count: number;
+  total_records: number;
+  clusters: Array<{
+    id: number;
+    company_name: string | null;
+    total_records: number;
+    total_leads: number;
+    total_deals: number;
+    total_contacts: number;
+    total_accounts: number;
+    confidence_score: number;
+    status: string;
+    created_at: Date | null;
+    has_account: boolean;
+  }>;
+}
+
+/**
+ * Find every domain that has ≥2 clusters with status='active' OR
+ * status='resolved'. Sarah's view-time fix taught us to count
+ * resolved clusters too — they still represent live Zoho records.
+ * 'ignored' clusters (operator-dismissed false positives) are skipped
+ * since merging them would resurrect a deliberate dismissal.
+ *
+ * Groups are sorted by total_records desc, then by domain asc, so the
+ * biggest collisions surface first. Hard cap at 500 groups to keep
+ * payloads bounded; the UI tells the operator when truncated.
+ */
+export async function findSameDomainClusterDuplicates(opts: {
+  limit?: number;
+} = {}): Promise<{
+  total_groups: number;
+  truncated: boolean;
+  groups: SameDomainClusterGroup[];
+}> {
+  const limit = Math.min(500, Math.max(1, opts.limit ?? 200));
+
+  // PASS 1 — pick the offending domains. Hits the existing
+  // idx_duplicate_clusters_domain btree so it's cheap even on 20k rows.
+  // Strip placeholder/quarantine buckets here so they never reach the
+  // UI as "merge candidates" (they'd never be safe to merge anyway).
+  const groupsQ = await pool.query<{
+    domain: string;
+    cluster_count: string;
+    total_records: string;
+  }>(
+    `SELECT domain,
+            COUNT(*)::text AS cluster_count,
+            SUM(total_records)::text AS total_records
+       FROM duplicate_clusters
+      WHERE status IN ('active','resolved')
+        AND domain IS NOT NULL
+        AND domain <> ''
+        AND domain <> '${PLACEHOLDER_CLUSTER_DOMAIN}'
+      GROUP BY domain
+     HAVING COUNT(*) > 1
+      ORDER BY SUM(total_records) DESC, domain ASC
+      LIMIT $1`,
+    [limit + 1],
+  );
+
+  const truncated = groupsQ.rows.length > limit;
+  const domains = groupsQ.rows.slice(0, limit).map((r) => r.domain);
+  if (domains.length === 0) {
+    return { total_groups: 0, truncated: false, groups: [] };
+  }
+
+  // PASS 2 — fetch every cluster for those domains in one round-trip.
+  const detailQ = await pool.query<{
+    id: number;
+    domain: string;
+    company_name: string | null;
+    total_records: number;
+    total_leads: number;
+    total_deals: number;
+    total_contacts: number;
+    total_accounts: number;
+    confidence_score: number;
+    status: string;
+    created_at: Date | null;
+  }>(
+    `SELECT id, domain, company_name, total_records,
+            total_leads, total_deals, total_contacts, total_accounts,
+            confidence_score, status, created_at
+       FROM duplicate_clusters
+      WHERE domain = ANY($1::text[])
+        AND status IN ('active','resolved')
+      ORDER BY domain ASC, total_records DESC, id ASC`,
+    [domains],
+  );
+
+  const byDomain = new Map<string, SameDomainClusterGroup>();
+  for (const head of groupsQ.rows.slice(0, limit)) {
+    byDomain.set(head.domain, {
+      domain: head.domain,
+      cluster_count: Number(head.cluster_count),
+      total_records: Number(head.total_records),
+      clusters: [],
+    });
+  }
+  for (const row of detailQ.rows) {
+    const g = byDomain.get(row.domain);
+    if (!g) continue;
+    g.clusters.push({
+      id: Number(row.id),
+      company_name: row.company_name,
+      total_records: Number(row.total_records),
+      total_leads: Number(row.total_leads),
+      total_deals: Number(row.total_deals),
+      total_contacts: Number(row.total_contacts),
+      total_accounts: Number(row.total_accounts),
+      confidence_score: Number(row.confidence_score),
+      status: row.status,
+      created_at: row.created_at,
+      has_account: Number(row.total_accounts) > 0,
+    });
+  }
+  return {
+    total_groups: byDomain.size,
+    truncated,
+    groups: Array.from(byDomain.values()),
+  };
+}
+
+/**
+ * Move every record from sourceClusterIds into targetClusterId,
+ * snapshot each source pre-merge, log to duplicate_merge_actions, and
+ * delete the now-empty source clusters. Transactional + idempotent.
+ *
+ * Safeguards:
+ *   • target and source must all exist and be in status active/resolved
+ *   • a source cannot equal the target
+ *   • snapshots captured BEFORE the UPDATE so the merge is undo-able
+ *   • final updateClusterStats run on the target so its rollups + owners
+ *     reflect the merged record set.
+ */
+export async function mergeClustersIntoMaster(opts: {
+  sourceClusterIds: number[];
+  targetClusterId: number;
+  performedBy: string;
+  notes?: string;
+}): Promise<{
+  target_cluster_id: number;
+  source_cluster_ids: number[];
+  records_moved: number;
+  source_clusters_deleted: number;
+}> {
+  const target = Number(opts.targetClusterId);
+  const sources = Array.from(
+    new Set(
+      (opts.sourceClusterIds || [])
+        .map((x) => Number(x))
+        .filter((n) => Number.isFinite(n) && n > 0 && n !== target),
+    ),
+  );
+  if (!Number.isFinite(target) || target <= 0) {
+    throw new Error("mergeClustersIntoMaster: invalid targetClusterId");
+  }
+  if (sources.length === 0) {
+    return {
+      target_cluster_id: target,
+      source_cluster_ids: [],
+      records_moved: 0,
+      source_clusters_deleted: 0,
+    };
+  }
+
+  // Validate target exists + is mergeable
+  const tgtQ = await pool.query(
+    `SELECT id, status FROM duplicate_clusters WHERE id = $1`,
+    [target],
+  );
+  if (tgtQ.rows.length === 0) {
+    throw new Error(`mergeClustersIntoMaster: target cluster #${target} not found`);
+  }
+  if (!["active", "resolved"].includes(tgtQ.rows[0].status)) {
+    throw new Error(
+      `mergeClustersIntoMaster: target cluster #${target} is ${tgtQ.rows[0].status}, not active/resolved`,
+    );
+  }
+
+  // Snapshot each source BEFORE the merge so undo is possible.
+  for (const sid of sources) {
+    await captureClusterSnapshot(sid, opts.performedBy, "pre_resolve", {
+      notes: `Pre-merge snapshot — being merged into cluster #${target}.`,
+    }).catch(() => { /* snapshot failure must not block the merge */ });
+  }
+
+  const client = await (pool as any).connect();
+  let recordsMoved = 0;
+  let deleted = 0;
+  try {
+    await client.query("BEGIN");
+
+    // Move every record from each source to the target. Done one-by-one
+    // so we can count rowCount per source for the audit log; sources
+    // typically number ≤ a handful so this isn't a hot path.
+    for (const sid of sources) {
+      const moveQ = await client.query(
+        `UPDATE duplicate_records
+            SET cluster_id = $1, is_primary = false
+          WHERE cluster_id = $2`,
+        [target, sid],
+      );
+      recordsMoved += moveQ.rowCount ?? 0;
+    }
+
+    // Audit-log a single 'merge' row per source so the Manual Actions
+    // tab + the Logs view show "who merged what into where".
+    for (const sid of sources) {
+      await client.query(
+        `INSERT INTO duplicate_merge_actions
+           (cluster_id, primary_record_id, merged_record_ids,
+            action_type, performed_by, notes)
+         VALUES ($1, NULL, '[]'::jsonb, $2, $3, $4)`,
+        [
+          sid,
+          "cluster_merge",
+          opts.performedBy,
+          opts.notes ||
+            `Merged source cluster #${sid} INTO master cluster #${target}.`,
+        ],
+      );
+    }
+
+    // Delete the now-empty source cluster rows.
+    const delQ = await client.query(
+      `DELETE FROM duplicate_clusters
+        WHERE id = ANY($1::int[])
+          AND NOT EXISTS (
+            SELECT 1 FROM duplicate_records dr WHERE dr.cluster_id = duplicate_clusters.id
+          )`,
+      [sources],
+    );
+    deleted = delQ.rowCount ?? 0;
+
+    await client.query("COMMIT");
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch { /* ignore */ }
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  // Recompute the target's rollups + owners now that its record set has
+  // grown. Best-effort: a stats failure must not roll back the merge.
+  try {
+    await updateClusterStats(target);
+  } catch (e) {
+    logger.warn("[DuplicateRadar] mergeClustersIntoMaster: updateClusterStats failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  return {
+    target_cluster_id: target,
+    source_cluster_ids: sources,
+    records_moved: recordsMoved,
+    source_clusters_deleted: deleted,
+  };
+}
+
 export async function getDuplicatesByOwner(): Promise<
   Array<{
     owner_name: string;

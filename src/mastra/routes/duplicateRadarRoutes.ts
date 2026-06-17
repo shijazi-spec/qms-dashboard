@@ -7653,6 +7653,89 @@ export const duplicateRadarRoutes = [
       };
     },
   },
+  {
+    // Sarah 2026-06-17 — Account merge candidates surface. Returns the
+    // set of domains that have ≥2 clusters in active/resolved status,
+    // grouped so the operator picks a master and merges the rest in.
+    // Read-only.
+    path: "/api/duplicates/cluster-merge-candidates",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const limit = parseInt(url.searchParams.get("limit") || "200", 10);
+          const { findSameDomainClusterDuplicates } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const r = await findSameDomainClusterDuplicates({ limit });
+          return c.json({ success: true, ...r });
+        } catch (error: any) {
+          logger.error("Error fetching cluster merge candidates:", error);
+          return c.json({ error: "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Admin-gated structural cluster merge. Reparents every record from
+    // sourceClusterIds to targetClusterId, snapshots each source pre-
+    // merge so the action is undo-able, writes one duplicate_merge_actions
+    // row per source, deletes the now-empty source rows, and recomputes
+    // the target's stats. Body:
+    //   { target_cluster_id: number, source_cluster_ids: number[], notes?: string }
+    path: "/api/duplicates/clusters/merge-into",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: ua } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return ua(c);
+
+          const body = await c.req.json().catch(() => ({}));
+          const targetId = Number(body?.target_cluster_id);
+          const sourceIds = Array.isArray(body?.source_cluster_ids)
+            ? body.source_cluster_ids.map((x: any) => Number(x))
+            : [];
+          if (!Number.isFinite(targetId) || targetId <= 0) {
+            return c.json(
+              { error: "target_cluster_id must be a positive integer" },
+              400,
+            );
+          }
+          if (sourceIds.length === 0) {
+            return c.json(
+              { error: "source_cluster_ids must contain at least one id" },
+              400,
+            );
+          }
+          const { mergeClustersIntoMaster } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const r = await mergeClustersIntoMaster({
+            sourceClusterIds: sourceIds,
+            targetClusterId: targetId,
+            performedBy: sessionUser.email || "admin",
+            notes: typeof body?.notes === "string" ? body.notes : undefined,
+          });
+          logger.info(
+            `🔁 [DuplicateRadar] Cluster merge: target=#${r.target_cluster_id}, sources=[${r.source_cluster_ids.join(",")}], records_moved=${r.records_moved}, deleted=${r.source_clusters_deleted}, by=${sessionUser.email || "admin"}`,
+          );
+          return c.json({ success: true, ...r });
+        } catch (error: any) {
+          logger.error("Error merging clusters:", error);
+          return c.json(
+            { error: error?.message || "Cluster merge failed" },
+            500,
+          );
+        }
+      };
+    },
+  },
 ];
 
 export default duplicateRadarRoutes;
