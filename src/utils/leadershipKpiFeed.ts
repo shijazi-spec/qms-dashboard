@@ -134,23 +134,42 @@ function currentQuarterLabel(now: Date): string {
 // dataAvailable:false rather than throwing — the endpoint must never 500 and
 // must never emit a misleading 0.
 
-/** QM-KPI-002 — (completed audits / total audits) × 100. */
+/** QM-KPI-002 — (completed audits / total audits) × 100, across BOTH formal
+ *  audits and completed AI-audit runs. */
 async function calcAuditExecutionRate() {
+  // Source = BOTH (per Sarah, 2026-06-17): formal audits in the Internal Audits
+  // module PLUS completed standalone AI-audit runs (audit_runs). Each AI run is an
+  // executed audit, so it counts +1 completed and +1 total (~100% executed),
+  // raising the rate as more auditing actually happens. Runs linked to a formal
+  // audit are excluded to avoid double-counting.
   const r = await pool.query(`
     SELECT
       COUNT(*)::int AS total,
       COUNT(*) FILTER (
-        WHERE status IN ('fieldwork_complete','report_draft','report_final','closed')
+        WHERE status IN ('fieldwork_complete','report_draft','report_final','closed','completed')
       )::int AS completed
     FROM audits
   `);
-  const total = r.rows[0]?.total ?? 0;
-  const completed = r.rows[0]?.completed ?? 0;
+  let total = r.rows[0]?.total ?? 0;
+  let completed = r.rows[0]?.completed ?? 0;
+  let aiRuns = 0;
+  try {
+    const a = await pool.query(`
+      SELECT COUNT(*)::int AS runs
+      FROM audit_runs
+      WHERE status = 'completed' AND linked_audit_id IS NULL
+    `);
+    aiRuns = a.rows[0]?.runs ?? 0;
+    total += aiRuns;
+    completed += aiRuns;
+  } catch {
+    /* audit_runs table not present yet — fall back to formal audits only */
+  }
   if (total <= 0) return { value: 0, dataAvailable: false };
   return {
     value: Math.round((completed / total) * 1000) / 10,
     dataAvailable: true,
-    details: { total_audits: total, completed_audits: completed },
+    details: { total_audits: total, completed_audits: completed, ai_audit_runs: aiRuns },
   };
 }
 
