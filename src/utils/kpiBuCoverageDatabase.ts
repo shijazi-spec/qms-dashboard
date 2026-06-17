@@ -114,10 +114,23 @@ export async function getBuCoverage(kpiId: number): Promise<BuCoverageRow[]> {
   return res.rows;
 }
 
+/** BUs counted in the headline: anything actually in this period's plan (not 'not_started'). */
+export function buCoverageInScope(rows: BuCoverageRow[]): BuCoverageRow[] {
+  return rows.filter((r) => r.status !== "not_started");
+}
+
+/**
+ * KPI value = average completion % across the IN-SCOPE BUs (status != 'not_started').
+ * Not-started BUs are future-period scope and are excluded, so the headline reflects
+ * the BUs actually being onboarded this period — otherwise a handful of untouched BUs
+ * drag a Sales/SDR-100% picture down to ~18%. Falls back to all rows if none in scope.
+ */
 export function buCoverageAverage(rows: BuCoverageRow[]): number | null {
   if (!rows.length) return null;
-  const sum = rows.reduce((a, r) => a + (Number(r.completion_pct) || 0), 0);
-  return Math.round((sum / rows.length) * 10) / 10;
+  const scoped = buCoverageInScope(rows);
+  const used = scoped.length ? scoped : rows;
+  const sum = used.reduce((a, r) => a + (Number(r.completion_pct) || 0), 0);
+  return Math.round((sum / used.length) * 10) / 10;
 }
 
 export async function updateBuCoverage(

@@ -1095,9 +1095,10 @@
                 const res = await fetch(`/api/kpis/${_buCoverageKpiId}/bu-coverage`);
                 const data = await res.json();
                 const rows = data.rows || [];
+                const _inScope = rows.filter(r => r.status !== 'not_started');
                 document.getElementById('buCoverageAvg').innerHTML =
-                    `Average coverage: <span class="text-gray-900 font-semibold">${data.average != null ? data.average : 0}%</span> across ${rows.length} BUs &middot; <span class="text-green-700">${rows.filter(r=>(r.completion_pct||0)>=100).length} done</span>` +
-                    `<div class="text-xs text-gray-500 mt-1">Each BU's % is driven by its 9-phase Framework checklist (Process &amp; Framework Completion). Tick phases there to change a BU's coverage; status &amp; due date stay editable here.</div>`;
+                    `Average coverage: <span class="text-gray-900 font-semibold">${data.average != null ? data.average : 0}%</span> across ${_inScope.length} in-scope BUs &middot; <span class="text-green-700">${rows.filter(r=>(r.completion_pct||0)>=100).length} done</span> &middot; <span class="text-gray-400">${rows.length} total</span>` +
+                    `<div class="text-xs text-gray-500 mt-1">Headline = average of BUs in this period's plan (status not "Not started"). Each BU's % is driven by its 9-phase Framework checklist — tick phases there to change a BU's coverage; status &amp; due date stay editable here.</div>`;
                 document.getElementById('buCoverageRows').innerHTML = rows.map(r => `
                     <tr class="border-b">
                         <td class="py-2 text-gray-800">${_esc(r.bu_name)}</td>
@@ -1119,9 +1120,10 @@
                 // Refresh ONLY the rolled-up average (don't re-render the table) so
                 // editing stays smooth — no flicker or lost focus mid-entry.
                 const d = await (await fetch(`/api/kpis/${_buCoverageKpiId}/bu-coverage`)).json();
-                const n = (d.rows || []).length;
+                const dr = d.rows || [];
+                const dInScope = dr.filter(r => r.status !== 'not_started');
                 document.getElementById('buCoverageAvg').innerHTML =
-                    `Average coverage: <span class="text-gray-900 font-semibold">${d.average != null ? d.average : 0}%</span> across ${n} BUs &middot; <span class="text-green-700">${(d.rows||[]).filter(r=>(r.completion_pct||0)>=100).length} done</span>`;
+                    `Average coverage: <span class="text-gray-900 font-semibold">${d.average != null ? d.average : 0}%</span> across ${dInScope.length} in-scope BUs &middot; <span class="text-green-700">${dr.filter(r=>(r.completion_pct||0)>=100).length} done</span> &middot; <span class="text-gray-400">${dr.length} total</span>`;
             } catch (e) { console.error('Save BU coverage error:', e); }
         }
         async function toggleChecklistItem(itemId, isDone) {
