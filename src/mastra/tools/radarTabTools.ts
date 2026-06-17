@@ -599,6 +599,47 @@ export const csOverlapStatusTool = createTool({
   },
 });
 
+// ── Cluster merge candidates (Sarah 2026-06-17) ───────────────────────────
+// Surfaces same-domain duplicate clusters so Adam can answer
+// "how many account clusters are split right now" / "which domains have
+// two clusters" / "what should I merge first". Read-only — operator
+// runs the merge from the Cluster Merge tab.
+export const clusterMergeCandidatesTool = createTool({
+  id: "cluster-merge-candidates",
+  description:
+    "Find the domains that have ≥2 active clusters in the Duplicate Radar — usually Account clusters that ended up split because of the missing UNIQUE constraint on duplicate_clusters.domain (concurrent syncs race). Returns total_groups + truncated flag + the top groups with their cluster ids, company names, record totals, module mix, and which cluster has an Account record (recommended master). Use when asked 'how many split account clusters are there', 'which domain has the worst cluster split', 'show me cluster merge candidates', or to answer Sarah's 'I found a second cluster for the same account' question. Read-only — the operator performs the merge from the Cluster Merge tab (POST /api/duplicates/clusters/merge-into).",
+  inputSchema: z.object({
+    limit: z
+      .number()
+      .optional()
+      .describe("Max number of domain groups to return (default 50, max 200)."),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    totalGroups: z.number().optional(),
+    truncated: z.boolean().optional(),
+    groups: z.array(z.record(z.any())).optional(),
+    error: z.string().optional(),
+  }),
+  execute: async ({ context }) => {
+    try {
+      const limit = Math.max(1, Math.min((context as any)?.limit ?? 50, 200));
+      const { findSameDomainClusterDuplicates } = await import(
+        "../../utils/duplicateRadarDatabase"
+      );
+      const r = await findSameDomainClusterDuplicates({ limit });
+      return {
+        success: true,
+        totalGroups: r.total_groups,
+        truncated: r.truncated,
+        groups: r.groups as any,
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || String(e) };
+    }
+  },
+});
+
 // ── Owner Accountability ──────────────────────────────────────────────────
 export const ownerAccountabilityTool = createTool({
   id: "owner-accountability",

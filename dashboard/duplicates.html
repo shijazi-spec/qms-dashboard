@@ -171,6 +171,7 @@
 
             <button data-on-click="showTab" data-args="[&quot;owners&quot;]" id="tab-owners" data-testid="tab-owners" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Owner Accountability</button>
             <button data-on-click="showTab" data-args="[&quot;logs&quot;]" id="tab-logs" data-testid="tab-logs" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm">Logs</button>
+            <button data-on-click="showTab" data-args="[&quot;merge-candidates&quot;]" id="tab-merge-candidates" data-testid="tab-merge-candidates" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm" title="Find domains that have ≥2 active clusters and merge them into one canonical cluster.">Cluster Merge</button>
             <button data-on-click="showTab" data-args="[&quot;search&quot;]" id="tab-search" data-testid="tab-search" class="tab-inactive px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-1">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 Search
@@ -557,6 +558,45 @@
             <div id="noSearchResults" class="hidden text-center py-12">
                 <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <h4 class="text-lg font-medium text-gray-500">No matching records found</h4>
+            </div>
+        </div>
+
+        <!-- ═══ CLUSTER MERGE TAB (Sarah 2026-06-17) ═══
+             Domains that have ≥2 active clusters — produced by the
+             concurrent-sync race against the missing UNIQUE constraint
+             on duplicate_clusters.domain. Operator picks a master per
+             group and merges the rest in (records reparented + sources
+             deleted; undo-able via captured snapshots). -->
+        <div id="content-merge-candidates" class="tab-content hidden">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-900">
+                <div class="font-semibold mb-1">Cluster merge candidates — same domain, two clusters</div>
+                <p>These are domains where the radar has <strong>≥2 separate clusters</strong> for the same Zoho domain. It happens when concurrent syncs both miss the existing row and both insert one (no UNIQUE constraint on <code class="bg-blue-100 px-1 rounded">duplicate_clusters.domain</code>). Pick a master per group — the engine reparents every record into it, snapshots the source pre-merge (undo-able), logs to Manual Actions, and deletes the now-empty clusters. Recommended master: the cluster with an <strong>Account</strong> record and the highest record count.</p>
+            </div>
+            <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
+                <button data-on-click="loadClusterMergeCandidates" id="cmcRefreshBtn" data-testid="button-cmc-refresh" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300">🔄 Refresh</button>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500">Domains with duplicates</div>
+                    <div id="cmcStatGroups" class="text-2xl font-bold text-rose-700 mt-1" data-testid="text-cmc-groups">—</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500">Extra clusters</div>
+                    <div id="cmcStatExtra" class="text-2xl font-bold text-amber-700 mt-1" data-testid="text-cmc-extra">—</div>
+                    <div class="text-[10px] text-gray-400">Records to reparent</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500">Records affected</div>
+                    <div id="cmcStatRecords" class="text-2xl font-bold text-gray-900 mt-1" data-testid="text-cmc-records">—</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-xs text-gray-500">Groups truncated?</div>
+                    <div id="cmcStatTrunc" class="text-2xl font-bold text-gray-900 mt-1" data-testid="text-cmc-trunc">—</div>
+                    <div class="text-[10px] text-gray-400">Cap is 200 / page</div>
+                </div>
+            </div>
+            <div id="cmcGroups" class="space-y-4">
+                <div class="text-center text-sm text-gray-500 py-8">Click <strong>Refresh</strong> to scan for same-domain clusters.</div>
             </div>
         </div>
 
@@ -7392,6 +7432,7 @@
             if (tab === 'account-hints') loadAccountHints();
             if (tab === 'logs') { loadAgentActivity(); loadManualActions(); }
             if (tab === 'deal-compliance' && !window._loadedTabs.has('deal-compliance')) loadDealCompliance();
+            if (tab === 'merge-candidates' && !window._loadedTabs.has('merge-candidates')) { loadClusterMergeCandidates(); window._loadedTabs.add('merge-candidates'); }
             // The Domain Clusters + 4 record tabs are expensive list queries;
             // load each one ONLY on first visit per refresh cycle. This is
             // the change that keeps the page under the 100 reads/min limit.
@@ -8152,6 +8193,178 @@
             if (s === 'government') return '<span class="text-purple-700 font-medium">Government</span>';
             if (s === 'private')    return '<span class="text-blue-700 font-medium">Private</span>';
             return '<span class="text-gray-400">—</span>';
+        }
+
+        // ─── Cluster Merge Candidates (Sarah 2026-06-17) ────────────────
+        // Loads same-domain duplicate clusters from
+        // /api/duplicates/cluster-merge-candidates and renders one card
+        // per offending domain. Each card lists every cluster on that
+        // domain; operator picks a master radio + selects which sources
+        // to merge in, then clicks Merge — backend reparents records,
+        // snapshots sources, deletes the empty rows, logs the action.
+        let _cmcData = null;
+        async function loadClusterMergeCandidates() {
+            const host = document.getElementById('cmcGroups');
+            if (host) host.innerHTML = '<div class="text-center text-sm text-gray-500 py-8">Scanning duplicate_clusters for same-domain duplicates…</div>';
+            try {
+                const res = await fetch('/api/duplicates/cluster-merge-candidates?limit=200', { credentials: 'same-origin' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                _cmcData = data;
+                _cmcRenderStats(data);
+                _cmcRenderGroups(data);
+            } catch (e) {
+                if (host) host.innerHTML = '<div class="text-center text-sm text-red-600 py-8">Scan failed: ' + escapeHtml(e.message || String(e)) + '</div>';
+            }
+        }
+
+        function _cmcRenderStats(data) {
+            const groups = Array.isArray(data && data.groups) ? data.groups : [];
+            const totalGroups = data && typeof data.total_groups === 'number' ? data.total_groups : groups.length;
+            let extraClusters = 0;
+            let recordsAffected = 0;
+            for (const g of groups) {
+                extraClusters += Math.max(0, (g.cluster_count || g.clusters?.length || 0) - 1);
+                recordsAffected += g.total_records || 0;
+            }
+            const _safe = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+            _safe('cmcStatGroups', _fn(totalGroups));
+            _safe('cmcStatExtra',  _fn(extraClusters));
+            _safe('cmcStatRecords', _fn(recordsAffected));
+            _safe('cmcStatTrunc',  data && data.truncated ? 'Yes' : 'No');
+        }
+
+        function _cmcRecommendedMaster(clusters) {
+            // Prefer a cluster that has an Account record, then highest
+            // record count, then highest confidence_score. Matches what
+            // the in-tab banner tells the operator to pick.
+            if (!Array.isArray(clusters) || clusters.length === 0) return null;
+            return clusters.slice().sort((a, b) => {
+                const aHasAcc = (a.has_account || (a.total_accounts || 0) > 0) ? 1 : 0;
+                const bHasAcc = (b.has_account || (b.total_accounts || 0) > 0) ? 1 : 0;
+                if (aHasAcc !== bHasAcc) return bHasAcc - aHasAcc;
+                if ((b.total_records || 0) !== (a.total_records || 0)) return (b.total_records || 0) - (a.total_records || 0);
+                return (b.confidence_score || 0) - (a.confidence_score || 0);
+            })[0].id;
+        }
+
+        function _cmcRenderGroups(data) {
+            const host = document.getElementById('cmcGroups');
+            if (!host) return;
+            const groups = Array.isArray(data && data.groups) ? data.groups : [];
+            if (groups.length === 0) {
+                host.innerHTML = '<div class="text-center text-sm text-green-700 py-8 bg-green-50 border border-green-200 rounded-lg">✓ No same-domain cluster duplicates found. The radar is clean.</div>';
+                return;
+            }
+            host.innerHTML = groups.map((g, gi) => {
+                const masterId = _cmcRecommendedMaster(g.clusters);
+                const rows = (g.clusters || []).map(c => {
+                    const isMaster = c.id === masterId;
+                    const modChips = [];
+                    if ((c.total_leads || 0) > 0)    modChips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 me-1">L ' + (c.total_leads||0) + '</span>');
+                    if ((c.total_deals || 0) > 0)    modChips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700 me-1">D ' + (c.total_deals||0) + '</span>');
+                    if ((c.total_contacts || 0) > 0) modChips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-700 me-1">C ' + (c.total_contacts||0) + '</span>');
+                    if ((c.total_accounts || 0) > 0) modChips.push('<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700 me-1">A ' + (c.total_accounts||0) + '</span>');
+                    return ''
+                        + '<tr class="' + (isMaster ? 'bg-emerald-50' : '') + '">'
+                        +   '<td class="px-3 py-2 text-xs text-center"><input type="radio" name="cmc-master-' + gi + '" value="' + Number(c.id) + '" data-on-change="_cmcOnMasterChange" data-args="[' + gi + ',' + Number(c.id) + ']" ' + (isMaster ? 'checked' : '') + ' aria-label="Set cluster ' + Number(c.id) + ' as master" /></td>'
+                        +   '<td class="px-3 py-2 text-xs text-center"><input type="checkbox" data-cmc-source-cb data-group="' + gi + '" data-cluster="' + Number(c.id) + '" ' + (isMaster ? 'disabled' : 'checked') + ' aria-label="Include cluster ' + Number(c.id) + ' as a source to merge" /></td>'
+                        +   '<td class="px-3 py-2 text-xs font-mono text-gray-700">#' + Number(c.id) + '</td>'
+                        +   '<td class="px-3 py-2 text-xs text-gray-800">' + escapeHtml(c.company_name || '—') + '</td>'
+                        +   '<td class="px-3 py-2 text-xs">' + (modChips.join('') || '<span class="text-gray-300 text-[10px]">—</span>') + '</td>'
+                        +   '<td class="px-3 py-2 text-xs text-end font-medium">' + _fn(c.total_records || 0) + '</td>'
+                        +   '<td class="px-3 py-2 text-xs text-end">' + (c.confidence_score != null ? (_fn(c.confidence_score) + '%') : '—') + '</td>'
+                        +   '<td class="px-3 py-2 text-xs"><span class="' + (c.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') + ' px-2 py-0.5 rounded text-[10px] font-semibold">' + escapeHtml(c.status) + '</span></td>'
+                        +   '<td class="px-3 py-2 text-xs"><button type="button" data-on-click="showClusterDetails" data-args="[' + Number(c.id) + ']" class="text-blue-700 hover:underline">Open →</button></td>'
+                        + '</tr>';
+                }).join('');
+                return ''
+                    + '<div class="bg-white rounded-lg shadow border border-gray-200" data-cmc-group="' + gi + '">'
+                    +   '<div class="flex flex-wrap items-center gap-2 px-4 py-3 border-b bg-gray-50">'
+                    +     '<span class="font-mono text-sm text-gray-900 break-all">' + escapeHtml(g.domain) + '</span>'
+                    +     '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-700">' + _fn(g.cluster_count) + ' clusters</span>'
+                    +     '<span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-200 text-gray-700">' + _fn(g.total_records) + ' records</span>'
+                    +     '<button type="button" data-on-click="mergeClusterGroup" data-args="[' + gi + ']" data-testid="button-cmc-merge-' + gi + '" class="ms-auto px-3 py-1.5 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700">Merge selected → master</button>'
+                    +   '</div>'
+                    +   '<div class="overflow-x-auto">'
+                    +     '<table class="min-w-full divide-y divide-gray-200">'
+                    +       '<thead class="bg-gray-50">'
+                    +         '<tr>'
+                    +           '<th class="px-3 py-2 text-xs font-medium text-gray-500 uppercase" title="Pick which cluster to merge the others INTO">Master</th>'
+                    +           '<th class="px-3 py-2 text-xs font-medium text-gray-500 uppercase" title="Tick the clusters whose records get moved into the master">Merge in?</th>'
+                    +           '<th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Cluster</th>'
+                    +           '<th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Company</th>'
+                    +           '<th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Modules</th>'
+                    +           '<th class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Records</th>'
+                    +           '<th class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Conf.</th>'
+                    +           '<th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Status</th>'
+                    +           '<th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">View</th>'
+                    +         '</tr>'
+                    +       '</thead>'
+                    +       '<tbody class="bg-white divide-y divide-gray-200">' + rows + '</tbody>'
+                    +     '</table>'
+                    +   '</div>'
+                    + '</div>';
+            }).join('');
+        }
+
+        function _cmcOnMasterChange(groupIdx, clusterId, event) {
+            // Re-enable / re-disable the per-row checkboxes so the master
+            // is never selected as a source.
+            const card = document.querySelector('[data-cmc-group="' + Number(groupIdx) + '"]');
+            if (!card) return;
+            card.querySelectorAll('[data-cmc-source-cb]').forEach(cb => {
+                const cid = Number(cb.getAttribute('data-cluster'));
+                if (cid === Number(clusterId)) { cb.checked = false; cb.disabled = true; }
+                else { cb.disabled = false; cb.checked = true; }
+            });
+            // Tint highlight the master row.
+            card.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('bg-emerald-50'));
+            const radio = card.querySelector('input[type=radio]:checked');
+            if (radio) {
+                const row = radio.closest('tr');
+                if (row) row.classList.add('bg-emerald-50');
+            }
+        }
+
+        async function mergeClusterGroup(groupIdx) {
+            const card = document.querySelector('[data-cmc-group="' + Number(groupIdx) + '"]');
+            if (!card) return;
+            const masterEl = card.querySelector('input[type=radio]:checked');
+            if (!masterEl) { alert('Pick a master cluster first.'); return; }
+            const targetId = Number(masterEl.value);
+            const sourceIds = Array.from(card.querySelectorAll('[data-cmc-source-cb]:checked'))
+                .map(cb => Number(cb.getAttribute('data-cluster')))
+                .filter(n => Number.isFinite(n) && n > 0 && n !== targetId);
+            if (sourceIds.length === 0) { alert('Tick at least one source cluster to merge.'); return; }
+            const grp = (_cmcData && _cmcData.groups && _cmcData.groups[groupIdx]) || null;
+            const dom = grp ? grp.domain : '(unknown domain)';
+            if (!confirm(
+                'Merge ' + sourceIds.length + ' cluster(s) on domain "' + dom + '" INTO master cluster #' + targetId + '?\n\n' +
+                'This reparents every record from the source cluster(s) into the master, snapshots each source first (undo-able from the Logs tab), audit-logs the action, and deletes the now-empty source clusters. No Zoho writes.'
+            )) return;
+            try {
+                let res = await fetch('/api/duplicates/clusters/merge-into', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_cluster_id: targetId, source_cluster_ids: sourceIds, notes: 'Same-domain cluster merge via Cluster Merge tab.' }),
+                });
+                if (res.status === 401 || res.status === 403) {
+                    const adminKey = prompt(WalaPlusI18n.t('dyn.duplicates.prompt_admin_key'));
+                    if (!adminKey) return;
+                    res = await fetch('/api/duplicates/clusters/merge-into', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                        body: JSON.stringify({ target_cluster_id: targetId, source_cluster_ids: sourceIds, notes: 'Same-domain cluster merge via Cluster Merge tab.' }),
+                    });
+                }
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+                alert('✓ Merged ' + (data.records_moved || 0) + ' record(s) into cluster #' + targetId + ', deleted ' + (data.source_clusters_deleted || 0) + ' source cluster(s).');
+                loadClusterMergeCandidates();
+            } catch (e) {
+                alert('Merge failed: ' + (e && e.message || e));
+            }
         }
 
         async function loadCsOverlap(verdict) {
