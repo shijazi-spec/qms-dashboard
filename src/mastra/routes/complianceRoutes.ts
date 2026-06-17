@@ -33,6 +33,41 @@ void (async () => {
       err,
     );
   }
+  try {
+    const { initClauseEmbeddingsTable } = await import(
+      "../../utils/clauseEmbeddings"
+    );
+    await initClauseEmbeddingsTable();
+  } catch (err) {
+    safeLogger.error(
+      "Failed to initialize obligation_embeddings table at boot:",
+      err,
+    );
+  }
+  // controls + control_clause_mappings (cross-framework crosswalk).
+  try {
+    const { initControlsCrosswalk } = await import(
+      "../../utils/controlsCrosswalk"
+    );
+    await initControlsCrosswalk();
+  } catch (err) {
+    safeLogger.error(
+      "Failed to initialize controls / control_clause_mappings tables at boot:",
+      err,
+    );
+  }
+  // obligation_evidence_quality + llm_call_log (compliance quality / judge log).
+  try {
+    const { initEvidenceQualityTable } = await import(
+      "../../utils/complianceQualityDatabase"
+    );
+    await initEvidenceQualityTable();
+  } catch (err) {
+    safeLogger.error(
+      "Failed to initialize obligation_evidence_quality / llm_call_log tables at boot:",
+      err,
+    );
+  }
 })();
 
 export const complianceRoutes = [
