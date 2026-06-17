@@ -159,15 +159,27 @@ export const SEMANTIC_MAX_OBLIGATIONS = 200;
 export const SEMANTIC_TOP_N = 8;
 
 /**
- * Confidence bar for the LLM semantic auto-mapper. Deliberately LOWER than
- * the citation bar (AUTO_MAP_CONFIDENCE_THRESHOLD = 80) — during the pilot we
- * want maximal coverage ("map everything") and the HITL review queue is the
- * safety net. Override with DOCUMENT_MAPPING_SEMANTIC_THRESHOLD. Combined with
- * the best-effort fallback in runSemanticAutoMap (link the single best match
- * when nothing clears the bar), this maps nearly every document to ≥1 clause.
+ * Confidence bar for the LLM semantic auto-mapper.
+ *
+ * AUDIT-GRADE DEFAULT (benchmark rec #1, 2026-06-17): precision-first at 70.
+ * Below the citation bar (80) but high enough that a confirmed link is
+ * defensible — pure low-confidence "map everything" is the documented
+ * anti-pattern for audit readiness. For an aggressive DISCOVERY/pilot sweep,
+ * lower it via DOCUMENT_MAPPING_SEMANTIC_THRESHOLD (e.g. 40) and turn on
+ * best-effort (DOCUMENT_MAPPING_BEST_EFFORT=true). See [[document-mapping-benchmark]].
  */
 export const SEMANTIC_AUTO_MAP_THRESHOLD =
-  Number(process.env.DOCUMENT_MAPPING_SEMANTIC_THRESHOLD) || 40;
+  Number(process.env.DOCUMENT_MAPPING_SEMANTIC_THRESHOLD) || 70;
+
+/**
+ * Best-effort = "link the single best match even if it didn't clear the bar".
+ * OFF by default now (precision-first): we do NOT manufacture a weak link just
+ * to avoid a 0 — an unmatched document is a finding, not a failure. Turn on
+ * with DOCUMENT_MAPPING_BEST_EFFORT=true for a discovery sweep.
+ */
+export function bestEffortEnabled(): boolean {
+  return process.env.DOCUMENT_MAPPING_BEST_EFFORT === "true";
+}
 
 /** LLM semantic fallback is on by default; set DOCUMENT_MAPPING_LLM_FALLBACK=false to disable platform-wide (cost kill-switch). */
 export function semanticFallbackEnabled(): boolean {
@@ -312,11 +324,10 @@ export async function runSemanticAutoMap(
       if (s.confidence < threshold) continue;
       if (await linkOne(s)) auto_mapped++;
     }
-    // Pilot "map everything": if nothing cleared the bar but the LLM did
-    // return candidates, link the single best match anyway so every document
-    // ends up mapped to ≥1 clause. The HITL review queue lets you refine
-    // later. Disable per-call with bestEffort:false.
-    if (auto_mapped === 0 && (opts.bestEffort ?? true) && suggestions.length > 0) {
+    // Best-effort (discovery only): if nothing cleared the bar, link the single
+    // best candidate anyway. OFF by default now — precision-first means an
+    // unmatched document is left as a gap, not given a manufactured weak link.
+    if (auto_mapped === 0 && (opts.bestEffort ?? bestEffortEnabled()) && suggestions.length > 0) {
       if (await linkOne(suggestions[0])) auto_mapped++;
     }
     return { suggested: suggestions.length, auto_mapped };
@@ -345,7 +356,7 @@ export interface PolicySyncResult {
  * next "Run mapping now" re-maps every document under the new rules. v2 =
  * lowered semantic threshold + best-effort "map everything" (2026-06-17).
  */
-export const MAPPING_FINGERPRINT_VERSION = "v2";
+export const MAPPING_FINGERPRINT_VERSION = "v3";
 
 /** Stable fingerprint of the inputs that affect a document's mapping. Exported for unit testing. */
 export function mappingFingerprint(text: string, regCodes: string[] | null): string {
