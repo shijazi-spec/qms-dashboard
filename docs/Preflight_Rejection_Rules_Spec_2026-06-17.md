@@ -50,7 +50,9 @@ Then classify by the company's strongest CRM state:
 |---|---|---|---|---|
 | 1a | Deal **Agreement Signed / Paid / Closed Won / Client Activated / Transferred to CS**, **no churn date** | **BLOCK** | critical | Current customer — do **not** pursue. Route to CS owner. |
 | 1b | Same as 1a **but has a churn date** (churned customer) | **REVIEW** if within cool-off · **WARN** if past it | high / medium | Cool-off: **180 days Private / 365 days Government** from churn date. Within → CS sign-off required. Past → Sales may re-engage; notify CS. |
-| 1c | **Open / active Deal** (Proposal, Negotiation, Meeting, Agreement Sent, Awaiting PO…) **or active Lead** (not junk/lost/disqualified/converted) | **DUPLICATE** | high | Already in the pipeline — do **not** re-import. Route to the existing owner (SDR double-touch). |
+| 1c | **Open / active Deal** (Proposal, Negotiation, Meeting, Agreement Sent, Awaiting PO…; not closed-lost, not signed/paid) **or active Lead** | **DUPLICATE** | high | Already in the pipeline — do **not** re-import. Route to the existing owner (SDR double-touch). |
+
+> **"Active lead" — COLD statuses (Ahmad 2026-06-18, narrowed):** a Lead counts as active only if its `Lead_Status` is NOT in the cold set: `Junk Lead`, `Bogus Lead`, `Lost Lead`, `Not Qualified`, `Disqualified`, `Converted`, **`New`**, **`Attempted to Contact`**. New / Attempted-to-Contact are cold (no real engagement yet), so a company whose only leads are New/Attempted is **pursuable** — it does not hard-reject a new contact. Only worked statuses (Contacted / Working / Qualified / …) make a lead "active".
 | 1d | Only **Closed-Lost** deals on file (no active deal/lead, not a customer) | **DUPLICATE** | low | Prior lost opportunity — Sales **may re-engage**. **LINK** the new lead to the existing Account; don't fork a parallel record. |
 
 If **no company match at all** → fall through to Tier 2.

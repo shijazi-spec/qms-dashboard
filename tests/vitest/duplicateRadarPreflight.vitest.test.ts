@@ -424,10 +424,18 @@ describe("buildClusterFromRecords — Tier-1 company state engine", () => {
     expect(c.total_deals).toBe(1);
   });
 
-  test("active lead detected from Lead_Status", () => {
+  test("active lead detected from a worked Lead_Status", () => {
     const c = buildClusterFromRecords("acme.com",
-      [rec({ record_type: "lead", stage: null, lead_status: "Attempted to Contact" })], TODAY)!;
+      [rec({ record_type: "lead", stage: null, lead_status: "Contacted" })], TODAY)!;
     expect(c.has_active_lead).toBe(true);
+  });
+
+  test("cold lead statuses (New / Attempted to Contact / Not Qualified) are NOT active", () => {
+    for (const s of ["New", "Attempted to Contact", "Not Qualified"]) {
+      const c = buildClusterFromRecords("acme.com",
+        [rec({ record_type: "lead", stage: null, lead_status: s })], TODAY)!;
+      expect(c.has_active_lead).toBe(false);
+    }
   });
 
   test("entirely marketplace/merchant → out of scope (null)", () => {

@@ -710,6 +710,11 @@ const PF_CUSTOMER_STAGES = new Set([
   "transferred to cs",
 ]);
 const PF_DEAD_STAGE_RE = /lost|dropped|cancel/;
+// Lead statuses that do NOT count as an "active lead" — a matching new contact
+// is therefore pursuable, not a hard reject. 2026-06-18 (Ahmad): added "new" and
+// "attempted to contact" — those are cold (no real engagement yet), so a company
+// whose only leads are New/Attempted should not block a new contact. Genuinely
+// worked statuses (Contacted / Working / Qualified / …) still count as active.
 const PF_DEAD_LEAD_STATUS = new Set([
   "junk lead",
   "bogus lead",
@@ -717,6 +722,8 @@ const PF_DEAD_LEAD_STATUS = new Set([
   "not qualified",
   "disqualified",
   "converted",
+  "new",
+  "attempted to contact",
 ]);
 
 /** A record is corporate UNLESS it sits on an explicit merchant layout. */
@@ -1693,7 +1700,7 @@ export async function runPreflight(input: {
                   _is_corporate
                   AND record_type = 'lead'
                   AND COALESCE(LOWER(raw_data->>'Lead_Status'), LOWER(status), '')
-                      NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted')
+                      NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted','new','attempted to contact')
                 ) AS has_active_lead,
                 MAX(NULLIF(raw_data->>'Churn_Date','')) AS churn_date,
                 (
@@ -1714,12 +1721,12 @@ export async function runPreflight(input: {
                 -- customer relationship actually lives.
                 MAX(CASE WHEN _is_corporate AND record_type = 'lead'
                           AND COALESCE(LOWER(raw_data->>'Lead_Status'), LOWER(status), '')
-                              NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted')
+                              NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted','new','attempted to contact')
                           AND zoho_record_id IS NOT NULL
                          THEN zoho_record_id END) AS active_lead_zoho_id,
                 MAX(CASE WHEN _is_corporate AND record_type = 'lead'
                           AND COALESCE(LOWER(raw_data->>'Lead_Status'), LOWER(status), '')
-                              NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted')
+                              NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted','new','attempted to contact')
                           AND record_name IS NOT NULL
                          THEN record_name END) AS active_lead_name,
                 MAX(CASE WHEN _is_corporate AND record_type = 'deal'
