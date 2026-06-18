@@ -96,7 +96,10 @@
       "invalid_state": "Session expired. Please try signing in again.",
       "session_expired": "Your session has expired. Please sign in again.",
       "invalid_admin_key": "Invalid admin key. Please check and try again.",
-      "auth_failed": "Authentication failed. Please try again."
+      "auth_failed": "Authentication failed. Please try again.",
+      "pending_approval": "Sign-in succeeded. Your account is waiting for an administrator to approve your access. You will be notified by email once approved.",
+      "access_denied": "Sign-in succeeded, but your access request was declined. Please contact your administrator if you believe this is an error.",
+      "account_disabled": "Sign-in succeeded, but your account is disabled. Please contact your administrator to reactivate it."
     }
   },
   "executive": {
