@@ -321,6 +321,19 @@ export interface ListFilters {
    * wildcards through this filter.
    */
   excludeToolIdPrefixes?: string[];
+  /**
+   * Free-text search (Sarah 2026-06-18). Case-insensitive substring match
+   * across the request CODE (action_code), the tool label, and the human
+   * preview — so an operator can paste the APR-… ticket Adam handed them and
+   * jump straight to it, or search by company/cluster wording. Wildcards in
+   * the term are escaped (literal match).
+   */
+  search?: string;
+  /**
+   * Sort direction by request date (created_at). 'desc' = newest first
+   * (default), 'asc' = oldest first. Lets the operator flip to "recent ones".
+   */
+  sort?: 'asc' | 'desc';
 }
 
 /**
@@ -366,6 +379,16 @@ export async function listPendingActions(filters: ListFilters = {}): Promise<{
       params.push(`${escapeLikeLiteral(prefix)}%`);
       where.push(`tool_id NOT LIKE $${params.length} ESCAPE '\\'`);
     }
+  }
+  if (filters.search && filters.search.trim()) {
+    params.push(`%${escapeLikeLiteral(filters.search.trim())}%`);
+    const idx = params.length;
+    // Match the request code, the tool label, or the human preview text.
+    where.push(
+      `(action_code ILIKE $${idx} ESCAPE '\\'
+        OR tool_label ILIKE $${idx} ESCAPE '\\'
+        OR payload_preview ILIKE $${idx} ESCAPE '\\')`,
+    );
   }
 
   // Task #298: review-status filter. Both branches use NOT EXISTS against
@@ -418,10 +441,11 @@ export async function listPendingActions(filters: ListFilters = {}): Promise<{
   );
   const total = parseInt(countRes.rows[0].total, 10);
 
+  const orderDir = filters.sort === 'asc' ? 'ASC' : 'DESC';
   params.push(limit, offset);
   const res = await pool.query<PendingAction>(
     `SELECT * FROM ai_pending_actions ${whereSql}
-     ORDER BY created_at DESC
+     ORDER BY created_at ${orderDir}
      LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );

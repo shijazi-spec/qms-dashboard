@@ -97,6 +97,17 @@
 
         <!-- Filters -->
         <div class="bg-white border border-gray-200 rounded-lg p-3 mb-4 flex flex-wrap gap-3 items-center">
+            <!-- Search by request code / text (Sarah 2026-06-18): paste the
+                 APR-… ticket Adam gives you and jump straight to it. -->
+            <label class="text-xs text-gray-600 flex items-center gap-1">
+                <span data-i18n="ai_approvals.filter_search">Search</span>
+                <input id="fltSearch" type="search" autocomplete="off"
+                       aria-label="Search approvals by request code or text"
+                       data-testid="input-search"
+                       placeholder="APR-… code, company, cluster…"
+                       class="border border-gray-300 rounded px-2 py-1 text-sm w-56" />
+            </label>
+
             <label class="text-xs text-gray-600" data-i18n="ai_approvals.filter_status">Status</label>
             <select id="fltStatus" aria-label="Filter by approval status" class="border border-gray-300 rounded px-2 py-1 text-sm">
                 <!-- Task #618: the five operator-facing status options own
@@ -188,6 +199,15 @@
                         data-testid="option-review-no-reviewers"
                         data-base-i18n="ai_approvals.review_no_reviewers"
                         data-base-label="No reviewer yet">No reviewer yet</option>
+            </select>
+
+            <!-- Sort by request date (Sarah 2026-06-18): newest or oldest first. -->
+            <label class="text-xs text-gray-600 ms-2" data-i18n="ai_approvals.filter_sort">Date</label>
+            <select id="fltSort" aria-label="Sort by request date"
+                    data-testid="select-sort"
+                    class="border border-gray-300 rounded px-2 py-1 text-sm">
+                <option value="desc" selected data-i18n="ai_approvals.sort_newest">Newest first</option>
+                <option value="asc" data-i18n="ai_approvals.sort_oldest">Oldest first</option>
             </select>
 
             <label class="text-xs text-gray-600 ms-2 flex items-center gap-1" title="Limit the list to rows where credential-shaped values were detected in the payload.">
@@ -371,6 +391,8 @@
     var fltMine = document.getElementById('fltMine');
     var fltReview = document.getElementById('fltReview');
     var fltCredWarn = document.getElementById('fltCredWarn');
+    var fltSearch = document.getElementById('fltSearch');
+    var fltSort = document.getElementById('fltSort');
     var badgeCredWarn = document.getElementById('badgeCredWarn');
     // Task #619: header-level "drop everything" badge for Critical pile-ups.
     // Threshold defaults to 1 (badge shows for ANY critical action) but can be
@@ -655,6 +677,9 @@
         // including the 30s auto-refresh, so the operator's selection
         // persists across reloads without extra client-side bookkeeping.
         if (fltReview.value) p.set('review_filter', fltReview.value);
+        // Search by APR-code / company / cluster text + date sort (Sarah 2026-06-18).
+        if (fltSearch && fltSearch.value.trim()) p.set('search', fltSearch.value.trim());
+        if (fltSort && fltSort.value === 'asc') p.set('sort', 'asc');
         p.set('limit', '100');
         return p.toString();
     }
@@ -1313,8 +1338,16 @@
         }).length;
     }
 
-    [fltStatus, fltRisk, fltMine, fltReview].forEach(function (el) { el.addEventListener('change', load); });
+    [fltStatus, fltRisk, fltMine, fltReview, fltSort].forEach(function (el) { if (el) el.addEventListener('change', load); });
     fltCredWarn.addEventListener('change', function () { renderRows(lastRows); });
+    // Debounced search: reload as the operator types the APR-code / text.
+    if (fltSearch) {
+        var _searchTimer = null;
+        fltSearch.addEventListener('input', function () {
+            if (_searchTimer) clearTimeout(_searchTimer);
+            _searchTimer = setTimeout(load, 300);
+        });
+    }
     document.getElementById('btnRefresh').addEventListener('click', load);
 
     /* ---------------------------------------------------------------- *

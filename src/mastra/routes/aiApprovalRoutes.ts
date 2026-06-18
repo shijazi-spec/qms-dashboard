@@ -240,6 +240,11 @@ const _aiApprovalRoutesRaw = [
               ? reviewFilterParam
               : undefined;
 
+          // Free-text search (by APR-code / label / preview) + date sort.
+          const search = (url.searchParams.get("search") || "").trim() || undefined;
+          const sort =
+            url.searchParams.get("sort") === "asc" ? "asc" : "desc";
+
           const status = statusParam
             ? (statusParam.split(",").map((s) => s.trim()) as ApprovalStatus[])
             : (["pending"] as ApprovalStatus[]);
@@ -256,6 +261,8 @@ const _aiApprovalRoutesRaw = [
             reviewFilter,
             // Only meaningful for 'unreviewed_by_me'; harmless otherwise.
             reviewerUserId: user.userId ?? undefined,
+            search,
+            sort,
             limit,
             offset,
             excludeToolIdPrefixes: getExcludedToolIdPrefixes(),
