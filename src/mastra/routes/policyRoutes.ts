@@ -1446,4 +1446,77 @@ export const policyRoutes = [
       };
     },
   },
+  {
+    // Inline file VIEW — same blob as /download but served with
+    // `Content-Disposition: inline` so the dashboard can embed a live preview
+    // (PDF / image) in the View modal instead of forcing a download.
+    // SECURITY: only an allowlist of safe preview types is served inline; any
+    // other type falls back to attachment (so a malicious .html/.svg upload
+    // can't run as same-origin script via this endpoint). Hardened with
+    // nosniff + a locked-down CSP, and the modal embeds it in a sandboxed
+    // iframe. Same read-role + confidentiality gate as /download.
+    path: "/api/policies/:id/view",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const admin = await requireRoleOrKey(c, [...POLICY_READ_ROLES]);
+          if (!admin) return unauthorizedResponse(c);
+
+          const { getPolicyById, initPolicyTables } =
+            await import("../../utils/policyDatabase");
+          const { getUploadedFileForModule } = await import("../../utils/fileUpload");
+          await initPolicyTables();
+
+          const id = parseInt(c.req.param("id"));
+          const policy = await getPolicyById(id);
+          if (!policy || !policy.file_path)
+            return c.json({ error: "No file attached" }, 404);
+
+          if (!canAccessConfidentialPolicy(admin.role, policy.confidentiality)) {
+            return forbiddenResponse(
+              c,
+              "Access to this policy file is restricted by its confidentiality classification",
+            );
+          }
+
+          const file = getUploadedFileForModule(policy.file_path, "policies");
+          if (!file) return c.json({ error: "File not found on disk" }, 404);
+
+          const mime = (policy.file_mime_type || "application/octet-stream").toLowerCase();
+          // Types that browsers render safely inline. Everything else (Office
+          // docs, archives, and crucially html/svg/xml) is forced to download.
+          const INLINE_SAFE = new Set([
+            "application/pdf",
+            "image/png",
+            "image/jpeg",
+            "image/jpg",
+            "image/gif",
+            "image/webp",
+            "image/bmp",
+            "text/plain",
+          ]);
+          const inline = INLINE_SAFE.has(mime);
+          const safeName = (policy.file_name || file.fileName || "document").replace(
+            /["\r\n]/g,
+            "",
+          );
+          return new Response(new Uint8Array(file.buffer), {
+            status: 200,
+            headers: {
+              "Content-Type": inline ? mime : "application/octet-stream",
+              "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${safeName}"`,
+              "Content-Length": String(file.buffer.length),
+              "X-Content-Type-Options": "nosniff",
+              "Content-Security-Policy": "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'self'",
+              "Cache-Control": "private, max-age=60",
+            },
+          });
+        } catch (error) {
+          safeLogger.error("❌ [PolicyAPI] Error serving inline file:", error);
+          return c.json({ error: "Failed to load file" }, 500);
+        }
+      };
+    },
+  },
 ];

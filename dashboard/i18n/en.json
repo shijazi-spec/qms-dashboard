@@ -2453,6 +2453,8 @@
     "d_no_file": "No file attached",
     "d_upload_file": "Upload File",
     "d_download": "Download",
+    "d_open_tab": "Open in new tab",
+    "d_no_inline_preview": "This file type can't be previewed in the browser. Use \"Open in new tab\" or \"Download\" above to view it.",
     "d_ack_status": "Acknowledgment Status",
     "d_current": "Current",
     "d_expired": "Expired",

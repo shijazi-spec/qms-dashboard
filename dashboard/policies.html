@@ -775,8 +775,12 @@
                                 <div class="text-xs text-blue-600">${policy.file_mime_type || ''} ${policy.file_size ? '· ' + formatFileSize(policy.file_size) : ''}</div>
                             </div>
                         </div>
-                        <a href="/api/policies/${policy.id}/download" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700" data-testid="link-download-file">${WalaPlusI18n.t('policies.d_download')}</a>
-                    </div>` : `
+                        <div class="flex items-center gap-2">
+                            <a href="/api/policies/${policy.id}/view" target="_blank" rel="noopener" class="px-3 py-1.5 bg-white border border-blue-600 text-blue-700 rounded text-sm hover:bg-blue-50" data-testid="link-open-file">${WalaPlusI18n.t('policies.d_open_tab')}</a>
+                            <a href="/api/policies/${policy.id}/download" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700" data-testid="link-download-file">${WalaPlusI18n.t('policies.d_download')}</a>
+                        </div>
+                    </div>
+                    ${filePreviewHtml(policy)}` : `
                     <div class="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-300">
                         <div class="text-center">
                             <p class="text-sm text-gray-500 mb-2">${WalaPlusI18n.t('policies.d_no_file')}</p>
@@ -831,6 +835,38 @@
             if (bytes < 1024) return bytes + ' B';
             if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
             return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        // Inline preview of an attached file in the View modal. PDFs and images
+        // render in-place (served inline + sandboxed by /api/policies/:id/view);
+        // formats a browser can't render natively (Word/Excel/PowerPoint) show a
+        // note with the Open-in-new-tab / Download actions above instead.
+        function filePreviewHtml(policy) {
+            var mime = (policy.file_mime_type || '').toLowerCase();
+            var name = (policy.file_name || '').toLowerCase();
+            var url = '/api/policies/' + policy.id + '/view';
+            var isPdf = mime === 'application/pdf' || name.endsWith('.pdf');
+            var isImg = mime.indexOf('image/') === 0 || /\.(png|jpe?g|gif|webp|bmp)$/.test(name);
+            var isTxt = mime === 'text/plain' || name.endsWith('.txt');
+            if (isPdf) {
+                return '<div class="border rounded-lg overflow-hidden bg-gray-100">'
+                    + '<iframe src="' + url + '" title="' + escAttr(policy.file_name || 'document') + '" class="w-full" style="height:70vh;border:0" sandbox="allow-same-origin"></iframe>'
+                    + '</div>';
+            }
+            if (isImg) {
+                return '<div class="border rounded-lg overflow-auto bg-gray-100 flex justify-center p-2" style="max-height:70vh">'
+                    + '<img src="' + url + '" alt="' + escAttr(policy.file_name || 'document') + '" class="max-w-full h-auto object-contain"/>'
+                    + '</div>';
+            }
+            if (isTxt) {
+                return '<div class="border rounded-lg overflow-hidden bg-gray-100">'
+                    + '<iframe src="' + url + '" title="' + escAttr(policy.file_name || 'document') + '" class="w-full" style="height:40vh;border:0" sandbox></iframe>'
+                    + '</div>';
+            }
+            // Office / other formats — no native browser rendering.
+            return '<div class="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg p-3">'
+                + escapeHtml(WalaPlusI18n.t('policies.d_no_inline_preview'))
+                + '</div>';
         }
 
         async function uploadFile(policyId, input) {
