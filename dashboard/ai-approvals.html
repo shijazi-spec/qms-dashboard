@@ -115,9 +115,9 @@
                 <select id="fltSource" aria-label="Filter by request source"
                         data-testid="select-source"
                         class="border border-gray-300 rounded px-2 py-1 text-sm">
-                    <option value="" data-i18n="ai_approvals.source_any">All sources</option>
-                    <option value="adam" data-i18n="ai_approvals.source_adam">Adam (chat requests)</option>
+                    <option value="adam" selected data-i18n="ai_approvals.source_adam">Adam (chat requests)</option>
                     <option value="autonomous" data-i18n="ai_approvals.source_autonomous">Autonomous (shadow proposals)</option>
+                    <option value="" data-i18n="ai_approvals.source_any">All sources</option>
                 </select>
             </span>
 
@@ -647,6 +647,8 @@
         if (fltRisk.value) p.set('risk_level', fltRisk.value);
         if (fltMine.checked) p.set('mine', 'true');
         if (fltReview.value) p.set('review_filter', fltReview.value);
+        // Keep the Status dropdown counts consistent with the Source filter.
+        if (fltSource && fltSource.value) p.set('source', fltSource.value);
         fetch('/api/ai/approvals/status-counts?' + p.toString(), { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {

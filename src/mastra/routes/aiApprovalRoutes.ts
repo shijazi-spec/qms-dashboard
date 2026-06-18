@@ -537,6 +537,10 @@ const _aiApprovalRoutesRaw = [
           const requestedByUserId =
             (canSeeAll(user.role) && !mine) ? undefined : (user.userId ?? undefined);
 
+          const sourceParam = url.searchParams.get('source');
+          const sourceGroup =
+            sourceParam === 'autonomous' || sourceParam === 'adam' ? sourceParam : undefined;
+
           // Only meaningful when reviewFilter='unreviewed_by_me'; we
           // still pass it for 'no_reviewers' so the helper signature
           // is symmetric with countByRiskLevel / listPendingActions.
@@ -547,6 +551,7 @@ const _aiApprovalRoutesRaw = [
             requestedByUserId,
             reviewFilter,
             reviewerUserId,
+            sourceGroup,
           });
 
           return c.json({ success: true, ...counts });

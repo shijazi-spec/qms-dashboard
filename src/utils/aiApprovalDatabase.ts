@@ -724,6 +724,7 @@ export async function countByStatus(filters: {
   requestedByUserId?: number;
   reviewFilter?: ReviewFilter;
   reviewerUserId?: number;
+  sourceGroup?: 'adam' | 'autonomous';
 }): Promise<{
   pending: number;
   executed: number;
@@ -741,6 +742,15 @@ export async function countByStatus(filters: {
   if (filters.riskLevel) {
     params.push(filters.riskLevel);
     where.push(`risk_level = $${params.length}`);
+  }
+  // Keep the dropdown bucket counts consistent with the Source filter so
+  // "Pending (N)" agrees with the visible list.
+  if (filters.sourceGroup === 'autonomous') {
+    params.push(AUTONOMOUS_TOOL_IDS as unknown as string[]);
+    where.push(`tool_id = ANY($${params.length})`);
+  } else if (filters.sourceGroup === 'adam') {
+    params.push(AUTONOMOUS_TOOL_IDS as unknown as string[]);
+    where.push(`NOT (tool_id = ANY($${params.length}))`);
   }
 
   // Mirror the review-filter SQL from `listPendingActions` so the
