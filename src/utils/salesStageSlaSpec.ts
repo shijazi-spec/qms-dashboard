@@ -54,11 +54,22 @@ const DEFAULT_CRIT_MULTIPLIER = 1.5;
 export const DEFAULT_OPEN_STAGE_SLA: StageSlaSpec = {
   stage: "*",
   unit: "calendar_days",
-  sla: 90,
+  sla: 30,
   clauseRef: "—",
+  warnDays: 30,
+  critDays: 120,
   description:
-    "No SOP-defined duration for this stage — generic stuck-deal watch (90 days).",
+    "No SOP-defined duration for this stage — generic stuck-deal watch: WARNING past 30 calendar days, CRITICAL past 120 (aging buckets 30 / 60 / 90 / 120+).",
 };
+
+/** Aging bucket label (30 / 60 / 90 / 120+) for the generic open-stage watch. */
+export function openStageAgingBucket(calendarDays: number): string {
+  if (calendarDays >= 120) return "120+";
+  if (calendarDays >= 90) return "90+";
+  if (calendarDays >= 60) return "60+";
+  if (calendarDays >= 30) return "30+";
+  return "<30";
+}
 
 export const SALES_STAGE_SLA_SPEC: ReadonlyArray<StageSlaSpec> = [
   {

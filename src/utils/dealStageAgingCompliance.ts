@@ -22,6 +22,7 @@ import {
   isTerminalSalesStage,
   measureAging,
   DEFAULT_OPEN_STAGE_SLA,
+  openStageAgingBucket,
 } from "./salesStageSlaSpec";
 
 export type DealStageAgingCode =
@@ -155,7 +156,7 @@ export function evaluateDealStageAging(
           : ""
         : "";
     const slaSource = usingDefault
-      ? `no Sales SOP duration is defined for this stage — generic ${spec.sla}-day stuck-deal watch`
+      ? `no Sales SOP duration is defined for this stage — generic stuck-deal watch (${openStageAgingBucket(aging.agingCalendarDays)} days band; warning past 30, critical past 120)`
       : `Sales SOP §${spec.clauseRef} allows ${slaLabel}`;
     violation = {
       code,

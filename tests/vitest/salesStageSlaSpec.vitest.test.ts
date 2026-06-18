@@ -19,6 +19,7 @@ import {
   gradeStageAging,
   isTerminalSalesStage,
   measureAging,
+  openStageAgingBucket,
 } from "../../src/utils/salesStageSlaSpec";
 
 function utc(y: number, m: number, d: number, h = 12): Date {
@@ -187,20 +188,32 @@ describe("gradeStageAging — severity bands", () => {
     expect(g.isTerminal).toBe(true);
   });
 
-  test("unknown OPEN stage uses the catch-all 90/135 default (isUnknownStage flag stays)", () => {
-    // 2026-06-18 — a non-SOP open stage is no longer ignored: it grades against
-    // the generic 90-day watch so a deal stuck there is still surfaced.
-    const within = gradeStageAging("Discovery", { unit: "calendar_days", agingUnits: 80, agingCalendarDays: 80 });
-    expect(within.severity).toBe("info");
-    expect(within.isUnknownStage).toBe(true);
-    expect(within.slaUnits).toBe(90);
+  test("unknown OPEN stage uses the catch-all default — warn >30, critical >120", () => {
+    // 2026-06-18 (Ahmad) — a non-SOP open stage is no longer ignored: it grades
+    // against the generic watch (warning past 30 days, critical past 120) so a
+    // deal stuck there is still surfaced. Buckets 30/60/90/120+.
+    const ok = gradeStageAging("Discovery", { unit: "calendar_days", agingUnits: 20, agingCalendarDays: 20 });
+    expect(ok.severity).toBe("info");
+    expect(ok.isUnknownStage).toBe(true);
+    expect(ok.slaUnits).toBe(30);
 
-    const warn = gradeStageAging("Discovery", { unit: "calendar_days", agingUnits: 100, agingCalendarDays: 100 });
+    const warn = gradeStageAging("Discovery", { unit: "calendar_days", agingUnits: 50, agingCalendarDays: 50 });
     expect(warn.severity).toBe("warning");
     expect(warn.isUnknownStage).toBe(true);
 
-    const crit = gradeStageAging("Discovery", { unit: "calendar_days", agingUnits: 200, agingCalendarDays: 200 });
+    const stillWarn = gradeStageAging("Discovery", { unit: "calendar_days", agingUnits: 100, agingCalendarDays: 100 });
+    expect(stillWarn.severity).toBe("warning");
+
+    const crit = gradeStageAging("Discovery", { unit: "calendar_days", agingUnits: 130, agingCalendarDays: 130 });
     expect(crit.severity).toBe("critical");
+  });
+
+  test("openStageAgingBucket labels 30/60/90/120+", () => {
+    expect(openStageAgingBucket(10)).toBe("<30");
+    expect(openStageAgingBucket(45)).toBe("30+");
+    expect(openStageAgingBucket(70)).toBe("60+");
+    expect(openStageAgingBucket(100)).toBe("90+");
+    expect(openStageAgingBucket(200)).toBe("120+");
   });
 
   test("terminal stage still freezes even past the catch-all window", () => {
