@@ -201,14 +201,17 @@
                         data-base-label="No reviewer yet">No reviewer yet</option>
             </select>
 
-            <!-- Sort by request date (Sarah 2026-06-18): newest or oldest first. -->
-            <label class="text-xs text-gray-600 ms-2" data-i18n="ai_approvals.filter_sort">Date</label>
-            <select id="fltSort" aria-label="Sort by request date"
-                    data-testid="select-sort"
-                    class="border border-gray-300 rounded px-2 py-1 text-sm">
-                <option value="desc" selected data-i18n="ai_approvals.sort_newest">Newest first</option>
-                <option value="asc" data-i18n="ai_approvals.sort_oldest">Oldest first</option>
-            </select>
+            <!-- Sort by request date (Sarah 2026-06-18): newest or oldest first.
+                 Label + select kept together (inline-flex, no wrap between). -->
+            <span class="inline-flex items-center gap-1 ms-2 whitespace-nowrap">
+                <span class="text-xs text-gray-600" data-i18n="ai_approvals.filter_sort">Date</span>
+                <select id="fltSort" aria-label="Sort by request date"
+                        data-testid="select-sort"
+                        class="border border-gray-300 rounded px-2 py-1 text-sm">
+                    <option value="desc" selected data-i18n="ai_approvals.sort_newest">Newest first</option>
+                    <option value="asc" data-i18n="ai_approvals.sort_oldest">Oldest first</option>
+                </select>
+            </span>
 
             <label class="text-xs text-gray-600 ms-2 flex items-center gap-1" title="Limit the list to rows where credential-shaped values were detected in the payload.">
                 <input id="fltCredWarn" type="checkbox" class="rounded" data-testid="input-credential-warnings-only">
@@ -228,6 +231,16 @@
         <!-- List -->
         <div id="approvalsList" class="space-y-3">
             <div class="text-center text-gray-500 text-sm py-10">Loading…</div>
+        </div>
+
+        <!-- Pagination (Sarah 2026-06-18): page through ALL matching requests,
+             not just the first 100. -->
+        <div id="pagerBar" class="hidden mt-4 flex items-center justify-between gap-3 text-sm">
+            <span id="pagerInfo" class="text-gray-600"></span>
+            <div class="flex items-center gap-2">
+                <button id="pagerPrev" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">‹ Previous</button>
+                <button id="pagerNext" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next ›</button>
+            </div>
         </div>
     </main>
 
@@ -421,6 +434,15 @@
     var optStatusExpired  = fltStatus.querySelector('option[value="expired"]');
     var cntPending = document.getElementById('cntPending');
     var cntExecutedToday = document.getElementById('cntExecutedToday');
+
+    // Pagination state (Sarah 2026-06-18): page through ALL matching requests.
+    var PAGE_SIZE = 100;
+    var pageOffset = 0;
+    var lastTotal = 0;
+    var pagerBar = document.getElementById('pagerBar');
+    var pagerInfo = document.getElementById('pagerInfo');
+    var pagerPrev = document.getElementById('pagerPrev');
+    var pagerNext = document.getElementById('pagerNext');
 
     // Cache the most recent server response so the credential-warning toggle
     // can re-filter without round-tripping the API.
@@ -680,7 +702,8 @@
         // Search by APR-code / company / cluster text + date sort (Sarah 2026-06-18).
         if (fltSearch && fltSearch.value.trim()) p.set('search', fltSearch.value.trim());
         if (fltSort && fltSort.value === 'asc') p.set('sort', 'asc');
-        p.set('limit', '100');
+        p.set('limit', String(PAGE_SIZE));
+        p.set('offset', String(pageOffset));
         return p.toString();
     }
 
@@ -768,8 +791,8 @@
             // password only — the old plain "Approve" button was removed to avoid
             // two competing approve actions on the same card.
             actionsHtml =
-                '<button data-code="' + a.action_code + '" data-act="approve-key" class="px-3 py-1.5 bg-emerald-700 text-white rounded hover:bg-emerald-800 text-xs font-medium">Approve with admin password 🔑</button>' +
-                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-1">Reject</button>';
+                '<button data-code="' + a.action_code + '" data-act="approve-key" class="px-3 py-2 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700">Approve with admin password 🔑</button>' +
+                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-2 bg-white border border-red-300 text-red-700 rounded text-sm hover:bg-red-50 ms-2">Reject</button>';
         } else if (a.status === 'executed') {
             // Show "already applied via APR-…" for a twin auto-closed because an
             // identical request was the one actually executed (Sarah 2026-06-18).
@@ -1322,8 +1345,10 @@
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {
                 lastRows = (data && Array.isArray(data.rows)) ? data.rows : [];
+                lastTotal = (data && typeof data.total === 'number') ? data.total : lastRows.length;
                 renderRows(lastRows);
                 updateSummary(lastRows);
+                renderPager();
                 refreshGlobalCredentialBadge();
                 refreshReviewStatusCounts();
                 refreshRiskLevelCounts();
@@ -1331,9 +1356,11 @@
             })
             .catch(function (err) {
                 lastRows = [];
+                lastTotal = 0;
                 listEl.innerHTML = '<div class="text-center text-red-600 text-sm py-10">' + _t('dyn.ai_approvals.failed_load') + ' ' +
                     (err && err.statusText ? escapeHtml(err.statusText) : '') + '</div>';
                 updateSummary(lastRows);
+                renderPager();
                 refreshGlobalCredentialBadge();
                 refreshReviewStatusCounts();
                 refreshRiskLevelCounts();
@@ -1343,20 +1370,59 @@
 
     function updateSummary(rows) {
         var today = new Date().toISOString().slice(0, 10);
-        cntPending.textContent = rows.filter(function (r) { return r.status === 'pending'; }).length;
+        // Show the TRUE total matching the current filters (not just the loaded
+        // page) so "Pending" agrees with the Status dropdown count instead of
+        // capping at the page size.
+        cntPending.textContent = Number(lastTotal || 0).toLocaleString();
         cntExecutedToday.textContent = rows.filter(function (r) {
             return r.status === 'executed' && r.executed_at && r.executed_at.startsWith(today);
         }).length;
     }
 
-    [fltStatus, fltRisk, fltMine, fltReview, fltSort].forEach(function (el) { if (el) el.addEventListener('change', load); });
+    // Render the pager: "Showing 1–100 of 3,475" + Prev/Next, paging by
+    // PAGE_SIZE through every matching request.
+    function renderPager() {
+        if (!pagerBar) return;
+        var total = Number(lastTotal || 0);
+        var shown = lastRows.length;
+        if (total <= PAGE_SIZE && pageOffset === 0) {
+            pagerBar.classList.add('hidden');
+            return;
+        }
+        pagerBar.classList.remove('hidden');
+        var start = total === 0 ? 0 : pageOffset + 1;
+        var end = pageOffset + shown;
+        if (pagerInfo) {
+            pagerInfo.textContent =
+                'Showing ' + start.toLocaleString() + '–' + end.toLocaleString() +
+                ' of ' + total.toLocaleString();
+        }
+        if (pagerPrev) pagerPrev.disabled = pageOffset <= 0;
+        if (pagerNext) pagerNext.disabled = pageOffset + shown >= total;
+    }
+
+    // Any filter/search/sort change resets to the first page.
+    function resetAndLoad() { pageOffset = 0; load(); }
+    [fltStatus, fltRisk, fltMine, fltReview, fltSort].forEach(function (el) { if (el) el.addEventListener('change', resetAndLoad); });
     fltCredWarn.addEventListener('change', function () { renderRows(lastRows); });
+    if (pagerPrev) pagerPrev.addEventListener('click', function () {
+        if (pageOffset <= 0) return;
+        pageOffset = Math.max(0, pageOffset - PAGE_SIZE);
+        load();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    if (pagerNext) pagerNext.addEventListener('click', function () {
+        if (pageOffset + lastRows.length >= lastTotal) return;
+        pageOffset += PAGE_SIZE;
+        load();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
     // Debounced search: reload as the operator types the APR-code / text.
     if (fltSearch) {
         var _searchTimer = null;
         fltSearch.addEventListener('input', function () {
             if (_searchTimer) clearTimeout(_searchTimer);
-            _searchTimer = setTimeout(load, 300);
+            _searchTimer = setTimeout(resetAndLoad, 300);
         });
     }
     document.getElementById('btnRefresh').addEventListener('click', load);
