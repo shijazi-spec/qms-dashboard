@@ -62,7 +62,7 @@ export const updateRecordFieldTool = createTool({
   id: "update-record-field",
 
   description:
-    'Update simple field(s) on ONE Zoho record — e.g. change a Contact\'s Email, Phone, Mobile, Website, Title, or a text custom field. Use when asked to "change this contact\'s email to X", "update the phone on this lead", "fix the website on this account", etc. Provide the module (Leads/Deals/Contacts/Accounts), the record id (you may pass the Zoho record URL — the tool extracts the id), and an updates object mapping the Zoho field API name to its new value (e.g. {"Email":"x@y.com"}). SCALAR fields only — to relink a Contact/Deal to an Account use link-records-to-account instead. You DO have this capability — do NOT tell the user to edit it manually in Zoho. It is gated: report the APR-… ticket and do not claim it was changed until approved/applied.',
+    'Update simple field(s) on ONE Zoho record — e.g. change a Contact\'s Email, Phone, Mobile, Website, or Title. Use when asked to "change this contact\'s email to X", "update the phone on this lead", "fix the website on this account", etc. Provide the module (Leads/Deals/Contacts/Accounts), the record id (you may pass the Zoho record URL — the tool extracts the id), and the field(s) to set: email / phone / mobile / website / title (set only the ones you are changing). For any OTHER text field, use fieldName (its Zoho API name) + fieldValue. To relink a Contact/Deal to an Account use link-records-to-account instead (Account_Name is a lookup, not a text field). You DO have this capability — do NOT tell the user to edit it manually in Zoho. It is gated: report the APR-… ticket and do not claim it was changed until approved/applied.',
 
   inputSchema: z.object({
     module: z
@@ -72,9 +72,22 @@ export const updateRecordFieldTool = createTool({
       .string()
       .min(1)
       .describe("Zoho record id (or the full Zoho record URL — the id is extracted)"),
-    updates: z
-      .record(z.union([z.string(), z.number(), z.boolean()]))
-      .describe('Field API name → new scalar value, e.g. {"Email":"ralsannat@masdr.sa"}'),
+    // Explicit common fields (an open dictionary schema is unreliable with
+    // function-calling). Set whichever apply; leave the rest empty.
+    email: z.string().optional().describe("New Email address"),
+    phone: z.string().optional().describe("New Phone number"),
+    mobile: z.string().optional().describe("New Mobile number"),
+    website: z.string().optional().describe("New Website URL"),
+    title: z.string().optional().describe("New Title / job title"),
+    // Escape hatch for any other simple text field by its Zoho API name.
+    fieldName: z
+      .string()
+      .optional()
+      .describe("Any OTHER Zoho field's API name to set (e.g. 'Description'). Use with fieldValue."),
+    fieldValue: z
+      .string()
+      .optional()
+      .describe("Value for fieldName"),
     reason: z
       .string()
       .optional()
@@ -93,7 +106,18 @@ export const updateRecordFieldTool = createTool({
   execute: async ({ context }) => {
     const module = context.module;
     const recordId = extractRecordId(context.recordId);
-    const raw = context.updates || {};
+
+    // Assemble the field→value map from the explicit inputs (maps the friendly
+    // names to Zoho API field names) plus the generic fieldName/fieldValue.
+    const raw: Record<string, any> = {};
+    if (context.email != null && context.email !== "") raw["Email"] = context.email;
+    if (context.phone != null && context.phone !== "") raw["Phone"] = context.phone;
+    if (context.mobile != null && context.mobile !== "") raw["Mobile"] = context.mobile;
+    if (context.website != null && context.website !== "") raw["Website"] = context.website;
+    if (context.title != null && context.title !== "") raw["Title"] = context.title;
+    if (context.fieldName && context.fieldValue != null && context.fieldValue !== "") {
+      raw[context.fieldName] = context.fieldValue;
+    }
 
     if (!recordId) {
       return {

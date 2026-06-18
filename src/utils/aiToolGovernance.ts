@@ -185,14 +185,22 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     ],
     entityType: 'zoho_update',
     buildPreview: (p: any) => {
-      const u = p?.updates && typeof p.updates === 'object' ? p.updates : {};
-      const fields = Object.keys(u)
-        .map((k) => `${k} → ${trim(String((u as any)[k]), 60)}`)
-        .join('; ');
+      const pairs: string[] = [];
+      const add = (label: string, v: any) => {
+        if (v != null && String(v) !== '') pairs.push(`${label} → ${trim(String(v), 60)}`);
+      };
+      add('Email', p?.email);
+      add('Phone', p?.phone);
+      add('Mobile', p?.mobile);
+      add('Website', p?.website);
+      add('Title', p?.title);
+      if (p?.fieldName && p?.fieldValue != null && String(p.fieldValue) !== '') {
+        add(String(p.fieldName), p.fieldValue);
+      }
       return [
         `**Module:** ${p?.module ?? 'n/a'}`,
         `**Record:** ${trim(String(p?.recordId ?? 'n/a'), 80)}`,
-        `**Changes:** ${fields || 'none'}`,
+        `**Changes:** ${pairs.join('; ') || 'none'}`,
         p?.reason ? `**Reason:** ${trim(p.reason, 200)}` : null,
       ].filter(Boolean).join('\n');
     },
