@@ -1365,8 +1365,14 @@
         bindRowActions();
     }
 
-    function load() {
-        listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10">' + _t('dyn.ai_approvals.loading') + '</div>';
+    function load(silent) {
+        // Auto-refresh passes silent=true: refresh the data in place WITHOUT
+        // blanking the list to "Loading…" first (that flash was the jarring
+        // "open and close" every tick). Manual refresh / filter changes still
+        // show the loading state for immediate feedback.
+        if (!silent) {
+            listEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-10">' + _t('dyn.ai_approvals.loading') + '</div>';
+        }
         fetch('/api/ai/approvals?' + buildQuery(), { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
             .then(function (data) {
@@ -1381,6 +1387,10 @@
                 refreshStatusCounts();
             })
             .catch(function (err) {
+                // On a SILENT auto-refresh failure, keep whatever is on screen —
+                // don't replace the list with an error (that would be the same
+                // disruptive flash). Only a manual/foreground load surfaces it.
+                if (silent) return;
                 lastRows = [];
                 lastTotal = 0;
                 listEl.innerHTML = '<div class="text-center text-red-600 text-sm py-10">' + _t('dyn.ai_approvals.failed_load') + ' ' +
@@ -1392,6 +1402,18 @@
                 refreshRiskLevelCounts();
                 refreshStatusCounts();
             });
+    }
+
+    // Auto-refresh that does NOT disrupt the operator: it refreshes silently
+    // (no "Loading…" flash) and SKIPS the tick entirely while the user is busy
+    // — typing in Search, a detail modal open, or the browser tab in the
+    // background. So the queue stays current without "opening and closing".
+    function autoRefresh() {
+        if (document.hidden) return;
+        if (fltSearch && document.activeElement === fltSearch) return;
+        var modal = document.getElementById('actionDetailModal');
+        if (modal && !modal.classList.contains('hidden')) return;
+        load(true);
     }
 
     function updateSummary(rows) {
@@ -1528,7 +1550,9 @@
     // the modal can open even when the queue list errors out.
     load();
     handleDeepLink();
-    setInterval(load, 30000);
+    // Silent, non-disruptive auto-refresh every 60s (was a blanking reload
+    // every 30s — the "open and close" flash Sarah reported).
+    setInterval(autoRefresh, 60000);
 
     /* ---------------------------------------------------------------- *
      *  Deep-linking (Task #545)
