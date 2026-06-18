@@ -42,6 +42,7 @@
  *      consumers does not double-scrub.
  */
 
+import "./normalizeDatabaseUrl";
 import pg from 'pg';
 import { redactSensitiveDeep } from './eventLogsDatabase';
 

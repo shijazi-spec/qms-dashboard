@@ -19,6 +19,7 @@
  * that preserves audit-trail integrity for external auditors.
  */
 
+import "./normalizeDatabaseUrl";
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
 import {
