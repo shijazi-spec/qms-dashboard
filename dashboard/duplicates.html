@@ -5894,6 +5894,9 @@
             }
             const headerTone = data.deleted > 0 ? 'blue' : (data.errors ? 'amber' : 'emerald');
             const truncNote = data.truncated ? ' <span class="text-amber-700">(showing first ' + data.total + ' of ' + data.totalInCluster + ')</span>' : '';
+            const purgedNote = (data.purged > 0)
+                ? ' · <strong class="text-emerald-700">' + data.purged + ' already-deleted record(s) removed — refreshing…</strong>'
+                : '';
             const header = '<div class="px-3 py-2 rounded-lg bg-' + headerTone + '-50 border border-' + headerTone + '-200 text-xs mb-2">'
                 + '<strong class="text-' + headerTone + '-800">Re-check:</strong> '
                 + data.alive + ' alive · '
@@ -5901,7 +5904,13 @@
                 + data.tagged + ' carry Duplicate-Delete tag'
                 + (data.errors ? ' · ' + data.errors + ' Zoho error(s)' : '')
                 + truncNote
+                + purgedNote
                 + '</div>';
+            // Records confirmed deleted in Zoho were just purged server-side —
+            // re-render the cluster so it collapses to the survivor(s) only.
+            if (data.purged > 0 && typeof showClusterDetails === 'function') {
+                setTimeout(function () { showClusterDetails(clusterId); }, 1400);
+            }
             const rows = (data.byRecord || []).map(function (r) {
                 const statusBadge = r.status === 'alive'
                     ? (r.hasDuplicateDeleteTag ? '<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[11px] font-semibold">ALIVE · TAGGED</span>' : '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px] font-semibold">ALIVE</span>')

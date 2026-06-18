@@ -3258,6 +3258,29 @@ export async function markRecordStalePending(
 }
 
 /**
+ * Mark specific duplicate_records rows (by primary-key id) stale_pending so the
+ * cleanup sweep purges them. Used when a CRM re-check confirms a record was
+ * deleted in Zoho (404) — e.g. the admin deleted a Duplicate-Delete duplicate,
+ * so it should disappear from the (now-resolved) cluster, leaving the survivor.
+ * Matches by id (not zoho_module, which can be null on legacy rows).
+ */
+export async function markRecordsStalePendingByIds(
+  ids: number[],
+): Promise<number> {
+  const clean = (ids || []).filter((n) => Number.isFinite(n));
+  if (clean.length === 0) return 0;
+  const result = await pool.query(
+    `UPDATE duplicate_records
+        SET match_signals = COALESCE(match_signals, '[]'::jsonb) || '["stale_pending"]'::jsonb
+      WHERE id = ANY($1::int[])
+        AND is_mock_data = false
+        AND NOT (match_signals @> '["stale_pending"]'::jsonb)`,
+    [clean],
+  );
+  return result.rowCount || 0;
+}
+
+/**
  * One-shot purge of singleton clusters — `duplicate_clusters` rows with
  * `status = 'active'` and `total_records ≤ 1`. These are residue from
  * the engine speculatively creating a cluster for every incoming record's

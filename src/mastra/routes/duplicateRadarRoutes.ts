@@ -96,6 +96,7 @@ import {
   getDuplicateProgressSeries,
   cleanupStaleRecords,
   cleanupOrphanClusters,
+  markRecordsStalePendingByIds,
   removeRecordsByZohoIds,
   getClusterRecordTypeMeta,
   getSyncState,
@@ -2103,7 +2104,33 @@ export const duplicateRadarRoutes = [
               (x: any) => x.status === "alive" && x.hasDuplicateDeleteTag,
             ).length,
           };
-          return c.json({ ...tally, truncated, totalInCluster: records.length, byRecord: out });
+          // 2026-06-18 — reconcile: records confirmed GONE from Zoho (404) are
+          // marked stale_pending and purged, so a resolved cluster collapses to
+          // just the survivor instead of lingering with already-deleted dupes.
+          // Only acts on definitively-deleted rows (never on transient errors).
+          let purged = 0;
+          const deletedDbIds = out
+            .filter((x) => x.status === "deleted" && typeof x.dbId === "number")
+            .map((x) => x.dbId as number);
+          if (deletedDbIds.length > 0) {
+            try {
+              await markRecordsStalePendingByIds(deletedDbIds);
+              purged = await cleanupStaleRecords();
+              await cleanupOrphanClusters();
+              await updateClusterStats(id).catch(() => {});
+            } catch (reErr: any) {
+              logger.warn("[DuplicateRadar] recheck reconcile skipped:", {
+                error: reErr?.message || String(reErr),
+              });
+            }
+          }
+          return c.json({
+            ...tally,
+            purged,
+            truncated,
+            totalInCluster: records.length,
+            byRecord: out,
+          });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }
