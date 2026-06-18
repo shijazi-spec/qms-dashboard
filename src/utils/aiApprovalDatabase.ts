@@ -227,6 +227,29 @@ export async function enqueuePendingAction(input: EnqueueInput): Promise<Pending
   // are replaced with the sentinel before they hit the database.
   const safePayloadPreview = redactSecretLikeStrings(input.payloadPreview ?? '') as string;
 
+  // DEDUP (Sarah 2026-06-18): collapse identical pending requests. If the SAME
+  // tool with the SAME payload is already queued and still PENDING (not yet
+  // expired), return that existing ticket instead of creating a twin. Without
+  // this, a re-asked merge (e.g. the agent proposing the same Nozom-Tech merge
+  // twice) floods the queue with duplicates AND causes the "Could not claim
+  // approval" error when the operator approves one and tries the stale twin.
+  // Keyed on tool_id + payload_checksum (the checksum is over the redacted
+  // payload, which is what determines the action). Best-effort: a lookup
+  // failure must not block a legitimate enqueue, so we fall through to insert.
+  try {
+    const dup = await pool.query<PendingAction>(
+      `SELECT * FROM ai_pending_actions
+        WHERE tool_id = $1 AND payload_checksum = $2 AND status = 'pending'
+          AND (expires_at IS NULL OR expires_at > NOW())
+        ORDER BY created_at ASC
+        LIMIT 1`,
+      [input.toolId, checksum],
+    );
+    if (dup.rows[0]) return dup.rows[0];
+  } catch {
+    /* non-fatal — fall through and insert a fresh row */
+  }
+
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateActionCode();
     try {

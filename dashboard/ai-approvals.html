@@ -764,10 +764,12 @@
 
         var actionsHtml = '';
         if (a.status === 'pending') {
+            // Single approve path (Sarah 2026-06-18): approval is via the admin
+            // password only — the old plain "Approve" button was removed to avoid
+            // two competing approve actions on the same card.
             actionsHtml =
-                '<button data-code="' + a.action_code + '" data-act="approve" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">Approve</button>' +
-                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-1">Reject</button>' +
-                '<button data-code="' + a.action_code + '" data-act="approve-key" class="px-3 py-1.5 bg-emerald-700 text-white rounded hover:bg-emerald-800 text-xs font-medium ms-1" title="Apply immediately with the admin password (bypasses the queue + self-approval block)">Approve with admin password 🔑</button>';
+                '<button data-code="' + a.action_code + '" data-act="approve-key" class="px-3 py-1.5 bg-emerald-700 text-white rounded hover:bg-emerald-800 text-xs font-medium">Approve with admin password 🔑</button>' +
+                '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-1">Reject</button>';
         } else if (a.status === 'executed') {
             actionsHtml = '<span class="text-xs text-green-700">' + (a.result_entity_id ? '→ ' + escapeHtml(a.result_entity_id) : 'Done') + '</span>';
         } else if (a.status === 'rejected') {
