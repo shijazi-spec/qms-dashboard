@@ -154,6 +154,15 @@
                 'callback_failed':  { key: 'login.errors.callback_failed',  fallback: 'Authentication failed. Please try again.' },
                 'invalid_state':    { key: 'login.errors.invalid_state',    fallback: 'Session expired. Please try signing in again.' },
                 'session_expired':  { key: 'login.errors.session_expired',  fallback: 'Your session has expired. Please sign in again.' },
+                // Sarah 2026-06-18 — account-status messages. The auth
+                // server already redirects to /login?error=<status>
+                // when the OIDC sign-in succeeds but the user record
+                // isn't 'active'. Before this entry the fallback was
+                // "Authentication failed" which misled newly-invited
+                // users into thinking their credentials were wrong.
+                'pending_approval': { key: 'login.errors.pending_approval', fallback: 'Sign-in succeeded. Your account is waiting for an administrator to approve your access. You will be notified by email once approved.' },
+                'access_denied':    { key: 'login.errors.access_denied',    fallback: 'Sign-in succeeded, but your access request was declined. Please contact your administrator if you believe this is an error.' },
+                'account_disabled': { key: 'login.errors.account_disabled', fallback: 'Sign-in succeeded, but your account is disabled. Please contact your administrator to reactivate it.' },
             };
             const e = errorMap[error] || { key: 'login.errors.callback_failed', fallback: 'An error occurred during sign-in. Please try again.' };
             showLoginError(msg, e.key, e.fallback);
