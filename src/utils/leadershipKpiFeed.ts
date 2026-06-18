@@ -33,6 +33,18 @@ import {
 
 export type RagStatus = "green" | "amber" | "red";
 
+/**
+ * The basis a KPI's `value` is computed on. The Leadership Platform files the
+ * value into the matching bucket: `quarter`/`cumulative`/`ytd` → the quarter's
+ * actual; `month` → that month's value. A KPI must NEVER silently switch basis
+ * between calls.
+ *   - "quarter"    — quarter-to-date progress against a quarterly plan (resets each quarter).
+ *   - "cumulative" — running point-in-time coverage/ratio over all records to date (no reset).
+ *   - "month"      — month-to-date value (resets each month).
+ *   - "ytd"        — year-to-date value (resets each year).
+ */
+export type FeedPeriodType = "month" | "quarter" | "cumulative" | "ytd";
+
 export interface FeedKpiResult {
   code: string;
   name: string;
@@ -45,7 +57,14 @@ export interface FeedKpiResult {
   /** % toward target ((value-baseline)/(target-baseline)), clamped 0-100. */
   progress_pct?: number | null;
   data_available: boolean;
+  /** Legacy quarter label (e.g. "2026-Q2"); kept for backward compatibility. */
   period: string;
+  /** Explicit basis the `value` is computed on (see FeedPeriodType). */
+  period_type: FeedPeriodType;
+  /** First day the value covers (ISO). null for cumulative (covers since inception). */
+  period_start: string | null;
+  /** Last day the value covers (ISO); = as_of for cumulative snapshots. */
+  period_end: string;
   as_of: string;
   details?: Record<string, unknown>;
 }
@@ -59,7 +78,13 @@ interface FeedKpiConfig {
   green: number;
   amber: number;
   direction: "higher_is_better" | "lower_is_better";
-  calc: () => Promise<{ value: number; dataAvailable: boolean; details?: any }>;
+  calc: () => Promise<{
+    value: number;
+    dataAvailable: boolean;
+    details?: any;
+    /** Custom `unavailable[]` reason when dataAvailable is false (else defaults to "no_data_in_qms"). */
+    reason?: string;
+  }>;
 }
 
 function ragStatus(value: number, cfg: FeedKpiConfig): RagStatus {
@@ -129,6 +154,47 @@ function currentQuarterLabel(now: Date): string {
   return `${now.getUTCFullYear()}-Q${q}`;
 }
 
+/**
+ * Explicit period basis per KPI code. Anything not listed defaults to
+ * "cumulative" (a running point-in-time coverage/ratio over all records to
+ * date). Only the audit execution rate (quarter-to-date against the quarterly
+ * audit plan) and the two North Star composites (computed from quarterly
+ * weights) are quarter-based.
+ */
+const PERIOD_TYPE_BY_CODE: Record<string, FeedPeriodType> = {
+  "QM-KPI-002": "quarter", // Audit Execution Rate — QTD vs quarterly audit plan
+  "QM-KPI-001": "quarter", // Quality North Star Score — quarterly weighted composite
+  "GRC-KPI-001": "quarter", // GRC North Star Score — quarterly weighted composite
+};
+
+function quarterStartIso(now: Date): string {
+  const q = Math.floor(now.getUTCMonth() / 3);
+  return new Date(Date.UTC(now.getUTCFullYear(), q * 3, 1)).toISOString();
+}
+function monthStartIso(now: Date): string {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+}
+function yearStartIso(now: Date): string {
+  return new Date(Date.UTC(now.getUTCFullYear(), 0, 1)).toISOString();
+}
+
+/**
+ * Resolve the explicit period window for a KPI. `period_end` is always the
+ * snapshot time (`as_of`); `period_start` is the first day the value covers, or
+ * null for cumulative metrics that have no reset point.
+ */
+function periodFor(
+  code: string,
+  now: Date,
+): { period_type: FeedPeriodType; period_start: string | null; period_end: string } {
+  const pt = PERIOD_TYPE_BY_CODE[code] ?? "cumulative";
+  const asOf = now.toISOString();
+  if (pt === "quarter") return { period_type: pt, period_start: quarterStartIso(now), period_end: asOf };
+  if (pt === "ytd") return { period_type: pt, period_start: yearStartIso(now), period_end: asOf };
+  if (pt === "month") return { period_type: pt, period_start: monthStartIso(now), period_end: asOf };
+  return { period_type: "cumulative", period_start: null, period_end: asOf };
+}
+
 // ── Calculators ────────────────────────────────────────────────────────────
 // Each is wrapped so any error (missing table/column, empty data) resolves to
 // dataAvailable:false rather than throwing — the endpoint must never 500 and
@@ -188,7 +254,21 @@ async function calcComplianceCoverage() {
   `);
   const total = r.rows[0]?.total_applicable ?? 0;
   const mapped = r.rows[0]?.mapped ?? 0;
-  if (total <= 0) return { value: 0, dataAvailable: false };
+  if (total <= 0) {
+    return { value: 0, dataAvailable: false, reason: "no_applicable_obligations_in_qms" };
+  }
+  if (mapped <= 0) {
+    // Obligations exist but NONE are linked to a control/policy yet. That is a
+    // "mapping not populated" signal, not a measured 0% — emitting value:0 would
+    // overwrite the Leadership Platform's manual value with a misleading zero.
+    // Mark unavailable so the connector skips it (per the feed safety contract).
+    return {
+      value: 0,
+      dataAvailable: false,
+      reason: "no_obligations_mapped_yet",
+      details: { total_applicable: total, mapped_obligations: 0 },
+    };
+  }
   return {
     value: Math.round((mapped / total) * 1000) / 10,
     dataAvailable: true,
@@ -208,7 +288,21 @@ async function calcProcessQualityFramework() {
   `);
   const total = r.rows[0]?.total ?? 0;
   const compliant = r.rows[0]?.compliant ?? 0;
-  if (total <= 0) return { value: 0, dataAvailable: false };
+  if (total <= 0) {
+    return { value: 0, dataAvailable: false, reason: "no_policies_in_qms" };
+  }
+  if (compliant <= 0) {
+    // Policies exist but NONE are published-and-within-review-date yet. That is a
+    // "framework not populated" signal, not a measured 0% — emitting value:0 would
+    // overwrite the Leadership Platform's manual value with a misleading zero.
+    // Mark unavailable so the connector skips it (per the feed safety contract).
+    return {
+      value: 0,
+      dataAvailable: false,
+      reason: "no_published_in_review_policies_yet",
+      details: { total_policies: total, compliant_policies: 0 },
+    };
+  }
   return {
     value: Math.round((compliant / total) * 1000) / 10,
     dataAvailable: true,
@@ -689,7 +783,17 @@ interface KpiDetail {
   methodology: string; // how QMS calculates it (source + formula, plain English)
   rationale: string; // why it matters (business purpose)
   plan_ref: string; // tie-back to Quality Plan / North Star
+  // ── Calculation-parity contract (Problem 2): the exact records counted, so
+  //    the Leadership Platform can confirm it is comparing the same definition. ──
+  numerator?: string; // exact records counted (table + filter)
+  denominator?: string; // exact records (table + filter + scope)
+  scope?: string; // which BUs / obligations / policies are in-scope (and exclusions)
+  rounding?: string; // decimals + rounding rule (must match Leadership display)
 }
+
+/** Default rounding rule shared by every percentage KPI in the feed. */
+const DEFAULT_ROUNDING =
+  "value = round(numerator ÷ denominator × 100) to 1 decimal place (round half up); reconcile against the raw counts in `details`.";
 
 const KPI_DETAILS: Record<string, KpiDetail> = {
   "QM-KPI-015": {
@@ -701,6 +805,12 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
       "Shows whether WalaPlus is building a real governance system (SOPs, controls), not just running checklists — the foundation all other quality work rests on.",
     plan_ref:
       "Quality Plan → Governance Document Plan; North Star 'Framework Completion' (Q1 40% → Q4 100%).",
+    numerator:
+      "policies WHERE status = 'published' AND (review_date IS NULL OR review_date >= NOW()) — see details.compliant_policies.",
+    denominator: "all rows in policies — see details.total_policies.",
+    scope:
+      "Every policy record in QMS (all business units). Cumulative point-in-time snapshot; not bounded to a month/quarter. If 0 policies are published-and-in-review, the KPI is reported in unavailable[] (not value:0).",
+    rounding: DEFAULT_ROUNDING,
   },
   "QM-KPI-002": {
     description:
@@ -711,6 +821,13 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
       "Ensures consistent internal quality execution and effective closure of audit and process gaps across all business units.",
     plan_ref:
       "Quality Plan → Audit Execution Rate (per-BU quarterly schedule); North Star 'Audit Execution' (Q1 80% → Q4 90%).",
+    numerator:
+      "audits WHERE status IN ('fieldwork_complete','report_draft','report_final','closed','completed') PLUS completed standalone AI-audit runs (audit_runs WHERE status='completed' AND linked_audit_id IS NULL) — see details.completed_audits.",
+    denominator:
+      "all rows in audits PLUS the same completed standalone AI-audit runs — see details.total_audits (details.ai_audit_runs counts the AI runs added to both sides).",
+    scope:
+      "All audits in the register (all BUs) + completed AI-audit runs not linked to a formal audit (to avoid double-counting). NOTE: the implementation currently counts the full audit register, not strictly the current-quarter plan; reported as period_type='quarter' (QTD intent). Confirm with the Leadership definition before relying on strict QTD parity.",
+    rounding: DEFAULT_ROUNDING,
   },
   "QM-KPI-003": {
     description: "Percentage of audit findings / process gaps closed.",
@@ -768,6 +885,12 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
     rationale:
       "Shows regulatory obligations (PDPL / ISO 27001 / NCA / PCI) are governed by controls — the audit-readiness foundation.",
     plan_ref: "Quality ↔ GRC RACI (Compliance → GRC = Accountable).",
+    numerator:
+      "obligations WHERE status='applicable' AND (linked_control_ids non-empty OR linked_policy_ids non-empty) — see details.mapped_obligations.",
+    denominator: "obligations WHERE status='applicable' — see details.total_applicable.",
+    scope:
+      "Applicable obligations only (status='applicable'); non-applicable/exempt obligations excluded. Cumulative point-in-time snapshot. If 0 applicable obligations are mapped, the KPI is reported in unavailable[] (not value:0).",
+    rounding: DEFAULT_ROUNDING,
   },
   "GRC-KPI-003": {
     description:
@@ -832,6 +955,13 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
     rationale:
       "Measures how broadly governance has rolled out across the org (Discovery → Partial → Full).",
     plan_ref: "Quality Plan → BU Coverage Plan (D / P / F per quarter).",
+    numerator:
+      "PREFERRED: mean per-BU completion % from the BU coverage tracker (partial credit; details.source='bu_coverage_tracker'). FALLBACK (tracker empty): COUNT(DISTINCT business_units with ≥1 published policy matched by owner_department) — see details.covered_business_units.",
+    denominator:
+      "the 13 canonical active business_units (Quality Plan 2026 BU Coverage Plan) — see details.total_business_units.",
+    scope:
+      "All 13 canonical BUs. NOTE: when the tracker has data the value is a mean of per-BU completion percentages (NOT a simple covered÷total), so it will not reconcile against a plain count — reconcile against the tracker instead. Cumulative point-in-time snapshot.",
+    rounding: DEFAULT_ROUNDING,
   },
 };
 
@@ -930,6 +1060,8 @@ export interface KpiDefinitionOut extends KpiDetail {
   entry_where: string;
   entry_route: string;
   baseline: number;
+  /** Explicit period basis this KPI's value is computed on (see FeedPeriodType). */
+  period_type: FeedPeriodType;
 }
 
 export interface LeadershipFeed {
@@ -1116,19 +1248,24 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
     methodology: KPI_DETAILS[cfg.code]?.methodology ?? "",
     rationale: KPI_DETAILS[cfg.code]?.rationale ?? "",
     plan_ref: KPI_DETAILS[cfg.code]?.plan_ref ?? "",
+    numerator: KPI_DETAILS[cfg.code]?.numerator ?? "",
+    denominator: KPI_DETAILS[cfg.code]?.denominator ?? "",
+    scope: KPI_DETAILS[cfg.code]?.scope ?? "",
+    rounding: KPI_DETAILS[cfg.code]?.rounding ?? (cfg.unit === "%" ? DEFAULT_ROUNDING : ""),
     entry_where: KPI_ENTRY[cfg.code]?.where ?? "",
     entry_route: KPI_ENTRY[cfg.code]?.route ?? "",
     baseline: BASELINES[cfg.code] ?? 0,
+    period_type: PERIOD_TYPE_BY_CODE[cfg.code] ?? "cumulative",
   }));
 
   for (const cfg of FEED_KPIS) {
     try {
-      const { value, dataAvailable, details } = await cfg.calc();
+      const { value, dataAvailable, details, reason } = await cfg.calc();
       if (!dataAvailable) {
         unavailable.push({
           code: cfg.code,
           name: cfg.name,
-          reason: "no_data_in_qms",
+          reason: reason ?? "no_data_in_qms",
         });
         continue;
       }
@@ -1145,6 +1282,7 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
         progress_pct: progressPct(value, baseline, cfg.target),
         data_available: true,
         period,
+        ...periodFor(cfg.code, now),
         as_of: asOf,
         details,
       });
@@ -1173,10 +1311,18 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
       amber: Math.round(tbl.target * 0.9 * 1000) / 10,
       direction: "higher_is_better",
       ...ns.detail,
+      numerator:
+        "Σ(quarter weight × component actual fraction) over this quarter's component KPIs (a missing component counts as 0).",
+      denominator:
+        "Σ(quarter weight) across the same components (normalised to the weights that have data — see details.weight_with_data).",
+      scope:
+        "Current quarter's component KPIs and weights from the North Star plan; resets each quarter. Composite — not a simple num/den count.",
+      rounding: "value = round(weighted fraction × 100) to 1 decimal place.",
       entry_where:
         "Composite — auto-computed from the KPIs in this scorecard; nothing to enter directly.",
       entry_route: "/leadership-kpis",
       baseline: 0,
+      period_type: PERIOD_TYPE_BY_CODE[ns.code] ?? "quarter",
     });
     let score = 0;
     let weightWithData = 0;
@@ -1212,6 +1358,7 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
       progress_pct: progressPct(value, 0, targetPct),
       data_available: true,
       period,
+      ...periodFor(ns.code, now),
       as_of: asOf,
       details: {
         quarter: `Q${quarter}`,
