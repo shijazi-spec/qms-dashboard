@@ -1499,10 +1499,26 @@ export async function updateZohoRecord(
         logger.error('❌ [ZohoCRM] Failed to update record', { error });
         throw new Error(`Zoho API error: ${response.status} - ${error.message || response.statusText}`);
       }
-      
+
       const data = await response.json();
+      // CRITICAL: Zoho's v2 write API returns HTTP 200 even when the PER-RECORD
+      // operation FAILED — the real outcome is in data[0].code/status. Without
+      // this check a rejected update (DUPLICATE_DATA, INVALID_DATA, a validation
+      // rule, MANDATORY_NOT_FOUND, …) was reported as "Executed successfully"
+      // while NOTHING changed in Zoho. Surface the real Zoho reason instead.
+      const rec = data?.data?.[0];
+      const ok =
+        rec &&
+        (rec.code === 'SUCCESS' ||
+          (typeof rec.status === 'string' && rec.status.toLowerCase() === 'success'));
+      if (rec && !ok) {
+        const apiName = rec?.details?.api_name ? ` [field: ${rec.details.api_name}]` : '';
+        const msg = `Zoho rejected the update: ${rec.code || 'ERROR'} — ${rec.message || 'no message'}${apiName}`;
+        logger.error('❌ [ZohoCRM] Zoho rejected record update', { rec });
+        throw new Error(msg);
+      }
       logger.info('✅ [ZohoCRM] Record updated successfully');
-      return data.data?.[0] || data;
+      return rec || data;
     }
   );
 }
@@ -1535,8 +1551,21 @@ export async function createZohoRecord(
       }
 
       const data = await response.json();
+      // Same per-record guard as updateZohoRecord: Zoho returns HTTP 200/201
+      // even when the create was rejected (DUPLICATE_DATA, INVALID_DATA, …).
+      const rec = data?.data?.[0];
+      const ok =
+        rec &&
+        (rec.code === 'SUCCESS' ||
+          (typeof rec.status === 'string' && rec.status.toLowerCase() === 'success'));
+      if (rec && !ok) {
+        const apiName = rec?.details?.api_name ? ` [field: ${rec.details.api_name}]` : '';
+        const msg = `Zoho rejected the create: ${rec.code || 'ERROR'} — ${rec.message || 'no message'}${apiName}`;
+        logger.error('❌ [ZohoCRM] Zoho rejected record create', { rec });
+        throw new Error(msg);
+      }
       logger.info('✅ [ZohoCRM] Record created successfully');
-      return data.data?.[0]?.details || data.data?.[0] || data;
+      return rec?.details || rec || data;
     }
   );
 }
