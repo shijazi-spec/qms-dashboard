@@ -77,17 +77,15 @@ export const PREFLIGHT_RULE_MODE: "basic" | "full" =
     : "basic";
 
 /**
- * Customer stages for RULE 2 — a deal in any of these (with NO churn date)
- * means the company is a live customer. "Paid" == "Agreement Signed" per the
- * established GRQ business rule; Closed Won / Client Activated / Transferred
- * to CS are the won-and-handed-off equivalents. Compared lowercased.
+ * Customer stages for RULE 2 — a deal in either of these (with NO churn date)
+ * means the company is a live customer. Ahmad 2026-06-18: STRICTLY these two
+ * (Agreement Signed / Paid) — no Closed Won / Client Activated / Transferred-
+ * to-CS equivalents. "Paid" == "Agreement Signed" per the established GRQ
+ * business rule. Compared lowercased.
  */
 export const PF_BASIC_CUSTOMER_STAGES: ReadonlyArray<string> = [
   "agreement signed",
   "paid",
-  "closed won",
-  "client activated",
-  "transferred to cs",
 ];
 
 export interface PreflightInputRow {

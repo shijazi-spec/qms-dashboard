@@ -1124,7 +1124,7 @@
                     </ul>
                     <p class="font-semibold text-slate-900">Rule 2 — is the company already a customer? <span class="font-normal">(only if Rule 1 finds nothing)</span></p>
                     <ul class="list-disc ml-5 space-y-1">
-                        <li><strong>REJECT (existing customer)</strong> — the company <em>domain</em> has a Deal in <em>Agreement Signed / Paid</em> (or the equivalent customer stages) with <strong>no churn date</strong>. Already our customer → do not import; route to CS.</li>
+                        <li><strong>REJECT (existing customer)</strong> — the company <em>domain</em> has a Deal in <em>Agreement Signed</em> or <em>Paid</em> (strictly these two stages) with <strong>no churn date</strong>. Already our customer → do not import; route to CS.</li>
                     </ul>
                     <p class="text-xs text-slate-600">No duplicate email/phone and no signed/paid-no-churn deal on the domain → <strong>PASS</strong> (safe to import).</p>
                     <p class="text-xs text-slate-500 italic">The earlier expanded ruleset (active leads, open deals, closed-lost link, churn cool-off, company-name fuzzy, signal-strength downgrades) is <strong>archived</strong> for now and can be switched back on later.</p>
