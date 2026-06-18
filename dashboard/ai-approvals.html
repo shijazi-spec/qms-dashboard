@@ -771,7 +771,16 @@
                 '<button data-code="' + a.action_code + '" data-act="approve-key" class="px-3 py-1.5 bg-emerald-700 text-white rounded hover:bg-emerald-800 text-xs font-medium">Approve with admin password 🔑</button>' +
                 '<button data-code="' + a.action_code + '" data-act="reject"  class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium ms-1">Reject</button>';
         } else if (a.status === 'executed') {
-            actionsHtml = '<span class="text-xs text-green-700">' + (a.result_entity_id ? '→ ' + escapeHtml(a.result_entity_id) : 'Done') + '</span>';
+            // Show "already applied via APR-…" for a twin auto-closed because an
+            // identical request was the one actually executed (Sarah 2026-06-18).
+            var supNote = '';
+            try {
+                var er = a.execution_result
+                    ? (typeof a.execution_result === 'string' ? JSON.parse(a.execution_result) : a.execution_result)
+                    : null;
+                if (er && er.superseded_by) supNote = ' (already applied via ' + er.superseded_by + ')';
+            } catch (e) { /* ignore */ }
+            actionsHtml = '<span class="text-xs text-green-700">' + (a.result_entity_id ? '→ ' + escapeHtml(a.result_entity_id) : 'Done') + escapeHtml(supNote) + '</span>';
         } else if (a.status === 'rejected') {
             actionsHtml = '<span class="text-xs text-gray-700" title="' + escapeHtml(a.rejection_reason || '') + '">✗ ' + escapeHtml((a.rejection_reason || '').slice(0, 40)) + '</span>';
         } else {

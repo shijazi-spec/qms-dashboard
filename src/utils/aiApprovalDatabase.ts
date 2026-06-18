@@ -946,7 +946,38 @@ export async function recordExecutionResult(
       result.entityId || null,
     ]
   );
-  return res.rows[0] || null;
+  const updated = res.rows[0] || null;
+
+  // AUTO-CLOSE IDENTICAL TWINS (Sarah 2026-06-18): once this action is DONE,
+  // any other still-open request for the exact same action (same tool_id +
+  // payload_checksum) is redundant — the work is already applied. Mark those
+  // twins 'executed' too (NOT re-running the tool — the action happened once)
+  // with a note that they were superseded, so they show as Done instead of
+  // lingering as Pending and throwing "Could not claim approval". Only fires on
+  // a successful execution; best-effort so it never breaks the primary update.
+  if (updated && result.success && (updated as any).payload_checksum) {
+    await pool
+      .query(
+        `UPDATE ai_pending_actions
+            SET status           = 'executed',
+                executed_at      = NOW(),
+                execution_result = $3
+          WHERE tool_id = $1
+            AND payload_checksum = $2
+            AND status IN ('pending', 'approved')
+            AND action_code <> $4`,
+        [
+          (updated as any).tool_id,
+          (updated as any).payload_checksum,
+          JSON.stringify({ superseded_by: code, note: `already applied via ${code} — not re-run` }),
+          code,
+        ],
+      )
+      .catch(() => {
+        /* non-fatal */
+      });
+  }
+  return updated;
 }
 
 /**
