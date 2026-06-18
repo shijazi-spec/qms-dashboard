@@ -5969,7 +5969,13 @@
                 + '<strong class="text-' + tone + '-800">' + data.deleted + ' of ' + data.total + ' tagged records have been deleted in Zoho.</strong>'
                 + (data.alive ? ' <span class="text-' + tone + '-700">' + data.alive + ' still pending admin delete.</span>' : '')
                 + (data.errors ? ' <span class="text-amber-700">' + data.errors + ' could not be verified (Zoho error).</span>' : '')
+                + (data.purged > 0 ? ' <strong class="text-emerald-700">' + data.purged + ' removed from this cluster — refreshing…</strong>' : '')
                 + '</div>';
+            // Deleted records were purged server-side — re-render so the
+            // cluster collapses to the survivor(s) only.
+            if (data.purged > 0 && typeof showClusterDetails === 'function') {
+                setTimeout(function () { showClusterDetails(clusterId); }, 1400);
+            }
             const rows = (data.byRecord || []).map(function (r) {
                 const badge = r.status === 'deleted'
                     ? '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px] font-semibold">DELETED</span>'

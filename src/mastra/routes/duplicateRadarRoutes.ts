@@ -1792,11 +1792,31 @@ export const duplicateRadarRoutes = [
               }
             }),
           );
+          // 2026-06-18 — reconcile like /recheck: records confirmed gone from
+          // Zoho (404) are marked stale_pending and purged, so the cluster
+          // collapses to the survivor(s) instead of listing deleted dupes.
+          let purged = 0;
+          const deletedDbIds = byRecord
+            .filter((x) => x.status === "deleted")
+            .map((x) => x.dbId);
+          if (deletedDbIds.length > 0) {
+            try {
+              await markRecordsStalePendingByIds(deletedDbIds);
+              purged = await cleanupStaleRecords();
+              await cleanupOrphanClusters();
+              await updateClusterStats(id).catch(() => {});
+            } catch (reErr: any) {
+              logger.warn("[DuplicateRadar] verify-tags reconcile skipped:", {
+                error: reErr?.message || String(reErr),
+              });
+            }
+          }
           return c.json({
             total: byRecord.length,
             deleted,
             alive,
             errors,
+            purged,
             byRecord,
           });
         } catch (e: any) {
