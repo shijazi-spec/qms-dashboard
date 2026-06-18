@@ -108,6 +108,19 @@
                        class="border border-gray-300 rounded px-2 py-1 text-sm w-56" />
             </label>
 
+            <!-- Source filter (Sarah 2026-06-18): separate the autonomous
+                 resolver's SHADOW proposals from requests made WITH ADAM in chat. -->
+            <span class="inline-flex items-center gap-1 whitespace-nowrap">
+                <span class="text-xs text-gray-600" data-i18n="ai_approvals.filter_source">Source</span>
+                <select id="fltSource" aria-label="Filter by request source"
+                        data-testid="select-source"
+                        class="border border-gray-300 rounded px-2 py-1 text-sm">
+                    <option value="" data-i18n="ai_approvals.source_any">All sources</option>
+                    <option value="adam" data-i18n="ai_approvals.source_adam">Adam (chat requests)</option>
+                    <option value="autonomous" data-i18n="ai_approvals.source_autonomous">Autonomous (shadow proposals)</option>
+                </select>
+            </span>
+
             <label class="text-xs text-gray-600" data-i18n="ai_approvals.filter_status">Status</label>
             <select id="fltStatus" aria-label="Filter by approval status" class="border border-gray-300 rounded px-2 py-1 text-sm">
                 <!-- Task #618: the five operator-facing status options own
@@ -221,6 +234,14 @@
                       class="hidden ms-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs"
                       title="Pending approvals flagged for credential-shaped values">0</span>
             </label>
+
+            <!-- Bulk-clear the autonomous SHADOW proposals — shown only when the
+                 Source filter is set to Autonomous (Sarah 2026-06-18). These were
+                 never applied to Zoho (shadow), so this only empties the review
+                 backlog; no CRM change. -->
+            <button id="btnClearShadow" type="button"
+                    class="hidden ms-2 px-3 py-2 bg-gray-700 text-white rounded text-sm hover:bg-gray-800"
+                    title="Reject all pending shadow proposals — they were never applied to Zoho; this only clears the review backlog.">🧹 Clear shadow proposals</button>
 
             <div id="summaryCounts" class="ms-auto text-xs text-gray-600 flex gap-3">
                 <span><span data-i18n="ai_approvals.pending">Pending</span>: <b id="cntPending">—</b></span>
@@ -406,6 +427,8 @@
     var fltCredWarn = document.getElementById('fltCredWarn');
     var fltSearch = document.getElementById('fltSearch');
     var fltSort = document.getElementById('fltSort');
+    var fltSource = document.getElementById('fltSource');
+    var btnClearShadow = document.getElementById('btnClearShadow');
     var badgeCredWarn = document.getElementById('badgeCredWarn');
     // Task #619: header-level "drop everything" badge for Critical pile-ups.
     // Threshold defaults to 1 (badge shows for ANY critical action) but can be
@@ -702,6 +725,7 @@
         // Search by APR-code / company / cluster text + date sort (Sarah 2026-06-18).
         if (fltSearch && fltSearch.value.trim()) p.set('search', fltSearch.value.trim());
         if (fltSort && fltSort.value === 'asc') p.set('sort', 'asc');
+        if (fltSource && fltSource.value) p.set('source', fltSource.value);
         p.set('limit', String(PAGE_SIZE));
         p.set('offset', String(pageOffset));
         return p.toString();
@@ -1401,9 +1425,40 @@
         if (pagerNext) pagerNext.disabled = pageOffset + shown >= total;
     }
 
+    // Show the "Clear shadow proposals" button only when the Source filter is
+    // viewing the autonomous shadow proposals.
+    function syncClearShadowBtn() {
+        if (!btnClearShadow) return;
+        var on = fltSource && fltSource.value === 'autonomous';
+        btnClearShadow.classList.toggle('hidden', !on);
+    }
+
+    function clearShadowProposals() {
+        if (!confirm('Reject ALL pending shadow proposals?\n\nThese were never applied to Zoho (shadow mode) — this only empties the review backlog so the queue shows the requests you made with Adam. No CRM changes.')) return;
+        btnClearShadow.disabled = true;
+        var prev = btnClearShadow.textContent;
+        btnClearShadow.textContent = 'Clearing…';
+        fetch('/api/duplicates/autonomous/clear-shadow-proposals', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' }, body: '{}'
+        })
+        .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+        .then(function (res) {
+            if (!res.ok || !res.body.success) throw new Error((res.body && res.body.error) || ('HTTP ' + (res.body && res.body.status)));
+            btnClearShadow.textContent = '✓ Cleared ' + (res.body.cleared || 0);
+            pageOffset = 0;
+            setTimeout(function () { btnClearShadow.textContent = prev; btnClearShadow.disabled = false; load(); }, 1200);
+        })
+        .catch(function (err) {
+            btnClearShadow.textContent = prev; btnClearShadow.disabled = false;
+            alert('Could not clear: ' + (err && err.message || err));
+        });
+    }
+
     // Any filter/search/sort change resets to the first page.
-    function resetAndLoad() { pageOffset = 0; load(); }
-    [fltStatus, fltRisk, fltMine, fltReview, fltSort].forEach(function (el) { if (el) el.addEventListener('change', resetAndLoad); });
+    function resetAndLoad() { pageOffset = 0; syncClearShadowBtn(); load(); }
+    [fltStatus, fltRisk, fltMine, fltReview, fltSort, fltSource].forEach(function (el) { if (el) el.addEventListener('change', resetAndLoad); });
+    if (btnClearShadow) btnClearShadow.addEventListener('click', clearShadowProposals);
     fltCredWarn.addEventListener('change', function () { renderRows(lastRows); });
     if (pagerPrev) pagerPrev.addEventListener('click', function () {
         if (pageOffset <= 0) return;

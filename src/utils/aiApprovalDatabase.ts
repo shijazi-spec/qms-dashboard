@@ -357,7 +357,22 @@ export interface ListFilters {
    * (default), 'asc' = oldest first. Lets the operator flip to "recent ones".
    */
   sort?: 'asc' | 'desc';
+  /**
+   * Source group (Sarah 2026-06-18): separate the autonomous resolver's
+   * SHADOW proposals (tool_id 'duplicate-resolution', queued in bulk by the
+   * 6-hourly cron) from requests made WITH ADAM directly in chat (the gated
+   * write tools — merge/update/link/tag/untag). 'autonomous' = only the
+   * duplicate-resolution proposals; 'adam' = everything else.
+   */
+  sourceGroup?: 'adam' | 'autonomous';
 }
+
+/**
+ * Tool ids produced by the autonomous duplicate resolver (the cron-queued
+ * SHADOW proposals). Everything NOT in this set is treated as an operator/
+ * chat-initiated request ("done with Adam directly").
+ */
+export const AUTONOMOUS_TOOL_IDS = ['duplicate-resolution'] as const;
 
 /**
  * Escape `_` and `%` so a caller-provided prefix string is treated as
@@ -402,6 +417,13 @@ export async function listPendingActions(filters: ListFilters = {}): Promise<{
       params.push(`${escapeLikeLiteral(prefix)}%`);
       where.push(`tool_id NOT LIKE $${params.length} ESCAPE '\\'`);
     }
+  }
+  if (filters.sourceGroup === 'autonomous') {
+    params.push(AUTONOMOUS_TOOL_IDS as unknown as string[]);
+    where.push(`tool_id = ANY($${params.length})`);
+  } else if (filters.sourceGroup === 'adam') {
+    params.push(AUTONOMOUS_TOOL_IDS as unknown as string[]);
+    where.push(`NOT (tool_id = ANY($${params.length}))`);
   }
   if (filters.search && filters.search.trim()) {
     params.push(`%${escapeLikeLiteral(filters.search.trim())}%`);

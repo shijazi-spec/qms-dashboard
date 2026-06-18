@@ -244,6 +244,12 @@ const _aiApprovalRoutesRaw = [
           const search = (url.searchParams.get("search") || "").trim() || undefined;
           const sort =
             url.searchParams.get("sort") === "asc" ? "asc" : "desc";
+          // Source group: 'autonomous' = shadow proposals, 'adam' = chat requests.
+          const sourceParam = url.searchParams.get("source");
+          const sourceGroup =
+            sourceParam === "autonomous" || sourceParam === "adam"
+              ? sourceParam
+              : undefined;
 
           const status = statusParam
             ? (statusParam.split(",").map((s) => s.trim()) as ApprovalStatus[])
@@ -263,6 +269,7 @@ const _aiApprovalRoutesRaw = [
             reviewerUserId: user.userId ?? undefined,
             search,
             sort,
+            sourceGroup,
             limit,
             offset,
             excludeToolIdPrefixes: getExcludedToolIdPrefixes(),
