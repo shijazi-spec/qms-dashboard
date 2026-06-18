@@ -247,6 +247,7 @@ export type TeamScope =
   | "Sales"
   | "Quality"
   | "GRC"
+  | "Legal Specialist"
   | "Viewer"
   | "Other";
 export type ModuleScope = "Leads" | "Deals" | "Accounts" | "Contacts" | "All";
@@ -786,6 +787,13 @@ export async function createDefaultDataScope(
       teamScope = ["SDR", "Sales", "Quality", "GRC"];
       break;
     case "GRC":
+      moduleScope = ["All"];
+      recordScope = "all";
+      break;
+    case "Legal Specialist":
+      // Legal team needs cross-module visibility (contracts, compliance
+      // evidence, vendor records, governance docs). Matches the GRC
+      // scope shape — Legal often partners with GRC on compliance work.
       moduleScope = ["All"];
       recordScope = "all";
       break;
