@@ -1121,8 +1121,9 @@
                     <ul class="list-disc ml-5 space-y-1">
                         <li><strong>BLOCK</strong> — existing customer: a Deal at <em>Agreement Signed / Paid / Closed Won / Client Activated / Transferred to CS</em> with <strong>no churn date</strong>. Do not pursue; route to CS.</li>
                         <li><strong>REVIEW / WARN</strong> — churned customer (same stages but with a churn date): within cool-off (<strong>180 days Private / 365 days Government</strong>) → REVIEW (CS sign-off); past cool-off → WARN (may re-engage, notify CS).</li>
-                        <li><strong>DUPLICATE</strong> — active open Deal (Proposal, Negotiation, Agreement Sent, Awaiting PO…) or active Lead: already in the pipeline → route to the existing owner, don't re-import.</li>
-                        <li><strong>DUPLICATE (low) → LINK</strong> — only Closed-Lost deals on file: Sales may re-engage; link the new lead to the existing Account instead of forking a new record.</li>
+                        <li><strong>DUPLICATE</strong> — active open Deal (Proposal, Negotiation, Agreement Sent, Awaiting PO… — not closed-lost, not signed/paid) or an <strong>active (worked) Lead</strong>: already in the pipeline → route to the existing owner, don't re-import.</li>
+                        <li><strong>DUPLICATE (low) → LINK</strong> — only Closed-Lost deals on file, <em>or</em> a known company whose leads are all <em>cold</em>: Sales may re-engage; link the new lead to the existing Account instead of forking a new record.</li>
+                        <li class="text-xs text-slate-600"><strong>"Active lead" = worked statuses only.</strong> Cold statuses do <u>not</u> reject (the company is still pursuable): <em>New, Attempted to Contact, Not Qualified, Lost, Junk, Bogus, Disqualified, Converted</em>. Only Contacted / Working / Qualified (and similar engaged statuses) count as active.</li>
                     </ul>
                     <p class="font-semibold text-slate-900">Tier 2 — is this exact <u>person</u> already in CRM? <span class="font-normal">(only if Tier 1 finds nothing)</span></p>
                     <ul class="list-disc ml-5 space-y-1">
@@ -1152,6 +1153,7 @@
                              operator's original column structure intact. -->
                         <button data-on-click="downloadPreflightPassRows" id="preflightExportPassBtn" data-testid="button-preflight-export-pass" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">⬇ Download PASS rows</button>
                         <button data-on-click="downloadPreflightFlaggedRows" id="preflightExportFlaggedBtn" data-testid="button-preflight-export-flagged" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700" title="Download ONLY the flagged rows (Block / Review / Warn / Duplicate) as a native Excel file — Company, Contact, Email, Phone, Verdict, Existing Owner, CS Phase, Churn Date, and the Recommended Action. This is the file to send the Head of Sales.">⚑ Download flagged rows (for Head of Sales)</button>
+                        <button data-on-click="downloadPreflightPassRowsXlsx" id="preflightExportPassXlsxBtn" data-testid="button-preflight-export-pass-xlsx" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-700 text-white hover:bg-emerald-800" title="Download the PASS (safe-to-import) rows as a native Excel file — same Summary + Findings design as the flagged export, with Company, Contact, Email, Phone columns.">📊 Download PASS rows (Excel)</button>
                         <!-- Executive toolbar — appears after a successful run. -->
                         <button data-on-click="copyPreflightEmailBody" id="preflightCopyEmailBtn" data-testid="button-preflight-copy-email" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-100 text-blue-900 hover:bg-blue-200" title="Copy a ready-to-paste email body with the run's headline numbers and top reasons.">📋 Copy email body</button>
                         <button data-on-click="openPushToZohoModal" id="preflightPushBtn" data-testid="button-preflight-push" class="hidden px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700" title="Push the PASS rows into Zoho CRM as new Leads on a Layout you pick. Defense in depth: dry-run by default, only PASS rows ever sent, every push audit-logged.">📤 Push PASS rows to Zoho</button>
@@ -9026,25 +9028,25 @@
         // We merge the uploaded file's Contact / Email / Phone columns (keyed
         // by row_index) and let the server emit a proper workbook with the
         // Churn Date column already present — no conversion step, no shifts.
-        async function downloadPreflightFlaggedRows() {
+        // Shared native-.xlsx export (Summary + colour-coded Findings sheets,
+        // built server-side). mode='flagged' → Block/Review/Warn/Duplicate;
+        // mode='pass' → safe-to-import rows, SAME design. SLIM payload: only the
+        // subset's rows + the fields the Findings sheet uses + contacts for only
+        // those row_indexes (avoids the browser freeze + the 1 MB body cap).
+        async function _exportPreflightXlsx(mode) {
+            const isPass = mode === 'pass';
             const data = preflightLastResult || window._preflightLastResult;
             if (!data || !Array.isArray(data.rows)) {
                 alert('Run the preflight Check first.');
                 return;
             }
-            const flagged = data.rows.filter(r => r && r.verdict && r.verdict !== 'pass');
-            if (flagged.length === 0) {
-                alert('No flagged rows (Block / Review / Warn / Duplicate) in the last run — nothing to send.');
+            const subset = data.rows.filter(r => r && r.verdict && (isPass ? r.verdict === 'pass' : r.verdict !== 'pass'));
+            if (subset.length === 0) {
+                alert(isPass ? 'No PASS (safe-to-import) rows in the last run.' : 'No flagged rows (Block / Review / Warn / Duplicate) in the last run — nothing to send.');
                 return;
             }
-            // 2026-06-17 — SLIM the POST. Previously we sent the ENTIRE result
-            // (all ~1,668 rows + a contacts map for every row), which froze the
-            // browser building the JSON and blew past the 1 MB body cap
-            // ("Request body too large"). Now we send ONLY the flagged rows,
-            // ONLY the fields the server's Findings sheet uses, and contacts for
-            // ONLY the flagged row_indexes.
-            const flaggedIdx = new Set(flagged.map(r => r.row_index));
-            const slimRows = flagged.map(r => ({
+            const subsetIdx = new Set(subset.map(r => r.row_index));
+            const slimRows = subset.map(r => ({
                 row_index: r.row_index,
                 verdict: r.verdict,
                 executive_severity: r.executive_severity,
@@ -9073,7 +9075,7 @@
                 top_reasons: data.top_reasons,
                 rows: slimRows,
             };
-            // Contacts only for the flagged rows (keyed by row_index).
+            // Contacts only for the subset's rows (keyed by row_index).
             const contacts = {};
             if (preflightLastUpload && Array.isArray(preflightLastUpload.originalRows)) {
                 const pick = (obj, keys) => {
@@ -9085,7 +9087,7 @@
                     return '';
                 };
                 preflightLastUpload.originalRows.forEach((o, idx) => {
-                    if (!flaggedIdx.has(idx)) return;
+                    if (!subsetIdx.has(idx)) return;
                     o = o || {};
                     const name = pick(o, ['fullname','name','contactname'])
                         || [pick(o, ['firstname']), pick(o, ['lastname'])].filter(Boolean).join(' ').trim();
@@ -9096,14 +9098,16 @@
                     };
                 });
             }
-            const btn = document.getElementById('preflightExportFlaggedBtn');
+            const btn = document.getElementById(isPass ? 'preflightExportPassXlsxBtn' : 'preflightExportFlaggedBtn');
             const orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = 'Building…'; }
             try {
+                const body = { result: slimResult, contacts: contacts };
+                if (isPass) body.passOnly = true; else body.flaggedOnly = true;
                 const res = await fetch('/api/duplicates/preflight/export-xlsx', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ result: slimResult, flaggedOnly: true, contacts: contacts }),
+                    body: JSON.stringify(body),
                 });
                 if (!res.ok) {
                     const e = await res.json().catch(() => ({}));
@@ -9113,16 +9117,18 @@
                 const baseName = (preflightLastUpload && preflightLastUpload.fileName ? preflightLastUpload.fileName : 'preflight').replace(/\.[^.]+$/, '');
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = baseName + '__FLAGGED__' + flagged.length + '.xlsx';
+                a.download = baseName + (isPass ? '__PASS__' : '__FLAGGED__') + subset.length + '.xlsx';
                 document.body.appendChild(a);
                 a.click();
                 setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 100);
             } catch (e) {
-                alert('Flagged export failed: ' + (e.message || e));
+                alert((isPass ? 'PASS' : 'Flagged') + ' export failed: ' + (e.message || e));
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
         }
+        async function downloadPreflightFlaggedRows() { return _exportPreflightXlsx('flagged'); }
+        async function downloadPreflightPassRowsXlsx() { return _exportPreflightXlsx('pass'); }
 
         function clearPreflight() {
             document.getElementById('preflightInput').value = '';
@@ -9142,6 +9148,8 @@
             if (exportBtn) exportBtn.classList.add('hidden');
             const flaggedBtn = document.getElementById('preflightExportFlaggedBtn');
             if (flaggedBtn) flaggedBtn.classList.add('hidden');
+            const passXlsxBtn = document.getElementById('preflightExportPassXlsxBtn');
+            if (passXlsxBtn) passXlsxBtn.classList.add('hidden');
         }
 
         // Replit's gateway returns HTTP 504 if a single request runs past
@@ -9330,6 +9338,19 @@
                         flaggedBtn.textContent = '⚑ Download ' + flaggedCount + ' flagged row(s) — for Head of Sales';
                     } else {
                         flaggedBtn.classList.add('hidden');
+                    }
+                }
+                // PASS Excel report button — same design as the flagged export,
+                // for the safe-to-import rows. Shown whenever there are PASS rows.
+                const passXlsxBtn = document.getElementById('preflightExportPassXlsxBtn');
+                if (passXlsxBtn) {
+                    const passCount = (data && data.summary && typeof data.summary.pass === 'number')
+                        ? data.summary.pass : 0;
+                    if (passCount > 0) {
+                        passXlsxBtn.classList.remove('hidden');
+                        passXlsxBtn.textContent = '📊 Download ' + passCount + ' PASS row(s) (Excel)';
+                    } else {
+                        passXlsxBtn.classList.add('hidden');
                     }
                 }
             } catch (e) {

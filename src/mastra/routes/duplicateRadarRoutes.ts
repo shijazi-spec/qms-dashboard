@@ -7605,12 +7605,17 @@ export const duplicateRadarRoutes = [
           // the CSV→Excel conversion that was shifting cells / dropping the
           // header on the client-built file.
           const flaggedOnly = body?.flaggedOnly === true;
+          const passOnly = body?.passOnly === true;
           const contacts =
             body?.contacts && typeof body.contacts === "object"
               ? body.contacts
               : null;
           const rowsToEmit = (Array.isArray(result.rows) ? result.rows : []).filter(
-            (r: any) => (flaggedOnly ? r && r.verdict && r.verdict !== "pass" : true),
+            (r: any) => {
+              if (flaggedOnly) return r && r.verdict && r.verdict !== "pass";
+              if (passOnly) return r && r.verdict === "pass";
+              return true;
+            },
           );
 
           const ExcelJS = (await import("exceljs")).default;
