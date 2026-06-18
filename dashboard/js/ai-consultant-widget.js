@@ -276,7 +276,7 @@
                     ${widgetTitle}
                 </h3>
                 <div class="aiw-header-row">
-                    <a href="/consultant.html" class="widget-expand-link" data-testid="link-expand-consultant">
+                    <a href="/consultant.html" target="_blank" rel="noopener" class="widget-expand-link" data-testid="link-expand-consultant">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="icon-14"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
                         ${fullView}
                     </a>
@@ -448,14 +448,17 @@
             var svgEl2 = expandLink.querySelector('svg');
             var svgHTML2 = svgEl2 ? svgEl2.outerHTML : '';
             expandLink.innerHTML = svgHTML2 + ' ' + _t('consultant.full_view', 'Full view');
-            // Carry the CURRENT widget conversation into the full page so it
-            // doesn't "disappear" on expand. The full page adopts ?thread=.
+            // Open the full conversation in a NEW TAB (Sarah 2026-06-18) so the
+            // page the widget is floating over (e.g. Duplicates Radar) isn't
+            // lost. Carry the CURRENT widget conversation across via ?thread= so
+            // it doesn't "disappear" on expand — the full page adopts it.
             expandLink.addEventListener('click', function (e) {
+                e.preventDefault();
                 var tid = sessionStorage.getItem('widget_consultant_threadId');
-                if (tid) {
-                    e.preventDefault();
-                    window.location.href = '/consultant.html?thread=' + encodeURIComponent(tid);
-                }
+                var url = tid
+                    ? '/consultant.html?thread=' + encodeURIComponent(tid)
+                    : '/consultant.html';
+                window.open(url, '_blank', 'noopener');
             });
         }
         var wTitle = widget.querySelector('#ai-widget-welcome h4');
