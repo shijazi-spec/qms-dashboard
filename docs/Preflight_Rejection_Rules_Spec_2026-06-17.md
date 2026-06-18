@@ -1,7 +1,17 @@
-# Preflight Rejection Rules — Specification (DRAFT for review)
+# Preflight Rejection Rules — Specification
+
+> **⚠️ ARCHIVED — NOT the active ruleset (Ahmad 2026-06-18).** Preflight was
+> simplified to **BASIC mode** — only two foundational rules run:
+> **Rule 1** contact duplicate (email or phone already in CRM → `duplicate`);
+> **Rule 2** (only if Rule 1 finds nothing) the company domain has a deal in
+> Agreement Signed / Paid (customer stage) with **no churn date** → `block`;
+> otherwise `pass`. The full ladder specified below is kept in code behind
+> `PREFLIGHT_RULE_MODE=full` and may be re-enabled later. See
+> `basicPreflightVerdict()` / `runPreflightBasic()` in
+> `src/utils/duplicateRadarPreflight.ts`.
 
 **Author:** Ahmad / Sarah (GRQ), drafted with Adam · 2026-06-17
-**Status:** DRAFT — awaiting sign-off. Nothing is implemented from this doc yet.
+**Status:** Superseded by BASIC mode 2026-06-18 (full ladder archived, re-enablable).
 **Applies to:** Duplicate Radar → Preflight Check (pre-import screening of marketing/vendor lead lists before they enter Zoho CRM).
 
 ---

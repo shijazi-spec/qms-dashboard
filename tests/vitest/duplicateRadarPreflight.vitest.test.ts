@@ -16,6 +16,7 @@ import {
   resolveCompany,
   shouldCreateForVerdict,
   buildClusterFromRecords,
+  basicPreflightVerdict,
   type PreflightClusterRow,
   type PreflightRowMatch,
   type PreflightRecordRow,
@@ -453,5 +454,39 @@ describe("resolveCompany — generic-name blacklist", () => {
   });
   test("keeps a real company name", () => {
     expect(resolveCompany({ company_name: "Saudi Aramco" })).not.toBeNull();
+  });
+});
+
+describe("basicPreflightVerdict — the two foundational rules (2026-06-18)", () => {
+  test("RULE 1 — duplicate contact by email → reject", () => {
+    const v = basicPreflightVerdict({ contactVia: "email", isCustomerDomain: false });
+    expect(v.verdict).toBe("duplicate");
+    expect(v.reason).toBe("contact_duplicate_email");
+    expect(v.executive_severity).toBe("high");
+    expect(v.executive_action).toMatch(/REJECT/i);
+  });
+
+  test("RULE 1 — duplicate contact by phone → reject", () => {
+    const v = basicPreflightVerdict({ contactVia: "phone", isCustomerDomain: false });
+    expect(v.verdict).toBe("duplicate");
+    expect(v.reason).toBe("contact_duplicate_phone");
+  });
+
+  test("RULE 1 takes precedence over RULE 2", () => {
+    const v = basicPreflightVerdict({ contactVia: "email", isCustomerDomain: true });
+    expect(v.verdict).toBe("duplicate");
+  });
+
+  test("RULE 2 — existing customer domain (no contact dup) → block", () => {
+    const v = basicPreflightVerdict({ contactVia: null, isCustomerDomain: true });
+    expect(v.verdict).toBe("block");
+    expect(v.reason).toBe("existing_customer_signed_or_paid");
+    expect(v.executive_severity).toBe("critical");
+  });
+
+  test("neither rule → pass", () => {
+    const v = basicPreflightVerdict({ contactVia: null, isCustomerDomain: false });
+    expect(v.verdict).toBe("pass");
+    expect(v.executive_action).toBe("Safe to import.");
   });
 });

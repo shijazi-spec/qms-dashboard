@@ -54,6 +54,42 @@ export type PreflightVerdict =
   | "duplicate"
   | "pass";
 
+/**
+ * Preflight rule mode (Ahmad 2026-06-18).
+ *
+ *   "basic" (default) — only the two foundational rules run:
+ *     RULE 1  contact duplicate — the row's email OR phone already exists
+ *             on any CRM record → REJECT (verdict "duplicate").
+ *     RULE 2  existing customer — only if RULE 1 found nothing, the
+ *             company domain has a deal in Agreement Signed / Paid (or the
+ *             equivalent customer stages) WITH NO churn date → REJECT
+ *             (verdict "block"). Everything else PASSES.
+ *
+ *   "full" — the rich verdict ladder (active leads, active deals, closed-
+ *     lost link, churn cool-off review/warn, known-company link, signal-
+ *     strength downgrades, fuzzy / company-name paths). ARCHIVED for now —
+ *     kept intact behind this flag so we can re-enable it later without a
+ *     rewrite. Set env PREFLIGHT_RULE_MODE=full to switch back.
+ */
+export const PREFLIGHT_RULE_MODE: "basic" | "full" =
+  (process.env.PREFLIGHT_RULE_MODE || "").toLowerCase() === "full"
+    ? "full"
+    : "basic";
+
+/**
+ * Customer stages for RULE 2 — a deal in any of these (with NO churn date)
+ * means the company is a live customer. "Paid" == "Agreement Signed" per the
+ * established GRQ business rule; Closed Won / Client Activated / Transferred
+ * to CS are the won-and-handed-off equivalents. Compared lowercased.
+ */
+export const PF_BASIC_CUSTOMER_STAGES: ReadonlyArray<string> = [
+  "agreement signed",
+  "paid",
+  "closed won",
+  "client activated",
+  "transferred to cs",
+];
+
 export interface PreflightInputRow {
   domain?: string | null;
   email?: string | null;
@@ -1317,6 +1353,289 @@ async function queryWithTimeout<T = any>(
   }
 }
 
+/**
+ * Pure verdict for BASIC mode — the two foundational rules, in order.
+ * RULE 1 (contact duplicate) takes precedence over RULE 2 (existing
+ * customer). Kept pure + exported so the unit tests can pin the wording.
+ */
+export function basicPreflightVerdict(input: {
+  /** Set when the row's email/phone hit an existing CRM record. */
+  contactVia: "email" | "phone" | null;
+  /** True iff the row's domain has a signed/paid deal with no churn date. */
+  isCustomerDomain: boolean;
+}): {
+  verdict: PreflightVerdict;
+  reason: string;
+  suggested_action: string;
+  executive_action: string;
+  executive_severity: PreflightResultRow["executive_severity"];
+} {
+  if (input.contactVia) {
+    const via = input.contactVia === "email" ? "email address" : "phone number";
+    return {
+      verdict: "duplicate",
+      reason: "contact_duplicate_" + input.contactVia,
+      suggested_action:
+        "This contact's " +
+        via +
+        " already exists on a CRM record. Do not import — it is a duplicate.",
+      executive_action:
+        "REJECT — duplicate contact: this " +
+        via +
+        " is already in the CRM. Do not re-import.",
+      executive_severity: "high",
+    };
+  }
+  if (input.isCustomerDomain) {
+    return {
+      verdict: "block",
+      reason: "existing_customer_signed_or_paid",
+      suggested_action:
+        "This company's domain already has a deal in Agreement Signed / Paid with no churn date — it is an existing customer. Do not import; route to Customer Success.",
+      executive_action:
+        "REJECT — existing customer: this company already has a signed / paid deal (no churn). Do not re-import; coordinate with CS.",
+      executive_severity: "critical",
+    };
+  }
+  return {
+    verdict: "pass",
+    reason: "safe_to_import",
+    suggested_action:
+      "No duplicate contact (email / phone) and not an existing customer — safe to import.",
+    executive_action: "Safe to import.",
+    executive_severity: "info",
+  };
+}
+
+/**
+ * BASIC mode runner (Ahmad 2026-06-18) — see PREFLIGHT_RULE_MODE. Two SQL
+ * passes over duplicate_records (corporate-scope only, marketplace excluded):
+ *   1) contact-identity match by email OR phone (any record type);
+ *   2) customer-domain match (deal in a customer stage, no churn date).
+ * Then a per-row verdict via basicPreflightVerdict(). The archived "full"
+ * ladder is left untouched below.
+ */
+async function runPreflightBasic(input: {
+  rows: PreflightInputRow[];
+  max_check?: number;
+}): Promise<PreflightResponse> {
+  const cap = Math.max(1, Math.min(input.max_check ?? 5000, 10000));
+  const rows = input.rows ?? [];
+  const examineCount = Math.min(rows.length, cap);
+
+  const emailByRow = new Map<number, string>();
+  const phoneByRow = new Map<number, string>();
+  const domainByRow = new Map<number, string>();
+  const emailSet = new Set<string>();
+  const phoneSet = new Set<string>();
+  const domainSet = new Set<string>();
+  for (let i = 0; i < examineCount; i++) {
+    const r = rows[i]!;
+    const email = (r.email || "").trim().toLowerCase();
+    if (email && email.includes("@")) {
+      emailByRow.set(i, email);
+      emailSet.add(email);
+    }
+    const p = resolvePhone(r);
+    if (p) {
+      phoneByRow.set(i, p);
+      phoneSet.add(p);
+    }
+    const d = resolveDomain(r);
+    if (d) {
+      domainByRow.set(i, d);
+      domainSet.add(d);
+    }
+  }
+
+  const CORPORATE_SQL =
+    "(record_type = 'contact' " +
+    `OR LOWER(COALESCE(layout_name, '')) NOT IN (${MERCHANT_LAYOUTS_SQL}) ` +
+    "OR LOWER(COALESCE(account_type, '')) = 'customer' " +
+    "OR LOWER(COALESCE(lead_type, '')) = 'customer')";
+
+  // RULE 1 — contact duplicate by email OR phone.
+  const matchedEmails = new Map<string, any>();
+  const matchedPhones = new Map<string, any>();
+  if (emailSet.size > 0 || phoneSet.size > 0) {
+    const q = await queryWithTimeout<any>(
+      `SELECT LOWER(email) AS email, phone_normalized, mobile_normalized,
+              record_type, owner_name, record_name, company_name, zoho_record_id
+         FROM duplicate_records
+        WHERE ${CORPORATE_SQL}
+          AND (
+            (email IS NOT NULL AND LOWER(email) = ANY($1::text[]))
+            OR phone_normalized  = ANY($2::text[])
+            OR mobile_normalized = ANY($2::text[])
+          )
+        LIMIT 20000`,
+      [Array.from(emailSet), Array.from(phoneSet)],
+    );
+    for (const r of (q?.rows ?? [])) {
+      const em = (r.email || "").trim().toLowerCase();
+      if (em && !matchedEmails.has(em)) matchedEmails.set(em, r);
+      const pn = (r.phone_normalized || "").trim();
+      if (pn && !matchedPhones.has(pn)) matchedPhones.set(pn, r);
+      const mn = (r.mobile_normalized || "").trim();
+      if (mn && !matchedPhones.has(mn)) matchedPhones.set(mn, r);
+    }
+  }
+
+  // RULE 2 — existing-customer domain (signed/paid deal, no churn date).
+  const customerDomains = new Map<string, any>();
+  if (domainSet.size > 0) {
+    const q = await queryWithTimeout<any>(
+      `SELECT LOWER(domain) AS domain, owner_name, record_name, zoho_record_id,
+              raw_data->>'Stage' AS stage
+         FROM duplicate_records
+        WHERE record_type = 'deal'
+          AND domain IS NOT NULL AND LOWER(domain) = ANY($1::text[])
+          AND LOWER(COALESCE(raw_data->>'Stage','')) = ANY($2::text[])
+          AND NULLIF(raw_data->>'Churn_Date','') IS NULL
+          AND ${CORPORATE_SQL}
+        LIMIT 20000`,
+      [Array.from(domainSet), PF_BASIC_CUSTOMER_STAGES as string[]],
+    );
+    for (const r of (q?.rows ?? [])) {
+      const dom = (r.domain || "").trim().toLowerCase();
+      if (dom && !customerDomains.has(dom)) customerDomains.set(dom, r);
+    }
+  }
+
+  const moduleOf = (rt: string | null | undefined): "Leads" | "Deals" | "Contacts" | "Accounts" => {
+    const t = (rt || "").toLowerCase();
+    if (t === "lead") return "Leads";
+    if (t === "deal") return "Deals";
+    if (t === "account") return "Accounts";
+    return "Contacts";
+  };
+
+  const out: PreflightResultRow[] = [];
+  const summary: PreflightSummary = { block: 0, review: 0, warn: 0, duplicate: 0, pass: 0 };
+  let skipped = 0;
+
+  for (let i = 0; i < examineCount; i++) {
+    const r = rows[i]!;
+    const email = emailByRow.get(i) ?? null;
+    const phone = phoneByRow.get(i) ?? null;
+    const domain = domainByRow.get(i) ?? null;
+
+    // No resolvable identity at all → can't screen it.
+    if (!email && !phone && !domain) {
+      skipped++;
+      continue;
+    }
+
+    const contactRec =
+      (email && matchedEmails.get(email)) ||
+      (phone && matchedPhones.get(phone)) ||
+      null;
+    const contactVia: "email" | "phone" | null = contactRec
+      ? email && matchedEmails.has(email)
+        ? "email"
+        : "phone"
+      : null;
+    const customerRec = domain ? customerDomains.get(domain) ?? null : null;
+    const isCustomerDomain = !!customerRec;
+
+    const v = basicPreflightVerdict({ contactVia, isCustomerDomain });
+    summary[v.verdict]++;
+
+    const owners: string[] = [];
+    let crmLinks: PreflightResultRow["crm_links"] = null;
+    if (v.verdict === "duplicate" && contactRec) {
+      if (contactRec.owner_name) owners.push(contactRec.owner_name);
+      const mod = moduleOf(contactRec.record_type);
+      if (contactRec.zoho_record_id && mod !== "Contacts") {
+        const link = {
+          url: buildZohoRecordUrl(mod, contactRec.zoho_record_id),
+          label: (contactRec.record_name || "").trim() || contactRec.zoho_record_id,
+        };
+        crmLinks = {
+          active_lead: mod === "Leads" ? link : null,
+          active_deal: mod === "Deals" ? link : null,
+          client_deal: null,
+          account: mod === "Accounts" ? link : null,
+        };
+      }
+    } else if (v.verdict === "block" && customerRec) {
+      if (customerRec.owner_name) owners.push(customerRec.owner_name);
+      if (customerRec.zoho_record_id) {
+        crmLinks = {
+          active_lead: null,
+          active_deal: null,
+          client_deal: {
+            url: buildZohoRecordUrl("Deals", customerRec.zoho_record_id),
+            label: (customerRec.record_name || "").trim() || customerRec.zoho_record_id,
+          },
+          account: null,
+        };
+      }
+    }
+
+    out.push({
+      row_index: i,
+      ref: r.ref ?? null,
+      input: { domain, company_name: r.company_name ?? null },
+      verdict: v.verdict,
+      cluster_id: null,
+      lifecycle_state: null,
+      sector: null,
+      arr_exposure: null,
+      owners,
+      reason: v.reason,
+      suggested_action: v.suggested_action,
+      module_counts: null,
+      matched_via: contactVia ? contactVia : isCustomerDomain ? "domain" : null,
+      executive_action: v.executive_action,
+      executive_severity: v.executive_severity,
+      churn_date: null,
+      churn_days: null,
+      cs_owner: v.verdict === "block" && customerRec?.owner_name ? customerRec.owner_name : null,
+      crm_links: crmLinks,
+    });
+  }
+
+  const reasonBuckets = new Map<string, number>();
+  for (const r of out) {
+    if (r.verdict === "duplicate") {
+      reasonBuckets.set(
+        "Duplicate contact (email / phone) already in CRM",
+        (reasonBuckets.get("Duplicate contact (email / phone) already in CRM") ?? 0) + 1,
+      );
+    } else if (r.verdict === "block") {
+      reasonBuckets.set(
+        "Existing customer — signed / paid deal, no churn",
+        (reasonBuckets.get("Existing customer — signed / paid deal, no churn") ?? 0) + 1,
+      );
+    }
+  }
+  const topReasons: PreflightTopReason[] = Array.from(reasonBuckets.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([label, count]) => ({
+      label,
+      count,
+      pct: examineCount > 0 ? Math.round((count / examineCount) * 1000) / 10 : 0,
+    }));
+
+  const actionable = summary.block + summary.duplicate;
+  const pctActionable =
+    examineCount > 0 ? Math.round((actionable / examineCount) * 1000) / 10 : 0;
+
+  return {
+    total_rows: rows.length,
+    examined: examineCount,
+    skipped,
+    summary,
+    total_arr_exposure_blocked: 0,
+    rows: out,
+    top_reasons: topReasons,
+    generated_at: new Date().toISOString(),
+    pct_actionable: pctActionable,
+  };
+}
+
 export async function runPreflight(input: {
   rows: PreflightInputRow[];
   max_check?: number;
@@ -1330,6 +1649,12 @@ export async function runPreflight(input: {
    */
   refresh_overlap?: boolean;
 }): Promise<PreflightResponse> {
+  // BASIC mode (default) — only the two foundational rules. The rich ladder
+  // below is archived behind PREFLIGHT_RULE_MODE=full.
+  if (PREFLIGHT_RULE_MODE === "basic") {
+    return runPreflightBasic({ rows: input.rows, max_check: input.max_check });
+  }
+
   const cap = Math.max(1, Math.min(input.max_check ?? 5000, 10000));
   const rows = input.rows ?? [];
   const examineCount = Math.min(rows.length, cap);

@@ -1117,20 +1117,17 @@
                 <summary class="cursor-pointer font-semibold text-slate-900">📋 How a row is screened — rejection rules (click to expand)</summary>
                 <div class="mt-2 space-y-2">
                     <p><strong>Scope:</strong> corporate / B2B only. Marketplace &amp; merchant records (layouts <code>Marketplace</code> / <code>Partner Accounts</code>) are out of scope and pass through.</p>
-                    <p class="font-semibold text-slate-900">Tier 1 — is the <u>company</u> already ours? <span class="font-normal">(matched by website / domain → corporate phone → company name; checked against all CRM records, not just clusters)</span></p>
+                    <p class="text-xs text-slate-600">Two basic rules run, in order. A row is rejected on the <u>first</u> one it hits; if neither hits, it <strong>PASSES</strong>.</p>
+                    <p class="font-semibold text-slate-900">Rule 1 — is this contact a duplicate? <span class="font-normal">(checked first)</span></p>
                     <ul class="list-disc ml-5 space-y-1">
-                        <li><strong>BLOCK</strong> — existing customer: a Deal at <em>Agreement Signed / Paid / Closed Won / Client Activated / Transferred to CS</em> with <strong>no churn date</strong>. Do not pursue; route to CS.</li>
-                        <li><strong>REVIEW / WARN</strong> — churned customer (same stages but with a churn date): within cool-off (<strong>180 days Private / 365 days Government</strong>) → REVIEW (CS sign-off); past cool-off → WARN (may re-engage, notify CS).</li>
-                        <li><strong>DUPLICATE</strong> — active open Deal (Proposal, Negotiation, Agreement Sent, Awaiting PO… — not closed-lost, not signed/paid) or an <strong>active (worked) Lead</strong>: already in the pipeline → route to the existing owner, don't re-import.</li>
-                        <li><strong>DUPLICATE (low) → LINK</strong> — only Closed-Lost deals on file, <em>or</em> a known company whose leads are all <em>cold</em>: Sales may re-engage; link the new lead to the existing Account instead of forking a new record.</li>
-                        <li class="text-xs text-slate-600"><strong>"Active lead" = worked statuses only.</strong> Cold statuses do <u>not</u> reject (the company is still pursuable): <em>New, Attempted to Contact, Not Qualified, Lost, Junk, Bogus, Disqualified, Converted</em>. Only Contacted / Working / Qualified (and similar engaged statuses) count as active.</li>
+                        <li><strong>REJECT (duplicate)</strong> — the row's <em>email</em> <strong>or</strong> <em>phone number</em> already exists on any CRM record. The contact is already on file → do not import.</li>
                     </ul>
-                    <p class="font-semibold text-slate-900">Tier 2 — is this exact <u>person</u> already in CRM? <span class="font-normal">(only if Tier 1 finds nothing)</span></p>
+                    <p class="font-semibold text-slate-900">Rule 2 — is the company already a customer? <span class="font-normal">(only if Rule 1 finds nothing)</span></p>
                     <ul class="list-disc ml-5 space-y-1">
-                        <li><strong>DUPLICATE</strong> — contact <em>email (exact)</em> already on file: update the existing record, don't create a new one.</li>
-                        <li><strong>REVIEW</strong> — only the <em>mobile / second phone</em> matches (no email): likely the same person, but verify before importing.</li>
+                        <li><strong>REJECT (existing customer)</strong> — the company <em>domain</em> has a Deal in <em>Agreement Signed / Paid</em> (or the equivalent customer stages) with <strong>no churn date</strong>. Already our customer → do not import; route to CS.</li>
                     </ul>
-                    <p class="text-xs text-slate-600"><strong>Match reliability:</strong> website/domain &amp; exact email are strong (confident). Phone and company-name are weaker — a single weak signal, or a match into an oversized catch-all cluster, is downgraded to <strong>REVIEW</strong> (verify by hand) and the matched record's churn/CS data is withheld, so it never shows another company's churn date. Free-mail (gmail/hotmail) is never used to identify a company. No match → <strong>PASS</strong> (safe to import).</p>
+                    <p class="text-xs text-slate-600">No duplicate email/phone and no signed/paid-no-churn deal on the domain → <strong>PASS</strong> (safe to import).</p>
+                    <p class="text-xs text-slate-500 italic">The earlier expanded ruleset (active leads, open deals, closed-lost link, churn cool-off, company-name fuzzy, signal-strength downgrades) is <strong>archived</strong> for now and can be switched back on later.</p>
                 </div>
             </details>
 
