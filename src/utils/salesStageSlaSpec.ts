@@ -43,6 +43,23 @@ export interface StageSlaSpec {
 const DEFAULT_WARN_MULTIPLIER = 1.0;
 const DEFAULT_CRIT_MULTIPLIER = 1.5;
 
+/**
+ * Catch-all SLA (2026-06-18, Ahmad) for ANY OPEN stage that has no explicit
+ * SOP duration — so a deal parked in a non-SOP stage (Qualification,
+ * Negotiation, Awaiting PO, a custom pipeline stage, …) for months is still
+ * surfaced, not silently ignored. Terminal stages (Agreement Signed / Paid /
+ * Closed Won / Closed Lost) still freeze and never use this. Generic watch:
+ * warning at 90 calendar days, critical past 135 (1.5×). Tune `sla` here.
+ */
+export const DEFAULT_OPEN_STAGE_SLA: StageSlaSpec = {
+  stage: "*",
+  unit: "calendar_days",
+  sla: 90,
+  clauseRef: "—",
+  description:
+    "No SOP-defined duration for this stage — generic stuck-deal watch (90 days).",
+};
+
 export const SALES_STAGE_SLA_SPEC: ReadonlyArray<StageSlaSpec> = [
   {
     stage: "Not Attend Meeting",
@@ -206,17 +223,10 @@ export function gradeStageAging(
       isUnknownStage: false,
     };
   }
-  const spec = getStageSlaSpec(stage);
-  if (!spec) {
-    return {
-      severity: "info",
-      slaUnits: null,
-      warnThreshold: null,
-      critThreshold: null,
-      isTerminal: false,
-      isUnknownStage: true,
-    };
-  }
+  // Non-terminal stages with no explicit SOP duration fall back to the
+  // generic catch-all SLA so a deal stuck in any open stage is still graded.
+  const specced = getStageSlaSpec(stage);
+  const spec = specced ?? DEFAULT_OPEN_STAGE_SLA;
   const warnThreshold = spec.warnDays ?? spec.sla * (spec.warnBandMultiplier ?? DEFAULT_WARN_MULTIPLIER);
   const critThreshold = spec.critDays ?? spec.sla * (spec.critBandMultiplier ?? DEFAULT_CRIT_MULTIPLIER);
   let severity: StageAgingSeverity = "info";
@@ -228,7 +238,7 @@ export function gradeStageAging(
     warnThreshold,
     critThreshold,
     isTerminal: false,
-    isUnknownStage: false,
+    isUnknownStage: !specced,
   };
 }
 

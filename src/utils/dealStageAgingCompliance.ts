@@ -21,6 +21,7 @@ import {
   gradeStageAging,
   isTerminalSalesStage,
   measureAging,
+  DEFAULT_OPEN_STAGE_SLA,
 } from "./salesStageSlaSpec";
 
 export type DealStageAgingCode =
@@ -100,19 +101,24 @@ export function evaluateDealStageAging(
     };
   }
 
+  // Terminal stages freeze (deal is done — no aging). Any OTHER open stage that
+  // has no explicit SOP duration falls back to the generic catch-all SLA so a
+  // deal stuck there for months is still flagged (2026-06-18, Ahmad).
   const terminal = isTerminalSalesStage(stage);
-  const spec = getStageSlaSpec(stage);
-  if (terminal || !spec) {
+  if (terminal) {
     return {
-      is_tracked_stage: !!spec,
-      is_terminal: terminal,
+      is_tracked_stage: false,
+      is_terminal: true,
       current_stage: stage,
       aging_calendar_days: null,
       aging_units: null,
-      unit: spec?.unit ?? null,
+      unit: null,
       violation: null,
     };
   }
+  const specced = getStageSlaSpec(stage);
+  const spec = specced ?? DEFAULT_OPEN_STAGE_SLA;
+  const usingDefault = !specced;
 
   const enteredAt =
     input.entered_stage_at ?? input.modified_date ?? input.created_time ?? null;
@@ -148,10 +154,13 @@ export function evaluateDealStageAging(
           ? ` (past critical threshold of ${grade.critThreshold} ${unitLabel})`
           : ""
         : "";
+    const slaSource = usingDefault
+      ? `no Sales SOP duration is defined for this stage — generic ${spec.sla}-day stuck-deal watch`
+      : `Sales SOP §${spec.clauseRef} allows ${slaLabel}`;
     violation = {
       code,
       severity: grade.severity,
-      message: `Deal in stage "${stage}" has aged ${aging.agingUnits} ${unitLabel} — Sales SOP §${spec.clauseRef} allows ${slaLabel}${bandNote}.`,
+      message: `Deal in stage "${stage}" has aged ${aging.agingUnits} ${unitLabel} — ${slaSource}${bandNote}.`,
       stage,
       unit: aging.unit,
       aging_units: aging.agingUnits,

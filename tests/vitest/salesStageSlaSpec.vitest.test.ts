@@ -187,12 +187,26 @@ describe("gradeStageAging — severity bands", () => {
     expect(g.isTerminal).toBe(true);
   });
 
-  test("unknown stage returns info + isUnknownStage flag", () => {
-    const at = { unit: "calendar_days" as const, agingUnits: 100, agingCalendarDays: 100 };
-    const g = gradeStageAging("Discovery", at);
+  test("unknown OPEN stage uses the catch-all 90/135 default (isUnknownStage flag stays)", () => {
+    // 2026-06-18 — a non-SOP open stage is no longer ignored: it grades against
+    // the generic 90-day watch so a deal stuck there is still surfaced.
+    const within = gradeStageAging("Discovery", { unit: "calendar_days", agingUnits: 80, agingCalendarDays: 80 });
+    expect(within.severity).toBe("info");
+    expect(within.isUnknownStage).toBe(true);
+    expect(within.slaUnits).toBe(90);
+
+    const warn = gradeStageAging("Discovery", { unit: "calendar_days", agingUnits: 100, agingCalendarDays: 100 });
+    expect(warn.severity).toBe("warning");
+    expect(warn.isUnknownStage).toBe(true);
+
+    const crit = gradeStageAging("Discovery", { unit: "calendar_days", agingUnits: 200, agingCalendarDays: 200 });
+    expect(crit.severity).toBe("critical");
+  });
+
+  test("terminal stage still freezes even past the catch-all window", () => {
+    const g = gradeStageAging("Closed Lost", { unit: "calendar_days", agingUnits: 500, agingCalendarDays: 500 });
     expect(g.severity).toBe("info");
-    expect(g.isUnknownStage).toBe(true);
-    expect(g.slaUnits).toBeNull();
+    expect(g.isTerminal).toBe(true);
   });
 });
 
