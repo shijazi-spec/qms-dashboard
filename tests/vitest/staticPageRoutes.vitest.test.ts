@@ -39,6 +39,58 @@ vi.mock("fs", async (importOriginal) => {
 });
 
 // ---------------------------------------------------------------------------
+// Seed the admin precondition that `isAdminAuthorizedLive()` enforces.
+//
+// The /admin and /users page gates call the *live* variant
+// `isAdminAuthorizedLive(c)`, which — for a session-cookie caller — does NOT
+// trust the role baked into the (still HMAC-signed) cookie. It re-reads the
+// caller's role from the `platform_users` table via `getPlatformUser(email)`.
+// Vitest workers run without a live Postgres, so that lookup returns null and
+// the gate falls through to the "Admin Setup Required" page even for a valid
+// admin-role cookie.
+//
+// To exercise the intended admin-session path WITHOUT weakening the security
+// assertion, we re-implement ONLY `isAdminAuthorizedLive` with the exact same
+// decision logic as production (valid X-Admin-Key OR an *active* `admin`
+// platform_user), but resolve the platform_user from a hermetic map keyed by
+// the session email instead of hitting the DB. The role is derived from the
+// session email prefix (see `sessionCookie` below), so:
+//   • admin@example.com               → active admin   → gate admits (200)
+//   • department_viewer@example.com   → active viewer  → gate refuses (setup)
+//   • quality_manager@example.com     → active QM      → gate refuses (setup)
+// The X-Admin-Key path, the admin_key-cookie-only path, and the
+// no-credentials path all keep flowing through the real helpers unchanged.
+//
+// A per-file `vi.mock` takes precedence over the global rbacAuthShim setup
+// file, and we re-export every other binding (`...real`) so the rest of
+// staticPageRoutes' imports behave exactly as in production.
+vi.mock("../../src/utils/rbacMiddleware", async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import("../../src/utils/rbacMiddleware")>();
+
+  /** Hermetic stand-in for `platform_users` lookups in the vitest worker. */
+  const fakePlatformUser = (
+    email: string,
+  ): { status: string; role: string } | null => {
+    const m = /^([a-z_]+)@example\.com$/.exec(email);
+    if (!m) return null;
+    return { status: "active", role: m[1] };
+  };
+
+  return {
+    ...real,
+    isAdminAuthorizedLive: async (c: any): Promise<boolean> => {
+      if (real.hasValidAdminApiKey(c)) return true;
+      const user = real.getSessionUser(c);
+      if (!user) return false;
+      const platformUser = fakePlatformUser(user.email);
+      if (!platformUser || platformUser.status !== "active") return false;
+      return platformUser.role === "admin";
+    },
+  };
+});
+
+// ---------------------------------------------------------------------------
 // Import the module under test **after** the vi.mock() call so it picks up
 // the mocked `fs`.
 // ---------------------------------------------------------------------------
@@ -77,11 +129,18 @@ function signSession(payload: Record<string, unknown>): string {
   return `${data}.${sig}`;
 }
 
-/** Build a `walaplus_session` cookie string for the given role. */
+/**
+ * Build a `walaplus_session` cookie string for the given role.
+ *
+ * The email encodes the role (`<role>@example.com`) so the hermetic
+ * `isAdminAuthorizedLive` mock above can resolve the caller's *platform_users*
+ * role without a DB lookup — mirroring production, which trusts the live DB
+ * role rather than the role baked into the signed cookie.
+ */
 function sessionCookie(role: string): string {
   const token = signSession({
     userId: 1,
-    email: "tester@example.com",
+    email: `${role}@example.com`,
     name: "Test User",
     role,
   });

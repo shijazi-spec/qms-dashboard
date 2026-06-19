@@ -163,6 +163,20 @@ const CONSULTANT_ROLES: readonly UserRole[] = [
   "head_of_operations_quality",
 ];
 
+// External audits read set. Mirrors `/api/external-audits GET` — governance +
+// audit roles only (annual audit plans, sign-off history, certification data).
+// Deliberately NARROWER than ANY_DASHBOARD_ROLES so the page shell does not
+// admit roles (e.g. department_viewer, team_lead) whose backing fetches 403.
+const EXTERNAL_AUDITS_READ_ROLES: readonly UserRole[] = [
+  "admin",
+  "ai_specialist",
+  "auditor",
+  "executive",
+  "grc_manager",
+  "head_of_operations_quality",
+  "quality_manager",
+];
+
 // Admin-only set. Mirrors `/api/pdpl/ *` (admin-only by `requireAdminOrKey`)
 // and `/api/logs GET` / `/api/event-logs GET` (admin-only audit trail).
 const ADMIN_ONLY: readonly UserRole[] = ["admin"];
@@ -705,14 +719,15 @@ export const staticPageRoutes = [
         `To access the Intake dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
-  // /external-audits → /api/external-audits GET — any authenticated session.
+  // /external-audits → /api/external-audits GET — governance + audit read set
+  // (mirrors the 7-role API allowlist; NOT any authenticated session).
   {
     path: "/external-audits",
     method: "GET",
     createHandler: async () =>
       serveDashboardPageWithRoleGate(
         "external-audits.html",
-        ANY_DASHBOARD_ROLES,
+        EXTERNAL_AUDITS_READ_ROLES,
         "External Audits Setup Required",
         `To access the External Audits dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
@@ -953,7 +968,7 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
   },
   {
     path: "/external-audits",
-    allowedRoles: ANY_DASHBOARD_ROLES,
+    allowedRoles: EXTERNAL_AUDITS_READ_ROLES,
     backingApiPath: "/api/external-audits",
   },
   {

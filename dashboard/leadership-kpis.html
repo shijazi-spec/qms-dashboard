@@ -14,6 +14,7 @@
     .detail { display:none; }
     .detail.open { display:block; }
   </style>
+  <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <div id="walaplus-nav"></div>
@@ -35,15 +36,15 @@
 
     <div class="bg-white rounded-xl shadow overflow-hidden">
       <table class="w-full text-sm">
-        <thead class="bg-gray-100 text-gray-600 text-left">
+        <thead class="bg-gray-100 text-gray-600 text-start">
           <tr>
-            <th class="px-4 py-3">KPI</th>
-            <th class="px-4 py-3">Code</th>
-            <th class="px-4 py-3 text-right">Baseline → Target</th>
-            <th class="px-4 py-3 text-right">Current</th>
-            <th class="px-4 py-3 text-right">Progress</th>
-            <th class="px-4 py-3">Status</th>
-            <th class="px-4 py-3"></th>
+            <th scope="col" class="px-4 py-3">KPI</th>
+            <th scope="col" class="px-4 py-3">Code</th>
+            <th scope="col" class="px-4 py-3 text-end">Baseline → Target</th>
+            <th scope="col" class="px-4 py-3 text-end">Current</th>
+            <th scope="col" class="px-4 py-3 text-end">Progress</th>
+            <th scope="col" class="px-4 py-3">Status</th>
+            <th scope="col" class="px-4 py-3"></th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
@@ -83,11 +84,11 @@
         return `<tr class="border-t">
             <td class="px-4 py-3">${esc(d.name)}</td>
             <td class="px-4 py-3 text-gray-400 font-mono text-xs">${esc(d.code)}</td>
-            <td class="px-4 py-3 text-right text-gray-500">${esc(d.baseline)}${u} → ${esc(d.target)}${u}</td>
-            <td class="px-4 py-3 text-right">${current}</td>
-            <td class="px-4 py-3 text-right text-gray-500">${progress}</td>
+            <td class="px-4 py-3 text-end text-gray-500">${esc(d.baseline)}${u} → ${esc(d.target)}${u}</td>
+            <td class="px-4 py-3 text-end">${current}</td>
+            <td class="px-4 py-3 text-end text-gray-500">${progress}</td>
             <td class="px-4 py-3">${statusHtml}</td>
-            <td class="px-4 py-3 text-right"><button class="text-cyan-600 text-xs" onclick="document.getElementById('det-${i}').classList.toggle('open')">how &amp; why ▾</button></td>
+            <td class="px-4 py-3 text-end"><button type="button" class="text-cyan-600 text-xs" data-toggle="det-${i}">how &amp; why ▾</button></td>
           </tr>
           <tr class="detail" id="det-${i}"><td colspan="7" class="px-4 pb-4 pt-0 bg-gray-50">
             <div class="text-gray-700"><b>What:</b> ${esc(d.description)}</div>
@@ -124,7 +125,22 @@
       }
     }
     document.getElementById("refresh").addEventListener("click", load);
+    // Delegated toggle for the per-row "how & why" detail panels. The #rows
+    // tbody is a stable element (only its innerHTML is replaced on render), so
+    // a single listener survives re-renders — and avoids CSP-blocked inline
+    // onclick handlers (script-src 'self' 'nonce-…').
+    document.getElementById("rows").addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-toggle]");
+      if (!btn) return;
+      const el = document.getElementById(btn.getAttribute("data-toggle"));
+      if (el) el.classList.toggle("open");
+    });
     load();
+  </script>
+  <script>
+    if (window.WalaPlusI18n) {
+      window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+    }
   </script>
 </body>
 </html>

@@ -23,9 +23,14 @@
 import { aiOpsRoutes } from "../src/mastra/routes/aiOpsRoutes";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext, type FakeContext } from "./_helpers/fakeContext";
+import { makeCookieForRole } from "./_helpers/sessionAuth";
 
 const suite = new TestSuite("aiOpsRoutes");
 const ADMIN_KEY = "integration-test-ai-ops-2026";
+// Signed walaplus_session cookie for an active admin platform user. requireRole()
+// now always does a live getPlatformUser() lookup, so the shared helper also
+// registers an active platform_users row for this session's email.
+const ADMIN_COOKIE = makeCookieForRole("admin");
 const HAS_DB = !!process.env.DATABASE_URL;
 
 console.log("\n=== aiOpsRoutes integration tests ===\n");
@@ -86,7 +91,7 @@ await suite.test("POST /api/ai-ops/alerts/:id/acknowledge — 400 on non-numeric
     const res = await handler(
       makeContext({
         method: "POST",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
         params: { id: "not-a-number" },
       }),
     );
@@ -106,7 +111,7 @@ await suite.test("POST /api/ai-ops/alerts/:id/resolve — 400 on zero id (with a
     const res = await handler(
       makeContext({
         method: "POST",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
         params: { id: "0" },
       }),
     );
@@ -155,7 +160,7 @@ if (!HAS_DB) {
         "GET",
       );
       const res = await handler(
-        makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
       );
       suite.expectEqual(res.status, 200, "status");
       const list: any[] = res.body?.data ?? [];
@@ -203,7 +208,7 @@ if (!HAS_DB) {
         "GET",
       );
       const res = await handler(
-        makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
       );
       suite.expectEqual(res.status, 200, "status");
       const list: any[] = res.body?.data ?? [];
@@ -237,7 +242,7 @@ if (!HAS_DB) {
       const res = await handler(
         makeContext({
           method: "POST",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           params: { id: String(createdId) },
         }),
       );
@@ -268,7 +273,7 @@ if (!HAS_DB) {
       const res = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { days: "14" },
         }),
       );
@@ -321,7 +326,7 @@ if (!HAS_DB) {
       const res = await handler(
         makeContext({
           method: "POST",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           params: { id: String(createdId) },
         }),
       );
@@ -401,7 +406,7 @@ if (!HAS_DB) {
       const noFilter = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { days: "1", limit: "100" },
         }),
       );
@@ -415,7 +420,7 @@ if (!HAS_DB) {
       const highOnly = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { days: "1", limit: "100", severity: "high" },
         }),
       );
@@ -433,7 +438,7 @@ if (!HAS_DB) {
       const mediumOnly = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { days: "1", limit: "100", severity: "medium" },
         }),
       );
@@ -450,7 +455,7 @@ if (!HAS_DB) {
       const allFallback = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { days: "1", limit: "100", severity: "all" },
         }),
       );
@@ -566,7 +571,7 @@ if (!HAS_DB) {
       const autoOnly = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { days: "1", limit: "100", resolution: "auto" },
         }),
       );
@@ -585,7 +590,7 @@ if (!HAS_DB) {
       const manualOnly = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { days: "1", limit: "100", resolution: "manual" },
         }),
       );
@@ -605,7 +610,7 @@ if (!HAS_DB) {
       const allFallback = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { days: "1", limit: "100", resolution: "garbage" },
         }),
       );
@@ -678,7 +683,7 @@ if (!HAS_DB) {
       // resolution=auto → only the auto-resolved seed.
       const autoRes = await handler(makeContext({
         method: "GET",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
         query: { limit: "100", resolution: "auto" },
       }));
       suite.expectEqual(autoRes.status, 200, "consultant auto status");
@@ -690,7 +695,7 @@ if (!HAS_DB) {
       // resolution=manual → manual + dismissed seeds, NOT auto.
       const manualRes = await handler(makeContext({
         method: "GET",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
         query: { limit: "100", resolution: "manual" },
       }));
       suite.expectEqual(manualRes.status, 200, "consultant manual status");
@@ -749,7 +754,7 @@ if (!HAS_DB) {
       const res = await handler(
         makeContext({
           method: "POST",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           params: { id: String(seedId) },
           body: { note: NOTE },
         }),
@@ -807,7 +812,7 @@ if (!HAS_DB) {
       const noFlag = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { days: "1", limit: "100" },
         }),
       );
@@ -822,7 +827,7 @@ if (!HAS_DB) {
       const withFlag = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { days: "1", limit: "100", includeDismissed: "1" },
         }),
       );
@@ -887,7 +892,7 @@ if (!HAS_DB) {
       const noFlag = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { limit: "50" },
         }),
       );
@@ -902,7 +907,7 @@ if (!HAS_DB) {
       const withFlag = await handler(
         makeContext({
           method: "GET",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { limit: "50", includeDismissed: "1" },
         }),
       );
@@ -1009,7 +1014,7 @@ await suite.test("PUT /api/ai-ops/tool-health-config — 400 when body is not an
     const res = await handler(
       makeContext({
         method: "PUT",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
         body: "not-an-object",
       }),
     );
@@ -1036,7 +1041,7 @@ await suite.test("PUT /api/ai-ops/tool-health-config — 400 when overrides miss
     const res = await handler(
       makeContext({
         method: "PUT",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
         body: { note: "no overrides field at all" },
       }),
     );
@@ -1067,7 +1072,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: "PUT",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           body: { overrides: {}, expires_at: "not-a-date" },
         }),
       );
@@ -1099,7 +1104,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: "PUT",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           body: { overrides: {}, expires_at: yesterday },
         }),
       );
@@ -1132,7 +1137,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: "PUT",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           body: { overrides: {}, expires_at: tooFar },
         }),
       );
@@ -1190,7 +1195,7 @@ if (HAS_DB) {
       // Snapshot the env baseline so we can pick override values that are
       // (a) within bounds and (b) safely satisfy the cross-field invariants.
       const initial = await getHandler(
-        makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
       );
       suite.expectEqual(initial.status, 200, "initial GET status");
       const baseline = initial.body?.data?.env_baseline;
@@ -1211,7 +1216,7 @@ if (HAS_DB) {
       const putRes = await putHandler(
         makeContext({
           method: "PUT",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           body: { overrides: patch, note: "integration test #177" },
         }),
       );
@@ -1229,7 +1234,7 @@ if (HAS_DB) {
 
       // Re-GET and assert the override is now visible alongside the audit row.
       const reread = await getHandler(
-        makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
       );
       suite.expectEqual(reread.status, 200, "re-read status");
       suite.expectEqual(
@@ -1259,7 +1264,7 @@ if (HAS_DB) {
         await putHandler(
           makeContext({
             method: "PUT",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             body: {
               overrides: {
                 windowMinutes: null,
@@ -1316,7 +1321,7 @@ if (HAS_DB) {
         const res = await putHandler(
           makeContext({
             method: "PUT",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             body: { overrides: { windowMinutes: 30 }, note: "task-190 regression" },
           }),
         );
@@ -1338,7 +1343,7 @@ if (HAS_DB) {
           await putHandler(
             makeContext({
               method: "PUT",
-              headers: { "X-Admin-Key": ADMIN_KEY },
+              headers: { Cookie: ADMIN_COOKIE },
               body: {
                 overrides: { windowMinutes: null },
                 note: "task-190 regression cleanup",
@@ -1371,7 +1376,7 @@ if (HAS_DB) {
       const res = await previewHandler(
         makeContext({
           method: "POST",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           body: {
             overrides: {
               windowMinutes: 30,
@@ -1461,7 +1466,7 @@ if (HAS_DB) {
         "GET",
       );
       const getRes = await getHandler(
-        makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
       );
       suite.expectEqual(getRes.status, 200, "GET status");
       const currentWindow = getRes.body?.data?.effective?.windowMinutes;
@@ -1482,7 +1487,7 @@ if (HAS_DB) {
       const res = await previewHandler(
         makeContext({
           method: "POST",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           body: { overrides: { windowMinutes: proposedWindow } },
         }),
       );
@@ -1532,7 +1537,7 @@ if (HAS_DB) {
       const res = await previewHandler(
         makeContext({
           method: "POST",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           body: {
             overrides: { errorRateHighPct: 90, errorRateCriticalPct: 90 },
           },
@@ -1562,7 +1567,7 @@ if (HAS_DB) {
       const res = await previewHandler(
         makeContext({
           method: "POST",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           body: { note: "no overrides" },
         }),
       );
@@ -1587,7 +1592,7 @@ if (HAS_DB) {
       const res = await putHandler(
         makeContext({
           method: "PUT",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           body: {
             overrides: { errorRateHighPct: 90, errorRateCriticalPct: 90 },
           },
@@ -1677,7 +1682,7 @@ if (HAS_DB) {
         // 1. Snapshot the env baseline so we can assert the post-revert
         //    effective config matches it field-for-field.
         const initial = await getHandler(
-          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+          makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
         );
         suite.expectEqual(initial.status, 200, "initial GET status");
         const envBaseline = initial.body?.data?.env_baseline;
@@ -1695,7 +1700,7 @@ if (HAS_DB) {
         const putRes = await putHandler(
           makeContext({
             method: "PUT",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             body: {
               overrides: {
                 errorRatePct: 7,
@@ -1723,7 +1728,7 @@ if (HAS_DB) {
         //    where the read path mis-treats a future expiry as already
         //    expired (defense-in-depth filter inverted).
         const midGet = await getHandler(
-          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+          makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
         );
         suite.expectEqual(midGet.status, 200, "mid GET status");
         suite.expectEqual(
@@ -1807,7 +1812,7 @@ if (HAS_DB) {
         // 6. Re-GET and assert the override + expires_at have been wiped
         //    and the effective config matches the env baseline exactly.
         const postGet = await getHandler(
-          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+          makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
         );
         suite.expectEqual(postGet.status, 200, "post GET status");
         const postOverrides = postGet.body?.data?.overrides ?? {};
@@ -1888,7 +1893,7 @@ if (HAS_DB) {
           await cleanupHandler(
             makeContext({
               method: "PUT",
-              headers: { "X-Admin-Key": ADMIN_KEY },
+              headers: { Cookie: ADMIN_COOKIE },
               body: {
                 overrides: {
                   windowMinutes: null,
@@ -2155,7 +2160,7 @@ await suite.test(
         "/api/ai-ops/tool-health/config-warnings",
         "GET",
       );
-      // No X-Admin-Key header → requireRole returns null → 403
+      // No session cookie → requireRole returns null → 403
       const res = await handler(makeContext({ method: "GET" }));
       suite.expectEqual(res.status, 403, "status");
       suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
@@ -2181,7 +2186,7 @@ if (!HAS_DB) {
           "GET",
         );
         const res = await handler(
-          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+          makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
         );
         suite.expectEqual(res.status, 200, "status");
         suite.expect(Array.isArray(res.body?.warnings), "body.warnings is an array");
@@ -2306,7 +2311,7 @@ if (HAS_DB) {
         const res = await handler(
           makeContext({
             method: "POST",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             body: {
               callId,
               rating: "thumbs_up",
@@ -2371,7 +2376,7 @@ if (HAS_DB) {
         const res = await handler(
           makeContext({
             method: "POST",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             body: {
               callId,
               rating: "thumbs_down",
@@ -2419,7 +2424,7 @@ if (HAS_DB) {
         const res = await handler(
           makeContext({
             method: "POST",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             body: {
               callId: 1,
               rating: "thumbs_up",
@@ -2465,7 +2470,7 @@ if (HAS_DB) {
         const res = await handler(
           makeContext({
             method: "POST",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             body: {
               callId,
               rating: "thumbs_up",
@@ -2525,7 +2530,7 @@ if (HAS_DB) {
         const res = await handler(
           makeContext({
             method: "POST",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             body: {
               callId,
               rating: "thumbs_down",
@@ -2573,7 +2578,7 @@ if (HAS_DB) {
         const res = await handler(
           makeContext({
             method: "POST",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             body: {
               callId: 1,
               rating: "thumbs_up",

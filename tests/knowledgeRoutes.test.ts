@@ -19,8 +19,15 @@
 import { knowledgeRoutes } from "../src/mastra/routes/knowledgeRoutes";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
+import { makeCookieForRole } from "./_helpers/sessionAuth";
 
 const suite = new TestSuite("knowledgeRoutes");
+// Signed walaplus_session cookie for an active admin platform user. The
+// checklist routes call requireRole() (live getPlatformUser() lookup) BEFORE
+// validating the :id param, so reaching the id->400 branch requires a valid
+// authenticated session. The shared helper also registers an active
+// platform_users row for this session's email.
+const ADMIN_COOKIE = makeCookieForRole("admin");
 
 console.log("\n=== knowledgeRoutes integration tests ===\n");
 
@@ -53,16 +60,42 @@ for (const [p, m] of AUTH_GATED) {
   });
 }
 
-await suite.test("GET /api/checklists/:id — 400 with non-numeric id (no auth gate by design)", async () => {
+// /api/checklists/:id now runs requireRole() BEFORE the isNaN(id)->400 check,
+// so the auth gate precedes id-validation: an unauthenticated caller gets 403
+// (never reaching the id check), and only an authenticated caller with a bad id
+// reaches the 400 branch.
+await suite.test("GET /api/checklists/:id — 403 without an authenticated role (auth gate precedes id check)", async () => {
   const handler = await buildHandler(knowledgeRoutes, "/api/checklists/:id", "GET");
   const res = await handler(makeContext({ method: "GET", params: { id: "abc" } }));
+  suite.expectEqual(res.status, 403, "status");
+  suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
+});
+
+await suite.test("GET /api/checklists/:id — 400 with non-numeric id when authenticated", async () => {
+  const handler = await buildHandler(knowledgeRoutes, "/api/checklists/:id", "GET");
+  const res = await handler(makeContext({
+    method: "GET",
+    headers: { Cookie: ADMIN_COOKIE },
+    params: { id: "abc" },
+  }));
   suite.expectEqual(res.status, 400, "status");
   suite.expectEqual(res.body?.error, "Invalid ID", "body.error");
 });
 
-await suite.test("POST /api/checklists/:id/run — 400 with non-numeric id", async () => {
+await suite.test("POST /api/checklists/:id/run — 403 without an authenticated role (auth gate precedes id check)", async () => {
   const handler = await buildHandler(knowledgeRoutes, "/api/checklists/:id/run", "POST");
   const res = await handler(makeContext({ method: "POST", params: { id: "abc" } }));
+  suite.expectEqual(res.status, 403, "status");
+  suite.expectEqual(res.body?.error, "Insufficient permissions", "body.error");
+});
+
+await suite.test("POST /api/checklists/:id/run — 400 with non-numeric id when authenticated", async () => {
+  const handler = await buildHandler(knowledgeRoutes, "/api/checklists/:id/run", "POST");
+  const res = await handler(makeContext({
+    method: "POST",
+    headers: { Cookie: ADMIN_COOKIE },
+    params: { id: "abc" },
+  }));
   suite.expectEqual(res.status, 400, "status");
   suite.expectEqual(res.body?.error, "Invalid ID", "body.error");
 });

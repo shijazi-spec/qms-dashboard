@@ -54,6 +54,18 @@ process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
 
+// Register an active admin platform_users row BEFORE importing staticPageRoutes
+// so the live getPlatformUser() lookup inside isAdminAuthorizedLive()
+// (rbacMiddleware) resolves the admin session cookie used by case D. Security
+// hardening (Task #855/#831) made requireRole()/admin gates ALWAYS perform a
+// live platform_users lookup rather than trusting the cookie's role claim, so
+// the session-cookie admin path now requires this seeded row. The helper
+// intercepts only the `SELECT status, role FROM platform_users WHERE email=$1`
+// query at the pg.Pool level — the non-admin (case B) email is left
+// unregistered so it still correctly renders "Setup Required".
+const { registerPlatformUser } = await import("./_helpers/sessionAuth");
+registerPlatformUser("admin@example.com", "admin");
+
 const { staticPageRoutes } = await import("../src/mastra/routes/staticPageRoutes");
 const { TestSuite } = await import("./_helpers/runner");
 const { buildHandler, makeContext } = await import("./_helpers/fakeContext");

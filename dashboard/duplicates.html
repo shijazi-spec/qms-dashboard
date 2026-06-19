@@ -732,7 +732,7 @@
                 <strong>Lead duplicates.</strong> Leads in Zoho that share an email, phone, or company domain with another lead — the highest-volume source of duplicate creation. Resolving these prevents two reps from working the same prospect and stops the same company from appearing twice in pipeline reports.
             </div>
             <div class="flex justify-end mb-3 gap-2">
-                <button data-on-click="exportTab" data-args="[&quot;lead&quot;]" data-pass-event="true" id="leadsExportBtn" data-testid="button-export-leads" title="Download a CSV of every Lead duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
+                <button data-on-click="exportTab" data-args="[&quot;lead&quot;]" data-pass-event="true" data-estimate-url="/api/duplicates/export" id="leadsExportBtn" data-testid="button-export-leads" title="Download a CSV of every Lead duplicate currently in the radar (respects the start/end date filters above)." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 text-white hover:bg-green-800">⬇ Export CSV</button>
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;leads&quot;]" id="leadsZohoRefreshBtn" title="Pull live values from Zoho for every lead currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;leads&quot;]" data-testid="button-open-capa-leads" title="Open a corrective-action record (CAPA) on one of the lead-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
@@ -1207,7 +1207,7 @@
                         <div class="text-xs uppercase tracking-wide text-indigo-700 font-semibold">Executive summary</div>
                         <p id="preflightExecHeadline" class="text-sm text-gray-900 font-medium mt-1">—</p>
                     </div>
-                    <div class="text-right text-xs text-gray-500" id="preflightExecMeta">—</div>
+                    <div class="text-end text-xs text-gray-500" id="preflightExecMeta">—</div>
                 </div>
                 <div id="preflightExecTopReasons" class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2"></div>
             </div>
@@ -8472,15 +8472,15 @@
                     +     '<table class="min-w-full divide-y divide-gray-200">'
                     +       '<thead class="bg-gray-50">'
                     +         '<tr>'
-                    +           '<th class="px-3 py-2 text-xs font-medium text-gray-500 uppercase" title="Pick which cluster to merge the others INTO">Master</th>'
-                    +           '<th class="px-3 py-2 text-xs font-medium text-gray-500 uppercase" title="Tick the clusters whose records get moved into the master">Merge in?</th>'
-                    +           '<th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Cluster</th>'
-                    +           '<th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Company</th>'
-                    +           '<th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Modules</th>'
-                    +           '<th class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Records</th>'
-                    +           '<th class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Conf.</th>'
-                    +           '<th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Status</th>'
-                    +           '<th class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">View</th>'
+                    +           '<th scope="col" class="px-3 py-2 text-xs font-medium text-gray-500 uppercase" title="Pick which cluster to merge the others INTO">Master</th>'
+                    +           '<th scope="col" class="px-3 py-2 text-xs font-medium text-gray-500 uppercase" title="Tick the clusters whose records get moved into the master">Merge in?</th>'
+                    +           '<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Cluster</th>'
+                    +           '<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Company</th>'
+                    +           '<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Modules</th>'
+                    +           '<th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Records</th>'
+                    +           '<th scope="col" class="px-3 py-2 text-end text-xs font-medium text-gray-500 uppercase">Conf.</th>'
+                    +           '<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">Status</th>'
+                    +           '<th scope="col" class="px-3 py-2 text-start text-xs font-medium text-gray-500 uppercase">View</th>'
                     +         '</tr>'
                     +       '</thead>'
                     +       '<tbody class="bg-white divide-y divide-gray-200">' + rows + '</tbody>'
@@ -8939,7 +8939,7 @@
                     const skipped = Number(body.skipped_rows || 0);
                     const skipNote = skipped > 0 ? ' · ⚠ ' + skipped + ' row(s) skipped (unreadable cells)' : '';
                     countSpan.textContent = '✓ Parsed ' + body.count + ' row(s) from "' + preflightLastUpload.fileName + '"' + dupNote + skipNote + ' — click Check to run preflight.';
-                    countSpan.className = 'ml-auto text-xs ' + ((dupDomainRows > 0 || skipped > 0) ? 'text-amber-700' : 'text-emerald-700') + ' font-medium';
+                    countSpan.className = 'ms-auto text-xs ' + ((dupDomainRows > 0 || skipped > 0) ? 'text-amber-700' : 'text-emerald-700') + ' font-medium';
                 }
             } catch (e) {
                 alert('Upload failed: ' + ((e && e.message) || String(e)));

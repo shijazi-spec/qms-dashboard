@@ -115,6 +115,7 @@ const originalQuery = pg.Pool.prototype.query;
 const { aiOpsRoutes } = await import("../src/mastra/routes/aiOpsRoutes");
 const { TestSuite } = await import("./_helpers/runner");
 const { buildHandler, makeContext } = await import("./_helpers/fakeContext");
+const { makeCookieForRole } = await import("./_helpers/sessionAuth");
 const {
   AI_METRICS_RETENTION_AUDIT_MAX_LIMIT,
   AI_METRICS_RETENTION_AUDIT_EXPORT_BATCH_SIZE,
@@ -122,6 +123,10 @@ const {
 
 const suite = new TestSuite("aiOpsMetricsRetentionExport");
 const ADMIN_KEY = "integration-test-ai-ops-retention-export-2026";
+// Signed walaplus_session cookie for an active admin platform user (requireRole()
+// now always performs a live getPlatformUser() lookup — the shared helper also
+// registers an active platform_users row for this session's email).
+const ADMIN_COOKIE = makeCookieForRole("admin");
 const ROUTE_PATH = "/api/ai-ops/metrics-retention/export.csv";
 const ROUTE_METHOD = "GET";
 
@@ -227,7 +232,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: {},
         }),
       );
@@ -272,7 +277,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { from: FROM, to: TO },
         }),
       );
@@ -321,7 +326,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: {},
         }),
       );
@@ -373,7 +378,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: {},
         }),
       );
@@ -401,7 +406,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: {
             from: "2026-04-25T00:00:00Z",
             to: "2026-04-20T00:00:00Z",
@@ -427,7 +432,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { from: "not a real date" },
         }),
       );

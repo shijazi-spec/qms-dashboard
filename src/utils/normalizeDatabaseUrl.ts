@@ -22,6 +22,8 @@
  * Import this FIRST in the application entry point so the rewrite happens before
  * `process.env.DATABASE_URL` is read by any pool or PostgresStore.
  */
+import { logger } from "./logger";
+
 const STRICT_MODES = new Set(["require", "prefer", "verify-ca"]);
 
 function normalizeDatabaseUrlSsl(): void {
@@ -36,7 +38,7 @@ function normalizeDatabaseUrlSsl(): void {
       url.searchParams.set("sslmode", "no-verify");
       process.env.DATABASE_URL = url.toString();
       // Mode keyword only — never the connection string (which holds credentials).
-      console.log(
+      logger.info(
         `[DB-SSL] Normalized DATABASE_URL sslmode '${mode}' -> 'no-verify' for TLS compatibility`,
       );
     }
@@ -56,7 +58,7 @@ function normalizeDatabaseUrlSsl(): void {
     );
     if (replaced !== raw) {
       process.env.DATABASE_URL = replaced;
-      console.log(
+      logger.info(
         "[DB-SSL] Normalized DATABASE_URL sslmode -> 'no-verify' for TLS compatibility",
       );
     }

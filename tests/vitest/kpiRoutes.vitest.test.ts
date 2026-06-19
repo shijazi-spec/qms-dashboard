@@ -70,16 +70,29 @@ async function getRoutes() {
 }
 
 describe("GET /api/kpis — real data path", () => {
+  // GET /api/kpis now enriches each definition with latestValue/status/trend/
+  // lastUpdated via getLatestKPIValue(). With no recorded value (mock → null)
+  // the enrichment defaults are latestValue:null, status:"no_data",
+  // trend:null, lastUpdated:null.
+  const enrich = (k: any) => ({
+    ...k,
+    latestValue: null,
+    status: "no_data",
+    trend: null,
+    lastUpdated: null,
+  });
+
   test("200 returns getAllKPIDefinitions() when no owner query param", async () => {
     const kpis = [makeKPIDefinition({ id: 1, kpi_name: "Revenue", kpi_code: "REV-01" })];
     vi.mocked(kpiDb.getAllKPIDefinitions).mockResolvedValueOnce(kpis);
+    vi.mocked(kpiDb.getLatestKPIValue).mockResolvedValue(null);
 
     const routes = await getRoutes();
     const handler = await buildHandler(routes, "/api/kpis", "GET");
     const res = await handler(makeContext({ method: "GET" }));
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual(kpis);
+    expect(res.body).toEqual(kpis.map(enrich));
     expect(kpiDb.getAllKPIDefinitions).toHaveBeenCalledTimes(1);
     expect(kpiDb.getKPIsByOwner).not.toHaveBeenCalled();
   });
@@ -87,13 +100,14 @@ describe("GET /api/kpis — real data path", () => {
   test("200 returns getKPIsByOwner() when owner query param is present", async () => {
     const kpis = [makeKPIDefinition({ id: 2, kpi_name: "Retention", kpi_code: "RET-01" })];
     vi.mocked(kpiDb.getKPIsByOwner).mockResolvedValueOnce(kpis);
+    vi.mocked(kpiDb.getLatestKPIValue).mockResolvedValue(null);
 
     const routes = await getRoutes();
     const handler = await buildHandler(routes, "/api/kpis", "GET");
     const res = await handler(makeContext({ method: "GET", query: { owner: "sales" } }));
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual(kpis);
+    expect(res.body).toEqual(kpis.map(enrich));
     expect(kpiDb.getKPIsByOwner).toHaveBeenCalledWith("sales");
     expect(kpiDb.getAllKPIDefinitions).not.toHaveBeenCalled();
   });

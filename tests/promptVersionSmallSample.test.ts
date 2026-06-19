@@ -33,9 +33,15 @@ import {
 import { aiOpsRoutes } from "../src/mastra/routes/aiOpsRoutes";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
+import { makeCookieForRole } from "./_helpers/sessionAuth";
 
 const suite = new TestSuite("promptVersionSmallSample");
 const ADMIN_KEY = "integration-test-prompt-version-2026";
+// Signed walaplus_session cookie for an active admin platform user. The
+// prompt-versions route uses requireRole(), which now always performs a live
+// getPlatformUser() lookup — the shared helper also registers an active
+// platform_users row for this session's email.
+const ADMIN_COOKIE = makeCookieForRole("admin");
 
 console.log("\n=== prompt-version small-sample protection unit tests ===\n");
 
@@ -226,7 +232,7 @@ await suite.test("route: ?minFeedback=10 is honoured — response.min_feedback =
     const res = await handler(
       makeContext({
         method: "GET",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
         query: { minFeedback: "10" },
       }),
     );
@@ -247,7 +253,7 @@ await suite.test("route: ?minFeedback=0 is honoured — response.min_feedback = 
     const res = await handler(
       makeContext({
         method: "GET",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
         query: { minFeedback: "0" },
       }),
     );
@@ -267,7 +273,7 @@ await suite.test("route: no minFeedback param → response.min_feedback = DEFAUL
     const res = await handler(
       makeContext({
         method: "GET",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
       }),
     );
     suite.expectEqual(res.status, 200, "status");
@@ -290,7 +296,7 @@ await suite.test("route: ?minFeedback=1001 is clamped to 1000", async () => {
     const res = await handler(
       makeContext({
         method: "GET",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
         query: { minFeedback: "1001" },
       }),
     );
@@ -310,7 +316,7 @@ await suite.test("route: non-numeric minFeedback falls back to DEFAULT", async (
     const res = await handler(
       makeContext({
         method: "GET",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Cookie: ADMIN_COOKIE },
         query: { minFeedback: "not-a-number" },
       }),
     );

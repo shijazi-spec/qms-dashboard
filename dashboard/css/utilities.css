@@ -116,3 +116,13 @@
 /* Max-width caps for AI-Ops feedback table cells (replaces style="max-width:…") */
 .max-w-24r { max-width: 24rem; }
 .max-w-18r { max-width: 18rem; }
+
+/* Recent-entries scroll cap on North Star data-entry page (replaces style="max-height:420px") */
+.max-h-420 { max-height: 420px; }
+
+/* Policy document preview frames (replaces inline style on <iframe>/<div>).
+ * iframes can't use the data-style hook because the height must apply
+ * before load, so a static utility class is the cleanest CSP-safe option. */
+.doc-preview-frame-lg { height: 70vh; border: 0; }
+.doc-preview-frame-sm { height: 40vh; border: 0; }
+.doc-preview-img-wrap { max-height: 70vh; }

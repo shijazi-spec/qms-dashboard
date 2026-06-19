@@ -196,6 +196,22 @@ const stubQuery: StubQuery = async <R extends QueryResultRow>(
     };
   }
 
+  // Dedup probe added to enqueuePendingAction():
+  //   SELECT * FROM ai_pending_actions
+  //    WHERE tool_id = $1 AND payload_checksum = $2 AND status = 'pending' ...
+  // It early-returns the matching pending row to collapse duplicate requests.
+  // In this test each scenario re-seeds `storedRow` and then approves it, so
+  // we must NOT collapse onto a previously-stored (possibly executed) twin —
+  // otherwise approve sees a non-pending row and returns 409. Return empty so
+  // every enqueue creates a genuinely fresh PENDING row.
+  if (
+    /SELECT \* FROM ai_pending_actions/i.test(sql) &&
+    /payload_checksum/i.test(sql) &&
+    /status\s*=\s*'pending'/i.test(sql)
+  ) {
+    return empty;
+  }
+
   if (/SELECT \* FROM ai_pending_actions/i.test(sql)) {
     return storedRow
       ? { ...empty, rowCount: 1, rows: [storedRow as unknown as R] }

@@ -26,9 +26,14 @@
 import { aiOpsRoutes } from "../src/mastra/routes/aiOpsRoutes";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
+import { makeCookieForRole } from "./_helpers/sessionAuth";
 
 const suite = new TestSuite("aiOpsStorageHealthRoutes");
 const ADMIN_KEY = "integration-test-storage-health-2026";
+// Signed walaplus_session cookie for an active admin platform user (requireRole()
+// now always performs a live getPlatformUser() lookup — the shared helper also
+// registers an active platform_users row for this session's email).
+const ADMIN_COOKIE = makeCookieForRole("admin");
 const HAS_DB = !!process.env.DATABASE_URL;
 
 console.log("\n=== aiOpsRoutes storage-health tests ===\n");
@@ -111,7 +116,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: "POST",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           params: { id: "not-a-number" },
         }),
       );
@@ -138,7 +143,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: "POST",
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           params: { id: "0" },
         }),
       );
@@ -199,7 +204,7 @@ if (!HAS_DB) {
         const res = await handler(
           makeContext({
             method: "GET",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             query: { limit: "100" },
           }),
         );
@@ -288,7 +293,7 @@ if (!HAS_DB) {
         const res = await handler(
           makeContext({
             method: "GET",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             query: { days: "7", limit: "100" },
           }),
         );
@@ -329,7 +334,7 @@ if (!HAS_DB) {
         const mediumOnly = await handler(
           makeContext({
             method: "GET",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             query: { days: "7", limit: "100", severity: "medium" },
           }),
         );
@@ -343,7 +348,7 @@ if (!HAS_DB) {
         const criticalOnly = await handler(
           makeContext({
             method: "GET",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             query: { days: "7", limit: "100", severity: "critical" },
           }),
         );
@@ -396,7 +401,7 @@ if (!HAS_DB) {
         const res = await handler(
           makeContext({
             method: "POST",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             params: { id: String(dismissSeedId) },
           }),
         );
@@ -418,7 +423,7 @@ if (!HAS_DB) {
         const listRes = await listHandler(
           makeContext({
             method: "GET",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             query: { limit: "100" },
           }),
         );
@@ -452,7 +457,7 @@ if (!HAS_DB) {
         const res = await handler(
           makeContext({
             method: "POST",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             // Pick an id that's almost certainly out of range.
             params: { id: "2147483640" },
           }),

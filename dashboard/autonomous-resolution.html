@@ -34,6 +34,9 @@
         document.addEventListener('DOMContentLoaded', function () {
             if (window.WalaPlusNav) WalaPlusNav.init('autonomous-resolution');
         });
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+        }
     </script>
 
     <main class="max-w-7xl mx-auto p-6 space-y-6">

@@ -25,6 +25,8 @@
  * directly so the guard can't be bypassed by drift.
  */
 
+import { logger } from "./logger";
+
 const MIN_VALID_KEY_LENGTH = 40;
 
 let warnedShortKey = false;
@@ -57,8 +59,7 @@ export function getOpenAIApiKey(): string | undefined {
   if (ai && ai.length > 0 && ai.length < MIN_VALID_KEY_LENGTH) {
     if (!warnedShortKey) {
       warnedShortKey = true;
-      // eslint-disable-next-line no-console
-      console.warn(
+      logger.warn(
         `[openaiCredentials] AI_INTEGRATIONS_OPENAI_API_KEY is only ${ai.length} ` +
           `chars (need >=${MIN_VALID_KEY_LENGTH}) — ignoring it and falling back ` +
           `to OPENAI_API_KEY${fallback ? "" : " (which is also not set)"}.`,
@@ -85,8 +86,7 @@ export function getOpenAIBaseUrl(): string | undefined {
   if (!aiIntegrationsKeyIsValid()) {
     if (!warnedFallbackBypassesProxy) {
       warnedFallbackBypassesProxy = true;
-      // eslint-disable-next-line no-console
-      console.warn(
+      logger.warn(
         "[openaiCredentials] AI_INTEGRATIONS_OPENAI_BASE_URL is set but " +
           "AI_INTEGRATIONS_OPENAI_API_KEY is missing or too short — " +
           "ignoring the gateway URL so the OPENAI_API_KEY fallback isn't " +

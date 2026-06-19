@@ -122,9 +122,12 @@ function buildApp(): Hono {
   app.use("*", ...(globalMiddleware as MiddlewareHandler[]));
 
   // Route #1 — `c.json(..., 500)` body with secret in `details`. Exercises
-  // the response post-processor. `/api/health/...` is treated as an API
-  // route by the middleware; the X-Admin-Key header satisfies auth.
-  app.get("/api/health/json-secret", (c) => {
+  // the response post-processor. Routes are mounted under `/api/admin/...`
+  // because, post task #855, the X-Admin-Key header only satisfies auth on
+  // `/api/admin/*` (and `/api/inngest*`) routes — every other `/api/*` path
+  // requires a real OIDC session. Admin-key callers reaching a 5xx-rendering
+  // route is exactly the production shape this post-processor must scrub.
+  app.get("/api/admin/health/json-secret", (c) => {
     return c.json(
       {
         error: "Failed to call upstream",
@@ -137,7 +140,7 @@ function buildApp(): Hono {
   // Route #2 — uncaught throw with secret in `.message`. In production the
   // Mastra-installed `app.onError` (mirrored below) converts this to a
   // static "Internal Server Error" body — the secret never reaches the wire.
-  app.get("/api/health/throw-secret", () => {
+  app.get("/api/admin/health/throw-secret", () => {
     throw new Error(`Stripe rejected token ${SECRET}`);
   });
 
@@ -145,7 +148,7 @@ function buildApp(): Hono {
   // onError DOES echo the message into the body (`{ error: err.message }`),
   // so this is the path where `redactSecretsInResponse` is the actual
   // production defense.
-  app.get("/api/health/throw-http-secret", () => {
+  app.get("/api/admin/health/throw-http-secret", () => {
     throw new HTTPException(502, {
       message: `Bad gateway: token ${SECRET} was rejected upstream`,
     });
@@ -153,7 +156,7 @@ function buildApp(): Hono {
 
   // Route #4 — happy-path control: a 2xx body containing a credential-
   // shaped substring. The post-processor MUST NOT walk this.
-  app.get("/api/health/ok-with-secret-shape", (c) => {
+  app.get("/api/admin/health/ok-with-secret-shape", (c) => {
     return c.json({ note: SECRET }, 200);
   });
 
@@ -164,7 +167,7 @@ function buildApp(): Hono {
   // never reaches `globalMiddleware`'s catch and the deleted
   // `throw new NonRetriableError(...)` rewrap could not have had any
   // observable effect on the wire response. See task #576.
-  app.get("/api/health/throw-mastra-secret", () => {
+  app.get("/api/admin/health/throw-mastra-secret", () => {
     throw new MastraError({
       id: "AGENT_MEMORY_MISSING_RESOURCE_ID",
       domain: "AGENT",
@@ -177,7 +180,7 @@ function buildApp(): Hono {
   // Route #6 — uncaught z.ZodError whose message contains a credential.
   // Same outcome as #5: rendered as the static `"Internal Server Error"`
   // body. Pins down the second half of task #576.
-  app.get("/api/health/throw-zod-secret", (): never => {
+  app.get("/api/admin/health/throw-zod-secret", (): never => {
     const schema = z.object({
       token: z.string().refine(() => false, {
         message: `Bearer ${SECRET} rejected by upstream validator`,
@@ -211,7 +214,7 @@ function buildApp(): Hono {
   // 1. c.json error body — proves the post-processor is wired.
   {
     const app = buildApp();
-    const res = await app.request("/api/health/json-secret", {
+    const res = await app.request("/api/admin/health/json-secret", {
       method: "GET",
       headers: { "X-Admin-Key": ADMIN_KEY },
     });
@@ -239,7 +242,7 @@ function buildApp(): Hono {
   // reaches the wire to begin with.
   {
     const app = buildApp();
-    const res = await app.request("/api/health/throw-secret", {
+    const res = await app.request("/api/admin/health/throw-secret", {
       method: "GET",
       headers: { "X-Admin-Key": ADMIN_KEY },
     });
@@ -266,7 +269,7 @@ function buildApp(): Hono {
   // this test.
   {
     const app = buildApp();
-    const res = await app.request("/api/health/throw-http-secret", {
+    const res = await app.request("/api/admin/health/throw-http-secret", {
       method: "GET",
       headers: { "X-Admin-Key": ADMIN_KEY },
     });
@@ -290,7 +293,7 @@ function buildApp(): Hono {
   // 4. 2xx success — regression guard against over-broad scrubbing.
   {
     const app = buildApp();
-    const res = await app.request("/api/health/ok-with-secret-shape", {
+    const res = await app.request("/api/admin/health/ok-with-secret-shape", {
       method: "GET",
       headers: { "X-Admin-Key": ADMIN_KEY },
     });
@@ -314,7 +317,7 @@ function buildApp(): Hono {
   // `globalMiddleware`'s outer catch in the first place.
   {
     const app = buildApp();
-    const res = await app.request("/api/health/throw-mastra-secret", {
+    const res = await app.request("/api/admin/health/throw-mastra-secret", {
       method: "GET",
       headers: { "X-Admin-Key": ADMIN_KEY },
     });
@@ -344,7 +347,7 @@ function buildApp(): Hono {
   // branch was likewise dead code.
   {
     const app = buildApp();
-    const res = await app.request("/api/health/throw-zod-secret", {
+    const res = await app.request("/api/admin/health/throw-zod-secret", {
       method: "GET",
       headers: { "X-Admin-Key": ADMIN_KEY },
     });

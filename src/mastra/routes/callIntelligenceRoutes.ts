@@ -3141,7 +3141,7 @@ Respond with JSON only:
             }
           }
           // Release slot on early client disconnect (abort before response ends).
-          c.req.raw.signal?.addEventListener("abort", releaseSlot, { once: true });
+          c.req.raw?.signal?.addEventListener("abort", releaseSlot, { once: true });
 
           // Wrap a ReadableStream so the concurrency slot is released exactly
           // once when the response body drains, errors, or is cancelled.

@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>North Star KPI — Data Entry</title>
   <link rel="stylesheet" href="/dashboard/tailwind.css" />
+  <link rel="stylesheet" href="/css/utilities.css" />
   <style>
     label { font-size: .8rem; color:#374151; font-weight:600; }
     input, select { width:100%; border:1px solid #d1d5db; border-radius:.5rem; padding:.45rem .6rem; font-size:.9rem; }
     .field { margin-bottom:.75rem; }
   </style>
+  <script src="/js/i18n.js?v=1.0"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <div id="walaplus-nav"></div>
@@ -33,11 +35,11 @@
         <h2 id="formTitle" class="font-semibold text-gray-800 mb-3"></h2>
         <form id="entryForm"></form>
         <button id="saveBtn" class="mt-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 text-sm">Save record</button>
-        <span id="msg" class="ml-3 text-sm"></span>
+        <span id="msg" class="ms-3 text-sm"></span>
       </div>
       <div class="bg-white rounded-xl shadow p-5">
         <h2 class="font-semibold text-gray-800 mb-3">Recent entries</h2>
-        <div id="recent" class="text-sm text-gray-600 overflow-auto" style="max-height:420px"></div>
+        <div id="recent" class="text-sm text-gray-600 overflow-auto max-h-420"></div>
       </div>
     </div>
   </div>
@@ -121,8 +123,8 @@
       const { rows } = await r.json();
       if (!rows || !rows.length) { wrap.innerHTML = '<span class="text-gray-400">No records yet.</span>'; return; }
       const cols = Object.keys(SOURCES[sel.value].fields);
-      wrap.innerHTML = `<table class="w-full text-xs"><thead><tr class="text-gray-500 text-left">${cols.map(c=>`<th class="pr-2 pb-1">${esc(c)}</th>`).join("")}</tr></thead><tbody>${
-        rows.map(row => `<tr class="border-t">${cols.map(c=>`<td class="pr-2 py-1">${esc(row[c])}</td>`).join("")}</tr>`).join("")
+      wrap.innerHTML = `<table class="w-full text-xs"><thead><tr class="text-gray-500 text-start">${cols.map(c=>`<th scope="col" class="pe-2 pb-1">${esc(c)}</th>`).join("")}</tr></thead><tbody>${
+        rows.map(row => `<tr class="border-t">${cols.map(c=>`<td class="pe-2 py-1">${esc(row[c])}</td>`).join("")}</tr>`).join("")
       }</tbody></table>`;
     }
 
@@ -131,23 +133,28 @@
       const body = {};
       new FormData(form).forEach((v, k) => { if (v !== "") body[k] = v; });
       const msg = document.getElementById("msg");
-      msg.textContent = "Saving…"; msg.className = "ml-3 text-sm text-gray-500";
+      msg.textContent = "Saving…"; msg.className = "ms-3 text-sm text-gray-500";
       try {
         const r = await fetch(`/api/northstar/${sel.value}`, {
           method:"POST", credentials:"same-origin",
           headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body),
         });
         if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || ("HTTP "+r.status)); }
-        msg.textContent = "✓ Saved"; msg.className = "ml-3 text-sm text-green-600";
+        msg.textContent = "✓ Saved"; msg.className = "ms-3 text-sm text-green-600";
         form.reset(); loadRecent();
       } catch (e) {
-        msg.textContent = "✗ " + e.message; msg.className = "ml-3 text-sm text-red-600";
+        msg.textContent = "✗ " + e.message; msg.className = "ms-3 text-sm text-red-600";
       }
     }
 
     sel.addEventListener("change", renderForm);
     document.getElementById("saveBtn").addEventListener("click", save);
     renderForm();
+  </script>
+  <script>
+    if (window.WalaPlusI18n) {
+      window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());
+    }
   </script>
 </body>
 </html>

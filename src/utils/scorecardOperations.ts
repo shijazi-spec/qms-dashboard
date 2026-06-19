@@ -6,8 +6,8 @@
  *
  * The scripts under scripts/ create their own pg.Pool from
  * process.env.DATABASE_URL; these functions take a pool from the
- * caller so they share the app's connection. No console.log here — the
- * caller (endpoint) decides how to surface results. No process.exit.
+ * caller so they share the app's connection. No raw stdout logging here —
+ * the caller (endpoint) decides how to surface results. No process.exit.
  */
 
 import { logger as safeLogger } from "./logger";

@@ -708,13 +708,13 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/compliance\/export/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   // Compliance reads — governance roles and senior leadership only
   {
     pattern: /^\/api\/compliance/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
 
   {
@@ -751,12 +751,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/reports\/capa-effectiveness$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/reports\/compliance-posture$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
 
   // PDPL reports — admin-only (privacy inventory, incident history, security
@@ -817,7 +817,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/audit\/trigger$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "ai_specialist", "bu_owner", "executive", "quality_specialist", "auditor", "team_lead"],
   },
 
   {
@@ -897,6 +897,34 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "grc_manager", "head_of_operations_quality"],
   },
+  {
+    // AI Consultant working-memory read (resource-scoped). Kept in sync with
+    // CONSULTANT_ROLES in src/mastra/routes/consultantRoutes.ts.
+    pattern: /^\/api\/consultant\/memory$/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
+  {
+    // AI Consultant working-memory clear (PDPL erasure of the resource-scoped
+    // working memory). Same allowlist as the memory read above.
+    pattern: /^\/api\/consultant\/memory\/clear$/,
+    methods: ["POST"],
+    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+  },
+  {
+    // Call-intelligence CRM-link audit/repair — admin-only (handler also
+    // enforces verifyAdminKey as defense-in-depth).
+    pattern: /^\/api\/calls\/audit-crm-links$/,
+    methods: ["POST"],
+    roles: ["admin"],
+  },
+  {
+    // Quality audit-rule snapshot — admin-only (handler enforces
+    // requireAdminOrKey).
+    pattern: /^\/api\/quality\/audit-rule-snapshot$/,
+    methods: ["GET"],
+    roles: ["admin"],
+  },
 
   {
     pattern: /^\/api\/knowledge\/upload$/,
@@ -938,7 +966,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/kpis\/seed-(mohammed|sdr|sales)$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin"],
   },
   // KPI auto-calc recompute — governance write roles only.
   {
@@ -978,19 +1006,19 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/kpis\/\d+\/values$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   // KPI definition writes (create / update / delete) — governance write roles only.
   {
     pattern: /^\/api\/kpis(\/\d+)?$/,
     methods: ["POST", "PUT", "DELETE"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   // KPI reads (definitions, summary, individual KPI, history) — governance roles + executive.
   {
     pattern: /^\/api\/kpis(\/(\d+(\/history)?|summary))?$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   // GRQ KPI feed/OKR/catalog reads — same read audience as KPI reads.
   {
@@ -1010,13 +1038,13 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   },
   // North Star capture-table reads.
   {
-    pattern: /^\/api\/northstar\/[a-z_]+$/,
+    pattern: /^\/api\/northstar\/[^/]+$/,
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
   // North Star capture-table writes — governance write roles.
   {
-    pattern: /^\/api\/northstar\/[a-z_]+$/,
+    pattern: /^\/api\/northstar\/[^/]+$/,
     methods: ["POST"],
     roles: ["admin", "executive", "grc_manager", "head_of_operations_quality", "quality_manager"],
   },
@@ -1025,17 +1053,17 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/executive\/reports(\/\d+)?$/,
     methods: ["POST", "PUT", "DELETE"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/executive\/reports(\/\d+)?$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/executive\/mbr-data$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
 
   // Analytics — cycle times, agent compliance, CAPA recurrence, trends, executive digest.
@@ -1043,12 +1071,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/analytics\/executive-digest\/send$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/analytics\//,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
 
   // Platform Health Pulse — admin only (operational diagnostics, secret presence,
@@ -1068,12 +1096,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/scorecard\/snapshot$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/scorecard\//,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
 
   // Infographics — governance-only renders.  Share-out (Slack / email) distributes
@@ -1081,12 +1109,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/infographic\/[^/]+\/share\/(slack|email)$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/infographic(\/.+)?$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1098,17 +1126,17 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/pmp\/generate-charter$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "head_of_operations_quality", "grc_manager", "quality_manager", "bu_owner", "ai_specialist"],
   },
   {
     pattern: /^\/api\/pmp\//,
     methods: ["POST", "PUT", "DELETE"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "head_of_operations_quality", "grc_manager", "quality_manager", "bu_owner"],
   },
   {
     pattern: /^\/api\/pmp\//,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "head_of_operations_quality", "grc_manager", "quality_manager", "bu_owner", "executive"],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1120,12 +1148,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/tablef\//,
     methods: ["POST", "PUT", "DELETE"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "head_of_operations_quality", "quality_manager", "grc_manager"],
   },
   {
     pattern: /^\/api\/tablef\//,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "head_of_operations_quality", "quality_manager", "grc_manager", "executive", "bu_owner"],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1138,12 +1166,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/ai\/approvals\/[^/]+\/approve$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/ai\/approvals\/[^/]+\/reject$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "ai_specialist", "bu_owner", "executive", "quality_specialist", "auditor", "team_lead"],
   },
   // Bulk-approve / bulk-reject — same authorisation envelope as the
   // single-record variants above. The handlers in aiApprovalRoutes
@@ -1155,12 +1183,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/ai\/approvals\/bulk-(approve|reject)$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "ai_specialist", "bu_owner", "executive", "quality_specialist", "auditor", "team_lead"],
   },
   {
     pattern: /^\/api\/ai\/approvals/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "ai_specialist", "bu_owner", "executive", "quality_specialist", "auditor", "team_lead"],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1171,71 +1199,71 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // auditors and quality specialists may read and attach, but only governance
   // roles may delete (to protect audit-trail integrity).
   // ─────────────────────────────────────────────────────────────────────────
-  { pattern: /^\/api\/pdpl\/export/, methods: ["GET"], roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"] },
+  { pattern: /^\/api\/pdpl\/export/, methods: ["GET"], roles: ["admin"] },
   {
     pattern: /^\/api\/qms\/nc\/export/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/qms\/capa-export-xlsx/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/qms\/capa\/export/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/kpis\/export/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/qms\/(nc|capa)\/bulk-update$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/qms\/(nc|capa)\/[^/]+\/history$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/qms\/nc\/\d+\/approve-closure$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/qms\/capa\/\d+\/(approve-closure|effectiveness)$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/qms\/capa\/\d+$/,
     methods: ["PATCH"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "auditor"],
   },
   {
     pattern: /^\/api\/evidence-pack$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "auditor", "quality_specialist"],
   },
   {
     pattern: /^\/api\/evidence-summary$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "auditor", "quality_specialist"],
   },
   {
     pattern: /^\/api\/evidence\/\w/,
     methods: ["DELETE"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/evidence/,
     methods: ["GET", "POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "ai_specialist", "bu_owner", "executive", "quality_specialist", "auditor", "team_lead"],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1249,52 +1277,52 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   {
     pattern: /^\/api\/audit\//,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/dashboard\//,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/dashboard$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/scorecards$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/scorecard$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/governance$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/crm\/enrich$/,
     methods: ["POST"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
     pattern: /^\/api\/crm\/data$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/agents\/performance$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   {
     pattern: /^\/api\/integrations\/status$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -23,6 +23,7 @@
 import { aiOpsRoutes } from "../src/mastra/routes/aiOpsRoutes";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
+import { makeCookieForRole } from "./_helpers/sessionAuth";
 import { QMS_CONSULTANT_PROMPT_VERSION } from "../src/mastra/agents/qmsConsultantAgent";
 import { QUALITY_SPECIALIST_PROMPT_VERSION } from "../src/mastra/agents/qualitySpecialistAgent";
 import { SDR_QUALITY_PROMPT_VERSION } from "../src/mastra/agents/sdrQualityAgent";
@@ -30,6 +31,10 @@ import { SALES_QUALITY_PROMPT_VERSION } from "../src/mastra/agents/salesQualityA
 
 const suite = new TestSuite("aiOpsPromptVersions");
 const ADMIN_KEY = "integration-test-prompt-versions-2026";
+// Signed walaplus_session cookie for an active admin platform user (requireRole()
+// now always performs a live getPlatformUser() lookup — the shared helper also
+// registers an active platform_users row for this session's email).
+const ADMIN_COOKIE = makeCookieForRole("admin");
 const HAS_DB = !!process.env.DATABASE_URL;
 
 console.log("\n=== aiOpsPromptVersions integration tests ===\n");
@@ -130,7 +135,7 @@ await suite.test(
         "GET",
       );
       const res = await handler(
-        makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+        makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
       );
       suite.expectEqual(res.status, 200, "status");
 
@@ -241,7 +246,7 @@ if (!HAS_DB) {
         const res = await handler(
           makeContext({
             method: "GET",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             query: { days: "1", minFeedback: "0" },
           }),
         );
@@ -290,7 +295,7 @@ if (!HAS_DB) {
           "GET",
         );
         const res = await handler(
-          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+          makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
         );
         suite.expectEqual(res.status, 200, "status");
 
@@ -342,7 +347,7 @@ if (!HAS_DB) {
           "GET",
         );
         const res = await handler(
-          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+          makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
         );
         suite.expectEqual(res.status, 200, "status");
         const run = res.body?.data;
@@ -395,7 +400,7 @@ if (!HAS_DB) {
           "GET",
         );
         const res = await handler(
-          makeContext({ method: "GET", headers: { "X-Admin-Key": ADMIN_KEY } }),
+          makeContext({ method: "GET", headers: { Cookie: ADMIN_COOKIE } }),
         );
         suite.expectEqual(res.status, 200, "status is 200 even with no rows");
         suite.expect(
@@ -463,7 +468,7 @@ if (!HAS_DB) {
         const res = await handler(
           makeContext({
             method: "GET",
-            headers: { "X-Admin-Key": ADMIN_KEY },
+            headers: { Cookie: ADMIN_COOKIE },
             query: { days: "7", minFeedback: "0" },
           }),
         );

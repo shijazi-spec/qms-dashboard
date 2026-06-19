@@ -91,6 +91,16 @@ const PUBLIC_PATH_ALLOWLIST: Record<string, string> = {
   // ---- Accessibility statement -------------------------------------------
   "/a11y": "WCAG / regulator-facing accessibility statement. Public by design.",
 
+  // ---- Slack interactive-component callback ------------------------------
+  "/webhooks/slack/action":
+    "POST: Slack interactive-component callback. Slack (not a browser) posts here and cannot carry a session cookie; the handler authenticates every request via Slack signing-secret signature verification plus dedup/bot-loop guards (src/triggers/slackTriggers.ts).",
+  "/api/webhooks/slack/action":
+    "POST: /api alias of the Slack interactive-component callback above — same Slack-signature-verified handler. Public so Slack's servers can reach it without a platform session.",
+
+  // ---- Server-to-server leadership KPI feed ------------------------------
+  "/api/kpis/leadership-feed":
+    "GET: read-only KPI feed PULLED server-to-server by the separate Leadership Platform app (no platform session). Fail-closed — returns 503 when LEADERSHIP_FEED_KEY is unset/<16 chars and 401 on any X-Feed-Key mismatch (src/mastra/routes/leadershipFeedRoutes.ts). The in-platform /api/kpis/leadership-feed/preview variant is session + role gated.",
+
   // ---- routeManifest paths whose declared path is matched as public -------
   // These are concrete manifest entries that fall under one of the prefix
   // bypasses above. Listing them explicitly forces a future engineer adding a

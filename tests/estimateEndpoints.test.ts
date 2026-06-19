@@ -44,10 +44,15 @@ import { policyRoutes } from "../src/mastra/routes/policyRoutes";
 import { eventLogsRoutes } from "../src/mastra/routes/eventLogsRoutes";
 import { TestSuite } from "./_helpers/runner";
 import { buildHandler, makeContext } from "./_helpers/fakeContext";
+import { makeCookieForRole } from "./_helpers/sessionAuth";
 
 const suite = new TestSuite("estimateEndpoints");
 const HAS_DB = !!process.env.DATABASE_URL;
 const ADMIN_KEY = "integration-test-estimate-2026";
+// Signed walaplus_session cookie for an active admin platform user. These
+// export/estimate routes authenticate via getSessionUser()/requireRole(); the
+// shared helper also registers an active platform_users row for the session.
+const ADMIN_COOKIE = makeCookieForRole("admin");
 
 console.log("\n=== estimate endpoint integration tests ===\n");
 
@@ -81,11 +86,11 @@ async function resolveResponse(result: any): Promise<{
   };
 }
 
-/** Make a context that carries a valid admin key in the request header. */
+/** Make a context that carries a valid admin session cookie in the request header. */
 function withAdminKey(extra: Parameters<typeof makeContext>[0] = {}): ReturnType<typeof makeContext> {
   return makeContext({
     ...extra,
-    headers: { "X-Admin-Key": ADMIN_KEY, ...(extra.headers ?? {}) },
+    headers: { Cookie: ADMIN_COOKIE, ...(extra.headers ?? {}) },
   });
 }
 

@@ -850,17 +850,17 @@
             var isTxt = mime === 'text/plain' || name.endsWith('.txt');
             if (isPdf) {
                 return '<div class="border rounded-lg overflow-hidden bg-gray-100">'
-                    + '<iframe src="' + url + '" title="' + escAttr(policy.file_name || 'document') + '" class="w-full" style="height:70vh;border:0" sandbox="allow-same-origin"></iframe>'
+                    + '<iframe src="' + url + '" title="' + escAttr(policy.file_name || 'document') + '" class="w-full doc-preview-frame-lg" sandbox="allow-same-origin"></iframe>'
                     + '</div>';
             }
             if (isImg) {
-                return '<div class="border rounded-lg overflow-auto bg-gray-100 flex justify-center p-2" style="max-height:70vh">'
+                return '<div class="border rounded-lg overflow-auto bg-gray-100 flex justify-center p-2 doc-preview-img-wrap">'
                     + '<img src="' + url + '" alt="' + escAttr(policy.file_name || 'document') + '" class="max-w-full h-auto object-contain"/>'
                     + '</div>';
             }
             if (isTxt) {
                 return '<div class="border rounded-lg overflow-hidden bg-gray-100">'
-                    + '<iframe src="' + url + '" title="' + escAttr(policy.file_name || 'document') + '" class="w-full" style="height:40vh;border:0" sandbox></iframe>'
+                    + '<iframe src="' + url + '" title="' + escAttr(policy.file_name || 'document') + '" class="w-full doc-preview-frame-sm" sandbox></iframe>'
                     + '</div>';
             }
             // Office / other formats — no native browser rendering.

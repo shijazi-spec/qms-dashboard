@@ -1255,14 +1255,14 @@
             (plan.linkAccountZohoId ? ' · link to account ' + escapeHtml(String(plan.linkAccountZohoId)) : '') +
             '</div>';
         if (recRows) html += '<div class="overflow-x-auto mb-3"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>' +
-            '<th class="px-2 py-1 text-start font-medium text-gray-600">Record</th>' +
-            '<th class="px-2 py-1 text-start font-medium text-gray-600">Action</th>' +
-            '<th class="px-2 py-1 text-start font-medium text-gray-600">Details</th></tr></thead><tbody>' + recRows + '</tbody></table></div>';
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Record</th>' +
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Action</th>' +
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Details</th></tr></thead><tbody>' + recRows + '</tbody></table></div>';
         if (confRows) html += '<div class="text-xs font-semibold text-gray-900 mb-1">Field conflicts (' + conflicts.length + ') — survivor value kept, other values differ</div>' +
             '<div class="overflow-x-auto mb-3"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>' +
-            '<th class="px-2 py-1 text-start font-medium text-gray-600">Field</th>' +
-            '<th class="px-2 py-1 text-start font-medium text-gray-600">Kept (survivor)</th>' +
-            '<th class="px-2 py-1 text-start font-medium text-gray-600">Other values</th></tr></thead><tbody>' + confRows + '</tbody></table></div>';
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Field</th>' +
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Kept (survivor)</th>' +
+            '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Other values</th></tr></thead><tbody>' + confRows + '</tbody></table></div>';
         if (reasons.length) html += '<div class="text-xs font-semibold text-gray-900 mb-1">Why it needs your review</div>' +
             '<ul class="list-disc ms-5 text-xs text-amber-800">' +
             reasons.map(function (rs) { return '<li>' + escapeHtml(String(rs)) + '</li>'; }).join('') + '</ul>';

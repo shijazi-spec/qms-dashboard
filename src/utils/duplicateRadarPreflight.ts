@@ -21,6 +21,7 @@ import {
   normalizePhone,
   normalizeCompanyName,
 } from "./duplicateRadarDatabase";
+import { logger } from "./logger";
 
 /**
  * Marketplace / merchant Zoho layout names — the ONLY records the Duplicate
@@ -2340,10 +2341,9 @@ export async function runPreflight(input: {
     }
   } catch (e) {
     // Degrade gracefully — the cluster paths already populated matchByRow.
-    console.warn(
-      "[preflight] all-records fallback skipped:",
-      (e as any)?.message || e,
-    );
+    logger.warn("[preflight] all-records fallback skipped", {
+      error: (e as any)?.message || e,
+    });
   }
 
   // OPT-IN — refresh the CS overlap verdict on every matched cluster.

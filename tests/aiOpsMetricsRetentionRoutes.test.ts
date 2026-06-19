@@ -148,12 +148,17 @@ const originalQuery = pg.Pool.prototype.query;
 const { aiOpsRoutes } = await import("../src/mastra/routes/aiOpsRoutes");
 const { TestSuite } = await import("./_helpers/runner");
 const { buildHandler, makeContext } = await import("./_helpers/fakeContext");
+const { makeCookieForRole } = await import("./_helpers/sessionAuth");
 const { AI_METRICS_RETENTION_AUDIT_MAX_LIMIT } = await import(
   "../src/utils/aiMetricsRetentionConfig"
 );
 
 const suite = new TestSuite("aiOpsMetricsRetentionRoutes");
 const ADMIN_KEY = "integration-test-ai-ops-retention-2026";
+// Signed walaplus_session cookie for an active admin platform user (requireRole()
+// now always performs a live getPlatformUser() lookup — the shared helper also
+// registers an active platform_users row for this session's email).
+const ADMIN_COOKIE = makeCookieForRole("admin");
 const ROUTE_PATH = "/api/ai-ops/metrics-retention";
 const ROUTE_METHOD = "GET";
 
@@ -210,7 +215,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { limit: "2", offset: "2" },
         }),
       );
@@ -249,7 +254,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { limit: String(AI_METRICS_RETENTION_AUDIT_MAX_LIMIT + 1) },
         }),
       );
@@ -272,7 +277,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { limit: "0" },
         }),
       );
@@ -294,7 +299,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { limit: "12.5" },
         }),
       );
@@ -319,7 +324,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { offset: "-1" },
         }),
       );
@@ -343,7 +348,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { offset: "1.5" },
         }),
       );
@@ -368,7 +373,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { from: "not a real date at all" },
         }),
       );
@@ -392,7 +397,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { to: "definitely not a timestamp" },
         }),
       );
@@ -419,7 +424,7 @@ await suite.test(
       const res = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: {
             from: "2026-04-25T00:00:00Z",
             to: "2026-04-20T00:00:00Z",
@@ -456,7 +461,7 @@ await suite.test(
       const baseline = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { limit: "100" },
         }),
       );
@@ -474,7 +479,7 @@ await suite.test(
       const filtered = await handler(
         makeContext({
           method: ROUTE_METHOD,
-          headers: { "X-Admin-Key": ADMIN_KEY },
+          headers: { Cookie: ADMIN_COOKIE },
           query: { limit: "100", from: FROM, to: TO },
         }),
       );

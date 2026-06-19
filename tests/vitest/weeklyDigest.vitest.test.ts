@@ -6,7 +6,7 @@
  *
  * Run: npx vitest run tests/vitest/weeklyDigest.vitest.test.ts
  */
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   buildLastWeekWindow,
   fetchWeeklyAgentRollup,
@@ -172,6 +172,18 @@ describe("renderDigestHtml", () => {
 });
 
 describe("sendWeeklyDigest — flag gating", () => {
+  // sendWeeklyDigest is decommissioned per the 3rd + 4th scope amendments and
+  // short-circuits to { sent:false, skipped_reason:"decommissioned_per_..." }
+  // unless DIGEST_DECOMMISSIONED_OVERRIDE === "true". Set the override so these
+  // tests exercise the real legacy flag/channel gating logic (the meaningful
+  // behaviour under test) rather than the decommission no-op.
+  beforeEach(() => {
+    process.env.DIGEST_DECOMMISSIONED_OVERRIDE = "true";
+  });
+  afterEach(() => {
+    delete process.env.DIGEST_DECOMMISSIONED_OVERRIDE;
+  });
+
   test("returns flag_disabled when flag off and forceSend=false", async () => {
     const pool = { query: async () => ({ rows: [] }) };
     const r = await sendWeeklyDigest(pool);

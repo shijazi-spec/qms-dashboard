@@ -492,12 +492,28 @@ export async function reapExpiredToolHealthOverrides(): Promise<ReapExpiredToolH
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Evaluate the expiry predicate in SQL (against the DB clock) rather than
+    // in JS. node-pg parses a TIMESTAMP-without-time-zone column into a Date
+    // using the *process* timezone, so comparing it against `new Date()` in JS
+    // silently breaks whenever the worker's TZ differs from the database's:
+    // a row that expired "10s ago" in UTC is parsed as a future instant when
+    // the process runs behind UTC, and isOverrideRowExpired() then returns
+    // false for *every* concurrent caller — nothing ever gets reaped. Letting
+    // Postgres compute `expires_at <= NOW()` makes the claim timezone-correct
+    // and keeps it atomic under the FOR UPDATE row lock: the winning caller
+    // clears expires_at, so the loser re-reads the row with _is_expired=false
+    // and returns { reaped: false }.
     const beforeResult = await client.query(
-      `SELECT * FROM tool_health_config_overrides WHERE id = 1 FOR UPDATE`,
+      `SELECT *,
+              (expires_at IS NOT NULL AND expires_at <= NOW()) AS _is_expired
+         FROM tool_health_config_overrides
+        WHERE id = 1
+        FOR UPDATE`,
     );
     const row = beforeResult.rows[0];
+    const rowIsExpired = row?._is_expired === true;
 
-    if (!row || !isOverrideRowExpired(row) || !rowHasAnyOverrideValue(row)) {
+    if (!row || !rowIsExpired || !rowHasAnyOverrideValue(row)) {
       // Nothing to do — but still clear an orphan expires_at on a row whose
       // override values are all NULL, so the dashboard doesn't keep showing
       // a stale "expires in -2h" forever.

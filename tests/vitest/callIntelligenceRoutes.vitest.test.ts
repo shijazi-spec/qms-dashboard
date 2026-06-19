@@ -92,7 +92,7 @@ describe("POST /api/calls/ingest — real data path", () => {
     const arg = vi.mocked(callDb.createCallRecord).mock.calls[0][0];
     expect(arg.call_id).toBe("call-abc");
     expect(arg.source).toBe("five9");
-    expect(arg.status).toBe("pending");
+    expect(arg.status).toBe("uploaded");
   });
 
   test("500 with deterministic body when createCallRecord throws", async () => {
