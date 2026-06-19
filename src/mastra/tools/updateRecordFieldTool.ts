@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   updateZohoRecord,
   fetchZohoRecordById,
+  searchZohoRecords,
   zohoWritesAllowedInEnv,
 } from "../../utils/zohoCRM";
 import { withTimeout } from "../../utils/promiseTimeout";
@@ -246,13 +247,67 @@ export const updateRecordFieldTool = createTool({
         "field update",
       );
     } catch (e: any) {
+      const errMsg = e?.message || String(e);
+
+      // DUPLICATE_DATA is the common "approved but nothing changed" cause for
+      // Email/Phone/Mobile edits: Zoho enforces uniqueness on these fields, so
+      // setting a value that ANOTHER record already holds is silently rejected
+      // (old code reported it as Executed). This almost always means the two
+      // records are duplicates of the same entity — copying the value across is
+      // the wrong fix; they should be MERGED. Surface that clearly, and make a
+      // best-effort lookup of the conflicting record so the user can act.
+      if (/DUPLICATE_DATA/i.test(errMsg)) {
+        const conflictField =
+          fields.find((f) => new RegExp(`\\b${f}\\b`, "i").test(errMsg)) ||
+          fields[0];
+        const conflictValue = updates[conflictField];
+
+        let conflictHint = "";
+        try {
+          // Escape Zoho criteria-grammar specials so a value containing
+          // parens/commas/backslashes can't break the best-effort lookup.
+          const escaped = String(conflictValue).replace(/([\\(),])/g, "\\$1");
+          const existing = await withTimeout(
+            searchZohoRecords(module, `(${conflictField}:equals:${escaped})`),
+            ZOHO_WRITE_TIMEOUT_MS,
+            "duplicate lookup",
+          );
+          const other = existing.find((r) => String(r.id) !== String(recordId));
+          if (other) {
+            const od = (other.data ?? {}) as Record<string, any>;
+            const name =
+              od.Full_Name || od.Last_Name || od.Account_Name || od.Deal_Name || "record";
+            conflictHint =
+              ` Another ${module} record already uses this ${conflictField}: ` +
+              `"${name}" (id ${other.id}). These look like duplicates — merge them ` +
+              `(use the duplicate-resolution / merge flow) instead of copying the ${conflictField}.`;
+          }
+        } catch {
+          /* best-effort only — never let the lookup mask the real failure */
+        }
+
+        return {
+          success: false,
+          module,
+          recordId,
+          fieldsUpdated: [],
+          message:
+            `Zoho rejected the update: the ${conflictField} "${String(conflictValue)}" ` +
+            `is already in use on another ${module} record (DUPLICATE_DATA).` +
+            (conflictHint ||
+              ` This usually means a duplicate record already holds this value — ` +
+                `merge the two records instead of copying the value.`),
+          error: errMsg,
+        };
+      }
+
       return {
         success: false,
         module,
         recordId,
         fieldsUpdated: [],
         message: "Failed to update the record in Zoho.",
-        error: e?.message || String(e),
+        error: errMsg,
       };
     }
 
