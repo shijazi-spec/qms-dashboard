@@ -1145,10 +1145,6 @@
                         <input type="file" id="preflightExcelInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" data-on-change="handlePreflightExcelChosen" data-testid="input-preflight-excel" />
                         <button data-on-click="loadPreflightSample" id="preflightSampleBtn" data-testid="button-preflight-sample" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Load sample</button>
                         <button data-on-click="clearPreflight" id="preflightClearBtn" data-testid="button-preflight-clear" class="px-3 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-700">Clear</button>
-                        <!-- Shown only after a preflight run on an uploaded
-                             Excel — exports PASS rows back out with the
-                             operator's original column structure intact. -->
-                        <button data-on-click="downloadPreflightPassRows" id="preflightExportPassBtn" data-testid="button-preflight-export-pass" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">⬇ Download PASS rows</button>
                         <button data-on-click="downloadPreflightFlaggedRows" id="preflightExportFlaggedBtn" data-testid="button-preflight-export-flagged" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700" title="Download ONLY the flagged rows (Block / Review / Warn / Duplicate) as a native Excel file — Company, Contact, Email, Phone, Verdict, Existing Owner, CS Phase, Churn Date, and the Recommended Action. This is the file to send the Head of Sales.">⚑ Download flagged rows (for Head of Sales)</button>
                         <button data-on-click="downloadPreflightPassRowsXlsx" id="preflightExportPassXlsxBtn" data-testid="button-preflight-export-pass-xlsx" class="hidden px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-700 text-white hover:bg-emerald-800" title="Download the PASS (safe-to-import) rows as a native Excel file — same Summary + Findings design as the flagged export, with Company, Contact, Email, Phone columns.">📊 Download PASS rows (Excel)</button>
                         <!-- Executive toolbar — appears after a successful run. -->
@@ -8953,71 +8949,6 @@
             }
         }
 
-        // Download PASS rows as a Zoho-ready CSV, preserving the operator's
-        // original column structure (not just domain+company). Filters
-        // against the last preflight result so they get only the
-        // import-safe leads, ready to drop into Zoho's bulk-lead-import
-        // wizard. Collapses what used to be a 4-step manual filter into
-        // one click. Tier 1 #3 recommendation.
-        async function downloadPreflightPassRows() {
-            if (!preflightLastUpload || !preflightLastUpload.originalRows || preflightLastUpload.originalRows.length === 0) {
-                alert('Upload an Excel file first, then click Check.');
-                return;
-            }
-            if (!preflightLastResult || !preflightLastResult.rows) {
-                alert('Run the preflight Check first to know which rows are safe to import.');
-                return;
-            }
-
-            const passIndexSet = new Set();
-            for (const r of preflightLastResult.rows) {
-                if (r && r.verdict === 'pass' && typeof r.row_index === 'number') {
-                    passIndexSet.add(r.row_index);
-                }
-            }
-            if (passIndexSet.size === 0) {
-                alert('No PASS rows in the last preflight result — nothing to export.');
-                return;
-            }
-
-            // Build CSV from the original column structure. Use the first
-            // row's keys as the header order (all rows share the same
-            // headers because they came from one workbook).
-            const passRows = preflightLastUpload.originalRows.filter((_, idx) => passIndexSet.has(idx));
-            if (passRows.length === 0) {
-                alert('No matching original rows found for the PASS verdicts.');
-                return;
-            }
-            const headerKeys = Object.keys(passRows[0]);
-            const quote = (v) => {
-                const s = v == null ? '' : String(v);
-                return s.includes(',') || s.includes('"') || s.includes('\n')
-                    ? '"' + s.replace(/"/g, '""') + '"'
-                    : s;
-            };
-            const lines = [headerKeys.map(quote).join(',')];
-            for (const r of passRows) {
-                lines.push(headerKeys.map(k => quote(r[k])).join(','));
-            }
-            const csvBlob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-
-            // Build a sensible filename from the original — e.g.
-            //   "2000 Sales Leads Patch 2-leads (Mawsool).xlsx"
-            //   → "2000 Sales Leads Patch 2-leads (Mawsool)__PASS__1009.csv"
-            const baseName = (preflightLastUpload.fileName || 'upload.xlsx').replace(/\.[^.]+$/, '');
-            const outName = baseName + '__PASS__' + passRows.length + '.csv';
-
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(csvBlob);
-            a.download = outName;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                URL.revokeObjectURL(a.href);
-                a.remove();
-            }, 100);
-        }
-
         // Download ONLY the flagged rows (Block / Review / Warn / Duplicate)
         // as a native .xlsx for the Head of Sales. 2026-06-17 — switched from
         // a client-built CSV to the server's native-xlsx endpoint: the manual
@@ -9141,8 +9072,6 @@
             // subsequent paste-only run doesn't try to export stale data.
             preflightLastUpload = null;
             preflightLastResult = null;
-            const exportBtn = document.getElementById('preflightExportPassBtn');
-            if (exportBtn) exportBtn.classList.add('hidden');
             const flaggedBtn = document.getElementById('preflightExportFlaggedBtn');
             if (flaggedBtn) flaggedBtn.classList.add('hidden');
             const passXlsxBtn = document.getElementById('preflightExportPassXlsxBtn');
@@ -9308,21 +9237,6 @@
                 const data = _preflightMergeChunks(results, rows.length);
                 preflightLastResult = data; // stash for "Download PASS rows"
                 renderPreflight(data);
-                // Show the export button only when we have an upload
-                // backing the result (typed-in CSV runs don't benefit
-                // from "preserve original columns" since there's nothing
-                // extra to preserve).
-                const exportBtn = document.getElementById('preflightExportPassBtn');
-                if (exportBtn) {
-                    const passCount = (data && data.summary && typeof data.summary.pass === 'number')
-                        ? data.summary.pass : 0;
-                    if (preflightLastUpload && passCount > 0) {
-                        exportBtn.classList.remove('hidden');
-                        exportBtn.textContent = '⬇ Download ' + passCount + ' PASS row(s) as CSV';
-                    } else {
-                        exportBtn.classList.add('hidden');
-                    }
-                }
                 // Flagged-rows button — show whenever the run produced any
                 // Block/Review/Warn/Duplicate row (works for typed-in runs
                 // too; contact columns are just blank without an upload).
