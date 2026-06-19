@@ -629,11 +629,14 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["POST", "PUT", "DELETE"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
-  // Audit programme reads — governance roles and senior leadership only
+  // Audit programme reads — governance and senior leadership only.
+  // These records include scope_summary, risk_based_rationale, planned_audits,
+  // preparer/approver identities, and sign-off history — internal compliance
+  // roadmap data that must not be visible to viewer or other low-privilege roles.
   {
     pattern: /^\/api\/audit-programme/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "ai_specialist", "auditor", "executive", "grc_manager", "head_of_operations_quality", "quality_manager"],
   },
 
   // Manual Audit Intake (off-platform audits) — Quality Manager is single-point intake.
@@ -644,10 +647,19 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   },
 
   // External Audits (regulatory, certification, surveillance) — GRC owns, QM contributes.
+  // Reads are restricted to governance/senior roles: these records include
+  // certification_body, auditor_name, scope_summary, readiness percentages,
+  // certificate numbers, expiry dates, and scope_statement values. Viewer and
+  // other low-privilege roles must not see the organisation's external-assurance posture.
+  {
+    pattern: /^\/api\/external-audits/,
+    methods: ["GET"],
+    roles: ["admin", "ai_specialist", "auditor", "executive", "grc_manager", "head_of_operations_quality", "quality_manager"],
+  },
   {
     pattern: /^\/api\/external-audits/,
     methods: ["POST", "PUT", "DELETE"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "grc_manager", "head_of_operations_quality", "quality_manager"],
   },
 
   {
@@ -717,16 +729,22 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
 
-  // Management reviews — senior governance records (minutes, decisions, action items)
+  // Management reviews — senior governance records (minutes, decisions, action items).
+  // These records store attendees, free-form minutes, structured decisions,
+  // action_items, and aggregated input_summary data drawn from nonconformities,
+  // CAPAs, KPI status, risk status, and customer feedback. Access is restricted
+  // to governance and senior-leadership roles only.
+  // Reads: governance leads + executive + auditor/ai_specialist for oversight.
+  // Writes: governance leads only (admin, HoOQ, quality_manager, grc_manager).
   {
     pattern: /^\/api\/management-reviews/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "ai_specialist", "auditor", "executive", "grc_manager", "head_of_operations_quality", "quality_manager"],
   },
   {
     pattern: /^\/api\/management-reviews/,
     methods: ["POST", "PUT", "DELETE"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
+    roles: ["admin", "grc_manager", "head_of_operations_quality", "quality_manager"],
   },
 
   // GRC aggregated reports — governance roles and senior leadership only; department_viewer excluded

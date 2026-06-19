@@ -43,10 +43,25 @@ import {
 import { logEvent } from "../../utils/eventLogsDatabase";
 
 import { logger } from "../../utils/logger";
+
+// Roles that may read external audit records (audits, summary, certificates,
+// checklists). These records contain certification_body, auditor_name,
+// scope_summary, readiness percentages, certificate numbers, expiry dates,
+// and scope_statement values — sensitive external-assurance posture data.
+const READ_ROLES = new Set([
+  "admin",
+  "ai_specialist",
+  "auditor",
+  "executive",
+  "grc_manager",
+  "head_of_operations_quality",
+  "quality_manager",
+]);
+
 const WRITE_ROLES = new Set([
   "admin",
-  "head_of_operations_quality",
   "grc_manager",
+  "head_of_operations_quality",
   "quality_manager",
 ]);
 
@@ -55,6 +70,10 @@ async function ensure() {
   if (ready) return;
   await initAuditProgrammeTables();
   ready = true;
+}
+
+function canRead(role: string | null | undefined): boolean {
+  return !!role && READ_ROLES.has(role);
 }
 
 function canWrite(role: string | null | undefined): boolean {
@@ -71,6 +90,11 @@ export const externalAuditRoutes = [
         await ensure();
         const user = getSessionUser(c);
         if (!user) return unauthorizedResponse(c);
+        if (!canRead(user.role))
+          return forbiddenResponse(
+            c,
+            "Access to external audit records is restricted to governance roles.",
+          );
         const url = new URL(c.req.url);
         const rows = await listExternalAudits({
           status: url.searchParams.get("status") || undefined,
@@ -95,6 +119,11 @@ export const externalAuditRoutes = [
         await ensure();
         const user = getSessionUser(c);
         if (!user) return unauthorizedResponse(c);
+        if (!canRead(user.role))
+          return forbiddenResponse(
+            c,
+            "Access to external audit records is restricted to governance roles.",
+          );
         const summary = await getExternalAuditsSummary();
         return c.json({ success: true, ...summary });
       } catch (err: any) {
@@ -116,6 +145,11 @@ export const externalAuditRoutes = [
         await ensure();
         const user = getSessionUser(c);
         if (!user) return unauthorizedResponse(c);
+        if (!canRead(user.role))
+          return forbiddenResponse(
+            c,
+            "Access to external audit records is restricted to governance roles.",
+          );
         const url = new URL(c.req.url);
         const expDays = url.searchParams.get("expiring_within_days");
         const rows = await listCertificates({
@@ -196,6 +230,11 @@ export const externalAuditRoutes = [
         await ensure();
         const user = getSessionUser(c);
         if (!user) return unauthorizedResponse(c);
+        if (!canRead(user.role))
+          return forbiddenResponse(
+            c,
+            "Access to external audit records is restricted to governance roles.",
+          );
         const id = parseInt(c.req.param("id"), 10);
         if (!Number.isFinite(id)) return c.json({ error: "Invalid id" }, 400);
         const audit = await getExternalAuditById(id);

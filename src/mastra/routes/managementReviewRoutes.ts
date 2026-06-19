@@ -1,3 +1,20 @@
+const MR_READ_ROLES = new Set([
+  "admin",
+  "ai_specialist",
+  "auditor",
+  "executive",
+  "grc_manager",
+  "head_of_operations_quality",
+  "quality_manager",
+]);
+
+const MR_WRITE_ROLES = new Set([
+  "admin",
+  "grc_manager",
+  "head_of_operations_quality",
+  "quality_manager",
+]);
+
 export const managementReviewRoutes = [
   {
     path: "/api/management-reviews",
@@ -5,9 +22,11 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } =
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } =
             await import("../../utils/rbacMiddleware");
-          if (!getSessionUser(c)) return unauthorizedResponse(c);
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+          if (!MR_READ_ROLES.has(user.role)) return forbiddenResponse(c);
 
           const { getReviews } =
             await import("../../utils/managementReviewDatabase");
@@ -31,9 +50,11 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } =
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } =
             await import("../../utils/rbacMiddleware");
-          if (!getSessionUser(c)) return unauthorizedResponse(c);
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+          if (!MR_READ_ROLES.has(user.role)) return forbiddenResponse(c);
 
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
@@ -54,9 +75,11 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } =
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } =
             await import("../../utils/rbacMiddleware");
-          if (!getSessionUser(c)) return unauthorizedResponse(c);
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+          if (!MR_WRITE_ROLES.has(user.role)) return forbiddenResponse(c);
 
           const body = await c.req.json();
           const { createReview } =
@@ -86,9 +109,11 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } =
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } =
             await import("../../utils/rbacMiddleware");
-          if (!getSessionUser(c)) return unauthorizedResponse(c);
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+          if (!MR_WRITE_ROLES.has(user.role)) return forbiddenResponse(c);
 
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
@@ -121,9 +146,11 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } =
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } =
             await import("../../utils/rbacMiddleware");
-          if (!getSessionUser(c)) return unauthorizedResponse(c);
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+          if (!MR_WRITE_ROLES.has(user.role)) return forbiddenResponse(c);
 
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);
@@ -144,9 +171,11 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } =
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } =
             await import("../../utils/rbacMiddleware");
-          if (!getSessionUser(c)) return unauthorizedResponse(c);
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+          if (!MR_WRITE_ROLES.has(user.role)) return forbiddenResponse(c);
 
           const reviewId = parseInt(c.req.param("id"));
           if (isNaN(reviewId)) return c.json({ error: "Invalid ID" }, 400);
@@ -167,9 +196,11 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } =
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } =
             await import("../../utils/rbacMiddleware");
-          if (!getSessionUser(c)) return unauthorizedResponse(c);
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+          if (!MR_WRITE_ROLES.has(user.role)) return forbiddenResponse(c);
 
           const actionId = parseInt(c.req.param("actionId"));
           if (isNaN(actionId)) return c.json({ error: "Invalid ID" }, 400);
@@ -191,9 +222,11 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } =
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } =
             await import("../../utils/rbacMiddleware");
-          if (!getSessionUser(c)) return unauthorizedResponse(c);
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+          if (!MR_READ_ROLES.has(user.role)) return forbiddenResponse(c);
 
           const { getReviewActionsSummary } =
             await import("../../utils/managementReviewDatabase");
@@ -211,9 +244,11 @@ export const managementReviewRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
-          const { getSessionUser, unauthorizedResponse } =
+          const { getSessionUser, unauthorizedResponse, forbiddenResponse } =
             await import("../../utils/rbacMiddleware");
-          if (!getSessionUser(c)) return unauthorizedResponse(c);
+          const user = getSessionUser(c);
+          if (!user) return unauthorizedResponse(c);
+          if (!MR_WRITE_ROLES.has(user.role)) return forbiddenResponse(c);
 
           const id = parseInt(c.req.param("id"));
           if (isNaN(id)) return c.json({ error: "Invalid ID" }, 400);

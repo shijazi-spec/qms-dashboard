@@ -64,12 +64,28 @@ async function ensure() {
 /* ------------------------------------------------------------------------- *
  * Role helpers
  * ------------------------------------------------------------------------- */
+// Roles permitted to read audit programme records (list, detail, history).
+// These records include scope_summary, risk_based_rationale, planned_audits,
+// and sign-off history — sensitive internal compliance roadmap data.
+const READ_ROLES = new Set([
+  "admin",
+  "ai_specialist",
+  "auditor",
+  "executive",
+  "grc_manager",
+  "head_of_operations_quality",
+  "quality_manager",
+]);
 const EDITOR_ROLES = new Set([
   "admin",
   "head_of_operations_quality",
   "quality_manager",
 ]);
 const APPROVER_ROLES = new Set(["admin", "head_of_operations_quality"]);
+
+function canRead(role: string | null | undefined): boolean {
+  return !!role && READ_ROLES.has(role);
+}
 
 function canEdit(role: string | null | undefined): boolean {
   return !!role && EDITOR_ROLES.has(role);
@@ -105,6 +121,11 @@ export const auditProgrammeRoutes = [
         await ensure();
         const user = getSessionUser(c);
         if (!user) return unauthorizedResponse(c);
+        if (!canRead(user.role))
+          return forbiddenResponse(
+            c,
+            "Access to audit programme records is restricted to governance roles.",
+          );
         const url = new URL(c.req.url);
         const year = url.searchParams.get("year");
         const status = url.searchParams.get("status") as ProgrammeStatus | null;
@@ -132,6 +153,11 @@ export const auditProgrammeRoutes = [
         await ensure();
         const user = getSessionUser(c);
         if (!user) return unauthorizedResponse(c);
+        if (!canRead(user.role))
+          return forbiddenResponse(
+            c,
+            "Access to audit programme records is restricted to governance roles.",
+          );
         const id = parseInt(c.req.param("id"), 10);
         if (!Number.isFinite(id)) return c.json({ error: "Invalid id" }, 400);
         const programme = await getProgrammeById(id);
