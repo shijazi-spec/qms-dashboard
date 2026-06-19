@@ -21,6 +21,7 @@
  */
 
 import { sharedPool as pool } from "./sharedPool";
+import { redactSensitiveDeep } from "./eventLogsDatabase";
 
 /** STRM relationship types (the five set-theoretic relations; we store the four meaningful ones). */
 export type StrmRelationship =
@@ -88,7 +89,13 @@ export async function upsertControl(c: Control): Promise<number> {
        SET title = EXCLUDED.title, description = EXCLUDED.description,
            domain = EXCLUDED.domain, source = EXCLUDED.source
      RETURNING id`,
-    [c.control_code, c.title, c.description ?? null, c.domain ?? null, c.source ?? "custom"],
+    [
+      redactSensitiveDeep(c.control_code, "control_code") as string,
+      redactSensitiveDeep(c.title, "title") as string,
+      redactSensitiveDeep(c.description ?? null, "description") as string | null,
+      redactSensitiveDeep(c.domain ?? null, "domain") as string | null,
+      redactSensitiveDeep(c.source ?? "custom", "source") as string,
+    ],
   );
   return r.rows[0].id;
 }
@@ -111,7 +118,7 @@ export async function mapControlToClause(
      ON CONFLICT (control_id, obligation_id) DO UPDATE
        SET relationship_type = EXCLUDED.relationship_type,
            strength = EXCLUDED.strength, source = EXCLUDED.source`,
-    [controlId, obligationId, rel, str, source],
+    [controlId, obligationId, rel, str, redactSensitiveDeep(source, "source") as string],
   );
 }
 

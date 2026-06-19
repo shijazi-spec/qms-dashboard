@@ -23,6 +23,7 @@
 import { sharedPool as pool } from "./sharedPool";
 import { logger } from "./logger";
 import { generateChatText } from "./openaiChatHelper";
+import { redactSensitiveDeep } from "./eventLogsDatabase";
 
 export const WEB_SEARCH_MODEL =
   process.env.WEB_SEARCH_MODEL || "gpt-4o-mini-search-preview";
@@ -260,7 +261,13 @@ export async function recommendForClause(
            web_grounded = EXCLUDED.web_grounded,
            generated_by = EXCLUDED.generated_by,
            generated_at = CURRENT_TIMESTAMP`,
-    [obligationId, clause.regulation_id, JSON.stringify(rec), rec.web_grounded, opts.generatedBy || "ai"],
+    [
+      obligationId,
+      clause.regulation_id,
+      JSON.stringify(redactSensitiveDeep(rec, "recommendation")),
+      rec.web_grounded,
+      redactSensitiveDeep(opts.generatedBy || "ai", "generated_by") as string,
+    ],
   );
 
   return { obligation_id: obligationId, ...rec };
@@ -475,7 +482,7 @@ export async function draftDocumentForClause(
   recJson.draft = draft.slice(0, 60_000);
   await pool.query(
     `UPDATE obligation_gap_recommendations SET recommendation = $2 WHERE obligation_id = $1`,
-    [obligationId, JSON.stringify(recJson)],
+    [obligationId, JSON.stringify(redactSensitiveDeep(recJson, "recommendation"))],
   );
 
   return {

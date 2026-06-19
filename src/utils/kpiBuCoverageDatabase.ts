@@ -6,6 +6,7 @@
  * with partial credit). Same value feeds /kpis and the leadership platform.
  */
 import { logger } from "./logger";
+import { redactSensitiveDeep } from "./eventLogsDatabase";
 import {
   pool,
   getKPIByCode,
@@ -153,22 +154,22 @@ export async function updateBuCoverage(
   }
   if (patch.due_date !== undefined) {
     fields.push(`due_date = $${p}`);
-    values.push(patch.due_date || null);
+    values.push(redactSensitiveDeep(patch.due_date || null, "due_date"));
     p++;
   }
   if (patch.status !== undefined) {
     fields.push(`status = $${p}`);
-    values.push(patch.status);
+    values.push(redactSensitiveDeep(patch.status, "status"));
     p++;
   }
   if (patch.note !== undefined) {
     fields.push(`note = $${p}`);
-    values.push(patch.note);
+    values.push(redactSensitiveDeep(patch.note, "note"));
     p++;
   }
   if (fields.length === 0) return null;
   fields.push(`updated_by = $${p}`);
-  values.push(updatedBy || null);
+  values.push(redactSensitiveDeep(updatedBy || null, "updated_by"));
   p++;
   fields.push(`updated_at = NOW()`);
   values.push(rowId);

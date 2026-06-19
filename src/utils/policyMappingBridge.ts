@@ -26,6 +26,7 @@
 import { createHash } from "crypto";
 import { sharedPool as pool } from "./sharedPool";
 import { logger } from "./logger";
+import { redactSensitiveDeep } from "./eventLogsDatabase";
 import { initQmsDocsTable } from "./qmsDocsDatabase";
 import { extractDocumentText } from "./documentTextExtractor";
 import {
@@ -308,8 +309,8 @@ export async function runSemanticAutoMap(
             documentId,
             ob.regulation_id ?? null,
             s.obligation_id,
-            `LLM:${ob.obligation_code}`.slice(0, 200),
-            (s.rationale || "").slice(0, 1000),
+            redactSensitiveDeep(`LLM:${ob.obligation_code}`.slice(0, 200), "raw_citation") as string,
+            redactSensitiveDeep((s.rationale || "").slice(0, 1000), "source_excerpt") as string,
             s.confidence,
           ],
         );
@@ -420,6 +421,17 @@ export async function syncPolicyToMapping(
   const projMime = String(policy.file_mime_type || "text/plain").slice(0, 128);
   const projUploadedBy = String(policy.created_by || policy.owner_name || "integrated-qms").slice(0, 255);
 
+  // SECURITY: scrub credential-shaped substrings (and deny-list keyed values)
+  // from every caller/document-derived string before it reaches the projection
+  // INSERT/UPDATE params. Policy title/file metadata/uploaded_by and the
+  // projected document text are all operator-supplied content that could embed
+  // a leaked token — redactSensitiveDeep leaves ordinary prose untouched.
+  const safeProjTitle = redactSensitiveDeep(projTitle, "title") as string;
+  const safeProjFilePath = redactSensitiveDeep(projFilePath, "file_path") as string;
+  const safeProjFileName = redactSensitiveDeep(projFileName, "file_name") as string;
+  const safeProjUploadedBy = redactSensitiveDeep(projUploadedBy, "uploaded_by") as string;
+  const safeText = text ? (redactSensitiveDeep(text, "extracted_text") as string) : text;
+
   // Upsert by source_policy_id (explicit select→update/insert to avoid the
   // ON CONFLICT-with-partial-index inference gotcha).
   const existing = await pool.query(
@@ -456,7 +468,7 @@ export async function syncPolicyToMapping(
               extracted_at = CURRENT_TIMESTAMP, uploaded_by = $10,
               extracted_hash = $11
         WHERE id = $1`,
-      [projectedId, projTitle, projFilePath, projFileName, projFileSize, projMime, regCodes, text || null, status, projUploadedBy, fingerprint],
+      [projectedId, safeProjTitle, safeProjFilePath, safeProjFileName, projFileSize, projMime, regCodes, safeText || null, status, safeProjUploadedBy, fingerprint],
     );
   } else {
     const ins = await pool.query(
@@ -466,7 +478,7 @@ export async function syncPolicyToMapping(
           extracted_text, extraction_status, extracted_at, extracted_hash)
        VALUES ('policies', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, $11)
        RETURNING id`,
-      [projTitle, projFilePath, projFileName, projFileSize, projMime, regCodes, projUploadedBy, policyId, text || null, status, fingerprint],
+      [safeProjTitle, safeProjFilePath, safeProjFileName, projFileSize, projMime, regCodes, safeProjUploadedBy, policyId, safeText || null, status, fingerprint],
     );
     projectedId = ins.rows[0].id;
   }

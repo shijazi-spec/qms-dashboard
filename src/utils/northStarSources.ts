@@ -24,6 +24,7 @@
 
 import { pool } from "./kpiDatabase";
 import { logger } from "./logger";
+import { redactSensitiveDeep } from "./eventLogsDatabase";
 
 export async function initNorthStarSourceTables(): Promise<void> {
   await pool.query(`
@@ -235,7 +236,7 @@ export async function insertSource(
   const cols = def.cols.filter((c) => body[c] !== undefined);
   if (cols.length === 0) throw new Error("No valid fields provided");
   const params = cols.map((_, i) => `$${i + 1}`);
-  const vals = cols.map((c) => body[c]);
+  const vals = cols.map((c) => redactSensitiveDeep(body[c], c));
   const conflict =
     name === "qms_adoption"
       ? ` ON CONFLICT (business_unit) DO UPDATE SET ${cols

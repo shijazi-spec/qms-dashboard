@@ -18,6 +18,7 @@ import { createHash } from "crypto";
 import { sharedPool as pool } from "./sharedPool";
 import { logger } from "./logger";
 import { getOpenAIApiKey, getOpenAIBaseUrl } from "./openaiCredentials";
+import { redactSensitiveDeep } from "./eventLogsDatabase";
 
 export const EMBED_MODEL =
   process.env.DOCUMENT_MAPPING_EMBED_MODEL || "text-embedding-3-small";
@@ -135,7 +136,13 @@ async function ensureClauseEmbeddings(
          ON CONFLICT (obligation_id) DO UPDATE
            SET embedding = EXCLUDED.embedding, model = EXCLUDED.model,
                dim = EXCLUDED.dim, text_hash = EXCLUDED.text_hash, created_at = CURRENT_TIMESTAMP`,
-        [c.id, JSON.stringify(vec), EMBED_MODEL, vec.length, h],
+        [
+          redactSensitiveDeep(c.id, "obligation_id"),
+          JSON.stringify(vec),
+          EMBED_MODEL,
+          vec.length,
+          h,
+        ],
       );
     } catch {
       /* best-effort cache write */
@@ -220,7 +227,13 @@ export async function backfillEmbeddingsBatch(
            ON CONFLICT (obligation_id) DO UPDATE
              SET embedding = EXCLUDED.embedding, model = EXCLUDED.model,
                  dim = EXCLUDED.dim, text_hash = EXCLUDED.text_hash, created_at = CURRENT_TIMESTAMP`,
-          [c.id, JSON.stringify(vec), EMBED_MODEL, vec.length, hashText(text)],
+          [
+            redactSensitiveDeep(c.id, "obligation_id"),
+            JSON.stringify(vec),
+            EMBED_MODEL,
+            vec.length,
+            hashText(text),
+          ],
         );
         embedded++;
       } catch {

@@ -9,6 +9,7 @@
  */
 import { logger } from "./logger";
 import { pool, getKPIById, getKPIByCode, recordKPIValue } from "./kpiDatabase";
+import { redactSensitiveDeep } from "./eventLogsDatabase";
 
 export interface KPIChecklistItem {
   id?: number;
@@ -202,7 +203,12 @@ export async function addChecklistItem(
   const res = await pool.query(
     `INSERT INTO kpi_checklist_items (kpi_id, section, item_text, updated_by)
      VALUES ($1, $2, $3, $4) RETURNING *`,
-    [kpiId, section?.trim() || null, itemText, updatedBy || null],
+    [
+      kpiId,
+      redactSensitiveDeep(section?.trim() || null, "section"),
+      redactSensitiveDeep(itemText, "item_text"),
+      redactSensitiveDeep(updatedBy || null, "updated_by"),
+    ],
   );
   return res.rows[0];
 }
@@ -218,13 +224,13 @@ export async function updateChecklistItem(
   for (const key of ["item_text", "is_done", "note"] as const) {
     if (patch[key] !== undefined) {
       fields.push(`${key} = $${p}`);
-      values.push(patch[key]);
+      values.push(redactSensitiveDeep(patch[key], key));
       p++;
     }
   }
   if (fields.length === 0) return null;
   fields.push(`updated_by = $${p}`);
-  values.push(updatedBy || null);
+  values.push(redactSensitiveDeep(updatedBy || null, "updated_by"));
   p++;
   fields.push(`updated_at = NOW()`);
   values.push(itemId);
