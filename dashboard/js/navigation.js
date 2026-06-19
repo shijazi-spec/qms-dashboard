@@ -8,6 +8,11 @@
 // so dynamically created <style>/<script> tags can be authorized under the
 // strict style-src/script-src 'nonce-...' policy.
 const WALAPLUS_NAV_NONCE = (document.currentScript && document.currentScript.nonce) || '';
+// Expose the page nonce so dynamically loaded helpers (e.g. the AI consultant
+// widget) can authorize their own injected <style>/<script> under the strict
+// nonce-based CSP, since document.currentScript.nonce is unreliable for async
+// dynamically-inserted scripts.
+try { window.WALAPLUS_NAV_NONCE = WALAPLUS_NAV_NONCE; } catch (e) {}
 
 // Helper: load i18n module before navigation renders.
 // Falls back gracefully if i18n.js is not yet loaded.
@@ -745,6 +750,9 @@ const WalaPlusNav = {
     s.src = '/js/ai-consultant-widget.js?v=1';
     s.async = true;
     s.setAttribute('data-walaplus-consultant-widget', '1');
+    // Propagate the page nonce so the widget's injected <style> is authorized
+    // under the strict nonce-based CSP (otherwise it renders unstyled).
+    if (WALAPLUS_NAV_NONCE) s.setAttribute('nonce', WALAPLUS_NAV_NONCE);
     s.onload = function () { openWhenReady(20); };
     s.onerror = function () { window.location.href = '/consultant'; };
     document.head.appendChild(s);

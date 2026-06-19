@@ -118,7 +118,19 @@
         return html;
     }
 
-    var widgetNonce = (document.currentScript && document.currentScript.nonce) || '';
+    // Resolve a CSP nonce so the injected <style> below is authorized under the
+    // strict nonce-based style-src. document.currentScript.nonce is unreliable
+    // for async dynamically-inserted scripts, so fall back to the nonce shared
+    // by navigation.js and finally to any nonce-bearing element already on the
+    // page.
+    function _resolveWidgetNonce() {
+        var n = (document.currentScript && document.currentScript.nonce) || '';
+        if (n) return n;
+        if (window.WALAPLUS_NAV_NONCE) return window.WALAPLUS_NAV_NONCE;
+        var el = document.querySelector('script[nonce], style[nonce]');
+        return (el && (el.nonce || el.getAttribute('nonce'))) || '';
+    }
+    var widgetNonce = _resolveWidgetNonce();
     var style = document.createElement('style');
     if (widgetNonce) style.setAttribute('nonce', widgetNonce);
     style.textContent = `
