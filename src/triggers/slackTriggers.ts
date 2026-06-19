@@ -48,6 +48,7 @@ import type { z } from "zod";
 import { registerApiRoute } from "../mastra/inngest";
 
 import { logger as safeLogger } from "../utils/logger";
+import { verifySlackSignature } from "./slackConsultantRatingTrigger";
 export type Methods = "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "ALL";
 
 // TODO: Remove when Mastra exports this type.
@@ -283,7 +284,39 @@ export function registerSlackTrigger<
     const mastra = c.get("mastra");
     const logger = mastra.getLogger();
     try {
-      const payload = await c.req.json();
+      // ── Slack request authentication ────────────────────────────────
+      // Slack (not a browser) posts here with no platform session, so the
+      // ONLY thing standing between an attacker and this workflow-triggering
+      // endpoint is Slack's request signature. Verify it over the RAW body
+      // BEFORE parsing, and fail closed when the signing secret is absent —
+      // mirroring handleSlackConsultantRatingRequest. Accepting unsigned
+      // requests would let anyone drive the Slack bot / workflow handler.
+      const signingSecret = process.env.SLACK_SIGNING_SECRET;
+      if (!signingSecret) {
+        logger?.warn(
+          "[Slack] SLACK_SIGNING_SECRET not configured; rejecting webhook",
+        );
+        return c.text("Slack signing secret not configured", 503);
+      }
+      const rawBody = await c.req.text();
+      const signature = c.req.header("x-slack-signature") ?? "";
+      const timestamp = c.req.header("x-slack-request-timestamp") ?? "";
+      if (
+        !verifySlackSignature({ signingSecret, timestamp, signature, rawBody })
+      ) {
+        logger?.warn("[Slack] Invalid Slack signature");
+        return c.text("Invalid signature", 401);
+      }
+
+      let payload: any;
+      try {
+        payload = rawBody.length > 0 ? JSON.parse(rawBody) : {};
+      } catch (parseErr) {
+        logger?.warn("[Slack] Failed to parse webhook payload", {
+          error: format(parseErr),
+        });
+        return c.text("Malformed payload", 400);
+      }
 
       if (payload && payload["challenge"]) {
         return c.text(payload["challenge"], 200);
