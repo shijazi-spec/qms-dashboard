@@ -3,6 +3,8 @@
 - [DB TLS sslmode verify-full crash](db-tls-sslmode-verify-full.md) — managed-Postgres deploy crash-loops when upgraded pg treats sslmode=require as verify-full; startup DATABASE_URL normalization to no-verify
 - [provider-utils version conflict](provider-utils-version-conflict.md) — never globally force @ai-sdk/provider-utils to v4: it removes lazyValidator and breaks `mastra build`; split v3/v4 in overrides
 - [Mastra dev build cache](mastra-dev-build-cache.md) — "mastra dev" won't boot with inngest index.js/index.cjs error → `rm -rf .mastra/output` (restart alone won't fix)
+- [Mastra dev sharedPool commonjs](mastra-dev-sharedpool-commonjs.md) — "mastra dev" rollup `__require`/`?commonjs-es-import` fail on pure-ESM sharedPool.ts; cache-clear won't fix BUT `mastra build` (prod) is fine → dev-only, doesn't block deploy
+- [Zoho write read-back verify](zoho-write-readback-verify.md) — Zoho v2 returns code:SUCCESS even when a field doesn't persist; never mark an approval Executed without re-reading and confirming the value
 - [Multi-workflow boot crashes](mastra-multi-workflow-boot.md) — adding a 2nd Mastra workflow/cron trips two boot guards (single-workflow throw + duplicate Inngest cron id) that exit before the port opens
 - [Duplicate Radar pagination](duplicate-radar-pagination.md) — paginate by cluster end-to-end: server must page by cluster not row, AND client _dupBuckets must union by cluster_id or fuzzy clusters drop → empty pages
 - [Post-merge gate ordering](post-merge-gate-ordering.md) — post-merge.sh `set -e` runs the secret-leak coverage gate BEFORE the full suite; an early-gate failure masks a large latent backlog (RBAC/CSP/vitest) that surfaces once the early gate goes green
