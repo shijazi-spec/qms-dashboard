@@ -1,7 +1,73 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { updateZohoRecord, zohoWritesAllowedInEnv } from "../../utils/zohoCRM";
+import {
+  updateZohoRecord,
+  fetchZohoRecordById,
+  zohoWritesAllowedInEnv,
+} from "../../utils/zohoCRM";
 import { withTimeout } from "../../utils/promiseTimeout";
+
+/**
+ * Does the value Zoho actually stored (`got`) match what we asked it to set
+ * (`want`)?  Used for post-write read-back verification.
+ *
+ * Zoho's v2 write API returns HTTP 200 + code:SUCCESS even when a field was
+ * NOT persisted (field-level profile permission on the API connection, a
+ * validation rule / workflow that silently reverts the value, or a no-op).
+ * So a SUCCESS response is NOT proof the field changed — we must read the
+ * record back and compare. The comparison is deliberately lenient so Zoho's
+ * own normalization (casing on emails/URLs, phone re-formatting) does not
+ * produce a false "did not change" report:
+ *   - exact match after trim
+ *   - case-insensitive match (emails, URLs)
+ *   - digit-only match for phone-like values Zoho may reformat
+ */
+export function fieldValuesMatch(
+  got: unknown,
+  want: unknown,
+  fieldName?: string,
+): boolean {
+  if (got == null) return false;
+  const g = String(got).trim();
+  const w = String(want).trim();
+  if (g === w) return true;
+  if (g.toLowerCase() === w.toLowerCase()) return true;
+  // Digit-only equivalence is ONLY safe for phone-like fields Zoho reformats
+  // (e.g. "+1 (555) 123-4567" vs "15551234567"). Applying it to arbitrary
+  // fields would let a non-persisted numeric value (custom id, title) pass
+  // verification, so it is gated on the field name.
+  if (fieldName && /phone|mobile/i.test(fieldName)) {
+    const gd = g.replace(/\D/g, "");
+    const wd = w.replace(/\D/g, "");
+    if (wd.length >= 4 && gd === wd) return true;
+  }
+  return false;
+}
+
+/**
+ * Compare a freshly-read Zoho record against the field→value map we asked it
+ * to write, returning a human-readable list of fields that did NOT persist.
+ * An empty list means every field was confirmed. Pure (no I/O) so the
+ * approval-critical "did it actually change?" logic is unit-testable without
+ * hitting Zoho.
+ */
+export function computeReadBackMismatches(
+  updates: Record<string, any>,
+  freshData: Record<string, any> | null,
+): string[] {
+  if (!freshData) return ["record could not be found on read-back"];
+  const mismatches: string[] = [];
+  for (const [key, want] of Object.entries(updates)) {
+    if (!fieldValuesMatch(freshData[key], want, key)) {
+      const got =
+        freshData[key] == null || freshData[key] === ""
+          ? "(empty)"
+          : String(freshData[key]);
+      mismatches.push(`${key} still shows "${got}" (expected "${String(want)}")`);
+    }
+  }
+  return mismatches;
+}
 
 /**
  * Update simple fields on a Zoho record — the chat-side of "change this
@@ -172,22 +238,13 @@ export const updateRecordFieldTool = createTool({
       };
     }
 
+    const fields = Object.keys(updates);
     try {
       await withTimeout(
         updateZohoRecord(module, recordId, updates),
         ZOHO_WRITE_TIMEOUT_MS,
         "field update",
       );
-      const fields = Object.keys(updates);
-      return {
-        success: true,
-        module,
-        recordId,
-        fieldsUpdated: fields,
-        message:
-          `Updated ${fields.length} field(s) on ${module}/${recordId}: ${fields.join(", ")}.` +
-          (rejected.length ? ` (Skipped: ${rejected.join(", ")}.)` : ""),
-      };
     } catch (e: any) {
       return {
         success: false,
@@ -198,5 +255,72 @@ export const updateRecordFieldTool = createTool({
         error: e?.message || String(e),
       };
     }
+
+    // ROOT-CAUSE GUARD (read-back verification): Zoho's v2 write API returns
+    // HTTP 200 + code:SUCCESS even when the field was NOT actually persisted
+    // (field-level profile permission on the API connection, a validation
+    // rule / workflow that reverts the value, or a no-op). Reporting that
+    // SUCCESS as "Executed" while nothing changed in Zoho is exactly the
+    // "approved but nothing happened" disconnect. So we re-read the record
+    // from Zoho's REAL-TIME single-record endpoint and confirm each field
+    // now holds the requested value before we claim success.
+    let fresh: Awaited<ReturnType<typeof fetchZohoRecordById>> = null;
+    try {
+      fresh = await withTimeout(
+        fetchZohoRecordById(module, recordId),
+        ZOHO_WRITE_TIMEOUT_MS,
+        "field update verify",
+      );
+    } catch (e: any) {
+      // The write returned SUCCESS but we could not read the record back to
+      // confirm. We must NOT let this land as "Executed" without proof — that
+      // is the exact false-confidence the user reported. Report success:false
+      // (the approval is recorded as FAILED, not Executed) so "Done" always
+      // means a verified change. The write is idempotent, so re-approving once
+      // Zoho is reachable simply re-applies the same value safely.
+      return {
+        success: false,
+        module,
+        recordId,
+        fieldsUpdated: [],
+        message:
+          `Zoho accepted the update to ${module}/${recordId} (${fields.join(", ")}), ` +
+          `but the new value could NOT be verified (read-back failed: ${e?.message || String(e)}). ` +
+          `Not marking this as done — please retry, or confirm the value directly in Zoho.`,
+        error: "verification_unavailable",
+      };
+    }
+
+    const data = (fresh?.data ?? null) as Record<string, any> | null;
+    const mismatches = computeReadBackMismatches(updates, data);
+
+    if (mismatches.length > 0) {
+      // Zoho said SUCCESS but the value did not change. Surface this honestly
+      // so the approval is recorded as FAILED (not Executed) with the real
+      // reason — almost always a field-level permission or validation rule on
+      // the API connection's profile.
+      return {
+        success: false,
+        module,
+        recordId,
+        fieldsUpdated: [],
+        message:
+          `Zoho reported success but the change did NOT persist: ${mismatches.join("; ")}. ` +
+          `This usually means the API connection's profile lacks field-level edit ` +
+          `permission, or a Zoho validation rule/workflow reverted the value. ` +
+          `Fix the field permission in Zoho and try again.`,
+        error: "zoho write not persisted (read-back mismatch)",
+      };
+    }
+
+    return {
+      success: true,
+      module,
+      recordId,
+      fieldsUpdated: fields,
+      message:
+        `Updated and verified ${fields.length} field(s) on ${module}/${recordId}: ${fields.join(", ")}.` +
+        (rejected.length ? ` (Skipped: ${rejected.join(", ")}.)` : ""),
+    };
   },
 });
