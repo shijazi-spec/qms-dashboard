@@ -1297,6 +1297,35 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Acceptance-pattern analysis (Sarah 2026-06-20): learn AUTO-APPROVE rules
+    // from resolved data (manual merges + agent applies). Recommend-only.
+    //   GET /api/duplicates/autonomous/acceptance-patterns?module=Accounts&days=90
+    path: "/api/duplicates/autonomous/acceptance-patterns",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const days = parseInt(url.searchParams.get("days") || "90", 10);
+          const moduleRaw = url.searchParams.get("module") || "";
+          const module = ["Accounts", "Leads", "Deals", "Contacts"].includes(moduleRaw)
+            ? moduleRaw
+            : undefined;
+          const { analyzeAcceptancePatterns } = await import("../../utils/rejectionPatterns");
+          const data = await analyzeAcceptancePatterns({
+            module,
+            windowDays: Number.isFinite(days) && days > 0 ? days : 90,
+          });
+          return c.json({ success: true, ...data });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Per-tab daily PROGRESS burndown (Sarah 2026-06-17): for each module
     // (Leads/Deals/Contacts/Accounts) returns the daily series of open / solved
     // / total (+ durable merged) plus the latest snapshot and the day-over-day

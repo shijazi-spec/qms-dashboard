@@ -218,6 +218,25 @@
             <div id="rejectionPatterns" class="space-y-2 text-sm"><div class="text-gray-500">Loading…</div></div>
         </section>
 
+        <!-- What's safe to auto-merge (learned from resolved data) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">✅ What's safe to auto-merge (learned)</h2>
+                <div class="flex items-center gap-2">
+                    <select id="acceptModule" class="text-sm border border-gray-300 rounded-lg px-2 py-1">
+                        <option value="Accounts" selected>Accounts</option>
+                        <option value="Contacts">Contacts</option>
+                        <option value="Deals">Deals</option>
+                        <option value="Leads">Leads</option>
+                        <option value="">All modules</option>
+                    </select>
+                    <button data-on-click="loadAcceptancePatterns" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">Auto-approve rule ideas Adam learns from what you've already merged (your manual merges + agent applies, last 90 days). <strong>Recommend-only</strong> — "Use this rule" loads it into the Learning rules form for you to add.</p>
+            <div id="acceptancePatterns" class="space-y-2 text-sm"><div class="text-gray-500">Loading…</div></div>
+        </section>
+
         <!-- Learning rules -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <h2 class="text-lg font-semibold text-gray-900 mb-1">Learning rules</h2>
@@ -854,9 +873,60 @@
             if (sig) { sig.scrollIntoView({ behavior: 'smooth', block: 'center' }); sig.focus(); }
         }
 
-        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); loadProposalTiers(); loadProgress(); loadHygieneRules(); loadRejectionPatterns(); }
+        async function loadAcceptancePatterns() {
+            var box = document.getElementById('acceptancePatterns');
+            if (!box) return;
+            var modSel = document.getElementById('acceptModule');
+            var mod = modSel ? modSel.value : 'Accounts';
+            try {
+                var d = await getJSON('/api/duplicates/autonomous/acceptance-patterns?days=90' + (mod ? ('&module=' + encodeURIComponent(mod)) : ''));
+                var pats = (d && d.patterns) || [];
+                var note = '<div class="text-xs text-gray-500 mb-2">' + esc((d && d.note) || '') + '</div>';
+                if (!pats.length) {
+                    box.innerHTML = note + '<div class="text-gray-500">No auto-approve pattern yet for this module. As you approve more merges from the queue, safe shapes appear here.</div>';
+                    window._acceptPatterns = [];
+                    return;
+                }
+                box.innerHTML = note + pats.map(function (p, i) {
+                    return '<div class="rounded-lg border border-gray-200 p-3">' +
+                        '<div class="flex items-center justify-between gap-3">' +
+                        '<span class="font-medium text-gray-900">' + esc(p.label) + '</span>' +
+                        '<span class="text-xs text-gray-500 whitespace-nowrap">' + Number(p.count).toLocaleString() + ' · ' + p.sharePct + '%</span></div>' +
+                        '<div class="flex items-start justify-between gap-3 mt-2">' +
+                        '<span class="text-[11px] text-gray-500 leading-relaxed">' + esc(p.advice || '') + '</span>' +
+                        (p.suggestedRule ? '<button data-on-click="useAcceptanceRule" data-idx="' + i + '" class="shrink-0 px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Use this rule</button>' : '') +
+                        '</div></div>';
+                }).join('');
+                window._acceptPatterns = pats;
+                window._acceptModule = mod || 'Accounts';
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
 
-        document.addEventListener('DOMContentLoaded', refreshAll);
+        // Recommend-only: load a suggested auto-approve rule into the Learning-rules
+        // form (module + decision + signature). The operator clicks Add to apply.
+        function useAcceptanceRule(el) {
+            var idx = el && el.getAttribute ? parseInt(el.getAttribute('data-idx'), 10) : -1;
+            var pats = window._acceptPatterns || [];
+            var p = pats[idx];
+            if (!p || !p.suggestedRule) return;
+            var mod = document.getElementById('ruleModule');
+            var dec = document.getElementById('ruleDecision');
+            var sig = document.getElementById('ruleSignature');
+            if (mod && window._acceptModule) mod.value = window._acceptModule;
+            if (dec) dec.value = p.suggestedRule.decision;
+            if (sig) sig.value = JSON.stringify(p.suggestedRule.signature);
+            if (sig) { sig.scrollIntoView({ behavior: 'smooth', block: 'center' }); sig.focus(); }
+        }
+
+        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); loadProposalTiers(); loadProgress(); loadHygieneRules(); loadRejectionPatterns(); loadAcceptancePatterns(); }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            refreshAll();
+            var am = document.getElementById('acceptModule');
+            if (am) am.addEventListener('change', loadAcceptancePatterns);
+        });
     </script>
 </body>
 </html>
