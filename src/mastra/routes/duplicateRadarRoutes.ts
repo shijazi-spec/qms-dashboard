@@ -417,6 +417,9 @@ async function processModule(
         // company-name clustering behaviour verbatim.
         recordType,
         data.recordName,
+        // Zoho id → lets the clusterer honor the separation ledger so a record
+        // the operator split/dismissed apart is never silently re-fused.
+        record.id,
       );
 
       await upsertRecord({
@@ -3598,6 +3601,38 @@ export const duplicateRadarRoutes = [
             logger.warn(
               "Post-split stats refresh failed (non-fatal)",
               statsErr as any,
+            );
+          }
+
+          // Durable separation (Ahmad 2026-06-20): record that the records left
+          // on the source cluster and the records in each split-off cluster are
+          // NOT duplicates of each other, so the next sync can't re-fuse them by
+          // a shared name / phone / domain and silently undo this split.
+          try {
+            const { pool: dpool, recordSeparations } = await import(
+              "../../utils/duplicateRadarDatabase"
+            );
+            const groups: string[][] = [];
+            for (const cid of [id, ...newClusterIds]) {
+              const rr = await dpool.query(
+                `SELECT zoho_record_id FROM duplicate_records
+                  WHERE cluster_id = $1 AND zoho_record_id IS NOT NULL`,
+                [cid],
+              );
+              groups.push(rr.rows.map((r: any) => r.zoho_record_id as string));
+            }
+            const n = await recordSeparations(
+              groups,
+              "split",
+              (sessionUser as any)?.email || "operator",
+            );
+            logger.info(
+              `[DuplicateRadar] Split cluster ${id}: recorded ${n} separation pair(s) so it won't re-cluster`,
+            );
+          } catch (sepErr) {
+            logger.warn(
+              "Post-split separation-ledger write failed (non-fatal)",
+              sepErr as any,
             );
           }
 

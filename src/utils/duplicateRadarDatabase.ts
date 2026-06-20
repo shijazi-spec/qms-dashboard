@@ -1156,6 +1156,31 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     )
   `);
 
+  // Separation ledger (Ahmad 2026-06-20) — durable "these Zoho records are NOT
+  // duplicates of each other" decisions captured from Split / Dismiss. The
+  // radar otherwise re-clusters by shared name / phone / domain on every sync,
+  // which silently undoes an operator's split (the "I split it many times and
+  // it came back" bug). findOrCreateClusterByCompany consults this and refuses
+  // to re-fuse a record into a cluster holding a record it was separated from.
+  // Pairs stored canonically (low,high) so the lookup is symmetric.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS duplicate_separation_ledger (
+      id SERIAL PRIMARY KEY,
+      zoho_id_low VARCHAR(255) NOT NULL,
+      zoho_id_high VARCHAR(255) NOT NULL,
+      reason VARCHAR(32) NOT NULL DEFAULT 'split',
+      created_by VARCHAR(255),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (zoho_id_low, zoho_id_high)
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_dup_sep_low ON duplicate_separation_ledger(zoho_id_low)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_dup_sep_high ON duplicate_separation_ledger(zoho_id_high)`,
+  );
+
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_clusters_domain ON duplicate_clusters(domain)`,
   );
@@ -4068,6 +4093,114 @@ export async function findContactClusterByStrictMatch(
 }
 
 // B4: Fuzzy match using pg_trgm similarity() with fallback
+// ─── Separation ledger (Ahmad 2026-06-20) ───────────────────────────────────
+// Durable "not duplicates of each other" decisions from Split / Dismiss, so a
+// later sync never re-fuses records the operator pulled apart.
+
+function _sepPair(a: string, b: string): [string, string] {
+  return a < b ? [a, b] : [b, a];
+}
+
+// Cache the set of Zoho ids that appear in ANY separation pair, so a full
+// rebuild (50k+ records) does ONE lookup per sync instead of one per record:
+// the vast majority of records aren't in the ledger, so we short-circuit
+// getSeparatedZohoIds() without a query. Invalidated on every write; TTL is a
+// backstop. Refreshed lazily.
+let _sepParticipants: Set<string> | null = null;
+let _sepParticipantsAt = 0;
+const SEP_PARTICIPANTS_TTL_MS = 60_000;
+
+async function getSeparationParticipants(): Promise<Set<string>> {
+  const now = Date.now();
+  if (_sepParticipants && now - _sepParticipantsAt < SEP_PARTICIPANTS_TTL_MS) {
+    return _sepParticipants;
+  }
+  const r = await pool
+    .query(
+      `SELECT zoho_id_low AS z FROM duplicate_separation_ledger
+       UNION
+       SELECT zoho_id_high AS z FROM duplicate_separation_ledger`,
+    )
+    .catch(() => ({ rows: [] as any[] }));
+  _sepParticipants = new Set((r.rows || []).map((x: any) => x.z).filter(Boolean));
+  _sepParticipantsAt = now;
+  return _sepParticipants;
+}
+
+/**
+ * Record separations: every pair of Zoho ids that ended up in DIFFERENT groups
+ * becomes a permanent "do not cluster together" entry. Pass each resulting
+ * group as its own array (a Split passes [survivors, movedOut, ...]; a Dismiss
+ * passes one singleton group per record so all pairs are separated). Idempotent.
+ */
+export async function recordSeparations(
+  groups: string[][],
+  reason: "split" | "dismiss",
+  createdBy: string,
+): Promise<number> {
+  const clean = groups.map((g) =>
+    (g || []).map((z) => (z || "").trim()).filter(Boolean),
+  );
+  const pairs: Array<[string, string]> = [];
+  for (let i = 0; i < clean.length; i++) {
+    for (let j = i + 1; j < clean.length; j++) {
+      for (const a of clean[i]) {
+        for (const b of clean[j]) {
+          if (a !== b) pairs.push(_sepPair(a, b));
+        }
+      }
+    }
+  }
+  if (pairs.length === 0) return 0;
+  let written = 0;
+  for (const [low, high] of pairs) {
+    const r = await pool
+      .query(
+        `INSERT INTO duplicate_separation_ledger (zoho_id_low, zoho_id_high, reason, created_by)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (zoho_id_low, zoho_id_high) DO NOTHING`,
+        [low, high, reason, createdBy],
+      )
+      .catch(() => ({ rowCount: 0 }));
+    written += (r as any)?.rowCount || 0;
+  }
+  _sepParticipants = null; // invalidate the participant cache after a write
+  return written;
+}
+
+/** All Zoho ids this record has been separated from (empty for the 99% case). */
+export async function getSeparatedZohoIds(zohoId?: string): Promise<string[]> {
+  if (!zohoId) return [];
+  // Fast path: if this id isn't in any separation pair, skip the per-record
+  // query entirely (the common case on a 50k-record sync).
+  const participants = await getSeparationParticipants();
+  if (!participants.has(zohoId)) return [];
+  const r = await pool
+    .query(
+      `SELECT CASE WHEN zoho_id_low = $1 THEN zoho_id_high ELSE zoho_id_low END AS other
+         FROM duplicate_separation_ledger
+        WHERE zoho_id_low = $1 OR zoho_id_high = $1`,
+      [zohoId],
+    )
+    .catch(() => ({ rows: [] as any[] }));
+  return (r.rows || []).map((x: any) => x.other).filter(Boolean);
+}
+
+async function clusterContainsAnyZohoId(
+  clusterId: number,
+  zohoIds: string[],
+): Promise<boolean> {
+  if (!zohoIds.length) return false;
+  const r = await pool
+    .query(
+      `SELECT 1 FROM duplicate_records
+        WHERE cluster_id = $1 AND zoho_record_id = ANY($2::text[]) LIMIT 1`,
+      [clusterId, zohoIds],
+    )
+    .catch(() => ({ rows: [] as any[] }));
+  return (r.rows || []).length > 0;
+}
+
 export async function findOrCreateClusterByCompany(
   companyName: string,
   domain?: string,
@@ -4081,6 +4214,10 @@ export async function findOrCreateClusterByCompany(
   // are duplicates when the module is "Accounts".
   recordType?: "lead" | "deal" | "contact" | "account",
   recordName?: string,
+  // The incoming record's Zoho id — when set, the separation ledger is honored
+  // so a record the operator split/dismissed apart is never re-fused into a
+  // cluster still holding a record it was separated from (Ahmad 2026-06-20).
+  zohoRecordId?: string,
 ): Promise<DuplicateCluster> {
   // CONTACTS: bypass the company-name / domain branches and require ≥2
   // strict-match attributes (email / phone / name). Two contacts sharing
@@ -4139,12 +4276,22 @@ export async function findOrCreateClusterByCompany(
   // creating one synthetic "n-a.cluster" per placeholder string.
   const placeholder = isPlaceholderName(companyName);
 
+  // Durable separation guard. For records the operator split/dismissed apart,
+  // skip any candidate cluster that still holds one of their separated records
+  // and fall through to the next branch (ultimately a fresh cluster). Empty for
+  // virtually every record → `notSeparatedFrom` is a no-op, zero added queries.
+  const separatedIds = await getSeparatedZohoIds(zohoRecordId);
+  const notSeparatedFrom = async (clu: any): Promise<boolean> =>
+    separatedIds.length === 0
+      ? true
+      : !(await clusterContainsAnyZohoId(clu.id, separatedIds));
+
   if (domain) {
     const existingByDomain = await pool.query(
       "SELECT * FROM duplicate_clusters WHERE domain = $1",
       [domain],
     );
-    if (existingByDomain.rows[0]) {
+    if (existingByDomain.rows[0] && (await notSeparatedFrom(existingByDomain.rows[0]))) {
       // Same domain on the cluster row itself → identity is proven, no
       // need to run the conflict guard.
       return existingByDomain.rows[0];
@@ -4158,7 +4305,7 @@ export async function findOrCreateClusterByCompany(
        WHERE LOWER(dr.email) = LOWER($1) LIMIT 1`,
       [email],
     );
-    if (existingByEmail.rows[0]) {
+    if (existingByEmail.rows[0] && (await notSeparatedFrom(existingByEmail.rows[0]))) {
       return existingByEmail.rows[0];
     }
   }
@@ -4170,7 +4317,7 @@ export async function findOrCreateClusterByCompany(
        WHERE dr.phone_normalized = $1 LIMIT 1`,
       [normalizedPhone],
     );
-    if (existingByPhone.rows[0]) {
+    if (existingByPhone.rows[0] && (await notSeparatedFrom(existingByPhone.rows[0]))) {
       return existingByPhone.rows[0];
     }
   }
@@ -4201,7 +4348,7 @@ export async function findOrCreateClusterByCompany(
       const nameIsGeneric = normalizedName.length < 10;
       if (domainsConflict && nameIsGeneric) {
         // fall through to fuzzy step / new-cluster creation below
-      } else {
+      } else if (await notSeparatedFrom(candidate)) {
         return candidate;
       }
     }
@@ -4238,6 +4385,7 @@ export async function findOrCreateClusterByCompany(
         ) {
           continue; // try next-best candidate
         }
+        if (!(await notSeparatedFrom(candidate))) continue;
         return candidate;
       }
     } catch {
@@ -4279,6 +4427,7 @@ export async function findOrCreateClusterByCompany(
             ) {
               continue;
             }
+            if (!(await notSeparatedFrom(cluster))) continue;
             return cluster;
           }
         }
@@ -4536,6 +4685,31 @@ export async function resolveCluster(
     "UPDATE duplicate_clusters SET status = $1, resolved_by = $2, resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
     [newStatus, performedBy, clusterId],
   );
+
+  // Dismiss = "these are NOT duplicates of each other." Record every record in
+  // the cluster as mutually separated so a future sync can't re-fuse them and
+  // resurrect the dismissed cluster (Ahmad 2026-06-20). Each record is its own
+  // group → recordSeparations() separates all pairs.
+  if (action === "ignore") {
+    try {
+      const zr = await pool.query(
+        `SELECT zoho_record_id FROM duplicate_records
+          WHERE cluster_id = $1 AND zoho_record_id IS NOT NULL`,
+        [clusterId],
+      );
+      const groups = zr.rows.map((r) => [r.zoho_record_id as string]);
+      if (groups.length >= 2) {
+        const n = await recordSeparations(groups, "dismiss", performedBy);
+        logger.info(
+          `[DuplicateRadar] Dismiss cluster ${clusterId}: recorded ${n} separation pair(s) so it won't re-cluster`,
+        );
+      }
+    } catch (e) {
+      logger.warn(
+        `[DuplicateRadar] dismiss separation-ledger write skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
 
   // Durable ledger write so this "Mark Resolved" survives a future Rebuild
   // Clusters wipe. Only 'resolve' counts as solved ('ignore' is a dismissal).
