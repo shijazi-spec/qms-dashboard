@@ -608,6 +608,8 @@ const WalaPlusNav = {
       // include the script tag. The helper is idempotent and self-guards
       // against double-init.
       this._ensureTableSortLoaded();
+      // Floating Adam chat launcher on every page (bottom-right bubble).
+      this._ensureAssistantWidgetLoaded();
       // Env badge in the header + standby warning banner. Hostname-
       // detection-based so the dashboard can flag Replit (primary) vs
       // Railway (standby/failover) at a glance without any env-var
@@ -722,6 +724,33 @@ const WalaPlusNav = {
     s.src = '/js/table-sort.js?v=1';
     s.async = true;
     s.setAttribute('data-walaplus-table-sort', '1');
+    document.head.appendChild(s);
+  },
+
+  // Mount the floating Adam chat launcher (the bottom-right bubble) on EVERY
+  // page, so individual dashboards don't each need their own <script> tag.
+  // Idempotent + self-guarding:
+  //   - skip the full /consultant page (the widget intentionally doesn't mount
+  //     there — that page IS the full chat),
+  //   - skip if the widget already loaded or its script is already present
+  //     (pages like /duplicates include it directly).
+  _ensureAssistantWidgetLoaded() {
+    try {
+      if (window.location.pathname.indexOf('consultant') !== -1) return;
+    } catch (e) { /* ignore */ }
+    if (typeof window._openAIWidget === 'function') return;
+    if (document.getElementById('ai-consultant-widget')) return;
+    if (document.querySelector('script[data-walaplus-consultant-widget]')) return;
+    // Also skip if the page already includes the widget directly (e.g.
+    // /duplicates), regardless of the data attribute, so we never double-mount.
+    if (document.querySelector('script[src*="ai-consultant-widget"]')) return;
+    var s = document.createElement('script');
+    s.src = '/js/ai-consultant-widget.js?v=1';
+    s.async = true;
+    s.setAttribute('data-walaplus-consultant-widget', '1');
+    // Propagate the page nonce so the widget's injected <style> is authorized
+    // under the strict nonce-based CSP (otherwise it renders unstyled).
+    if (WALAPLUS_NAV_NONCE) s.setAttribute('nonce', WALAPLUS_NAV_NONCE);
     document.head.appendChild(s);
   },
 
