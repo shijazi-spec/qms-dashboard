@@ -335,6 +335,34 @@ async function calcProcessQualityFramework() {
 }
 
 /**
+ * QM-KPI-015 — Process & Framework Completion = the BU Framework checklist
+ * completion %, the SAME basis the internal /kpis page shows (calc_mode
+ * 'checklist'), so the leadership push matches exactly what Sarah tracks/ticks.
+ * value = phases done ÷ total phases across all BUs. (Replaced the older
+ * policies-based calcProcessQualityFramework, which diverged from /kpis.)
+ */
+async function calcFrameworkChecklistCompletion() {
+  const r = await pool.query(`
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE is_done)::int AS done
+    FROM kpi_checklist_items
+    WHERE kpi_id = (SELECT id FROM kpi_definitions WHERE kpi_code = 'QM-KPI-015' LIMIT 1)
+  `);
+  const total = r.rows[0]?.total ?? 0;
+  const done = r.rows[0]?.done ?? 0;
+  if (total <= 0) {
+    // No framework checklist seeded yet — not a real 0%.
+    return { value: 0, dataAvailable: false, reason: "no_framework_checklist_yet" };
+  }
+  return {
+    value: Math.round((done / total) * 1000) / 10,
+    dataAvailable: true,
+    details: { total_phases: total, completed_phases: done },
+  };
+}
+
+/**
  * QM-KPI-008 — (business units with governance coverage / total business units) × 100.
  *
  * The canonical BU list comes from the GRQ "Quality Plan 2026 → BU Coverage Plan"
@@ -664,7 +692,7 @@ const FEED_KPIS: FeedKpiConfig[] = [
     green: 95,
     amber: 80,
     direction: "higher_is_better",
-    calc: calcProcessQualityFramework,
+    calc: calcFrameworkChecklistCompletion, // BU Framework checklist — same as /kpis
   },
   // ── Additional North Star KPIs (emitted when their source data exists;
   //    omitted otherwise so leadership keeps any manual value). ──────────────
@@ -822,18 +850,18 @@ const DEFAULT_ROUNDING =
 const KPI_DETAILS: Record<string, KpiDetail> = {
   "QM-KPI-015": {
     description:
-      "Percentage of the governance/process framework documents completed and published across the 13 business units.",
+      "Percentage of the governance/process framework built across the 13 business units, measured by the BU Framework checklist (the 9-phase build plan per BU).",
     methodology:
-      "Published policies that are within their review date ÷ total policies, from the QMS Policies module (source: policies table).",
+      "Framework checklist phases marked done ÷ total phases across all BUs (source: kpi_checklist_items for QM-KPI-015). This is the SAME value shown on the internal /kpis page, so the leadership number matches exactly.",
     rationale:
-      "Shows whether WalaPlus is building a real governance system (SOPs, controls), not just running checklists — the foundation all other quality work rests on.",
+      "Shows how far each BU's governance framework is actually built (process mapping → drafting → review → release → training → trial audit), the foundation all other quality work rests on.",
     plan_ref:
-      "Quality Plan → Governance Document Plan; North Star 'Framework Completion' (Q1 40% → Q4 100%).",
+      "Quality Plan → Governance Framework build (9-phase methodology); North Star 'Framework Completion' (Q1 40% → Q4 100%).",
     numerator:
-      "policies WHERE status = 'published' AND (review_date IS NULL OR review_date >= NOW()) — see details.compliant_policies.",
-    denominator: "all rows in policies — see details.total_policies.",
+      "kpi_checklist_items WHERE is_done = true (for QM-KPI-015) — see details.completed_phases.",
+    denominator: "all kpi_checklist_items for QM-KPI-015 (13 BUs × 9 phases) — see details.total_phases.",
     scope:
-      "Every policy record in QMS (all business units). Cumulative point-in-time snapshot; not bounded to a month/quarter. If 0 policies are published-and-in-review, the KPI is reported in unavailable[] (not value:0).",
+      "All BU framework phases. If no checklist is seeded yet the KPI is reported in unavailable[] (reason no_framework_checklist_yet), not value:0.",
     rounding: DEFAULT_ROUNDING,
   },
   "QM-KPI-002": {
