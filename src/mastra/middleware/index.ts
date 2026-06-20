@@ -689,6 +689,73 @@ export const globalMiddleware = [
       return c.json({ error: 'Insufficient permissions' }, 403);
     }
 
+    // Sarah 2026-06-20 — friendly 500 page for browser requests.
+    //
+    // Mastra's deployer installs `app.onError` (see comment block above)
+    // which serializes every uncaught exception as the static body
+    // `{ error: "Internal Server Error" }` with status 500. For an API
+    // caller that's correct — JSON in, JSON out, no leak of error.message.
+    // For a BROWSER navigation, though, what the user sees is just the
+    // raw text "Internal Server Error" with no context, no retry hint,
+    // no support path. That's what flagged this fix.
+    //
+    // After Mastra's onError returns, we land here with c.res.status =
+    // 500. For HTML-accepting browser requests we replace the response
+    // with a real HTML error page (refresh + contact hint). API callers
+    // and asset/script requests keep the existing JSON behaviour so
+    // automation isn't broken. We also log the failed URL explicitly so
+    // it's findable in Replit deploy logs without re-deriving from the
+    // upstream `app.onError` log line.
+    if (
+      !isApi &&
+      c.res.status === 500 &&
+      (c.req.header('Accept') || '').includes('text/html')
+    ) {
+      logger?.error('[500-served-to-browser]', {
+        method: c.req.method,
+        url: c.req.url,
+        path: urlPath,
+        ua: c.req.header('User-Agent'),
+      });
+      return c.html(
+        `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Something went wrong — WalaPlus</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1f2937;background:linear-gradient(135deg,#f8fafc 0%,#e0e7ff 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{max-width:520px;width:100%;background:#fff;border-radius:14px;box-shadow:0 20px 60px -10px rgba(15,23,42,.15);padding:36px 32px;text-align:center}
+    .badge{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;background:#fef3c7;color:#b45309;font-size:32px;margin-bottom:18px}
+    h1{margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a}
+    p{margin:8px 0;line-height:1.55;color:#475569;font-size:15px}
+    .actions{display:flex;gap:10px;justify-content:center;margin-top:22px;flex-wrap:wrap}
+    a.btn,button.btn{background:#2563eb;color:#fff;border:0;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+    a.btn.secondary{background:#fff;color:#2563eb;border:1px solid #2563eb}
+    a.btn:hover{background:#1d4ed8}
+    .ref{margin-top:18px;font-size:12px;color:#94a3b8;font-family:ui-monospace,Menlo,monospace;word-break:break-all}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">⚠</div>
+    <h1>Something went wrong on our side</h1>
+    <p>The page couldn't load just now. The request has been logged and the team has been notified.</p>
+    <p>This is usually a brief hiccup — refreshing the page once or twice fixes it. If it keeps happening, contact your administrator.</p>
+    <div class="actions">
+      <a class="btn" href="javascript:location.reload()">Refresh</a>
+      <a class="btn secondary" href="/">Go to dashboard</a>
+    </div>
+    <div class="ref">Path: ${urlPath.replace(/[<>&]/g, (m) => ({'<':'&lt;','>':'&gt;','&':'&amp;'} as any)[m])}<br/>Time: ${new Date().toISOString()}</div>
+  </div>
+</body>
+</html>`,
+        500,
+      );
+    }
+
     // Symmetric with storage-side defense: scrub credential-shaped substrings
     // out of any 4xx/5xx JSON error body before it leaves the server. See
     // `redactSecretsInResponse` doc-comment for rationale.
