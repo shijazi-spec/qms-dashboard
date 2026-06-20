@@ -231,18 +231,21 @@ async function calcAuditExecutionRate() {
   let completed = r.rows[0]?.completed ?? 0;
   let aiRuns = 0;
   try {
+    // The weekly AI audit is the qualityAuditWorkflow — it writes ONE row per run
+    // to `quality_audit_results` (keyed by audit_date). (The older `audit_runs`
+    // table is never populated, so we count the real AI-audit runs here.) Each run
+    // this quarter = one executed audit, counted as +1 planned and +1 completed.
     const a = await pool.query(`
       SELECT COUNT(*)::int AS runs
-      FROM audit_runs
-      WHERE status = 'completed' AND linked_audit_id IS NULL
-        AND COALESCE(finished_at, started_at) >= date_trunc('quarter', NOW())
-        AND COALESCE(finished_at, started_at) <  date_trunc('quarter', NOW()) + interval '3 months'
+      FROM quality_audit_results
+      WHERE audit_date >= date_trunc('quarter', NOW())
+        AND audit_date <  date_trunc('quarter', NOW()) + interval '3 months'
     `);
     aiRuns = a.rows[0]?.runs ?? 0;
-    planned += aiRuns; // each completed AI run = one planned + one executed
+    planned += aiRuns;
     completed += aiRuns;
   } catch {
-    /* audit_runs table not present yet — fall back to formal audits only */
+    /* quality_audit_results not present — fall back to formal audits only */
   }
   if (planned <= 0) {
     // No audits planned/dated in the current quarter → nothing to execute yet.
@@ -843,11 +846,11 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
     plan_ref:
       "Quality Plan → Audit Execution Rate (per-BU quarterly schedule); North Star 'Audit Execution' (Q1 80% → Q4 90%).",
     numerator:
-      "audits PLANNED this quarter WHERE status IN ('fieldwork_complete','report_draft','report_final','closed','completed') PLUS completed AI-audit runs finished this quarter (audit_runs WHERE status='completed' AND linked_audit_id IS NULL) — see details.completed_this_quarter.",
+      "audits PLANNED this quarter WHERE status IN ('fieldwork_complete','report_draft','report_final','closed','completed') PLUS weekly AI-audit runs this quarter (quality_audit_results, one row per run, by audit_date) — see details.completed_this_quarter.",
     denominator:
-      "audits PLANNED this quarter (planned/scheduled date in the current quarter) PLUS the same completed AI-audit runs finished this quarter — see details.planned_this_quarter (details.ai_audit_runs counts the AI runs added to both sides).",
+      "audits PLANNED this quarter (planned/scheduled date in the current quarter) PLUS the same weekly AI-audit runs this quarter — see details.planned_this_quarter (details.ai_audit_runs counts the AI runs added to both sides).",
     scope:
-      "QUARTERLY (QTD): only audits whose planned/scheduled date falls in the current quarter, across all BUs, + completed AI-audit runs finished this quarter (not linked to a formal audit, to avoid double-counting). If no audits are planned this quarter the KPI is reported unavailable (reason 'no_audits_planned_this_quarter'), not a 0%.",
+      "QUARTERLY (QTD): audits whose planned/scheduled date falls in the current quarter, across all BUs, + weekly AI-audit runs this quarter (qualityAuditWorkflow → quality_audit_results). If no audits are planned this quarter the KPI is reported unavailable (reason 'no_audits_planned_this_quarter'), not a 0%.",
     rounding: DEFAULT_ROUNDING,
   },
   "QM-KPI-003": {
