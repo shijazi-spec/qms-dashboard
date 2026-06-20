@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <title>Autonomous Resolution — WalaPlus Enterprise</title>
+    <title>Adam — Scope of Work — WalaPlus Enterprise</title>
     <link rel="stylesheet" href="/dashboard/tailwind.css">
     <link rel="stylesheet" href="/css/navigation.css">
     <link rel="stylesheet" href="/css/utilities.css">
@@ -42,8 +42,8 @@
     <main class="max-w-7xl mx-auto p-6 space-y-6">
         <header class="flex items-start justify-between flex-wrap gap-3">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900">🤖 GRQ Assistant — Autonomous Resolution</h1>
-                <p class="text-sm text-gray-600 mt-1">Runs every 6 hours, acts on behalf of Sarah Hijazi, escalates the doubtful 1% to the AI Approvals queue, and learns from every decision.</p>
+                <h1 class="text-2xl font-bold text-gray-900">🤖 Adam — Scope of Work</h1>
+                <p class="text-sm text-gray-600 mt-1">Adam's job description, skills &amp; lessons learned, grade &amp; path to the next level, and the duplicate-resolution work he runs on behalf of Sarah Hijazi (every 6 hours; escalates the doubtful 1% to the AI Approvals queue).</p>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
                 <button data-on-click="refreshAll" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
@@ -52,6 +52,40 @@
                 <button data-on-click="runNow" id="runNowBtn" class="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">▶ Run now</button>
             </div>
         </header>
+
+        <!-- Scope of Work overview (Adam's job description, skills, growth path) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 mb-3">📄 Scope of Work</h2>
+            <div class="grid md:grid-cols-2 gap-4 text-sm">
+                <div class="rounded-lg border border-gray-200 p-3">
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Role &amp; job description</div>
+                    <p class="text-gray-700 leading-relaxed">Adam is the GRQ Assistant. He keeps the CRM clean: detects duplicate Accounts / Contacts / Leads / Deals, proposes migrate-then-tag merges (never deletes), enforces the hygiene &amp; business rules below, and escalates anything doubtful to the AI Approvals queue for a human. He acts on behalf of Sarah Hijazi and queues every Zoho write for approval.</p>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-3">
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Skills &amp; lessons learned</div>
+                    <p class="text-gray-700 leading-relaxed">His skills are the <strong>Learning rules</strong> you approve and the <strong>safe-tier gate</strong> he applies. He learns from your decisions: rejections become "don't re-ask" + suggested rules (see "Why proposals get rejected"), and his competence per module is graded G1→G4 below.</p>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-3">
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">How he reaches the next grade</div>
+                    <ul class="list-disc ps-5 text-gray-700 leading-relaxed space-y-0.5">
+                        <li><strong>G1 → G2</strong>: ≥20 decisions at ≥85% agreement.</li>
+                        <li><strong>G2 → G3</strong>: agreement ≥92% &amp; override ≤10%.</li>
+                        <li><strong>G3 → G4</strong>: agreement ≥96% &amp; override ≤5%, sustained.</li>
+                        <li>Promotion is a recommendation — you flip the mode (segregation of duties).</li>
+                    </ul>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-3">
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Documents he reads</div>
+                    <ul class="list-disc ps-5 text-gray-700 leading-relaxed space-y-0.5">
+                        <li><a href="/policies" class="text-indigo-700 hover:underline">Account / Contact Master Data SOPs</a></li>
+                        <li><a href="/policies" class="text-indigo-700 hover:underline">Sales Management Process SOP (stage SLAs &amp; 7.5.10 docs)</a></li>
+                        <li><a href="/policies" class="text-indigo-700 hover:underline">SDR Process SOP · WP-SOP-011 · WP-DOC-004</a></li>
+                        <li>The hygiene &amp; business rules listed further down this page.</li>
+                    </ul>
+                </div>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-3">Current mode &amp; per-module grade are shown below. The goal: Adam clears the obvious thousands so the team only reviews the genuinely doubtful cases.</p>
+        </section>
 
         <!-- Executive brief (shareable, board-ready) -->
         <section id="execBriefCard" class="hidden bg-white rounded-xl border border-indigo-200 p-5">

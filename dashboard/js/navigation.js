@@ -253,7 +253,7 @@ const WalaPlusNav = {
         // AI Consultant pinned to the top of Tools per user request — it is
         // the most-used item in this group and is open to all roles.
         { label: 'GRQ Assistant', href: '/consultant', icon: 'brain', id: 'consultant' },
-        { label: 'GRQ Assistant · Autonomous', href: '/autonomous-resolution', icon: 'duplicate', id: 'autonomous-resolution' },
+        { label: 'Adam — Scope of Work', href: '/autonomous-resolution', icon: 'duplicate', id: 'autonomous-resolution' },
         { label: 'Data Migration Engine', href: '/migration', icon: 'database', id: 'migration', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] },
         { label: 'Infographic Generator', href: '/infographic', icon: 'document', id: 'infographic', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'ai_specialist'] }
       ]
