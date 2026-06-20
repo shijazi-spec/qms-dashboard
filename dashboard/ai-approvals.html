@@ -1450,22 +1450,30 @@
         if (pagerNext) pagerNext.disabled = pageOffset + shown >= total;
     }
 
-    // Show the "Clear shadow proposals" button only when the Source filter is
-    // viewing the autonomous shadow proposals.
+    // The clear button adapts to the Source filter:
+    //   All sources → Clear ALL pending; Adam → Clear Adam requests;
+    //   Autonomous → Clear shadow proposals.
+    function _clearScope() {
+        var v = fltSource ? fltSource.value : '';
+        if (v === 'adam') return { group: 'adam', label: '🧹 Clear Adam requests', confirm: 'Reject ALL pending Adam (chat) requests?\n\nThis empties the review backlog. Nothing here was applied to Zoho, so no CRM changes.' };
+        if (v === 'autonomous') return { group: 'autonomous', label: '🧹 Clear shadow proposals', confirm: 'Reject ALL pending shadow proposals?\n\nThese were never applied to Zoho (shadow mode) — this only empties the review backlog. No CRM changes.' };
+        return { group: 'all', label: '🧹 Clear ALL pending', confirm: 'Reject EVERY pending request in the queue (all sources)?\n\nFull backlog reset. Nothing here was applied to Zoho, so no CRM changes are made. The agent re-evaluates clusters fresh on its next run.' };
+    }
     function syncClearShadowBtn() {
         if (!btnClearShadow) return;
-        var on = fltSource && fltSource.value === 'autonomous';
-        btnClearShadow.classList.toggle('hidden', !on);
+        btnClearShadow.classList.remove('hidden');
+        btnClearShadow.textContent = _clearScope().label;
     }
 
     function clearShadowProposals() {
-        if (!confirm('Reject ALL pending shadow proposals?\n\nThese were never applied to Zoho (shadow mode) — this only empties the review backlog so the queue shows the requests you made with Adam. No CRM changes.')) return;
+        var scope = _clearScope();
+        if (!confirm(scope.confirm)) return;
         btnClearShadow.disabled = true;
         var prev = btnClearShadow.textContent;
         btnClearShadow.textContent = 'Clearing…';
         fetch('/api/duplicates/autonomous/clear-shadow-proposals', {
             method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' }, body: '{}'
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceGroup: scope.group })
         })
         .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
         .then(function (res) {
@@ -1550,6 +1558,7 @@
     // Wrapping handleDeepLink in load()'s .then chain would couple it to
     // the API succeeding; we instead call it after kicking off load() so
     // the modal can open even when the queue list errors out.
+    syncClearShadowBtn();
     load();
     handleDeepLink();
     // Silent, non-disruptive auto-refresh every 60s (was a blanking reload

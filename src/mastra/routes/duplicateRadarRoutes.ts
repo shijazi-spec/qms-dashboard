@@ -330,7 +330,13 @@ async function processModule(
   // time are fetched from Zoho (via the If-Modified-Since header). undefined =
   // full pull (first sync, or an explicit "Rebuild all").
   ifModifiedSince?: string,
+  // Live progress reporter — receives this module's completion fraction (0..1)
+  // as it fetches then writes, so the caller can advance the shared 10→60%
+  // "fetch band" smoothly instead of leaving it frozen at 10% until every
+  // module's parallel Promise.all settles. Never throws into the loop.
+  onProgress?: (frac: number) => void,
 ): Promise<{ count: number; written: number; skipped: number }> {
+  const t0 = Date.now();
   let records: any[] = [];
   scanState.moduleStatuses[moduleName] = "fetching";
   broadcastSSE("module", { module: moduleName, status: "fetching" });
@@ -340,6 +346,18 @@ async function processModule(
     records = await fetchAllZohoRecords(moduleName, {
       maxRecords: SCAN_MAX_PER_MODULE,
       ifModifiedSince,
+      // Surface live page counts: update the chip with the running fetched
+      // total and nudge the fetch band (asymptotic — we don't know the total
+      // page count up front, so approach ~0.45 of this module's slice).
+      onProgress: (fetched, page) => {
+        scanState.recordCounts[moduleName] = fetched;
+        broadcastSSE("module", {
+          module: moduleName,
+          status: "fetching",
+          count: fetched,
+        });
+        if (onProgress) onProgress(Math.min(0.45, 0.45 * (1 - 1 / (1 + page / 12))));
+      },
     });
   } catch (e: any) {
     logger.error(`Error fetching ${moduleName}:`, e);
@@ -368,10 +386,14 @@ async function processModule(
     status: "processing",
     count: records.length,
   });
+  // Fetch sub-phase done — the write sub-phase fills the remaining half of
+  // this module's slice (0.5 → 1.0), reported exactly by written/total below.
+  if (onProgress) onProgress(0.5);
 
   let written = 0;
   let skipped = 0;
   let droppedNoCompany = 0;
+  let processedInLoop = 0;
   for (const record of records) {
     try {
       const data = extractRecord(record);
@@ -1193,25 +1215,36 @@ export const duplicateRadarRoutes = [
             body?.onlyVerdict === "auto" || body?.onlyVerdict === "escalate"
               ? body.onlyVerdict
               : null;
+          // sourceGroup (Sarah 2026-06-20): which pending actions to clear.
+          //   'autonomous' (default) → only the resolver's shadow proposals
+          //   'adam'                 → only chat-initiated requests
+          //   'all'                  → EVERY pending action (full reset)
+          const sourceGroup =
+            body?.sourceGroup === "all" || body?.sourceGroup === "adam"
+              ? body.sourceGroup
+              : "autonomous";
           const { pool } = await import("../../utils/duplicateRadarDatabase");
           const params: any[] = [
             (user as any)?.email || "admin",
             (user as any)?.name || "admin",
           ];
+          // Build the tool-scope clause for the chosen source group.
+          let toolClause = " AND tool_id = 'duplicate-resolution'";
+          if (sourceGroup === "adam") toolClause = " AND tool_id <> 'duplicate-resolution'";
+          else if (sourceGroup === "all") toolClause = "";
           let verdictClause = "";
           if (onlyVerdict) {
-            verdictClause = " AND payload->>'verdict' = $3";
+            verdictClause = ` AND payload->>'verdict' = $${params.length + 1}`;
             params.push(onlyVerdict);
           }
           const r = await pool.query(
             `UPDATE ai_pending_actions
                 SET status = 'rejected',
-                    rejection_reason = 'Shadow proposal cleared in bulk — never applied to Zoho.',
+                    rejection_reason = 'Cleared in bulk — backlog reset, never applied to Zoho.',
                     reviewed_by_email = $1,
                     reviewed_by_name = $2,
                     reviewed_at = NOW()
-              WHERE tool_id = 'duplicate-resolution'
-                AND status = 'pending'${verdictClause}`,
+              WHERE status = 'pending'${toolClause}${verdictClause}`,
             params,
           );
           return c.json({ success: true, cleared: r.rowCount ?? 0 });
