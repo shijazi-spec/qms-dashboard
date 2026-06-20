@@ -5906,7 +5906,7 @@
                 const res = await fetch('/api/duplicates/contacts/exact-match-merge', {
                     method: 'POST', credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json', 'x-admin-key': key.trim() },
-                    body: JSON.stringify({ limit: 300 }),
+                    body: JSON.stringify({ limit: 1000 }),
                 });
                 live = await res.json();
                 if (!res.ok || !live.success) throw new Error((live && live.error) || ('HTTP ' + res.status));
