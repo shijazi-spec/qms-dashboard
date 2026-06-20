@@ -1273,6 +1273,47 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Flag a hygiene rule for editing (Sarah 2026-06-20): record the operator's
+    // requested change to event_logs so it can be reviewed/actioned. The rules
+    // live in code (hygieneRulesCatalog.ts); this is the lightweight "I want
+    // this edited" capture, not an in-place editor.
+    //   POST /api/duplicates/hygiene-rules/flag  { tab, ruleId, note }
+    path: "/api/duplicates/hygiene-rules/flag",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const tab = String(body?.tab || "").slice(0, 64);
+          const ruleId = String(body?.ruleId || "").slice(0, 64);
+          const note = String(body?.note || "").slice(0, 1000).trim();
+          if (!ruleId || !note) {
+            return c.json({ error: "ruleId and note are required" }, 400);
+          }
+          const { logEvent } = await import("../../utils/eventLogsDatabase");
+          await logEvent({
+            userId: (user as any)?.userId ?? undefined,
+            userEmail: (user as any)?.email ?? undefined,
+            userRole: (user as any)?.role ?? undefined,
+            actionType: "AI_ACTION",
+            entityType: "SYSTEM",
+            entityId: `hygiene-rule:${tab}/${ruleId}`,
+            entityName: "Hygiene rule edit request",
+            description: `Hygiene rule edit requested for ${tab}/${ruleId}: ${note}`,
+            aiInvolved: false,
+            severity: "INFO",
+            module: "duplicate-radar",
+          }).catch(() => {});
+          return c.json({ success: true });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Rejection-pattern analysis (Sarah 2026-06-20): why deliberately-rejected
     // proposals were rejected, with recommend-only rule/threshold suggestions.
     //   GET /api/duplicates/autonomous/rejection-patterns?days=30

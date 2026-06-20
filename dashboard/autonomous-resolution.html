@@ -202,9 +202,12 @@
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
                 <h2 class="text-lg font-semibold text-gray-900">🛡️ Hygiene &amp; business rules Adam enforces</h2>
-                <span id="hygieneCount" class="text-xs text-gray-500"></span>
+                <div class="flex items-center gap-2">
+                    <select id="hygieneTab" class="text-sm border border-gray-300 rounded-lg px-2 py-1"></select>
+                    <span id="hygieneCount" class="text-xs text-gray-500"></span>
+                </div>
             </div>
-            <p class="text-xs text-gray-500 mb-3">The agreed data-hygiene &amp; governance rules the agent checks before deciding. Reference only — these are what Adam applies; the editable "Learning rules" below are the case-shapes you teach it.</p>
+            <p class="text-xs text-gray-500 mb-3">The agreed data-hygiene &amp; governance rules per Duplicate Radar tab. Pick a module to review its rules; "General" rules apply to every tab. Spot one that needs changing? Click <strong>✎ Flag for edit</strong> and I'll review it.</p>
             <div id="hygieneRules" class="space-y-3 text-sm"><div class="text-gray-500">Loading…</div></div>
         </section>
 
@@ -798,28 +801,70 @@
             });
         }
 
+        var _hygieneGroups = null;
         async function loadHygieneRules() {
             var box = document.getElementById('hygieneRules');
             if (!box) return;
             try {
-                var d = await getJSON('/api/duplicates/hygiene-rules');
-                var groups = (d && d.groups) || [];
-                var cnt = document.getElementById('hygieneCount');
-                if (cnt) cnt.textContent = (d && d.totalRules ? d.totalRules : 0) + ' rules';
-                if (!groups.length) { box.innerHTML = '<div class="text-gray-500">No rules.</div>'; return; }
-                box.innerHTML = groups.map(function (g) {
-                    var items = (g.rules || []).map(function (r) {
-                        var ref = r.ref ? ' <span class="text-[11px] text-gray-400">(' + esc(r.ref) + ')</span>' : '';
-                        return '<li class="text-gray-700 leading-relaxed">' + esc(r.rule) + ref + '</li>';
-                    }).join('');
-                    return '<details class="rounded-lg border border-gray-200">' +
-                        '<summary class="cursor-pointer select-none px-3 py-2 font-medium text-gray-800 bg-gray-50 rounded-lg">' +
-                        esc(g.title) + ' <span class="text-[11px] text-gray-400">(' + (g.rules || []).length + ')</span></summary>' +
-                        '<ul class="list-disc ps-8 pe-3 py-2 space-y-1">' + items + '</ul>' +
-                        '</details>';
-                }).join('');
+                if (!_hygieneGroups) {
+                    var d = await getJSON('/api/duplicates/hygiene-rules');
+                    _hygieneGroups = (d && d.groups) || [];
+                    // Populate the tab selector once (per-module tabs only; General
+                    // is always shown). Default to Accounts (Sarah's focus).
+                    var sel = document.getElementById('hygieneTab');
+                    if (sel && !sel.options.length) {
+                        var tabs = _hygieneGroups.filter(function (g) { return !g.general; });
+                        sel.innerHTML = tabs.map(function (g) {
+                            return '<option value="' + esc(g.key) + '"' + (g.key === 'accounts' ? ' selected' : '') + '>' + esc(g.title) + '</option>';
+                        }).join('');
+                    }
+                }
+                renderHygieneRules();
             } catch (e) {
                 box.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+        function renderHygieneRules() {
+            var box = document.getElementById('hygieneRules');
+            if (!box || !_hygieneGroups) return;
+            var sel = document.getElementById('hygieneTab');
+            var tab = sel ? sel.value : 'accounts';
+            // Show the selected tab's group + all cross-cutting (general) groups.
+            var shown = _hygieneGroups.filter(function (g) { return g.general || g.key === tab; });
+            var cnt = document.getElementById('hygieneCount');
+            var total = shown.reduce(function (n, g) { return n + (g.rules || []).length; }, 0);
+            if (cnt) cnt.textContent = total + ' rules shown';
+            box.innerHTML = shown.map(function (g) {
+                var items = (g.rules || []).map(function (r) {
+                    var ref = r.ref ? ' <span class="text-[11px] text-gray-400">(' + esc(r.ref) + ')</span>' : '';
+                    return '<li class="text-gray-700 leading-relaxed">' + esc(r.rule) + ref +
+                        ' <button data-on-click="flagHygieneRule" data-tab="' + esc(g.key) + '" data-rule="' + esc(r.id) + '" class="text-[11px] text-indigo-600 hover:text-indigo-800 whitespace-nowrap">✎ Flag for edit</button></li>';
+                }).join('');
+                var openAttr = g.general ? '' : ' open';
+                return '<details class="rounded-lg border border-gray-200"' + openAttr + '>' +
+                    '<summary class="cursor-pointer select-none px-3 py-2 font-medium text-gray-800 bg-gray-50 rounded-lg">' +
+                    esc(g.title) + ' <span class="text-[11px] text-gray-400">(' + (g.rules || []).length + ')</span></summary>' +
+                    '<ul class="list-disc ps-8 pe-3 py-2 space-y-1">' + items + '</ul>' +
+                    '</details>';
+            }).join('');
+        }
+        async function flagHygieneRule(el) {
+            if (!el || !el.getAttribute) return;
+            var tab = el.getAttribute('data-tab');
+            var ruleId = el.getAttribute('data-rule');
+            var note = prompt('What should change about this rule? (your note is logged for review)');
+            if (!note || !note.trim()) return;
+            try {
+                var r = await fetch('/api/duplicates/hygiene-rules/flag', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tab: tab, ruleId: ruleId, note: note.trim() })
+                });
+                var data = await r.json();
+                if (!r.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + r.status));
+                alert('Flagged for edit — thanks, it will be reviewed.');
+            } catch (e) {
+                alert('Could not flag: ' + (e && e.message || e));
             }
         }
 
@@ -926,6 +971,8 @@
             refreshAll();
             var am = document.getElementById('acceptModule');
             if (am) am.addEventListener('change', loadAcceptancePatterns);
+            var ht = document.getElementById('hygieneTab');
+            if (ht) ht.addEventListener('change', renderHygieneRules);
         });
     </script>
 </body>

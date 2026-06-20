@@ -1,14 +1,16 @@
 /**
  * Hygiene & business rules catalog — the canonical, human-readable list of the
- * data-hygiene / governance rules the GRQ team has agreed on and that Adam +
- * the Duplicate Radar enforce. Surfaced read-only on the Autonomous Resolution
- * screen (GET /api/duplicates/hygiene-rules) so an operator can see, in ONE
- * place, exactly what the agent is checking before deciding whether to trust it
- * in assisted mode.
+ * data-hygiene / governance rules the GRQ team agreed on while building each
+ * Duplicate Radar tab. Surfaced read-only (and per-module-selectable) on the
+ * Adam — Scope of Work screen (GET /api/duplicates/hygiene-rules) so Sarah can
+ * review the rules tab-by-tab and flag anything that needs editing.
  *
- * This is a REFERENCE list (not the resolver's executable "learning rules",
- * which live in duplicate_resolution_rules). Keep it in sync as new standing
- * rules are agreed — it mirrors the rules block in qmsConsultantAgent.ts.
+ * Organised PER TAB/MODULE so it mirrors the Duplicate Radar tabs. Groups
+ * flagged `general: true` are cross-cutting (shown alongside any selected tab).
+ *
+ * This is a REFERENCE list (not the resolver's executable "learning rules").
+ * Keep it in sync with the rules block in qmsConsultantAgent.ts as standing
+ * rules are agreed.
  */
 
 export interface HygieneRule {
@@ -19,91 +21,125 @@ export interface HygieneRule {
 }
 
 export interface HygieneRuleGroup {
+  /** Matches a Duplicate Radar tab id (or a cross-cutting area). */
   key: string;
   title: string;
+  /** Cross-cutting — show with every selected tab. */
+  general?: boolean;
   rules: HygieneRule[];
 }
 
 export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
+  // ── Cross-cutting (always shown) ───────────────────────────────────────────
   {
-    key: "scope",
-    title: "Scope",
+    key: "general",
+    title: "General (applies to every tab)",
+    general: true,
     rules: [
-      {
-        id: "scope-corporate",
-        rule: "All Duplicate Radar rules apply to CORPORATE / B2B company records only. Marketplace and Merchant records are out of scope (different sales motion). A record is corporate unless it carries an explicit merchant layout (Marketplace, Partner Accounts).",
-        ref: "Sarah 2026-06-17",
-      },
+      { id: "gen-scope", rule: "CORPORATE / B2B company records only. Marketplace & Merchant records are out of scope. A record is corporate unless it carries an explicit merchant layout (Marketplace, Partner Accounts).", ref: "Sarah 2026-06-17" },
+      { id: "gen-freemail", rule: "Free-mail domains (gmail, yahoo, ymail, hotmail, outlook…) and WalaPlus house domains are NOT a clustering signal. Placeholder names (N/A, Not Provided…) go to a quarantine bucket, not a real duplicate." },
+      { id: "gen-migrate-tag", rule: "Merge = migrate-then-tag: keep the survivor, copy its MISSING fields from the duplicate(s), tag the duplicate(s) 'Duplicate-Delete'. The platform NEVER deletes — the admin deletes tagged records." },
+      { id: "gen-resolved-merged", rule: "'Resolved' ≠ 'Merged'. A cluster is only truly resolved once tagged records are confirmed deleted in Zoho. Report the real applied/merged figure, never the cluster 'resolved' count." },
+      { id: "gen-hitl", rule: "Every Zoho write is gated (Human-in-the-Loop): it queues for approval (admin password) before applying. Attribution: 'Adam — GRQ Assistant (on behalf of Sarah Hijazi)'. Shadow default = no autonomous writes; kill switch always live." },
+      { id: "gen-safe-tier", rule: "Safe-tier auto-apply requires ALL clear: confidence ≥85, <2 domains, <2 phones, no CS block/review, pipeline & ARR ≤ cap, no active deal stage, 0 field conflicts, all Zoho ids present, not cross-module, <2 layouts, ≤1 owner, nothing modified <7 days, no failed prior verification, no custom-field assumption, survivor ≥50% complete, no attachments. Any one missing → escalate." },
+    ],
+  },
+  // ── Per-module duplicate tabs ──────────────────────────────────────────────
+  {
+    key: "accounts",
+    title: "Accounts Duplicates",
+    rules: [
+      { id: "acc-def", rule: "A duplicate Account = the SAME company — same domain / legal name / close fuzzy name." },
+      { id: "acc-survivor", rule: "Survivor = the most complete record / the one with the Account + most related records; gap-fill its blanks, tag the others Duplicate-Delete." },
     ],
   },
   {
-    key: "duplicates",
-    title: "Per-module duplicate definitions",
+    key: "contacts",
+    title: "Contacts Duplicates",
     rules: [
-      { id: "dup-accounts", rule: "Accounts: the SAME company — same domain / legal name / close fuzzy name." },
-      { id: "dup-contacts", rule: "Contacts: the SAME person — only a duplicate when ≥2 of {email, phone, full name} match. Sharing an Account is NOT duplicate evidence." },
-      { id: "dup-leads", rule: "Leads: duplicate leads are accepted; a lead is only flagged when the SAME lead (same phone + email) is submitted AGAIN (a resubmission)." },
-      { id: "dup-deals", rule: "Deals: the problem is 2 ACTIVE deals for the same thing. Won/closed/lost deals are not duplicates to fix." },
-      { id: "dup-freemail", rule: "Free-mail (gmail, yahoo, ymail, hotmail, outlook…) and WalaPlus house domains are NOT a clustering signal. Placeholder names (N/A, Not Provided…) go to a quarantine bucket, not a real duplicate." },
+      { id: "con-def", rule: "A duplicate Contact = the SAME person — only when ≥2 of {email, phone, full name} match. Sharing an Account is NOT duplicate evidence (that's the Account-merge cascade).", ref: "hard rule" },
     ],
   },
   {
-    key: "resolution",
-    title: "Resolution & merge",
+    key: "leads",
+    title: "Leads Duplicates",
     rules: [
-      { id: "res-migrate-tag", rule: "Merge = migrate-then-tag: keep the survivor, copy the survivor's MISSING fields from the duplicate(s), tag the duplicate(s) 'Duplicate-Delete'. The platform NEVER deletes — the admin deletes tagged records." },
-      { id: "res-resolved-vs-merged", rule: "'Resolved' ≠ 'Merged'. A cluster is only truly resolved once tagged records are confirmed deleted in Zoho (Verify in CRM). Report the real 'applied/merged' figure, never the cluster 'resolved' count." },
-      { id: "res-safe-tier", rule: "Safe-tier (auto-apply in assisted) requires ALL clear: confidence ≥85, <2 domains, <2 phones, no CS block/review, pipeline & ARR ≤ cap (default 0), no active deal stage, 0 field conflicts, all Zoho ids present, not cross-module, <2 layouts, ≤1 owner, nothing modified <7 days, no failed prior verification, no custom-field assumption, survivor ≥50% complete, no attachments on duplicates. Any one missing → escalate." },
-      { id: "res-dont-reask", rule: "Your decisions stick: a cluster you reject is not re-proposed for 30 days; a pending cluster is never re-queued. A bulk Clear is a reset, not a rejection." },
+      { id: "lead-def", rule: "Duplicate leads are ACCEPTED. A lead is only flagged when the SAME lead (same phone + email) is submitted AGAIN (a resubmission)." },
     ],
   },
+  {
+    key: "deals",
+    title: "Deals Duplicates",
+    rules: [
+      { id: "deal-def", rule: "The problem is 2 ACTIVE deals for the same thing → tag Duplicate-Delete + merge info. Won / closed / lost deals are NOT duplicates to fix (detection is stage-aware)." },
+    ],
+  },
+  // ── Cross-module & lifecycle tabs ──────────────────────────────────────────
   {
     key: "cross-module",
-    title: "Cross-module overlap",
+    title: "Cross-Module Overlap",
     rules: [
-      { id: "xm-lead", rule: "Lead ↔ anything: Zoho can't link a Lead, so the fix is CLOSE the Lead (convert into the existing Account or close as duplicate) — never 'link the lead'." },
-      { id: "xm-link", rule: "Contact ↔ Account / Deal ↔ Account → LINK by setting Account_Name. Contact ↔ Deal → LINK by setting Contact_Name." },
-      { id: "xm-existing-client", rule: "Existing-client flag only when a Deal in Paid / Agreement Signed / Closed Won / Awaiting PO / Client Activated / Transferred to CS is present — those are CS-owned; Sales must not pursue. A Contact alone is NOT customer evidence." },
+      { id: "xm-lead", rule: "Lead ↔ anything: Zoho can't link a Lead — fix is CLOSE the Lead (convert into the existing Account or close as duplicate). Pure Lead↔Contact / Lead↔Account clusters are hidden here (handled on the Leads tab).", ref: "Sarah 2026-06-16" },
+      { id: "xm-link", rule: "Contact ↔ Account / Deal ↔ Account → LINK by Account_Name. Contact ↔ Deal → LINK by Contact_Name. 3+ modules → open the cluster for per-record recs." },
+      { id: "xm-existing-client", rule: "Existing-client flag only when a Deal in Paid / Agreement Signed / Closed Won / Awaiting PO / Client Activated / Transferred to CS is present (CS-owned). A Contact alone is NOT customer evidence." },
     ],
   },
   {
     key: "cs-lifecycle",
-    title: "CS Lifecycle (per-phase hygiene)",
+    title: "CS Lifecycle",
     rules: [
-      { id: "cs-phases", rule: "CS deals tracked by phase: onboarding / adoption / renewal / termination. Violations: onboarding_overdue (>30 days), adoption_premature (trial still open), renewal_overdue (CRITICAL past a quarter / 90 days), termination_missing_churn_date, termination_missing_churn_reason, plus active-phase missing-field checks (company_domain, customer_since, renewal_date, health_score, arr_value)." },
-      { id: "cs-overlap", rule: "CS Pipeline Overlap: BLOCK when an OPEN Sales Deal + a Paid/Agreement-Signed handoff Deal coexist on the same customer AND the churn cool-off has NOT elapsed (180d Private / 365d Government); WARN if past cool-off in Termination; otherwise no flag." },
+      { id: "cs-phases", rule: "CS deals by phase (onboarding / adoption / renewal / termination). Violations: onboarding_overdue (>30d), adoption_premature (trial still open), renewal_overdue (CRITICAL past a quarter / 90d), termination_missing_churn_date, termination_missing_churn_reason, + active-phase missing-field checks." },
+    ],
+  },
+  {
+    key: "cs-overlap",
+    title: "CS Pipeline Overlap",
+    rules: [
+      { id: "cso-block", rule: "BLOCK when an OPEN Sales Deal + a Paid/Agreement-Signed handoff Deal coexist on the same customer AND the churn cool-off has NOT elapsed (180d Private / 365d Government). WARN if past cool-off in Termination. A lone Paid deal in Adoption is not flagged.", ref: "Sarah 2026-06-11" },
     ],
   },
   {
     key: "deals-lifecycle",
-    title: "Deals Lifecycle (Sales SOP stage aging)",
+    title: "Deals Lifecycle (stage aging)",
     rules: [
-      { id: "deal-slas", rule: "Stage SLAs (Sales SOP v1.1): Not Attend Meeting ≤5 business days (§7.2.8); Meeting ≤10 business days (§7.3); On Hold 3–6 months (§7.3.11); Proposal ≤3 months (§7.4.2); Agreement Sent ≤3 months (§7.5.1). WARNING past SLA up to 1.5×; CRITICAL past 1.5×. Terminal stages (Agreement Signed, Paid, Closed Won/Lost) freeze aging." },
-      { id: "deal-compliance", rule: "Deal document compliance (Sales SOP 7.5.10, attachments only): Proposal needs the financial offer; Agreement Signed & Paid need proposal + contract/PO + VAT cert + Commercial Registration + National Address." },
+      { id: "dl-slas", rule: "Stage SLAs (Sales SOP v1.1): Not Attend Meeting ≤5 business days (§7.2.8); Meeting ≤10 business days (§7.3); On Hold 3–6 months (§7.3.11); Proposal ≤3 months (§7.4.2); Agreement Sent ≤3 months (§7.5.1). WARNING past SLA up to 1.5×; CRITICAL past 1.5×. Terminal stages freeze aging." },
+    ],
+  },
+  {
+    key: "deal-compliance",
+    title: "Deal Compliance (documents)",
+    rules: [
+      { id: "dc-docs", rule: "Sales SOP 7.5.10, ATTACHMENTS only: Proposal needs the financial offer; Agreement Signed & Paid need proposal + contract/PO + VAT cert + Commercial Registration + National Address. (Field-level data-entry compliance lives on the Quality Dashboard audit.)" },
+    ],
+  },
+  {
+    key: "account-hints",
+    title: "Account Hints",
+    rules: [
+      { id: "ah-conf", rule: "Smart Account inference for Deals missing Account_Name: confidence = 40 base + evidence (cap 100); AI auto-resolve gate 70%. Dismissed hints are immutable (never resurrected by a re-scan)." },
     ],
   },
   {
     key: "preflight",
-    title: "Preflight (vetting a new record)",
+    title: "Preflight Check",
     rules: [
-      { id: "pf-basic", rule: "ACTIVE mode = BASIC: Rule 1 — contact duplicate by email/phone → 'duplicate'. Rule 2 (only if no dup) — domain has a signed/paid, not-churned deal → 'block'. Else 'pass'. Identity fallback: domain → phone (≥7 digits) → company-name fuzzy." },
-      { id: "pf-active-lead", rule: "Reject a vendor/import row when an ACTIVE Lead already exists for that corporate cluster — pass the info to the existing owner; do NOT re-import." },
-      { id: "pf-closed-lost", rule: "A prior Closed-Lost-only deal is NOT a duplicate — Sales may re-engage; LINK the new lead to the existing Account (severity LOW)." },
+      { id: "pf-basic", rule: "ACTIVE = BASIC: Rule 1 — contact dup by email/phone → 'duplicate'. Rule 2 (only if no dup) — domain has a signed/paid not-churned deal → 'block'. Else 'pass'. Fallback: domain → phone (≥7 digits) → company-name fuzzy.", ref: "Ahmad 2026-06-18" },
+      { id: "pf-active-lead", rule: "Reject a vendor/import row when an ACTIVE Lead already exists for that corporate cluster — pass info to the existing owner, do NOT re-import." },
+      { id: "pf-closed-lost", rule: "Closed-Lost-only on file is NOT a duplicate — Sales may re-engage; LINK the new lead to the existing Account (LOW)." },
     ],
   },
   {
-    key: "ownership",
-    title: "Owner accountability",
+    key: "owner-accountability",
+    title: "Owner Accountability",
     rules: [
-      { id: "own-rag", rule: "Duplicate-rate RAG (SDR-KPI-09): green ≤2%, amber 2–5%, red >5%. Reps on multiple mailboxes consolidate under their canonical email (OWNER_EMAIL_ALIASES)." },
+      { id: "oa-rag", rule: "Duplicate-rate RAG (SDR-KPI-09): green ≤2%, amber 2–5%, red >5%. Reps on multiple mailboxes consolidate under their canonical email (OWNER_EMAIL_ALIASES)." },
     ],
   },
   {
-    key: "governance",
-    title: "Governance & attribution",
+    key: "cluster-merge",
+    title: "Cluster Merge",
     rules: [
-      { id: "gov-hitl", rule: "Every Zoho write is gated (Human-in-the-Loop): it queues for approval (admin password) before it is applied. The agent never deletes; risky tiers always need a human." },
-      { id: "gov-attribution", rule: "Agent actions are attributed 'Adam — GRQ Assistant (on behalf of Sarah Hijazi)' for ISO 27001 non-repudiation. Kill switch + shadow mode default = no autonomous writes until a manager promotes the mode." },
+      { id: "cm-split", rule: "Finds domains with ≥2 separate clusters (same-domain split from concurrent syncs). Recommended master = the cluster with an Account + highest record count + highest confidence." },
     ],
   },
 ];
