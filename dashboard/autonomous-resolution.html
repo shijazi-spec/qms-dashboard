@@ -164,6 +164,16 @@
             <div id="curveEmpty" class="hidden text-sm text-gray-500 mt-2">No grade snapshots yet — they accumulate as the agent runs.</div>
         </section>
 
+        <!-- Hygiene & business rules (read-only reference of what Adam enforces) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">🛡️ Hygiene &amp; business rules Adam enforces</h2>
+                <span id="hygieneCount" class="text-xs text-gray-500"></span>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">The agreed data-hygiene &amp; governance rules the agent checks before deciding. Reference only — these are what Adam applies; the editable "Learning rules" below are the case-shapes you teach it.</p>
+            <div id="hygieneRules" class="space-y-3 text-sm"><div class="text-gray-500">Loading…</div></div>
+        </section>
+
         <!-- Learning rules -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <h2 class="text-lg font-semibold text-gray-900 mb-1">Learning rules</h2>
@@ -725,7 +735,32 @@
             });
         }
 
-        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); loadProposalTiers(); loadProgress(); }
+        async function loadHygieneRules() {
+            var box = document.getElementById('hygieneRules');
+            if (!box) return;
+            try {
+                var d = await getJSON('/api/duplicates/hygiene-rules');
+                var groups = (d && d.groups) || [];
+                var cnt = document.getElementById('hygieneCount');
+                if (cnt) cnt.textContent = (d && d.totalRules ? d.totalRules : 0) + ' rules';
+                if (!groups.length) { box.innerHTML = '<div class="text-gray-500">No rules.</div>'; return; }
+                box.innerHTML = groups.map(function (g) {
+                    var items = (g.rules || []).map(function (r) {
+                        var ref = r.ref ? ' <span class="text-[11px] text-gray-400">(' + esc(r.ref) + ')</span>' : '';
+                        return '<li class="text-gray-700 leading-relaxed">' + esc(r.rule) + ref + '</li>';
+                    }).join('');
+                    return '<details class="rounded-lg border border-gray-200">' +
+                        '<summary class="cursor-pointer select-none px-3 py-2 font-medium text-gray-800 bg-gray-50 rounded-lg">' +
+                        esc(g.title) + ' <span class="text-[11px] text-gray-400">(' + (g.rules || []).length + ')</span></summary>' +
+                        '<ul class="list-disc ps-8 pe-3 py-2 space-y-1">' + items + '</ul>' +
+                        '</details>';
+                }).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+
+        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); loadProposalTiers(); loadProgress(); loadHygieneRules(); }
 
         document.addEventListener('DOMContentLoaded', refreshAll);
     </script>

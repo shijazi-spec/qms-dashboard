@@ -1253,6 +1253,26 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Hygiene & business rules catalog (Sarah 2026-06-20): the read-only list
+    // of agreed data-hygiene / governance rules Adam enforces, surfaced on the
+    // Autonomous Resolution screen so an operator can see what's being checked.
+    //   GET /api/duplicates/hygiene-rules
+    path: "/api/duplicates/hygiene-rules",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const { getHygieneRulesCatalog } = await import("../../utils/hygieneRulesCatalog");
+          return c.json({ success: true, ...getHygieneRulesCatalog() });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Per-tab daily PROGRESS burndown (Sarah 2026-06-17): for each module
     // (Leads/Deals/Contacts/Accounts) returns the daily series of open / solved
     // / total (+ durable merged) plus the latest snapshot and the day-over-day
