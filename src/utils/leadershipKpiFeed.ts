@@ -203,20 +203,33 @@ function periodFor(
 /** QM-KPI-002 — (completed audits / total audits) × 100, across BOTH formal
  *  audits and completed AI-audit runs. */
 async function calcAuditExecutionRate() {
-  // Source = BOTH (per Sarah, 2026-06-17): formal audits in the Internal Audits
-  // module PLUS completed standalone AI-audit runs (audit_runs). Each AI run is an
-  // executed audit, so it counts +1 completed and +1 total (~100% executed),
-  // raising the rate as more auditing actually happens. Runs linked to a formal
+  // Audit Execution Rate — QUARTERLY (per Sarah, 2026-06-17): of the audits
+  // PLANNED for the CURRENT quarter, how many were EXECUTED (completed). This is a
+  // true QTD execution rate — the denominator is the quarter's plan, NOT the whole
+  // register (the old formula divided by every audit ever, which misrepresented it).
+  //   planned   = formal audits whose planned/scheduled date is in this quarter
+  //   executed  = those with status fieldwork_complete | report_draft | report_final | closed
+  // Source = BOTH: also include completed standalone AI-audit runs finished THIS
+  // quarter (each counts as one planned + one executed). Runs linked to a formal
   // audit are excluded to avoid double-counting.
   const r = await pool.query(`
+    WITH q AS (
+      SELECT date_trunc('quarter', NOW()) AS q_start,
+             date_trunc('quarter', NOW()) + interval '3 months' AS q_end
+    )
     SELECT
-      COUNT(*)::int AS total,
       COUNT(*) FILTER (
-        WHERE status IN ('fieldwork_complete','report_draft','report_final','closed','completed')
+        WHERE COALESCE(planned_start_date, scheduled_date, created_at) >= (SELECT q_start FROM q)
+          AND COALESCE(planned_start_date, scheduled_date, created_at) <  (SELECT q_end FROM q)
+      )::int AS planned,
+      COUNT(*) FILTER (
+        WHERE COALESCE(planned_start_date, scheduled_date, created_at) >= (SELECT q_start FROM q)
+          AND COALESCE(planned_start_date, scheduled_date, created_at) <  (SELECT q_end FROM q)
+          AND status IN ('fieldwork_complete','report_draft','report_final','closed','completed')
       )::int AS completed
     FROM audits
   `);
-  let total = r.rows[0]?.total ?? 0;
+  let planned = r.rows[0]?.planned ?? 0;
   let completed = r.rows[0]?.completed ?? 0;
   let aiRuns = 0;
   try {
@@ -224,18 +237,28 @@ async function calcAuditExecutionRate() {
       SELECT COUNT(*)::int AS runs
       FROM audit_runs
       WHERE status = 'completed' AND linked_audit_id IS NULL
+        AND COALESCE(finished_at, started_at) >= date_trunc('quarter', NOW())
+        AND COALESCE(finished_at, started_at) <  date_trunc('quarter', NOW()) + interval '3 months'
     `);
     aiRuns = a.rows[0]?.runs ?? 0;
-    total += aiRuns;
+    planned += aiRuns; // each completed AI run = one planned + one executed
     completed += aiRuns;
   } catch {
     /* audit_runs table not present yet — fall back to formal audits only */
   }
-  if (total <= 0) return { value: 0, dataAvailable: false };
+  if (planned <= 0) {
+    // No audits planned/dated in the current quarter → nothing to execute yet.
+    // Mark unavailable (not a real 0%) so leadership keeps its value.
+    return { value: 0, dataAvailable: false, reason: "no_audits_planned_this_quarter" };
+  }
   return {
-    value: Math.round((completed / total) * 1000) / 10,
+    value: Math.round((completed / planned) * 1000) / 10,
     dataAvailable: true,
-    details: { total_audits: total, completed_audits: completed, ai_audit_runs: aiRuns },
+    details: {
+      planned_this_quarter: planned,
+      completed_this_quarter: completed,
+      ai_audit_runs: aiRuns,
+    },
   };
 }
 
@@ -822,11 +845,11 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
     plan_ref:
       "Quality Plan → Audit Execution Rate (per-BU quarterly schedule); North Star 'Audit Execution' (Q1 80% → Q4 90%).",
     numerator:
-      "audits WHERE status IN ('fieldwork_complete','report_draft','report_final','closed','completed') PLUS completed standalone AI-audit runs (audit_runs WHERE status='completed' AND linked_audit_id IS NULL) — see details.completed_audits.",
+      "audits PLANNED this quarter WHERE status IN ('fieldwork_complete','report_draft','report_final','closed','completed') PLUS completed AI-audit runs finished this quarter (audit_runs WHERE status='completed' AND linked_audit_id IS NULL) — see details.completed_this_quarter.",
     denominator:
-      "all rows in audits PLUS the same completed standalone AI-audit runs — see details.total_audits (details.ai_audit_runs counts the AI runs added to both sides).",
+      "audits PLANNED this quarter (planned/scheduled date in the current quarter) PLUS the same completed AI-audit runs finished this quarter — see details.planned_this_quarter (details.ai_audit_runs counts the AI runs added to both sides).",
     scope:
-      "All audits in the register (all BUs) + completed AI-audit runs not linked to a formal audit (to avoid double-counting). NOTE: the implementation currently counts the full audit register, not strictly the current-quarter plan; reported as period_type='quarter' (QTD intent). Confirm with the Leadership definition before relying on strict QTD parity.",
+      "QUARTERLY (QTD): only audits whose planned/scheduled date falls in the current quarter, across all BUs, + completed AI-audit runs finished this quarter (not linked to a formal audit, to avoid double-counting). If no audits are planned this quarter the KPI is reported unavailable (reason 'no_audits_planned_this_quarter'), not a 0%.",
     rounding: DEFAULT_ROUNDING,
   },
   "QM-KPI-003": {
