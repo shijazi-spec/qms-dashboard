@@ -663,6 +663,23 @@ export async function buildRadarTabStatus(): Promise<string> {
       .join(" · ");
     if (pl) parts.push(`›  *Progress (solved/total):* ${pl}`);
   } catch { /* skip */ }
+  // Rejection patterns (Sarah 2026-06-20) — what operators keep rejecting, so
+  // the team knows what to teach Adam / which threshold to tune.
+  try {
+    const { analyzeRejectionPatterns } = await import("./rejectionPatterns");
+    const rp = await analyzeRejectionPatterns(7);
+    if (rp.totalRejected > 0) {
+      const top = rp.patterns
+        .slice(0, 3)
+        .map((p) => `${p.label} ${p.sharePct}%`)
+        .join(" · ");
+      parts.push(
+        `›  *Rejections (last 7d):* ${n(rp.totalRejected)}` +
+          (top ? ` — top: ${top}` : "") +
+          ` — review/teach on the Autonomous Resolution screen`,
+      );
+    }
+  } catch { /* skip */ }
   // Account Hints — pending / applied / dismissed.
   try {
     const { listAccountInferenceHints } = await import("./accountInference");

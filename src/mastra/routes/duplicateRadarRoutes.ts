@@ -1273,6 +1273,30 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Rejection-pattern analysis (Sarah 2026-06-20): why deliberately-rejected
+    // proposals were rejected, with recommend-only rule/threshold suggestions.
+    //   GET /api/duplicates/autonomous/rejection-patterns?days=30
+    path: "/api/duplicates/autonomous/rejection-patterns",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const days = parseInt(url.searchParams.get("days") || "30", 10);
+          const { analyzeRejectionPatterns } = await import("../../utils/rejectionPatterns");
+          const data = await analyzeRejectionPatterns(
+            Number.isFinite(days) && days > 0 ? days : 30,
+          );
+          return c.json({ success: true, ...data });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Per-tab daily PROGRESS burndown (Sarah 2026-06-17): for each module
     // (Leads/Deals/Contacts/Accounts) returns the daily series of open / solved
     // / total (+ durable merged) plus the latest snapshot and the day-over-day

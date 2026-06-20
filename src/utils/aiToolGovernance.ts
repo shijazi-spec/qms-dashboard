@@ -437,6 +437,15 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     entityType: 'crm_lookup',
     buildPreview: (p: any) => `Lookup: ${trim(p?.query, 80)}`,
   },
+  'rejection-patterns': {
+    toolId: 'rejection-patterns',
+    label: 'Rejection-pattern analysis (why proposals get rejected)',
+    riskLevel: 'low',
+    requiresApproval: false, // read-only analytics over rejected proposals
+    complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only analytics; recommend-only, creates no rule'],
+    entityType: 'resolution_analytics',
+    buildPreview: (p: any) => `Rejection patterns (last ${p?.days ?? 30}d)`,
+  },
   'check-domains-batch': {
     toolId: 'check-domains-batch',
     label: 'Batch domain CRM-presence check (many domains at once)',
