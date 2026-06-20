@@ -320,7 +320,13 @@ export async function findOpenOrRejectedResolutionAction(
         AND payload->>'clusterId' = $1
         AND payload->>'module' = $2
         AND ( status = 'pending'
-              OR (status = 'rejected' AND reviewed_at > NOW() - ($3 || ' days')::interval) )
+              OR (status = 'rejected'
+                  AND reviewed_at > NOW() - ($3 || ' days')::interval
+                  -- A BULK CLEAR ("clear shadow proposals") sets status=rejected
+                  -- too, but it's a backlog reset, NOT a per-cluster judgment —
+                  -- so it must NOT suppress future proposals. Only a deliberate
+                  -- per-card Reject counts as "don't re-ask".
+                  AND COALESCE(rejection_reason, '') NOT ILIKE '%cleared in bulk%') )
       ORDER BY created_at DESC
       LIMIT 1`,
     [String(clusterId), module, String(rejectedWithinDays)],
