@@ -155,16 +155,14 @@ function currentQuarterLabel(now: Date): string {
 }
 
 /**
- * Explicit period basis per KPI code. Anything not listed defaults to
- * "cumulative" (a running point-in-time coverage/ratio over all records to
- * date). Only the audit execution rate (quarter-to-date against the quarterly
- * audit plan) and the two North Star composites (computed from quarterly
- * weights) are quarter-based.
+ * Period basis per KPI code. ALL GRQ KPIs are reported QUARTERLY (per Sarah,
+ * 2026-06-17) — the Leadership Platform tracks every KPI on a quarterly cadence,
+ * so the default is "quarter" and the connector files each value under the
+ * current quarter. Add an explicit override here only if a specific KPI ever
+ * needs month/ytd/cumulative.
  */
 const PERIOD_TYPE_BY_CODE: Record<string, FeedPeriodType> = {
-  "QM-KPI-002": "quarter", // Audit Execution Rate — QTD vs quarterly audit plan
-  "QM-KPI-001": "quarter", // Quality North Star Score — quarterly weighted composite
-  "GRC-KPI-001": "quarter", // GRC North Star Score — quarterly weighted composite
+  // (all default to "quarter"; list any non-quarter exceptions here)
 };
 
 function quarterStartIso(now: Date): string {
@@ -187,7 +185,7 @@ function periodFor(
   code: string,
   now: Date,
 ): { period_type: FeedPeriodType; period_start: string | null; period_end: string } {
-  const pt = PERIOD_TYPE_BY_CODE[code] ?? "cumulative";
+  const pt = PERIOD_TYPE_BY_CODE[code] ?? "quarter";
   const asOf = now.toISOString();
   if (pt === "quarter") return { period_type: pt, period_start: quarterStartIso(now), period_end: asOf };
   if (pt === "ytd") return { period_type: pt, period_start: yearStartIso(now), period_end: asOf };
@@ -1278,7 +1276,7 @@ export async function buildLeadershipKpiFeed(): Promise<LeadershipFeed> {
     entry_where: KPI_ENTRY[cfg.code]?.where ?? "",
     entry_route: KPI_ENTRY[cfg.code]?.route ?? "",
     baseline: BASELINES[cfg.code] ?? 0,
-    period_type: PERIOD_TYPE_BY_CODE[cfg.code] ?? "cumulative",
+    period_type: PERIOD_TYPE_BY_CODE[cfg.code] ?? "quarter",
   }));
 
   for (const cfg of FEED_KPIS) {
