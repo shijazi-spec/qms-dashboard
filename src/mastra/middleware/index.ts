@@ -258,7 +258,20 @@ function applySecurityHeaders(c: any, cspNonce: string): void {
   c.header('X-Frame-Options', 'DENY');
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('X-XSS-Protection', '1; mode=block');
-  c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${cspNonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'nonce-${cspNonce}' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://accounts.google.com https://oauth2.googleapis.com; frame-ancestors 'none'; form-action 'self'`);
+  // Sarah 2026-06-20 — CSP fixes for two recurring console-noise errors:
+  //
+  // (1) Replit injects a floating "Open in Replit" pill into preview-domain
+  //     pages from https://replit-cdn.com/replit-pill/replit-pill.global.js.
+  //     Without https://replit-cdn.com in script-src the browser blocks the
+  //     load and logs a CSP violation every page open. Added it under
+  //     script-src — same vendor as the platform host, same trust boundary.
+  //
+  // (2) DevTools fetches the source maps for chart.js (cdn.jsdelivr.net) and
+  //     other libraries when the Console / Sources tab is open. The fetch
+  //     uses connect-src, not script-src, so the existing script-src
+  //     allowance for those CDNs doesn't cover it. Mirrored the CDN list
+  //     into connect-src so developers see clean console output.
+  c.header('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${cspNonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://replit-cdn.com; style-src 'self' 'nonce-${cspNonce}' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https://replit.com https://replit-cdn.com https://accounts.google.com https://oauth2.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; frame-ancestors 'none'; form-action 'self'`);
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   (c as any)._cspNonce = cspNonce;
 }
