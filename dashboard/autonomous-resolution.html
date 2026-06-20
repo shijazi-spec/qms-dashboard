@@ -164,6 +164,26 @@
             <div id="curveEmpty" class="hidden text-sm text-gray-500 mt-2">No grade snapshots yet — they accumulate as the agent runs.</div>
         </section>
 
+        <!-- Hygiene & business rules (read-only reference of what Adam enforces) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">🛡️ Hygiene &amp; business rules Adam enforces</h2>
+                <span id="hygieneCount" class="text-xs text-gray-500"></span>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">The agreed data-hygiene &amp; governance rules the agent checks before deciding. Reference only — these are what Adam applies; the editable "Learning rules" below are the case-shapes you teach it.</p>
+            <div id="hygieneRules" class="space-y-3 text-sm"><div class="text-gray-500">Loading…</div></div>
+        </section>
+
+        <!-- Why proposals get rejected (recommend-only learning) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold text-gray-900">🧐 Why proposals get rejected</h2>
+                <button data-on-click="loadRejectionPatterns" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">What Adam should learn from your rejections (last 30 days). Suggestions are <strong>recommend-only</strong> — click "Use this rule" to load it into the Learning rules form below, then you decide whether to add it.</p>
+            <div id="rejectionPatterns" class="space-y-2 text-sm"><div class="text-gray-500">Loading…</div></div>
+        </section>
+
         <!-- Learning rules -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <h2 class="text-lg font-semibold text-gray-900 mb-1">Learning rules</h2>
@@ -725,7 +745,82 @@
             });
         }
 
-        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); loadProposalTiers(); loadProgress(); }
+        async function loadHygieneRules() {
+            var box = document.getElementById('hygieneRules');
+            if (!box) return;
+            try {
+                var d = await getJSON('/api/duplicates/hygiene-rules');
+                var groups = (d && d.groups) || [];
+                var cnt = document.getElementById('hygieneCount');
+                if (cnt) cnt.textContent = (d && d.totalRules ? d.totalRules : 0) + ' rules';
+                if (!groups.length) { box.innerHTML = '<div class="text-gray-500">No rules.</div>'; return; }
+                box.innerHTML = groups.map(function (g) {
+                    var items = (g.rules || []).map(function (r) {
+                        var ref = r.ref ? ' <span class="text-[11px] text-gray-400">(' + esc(r.ref) + ')</span>' : '';
+                        return '<li class="text-gray-700 leading-relaxed">' + esc(r.rule) + ref + '</li>';
+                    }).join('');
+                    return '<details class="rounded-lg border border-gray-200">' +
+                        '<summary class="cursor-pointer select-none px-3 py-2 font-medium text-gray-800 bg-gray-50 rounded-lg">' +
+                        esc(g.title) + ' <span class="text-[11px] text-gray-400">(' + (g.rules || []).length + ')</span></summary>' +
+                        '<ul class="list-disc ps-8 pe-3 py-2 space-y-1">' + items + '</ul>' +
+                        '</details>';
+                }).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+
+        async function loadRejectionPatterns() {
+            var box = document.getElementById('rejectionPatterns');
+            if (!box) return;
+            try {
+                var d = await getJSON('/api/duplicates/autonomous/rejection-patterns?days=30');
+                var pats = (d && d.patterns) || [];
+                if (!d || !d.totalRejected) {
+                    box.innerHTML = '<div class="text-gray-500">No deliberate rejections in the last 30 days yet — reject a few proposals and patterns will appear here.</div>';
+                    return;
+                }
+                var head = '<div class="text-xs text-gray-500 mb-2">' + Number(d.totalRejected).toLocaleString() + ' rejected in the last ' + d.windowDays + ' days.</div>';
+                if (!pats.length) { box.innerHTML = head + '<div class="text-gray-500">No common pattern detected.</div>'; return; }
+                box.innerHTML = head + pats.map(function (p, i) {
+                    var pct = Math.max(2, Math.min(100, p.sharePct));
+                    var btn = p.suggestedRule
+                        ? '<button data-on-click="useRejectionRule" data-idx="' + i + '" class="shrink-0 px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Use this rule</button>'
+                        : '<span class="shrink-0 text-[11px] text-gray-400">config / review</span>';
+                    return '<div class="rounded-lg border border-gray-200 p-3">' +
+                        '<div class="flex items-center justify-between gap-3">' +
+                        '<span class="font-medium text-gray-900">' + esc(p.label) + '</span>' +
+                        '<span class="text-xs text-gray-500 whitespace-nowrap">' + Number(p.count).toLocaleString() + ' · ' + p.sharePct + '%</span>' +
+                        '</div>' +
+                        '<div class="mt-2 h-2 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-2 bg-amber-500 rounded-full reject-bar" data-pct="' + pct + '"></div></div>' +
+                        '<div class="flex items-start justify-between gap-3 mt-2">' +
+                        '<span class="text-[11px] text-gray-500 leading-relaxed">' + esc(p.advice || '') + '</span>' + btn +
+                        '</div></div>';
+                }).join('');
+                Array.prototype.forEach.call(box.querySelectorAll('.reject-bar'), function (el) {
+                    el.style.width = (Number(el.getAttribute('data-pct')) || 0) + '%';
+                });
+                window._rejectionPatterns = pats;
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700">Could not load: ' + esc(String(e && e.message || e)) + '</div>';
+            }
+        }
+
+        // Recommend-only: load a suggested rule into the Learning-rules form so the
+        // operator reviews + clicks "Add rule". Never auto-creates the rule.
+        function useRejectionRule(el) {
+            var idx = el && el.getAttribute ? parseInt(el.getAttribute('data-idx'), 10) : -1;
+            var pats = window._rejectionPatterns || [];
+            var p = pats[idx];
+            if (!p || !p.suggestedRule) return;
+            var dec = document.getElementById('ruleDecision');
+            var sig = document.getElementById('ruleSignature');
+            if (dec) dec.value = p.suggestedRule.decision;
+            if (sig) sig.value = JSON.stringify(p.suggestedRule.signature);
+            if (sig) { sig.scrollIntoView({ behavior: 'smooth', block: 'center' }); sig.focus(); }
+        }
+
+        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); loadProposalTiers(); loadProgress(); loadHygieneRules(); loadRejectionPatterns(); }
 
         document.addEventListener('DOMContentLoaded', refreshAll);
     </script>
