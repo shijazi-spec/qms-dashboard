@@ -559,6 +559,7 @@ export interface NotificationScheduleEntry {
 export const ADAM_NOTIFICATION_SCHEDULE: NotificationScheduleEntry[] = [
   { time: "03:00 / 09:00 / 15:00 / 21:00 KSA", cron: "0 */6 * * *", envKey: "DUPLICATE_SCAN_CRON", channel: "— (background)", what: "Every-6h incremental CRM sync — keeps data fresh round the clock", postsToSlack: false },
   { time: "07:00 KSA · daily", cron: "0 4 * * *", envKey: "DUPLICATE_MORNING_SYNC_CRON", channel: "— (background)", what: "Pre-shift incremental sync — radar current before your shift", postsToSlack: false },
+  { time: "02:00 KSA · Sat & Tue", cron: "0 23 * * 1,5", envKey: "DUPLICATE_FULL_REBUILD_CRON", channel: "— (background)", what: "Twice-weekly FULL rebuild — clean wipe + re-fetch + re-score off-hours", postsToSlack: false },
   { time: "09:00 & 17:00 KSA · daily", cron: "0 6,14 * * *", envKey: "AUTONOMOUS_RESOLUTION_DIGEST_CRON", channel: "#grq-assistant", what: "Operational apply digest — what the agent applied/queued this shift", postsToSlack: true },
   { time: "Sunday 06:00 KSA · weekly", cron: "0 3 * * 0", envKey: "AUTONOMOUS_EXEC_BRIEF_CRON", channel: "#grq-assistant + #automatic-audits", what: "Weekly leadership brief — exposure, dup-rate vs 2%, week-over-week trend, recommendation", postsToSlack: true },
   { time: "Every 6h (:30)", cron: "30 */6 * * *", channel: "#grq-assistant", what: "Autonomous resolution tick (shadow) — per-tick summary, quiet when nothing changed", postsToSlack: true },

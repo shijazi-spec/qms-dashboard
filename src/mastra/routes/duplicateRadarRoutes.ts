@@ -484,6 +484,16 @@ async function processModule(
           `⚠️ [DuplicateRadar] Skipped ${moduleName} record ${record.id}: ${recordErr}`,
         );
     }
+    processedInLoop++;
+    if (processedInLoop % 200 === 0) {
+      broadcastSSE("module", {
+        module: moduleName,
+        status: "processing",
+        count: written,
+      });
+      if (onProgress && records.length > 0)
+        onProgress(0.5 + 0.5 * (processedInLoop / records.length));
+    }
   }
   if (droppedNoCompany > 0)
     logger.warn(
@@ -495,11 +505,19 @@ async function processModule(
     );
 
   scanState.moduleStatuses[moduleName] = "done";
+  if (onProgress) onProgress(1);
   broadcastSSE("module", {
     module: moduleName,
     status: "done",
     count: written,
   });
+  // INSTRUMENTATION (2026-06-20) — per-module timing so a slow sync is
+  // diagnosable from the logs: how long each module took, how many records
+  // it fetched vs wrote. A module that dominates the wall-clock (rate-limited
+  // fetch or a huge changed-set) shows up here immediately.
+  logger.info(
+    `⏱️ [DuplicateRadar] ${moduleName} done in ${((Date.now() - t0) / 1000).toFixed(1)}s — fetched ${records.length}, written ${written}, skipped ${skipped + droppedNoCompany}`,
+  );
   // CHIP HONESTY: report the count actually persisted to the database, not
   // the count fetched from Zoho. Previously this passed records.length even
   // when every upsertRecord threw — sync_status went 'completed' / 5000
@@ -682,6 +700,42 @@ async function scanZohoCRMForDuplicates(
       message: incremental ? "Fetching changed records..." : "Fetching all modules...",
     });
 
+    // Shared fetch-band progress (10 → 60%). Each of the 4 parallel modules
+    // reports its own 0..1 completion fraction; the bar = 10 + 50 × average,
+    // so it climbs smoothly while modules fetch + write instead of freezing at
+    // 10% until the whole Promise.all settles. Monotonic (never moves back).
+    const FETCH_BAND_START = 10;
+    const FETCH_BAND_END = 60;
+    const moduleFrac: Record<string, number> = {
+      Leads: 0,
+      Deals: 0,
+      Contacts: 0,
+      Accounts: 0,
+    };
+    let lastBandPct = FETCH_BAND_START;
+    const reportFetch = (mod: string, frac: number) => {
+      moduleFrac[mod] = Math.max(moduleFrac[mod] ?? 0, Math.min(1, frac));
+      const avg =
+        (moduleFrac.Leads +
+          moduleFrac.Deals +
+          moduleFrac.Contacts +
+          moduleFrac.Accounts) /
+        4;
+      const pct = Math.min(
+        FETCH_BAND_END,
+        FETCH_BAND_START +
+          Math.round((FETCH_BAND_END - FETCH_BAND_START) * avg),
+      );
+      if (pct > lastBandPct) {
+        lastBandPct = pct;
+        scanState.percentage = pct;
+        broadcastSSE("progress", {
+          percentage: pct,
+          message: scanState.progress,
+        });
+      }
+    };
+
     const [leadsResult, dealsResult, contactsResult, accountsResult] =
       await Promise.all([
         processModule("Leads", "lead", clustersUpdated, (record) => {
@@ -710,7 +764,7 @@ async function scanZohoCRMForDuplicates(
             industry: d.Industry || "",
             website: d.Website || "",
           };
-        }, sinceFor("Leads")),
+        }, sinceFor("Leads"), (frac) => reportFetch("Leads", frac)),
         processModule("Deals", "deal", clustersUpdated, (record) => {
           const d = record.data;
           return {
@@ -737,7 +791,7 @@ async function scanZohoCRMForDuplicates(
             contactName: d.Contact_Name?.name || "",
             accountName: d.Account_Name?.name || "",
           };
-        }, sinceFor("Deals")),
+        }, sinceFor("Deals"), (frac) => reportFetch("Deals", frac)),
         processModule("Contacts", "contact", clustersUpdated, (record) => {
           const d = record.data;
           return {
@@ -763,7 +817,7 @@ async function scanZohoCRMForDuplicates(
             accountName: d.Account_Name?.name || "",
             country: d.Mailing_Country || d.Other_Country || "",
           };
-        }, sinceFor("Contacts")),
+        }, sinceFor("Contacts"), (frac) => reportFetch("Contacts", frac)),
         processModule("Accounts", "account", clustersUpdated, (record) => {
           const d = record.data;
           const websiteRaw = d.Website || "";
@@ -797,7 +851,7 @@ async function scanZohoCRMForDuplicates(
             noOfEmployees: parseInt(d.Employees) || undefined,
             accountType: d.Account_Type || "",
           };
-        }, sinceFor("Accounts")),
+        }, sinceFor("Accounts"), (frac) => reportFetch("Accounts", frac)),
       ]);
 
     // Tasks pagination removed per platform-wide Tasks data removal.
@@ -881,23 +935,51 @@ async function scanZohoCRMForDuplicates(
     logger.info(
       `📊 [DuplicateRadar] Updating stats for ${clustersUpdated.size} clusters...`,
     );
+    // Scoring is the 70→95% phase. Previously single-threaded (one
+    // updateClusterStats await per cluster) — with 10k+ clusters that's the
+    // dominant tail of a full rebuild. Run it in bounded-concurrency batches
+    // so the DB pool is used efficiently without being overwhelmed. Tune via
+    // DUPLICATE_SCORE_CONCURRENCY (default 8). A single cluster's scoring
+    // failure is logged and skipped, not allowed to abort the whole scan.
+    const scoreConcEnv = parseInt(
+      process.env.DUPLICATE_SCORE_CONCURRENCY || "",
+      10,
+    );
+    const SCORE_CONCURRENCY =
+      Number.isFinite(scoreConcEnv) && scoreConcEnv >= 1 && scoreConcEnv <= 32
+        ? scoreConcEnv
+        : 8;
+    const clusterIds = Array.from(clustersUpdated);
+    const scoreT0 = Date.now();
     let processed = 0;
-    for (const clusterId of clustersUpdated) {
-      await updateClusterStats(clusterId);
-      processed++;
-      if (processed % 200 === 0) {
-        const pct = 70 + Math.round((processed / clustersUpdated.size) * 25);
-        scanState.progress = `Scoring clusters: ${processed}/${clustersUpdated.size}...`;
+    for (let i = 0; i < clusterIds.length; i += SCORE_CONCURRENCY) {
+      const batch = clusterIds.slice(i, i + SCORE_CONCURRENCY);
+      await Promise.all(
+        batch.map((clusterId) =>
+          updateClusterStats(clusterId).catch((e) =>
+            logger.warn(
+              `[DuplicateRadar] cluster ${clusterId} scoring failed (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+            ),
+          ),
+        ),
+      );
+      processed += batch.length;
+      if (processed % 200 < SCORE_CONCURRENCY || processed === clusterIds.length) {
+        const pct =
+          clusterIds.length > 0
+            ? 70 + Math.round((processed / clusterIds.length) * 25)
+            : 95;
+        scanState.progress = `Scoring clusters: ${processed}/${clusterIds.length}...`;
         scanState.percentage = pct;
         broadcastSSE("progress", {
           percentage: pct,
-          message: `Scoring: ${processed}/${clustersUpdated.size}`,
+          message: `Scoring: ${processed}/${clusterIds.length}`,
         });
-        logger.info(
-          `  📊 Updated ${processed}/${clustersUpdated.size} clusters...`,
-        );
       }
     }
+    logger.info(
+      `⏱️ [DuplicateRadar] Scored ${clusterIds.length} clusters in ${((Date.now() - scoreT0) / 1000).toFixed(1)}s (concurrency ${SCORE_CONCURRENCY})`,
+    );
 
     // Layer-2 of Mark-Handled persistence (Sarah 2026-06-16). Every scan
     // re-clusters records and the new cluster row defaults to status='active'

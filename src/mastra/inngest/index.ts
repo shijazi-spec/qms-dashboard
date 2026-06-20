@@ -450,6 +450,37 @@ const duplicateMorningSyncFunction = inngest.createFunction(
 );
 inngestFunctions.push(duplicateMorningSyncFunction);
 
+// Twice-weekly FULL REBUILD — Ahmad 2026-06-20. The every-6h + pre-shift syncs
+// are incremental (fast, changed-only) and keep the radar fresh day to day, but
+// they never wipe+rescore from scratch, so drift (stale clusters, records
+// deleted in Zoho outside the deletion window, scoring changes) can accumulate.
+// This runs a clean forceFull=true rebuild off-hours so nobody has to trigger
+// the heavy 30-min job by hand. KSA 02:00 Sat & Tue = 23:00 UTC Fri & Mon
+// (UTC+3, no DST) → cron "0 23 * * 1,5". Override with DUPLICATE_FULL_REBUILD_CRON;
+// set it empty-string-equivalent (e.g. a far-future date pattern) to disable.
+const duplicateFullRebuildFunction = inngest.createFunction(
+  { id: "duplicate-radar-full-rebuild" },
+  { cron: process.env.DUPLICATE_FULL_REBUILD_CRON || "0 23 * * 1,5" },
+  async ({ step }) => {
+    return await step.run("twice-weekly-full-rebuild", async () => {
+      logger.info(
+        "[DuplicateRadar] Twice-weekly FULL rebuild (forceFull) starting",
+      );
+      const { scanZohoCRMForDuplicates } = await import(
+        "../routes/duplicateRadarRoutes"
+      );
+      // forceFull=true → wipe + re-fetch every module + re-score all clusters.
+      const r = await scanZohoCRMForDuplicates("scheduled", true);
+      logger.info("[DuplicateRadar] Twice-weekly full rebuild done", {
+        scanned: r.totalRecordsScanned,
+        clusters: r.totalClustersFound,
+      });
+      return { scanned: r.totalRecordsScanned, clusters: r.totalClustersFound };
+    });
+  },
+);
+inngestFunctions.push(duplicateFullRebuildFunction);
+
 // Autonomous-Resolution apply DIGEST — twice daily to #grq-platform-assistant:
 // 09:00 KSA (start of day) and 17:00 KSA (end of day). KSA = UTC+3, no DST, so
 // 06:00 and 14:00 UTC. Batches all AI solves/migrations in the window into one

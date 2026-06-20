@@ -475,6 +475,11 @@ export async function fetchAllZohoRecords(
     /** ISO8601 — incremental sync: only records modified at/after this time.
      *  Forwarded to fetchZohoRecords as the `If-Modified-Since` header. */
     ifModifiedSince?: string;
+    /** Live progress callback — fired after each parallel page batch with the
+     *  running total fetched + the next page number. Lets the Duplicate Radar
+     *  progress bar/chips show real counts during a long (rate-limited) fetch
+     *  instead of sitting frozen. Never throws into the fetch loop. */
+    onProgress?: (fetched: number, page: number) => void;
   } = {}
 ): Promise<ZohoCRMRecord[]> {
   const allRecords: ZohoCRMRecord[] = [];
@@ -560,6 +565,13 @@ export async function fetchAllZohoRecords(
     }
 
     page += CONCURRENCY;
+    if (params.onProgress) {
+      try {
+        params.onProgress(allRecords.length, page);
+      } catch {
+        /* progress reporting must never break the fetch */
+      }
+    }
     if (hasMore) await sleep(150);
   }
 
