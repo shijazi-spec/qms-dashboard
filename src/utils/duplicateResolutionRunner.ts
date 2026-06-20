@@ -48,7 +48,11 @@ import {
 import { evaluateRules } from "./duplicateResolutionRules";
 import { recordResolutionEvent } from "./duplicateResolutionLearning";
 import { snapshotGrades, getGradeHistory } from "./duplicateResolutionGrades";
-import { enqueuePendingAction, initAIApprovalTable } from "./aiApprovalDatabase";
+import {
+  enqueuePendingAction,
+  initAIApprovalTable,
+  findOpenOrRejectedResolutionAction,
+} from "./aiApprovalDatabase";
 import { fetchRecordAttachments, removeZohoTags } from "./zohoCRM";
 import { logger } from "./logger";
 
@@ -1595,6 +1599,24 @@ async function processModule(ctx: {
 
   // Otherwise → dry-run for the record, then queue to the approval screen.
   try {
+    // DON'T re-ask (Sarah 2026-06-20): if this exact cluster+module is already
+    // PENDING in the queue, or the operator REJECTED it recently, skip it. This
+    // stops the 6-hourly tick from re-flooding the queue with the same clusters
+    // and makes a human rejection a durable "no" the agent honours — the
+    // "Adam should learn from my decisions" behaviour.
+    const priorAction = await findOpenOrRejectedResolutionAction(clusterId, module).catch(
+      () => null,
+    );
+    if (priorAction) {
+      item.action = "skipped";
+      item.detail =
+        priorAction.status === "pending"
+          ? `already queued (${priorAction.action_code}) — not re-proposing`
+          : `rejected earlier (${priorAction.action_code}) — honouring your decision, not re-proposing`;
+      summary.items.push(item);
+      return;
+    }
+
     await executeMergePlan(plan, { performedBy: AGENT_PERFORMED_BY, dryRun: true }).catch(
       () => {},
     );

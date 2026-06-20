@@ -298,6 +298,37 @@ export async function getPendingActionByCode(code: string): Promise<PendingActio
 }
 
 /**
+ * Has the autonomous resolver ALREADY proposed this exact cluster+module — and
+ * is that proposal still PENDING, or was it REJECTED recently? Used by the
+ * resolution runner to STOP re-queuing the same cluster every 6-hour tick
+ * (which floods the queue) and to HONOUR a human rejection as a "don't re-ask"
+ * signal for `rejectedWithinDays`. Keyed on the durable cluster id + module in
+ * the payload (both plain scalars, so they survive payload redaction).
+ *
+ * Returns the matching row's status + code, or null if none — meaning it's
+ * genuinely new and may be queued.
+ */
+export async function findOpenOrRejectedResolutionAction(
+  clusterId: number,
+  module: string,
+  rejectedWithinDays = 30,
+): Promise<{ status: ApprovalStatus; action_code: string } | null> {
+  const res = await pool.query<{ status: ApprovalStatus; action_code: string }>(
+    `SELECT status, action_code
+       FROM ai_pending_actions
+      WHERE tool_id = 'duplicate-resolution'
+        AND payload->>'clusterId' = $1
+        AND payload->>'module' = $2
+        AND ( status = 'pending'
+              OR (status = 'rejected' AND reviewed_at > NOW() - ($3 || ' days')::interval) )
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [String(clusterId), module, String(rejectedWithinDays)],
+  );
+  return res.rows[0] || null;
+}
+
+/**
  * Task #298: review-status filter for the approval queue. Lets reviewers
  * narrow the list to either:
  *   - 'unreviewed_by_me' — actions the current reviewer has never opened
