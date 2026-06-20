@@ -187,6 +187,7 @@ import {
   buildExecutiveBriefText,
   postWeeklyExecBrief,
   postResolutionDigest,
+  cleanupZeroResolutionPings,
   ADAM_NOTIFICATION_SCHEDULE,
   getModuleResolutionBreakdown,
   type ResolutionMode,
@@ -1590,6 +1591,24 @@ export const duplicateRadarRoutes = [
           return c.json(result, result.ok ? 200 : 400);
         } catch (e: any) {
           return c.json({ ok: false, error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // One-off cleanup: delete the bot's zero-progress "applied 0" resolution
+    // pings from the Slack channel (Sarah 2026-06-20). Management-tier.
+    path: "/api/duplicates/autonomous/cleanup-slack-pings",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireRoleOrKey(c, [...AUTONOMOUS_RESOLUTION_MANAGE_ROLES]);
+          if (!user) return unauthorizedResponse(c);
+          const result = await cleanupZeroResolutionPings({ limit: 800 });
+          return c.json({ success: !result.error, ...result });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
         }
       };
     },

@@ -321,7 +321,13 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
     const channel = getResolutionSlackChannel();
     if (!token || !channel) return;
     if (summary.clustersScanned === 0) return;
-    if (summary.applied === 0 && summary.queued === 0 && summary.errors === 0) return;
+    // Quiet unless the agent actually DID something (Sarah 2026-06-20). In shadow
+    // mode `applied` is always 0, so a per-tick ping just repeats "applied 0 · 0
+    // solved" — pure zero-noise. The backlog / queued items are already reported
+    // by the twice-daily digest + the Autonomous Resolution screen, so only ping
+    // when there were real applies or errors. Once in assisted mode (applied>0)
+    // the per-tick ping returns automatically with real numbers.
+    if (summary.applied === 0 && summary.errors === 0) return;
 
     const icon = summary.errors > 0 ? "🔴" : summary.queued > 0 ? "🟡" : "🟢";
     let breakdownText = "";
@@ -349,6 +355,64 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
     logger.warn("[dup-resolution-runner] slack ping failed (non-fatal)", {
       error: e instanceof Error ? e.message : String(e),
     });
+  }
+}
+
+/**
+ * One-off cleanup (Sarah 2026-06-20): delete the bot's OWN zero-progress
+ * "Autonomous Resolution — … applied 0 …" pings from the resolution channel.
+ * Best-effort: needs the bot to have history scope on the channel and chat:write
+ * to delete its own messages. Returns counts + any Slack error so the operator
+ * knows if a scope is missing (then they can delete the few manually).
+ */
+export async function cleanupZeroResolutionPings(opts?: {
+  limit?: number;
+}): Promise<{ scanned: number; deleted: number; error?: string }> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  const channel = getResolutionSlackChannel();
+  if (!token || !channel) return { scanned: 0, deleted: 0, error: "Slack not configured" };
+  const max = Math.max(1, Math.min(Math.floor(opts?.limit || 500), 1000));
+  let scanned = 0;
+  let deleted = 0;
+  try {
+    const { WebClient } = await import("@slack/web-api");
+    const slack = new WebClient(token);
+    let cursor: string | undefined;
+    // Page through recent history; match the bot's own zero-apply pings.
+    while (scanned < max) {
+      const resp: any = await slack.conversations.history({
+        channel,
+        limit: 200,
+        cursor,
+      });
+      const msgs: any[] = resp?.messages || [];
+      for (const m of msgs) {
+        scanned++;
+        const text: string = m?.text || "";
+        const isResolutionPing =
+          text.includes("Autonomous Resolution —") &&
+          /applied\s+0\b/.test(text); // zero-apply tick
+        if (!isResolutionPing) continue;
+        try {
+          await slack.chat.delete({ channel, ts: m.ts });
+          deleted++;
+        } catch (delErr: any) {
+          // Can't delete others' messages / rate limited — keep going.
+          logger.warn("[dup-resolution-runner] chat.delete failed", {
+            error: delErr?.data?.error || String(delErr),
+          });
+        }
+      }
+      cursor = resp?.response_metadata?.next_cursor;
+      if (!cursor) break;
+    }
+    return { scanned, deleted };
+  } catch (e: any) {
+    return {
+      scanned,
+      deleted,
+      error: e?.data?.error || (e instanceof Error ? e.message : String(e)),
+    };
   }
 }
 

@@ -49,6 +49,7 @@
                 <button data-on-click="refreshAll" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
                 <button data-on-click="execBrief" id="execBriefBtn" title="Generate a board-ready summary for the CEO/CCO" class="px-3 py-2 text-sm rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100">📋 Executive brief</button>
                 <button data-on-click="testSlack" id="testSlackBtn" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">🔔 Send test ping</button>
+                <button data-on-click="cleanupSlackPings" id="cleanupPingsBtn" title="Delete the bot's old zero-progress 'applied 0' resolution pings from the Slack channel." class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">🧹 Clean zero pings</button>
                 <button data-on-click="runNow" id="runNowBtn" class="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">▶ Run now</button>
             </div>
         </header>
@@ -594,6 +595,27 @@
                 }
             } catch (e) { alert('Test failed: ' + e); }
             finally { btn.disabled = false; btn.textContent = '🔔 Send test ping'; }
+        }
+
+        async function cleanupSlackPings() {
+            if (!confirm('Delete the old zero-progress "applied 0" resolution pings from the Slack channel?\n\nOnly the bot\'s own pings are removed; nothing else is touched.')) return;
+            var btn = document.getElementById('cleanupPingsBtn');
+            btn.disabled = true; btn.textContent = 'Cleaning…';
+            try {
+                var r = await fetch('/api/duplicates/autonomous/cleanup-slack-pings', {
+                    method: 'POST', credentials: 'same-origin'
+                });
+                var data = await r.json();
+                if (data && data.success) {
+                    alert('✅ Removed ' + (data.deleted || 0) + ' zero-progress ping(s) (scanned ' + (data.scanned || 0) + ').');
+                } else {
+                    var hint = (data && /missing_scope|not_in_channel|cant_delete|history/.test(data.error || ''))
+                        ? '\n\nThe bot may lack channel-history / delete permission — you can delete the few remaining manually in Slack.'
+                        : '';
+                    alert('⚠️ Could not clean: ' + ((data && data.error) || 'unknown error') + hint);
+                }
+            } catch (e) { alert('Cleanup failed: ' + e); }
+            finally { btn.disabled = false; btn.textContent = '🧹 Clean zero pings'; }
         }
 
         // ── Executive brief (board-ready, shareable) ─────────────────────
