@@ -56,7 +56,7 @@
     "@types/passport": "^1.0.17",
     "@types/pg": "^8.16.0",
     "acorn": "^8.16.0",
-    "ai": "^5.0.201",
+    "ai": "5.0.190",
     "axios": "^1.16.0",
     "bcryptjs": "^3.0.3",
     "connect-pg-simple": "^10.0.0",
@@ -64,7 +64,7 @@
     "exa-js": "^2.4.0",
     "exceljs": "^4.4.0",
     "express-session": "^1.19.0",
-    "hono": "^4.12.18",
+    "hono": "4.12.21",
     "inngest": "^3.52.0",
     "inngest-cli": "^1.17.0",
     "ip-address": "^10.2.0",
@@ -95,16 +95,16 @@
   },
   "overrides": {
     "@mastra/core": {
-      "ai": "^5.0.190"
+      "ai": "5.0.190"
     },
     "@mastra/memory": {
-      "ai": "^5.0.190"
+      "ai": "5.0.190"
     },
     "rollup": "^4.59.0",
     "uuid": "14.0.0",
     "jsondiffpatch": "0.7.3",
     "axios": "^1.16.0",
-    "hono": "^4.12.18",
+    "hono": "4.12.21",
     "ip-address": "^10.2.0",
     "fast-uri": "^3.1.2",
     "@opentelemetry/core": "^2.8.0",
