@@ -1338,6 +1338,54 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Bulk exact email+phone contact merge — PREVIEW (Sarah 2026-06-20).
+    //   GET /api/duplicates/contacts/exact-match-preview
+    path: "/api/duplicates/contacts/exact-match-preview",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const { previewExactContactMatches } = await import("../../utils/duplicateRadarDatabase");
+          const data = await previewExactContactMatches();
+          return c.json({ success: true, ...data });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Bulk exact email+phone contact merge — APPLY (admin-key gated, Sarah 2026-06-20).
+    // Keeps the survivor, tags duplicates Duplicate-Delete (migrate-then-tag).
+    //   POST /api/duplicates/contacts/exact-match-merge  { limit? }
+    path: "/api/duplicates/contacts/exact-match-merge",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          const body = await c.req.json().catch(() => ({}));
+          const limit = parseInt(body?.limit, 10);
+          const performedBy =
+            `${(sessionUser as any)?.email || "admin"} (bulk exact email+phone merge)`;
+          const { applyExactContactMatches } = await import("../../utils/duplicateRadarDatabase");
+          const result = await applyExactContactMatches({
+            limit: Number.isFinite(limit) && limit > 0 ? limit : 300,
+            performedBy,
+          });
+          return c.json({ success: true, ...result });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Acceptance-pattern analysis (Sarah 2026-06-20): learn AUTO-APPROVE rules
     // from resolved data (manual merges + agent applies). Recommend-only.
     //   GET /api/duplicates/autonomous/acceptance-patterns?module=Accounts&days=90

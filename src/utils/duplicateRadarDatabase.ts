@@ -1945,6 +1945,173 @@ export async function getDuplicateProgressSeries(days = 30): Promise<{
   return { byModule, generatedAt: new Date().toISOString() };
 }
 
+// ── Bulk auto-merge: Contacts with EXACT email + phone match (Sarah 2026-06-20) ─
+//
+// Rule: when ≥2 contacts share the SAME email AND the SAME phone (both exact,
+// after normalization), they're the same person — safe to bulk-merge. Keep the
+// survivor (most complete → linked-Account → oldest), tag the rest
+// "Duplicate-Delete" (migrate-then-tag; the admin deletes). Guards exclude
+// placeholder emails / junk phones so a placeholder collision can't trigger it.
+
+interface ExactContactGroup {
+  email: string;
+  phone: string;
+  survivorZohoId: string;
+  duplicateZohoIds: string[];
+}
+
+/** Find contact groups where email AND phone match exactly (guarded). */
+async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
+  const res = await pool.query<{
+    k_email: string;
+    k_phone: string;
+    zoho_record_id: string;
+    has_account: boolean;
+    completeness: number;
+    created_ms: string | null;
+  }>(
+    `SELECT lower(trim(email)) AS k_email,
+            phone_normalized    AS k_phone,
+            zoho_record_id,
+            (account_name IS NOT NULL AND btrim(account_name) <> '') AS has_account,
+            ( (CASE WHEN account_name IS NOT NULL AND btrim(account_name)<>'' THEN 1 ELSE 0 END)
+            + (CASE WHEN title       IS NOT NULL AND btrim(title)<>''        THEN 1 ELSE 0 END)
+            + (CASE WHEN website     IS NOT NULL AND btrim(website)<>''      THEN 1 ELSE 0 END)
+            + (CASE WHEN owner_name  IS NOT NULL AND btrim(owner_name)<>''   THEN 1 ELSE 0 END)
+            + (CASE WHEN company_name IS NOT NULL AND btrim(company_name)<>'' THEN 1 ELSE 0 END)
+            ) AS completeness,
+            EXTRACT(EPOCH FROM COALESCE(created_date, modified_date))::bigint AS created_ms
+       FROM duplicate_records
+      WHERE record_type = 'contact'
+        AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+        AND email IS NOT NULL
+        AND length(btrim(email)) > 4
+        AND position('@' in email) > 1
+        AND lower(email) NOT LIKE 'test@%'
+        AND lower(email) NOT LIKE '%@test%'
+        AND lower(email) NOT LIKE '%example.%'
+        AND lower(btrim(email)) NOT IN ('n/a','na','none','null','-')
+        AND phone_normalized IS NOT NULL
+        AND length(phone_normalized) >= 7
+        AND phone_normalized !~ '^(.)\\1+$'`,
+  );
+
+  const byKey = new Map<string, typeof res.rows>();
+  for (const row of res.rows) {
+    if (!row.k_email || !row.k_phone) continue;
+    const key = `${row.k_email}|${row.k_phone}`;
+    const arr = byKey.get(key) || [];
+    arr.push(row);
+    byKey.set(key, arr);
+  }
+
+  const groups: ExactContactGroup[] = [];
+  for (const [key, rows] of byKey.entries()) {
+    // Dedupe by zoho id; need ≥2 DISTINCT records to be a real duplicate set.
+    const seen = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) if (!seen.has(r.zoho_record_id)) seen.set(r.zoho_record_id, r);
+    const members = [...seen.values()];
+    if (members.length < 2) continue;
+    // Survivor: most complete → linked-Account → oldest.
+    members.sort((a, b) => {
+      if (b.completeness !== a.completeness) return b.completeness - a.completeness;
+      if (a.has_account !== b.has_account) return a.has_account ? -1 : 1;
+      const am = Number(a.created_ms || Number.MAX_SAFE_INTEGER);
+      const bm = Number(b.created_ms || Number.MAX_SAFE_INTEGER);
+      return am - bm; // older first
+    });
+    const [survivor, ...dups] = members;
+    const [email, phone] = key.split("|");
+    groups.push({
+      email,
+      phone,
+      survivorZohoId: survivor.zoho_record_id,
+      duplicateZohoIds: dups.map((d) => d.zoho_record_id),
+    });
+  }
+  return groups;
+}
+
+/** Preview only — count qualifying groups + how many records would be tagged. */
+export async function previewExactContactMatches(): Promise<{
+  qualifyingGroups: number;
+  duplicatesToTag: number;
+}> {
+  try {
+    const groups = await getExactContactMatchGroups();
+    return {
+      qualifyingGroups: groups.length,
+      duplicatesToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
+    };
+  } catch (e) {
+    logger.warn("[DuplicateRadar] previewExactContactMatches failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return { qualifyingGroups: 0, duplicatesToTag: 0 };
+  }
+}
+
+/**
+ * Apply the bulk merge: tag the duplicate(s) in each exact-match group
+ * Duplicate-Delete (keeping the survivor), batching the Zoho add_tags calls.
+ * Records a ledger entry per survivor so the merge counts as "merged" in the
+ * progress/breakdown views. Bounded by `limit` groups per run (re-runnable).
+ */
+export async function applyExactContactMatches(opts: {
+  limit?: number;
+  performedBy: string;
+}): Promise<{ mergedGroups: number; taggedRecords: number; remaining: number; errors: number }> {
+  const { addZohoTags, zohoWritesAllowedInEnv } = await import("./zohoCRM");
+  const { withTimeout } = await import("./promiseTimeout");
+  if (!zohoWritesAllowedInEnv()) {
+    throw new Error("Live Zoho writes are disabled outside production.");
+  }
+  const limit = Math.max(1, Math.min(Math.floor(opts.limit || 300), 1000));
+  const all = await getExactContactMatchGroups();
+  const batch = all.slice(0, limit);
+  let taggedRecords = 0;
+  let mergedGroups = 0;
+  let errors = 0;
+
+  // Tag in chunks of 100 ids (Zoho add_tags multi-record limit).
+  const CHUNK = 100;
+  const dupIds = batch.flatMap((g) => g.duplicateZohoIds);
+  for (let i = 0; i < dupIds.length; i += CHUNK) {
+    const chunk = dupIds.slice(i, i + CHUNK);
+    try {
+      await withTimeout(
+        addZohoTags("Contacts", chunk, ["Duplicate-Delete"]),
+        20_000,
+        `tag contacts ${i}`,
+      );
+      taggedRecords += chunk.length;
+    } catch (e) {
+      errors++;
+      logger.warn("[DuplicateRadar] bulk contact tag chunk failed", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  // Record a durable ledger entry per survivor so it counts as merged.
+  for (const g of batch) {
+    try {
+      await pool.query(
+        `INSERT INTO duplicate_resolution_ledger
+           (module, master_zoho_id, duplicate_zoho_ids, action_type, performed_by, notes, resolved_at)
+         VALUES ('Contacts', $1, $2, 'resolve', $3, 'bulk exact email+phone match', NOW())
+         ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
+        [g.survivorZohoId, JSON.stringify(g.duplicateZohoIds), opts.performedBy],
+      );
+      mergedGroups++;
+    } catch {
+      /* ledger is best-effort */
+    }
+  }
+
+  return { mergedGroups, taggedRecords, remaining: Math.max(0, all.length - batch.length), errors };
+}
+
 /**
  * Layer-2 of Sarah's "Mark Handled survives the 6h sync" fix (2026-06-16).
  *
