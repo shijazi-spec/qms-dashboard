@@ -81,7 +81,8 @@
                 </p>
             </div>
             <div class="flex items-center gap-2">
-                <button id="btnRefresh" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Refresh</button>
+                <!-- Page-level Refresh removed (Sarah 2026-06-20): the global
+                     header Refresh button already reloads the page. -->
                 <a href="/consultant" class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">Open Consultant</a>
             </div>
         </div>
@@ -1504,7 +1505,8 @@
             _searchTimer = setTimeout(resetAndLoad, 300);
         });
     }
-    document.getElementById('btnRefresh').addEventListener('click', load);
+    var _btnRefresh = document.getElementById('btnRefresh');
+    if (_btnRefresh) _btnRefresh.addEventListener('click', load);
 
     /* ---------------------------------------------------------------- *
      *  Deep link handling (Task #485)
