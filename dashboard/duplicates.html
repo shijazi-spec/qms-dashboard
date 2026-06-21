@@ -196,7 +196,7 @@
                 <p class="font-semibold mb-1">After merging duplicates in Zoho:</p>
                 <ol class="list-decimal list-inside space-y-0.5 text-blue-800">
                     <li>Click <strong>"Sync Now"</strong> above to refresh from Zoho — clusters whose duplicates were actually tagged or merged will flip to <strong>Resolved</strong> automatically. (KPIs incl. SDR-KPI-09 Duplicate Rate ≤2% rely on CRM-verified resolution, not a manual "mark done".)</li>
-                    <li>If a duplicate is a false positive, use the <strong>Ignore</strong> button inside the cluster to drop it from triage without merging.</li>
+                    <li>If a duplicate is a false positive, use the <strong>Dismiss</strong> button inside the cluster to drop it from triage without merging.</li>
                 </ol>
             </div>
             <button data-on-click="addClass,localStorage.setItem" data-args="[[&quot;mergeGuideBanner&quot;,&quot;hidden&quot;],[&quot;mergeGuideDismissed&quot;,&quot;1&quot;]]" class="text-blue-400 hover:text-blue-600" data-testid="button-dismiss-merge-guide" title="Dismiss">
@@ -687,7 +687,7 @@
                     <option value="active" selected>Active</option>
                     <option value="all">All statuses</option>
                     <option value="resolved">Resolved</option>
-                    <option value="ignored">Ignored (dismissed)</option>
+                    <option value="ignored">Dismissed</option>
                 </select>
                 <select id="layoutFilter" aria-label="Filter by Zoho layout" data-on-change="loadClusters" data-testid="select-layout-filter" class="border rounded-lg px-3 py-2 min-w-[180px]" title="Filter by Zoho layout (Corporate Accounts, Standard, Marketplace, ...)">
                     <option value="">All Layouts</option>
@@ -5478,7 +5478,7 @@
                 const data = await res.json();
                 const actions = Array.isArray(data && data.history) ? data.history : [];
                 if (actions.length === 0) {
-                    listEl.innerHTML = '<span class="text-gray-400 italic">No actions yet — Ignore, an agentic apply, or a domain-collision merge will log here.</span>';
+                    listEl.innerHTML = '<span class="text-gray-400 italic">No actions yet — Dismiss, an agentic apply, or a domain-collision merge will log here.</span>';
                     return;
                 }
                 listEl.innerHTML = '<ul class="divide-y divide-gray-100 border border-gray-100 rounded">' + actions.map(a => renderActionTimelineRow(a)).join('') + '</ul>';
@@ -5494,7 +5494,7 @@
         function actionTimelineChip(actionType) {
             const map = {
                 resolve: { label: 'Resolved', cls: 'bg-emerald-100 text-emerald-800' },
-                ignore: { label: 'Ignored', cls: 'bg-gray-100 text-gray-700' },
+                ignore: { label: 'Dismissed', cls: 'bg-gray-100 text-gray-700' },
                 domain_collision_merge: { label: 'Collision merge', cls: 'bg-indigo-100 text-indigo-700' },
             };
             const m = map[actionType] || { label: String(actionType || '—'), cls: 'bg-gray-100 text-gray-600' };
