@@ -5795,12 +5795,12 @@
             if (btn) btn.disabled = true;
             panel.innerHTML = '<div class="text-violet-700">Computing dry-run plan…</div>';
 
-            const callApi = async (confirmFlag) => {
+            const callApi = async (confirmFlag, limitOverride) => {
                 const res = await fetch('/api/duplicates/bulk-split-contacts', {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ confirm: !!confirmFlag, limit: 500 }),
+                    body: JSON.stringify({ confirm: !!confirmFlag, limit: limitOverride || 500 }),
                 });
                 const j = await res.json().catch(() => null);
                 return { ok: res.ok, status: res.status, data: j };
@@ -5840,22 +5840,45 @@
                 + '</div>';
             const confirmed = window.confirm(planMsg);
             if (!confirmed) { if (btn) btn.disabled = false; return; }
-            panel.innerHTML += '<div class="text-violet-700 mt-1">Applying…</div>';
-            let live;
-            try { live = await callApi(true); }
-            catch (e) {
-                panel.innerHTML += '<div class="text-red-600">Apply failed: ' + escapeHtml(String(e && e.message || e)) + '</div>';
-                if (btn) btn.disabled = false;
-                return;
+            // Apply in SMALL BATCHES, not one giant request. Splitting 500
+            // clusters in a single call exceeds the proxy's request timeout
+            // (504 "Gateway Timeout") and the UI hangs on "Applying…" with no
+            // feedback. The endpoint is idempotent — each call re-selects the
+            // clusters that STILL violate the rule — so we loop with a small
+            // limit until a batch splits nothing, showing live progress. A
+            // batch that errors pauses gracefully (re-runnable, no data loss).
+            panel.insertAdjacentHTML('beforeend',
+                '<div id="bulkSplitProgress" class="text-violet-700 mt-1">Applying… 0 cluster(s) split so far</div>');
+            const progressEl = document.getElementById('bulkSplitProgress');
+            const BATCH = 10;       // clusters per request — safe under the gateway timeout
+            const MAX_ITERS = 2000; // runaway backstop
+            let totalSplit = 0, totalMoved = 0, totalNew = 0, iter = 0;
+            while (iter++ < MAX_ITERS) {
+                let r;
+                try { r = await callApi(true, BATCH); }
+                catch (e) {
+                    progressEl.innerHTML = '<span class="text-amber-700">Apply paused (network): ' + escapeHtml(String(e && e.message || e))
+                        + ' — ' + totalSplit + ' cluster(s) split so far. Click Bulk-split again to resume the rest.</span>';
+                    if (btn) btn.disabled = false;
+                    return;
+                }
+                if (!r.ok || !r.data) {
+                    progressEl.innerHTML = '<span class="text-amber-700">Apply paused: ' + escapeHtml((r.data && r.data.error) || ('Server returned ' + r.status))
+                        + ' — ' + totalSplit + ' cluster(s) split so far. Click Bulk-split again to resume the rest.</span>';
+                    if (btn) btn.disabled = false;
+                    return;
+                }
+                const d = r.data;
+                totalSplit += (d.clustersSplit || 0);
+                totalMoved += (d.recordsMoved || 0);
+                totalNew += (d.newClustersCreated || 0);
+                progressEl.textContent = 'Applying… ' + totalSplit + ' cluster(s) split, ' + totalMoved + ' contact(s) moved…';
+                // A batch that splits nothing means there's nothing left that
+                // can be split (done, or the remainder keeps failing) — stop.
+                if ((d.clustersSplit || 0) === 0) break;
             }
-            if (!live.ok || !live.data) {
-                panel.innerHTML += '<div class="text-amber-700">Apply: ' + escapeHtml((live.data && live.data.error) || ('Server returned ' + live.status)) + '</div>';
-                if (btn) btn.disabled = false;
-                return;
-            }
-            const l = live.data;
-            panel.innerHTML += '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 mt-1">'
-                + '<strong>Done.</strong> Split ' + l.clustersSplit + ' cluster(s), moved ' + l.recordsMoved + ' contact(s), created ' + l.newClustersCreated + ' new cluster(s). Reloading list…'
+            progressEl.outerHTML = '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 mt-1">'
+                + '<strong>Done.</strong> Split ' + totalSplit + ' cluster(s), moved ' + totalMoved + ' contact(s), created ' + totalNew + ' new cluster(s). Reloading list…'
                 + '</div>';
             // Auto-reload the Contact Duplicates list so the operator sees
             // the recompacted page immediately — no manual refresh needed.
