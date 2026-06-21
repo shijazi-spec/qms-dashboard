@@ -501,14 +501,16 @@ export async function fetchAllZohoRecords(
   // server env to throttle without redeploying code.
   const envConc = parseInt(process.env.ZOHO_FETCH_CONCURRENCY || "", 10);
   const CONCURRENCY =
-    Number.isFinite(envConc) && envConc >= 1 && envConc <= 8 ? envConc : 4;
+    Number.isFinite(envConc) && envConc >= 1 && envConc <= 8 ? envConc : 3;
   logger.info(
     `📊 [ZohoCRM] Fetching all ${module} records with parallel pagination (CONCURRENCY=${CONCURRENCY})...`,
   );
 
   const fetchPageWithRetry = async (pageNum: number): Promise<ZohoCRMRecord[]> => {
     let retries = 0;
-    const maxRetries = 3;
+    // More retries + jittered backoff so a transient 429 recovers instead of
+    // failing the whole module (which showed up as "Deals: error" etc.).
+    const maxRetries = 5;
     while (true) {
       try {
         return await fetchZohoRecords(module, {
@@ -530,8 +532,8 @@ export async function fetchAllZohoRecords(
             logger.error(`❌ [ZohoCRM] Rate limit exceeded after ${maxRetries} retries for ${module} page ${pageNum}`);
             throw error;
           }
-          const backoffMs = retries * 5000;
-          logger.warn(`⚠️ [ZohoCRM] Rate limited (429) on ${module} page ${pageNum}, retry ${retries}/${maxRetries} in ${backoffMs/1000}s`);
+          const backoffMs = retries * 5000 + Math.floor(Math.random() * 1500);
+          logger.warn(`⚠️ [ZohoCRM] Rate limited (429) on ${module} page ${pageNum}, retry ${retries}/${maxRetries} in ${Math.round(backoffMs/1000)}s`);
           await sleep(backoffMs);
           continue;
         }

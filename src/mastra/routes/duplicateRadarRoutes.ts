@@ -569,6 +569,31 @@ async function processModule(
   return { count: records.length, written, skipped: skipped + droppedNoCompany };
 }
 
+/**
+ * Run module-fetch tasks with bounded concurrency. Default 1 (sequential) keeps
+ * the number of simultaneous Zoho API calls low so a multi-module sync doesn't
+ * trip Zoho's rate / concurrency limit — the cause of "Leads/Deals/Accounts:
+ * error" while one module squeaked through. A task that throws still rejects
+ * (same as Promise.all). Results preserve input order.
+ */
+async function runModulesWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number,
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let next = 0;
+  const workerCount = Math.max(1, Math.min(limit, tasks.length));
+  const worker = async () => {
+    while (true) {
+      const i = next++;
+      if (i >= tasks.length) break;
+      results[i] = await tasks[i]!();
+    }
+  };
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return results;
+}
+
 // Detect records deleted/merged inside Zoho CRM since the last successful sync
 // and purge them from the duplicate radar. Without this, a manual Zoho merge
 // would leave the losing record visible in the radar forever (Modified_Time
@@ -733,10 +758,10 @@ async function scanZohoCRMForDuplicates(
     let totalRecords = 0;
     const clustersUpdated = new Set<number>();
 
-    // B3: Parallel module fetch
+    // B3: Module fetch (sequential by default — see runModulesWithConcurrency)
     scanState.progress = incremental
       ? "Fetching changed records from Zoho CRM..."
-      : "Fetching all modules from Zoho CRM in parallel...";
+      : "Fetching all modules from Zoho CRM...";
     scanState.percentage = 10;
     broadcastSSE("progress", {
       percentage: 10,
@@ -779,9 +804,18 @@ async function scanZohoCRMForDuplicates(
       }
     };
 
+    // Fetch modules with BOUNDED concurrency (default 1 = sequential). Fetching
+    // all 4 modules in parallel × ZOHO_FETCH_CONCURRENCY pages each meant up to
+    // ~16 simultaneous Zoho calls, which tripped Zoho's rate/concurrency limit
+    // and failed 3 of 4 modules. Sequential keeps it to one module at a time.
+    // Tune with DUPLICATE_MODULE_CONCURRENCY (1–4).
+    const MODULE_CONCURRENCY = (() => {
+      const n = parseInt(process.env.DUPLICATE_MODULE_CONCURRENCY || "", 10);
+      return Number.isFinite(n) && n >= 1 && n <= 4 ? n : 1;
+    })();
     const [leadsResult, dealsResult, contactsResult, accountsResult] =
-      await Promise.all([
-        processModule("Leads", "lead", clustersUpdated, (record) => {
+      await runModulesWithConcurrency([
+        () => processModule("Leads", "lead", clustersUpdated, (record) => {
           const d = record.data;
           return {
             companyName: d.Company || d.Last_Name || "Unknown",
@@ -808,7 +842,7 @@ async function scanZohoCRMForDuplicates(
             website: d.Website || "",
           };
         }, sinceFor("Leads"), (frac) => reportFetch("Leads", frac)),
-        processModule("Deals", "deal", clustersUpdated, (record) => {
+        () => processModule("Deals", "deal", clustersUpdated, (record) => {
           const d = record.data;
           return {
             companyName: d.Account_Name?.name || d.Deal_Name || "Unknown",
@@ -835,7 +869,7 @@ async function scanZohoCRMForDuplicates(
             accountName: d.Account_Name?.name || "",
           };
         }, sinceFor("Deals"), (frac) => reportFetch("Deals", frac)),
-        processModule("Contacts", "contact", clustersUpdated, (record) => {
+        () => processModule("Contacts", "contact", clustersUpdated, (record) => {
           const d = record.data;
           return {
             companyName:
@@ -861,7 +895,7 @@ async function scanZohoCRMForDuplicates(
             country: d.Mailing_Country || d.Other_Country || "",
           };
         }, sinceFor("Contacts"), (frac) => reportFetch("Contacts", frac)),
-        processModule("Accounts", "account", clustersUpdated, (record) => {
+        () => processModule("Accounts", "account", clustersUpdated, (record) => {
           const d = record.data;
           const websiteRaw = d.Website || "";
           const websiteDomain =
@@ -895,7 +929,7 @@ async function scanZohoCRMForDuplicates(
             accountType: d.Account_Type || "",
           };
         }, sinceFor("Accounts"), (frac) => reportFetch("Accounts", frac)),
-      ]);
+      ], MODULE_CONCURRENCY);
 
     // Tasks pagination removed per platform-wide Tasks data removal.
     // `totalRecords` was previously the count fetched from Zoho — that
