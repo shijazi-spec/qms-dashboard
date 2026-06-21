@@ -6151,6 +6151,39 @@ export async function getDuplicateRecordsByType(
       " AND NOT EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending'))";
   }
 
+  // GENUINE-DUPLICATE gate for DEALS (Ahmad 2026-06-21). Deal clusters are
+  // grouped by COMPANY, so a company with two DIFFERENT deals (e.g. "Renewal
+  // 2025" and "New Project") becomes a cluster with 2 deals — counted as a
+  // "duplicate group" even though the deals aren't duplicates. The Deal tab's
+  // renderer then drops them (it only shows deals sharing name+account or a
+  // duplicate CRM id), leaving the page empty while the footer claimed
+  // thousands of groups. Mirror the renderer here so the count + pages reflect
+  // ONLY clusters that hold a real deal duplicate. Accounts don't need this —
+  // every account-cluster is a genuine duplicate. _normName = lower + trim +
+  // collapse whitespace.
+  let genuineDupFilter = "";
+  if (recordType === "deal") {
+    genuineDupFilter = `
+      AND (
+        EXISTS (
+          SELECT 1 FROM duplicate_records dd
+           WHERE dd.cluster_id = dc.id AND dd.record_type = 'deal'
+             AND dd.record_name IS NOT NULL AND btrim(dd.record_name) <> ''
+             AND COALESCE(dd.raw_data->'Account_Name'->>'id', dd.raw_data->>'account_id', '') <> ''
+           GROUP BY lower(regexp_replace(btrim(dd.record_name), '\\s+', ' ', 'g')),
+                    COALESCE(dd.raw_data->'Account_Name'->>'id', dd.raw_data->>'account_id', '')
+          HAVING COUNT(*) >= 2
+        )
+        OR EXISTS (
+          SELECT 1 FROM duplicate_records de
+           WHERE de.cluster_id = dc.id AND de.record_type = 'deal'
+             AND de.zoho_record_id IS NOT NULL AND btrim(de.zoho_record_id) <> ''
+           GROUP BY de.zoho_record_id
+          HAVING COUNT(*) >= 2
+        )
+      )`;
+  }
+
   // ── Paginate by CLUSTER, not by record. ────────────────────────────────
   //
   // This view groups records into duplicate clusters, so the unit of
@@ -6170,7 +6203,7 @@ export async function getDuplicateRecordsByType(
       AND EXISTS (
         SELECT 1 FROM duplicate_records dr
         WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
-      )
+      )${genuineDupFilter}
     ORDER BY dc.confidence_score DESC, dc.id ASC
     LIMIT $${dateParams.length + 2} OFFSET $${dateParams.length + 3}
   `,
@@ -6187,7 +6220,7 @@ export async function getDuplicateRecordsByType(
       AND EXISTS (
         SELECT 1 FROM duplicate_records dr
         WHERE dr.cluster_id = dc.id AND dr.record_type = $1${dateFilter}
-      )
+      )${genuineDupFilter}
   `,
     [recordType, ...dateParams],
   );
