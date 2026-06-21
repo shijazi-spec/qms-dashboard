@@ -3,6 +3,7 @@
 - [DB TLS sslmode verify-full crash](db-tls-sslmode-verify-full.md) — managed-Postgres deploy crash-loops when upgraded pg treats sslmode=require as verify-full; startup DATABASE_URL normalization to no-verify
 - [provider-utils version conflict](provider-utils-version-conflict.md) — never globally force @ai-sdk/provider-utils to v4: it removes lazyValidator and breaks `mastra build`; split v3/v4 in overrides
 - [Mastra dev build cache](mastra-dev-build-cache.md) — "mastra dev" won't boot with inngest index.js/index.cjs error → `rm -rf .mastra/output` (restart alone won't fix)
+- [Mastra bundle zod externals](mastra-bundle-zod-externals.md) — zod MUST be in bundler.externals or prod bundle installs zod v4 for @mastra/core → startup crash in zod/v4 toJSONSchema; dev is fine
 - [Mastra dev sharedPool commonjs](mastra-dev-sharedpool-commonjs.md) — "mastra dev" rollup `__require`/`?commonjs-es-import` fail on pure-ESM sharedPool.ts; cache-clear won't fix BUT `mastra build` (prod) is fine → dev-only, doesn't block deploy
 - [Zoho write read-back verify](zoho-write-readback-verify.md) — Zoho v2 returns code:SUCCESS even when a field doesn't persist; never mark an approval Executed without re-reading and confirming the value
 - [Multi-workflow boot crashes](mastra-multi-workflow-boot.md) — adding a 2nd Mastra workflow/cron trips two boot guards (single-workflow throw + duplicate Inngest cron id) that exit before the port opens

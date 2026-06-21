@@ -218,6 +218,16 @@ export const mastra = new Mastra({
   },
   bundler: {
     externals: [
+      // zod MUST be externalized so the generated bundle manifest installs a
+      // single shared zod (the workspace ^3.25.76) that BOTH the app schemas
+      // and @mastra/core resolve to. Mastra packages declare
+      // `zod: "^3.25.0 || ^4.0.0"`, so if zod is bundled (not external) the
+      // bundle's fresh `npm install` pulls a SEPARATE zod v4 for @mastra/core
+      // while the schemas were compiled against v3 — @mastra/core then calls
+      // zod v4 `toJSONSchema()` on v3 schemas (`schema._zod` undefined) and
+      // crash-loops on startup, failing the deploy health check. Dev avoids
+      // this only because everything dedupes to the workspace zod 3.25.76.
+      "zod",
       "@mastra/core",
       "@ai-sdk/openai",
       "@openrouter/ai-sdk-provider",
