@@ -5094,6 +5094,7 @@
                 if (t === 'ignore')          return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700">Mark Dismissed</span>';
                 if (t === 'module_resolved') return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="One module of a cross-module cluster applied; other modules still open">Partial apply</span>';
                 if (t === 'split')           return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-800" title="Bulk-split contacts cleanup re-shaped this cluster">Bulk-split</span>';
+                if (t === 'auto_merge_pending') return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Auto-merge tagged the duplicates Duplicate-Delete — pending the Zoho admin actually deleting them">Auto-merge · pending</span>';
                 if (t === 'merge')           return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Merge</span>';
                 return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">' + escapeHtml(String(t || '—')) + '</span>';
             };
@@ -5495,6 +5496,7 @@
             const map = {
                 resolve: { label: 'Resolved', cls: 'bg-emerald-100 text-emerald-800' },
                 ignore: { label: 'Dismissed', cls: 'bg-gray-100 text-gray-700' },
+                auto_merge_pending: { label: 'Auto-merge · pending', cls: 'bg-amber-100 text-amber-800' },
                 domain_collision_merge: { label: 'Collision merge', cls: 'bg-indigo-100 text-indigo-700' },
             };
             const m = map[actionType] || { label: String(actionType || '—'), cls: 'bg-gray-100 text-gray-600' };

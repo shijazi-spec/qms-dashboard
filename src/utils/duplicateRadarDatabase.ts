@@ -2118,23 +2118,133 @@ export async function applyExactContactMatches(opts: {
     }
   }
 
-  // Record a durable ledger entry per survivor so it counts as merged.
+  // Mark each touched cluster AI-APPLIED · pending (Ahmad 2026-06-21). We record
+  // an 'auto_merge_pending' merge action — NOT a ledger 'resolve' — so the
+  // cluster moves out of Untouched into "AI-Applied · pending Zoho admin delete"
+  // but does NOT prematurely flip to Resolved. It becomes Resolved only once the
+  // admin actually deletes the tagged duplicates in Zoho, which the next sync's
+  // reconcileAutoMergedContactDeletions() detects (it then writes the durable
+  // ledger entry, and restoreLedgerResolvedClusterStatus flips it to resolved).
   for (const g of batch) {
     try {
+      const idRes = await pool.query<{
+        id: number;
+        cluster_id: number | null;
+        zoho_record_id: string;
+      }>(
+        `SELECT id, cluster_id, zoho_record_id
+           FROM duplicate_records
+          WHERE zoho_record_id = ANY($1::text[])`,
+        [[g.survivorZohoId, ...g.duplicateZohoIds]],
+      );
+      const rows = idRes.rows;
+      const survivorRow = rows.find((r) => r.zoho_record_id === g.survivorZohoId);
+      const clusterId = survivorRow?.cluster_id ?? rows[0]?.cluster_id ?? null;
+      const dupDbIds = rows
+        .filter((r) => g.duplicateZohoIds.includes(r.zoho_record_id))
+        .map((r) => r.id);
+      if (!clusterId || dupDbIds.length === 0) continue;
       await pool.query(
-        `INSERT INTO duplicate_resolution_ledger
-           (module, master_zoho_id, duplicate_zoho_ids, action_type, performed_by, notes, resolved_at)
-         VALUES ('Contacts', $1, $2, 'resolve', $3, 'bulk exact email+phone match', NOW())
-         ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
-        [g.survivorZohoId, JSON.stringify(g.duplicateZohoIds), opts.performedBy],
+        `INSERT INTO duplicate_merge_actions
+           (cluster_id, primary_record_id, merged_record_ids, action_type, performed_by, notes)
+         VALUES ($1, $2, $3, 'auto_merge_pending', $4, $5)`,
+        [
+          clusterId,
+          survivorRow?.id ?? null,
+          JSON.stringify(dupDbIds),
+          opts.performedBy,
+          `Bulk auto-merge: exact email+phone. Tagged ${dupDbIds.length} Duplicate-Delete, pending Zoho admin delete.`,
+        ],
       );
       mergedGroups++;
-    } catch {
-      /* ledger is best-effort */
+    } catch (e) {
+      logger.warn("[DuplicateRadar] auto-merge mark-pending failed (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
   return { mergedGroups, taggedRecords, remaining: Math.max(0, all.length - batch.length), errors };
+}
+
+/**
+ * Resolve auto-merged contact clusters ONCE their tagged duplicates are
+ * actually deleted in Zoho (Ahmad 2026-06-21). The bulk auto-merge marks a
+ * cluster 'auto_merge_pending' (→ shows as "AI-Applied · pending Zoho admin
+ * delete"). This pass writes the durable resolution-ledger entry only after
+ * deletion-detection has removed EVERY tagged duplicate — so the cluster stays
+ * pending until the admin truly deletes, then restoreLedgerResolvedClusterStatus
+ * (run right after this) flips it to 'resolved'. Idempotent + best-effort.
+ *
+ * Guards against a full rebuild that reassigned db ids: it only resolves when
+ * the survivor row still exists, so stale ids can't false-resolve a cluster.
+ */
+export async function reconcileAutoMergedContactDeletions(): Promise<number> {
+  try {
+    const pend = await pool.query<{
+      id: number;
+      primary_record_id: number | null;
+      merged_record_ids: any;
+      performed_by: string | null;
+    }>(
+      `SELECT id, primary_record_id, merged_record_ids, performed_by
+         FROM duplicate_merge_actions
+        WHERE action_type = 'auto_merge_pending'`,
+    );
+    let resolved = 0;
+    for (const a of pend.rows) {
+      const dupIds: number[] = Array.isArray(a.merged_record_ids)
+        ? a.merged_record_ids
+        : (() => {
+            try {
+              return JSON.parse(a.merged_record_ids);
+            } catch {
+              return [];
+            }
+          })();
+      if (!dupIds.length || !a.primary_record_id) continue;
+      // Survivor must still exist (a full rebuild would have reassigned ids;
+      // don't false-resolve on stale references).
+      const surv = await pool.query<{ zoho_record_id: string }>(
+        `SELECT zoho_record_id FROM duplicate_records WHERE id = $1`,
+        [a.primary_record_id],
+      );
+      const survivorZoho = surv.rows[0]?.zoho_record_id;
+      if (!survivorZoho) continue;
+      // Are ALL tagged duplicates gone (admin deleted them)?
+      const still = await pool.query<{ n: number }>(
+        `SELECT COUNT(*)::int AS n FROM duplicate_records WHERE id = ANY($1::int[])`,
+        [dupIds],
+      );
+      if ((still.rows[0]?.n ?? 0) > 0) continue; // still pending — some dups remain
+      // Deleted → record the true merge; the ledger-restore pass resolves it.
+      await pool.query(
+        `INSERT INTO duplicate_resolution_ledger
+           (module, master_zoho_id, duplicate_zoho_ids, action_type, performed_by, notes, resolved_at)
+         VALUES ('Contacts', $1, '[]'::jsonb, 'resolve', $2, 'bulk exact email+phone — admin deleted tagged dups', NOW())
+         ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
+        [survivorZoho, a.performed_by || "auto-merge"],
+      );
+      // Convert the pending marker to a normal resolve marker so it isn't
+      // re-checked and reads correctly in the Manual Actions log.
+      await pool.query(
+        `UPDATE duplicate_merge_actions SET action_type = 'module_resolved' WHERE id = $1`,
+        [a.id],
+      );
+      resolved++;
+    }
+    if (resolved > 0) {
+      logger.info(
+        `🔁 [DuplicateRadar] Auto-merge: ${resolved} cluster(s) had their tagged dups deleted in Zoho → resolving`,
+      );
+    }
+    return resolved;
+  } catch (e) {
+    logger.warn(
+      `[DuplicateRadar] reconcileAutoMergedContactDeletions skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+    );
+    return 0;
+  }
 }
 
 /**
@@ -5081,7 +5191,7 @@ export async function getTaggedRecordDbIdsByCluster(
   const result = await pool.query(
     `SELECT merged_record_ids FROM duplicate_merge_actions
        WHERE cluster_id = $1
-         AND action_type IN ('resolve', 'module_resolved')`,
+         AND action_type IN ('resolve', 'module_resolved', 'auto_merge_pending')`,
     [clusterId],
   );
   const out = new Set<number>();
@@ -6023,7 +6133,7 @@ export async function getDuplicateRecordsByType(
   if (aiStatus === "tagged_pending") {
     statusFilter = "AND dc.status = 'active'";
     mergeActionFilter =
-      " AND EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved'))";
+      " AND EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending'))";
   } else if (aiStatus === "resolved") {
     statusFilter = "AND dc.status = 'resolved'";
   } else if (aiStatus === "dismissed") {
@@ -6034,10 +6144,11 @@ export async function getDuplicateRecordsByType(
   } else if (aiStatus === "all") {
     statusFilter = "";
   } else if (aiStatus === "active") {
-    // Untouched active — exclude clusters with prior merge actions.
+    // Untouched active — exclude clusters with prior merge actions (incl.
+    // auto-merge tagged-pending, which belongs in AI-Applied, not here).
     statusFilter = "AND dc.status = 'active'";
     mergeActionFilter =
-      " AND NOT EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved'))";
+      " AND NOT EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending'))";
   }
 
   // ── Paginate by CLUSTER, not by record. ────────────────────────────────

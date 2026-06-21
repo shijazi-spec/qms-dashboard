@@ -92,6 +92,7 @@ import {
   truncateAllDuplicateData,
   backfillResolutionLedger,
   restoreLedgerResolvedClusterStatus,
+  reconcileAutoMergedContactDeletions,
   captureDuplicateProgressSnapshot,
   getDuplicateProgressSeries,
   cleanupStaleRecords,
@@ -991,6 +992,16 @@ async function scanZohoCRMForDuplicates(
     // prior Mark Handled click. Walk active clusters now and flip status back
     // to 'resolved' when every present module has a ledger match — this is
     // the durable counterpart to the view-time filter in getCrossModuleOverlaps.
+    // Auto-merge contacts that were tagged "pending Zoho admin delete" → resolve
+    // them now IF the admin has actually deleted the tagged duplicates (so they
+    // stay AI-Applied · pending until then). Must run BEFORE the ledger-restore
+    // below, which reads the entries this writes.
+    await reconcileAutoMergedContactDeletions().catch((e) =>
+      logger.warn(
+        `[DuplicateRadar] auto-merge deletion reconcile skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
+
     await restoreLedgerResolvedClusterStatus().catch((e) =>
       logger.warn(
         `[DuplicateRadar] post-scan ledger restore skipped (non-fatal): ${e instanceof Error ? e.message : String(e)}`,
