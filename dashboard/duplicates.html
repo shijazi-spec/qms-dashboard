@@ -319,10 +319,10 @@
 
             <!-- D4: Resolution Rate + KPI Gauge + Last Scan -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div class="bg-white rounded-lg shadow p-4" title="Share of duplicate-cluster work that is closed. Numerator = resolved + ignored. Denominator = true duplicate clusters (active) + resolved + ignored — i.e. the universe of duplicate clusters we ever saw. Singleton (non-duplicate) clusters are excluded so the rate isn't diluted to 0%.">
+                <div class="bg-white rounded-lg shadow p-4" title="Share of duplicate-cluster work that is closed. Numerator = resolved + dismissed. Denominator = true duplicate clusters (active) + resolved + dismissed — i.e. the universe of duplicate clusters we ever saw. Singleton (non-duplicate) clusters are excluded so the rate isn't diluted to 0%.">
                     <div class="text-sm font-medium text-gray-500 mb-2" data-i18n="duplicates.resolution_rate">Resolution Rate</div>
                     <div id="resolutionRate" data-testid="text-resolution-rate" class="text-3xl font-bold text-green-600">-</div>
-                    <div class="text-xs text-gray-400 mt-1"><span id="resolvedCount">0</span> resolved + <span id="ignoredCount">0</span> ignored</div>
+                    <div class="text-xs text-gray-400 mt-1"><span id="resolvedCount">0</span> resolved + <span id="ignoredCount">0</span> dismissed</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4">
                     <div class="text-sm font-medium text-gray-500 mb-2" title="Whole-system duplicate rate — actionable duplicate records across ALL modules (Leads + Deals + Contacts + Accounts) over the total record count. Company target is ≤2% (SDR-KPI-09). The Leads-only rate is on the Dup Leads card above; per-module rates are on the Owner Accountability tab.">Overall Duplicate Rate — all modules (target ≤ 2%)</div>
@@ -5149,7 +5149,7 @@
             }
             if (!res || !res.ok) {
                 document.getElementById('modalContent').innerHTML =
-                    `<div class="text-center py-8 text-red-600 text-sm">Server returned ${res ? res.status : '—'} for cluster ${escapeHtml(String(id))}. The cluster may have been resolved, ignored, or removed.</div>`;
+                    `<div class="text-center py-8 text-red-600 text-sm">Server returned ${res ? res.status : '—'} for cluster ${escapeHtml(String(id))}. The cluster may have been resolved, dismissed, or removed.</div>`;
                 return;
             }
             try {
