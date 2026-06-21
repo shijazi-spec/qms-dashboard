@@ -11698,7 +11698,30 @@
             btn.disabled = true;
             btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> ' + escapeHtml(WalaPlusI18n.t('dyn.duplicates.syncing'));
             try {
-                const res = await fetch('/api/duplicates/scan-zoho', { method: 'POST', credentials: 'same-origin' });
+                const doSync = (force) => fetch('/api/duplicates/scan-zoho', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force: !!force }),
+                });
+                let res = await doSync(false);
+                // A scan is already running. Offer to force-reset a stuck one
+                // and start fresh (the server fences the old run so it can't
+                // clobber the new one's state).
+                if (res.status === 409) {
+                    const info = await res.json().catch(() => ({}));
+                    const mins = (info && typeof info.ageMinutes === 'number') ? info.ageMinutes : null;
+                    const ask = 'A scan is already in progress'
+                        + (mins != null ? ' (running ' + mins + ' min)' : '')
+                        + '.\n\nForce-reset it and start a fresh sync?';
+                    if (window.confirm(ask)) {
+                        res = await doSync(true);
+                    } else {
+                        btn.disabled = false;
+                        btn.innerHTML = originalHTML;
+                        return;
+                    }
+                }
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
                     alert(err.error || WalaPlusI18n.t('dyn.duplicates.sync_failed'));

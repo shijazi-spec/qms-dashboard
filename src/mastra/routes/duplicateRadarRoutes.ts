@@ -244,6 +244,41 @@ const scanState: ScanState = {
   percentage: 0,
 };
 
+// Monotonic scan "generation" — each run captures its number at start; a run
+// only writes terminal state if it's still the current generation. This fences
+// a stale background run (released below) from clobbering a newer run's state.
+let scanGeneration = 0;
+
+// A scan that's been "scanning" longer than this is treated as stalled and its
+// lock can be reclaimed (e.g. the process was killed mid-run, or Zoho hung).
+const STALE_SCAN_MS = (() => {
+  const n = parseInt(process.env.DUPLICATE_SCAN_STALE_MS || "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 20 * 60 * 1000; // default 20 min
+})();
+
+/**
+ * Gate for starting a new scan. Returns a block reason when a HEALTHY scan is
+ * still running; otherwise releases a stale (or force-reset) "scanning" lock
+ * and returns null so the caller proceeds. The released run, if still alive in
+ * the background, is fenced by scanGeneration so it can't clobber the new run.
+ */
+function blockOrClearScan(force: boolean): { error: string; ageMinutes: number } | null {
+  if (scanState.status !== "scanning") return null;
+  const ageMs = scanState.startedAt ? Date.now() - scanState.startedAt : Infinity;
+  const ageMinutes = Number.isFinite(ageMs) ? Math.round(ageMs / 60000) : 0;
+  if (!force && ageMs < STALE_SCAN_MS) {
+    return { error: "A scan is already in progress", ageMinutes };
+  }
+  logger.warn(
+    `🧹 [DuplicateRadar] Releasing ${force ? "force-reset" : "stale"} scan lock (age ${ageMinutes}m) — starting fresh`,
+  );
+  scanState.status = "failed";
+  scanState.error = force
+    ? "Reset by admin"
+    : `Auto-reset: previous scan stalled (${ageMinutes}m)`;
+  return null;
+}
+
 // SSE listeners for C1: real-time progress
 let sseClients: Array<{
   id: string;
@@ -607,8 +642,11 @@ async function scanZohoCRMForDuplicates(
   error?: string;
 }> {
   const startTime = Date.now();
+  // Claim this generation; terminal writes below are gated on it still being
+  // current, so a stale concurrent run can't overwrite a newer run's state.
+  const myGeneration = ++scanGeneration;
   logger.info(
-    `🔍 [DuplicateRadar] Starting Zoho CRM duplicate scan (${detectionType})...`,
+    `🔍 [DuplicateRadar] Starting Zoho CRM duplicate scan (${detectionType}) [gen ${myGeneration}]...`,
   );
 
   scanState.status = "scanning";
@@ -1054,13 +1092,18 @@ async function scanZohoCRMForDuplicates(
       durationMs: duration,
     };
 
-    scanState.status = "completed";
-    scanState.completedAt = Date.now();
-    scanState.progress = `Complete: ${totalRecords} records scanned, ${summary.trueDuplicateClusters} duplicate clusters found`;
-    scanState.result = resultData;
-    scanState.percentage = 100;
-
-    broadcastSSE("scan", { status: "completed", result: resultData });
+    if (myGeneration === scanGeneration) {
+      scanState.status = "completed";
+      scanState.completedAt = Date.now();
+      scanState.progress = `Complete: ${totalRecords} records scanned, ${summary.trueDuplicateClusters} duplicate clusters found`;
+      scanState.result = resultData;
+      scanState.percentage = 100;
+      broadcastSSE("scan", { status: "completed", result: resultData });
+    } else {
+      logger.warn(
+        `[DuplicateRadar] Scan gen ${myGeneration} finished but a newer scan (gen ${scanGeneration}) owns the state — not overwriting.`,
+      );
+    }
 
     return resultData;
   } catch (error: any) {
@@ -1087,15 +1130,16 @@ async function scanZohoCRMForDuplicates(
       error: userMessage,
     };
 
-    scanState.status = "failed";
-    scanState.completedAt = Date.now();
-    scanState.progress = rateLimited
-      ? "Scan failed — Zoho rate-limited"
-      : "Scan failed";
-    scanState.error = userMessage;
-    scanState.result = errorResult;
-
-    broadcastSSE("scan", { status: "failed", error: scanState.error });
+    if (myGeneration === scanGeneration) {
+      scanState.status = "failed";
+      scanState.completedAt = Date.now();
+      scanState.progress = rateLimited
+        ? "Scan failed — Zoho rate-limited"
+        : "Scan failed";
+      scanState.error = userMessage;
+      scanState.result = errorResult;
+      broadcastSSE("scan", { status: "failed", error: scanState.error });
+    }
 
     return errorResult;
   }
@@ -4008,13 +4052,17 @@ export const duplicateRadarRoutes = [
           const sessionUser = await requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
-          if (scanState.status === "scanning") {
+          const body = await c.req.json().catch(() => ({}));
+          const blocked = blockOrClearScan(body?.force === true);
+          if (blocked) {
             return c.json(
               {
                 success: false,
-                error: "A scan is already in progress",
+                error: blocked.error,
+                ageMinutes: blocked.ageMinutes,
                 progress: scanState.progress,
                 startedAt: scanState.startedAt,
+                hint: "Send { force: true } to abort the in-progress scan and start a fresh one.",
               },
               409,
             );
@@ -4096,13 +4144,17 @@ export const duplicateRadarRoutes = [
           const sessionUser = await requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
 
-          if (scanState.status === "scanning") {
+          const rebuildBody = await c.req.json().catch(() => ({}));
+          const rebuildBlocked = blockOrClearScan(rebuildBody?.force === true);
+          if (rebuildBlocked) {
             return c.json(
               {
                 success: false,
-                error: "A scan is already in progress",
+                error: rebuildBlocked.error,
+                ageMinutes: rebuildBlocked.ageMinutes,
                 progress: scanState.progress,
                 startedAt: scanState.startedAt,
+                hint: "Send { force: true } to abort the in-progress scan and start a fresh one.",
               },
               409,
             );
