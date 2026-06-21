@@ -18,8 +18,11 @@ dist
 
 # SQL dumps / snapshots — never check in. Treat as backup artifacts and
 # park them outside the repo (e.g. a OneDrive backup folder). Tracked
-# dumps balloon the repo and make every clone slow.
+# dumps balloon the repo and make every clone slow. Covers plain SQL
+# (pg_dump default), custom-format pg_dump (.dump), and gzipped variants.
 *.sql
+*.sql.gz
+*.dump
 
 # Test outputs
 test-results/
