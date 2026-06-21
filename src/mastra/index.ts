@@ -229,6 +229,7 @@ export const mastra = new Mastra({
       "glob",
       "fstream",
       "pg",
+      "pg-query-stream",
       "pdfkit",
       "pino",
       "resend",

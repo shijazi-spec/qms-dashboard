@@ -12,3 +12,4 @@
 - [Zoho field-update DUPLICATE_DATA](zoho-duplicate-data-field-update.md) — "approved but unchanged" Email/Phone edits = Zoho uniqueness collision with a duplicate record; merge, don't copy; never weaken read-back verify
 - [Public-path justifications](public-path-justifications.md) — a PUBLIC_PATHS entry's written justification must match the handler's REAL auth (not intended behavior); verify the claimed control actually exists in code before claiming it
 - [DB-writer secret-leak gate](db-writer-secret-leak-gate.md) — every src/utils writer needs a companion *.test.ts (gate runs first, no grandfathering); seed-only writers still need a doc test; createRedactedPool false-positives on literals like "Specialist×15%"
+- [Mastra build dynamic-import externals](mastra-build-dynamic-import-externals.md) — a pkg the app `await import()`s that's only transitive (e.g. pg-query-stream) must be BOTH in bundler.externals AND a direct dep, or prod prune breaks the build/runtime
