@@ -15,10 +15,10 @@ let oidcConfig: client.Configuration | null = null;
 /**
  * OIDC provider configuration — provider-agnostic.
  *
- * The QMS app started on Replit Auth (OIDC) and was migrated to support
- * Google OAuth (also OIDC) when hosting moved to Railway. To keep one
- * codebase that runs on either platform, every provider-specific value
- * is read from env vars with Replit-style fallbacks:
+ * The QMS app uses Replit Auth (OIDC) by default but supports any
+ * generic OIDC issuer (Google OAuth, Auth0, Okta, etc.) via env vars.
+ * Every provider-specific value is read from env vars with Replit-style
+ * fallbacks so this code runs anywhere without `if (env === '…')` forks:
  *
  *   OIDC_ISSUER_URL    — defaults to ISSUER_URL → https://replit.com/oidc
  *                        For Google: https://accounts.google.com
@@ -27,10 +27,10 @@ let oidcConfig: client.Configuration | null = null;
  *   OIDC_CLIENT_SECRET — required for Google (no fallback). Replit's PKCE
  *                        flow never required a secret; Google does.
  *   PUBLIC_BASE_URL    — defaults to REPLIT_DOMAINS / REPLIT_DEV_DOMAIN.
- *                        For Railway: the Railway-generated *.up.railway.app URL.
+ *                        For a custom host: the canonical https URL.
  *
- * Set the OIDC_* vars on Railway → falls through to Replit vars on Replit.
- * One codebase, two deploy targets, no `if (env === 'railway')` branches.
+ * Set the OIDC_* vars on a non-Replit host → falls through to Replit vars
+ * on Replit. One codebase, multiple deploy targets.
  */
 function getIssuerUrl(): string {
   return (

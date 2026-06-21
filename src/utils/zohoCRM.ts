@@ -495,10 +495,10 @@ export async function fetchAllZohoRecords(
   // stops the loop early if any page returns < perPage records (last page) or
   // 0 records (overshoot). Order is preserved because we slice by page index.
   // PERF / MEMORY: per-module page concurrency. Default 4 keeps cold fetches
-  // fast on a healthy host, but on memory-tight Railway tiers six module
-  // fetches × 4 concurrent pages × 200 records each can pin >600MB and
-  // OOM-kill the process. Set ZOHO_FETCH_CONCURRENCY=1 (or 2) on the
-  // server env to throttle without redeploying code.
+  // fast on a healthy host, but on memory-tight tiers six concurrent module
+  // fetches × 4 pages × 200 records each can pin >600MB and OOM-kill the
+  // process. Set ZOHO_FETCH_CONCURRENCY=1 (or 2) on the server env to
+  // throttle without redeploying code.
   const envConc = parseInt(process.env.ZOHO_FETCH_CONCURRENCY || "", 10);
   const CONCURRENCY =
     Number.isFinite(envConc) && envConc >= 1 && envConc <= 8 ? envConc : 3;

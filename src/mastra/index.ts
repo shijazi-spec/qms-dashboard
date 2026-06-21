@@ -377,12 +377,12 @@ export const mastra = new Mastra({
     (just before the 15-minute TTL expires). Failures are logged but never crash the process.
 */
 (function startCacheWarmer() {
-  // Operator escape hatch — set DISABLE_CACHE_WARMER=true on a small
-  // host (Railway trial, etc.) to skip the background pre-warm
-  // entirely. The warmer hits /api/agents/performance and
+  // Operator escape hatch — set DISABLE_CACHE_WARMER=true on a
+  // resource-tight host to skip the background pre-warm entirely.
+  // The warmer hits /api/agents/performance and
   // /api/dashboard/layouts-breakdown every 15 minutes, which is
-  // helpful on a long-lived deploy but wasteful on a resource-tight
-  // one where the first user request can cold-fill the cache instead.
+  // helpful on a long-lived deploy but wasteful on a tight one
+  // where the first user request can cold-fill the cache instead.
   if (
     String(process.env.DISABLE_CACHE_WARMER || "").toLowerCase() === "true"
   ) {
@@ -478,12 +478,12 @@ export const mastra = new Mastra({
 */
 (function startScheduledJobFallback() {
   // Operator escape hatch — set DISABLE_SCHEDULED_JOB_FALLBACK=true on a
-  // memory-tight host (Railway trial/Hobby, etc.) to skip the in-process
-  // cron fallback entirely. Each helper fans out parallel Zoho fetches
-  // (DuplicateRadar + QualityAudit + ConsultantScanner all pull 6 modules
-  // × CONCURRENCY=4 pages × 200 records, ~600MB+ resident at peak) which
-  // OOM-kills the process. When Inngest is wired up in front of this
-  // service, the fallback is redundant anyway.
+  // memory-tight host to skip the in-process cron fallback entirely. Each
+  // helper fans out parallel Zoho fetches (DuplicateRadar + QualityAudit +
+  // ConsultantScanner all pull 6 modules × CONCURRENCY=4 pages × 200
+  // records, ~600MB+ resident at peak) which can OOM-kill the process.
+  // When Inngest is wired up in front of this service, the fallback is
+  // redundant anyway.
   if (
     String(process.env.DISABLE_SCHEDULED_JOB_FALLBACK || "").toLowerCase() ===
     "true"
