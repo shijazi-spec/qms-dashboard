@@ -42,6 +42,8 @@ export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
       { id: "gen-resolved-merged", rule: "'Resolved' ≠ 'Merged'. A cluster is only truly resolved once tagged records are confirmed deleted in Zoho. Report the real applied/merged figure, never the cluster 'resolved' count." },
       { id: "gen-hitl", rule: "Every Zoho write is gated (Human-in-the-Loop): it queues for approval (admin password) before applying. Attribution: 'Adam — GRQ Assistant (on behalf of Sarah Hijazi)'. Shadow default = no autonomous writes; kill switch always live." },
       { id: "gen-safe-tier", rule: "Safe-tier auto-apply requires ALL clear: confidence ≥85, <2 domains, <2 phones, no CS block/review, pipeline & ARR ≤ cap, no active deal stage, 0 field conflicts, all Zoho ids present, not cross-module, <2 layouts, ≤1 owner, nothing modified <7 days, no failed prior verification, no custom-field assumption, survivor ≥50% complete, no attachments. Any one missing → escalate." },
+      { id: "gen-automerge-lifecycle", rule: "A bulk auto-merge marks each touched cluster 'AI-Applied · pending Zoho admin delete'. It flips to 'Resolved' ONLY after the admin actually deletes the tagged duplicates in Zoho (a per-sync reconcile detects the deletion, then records the merge). A failed tag (e.g. Zoho rate-limited because a sync is running) leaves the cluster Untouched and re-runnable — it is never marked pending on a failed write. Run auto-merges when no sync is in progress. Large runs apply in BATCHES so they can't hit the proxy timeout.", ref: "Ahmad 2026-06-22" },
+      { id: "gen-grade2", rule: "Grade 2 (Assistant) for the auto-merge rules. Grades: G1 Trainee → G2 Assistant → G3 Trusted → G4 Autonomous Specialist (computed from agreement/override metrics; promotion is a human decision, never self-promotion). For these high-confidence, admin-gated auto-merges Adam acts as an ASSISTANT — he surfaces, previews and assists the merges; he NEVER claims they run unattended, and every Zoho write still requires the admin password (HITL).", ref: "Ahmad 2026-06-22" },
     ],
   },
   // ── Per-module duplicate tabs ──────────────────────────────────────────────
@@ -51,6 +53,7 @@ export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
     rules: [
       { id: "acc-def", rule: "A duplicate Account = the SAME company — same domain / legal name / close fuzzy name." },
       { id: "acc-survivor", rule: "Survivor = the most complete record / the one with the Account + most related records; gap-fill its blanks, tag the others Duplicate-Delete." },
+      { id: "acc-automerge", rule: "Auto-merge by SAME domain + SAME company name (Arabic-aware + company-suffix stripped), WITHIN one layout only: Corporate Accounts ↔ Corporate Accounts, and Marketplace ↔ Marketplace. A Corporate account and a Partner/Marketplace account for the SAME company are intentionally two separate records — NEVER merged across layouts. Preserves BOTH the EN + AR names (the alternate-language name is appended to the survivor's Description), re-parents the duplicates' Contacts & Deals onto the survivor, then tags the rest Duplicate-Delete. CR / VAT numbers are IGNORED (unreliable / fake data). Read-only preview first → admin password → batched apply; never deletes.", ref: "Ahmad 2026-06-22" },
     ],
   },
   {
@@ -58,6 +61,8 @@ export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
     title: "Contacts Duplicates",
     rules: [
       { id: "con-def", rule: "A duplicate Contact = the SAME person — only when ≥2 of {email, phone, full name} match. Sharing an Account is NOT duplicate evidence (that's the Account-merge cascade).", ref: "hard rule" },
+      { id: "con-genuine", rule: "The Contacts tab shows a cluster ONLY when ≥2 of its contacts DIRECTLY share an identity signal (email, phone, or name). Same-account colleagues who share only the company domain (a 'chained match') are NOT duplicates — they are a LINK-to-account job (Account-merge cascade / Open AI Plan → Link), never tagged. Within a cluster only the truly matching pair is shown; the rest drop off.", ref: "Ahmad 2026-06-22" },
+      { id: "con-automerge", rule: "TWO contact auto-merge buttons (dry-run preview → admin password → batched apply, never delete): (1) EXACT email+phone — same person → tag the duplicates, keep the most-complete survivor; (2) SAME name+phone — same person even when emails differ or one is missing: keep BOTH emails on the survivor (its primary Email + the other in Secondary_Email; a lone email becomes the primary), then tag the duplicates. Matching is Arabic-aware (fold ة/ه, ى/ي, آأإ→ا, strip invisible marks/tatweel) and Saudi-phone-canonical (drop 0 / +966, compare the last 9 digits).", ref: "Ahmad 2026-06-22" },
     ],
   },
   {
