@@ -2573,10 +2573,23 @@ export interface AccountDomainNameGroup {
   members: AccountDomainNameMember[];
 }
 
-/** Group accounts on the given layouts by domain + normalized name (>=2). */
+/**
+ * Group accounts on the given layouts by domain + normalized name (>=2).
+ *
+ * groupBy (Sarah 2026-06-23):
+ *   'domain_name' (default) → key = domain|name  (strict; unchanged behaviour)
+ *   'domain'                → key = domain only   ("same domain, any name" — the
+ *      looser mode that catches EN/AR / spelling variants). A SHARED-DOMAIN
+ *      GUARD skips any domain carrying more than `maxDistinctNames` distinct
+ *      company names (likely a holding/agency/shared domain) — those are left
+ *      for manual review.
+ */
 async function getAccountDomainNameGroups(
   layoutNames: string[],
+  opts?: { groupBy?: "domain_name" | "domain"; maxDistinctNames?: number },
 ): Promise<AccountDomainNameGroup[]> {
+  const groupBy = opts?.groupBy || "domain_name";
+  const maxDistinctNames = opts?.maxDistinctNames ?? 6;
   if (!layoutNames.length) return [];
   const res = await pool.query<{
     zoho_record_id: string;
@@ -2614,8 +2627,10 @@ async function getAccountDomainNameGroups(
     if (resolvedDupIds.has(row.zoho_record_id)) continue; // already merged away
     const dom = (row.domain || "").trim().toLowerCase();
     const nameKey = normalizeCompanyName(row.record_name || row.company_name || "");
-    if (!dom || !nameKey) continue;
-    const key = `${dom}|${nameKey}`;
+    // Domain-only mode groups by domain alone (any name); strict mode needs both.
+    if (!dom) continue;
+    if (groupBy === "domain_name" && !nameKey) continue;
+    const key = groupBy === "domain" ? dom : `${dom}|${nameKey}`;
     const arr = byKey.get(key) || [];
     arr.push(row);
     byKey.set(key, arr);
@@ -2687,6 +2702,10 @@ async function getAccountDomainNameGroups(
           .filter(Boolean),
       ),
     ];
+    // Shared-domain guard (domain-only mode): a domain carrying many DISTINCT
+    // company names is probably a holding/agency/shared domain — skip it so it
+    // isn't auto-merged; it stays for manual review.
+    if (groupBy === "domain" && names.length > maxDistinctNames) continue;
     groups.push({
       key,
       domain: key.split("|")[0]!,
@@ -2723,6 +2742,30 @@ export async function previewAccountDomainNameMerge(): Promise<{
 }
 
 /**
+ * Read-only PREVIEW of the LOOSER domain-only account auto-merge (Sarah
+ * 2026-06-23): "same domain, any name", with the shared-domain guard. No writes.
+ */
+export async function previewAccountDomainOnlyMerge(): Promise<{
+  corporate: { groups: number; accountsToTag: number; sample: AccountDomainNameGroup[] };
+  partner: { groups: number; accountsToTag: number; sample: AccountDomainNameGroup[] };
+}> {
+  const build = async (layouts: string[]) => {
+    const groups = await getAccountDomainNameGroups(layouts, { groupBy: "domain" }).catch(
+      () => [],
+    );
+    return {
+      groups: groups.length,
+      accountsToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
+      sample: groups.slice(0, 200),
+    };
+  };
+  return {
+    corporate: await build(ACCOUNT_SCOPE_LAYOUTS.corporate),
+    partner: await build(ACCOUNT_SCOPE_LAYOUTS.partner),
+  };
+}
+
+/**
  * Apply the account auto-merge for one scope. For each domain+name group it
  * reuses the PROVEN agentic merge engine (buildMergePlan + executeMergePlan):
  * survivor selection, EN/AR name preservation (into Description), re-parenting
@@ -2742,6 +2785,8 @@ export async function applyAccountDomainNameMerge(opts: {
    * record not in the group is ignored by the engine (it falls back safely).
    */
   overrides?: Record<string, string>;
+  /** 'domain_name' (strict, default) or 'domain' (looser same-domain-any-name). */
+  groupBy?: "domain_name" | "domain";
 }): Promise<{
   scope: string;
   groups: number;
@@ -2754,7 +2799,7 @@ export async function applyAccountDomainNameMerge(opts: {
   errors: number;
 }> {
   const layouts = ACCOUNT_SCOPE_LAYOUTS[opts.scope] || [];
-  const all = await getAccountDomainNameGroups(layouts);
+  const all = await getAccountDomainNameGroups(layouts, { groupBy: opts.groupBy || "domain_name" });
   const limit = Math.max(1, Math.min(Math.floor(opts.limit || 100), 500));
   const batch = all.slice(0, limit);
   const { buildMergePlan } = await import("./duplicateMergePlanner");

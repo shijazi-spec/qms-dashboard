@@ -1592,6 +1592,67 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Looser DOMAIN-ONLY account auto-merge — PREVIEW (Sarah 2026-06-23).
+    // "Same domain, any name" with the shared-domain guard. No writes.
+    //   GET /api/duplicates/accounts/domain-only-preview
+    path: "/api/duplicates/accounts/domain-only-preview",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const { previewAccountDomainOnlyMerge } = await import("../../utils/duplicateRadarDatabase");
+          const data = await previewAccountDomainOnlyMerge();
+          return c.json({ success: true, ...data });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Looser DOMAIN-ONLY account auto-merge — APPLY one scope (admin-key gated).
+    //   POST /api/duplicates/accounts/domain-only-merge  { scope, limit?, overrides? }
+    path: "/api/duplicates/accounts/domain-only-merge",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          const body = await c.req.json().catch(() => ({}));
+          const scope = body?.scope === "partner" ? "partner" : "corporate";
+          const limit = parseInt(body?.limit, 10);
+          const overrides: Record<string, string> = {};
+          if (body?.overrides && typeof body.overrides === "object") {
+            for (const [k, v] of Object.entries(body.overrides)) {
+              if (typeof k === "string" && typeof v === "string" && v.trim()) {
+                overrides[k] = v.trim();
+              }
+            }
+          }
+          const performedBy =
+            `${(sessionUser as any)?.email || "admin"} (bulk account ${scope} domain-only merge)`;
+          const { applyAccountDomainNameMerge } = await import("../../utils/duplicateRadarDatabase");
+          const result = await applyAccountDomainNameMerge({
+            scope,
+            dryRun: false,
+            limit: Number.isFinite(limit) && limit > 0 ? limit : 100,
+            performedBy,
+            overrides,
+            groupBy: "domain",
+          });
+          return c.json({ success: true, ...result });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Acceptance-pattern analysis (Sarah 2026-06-20): learn AUTO-APPROVE rules
     // from resolved data (manual merges + agent applies). Recommend-only.
     //   GET /api/duplicates/autonomous/acceptance-patterns?module=Accounts&days=90

@@ -861,6 +861,7 @@
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;accounts&quot;]" data-testid="button-open-capa-accounts" title="Open a corrective-action record (CAPA) on one of the account-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
                 <button data-on-click="previewAccountAutoMerge" id="accountAutoMergePreviewBtn" data-testid="button-account-auto-merge-preview" title="DRY-RUN preview (no changes): which accounts would auto-merge by SAME DOMAIN + SAME NAME — Corporate↔Corporate and Partner↔Partner only (never across). Review this before we enable the apply." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-200 text-teal-900 hover:bg-teal-300">🔍 Preview auto-merge (domain+name)</button>
+                <button data-on-click="previewAccountAutoMerge" data-args="[&quot;domain&quot;]" id="accountDomainOnlyPreviewBtn" data-testid="button-account-domain-only-preview" title="LOOSER dry-run (no changes): accounts that share the SAME DOMAIN even when names differ (EN/AR/spelling variants). Skips domains carrying many distinct names (likely shared/agency). Review + override survivors before applying." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-200 text-amber-900 hover:bg-amber-300">🔍 Preview auto-merge (domain only)</button>
             </div>
             <div id="accountAutoMergePanel" class="text-xs mb-3"></div>
             <!-- AI-status chips — toggle which slice of clusters is in the list.
@@ -6074,14 +6075,21 @@
         // DRY-RUN preview of the account auto-merge (same domain + same name,
         // within layout). READ-ONLY — nothing is written. Lets the operator
         // validate the rule on real data before the apply step is enabled.
-        async function previewAccountAutoMerge() {
+        async function previewAccountAutoMerge(mode) {
+            // mode: 'domain' = looser "same domain, any name" (Sarah 2026-06-23);
+            // anything else = strict "same domain + same name".
+            const amMode = (mode === 'domain') ? 'domain' : 'domain_name';
+            window._accountMergeMode = amMode;
             const panel = document.getElementById('accountAutoMergePanel');
-            const btn = document.getElementById('accountAutoMergePreviewBtn');
+            const btn = document.getElementById(amMode === 'domain' ? 'accountDomainOnlyPreviewBtn' : 'accountAutoMergePreviewBtn');
             if (btn) btn.disabled = true;
             panel.innerHTML = '<div class="text-teal-700">Computing dry-run (no changes)…</div>';
             let data;
             try {
-                const res = await fetch('/api/duplicates/accounts/domain-name-preview', { credentials: 'same-origin' });
+                const url = amMode === 'domain'
+                    ? '/api/duplicates/accounts/domain-only-preview'
+                    : '/api/duplicates/accounts/domain-name-preview';
+                const res = await fetch(url, { credentials: 'same-origin' });
                 data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
             } catch (e) {
@@ -6095,7 +6103,7 @@
             window._accountMergeOverrides = {};
             const scopeBlock = (title, scopeKey, s) => {
                 if (!s || !s.groups) {
-                    return '<div class="px-3 py-2 rounded bg-gray-50 border border-gray-200 text-gray-600 mb-2">' + title + ': no same domain+name groups found.</div>';
+                    return '<div class="px-3 py-2 rounded bg-gray-50 border border-gray-200 text-gray-600 mb-2">' + title + ': no ' + (amMode === 'domain' ? 'same-domain' : 'same domain+name') + ' groups found.</div>';
                 }
                 const rows = (s.sample || []).map(function (g) {
                     // Register the group by a stable integer index so the click
@@ -6203,11 +6211,16 @@
         // duplicates' contacts/deals onto the survivor, tags the rest. Nothing
         // is deleted by the platform.
         async function applyAccountAutoMerge(scope) {
+            const amMode = window._accountMergeMode === 'domain' ? 'domain' : 'domain_name';
+            const matchDesc = amMode === 'domain' ? 'same domain, any name' : 'same domain + same name';
             const panel = document.getElementById('accountAutoMergePanel');
-            if (!window.confirm('Apply the ' + scope + ' account auto-merge (same domain + same name)?\\n\\nFor each group: the survivor keeps both EN + AR names (alternate saved to its Description), the duplicate accounts have their contacts/deals re-parented onto the survivor, and the duplicates are tagged Duplicate-Delete — the admin deletes them later; nothing is deleted now.\\n\\nYou will be asked for the admin password next.')) return;
+            if (!window.confirm('Apply the ' + scope + ' account auto-merge (' + matchDesc + ')?\\n\\nFor each group: the survivor keeps both EN + AR names (alternate saved to its Description), the duplicate accounts have their contacts/deals re-parented onto the survivor, and the duplicates are tagged Duplicate-Delete — the admin deletes them later; nothing is deleted now.' + (amMode === 'domain' ? '\\n\\nNote: this is the LOOSER domain-only rule — please review the groups (drill in / override survivor) before applying.' : '') + '\\n\\nYou will be asked for the admin password next.')) return;
             const key = window.prompt('Enter the admin password to apply this account merge:');
             if (!key || !key.trim()) return;
             const overrides = _accountOverridesForScope(scope);
+            const applyUrl = amMode === 'domain'
+                ? '/api/duplicates/accounts/domain-only-merge'
+                : '/api/duplicates/accounts/domain-name-merge';
             const note = document.createElement('div');
             note.className = 'text-teal-700 mt-1';
             const ovCount = Object.keys(overrides).length;
@@ -6215,7 +6228,7 @@
             panel.appendChild(note);
             let live;
             try {
-                live = await _runBatchedMerge('/api/duplicates/accounts/domain-name-merge', {
+                live = await _runBatchedMerge(applyUrl, {
                     key: key.trim(), batchLimit: 8, body: { scope: scope, overrides: overrides }, progressKeys: ['merged'],
                     onTick: function (t) { note.textContent = 'Applying ' + scope + ' merges… ' + (t.merged || 0).toLocaleString() + ' group(s), re-parented ' + (t.reparentedDeals || 0) + ' deal(s)/' + (t.reparentedContacts || 0) + ' contact(s)…'; },
                 });
