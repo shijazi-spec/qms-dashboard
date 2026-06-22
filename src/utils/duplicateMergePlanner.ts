@@ -39,6 +39,32 @@ const MODULE_LABEL: Record<CrmModule, string> = {
   Contacts: "Contact",
 };
 
+/**
+ * Normalize a (possibly Arabic) personal name for EQUALITY comparison in the
+ * ≥2-attribute contact rule. Plain `trim().toLowerCase()` left visually-
+ * identical Arabic names comparing UNEQUAL — a very common cause of "these are
+ * obviously the same person but the modal won't let me merge them" (the plan
+ * falls to link-only). Here we: Unicode-NFKC; strip bidi / zero-width marks,
+ * tatweel and harakat (diacritics); fold the common Arabic letter variants
+ * (آأإ→ا, ى→ي, ة→ه); collapse whitespace; lowercase. The ≥2-attribute rule
+ * still requires a second signal (email or phone) to match, so the slightly
+ * looser name match can't merge two genuinely different people on its own.
+ * (Ahmad 2026-06-22.)
+ */
+export function normalizePersonName(s: string | null | undefined): string {
+  return String(s || "")
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "") // zero-width + bidi marks
+    .replace(/\u0640/g, "") // tatweel
+    .replace(/[\u064B-\u0652\u0670]/g, "") // harakat / diacritics
+    .replace(/[\u0622\u0623\u0625]/g, "\u0627") // alef variants -> alef
+    .replace(/\u0649/g, "\u064A") // alef maqsura -> yaa
+    .replace(/\u0629/g, "\u0647") // taa marbuta -> haa
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 // ── Output types ───────────────────────────────────────────────────────────
 
 export type MergeFieldAction = "fill" | "conflict";
@@ -444,12 +470,15 @@ export function buildMergePlan(
   if (module === "Contacts" && duplicates.length > 0) {
     const masterEmail = (master.email || "").trim().toLowerCase();
     const masterPhone = (master.phone_normalized || "").trim();
-    const masterName = (master.record_name || "").trim().toLowerCase();
+    // Arabic-aware name normalization so visually-identical names (differing
+    // only by invisible bidi marks / NFC-vs-NFKC / tatweel / ة-vs-ه) compare
+    // equal instead of silently dropping a real duplicate to cascade-only.
+    const masterName = normalizePersonName(master.record_name);
     const passesStrict = (r: DuplicateRecord): boolean => {
       let matches = 0;
       const rEmail = (r.email || "").trim().toLowerCase();
       const rPhone = (r.phone_normalized || "").trim();
-      const rName = (r.record_name || "").trim().toLowerCase();
+      const rName = normalizePersonName(r.record_name);
       if (masterEmail && rEmail && masterEmail === rEmail) matches++;
       if (masterPhone && rPhone && masterPhone === rPhone) matches++;
       if (masterName && rName && masterName === rName) matches++;
