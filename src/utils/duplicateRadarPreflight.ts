@@ -1407,12 +1407,164 @@ export function basicPreflightVerdict(input: {
 }
 
 /**
+ * RULE 2 (v2) — existing-client verdict (Ahmad 2026-06-22).
+ *
+ * Runs ONLY when Rule 1 (email/phone) found no contact duplicate. Given the
+ * `cs_overlap_verdict` that `buildClusterFromRecords` derived for the company
+ * the inbound row matched (by domain → strict company name → fuzzy company
+ * name), decide whether the contact may be imported:
+ *
+ *   cs = "block"  (active client — customer-stage deal, no churn)
+ *        · matched by domain / strict name → BLOCK  (existing client, do not
+ *          cold-contact; route to the Account / CS owner)
+ *        · matched by FUZZY name only      → REVIEW (possible existing client —
+ *          name resemblance only, verify identity before any outreach)
+ *   cs = "review" (churned, still inside the sector cool-off — 180d Private /
+ *                  365d Government) → REVIEW (CS sign-off before re-engaging)
+ *   cs = "warn"   (churned, cool-off elapsed) → PASS (Sales may re-engage)
+ *   cs = null     (not a client)             → PASS
+ *
+ * The cool-off window and sector come from the matched company's records, so
+ * Government clients get the longer 365-day hold automatically.
+ */
+export function csClientPreflightVerdict(input: {
+  cs: "block" | "review" | "warn" | null;
+  matchVia: "domain" | "strict_name" | "fuzzy_name";
+  churnDays: number | null;
+  coolOff: number;
+  sector: "private" | "government" | null;
+  csOwner: string | null;
+  companyName: string | null;
+}): {
+  verdict: PreflightVerdict;
+  reason: string;
+  suggested_action: string;
+  executive_action: string;
+  executive_severity: PreflightResultRow["executive_severity"];
+  lifecycle_state: PreflightResultRow["lifecycle_state"];
+} {
+  const co = input.companyName ? '"' + input.companyName + '"' : "this company";
+  const sectorLabel = input.sector === "government" ? "Government" : "Private";
+  const ownerSuffix = input.csOwner ? " Current Account / CS owner: " + input.csOwner + "." : "";
+  const matchLabel =
+    input.matchVia === "domain"
+      ? "email domain"
+      : input.matchVia === "strict_name"
+        ? "company name"
+        : "a close company-name match";
+
+  // Active client (customer-stage deal, no churn date).
+  if (input.cs === "block") {
+    if (input.matchVia === "fuzzy_name") {
+      // Name resemblance only — soften to REVIEW so a human verifies identity
+      // before we treat a new contact as an existing client.
+      return {
+        verdict: "review",
+        reason: "possible_existing_client_fuzzy_name",
+        suggested_action:
+          co +
+          " closely matches an EXISTING active client by company name (no domain / exact-name match). Verify it is the same company; if so do NOT cold-contact — route to the Account / CS owner.",
+        executive_action:
+          "VERIFY — possible existing client (name match only): " +
+          co +
+          " resembles a current client. Confirm identity before any outreach; if confirmed, hand to the Account / CS owner." +
+          ownerSuffix,
+        executive_severity: "high",
+        lifecycle_state: null,
+      };
+    }
+    return {
+      verdict: "block",
+      reason: "existing_active_client",
+      suggested_action:
+        co +
+        " is an EXISTING active client (matched by " +
+        matchLabel +
+        "). Do NOT cold-contact or re-import — route to the Account / CS owner.",
+      executive_action:
+        "REJECT — existing client: " +
+        co +
+        " is a current client (matched by " +
+        matchLabel +
+        "). Do not cold-contact; route to the Account / CS owner." +
+        ownerSuffix,
+      executive_severity: "critical",
+      lifecycle_state: null,
+    };
+  }
+
+  // Churned, still inside the sector cool-off window.
+  if (input.cs === "review") {
+    const days = input.churnDays != null ? input.churnDays + "d ago" : "recently";
+    return {
+      verdict: "review",
+      reason: "recently_churned_within_cooloff",
+      suggested_action:
+        co +
+        " is a RECENTLY churned client (terminated " +
+        days +
+        "; the " +
+        sectorLabel +
+        " cool-off of " +
+        input.coolOff +
+        " days has not elapsed). CS sign-off is required before re-engaging — do NOT cold-contact yet.",
+      executive_action:
+        "HOLD — recently churned: " +
+        co +
+        " terminated " +
+        days +
+        " (within the " +
+        input.coolOff +
+        "-day " +
+        sectorLabel +
+        " cool-off). Get CS sign-off before any outreach." +
+        ownerSuffix,
+      executive_severity: "high",
+      lifecycle_state: "termination_recent",
+    };
+  }
+
+  // cs === "warn" (past cool-off) or null (not a client) → safe to import.
+  if (input.cs === "warn") {
+    return {
+      verdict: "pass",
+      reason: "past_cooloff_may_reengage",
+      suggested_action:
+        co +
+        " is a PAST client whose " +
+        sectorLabel +
+        " cool-off has elapsed — Sales may re-engage. Safe to import (coordinate with the Account owner as a courtesy).",
+      executive_action:
+        "Safe to import — past client, " +
+        sectorLabel +
+        " cool-off elapsed; Sales may re-engage." +
+        ownerSuffix,
+      executive_severity: "info",
+      lifecycle_state: "termination_old",
+    };
+  }
+  return {
+    verdict: "pass",
+    reason: "safe_to_import",
+    suggested_action:
+      "No duplicate contact (email / phone) and not an existing client — safe to import.",
+    executive_action: "Safe to import.",
+    executive_severity: "info",
+    lifecycle_state: null,
+  };
+}
+
+/**
  * BASIC mode runner (Ahmad 2026-06-18) — see PREFLIGHT_RULE_MODE. Two SQL
  * passes over duplicate_records (corporate-scope only, marketplace excluded):
- *   1) contact-identity match by email OR phone (any record type);
- *   2) customer-domain match (deal in a customer stage, no churn date).
- * Then a per-row verdict via basicPreflightVerdict(). The archived "full"
- * ladder is left untouched below.
+ *   1) contact-identity match by email OR phone (any record type) → duplicate;
+ *   2) RULE 2 v2 (Ahmad 2026-06-22) — existing-CLIENT match: only for rows
+ *      Rule 1 cleared, find the company in the CRM by domain → strict company
+ *      name → fuzzy company name, aggregate its records with
+ *      buildClusterFromRecords, and apply csClientPreflightVerdict (active
+ *      client → BLOCK / fuzzy-name-only → REVIEW; churned-in-cool-off →
+ *      REVIEW; past cool-off / not a client → PASS).
+ * The archived "full" ladder is left untouched below.
  */
 async function runPreflightBasic(input: {
   rows: PreflightInputRow[];
@@ -1425,9 +1577,11 @@ async function runPreflightBasic(input: {
   const emailByRow = new Map<number, string>();
   const phoneByRow = new Map<number, string>();
   const domainByRow = new Map<number, string>();
+  const nameByRow = new Map<number, string>();
   const emailSet = new Set<string>();
   const phoneSet = new Set<string>();
   const domainSet = new Set<string>();
+  const nameSet = new Set<string>();
   for (let i = 0; i < examineCount; i++) {
     const r = rows[i]!;
     const email = (r.email || "").trim().toLowerCase();
@@ -1444,6 +1598,14 @@ async function runPreflightBasic(input: {
     if (d) {
       domainByRow.set(i, d);
       domainSet.add(d);
+    }
+    // RULE 2 v2 — normalise the inbound company name the SAME way the sync
+    // stored duplicate_records.company_name_normalized, so a strict match is
+    // an exact string compare and the fuzzy tier shares one trigram space.
+    const nm = normalizeCompanyName(r.company_name || "");
+    if (nm) {
+      nameByRow.set(i, nm);
+      nameSet.add(nm);
     }
   }
 
@@ -1480,26 +1642,147 @@ async function runPreflightBasic(input: {
     }
   }
 
-  // RULE 2 — existing-customer domain (signed/paid deal, no churn date).
-  const customerDomains = new Map<string, any>();
+  // ── RULE 2 v2 — existing-CLIENT check (Ahmad 2026-06-22).
+  // Match the inbound company against duplicate_RECORDS (not just clusters,
+  // so a single-deal client with no duplicate group is still caught) by
+  // domain → strict company name → fuzzy company name, then aggregate each
+  // match with buildClusterFromRecords to read its cs_overlap_verdict.
+  const todayMs = Date.now();
+  const PF_REC_COLS = `cluster_id, LOWER(domain) AS domain, record_type,
+              raw_data->>'Stage' AS stage, status,
+              raw_data->>'Lead_Status' AS lead_status,
+              NULLIF(raw_data->>'Churn_Date','') AS churn_date,
+              gov_type, owner_name, record_name, company_name, zoho_record_id,
+              layout_name, account_type, lead_type, company_name_normalized`;
+  const recsByDomain = new Map<string, PreflightRecordRow[]>();
+  const recsByName = new Map<string, PreflightRecordRow[]>();
+  const pushRec = (
+    m: Map<string, PreflightRecordRow[]>,
+    k: string,
+    v: PreflightRecordRow,
+  ) => {
+    const a = m.get(k);
+    if (a) a.push(v);
+    else m.set(k, [v]);
+  };
+
+  // Tier 1 — exact domain.
   if (domainSet.size > 0) {
     const q = await queryWithTimeout<any>(
-      `SELECT LOWER(domain) AS domain, owner_name, record_name, zoho_record_id,
-              raw_data->>'Stage' AS stage
+      `SELECT ${PF_REC_COLS}
          FROM duplicate_records
-        WHERE record_type = 'deal'
+        WHERE record_type IN ('deal','lead','account')
           AND domain IS NOT NULL AND LOWER(domain) = ANY($1::text[])
-          AND LOWER(COALESCE(raw_data->>'Stage','')) = ANY($2::text[])
-          AND NULLIF(raw_data->>'Churn_Date','') IS NULL
           AND ${CORPORATE_SQL}
-        LIMIT 20000`,
-      [Array.from(domainSet), PF_BASIC_CUSTOMER_STAGES as string[]],
+        LIMIT 50000`,
+      [Array.from(domainSet)],
     );
     for (const r of (q?.rows ?? [])) {
       const dom = (r.domain || "").trim().toLowerCase();
-      if (dom && !customerDomains.has(dom)) customerDomains.set(dom, r);
+      if (dom) pushRec(recsByDomain, dom, r);
     }
   }
+
+  // Tier 2 — strict (exact) normalized company name.
+  if (nameSet.size > 0) {
+    const q = await queryWithTimeout<any>(
+      `SELECT ${PF_REC_COLS}
+         FROM duplicate_records
+        WHERE record_type IN ('deal','lead','account')
+          AND company_name_normalized = ANY($1::text[])
+          AND ${CORPORATE_SQL}
+        LIMIT 50000`,
+      [Array.from(nameSet)],
+    );
+    for (const r of (q?.rows ?? [])) {
+      const nm = (r.company_name_normalized || "").trim();
+      if (nm) pushRec(recsByName, nm, r);
+    }
+  }
+
+  // Tier 3 — fuzzy company name (only rows still unmatched by domain & strict).
+  // ONE batched LATERAL finds the best-matching stored company name per input
+  // name (pg_trgm similarity ≥ 0.6); a follow-up query pulls those companies'
+  // records. fuzzyNameByRow maps a row → the matched stored name key.
+  const fuzzyNameByRow = new Map<number, string>();
+  const fuzzyInputToMatched = new Map<string, string>();
+  const fuzzyNeeded: string[] = [];
+  const fuzzySeen = new Set<string>();
+  for (let i = 0; i < examineCount; i++) {
+    const dom = domainByRow.get(i);
+    if (dom && recsByDomain.has(dom)) continue;
+    const nm = nameByRow.get(i);
+    if (!nm || recsByName.has(nm)) continue;
+    if (!fuzzySeen.has(nm)) {
+      fuzzySeen.add(nm);
+      fuzzyNeeded.push(nm);
+    }
+  }
+  if (fuzzyNeeded.length > 0) {
+    const q = await queryWithTimeout<any>(
+      `SELECT v.ord AS _ord, m.company_name_normalized AS matched_name
+         FROM unnest($1::text[]) WITH ORDINALITY AS v(nm, ord)
+         LEFT JOIN LATERAL (
+           SELECT company_name_normalized
+             FROM duplicate_records
+            WHERE record_type IN ('deal','lead','account')
+              AND company_name_normalized IS NOT NULL
+              AND company_name_normalized <> ''
+              AND company_name_normalized % v.nm
+            ORDER BY similarity(company_name_normalized, v.nm) DESC
+            LIMIT 1
+         ) m ON true
+        WHERE m.company_name_normalized IS NOT NULL`,
+      [fuzzyNeeded],
+      [`SELECT set_limit(0.6)`],
+    );
+    const matchedNames = new Set<string>();
+    for (const row of (q?.rows ?? [])) {
+      const ord = Number(row._ord) - 1;
+      const inputName = fuzzyNeeded[ord];
+      const matched = (row.matched_name || "").trim();
+      if (!inputName || !matched) continue;
+      fuzzyInputToMatched.set(inputName, matched);
+      matchedNames.add(matched);
+    }
+    const toFetch = Array.from(matchedNames).filter((n) => !recsByName.has(n));
+    if (toFetch.length > 0) {
+      const q2 = await queryWithTimeout<any>(
+        `SELECT ${PF_REC_COLS}
+           FROM duplicate_records
+          WHERE record_type IN ('deal','lead','account')
+            AND company_name_normalized = ANY($1::text[])
+            AND ${CORPORATE_SQL}
+          LIMIT 50000`,
+        [toFetch],
+      );
+      for (const r of (q2?.rows ?? [])) {
+        const nm = (r.company_name_normalized || "").trim();
+        if (nm) pushRec(recsByName, nm, r);
+      }
+    }
+    for (let i = 0; i < examineCount; i++) {
+      const dom = domainByRow.get(i);
+      if (dom && recsByDomain.has(dom)) continue;
+      const nm = nameByRow.get(i);
+      if (!nm || recsByName.has(nm)) continue;
+      const matched = fuzzyInputToMatched.get(nm);
+      if (matched && recsByName.has(matched)) fuzzyNameByRow.set(i, matched);
+    }
+  }
+
+  // Memoize the cluster aggregation per match key (one company → one verdict).
+  const clusterCache = new Map<string, PreflightClusterRow | null>();
+  const clusterForKey = (
+    key: string,
+    domainKey: string,
+    recs: PreflightRecordRow[],
+  ): PreflightClusterRow | null => {
+    if (clusterCache.has(key)) return clusterCache.get(key) ?? null;
+    const c = buildClusterFromRecords(domainKey, recs, todayMs);
+    clusterCache.set(key, c);
+    return c;
+  };
 
   const moduleOf = (rt: string | null | undefined): "Leads" | "Deals" | "Contacts" | "Accounts" => {
     const t = (rt || "").toLowerCase();
@@ -1534,16 +1817,71 @@ async function runPreflightBasic(input: {
         ? "email"
         : "phone"
       : null;
-    const customerRec = domain ? customerDomains.get(domain) ?? null : null;
-    const isCustomerDomain = !!customerRec;
 
-    const v = basicPreflightVerdict({ contactVia, isCustomerDomain });
+    // RULE 1 (email/phone duplicate) always wins. Only when it clears do we
+    // run RULE 2 v2 (existing-client check) for this row.
+    let v: ReturnType<typeof basicPreflightVerdict> & {
+      lifecycle_state?: PreflightResultRow["lifecycle_state"];
+    };
+    let csCluster: PreflightClusterRow | null = null;
+    let csMatchVia: "domain" | "strict_name" | "fuzzy_name" | null = null;
+    if (contactVia) {
+      v = basicPreflightVerdict({ contactVia, isCustomerDomain: false });
+    } else {
+      if (domain && recsByDomain.has(domain)) {
+        csCluster = clusterForKey("d:" + domain, domain, recsByDomain.get(domain)!);
+        csMatchVia = "domain";
+      } else {
+        const nm = nameByRow.get(i);
+        if (nm && recsByName.has(nm)) {
+          csCluster = clusterForKey("n:" + nm, nm, recsByName.get(nm)!);
+          csMatchVia = "strict_name";
+        } else {
+          const fz = fuzzyNameByRow.get(i);
+          if (fz && recsByName.has(fz)) {
+            csCluster = clusterForKey("n:" + fz, fz, recsByName.get(fz)!);
+            csMatchVia = "fuzzy_name";
+          }
+        }
+      }
+      if (csCluster && csCluster.cs_overlap_verdict && csMatchVia) {
+        const cAny = csCluster as any;
+        v = csClientPreflightVerdict({
+          cs: csCluster.cs_overlap_verdict as "block" | "review" | "warn",
+          matchVia: csMatchVia,
+          churnDays: cAny.churn_days ?? null,
+          coolOff: csCluster.client_sector === "government" ? 365 : 180,
+          sector: (csCluster.client_sector as PreflightResultRow["sector"]) ?? null,
+          csOwner:
+            cAny.cs_owner ??
+            (Array.isArray(cAny.owners_involved) && cAny.owners_involved.length
+              ? cAny.owners_involved[0]
+              : null),
+          companyName: csCluster.company_name ?? null,
+        });
+      } else {
+        // Matched no client (or matched non-client records) → safe to import.
+        v = basicPreflightVerdict({ contactVia: null, isCustomerDomain: false });
+        csCluster = null;
+        csMatchVia = null;
+      }
+    }
     summary[v.verdict]++;
 
     const owners: string[] = [];
     let crmLinks: PreflightResultRow["crm_links"] = null;
-    if (v.verdict === "duplicate" && contactRec) {
+    let matchedViaOut: PreflightResultRow["matched_via"] = null;
+    let clusterIdOut: number | null = null;
+    let sectorOut: PreflightResultRow["sector"] = null;
+    let csOwnerOut: string | null = null;
+    let churnDateOut: string | null = null;
+    let churnDaysOut: number | null = null;
+    let moduleCountsOut: PreflightResultRow["module_counts"] = null;
+
+    if (contactVia && contactRec) {
+      // RULE 1 duplicate — surface the existing owner + a CRM link.
       if (contactRec.owner_name) owners.push(contactRec.owner_name);
+      matchedViaOut = contactVia;
       const mod = moduleOf(contactRec.record_type);
       if (contactRec.zoho_record_id && mod !== "Contacts") {
         const link = {
@@ -1557,19 +1895,33 @@ async function runPreflightBasic(input: {
           account: mod === "Accounts" ? link : null,
         };
       }
-    } else if (v.verdict === "block" && customerRec) {
-      if (customerRec.owner_name) owners.push(customerRec.owner_name);
-      if (customerRec.zoho_record_id) {
-        crmLinks = {
-          active_lead: null,
-          active_deal: null,
-          client_deal: {
-            url: buildZohoRecordUrl("Deals", customerRec.zoho_record_id),
-            label: (customerRec.record_name || "").trim() || customerRec.zoho_record_id,
-          },
-          account: null,
-        };
-      }
+    } else if (csCluster && csMatchVia) {
+      // RULE 2 v2 — surface the existing client's owner, account/deal links,
+      // sector + churn so the export's CS columns are populated.
+      const cAny = csCluster as any;
+      const ownerList: string[] = Array.isArray(cAny.owners_involved)
+        ? cAny.owners_involved
+        : [];
+      for (const o of ownerList) if (o) owners.push(o);
+      matchedViaOut = csMatchVia === "domain" ? "domain" : "company_name";
+      clusterIdOut = csCluster.id || null;
+      sectorOut = (csCluster.client_sector as PreflightResultRow["sector"]) ?? null;
+      csOwnerOut = cAny.cs_owner ?? (owners.length ? owners[0]! : null);
+      churnDateOut = cAny.churn_date ?? null;
+      churnDaysOut = cAny.churn_days ?? null;
+      crmLinks = _buildCrmLinks(cAny);
+      const _c = (n: unknown) => (typeof n === "number" ? n : 0);
+      moduleCountsOut = {
+        leads: _c(csCluster.total_leads),
+        deals: _c(csCluster.total_deals),
+        contacts: _c(csCluster.total_contacts),
+        accounts: _c(csCluster.total_accounts),
+        total:
+          _c(csCluster.total_leads) +
+          _c(csCluster.total_deals) +
+          _c(csCluster.total_contacts) +
+          _c(csCluster.total_accounts),
+      };
     }
 
     out.push({
@@ -1577,36 +1929,40 @@ async function runPreflightBasic(input: {
       ref: r.ref ?? null,
       input: { domain, company_name: r.company_name ?? null },
       verdict: v.verdict,
-      cluster_id: null,
-      lifecycle_state: null,
-      sector: null,
+      cluster_id: clusterIdOut,
+      lifecycle_state: v.lifecycle_state ?? null,
+      sector: sectorOut,
       arr_exposure: null,
       owners,
       reason: v.reason,
       suggested_action: v.suggested_action,
-      module_counts: null,
-      matched_via: contactVia ? contactVia : isCustomerDomain ? "domain" : null,
+      module_counts: moduleCountsOut,
+      matched_via: matchedViaOut,
       executive_action: v.executive_action,
       executive_severity: v.executive_severity,
-      churn_date: null,
-      churn_days: null,
-      cs_owner: v.verdict === "block" && customerRec?.owner_name ? customerRec.owner_name : null,
+      churn_date: churnDateOut,
+      churn_days: churnDaysOut,
+      cs_owner: csOwnerOut,
       crm_links: crmLinks,
     });
   }
 
   const reasonBuckets = new Map<string, number>();
+  const bump = (label: string) =>
+    reasonBuckets.set(label, (reasonBuckets.get(label) ?? 0) + 1);
   for (const r of out) {
     if (r.verdict === "duplicate") {
-      reasonBuckets.set(
-        "Duplicate contact (email / phone) already in CRM",
-        (reasonBuckets.get("Duplicate contact (email / phone) already in CRM") ?? 0) + 1,
-      );
+      bump("Duplicate contact (email / phone) already in CRM");
     } else if (r.verdict === "block") {
-      reasonBuckets.set(
-        "Existing customer — signed / paid deal, no churn",
-        (reasonBuckets.get("Existing customer — signed / paid deal, no churn") ?? 0) + 1,
+      bump("Existing active client — do not cold-contact, route to owner");
+    } else if (r.verdict === "review") {
+      bump(
+        r.reason === "possible_existing_client_fuzzy_name"
+          ? "Possible existing client (name match) — verify before contacting"
+          : "Recently churned client — CS sign-off before re-engaging",
       );
+    } else if (r.verdict === "warn") {
+      bump("Past CS cool-off — Sales may re-engage with CS sign-off");
     }
   }
   const topReasons: PreflightTopReason[] = Array.from(reasonBuckets.entries())
