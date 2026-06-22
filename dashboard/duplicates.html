@@ -3765,7 +3765,23 @@
         function _normPhone(s) {
             return String(s || '').replace(/\D+/g, '').replace(/^00/, '').replace(/^966/, '').slice(-9);
         }
-        function _normName(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+        // Arabic-aware name normalizer (mirrors the backend normalizePersonName):
+        // NFKC, strip bidi/zero-width marks + tatweel + diacritics, fold the
+        // common Arabic letter variants (آأإ→ا, ى→ي, ة→ه), collapse whitespace,
+        // lowercase — so visually-identical Arabic names group reliably.
+        function _normName(s) {
+            return String(s || '')
+                .normalize('NFKC')
+                .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
+                .replace(/\u0640/g, '')
+                .replace(/[\u064B-\u0652\u0670]/g, '')
+                .replace(/[\u0622\u0623\u0625]/g, '\u0627')
+                .replace(/\u0649/g, '\u064A')
+                .replace(/\u0629/g, '\u0647')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
 
         // Compact "3d ago" style relative time. Falls back to absolute
         // date when the gap is large or unparseable. Full timestamp is
@@ -4254,18 +4270,15 @@
                 id:    { emoji: '🆔', label: 'CRM ID', color: 'bg-rose-200 text-rose-900 border border-rose-400' },
             };
             const counts = _dupCounts(items, extractors);
-            // Cluster fallback (same fix as the Accounts tab): union records
-            // WITHIN the same server cluster so every paginated cluster renders
-            // as a group — otherwise clusters whose contacts share no exactly-
-            // equal JS key (very common with Arabic names that differ by an
-            // invisible mark / ة-vs-ه) get dropped client-side and a 20-cluster
-            // page shows only a couple of groups. Cross-cluster chaining by
-            // name/email/phone/id is unchanged (it only ever adds unions).
-            const bucketExtractors = {
-                ...extractors,
-                _cluster: r => (r.cluster_id != null ? 'cid:' + r.cluster_id : ''),
-            };
-            const groupList = _dupBuckets(items, bucketExtractors);
+            // Group ONLY by a DIRECT identity signal — name / email / phone / id
+            // (Ahmad 2026-06-22). No cluster-id fallback: two contacts that share
+            // nothing but their company's domain (colleagues in a "chained match"
+            // cluster) must NOT group as duplicates — they're a link-to-account
+            // job. The server already filters the tab to clusters that hold a
+            // real same-signal pair, and _normName is Arabic-aware, so genuine
+            // duplicates (incl. Arabic names that differ by an invisible mark or
+            // ة-vs-ه) still group reliably and no real duplicate is dropped.
+            const groupList = _dupBuckets(items, extractors);
 
             let rows = '';
             groupList.forEach((idxs, gIdx) => {

@@ -6687,6 +6687,42 @@ export async function getDuplicateRecordsByType(
           HAVING COUNT(*) >= 2
         )
       )`;
+  } else if (recordType === "contact") {
+    // GENUINE-DUPLICATE gate for CONTACTS (Ahmad 2026-06-22). A cluster only
+    // counts as a contact-duplicate when >=2 of its contacts DIRECTLY share an
+    // identity signal — same email, OR same phone, OR same name. Contacts that
+    // are merely colleagues at the same company (sharing only the account/
+    // domain) form no such pair, so a "chained match" cluster held together
+    // only by the domain drops off the list — it's a link-to-account job, not a
+    // duplicate. A direct single-signal pair still shows (it MAY be a dup).
+    genuineDupFilter = `
+      AND (
+        EXISTS (
+          SELECT 1 FROM duplicate_records ce
+           WHERE ce.cluster_id = dc.id AND ce.record_type = 'contact'
+             AND ce.email IS NOT NULL AND btrim(ce.email) <> ''
+           GROUP BY lower(btrim(ce.email))
+          HAVING COUNT(*) >= 2
+        )
+        OR EXISTS (
+          SELECT 1 FROM duplicate_records cp
+           WHERE cp.cluster_id = dc.id AND cp.record_type = 'contact'
+             AND cp.phone_normalized IS NOT NULL AND length(cp.phone_normalized) >= 7
+           GROUP BY cp.phone_normalized
+          HAVING COUNT(*) >= 2
+        )
+        OR EXISTS (
+          SELECT 1 FROM duplicate_records cn
+           WHERE cn.cluster_id = dc.id AND cn.record_type = 'contact'
+             AND cn.record_name IS NOT NULL AND btrim(cn.record_name) <> ''
+           -- Arabic-aware to match the frontend _normName: fold ة→ه, ى→ي,
+           -- آأإ→ا and drop tatweel (ـ) before collapsing whitespace.
+           GROUP BY lower(regexp_replace(
+                      translate(btrim(cn.record_name), 'ةىأإآـ', 'هيااا'),
+                      '\\s+', ' ', 'g'))
+          HAVING COUNT(*) >= 2
+        )
+      )`;
   }
 
   // ── Paginate by CLUSTER, not by record. ────────────────────────────────
