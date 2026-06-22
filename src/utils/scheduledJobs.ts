@@ -504,32 +504,17 @@ export async function runResolutionDigestIfDue(): Promise<{ ran: boolean; ageHou
     );
     CREATE INDEX IF NOT EXISTS idx_scanner_run_log_name_time ON scanner_run_log(scanner_name, ran_at DESC);
   `);
-  const scanner = `resolution-digest-${slot}`;
-  const r = await pool.query<{ hours: number | null }>(
-    `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ran_at)))/3600 AS hours
-     FROM scanner_run_log WHERE scanner_name=$1 AND success=true`,
-    [scanner],
-  );
-  const ageHours = r.rows[0]?.hours == null ? Infinity : Number(r.rows[0].hours);
-  if (ageHours < 12) return { ran: false, ageHours }; // already posted this slot today
+  // Single shared once-per-slot claim (Sarah 2026-06-22): the cron AND this
+  // fallback both go through postResolutionDigestOncePerSlot, which atomically
+  // claims the (slot, UTC-date) key — so the digest posts exactly once even if
+  // both triggers fire. (Previously each path had its own marker → double-post.)
   try {
-    const { postResolutionDigest } = await import("./duplicateResolutionRunner");
-    await postResolutionDigest({
-      label: slot === "morning" ? "Start of day (9 AM KSA)" : "End of day (5 PM KSA)",
-      sinceHours: slot === "morning" ? 16 : 8,
-    });
-    await pool.query(
-      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, true, $2)`,
-      [scanner, JSON.stringify({ slot })],
-    );
-    return { ran: true, ageHours };
+    const { postResolutionDigestOncePerSlot } = await import("./duplicateResolutionRunner");
+    const res = await postResolutionDigestOncePerSlot(slot);
+    return { ran: !!res.posted, ageHours: 0 };
   } catch (err) {
     logger.error("[ResolutionDigest Fallback] failed:", err);
-    await pool.query(
-      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, false, $2)`,
-      [scanner, JSON.stringify({ error: String(err) })],
-    );
-    return { ran: false, ageHours };
+    return { ran: false, ageHours: 0 };
   }
 }
 

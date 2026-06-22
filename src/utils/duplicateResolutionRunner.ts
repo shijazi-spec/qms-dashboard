@@ -813,6 +813,50 @@ export async function buildRadarTabStatus(): Promise<string> {
   return parts.length ? `\n*Radar status by tab:*\n${parts.join("\n")}` : "";
 }
 
+/**
+ * Post the morning/evening digest AT MOST ONCE per slot per day (Sarah
+ * 2026-06-22 — fix for the digest posting twice).
+ *
+ * The digest has TWO triggers — the Inngest cron AND the in-process fallback —
+ * which previously didn't share a guard, so both could fire minutes apart with
+ * slightly different data. This claims the slot ATOMICALLY via a primary-key
+ * insert: the first caller to insert the (slot, UTC-date) key wins and posts;
+ * any concurrent/later caller gets rowCount 0 and skips. Both triggers MUST call
+ * this instead of postResolutionDigest directly.
+ */
+export async function postResolutionDigestOncePerSlot(
+  slot: "morning" | "evening",
+): Promise<{ posted: boolean; reason?: string }> {
+  try {
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS digest_post_claims (
+         claim_key  VARCHAR(160) PRIMARY KEY,
+         claimed_at TIMESTAMP NOT NULL DEFAULT NOW()
+       )`,
+    );
+    const ymd = new Date().toISOString().slice(0, 10); // UTC date
+    const key = `resolution-digest-${slot}-${ymd}`;
+    const claim = await pool.query(
+      `INSERT INTO digest_post_claims (claim_key) VALUES ($1)
+       ON CONFLICT (claim_key) DO NOTHING`,
+      [key],
+    );
+    if ((claim.rowCount ?? 0) === 0) {
+      return { posted: false, reason: "already posted this slot today" };
+    }
+    await postResolutionDigest({
+      label: slot === "morning" ? "Start of day (9 AM KSA)" : "End of day (5 PM KSA)",
+      sinceHours: slot === "morning" ? 16 : 8,
+    });
+    return { posted: true };
+  } catch (e) {
+    logger.warn("[dup-resolution-runner] postResolutionDigestOncePerSlot failed", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return { posted: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function postResolutionDigest(opts: {
   label: string;
   sinceHours: number;

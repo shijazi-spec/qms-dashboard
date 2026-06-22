@@ -491,17 +491,16 @@ const resolutionDigestFunction = inngest.createFunction(
   { cron: process.env.AUTONOMOUS_RESOLUTION_DIGEST_CRON || "0 6,14 * * *" },
   async ({ step }) => {
     return await step.run("post-resolution-digest", async () => {
-      const { postResolutionDigest } = await import(
+      const { postResolutionDigestOncePerSlot } = await import(
         "../../utils/duplicateResolutionRunner"
       );
       const utcHour = new Date().getUTCHours();
       const morning = utcHour < 12; // 06:00 UTC = 09:00 KSA
-      await postResolutionDigest({
-        label: morning ? "Start of day (9 AM KSA)" : "End of day (5 PM KSA)",
-        sinceHours: morning ? 16 : 8,
-      });
-      logger.info("[ResolutionDigest] posted", { morning, utcHour });
-      return { posted: true, morning };
+      // Once-per-slot claim shared with the in-process fallback so the digest
+      // can't post twice (Sarah 2026-06-22).
+      const res = await postResolutionDigestOncePerSlot(morning ? "morning" : "evening");
+      logger.info("[ResolutionDigest] cron", { morning, utcHour, ...res });
+      return { ...res, morning };
     });
   },
 );
