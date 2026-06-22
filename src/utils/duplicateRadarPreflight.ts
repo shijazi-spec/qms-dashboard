@@ -20,6 +20,7 @@ import {
   normalizeDomain,
   normalizePhone,
   normalizeCompanyName,
+  isPlaceholderName,
 } from "./duplicateRadarDatabase";
 import { logger } from "./logger";
 
@@ -1644,8 +1645,14 @@ async function runPreflightBasic(input: {
     // RULE 2 v2 — normalise the inbound company name the SAME way the sync
     // stored duplicate_records.company_name_normalized, so a strict match is
     // an exact string compare and the fuzzy tier shares one trigram space.
-    const nm = normalizeCompanyName(r.company_name || "");
-    if (nm) {
+    // Only match by NAME when it's a real, substantial name: skip placeholders
+    // (N/A, Test, Confidential, Unknown…) and short/generic fragments (< 4
+    // normalised chars) so we never fuse unrelated companies that merely share
+    // a placeholder or a boilerplate word. The DOMAIN tier is unaffected, so a
+    // short-named client that has a website is still caught there.
+    const rawCompany = r.company_name || "";
+    const nm = normalizeCompanyName(rawCompany);
+    if (nm && nm.length >= 4 && !isPlaceholderName(rawCompany)) {
       nameByRow.set(i, nm);
       nameSet.add(nm);
     }
