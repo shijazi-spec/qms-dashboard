@@ -817,9 +817,11 @@
                 <button data-on-click="openCapaPicker" data-args="[&quot;contacts&quot;]" data-testid="button-open-capa-contacts" title="Open a corrective-action record (CAPA) on one of the contact-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
                 <button data-on-click="bulkSplitContacts" id="bulkSplitContactsBtn" data-testid="button-bulk-split-contacts" title="One-shot cleanup of historical false-positive Contact clusters (e.g. the 7 SLB employees that were lumped together). Applies the ≥2-attribute rule retroactively. Dry-run first, then confirm." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-violet-200 text-violet-900 hover:bg-violet-300">🧹 Bulk-split bad clusters</button>
                 <button data-on-click="bulkMergeExactContacts" id="bulkMergeExactBtn" data-testid="button-bulk-merge-exact-contacts" title="Bulk-merge contacts where Email AND Phone match 100% — these are the same person. Keeps the most complete record, tags the rest Duplicate-Delete. Shows a preview count first, then asks for the admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-200 text-emerald-900 hover:bg-emerald-300">✅ Auto-merge exact email+phone</button>
+                <button data-on-click="bulkMergeNamePhoneContacts" id="bulkMergeNamePhoneBtn" data-testid="button-bulk-merge-name-phone-contacts" title="Bulk-merge contacts that share the SAME NAME + SAME PHONE — the same person even when emails differ or one is missing. Keeps both emails on the survivor (primary + Secondary_Email); a lone email becomes the primary. Tags the rest Duplicate-Delete. Preview first, then admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-200 text-teal-900 hover:bg-teal-300">✅ Auto-merge same name+phone</button>
             </div>
             <div id="bulkSplitContactsPanel" class="text-xs mb-2"></div>
             <div id="bulkMergeExactPanel" class="text-xs mb-2"></div>
+            <div id="bulkMergeNamePhonePanel" class="text-xs mb-2"></div>
             <div class="flex flex-wrap items-center gap-2 mb-2" data-tab-key="contacts">
                 <span class="text-xs text-gray-500 me-1">AI status:</span>
                 <button data-on-click="setAiStatus" data-args="[&quot;contacts&quot;,&quot;active&quot;]" id="aiChip-contacts-active" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-900 text-white" title="Untouched active clusters — no Apply pressed yet">Untouched</button>
@@ -5955,6 +5957,69 @@
                 + '<strong>Done.</strong> Merged ' + live.mergedGroups.toLocaleString() + ' group(s), tagged ' + live.taggedRecords.toLocaleString() + ' contact(s) Duplicate-Delete.'
                 + (live.remaining > 0 ? ' <strong>' + live.remaining.toLocaleString() + '</strong> group(s) remain — click again to continue.' : ' All exact matches handled.')
                 + (live.errors > 0 ? ' (' + live.errors + ' batch error(s) — re-run to retry.)' : '')
+                + '</div>';
+            try {
+                if (typeof loadRecordTab === 'function') {
+                    const currentPage = (typeof recordPages !== 'undefined' && recordPages.contacts) || 0;
+                    loadRecordTab('contacts', currentPage);
+                }
+            } catch (_) { /* non-fatal */ }
+            if (btn) btn.disabled = false;
+        }
+
+        // Auto-merge contacts that share the SAME NAME + SAME PHONE (Ahmad
+        // 2026-06-22). Same person even when emails differ or one is missing.
+        // Preserves both emails on the survivor (primary + Secondary_Email);
+        // a single email becomes the primary. Preview → admin password → apply.
+        async function bulkMergeNamePhoneContacts() {
+            const panel = document.getElementById('bulkMergeNamePhonePanel');
+            const btn = document.getElementById('bulkMergeNamePhoneBtn');
+            if (btn) btn.disabled = true;
+            panel.innerHTML = '<div class="text-teal-700">Finding same name + phone matches…</div>';
+            let preview;
+            try {
+                const res = await fetch('/api/duplicates/contacts/name-phone-preview', { credentials: 'same-origin' });
+                preview = await res.json();
+                if (!res.ok || !preview.success) throw new Error((preview && preview.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                panel.innerHTML = '<div class="text-red-600">Preview failed: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            if (!preview.qualifyingGroups) {
+                panel.innerHTML = '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-800">No same name + phone matches found — nothing to auto-merge.</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            panel.innerHTML = '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-900">'
+                + '<strong>' + preview.qualifyingGroups.toLocaleString() + '</strong> group(s) match on name + phone · <strong>'
+                + preview.duplicatesToTag.toLocaleString() + '</strong> contact(s) would be tagged Duplicate-Delete · <strong>'
+                + (preview.emailsPreserved || 0).toLocaleString() + '</strong> survivor(s) keep an extra email.</div>';
+            if (!window.confirm('Auto-merge ' + preview.qualifyingGroups + ' same-name+phone group(s)?\\n\\nThe most complete contact is kept and its email(s) preserved (a different email is saved as Secondary Email; a lone email becomes the primary). The other ' + preview.duplicatesToTag + ' are tagged Duplicate-Delete (the admin deletes — nothing is deleted now).\\n\\nYou will be asked for the admin password next.')) {
+                if (btn) btn.disabled = false;
+                return;
+            }
+            const key = window.prompt('Enter the admin password to apply this bulk merge:');
+            if (!key || !key.trim()) { if (btn) btn.disabled = false; return; }
+            panel.innerHTML += '<div class="text-teal-700 mt-1">Applying…</div>';
+            let live;
+            try {
+                const res = await fetch('/api/duplicates/contacts/name-phone-merge', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': key.trim() },
+                    body: JSON.stringify({ limit: 1000 }),
+                });
+                live = await res.json();
+                if (!res.ok || !live.success) throw new Error((live && live.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                panel.innerHTML += '<div class="text-amber-700">Apply failed: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            panel.innerHTML += '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-800 mt-1">'
+                + '<strong>Done.</strong> Merged ' + live.mergedGroups.toLocaleString() + ' group(s), tagged ' + live.taggedRecords.toLocaleString() + ' contact(s) Duplicate-Delete, preserved ' + (live.emailsWritten || 0).toLocaleString() + ' email(s).'
+                + (live.remaining > 0 ? ' <strong>' + live.remaining.toLocaleString() + '</strong> group(s) remain — click again to continue.' : ' All name+phone matches handled.')
+                + (live.errors > 0 ? ' (' + live.errors + ' group error(s) — re-run to retry.)' : '')
                 + '</div>';
             try {
                 if (typeof loadRecordTab === 'function') {

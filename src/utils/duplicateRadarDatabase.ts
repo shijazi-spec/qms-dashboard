@@ -1,5 +1,8 @@
 import { createRedactedPool } from "./redactedPool";
 import { logger } from "./logger";
+// Arabic-aware name normalizer (planner only type-imports this file, so this
+// runtime import creates no cycle).
+import { normalizePersonName } from "./duplicateMergePlanner";
 
 const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
@@ -2173,6 +2176,282 @@ export async function applyExactContactMatches(opts: {
   }
 
   return { mergedGroups, taggedRecords, remaining: Math.max(0, all.length - batch.length), errors };
+}
+
+// ── Bulk auto-merge: Contacts with SAME NAME + SAME PHONE (Ahmad 2026-06-22) ──
+//
+// Broader than the exact email+phone rule: two contacts sharing the same
+// (Arabic-normalized) name AND the same phone are the same person even when
+// their emails differ or one is missing. On merge we keep BOTH emails — the
+// survivor's primary Email plus the other in Secondary_Email — and when only
+// ONE email exists across the pair it becomes the survivor's primary Email
+// (the empty-email record is the same person). Migrate-then-tag; admin deletes.
+
+/**
+ * Decide the survivor's email fields for a same-name+phone contact merge.
+ * Pure + exported for unit/simulation testing.
+ *   • 0–1 distinct email total → that single email is the PRIMARY (no secondary).
+ *   • ≥2 distinct emails → primary stays, the freshest OTHER email → Secondary_Email;
+ *     any further alternates are returned in `extra` (Zoho has one secondary slot).
+ */
+export function planMergedContactEmails(input: {
+  survivorEmail: string | null;
+  otherEmails: string[]; // duplicate emails, freshest-first, original casing
+}): { updates: { Email?: string; Secondary_Email?: string }; extra: string[] } {
+  const trimOf = (e: string) => (e || "").trim();
+  const keyOf = (e: string) => trimOf(e).toLowerCase();
+  const updates: { Email?: string; Secondary_Email?: string } = {};
+  const survivor = trimOf(input.survivorEmail || "");
+  const seen = new Set<string>();
+  const distinct: string[] = [];
+  if (survivor) {
+    seen.add(keyOf(survivor));
+    distinct.push(survivor);
+  }
+  for (const raw of input.otherEmails || []) {
+    const e = trimOf(raw);
+    if (!e) continue;
+    const k = keyOf(e);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    distinct.push(e);
+  }
+  if (distinct.length === 0) return { updates, extra: [] };
+  if (!survivor) {
+    // Survivor had no email → promote the freshest distinct email to PRIMARY.
+    updates.Email = distinct[0]!;
+    if (distinct.length >= 2) updates.Secondary_Email = distinct[1]!;
+    return { updates, extra: distinct.slice(2) };
+  }
+  // Survivor keeps its primary; preserve the next distinct email as secondary.
+  if (distinct.length >= 2) updates.Secondary_Email = distinct[1]!;
+  return { updates, extra: distinct.slice(2) };
+}
+
+interface NamePhoneContactGroup {
+  survivorZohoId: string;
+  duplicateZohoIds: string[];
+  emailUpdates: { Email?: string; Secondary_Email?: string };
+  extraEmails: string[];
+  label: string;
+}
+
+/** Find contact groups sharing the same Arabic-normalized name + same phone. */
+async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
+  const res = await pool.query<{
+    zoho_record_id: string;
+    record_name: string;
+    email: string | null;
+    phone_normalized: string | null;
+    mobile_normalized: string | null;
+    account_name: string | null;
+    title: string | null;
+    website: string | null;
+    company_name: string | null;
+    created_ms: string | null;
+  }>(
+    `SELECT zoho_record_id, record_name, email,
+            phone_normalized, mobile_normalized,
+            account_name, title, website, company_name,
+            EXTRACT(EPOCH FROM COALESCE(created_date, modified_date))::bigint AS created_ms
+       FROM duplicate_records
+      WHERE record_type = 'contact'
+        AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+        AND record_name IS NOT NULL AND btrim(record_name) <> ''
+        AND (
+          (phone_normalized IS NOT NULL AND length(phone_normalized) >= 7)
+          OR (mobile_normalized IS NOT NULL AND length(mobile_normalized) >= 7)
+        )
+        AND LOWER(COALESCE(layout_name, '')) NOT IN ('marketplace', 'partner accounts')`,
+  );
+
+  const byKey = new Map<string, typeof res.rows>();
+  for (const row of res.rows) {
+    const nameKey = normalizePersonName(row.record_name);
+    if (!nameKey) continue;
+    // "Best phone" = the Phone field, else Mobile. (Cross-field Phone-vs-Mobile
+    // matches between two records are not grouped in this v1 — same-field is the
+    // overwhelmingly common case.)
+    const phoneKey = (row.phone_normalized || row.mobile_normalized || "").trim();
+    if (!phoneKey || phoneKey.length < 7) continue;
+    const key = `${nameKey}|${phoneKey}`;
+    const arr = byKey.get(key) || [];
+    arr.push(row);
+    byKey.set(key, arr);
+  }
+
+  const groups: NamePhoneContactGroup[] = [];
+  for (const [, rows] of byKey.entries()) {
+    const seenIds = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) if (!seenIds.has(r.zoho_record_id)) seenIds.set(r.zoho_record_id, r);
+    const members = [...seenIds.values()];
+    if (members.length < 2) continue;
+    const hasEmail = (r: (typeof rows)[number]) => (r.email && r.email.trim() ? 1 : 0);
+    const completeness = (r: (typeof rows)[number]) =>
+      (r.account_name && r.account_name.trim() ? 1 : 0) +
+      (r.title && r.title.trim() ? 1 : 0) +
+      (r.website && r.website.trim() ? 1 : 0) +
+      (r.company_name && r.company_name.trim() ? 1 : 0);
+    members.sort((a, b) => {
+      // A record WITH an email must survive: Zoho dup-checks the PRIMARY Email,
+      // so we never promote a still-existing duplicate's email to the survivor's
+      // primary (that would be rejected). The survivor's email stays primary;
+      // any different duplicate email goes to the un-dup-checked Secondary_Email.
+      const ea = hasEmail(a),
+        eb = hasEmail(b);
+      if (eb !== ea) return eb - ea;
+      const ca = completeness(a),
+        cb = completeness(b);
+      if (cb !== ca) return cb - ca;
+      const am = Number(a.created_ms || Number.MAX_SAFE_INTEGER);
+      const bm = Number(b.created_ms || Number.MAX_SAFE_INTEGER);
+      return am - bm; // older survives on a tie
+    });
+    const [survivor, ...dups] = members;
+    if (!survivor) continue;
+    // Duplicate emails, freshest first, to drive the primary/secondary choice.
+    const dupEmails = [...dups]
+      .sort(
+        (a, b) =>
+          Number(b.created_ms || 0) - Number(a.created_ms || 0),
+      )
+      .map((d) => (d.email || "").trim())
+      .filter(Boolean);
+    const { updates, extra } = planMergedContactEmails({
+      survivorEmail: survivor.email,
+      otherEmails: dupEmails,
+    });
+    groups.push({
+      survivorZohoId: survivor.zoho_record_id,
+      duplicateZohoIds: dups.map((d) => d.zoho_record_id),
+      emailUpdates: updates,
+      extraEmails: extra,
+      label: (survivor.record_name || "").trim(),
+    });
+  }
+  return groups;
+}
+
+/** Preview only — counts for the same-name+phone auto-merge. */
+export async function previewNamePhoneContactMatches(): Promise<{
+  qualifyingGroups: number;
+  duplicatesToTag: number;
+  emailsPreserved: number;
+}> {
+  try {
+    const groups = await getNamePhoneContactGroups();
+    return {
+      qualifyingGroups: groups.length,
+      duplicatesToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
+      emailsPreserved: groups.filter(
+        (g) => g.emailUpdates.Email || g.emailUpdates.Secondary_Email,
+      ).length,
+    };
+  } catch (e) {
+    logger.warn("[DuplicateRadar] previewNamePhoneContactMatches failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return { qualifyingGroups: 0, duplicatesToTag: 0, emailsPreserved: 0 };
+  }
+}
+
+/**
+ * Apply the same-name+phone auto-merge: write the email field(s) onto the
+ * survivor (primary gap-fill and/or Secondary_Email), then tag the duplicates
+ * Duplicate-Delete. Marks each touched cluster 'auto_merge_pending' (same
+ * lifecycle as the exact email+phone merge). Bounded by `limit`, re-runnable.
+ */
+export async function applyNamePhoneContactMatches(opts: {
+  limit?: number;
+  performedBy: string;
+}): Promise<{
+  mergedGroups: number;
+  taggedRecords: number;
+  emailsWritten: number;
+  remaining: number;
+  errors: number;
+}> {
+  const { addZohoTags, updateZohoRecord, zohoWritesAllowedInEnv } = await import("./zohoCRM");
+  const { withTimeout } = await import("./promiseTimeout");
+  if (!zohoWritesAllowedInEnv()) {
+    throw new Error("Live Zoho writes are disabled outside production.");
+  }
+  const limit = Math.max(1, Math.min(Math.floor(opts.limit || 200), 1000));
+  const all = await getNamePhoneContactGroups();
+  const batch = all.slice(0, limit);
+  let taggedRecords = 0;
+  let mergedGroups = 0;
+  let emailsWritten = 0;
+  let errors = 0;
+
+  for (const g of batch) {
+    try {
+      // 1) Preserve the email(s) on the survivor BEFORE tagging the dups.
+      const updates = g.emailUpdates;
+      if (updates.Email || updates.Secondary_Email) {
+        await withTimeout(
+          updateZohoRecord("Contacts", g.survivorZohoId, updates as Record<string, unknown>),
+          20_000,
+          `email-migrate ${g.survivorZohoId}`,
+        );
+        emailsWritten++;
+      }
+      // 2) Tag the duplicates Duplicate-Delete.
+      const taggedOk = new Set<string>();
+      for (let i = 0; i < g.duplicateZohoIds.length; i += 100) {
+        const chunk = g.duplicateZohoIds.slice(i, i + 100);
+        await withTimeout(
+          addZohoTags("Contacts", chunk, ["Duplicate-Delete"]),
+          20_000,
+          `tag ${g.survivorZohoId} ${i}`,
+        );
+        taggedRecords += chunk.length;
+        for (const id of chunk) taggedOk.add(id);
+      }
+      // 3) Mark the cluster AI-Applied · pending (only for the tagged dups).
+      const taggedDupZohoIds = g.duplicateZohoIds.filter((id) => taggedOk.has(id));
+      if (taggedDupZohoIds.length > 0) {
+        const idRes = await pool.query<{ id: number; cluster_id: number | null; zoho_record_id: string }>(
+          `SELECT id, cluster_id, zoho_record_id FROM duplicate_records WHERE zoho_record_id = ANY($1::text[])`,
+          [[g.survivorZohoId, ...taggedDupZohoIds]],
+        );
+        const rows = idRes.rows;
+        const survivorRow = rows.find((r) => r.zoho_record_id === g.survivorZohoId);
+        const clusterId = survivorRow?.cluster_id ?? rows[0]?.cluster_id ?? null;
+        const dupDbIds = rows
+          .filter((r) => taggedDupZohoIds.includes(r.zoho_record_id))
+          .map((r) => r.id);
+        if (clusterId && dupDbIds.length > 0) {
+          await pool.query(
+            `INSERT INTO duplicate_merge_actions
+               (cluster_id, primary_record_id, merged_record_ids, action_type, performed_by, notes)
+             VALUES ($1, $2, $3, 'auto_merge_pending', $4, $5)`,
+            [
+              clusterId,
+              survivorRow?.id ?? null,
+              JSON.stringify(dupDbIds),
+              opts.performedBy,
+              `Bulk auto-merge: same name + phone. Preserved email(s) on survivor; tagged ${dupDbIds.length} Duplicate-Delete, pending Zoho admin delete.`,
+            ],
+          );
+          mergedGroups++;
+        }
+      }
+    } catch (e) {
+      errors++;
+      logger.warn("[DuplicateRadar] name+phone auto-merge group failed (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  return {
+    mergedGroups,
+    taggedRecords,
+    emailsWritten,
+    remaining: Math.max(0, all.length - batch.length),
+    errors,
+  };
 }
 
 /**
