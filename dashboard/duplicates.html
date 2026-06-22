@@ -4243,7 +4243,18 @@
                 id:    { emoji: '🆔', label: 'CRM ID', color: 'bg-rose-200 text-rose-900 border border-rose-400' },
             };
             const counts = _dupCounts(items, extractors);
-            const groupList = _dupBuckets(items, extractors);
+            // Cluster fallback (same fix as the Accounts tab): union records
+            // WITHIN the same server cluster so every paginated cluster renders
+            // as a group — otherwise clusters whose contacts share no exactly-
+            // equal JS key (very common with Arabic names that differ by an
+            // invisible mark / ة-vs-ه) get dropped client-side and a 20-cluster
+            // page shows only a couple of groups. Cross-cluster chaining by
+            // name/email/phone/id is unchanged (it only ever adds unions).
+            const bucketExtractors = {
+                ...extractors,
+                _cluster: r => (r.cluster_id != null ? 'cid:' + r.cluster_id : ''),
+            };
+            const groupList = _dupBuckets(items, bucketExtractors);
 
             let rows = '';
             groupList.forEach((idxs, gIdx) => {
