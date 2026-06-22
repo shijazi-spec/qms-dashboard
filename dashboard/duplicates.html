@@ -6057,9 +6057,9 @@
                 if (btn) btn.disabled = false;
                 return;
             }
-            const scopeBlock = (title, s) => {
+            const scopeBlock = (title, scopeKey, s) => {
                 if (!s || !s.groups) {
-                    return '<div class="px-3 py-2 rounded bg-gray-50 border border-gray-200 text-gray-600">' + title + ': no same domain+name groups found.</div>';
+                    return '<div class="px-3 py-2 rounded bg-gray-50 border border-gray-200 text-gray-600 mb-2">' + title + ': no same domain+name groups found.</div>';
                 }
                 const rows = (s.sample || []).map(function (g) {
                     const others = (g.names || []).filter(function (n) { return (n || '').trim() && n !== g.label; });
@@ -6069,16 +6069,57 @@
                         + '<td class="px-2 py-1 align-top text-center">' + ((g.duplicateZohoIds || []).length + 1) + '</td>'
                         + '</tr>';
                 }).join('');
+                const applyBtn = '<button data-on-click="applyAccountAutoMerge" data-args=\'["' + scopeKey + '"]\' class="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-600 text-white hover:bg-teal-700">⚡ Apply these ' + s.groups.toLocaleString() + ' merge(s) (admin)</button>';
                 return '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-900 mb-2">'
-                    + '<strong>' + title + ':</strong> ' + s.groups.toLocaleString() + ' group(s) would merge · ' + s.accountsToTag.toLocaleString() + ' account(s) tagged Duplicate-Delete.'
+                    + '<strong>' + title + ':</strong> ' + s.groups.toLocaleString() + ' group(s) would merge · ' + (s.accountsToTag || 0).toLocaleString() + ' account(s) tagged Duplicate-Delete.'
                     + (rows ? '<table class="mt-1 w-full text-xs bg-white rounded"><thead><tr class="text-gray-500"><th class="px-2 py-1 text-start">Survivor name</th><th class="px-2 py-1 text-start">Domain</th><th class="px-2 py-1">#</th></tr></thead><tbody>' + rows + '</tbody></table>'
                         + (s.groups > (s.sample || []).length ? '<div class="text-[10px] text-gray-500 mt-1">… showing ' + (s.sample || []).length + ' of ' + s.groups + ' groups.</div>' : '') : '')
+                    + '<div>' + applyBtn + '</div>'
                     + '</div>';
             };
-            panel.innerHTML = scopeBlock('Corporate ↔ Corporate', data.corporate)
-                + scopeBlock('Partner ↔ Partner (Marketplace)', data.partner)
-                + '<div class="text-[11px] text-gray-500">Dry-run only — nothing changed. Confirm these look right and I\'ll enable the apply (which preserves both EN + AR names, re-parents contacts/deals onto the survivor, and tags the rest Duplicate-Delete).</div>';
+            panel.innerHTML = scopeBlock('Corporate ↔ Corporate', 'corporate', data.corporate)
+                + scopeBlock('Partner ↔ Partner (Marketplace)', 'partner', data.partner)
+                + '<div class="text-[11px] text-gray-500">Preview is a dry-run. <strong>Apply</strong> preserves both EN + AR names (alternate saved to the account Description), re-parents the duplicates\' contacts/deals onto the survivor, and tags the rest Duplicate-Delete — nothing is deleted by the platform.</div>';
             if (btn) btn.disabled = false;
+        }
+
+        // Apply the account auto-merge for one scope (admin-gated). Re-uses the
+        // proven agentic merge engine: preserves EN+AR names, re-parents the
+        // duplicates' contacts/deals onto the survivor, tags the rest. Nothing
+        // is deleted by the platform.
+        async function applyAccountAutoMerge(scope) {
+            const panel = document.getElementById('accountAutoMergePanel');
+            if (!window.confirm('Apply the ' + scope + ' account auto-merge (same domain + same name)?\\n\\nFor each group: the survivor keeps both EN + AR names (alternate saved to its Description), the duplicate accounts have their contacts/deals re-parented onto the survivor, and the duplicates are tagged Duplicate-Delete — the admin deletes them later; nothing is deleted now.\\n\\nYou will be asked for the admin password next.')) return;
+            const key = window.prompt('Enter the admin password to apply this account merge:');
+            if (!key || !key.trim()) return;
+            const note = document.createElement('div');
+            note.className = 'text-teal-700 mt-1';
+            note.textContent = 'Applying ' + scope + ' merges… (this re-parents records in Zoho — give it a moment)';
+            panel.appendChild(note);
+            let live;
+            try {
+                const res = await fetch('/api/duplicates/accounts/domain-name-merge', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': key.trim() },
+                    body: JSON.stringify({ scope: scope, limit: 500 }),
+                });
+                live = await res.json();
+                if (!res.ok || !live.success) throw new Error((live && live.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                note.innerHTML = '<span class="text-amber-700">Apply failed: ' + escapeHtml(String(e && e.message || e)) + '</span>';
+                return;
+            }
+            note.outerHTML = '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 mt-1">'
+                + '<strong>Done (' + escapeHtml(scope) + ').</strong> Merged ' + (live.merged || 0).toLocaleString() + ' group(s), tagged ' + (live.accountsTagged || 0).toLocaleString() + ' account(s) Duplicate-Delete, re-parented ' + (live.reparentedDeals || 0) + ' deal(s) + ' + (live.reparentedContacts || 0) + ' contact(s), preserved ' + (live.namesPreserved || 0) + ' alternate name(s).'
+                + (live.remaining > 0 ? ' <strong>' + live.remaining.toLocaleString() + '</strong> group(s) remain — click Apply again.' : ' All ' + scope + ' groups handled.')
+                + (live.errors > 0 ? ' (' + live.errors + ' group error(s) — re-run to retry.)' : '')
+                + '</div>';
+            try {
+                if (typeof loadRecordTab === 'function') {
+                    const currentPage = (typeof recordPages !== 'undefined' && recordPages.accounts) || 0;
+                    loadRecordTab('accounts', currentPage);
+                }
+            } catch (_) { /* non-fatal */ }
         }
 
         // Re-check Cluster — for every record currently in the cluster,

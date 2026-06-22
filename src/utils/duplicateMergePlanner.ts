@@ -679,6 +679,57 @@ export function buildMergePlan(
     }
   }
 
+  // Preserve alternate (EN/AR) names on an ACCOUNT merge (Ahmad 2026-06-22).
+  // The Account Name field is bilingual — one record may hold the English name,
+  // another the Arabic — so a straight merge keeps the survivor's name and the
+  // other-language name is lost when the admin deletes the duplicate. There's no
+  // dedicated Arabic-name field, so we APPEND the distinct alternate name(s) to
+  // the survivor's Description as "Also known as: …" (non-destructive, keeps
+  // Account_Name clean for reporting). Gap-aware: appends to any existing
+  // Description rather than overwriting.
+  if (module === "Accounts") {
+    const nameOf = (r: DuplicateRecord): string =>
+      String(
+        ((r.raw_data as any)?.Account_Name ?? r.record_name ?? r.company_name ?? "") as unknown,
+      ).trim();
+    const masterName = nameOf(master);
+    const masterKey = masterName.toLowerCase();
+    const seenNames = new Set<string>();
+    if (masterKey) seenNames.add(masterKey);
+    const altNames: string[] = [];
+    for (const d of duplicates) {
+      const n = nameOf(d);
+      const k = n.toLowerCase();
+      if (n && !seenNames.has(k)) {
+        seenNames.add(k);
+        altNames.push(n);
+      }
+    }
+    if (altNames.length > 0) {
+      const existingDesc = String(
+        ((master.raw_data as any)?.Description ?? "") as unknown,
+      ).trim();
+      const aka = `Also known as: ${altNames.join(" | ")}`;
+      const newDesc = existingDesc
+        ? existingDesc.includes(aka)
+          ? existingDesc
+          : `${existingDesc}\n${aka}`
+        : aka;
+      if (newDesc !== existingDesc) {
+        fieldDecisions.push({
+          field: "Description",
+          label: "Description (alternate names)",
+          action: "fill",
+          chosenValue: newDesc,
+          fromZohoId: master.zoho_record_id ?? null,
+          reason: `Preserved ${altNames.length} alternate name(s) (EN/AR) on the survivor so no name is lost when the duplicate is deleted.`,
+          alternatives: altNames.map((n) => ({ zohoId: null, recordName: n, value: n })),
+        });
+        fillCount++;
+      }
+    }
+  }
+
   // Structural warnings.
   const untaggable = duplicates.filter((d) => !d.zoho_record_id);
   if (untaggable.length > 0) {

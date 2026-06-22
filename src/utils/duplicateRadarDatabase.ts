@@ -2586,6 +2586,93 @@ export async function previewAccountDomainNameMerge(): Promise<{
 }
 
 /**
+ * Apply the account auto-merge for one scope. For each domain+name group it
+ * reuses the PROVEN agentic merge engine (buildMergePlan + executeMergePlan):
+ * survivor selection, EN/AR name preservation (into Description), re-parenting
+ * the duplicates' contacts/deals onto the survivor, and tagging the rest
+ * Duplicate-Delete — the platform never deletes. dryRun=true writes nothing
+ * (still enumerates). Bounded by `limit`, re-runnable.
+ */
+export async function applyAccountDomainNameMerge(opts: {
+  scope: "corporate" | "partner";
+  dryRun: boolean;
+  limit?: number;
+  performedBy: string;
+}): Promise<{
+  scope: string;
+  groups: number;
+  merged: number;
+  accountsTagged: number;
+  reparentedDeals: number;
+  reparentedContacts: number;
+  namesPreserved: number;
+  remaining: number;
+  errors: number;
+}> {
+  const layouts = ACCOUNT_SCOPE_LAYOUTS[opts.scope] || [];
+  const all = await getAccountDomainNameGroups(layouts);
+  const limit = Math.max(1, Math.min(Math.floor(opts.limit || 100), 500));
+  const batch = all.slice(0, limit);
+  const { buildMergePlan } = await import("./duplicateMergePlanner");
+  const { executeMergePlan, zohoWritesAllowedInEnv } = await import("./duplicateMergeExecutor");
+  if (!opts.dryRun && !zohoWritesAllowedInEnv()) {
+    throw new Error("Live Zoho writes are disabled outside production.");
+  }
+  let merged = 0,
+    accountsTagged = 0,
+    reparentedDeals = 0,
+    reparentedContacts = 0,
+    namesPreserved = 0,
+    errors = 0;
+  for (const g of batch) {
+    try {
+      const zohoIds = [g.survivorZohoId, ...g.duplicateZohoIds];
+      const recRes = await pool.query(
+        `SELECT * FROM duplicate_records WHERE record_type = 'account' AND zoho_record_id = ANY($1::text[])`,
+        [zohoIds],
+      );
+      const recs = recRes.rows as DuplicateRecord[];
+      if (recs.length < 2) continue;
+      const survivorRow =
+        recs.find((r) => (r as any).zoho_record_id === g.survivorZohoId) || recs[0];
+      const clusterId = (survivorRow as any)?.cluster_id ?? (recs[0] as any)?.cluster_id;
+      if (!clusterId) continue;
+      const plan = buildMergePlan("Accounts", clusterId, recs, {});
+      if (plan.fieldDecisions.some((d) => d.field === "Description" && d.action === "fill")) {
+        namesPreserved++;
+      }
+      const report = await executeMergePlan(plan, {
+        performedBy: opts.performedBy,
+        dryRun: opts.dryRun,
+        // Leave the cluster open — it may carry other modules; the next sync
+        // resolves it once every module's duplicates are tagged/merged.
+        closeCluster: false,
+      });
+      accountsTagged += plan.duplicateZohoIds.length;
+      reparentedDeals += report.reparented?.deals ?? 0;
+      reparentedContacts += report.reparented?.contacts ?? 0;
+      merged++;
+    } catch (e) {
+      errors++;
+      logger.warn("[DuplicateRadar] account auto-merge group failed (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+  return {
+    scope: opts.scope,
+    groups: batch.length,
+    merged,
+    accountsTagged,
+    reparentedDeals,
+    reparentedContacts,
+    namesPreserved,
+    remaining: Math.max(0, all.length - batch.length),
+    errors,
+  };
+}
+
+/**
  * Resolve auto-merged contact clusters ONCE their tagged duplicates are
  * actually deleted in Zoho (Ahmad 2026-06-21). The bulk auto-merge marks a
  * cluster 'auto_merge_pending' (→ shows as "AI-Applied · pending Zoho admin

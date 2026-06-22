@@ -1549,6 +1549,39 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Account auto-merge — APPLY one scope (admin-key gated, Ahmad 2026-06-22).
+    // Reuses the agentic merge engine: preserves EN/AR names, re-parents the
+    // duplicates' contacts/deals onto the survivor, tags the rest. Never deletes.
+    //   POST /api/duplicates/accounts/domain-name-merge  { scope, limit? }
+    path: "/api/duplicates/accounts/domain-name-merge",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          const body = await c.req.json().catch(() => ({}));
+          const scope = body?.scope === "partner" ? "partner" : "corporate";
+          const limit = parseInt(body?.limit, 10);
+          const performedBy =
+            `${(sessionUser as any)?.email || "admin"} (bulk account ${scope} domain+name merge)`;
+          const { applyAccountDomainNameMerge } = await import("../../utils/duplicateRadarDatabase");
+          const result = await applyAccountDomainNameMerge({
+            scope,
+            dryRun: false,
+            limit: Number.isFinite(limit) && limit > 0 ? limit : 100,
+            performedBy,
+          });
+          return c.json({ success: true, ...result });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Acceptance-pattern analysis (Sarah 2026-06-20): learn AUTO-APPROVE rules
     // from resolved data (manual merges + agent applies). Recommend-only.
     //   GET /api/duplicates/autonomous/acceptance-patterns?module=Accounts&days=90
