@@ -5915,6 +5915,33 @@
             if (btn) btn.disabled = false;
         }
 
+        // Run a bulk-merge endpoint in SMALL BATCHES so a large run can't hit
+        // the proxy's request timeout (504 "Gateway Timeout"). The endpoints are
+        // idempotent and return `remaining`, so we loop until nothing is left
+        // (or a batch makes no progress). Accumulates numeric result fields.
+        // onTick(totals, lastBatch) renders running progress.
+        async function _runBatchedMerge(url, opts) {
+            const totals = {};
+            let iter = 0;
+            const MAX = 5000;
+            while (iter++ < MAX) {
+                const res = await fetch(url, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, opts.key ? { 'x-admin-key': opts.key } : {}),
+                    body: JSON.stringify(Object.assign({ limit: opts.batchLimit }, opts.body || {})),
+                });
+                const d = await res.json().catch(function () { return {}; });
+                if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
+                for (const k in d) { if (typeof d[k] === 'number' && k !== 'remaining') totals[k] = (totals[k] || 0) + d[k]; }
+                totals.remaining = d.remaining || 0;
+                if (opts.onTick) opts.onTick(totals, d);
+                const progressed = (opts.progressKeys || ['merged', 'mergedGroups']).some(function (k) { return (d[k] || 0) > 0; });
+                if (!d.remaining || d.remaining <= 0) break;
+                if (!progressed) break; // can't advance (e.g. every group erroring) — stop
+            }
+            return totals;
+        }
+
         // Bulk auto-merge contacts where Email AND Phone match 100% (Sarah 2026-06-20).
         // Preview count first (read-only), then admin-password apply (tags the
         // duplicates Duplicate-Delete, keeps the most complete survivor).
@@ -5947,25 +5974,21 @@
             }
             const key = window.prompt('Enter the admin password to apply this bulk merge:');
             if (!key || !key.trim()) { if (btn) btn.disabled = false; return; }
-            panel.innerHTML += '<div class="text-emerald-700 mt-1">Applying…</div>';
+            const prog = document.createElement('div'); prog.className = 'text-emerald-700 mt-1'; prog.textContent = 'Applying…'; panel.appendChild(prog);
             let live;
             try {
-                const res = await fetch('/api/duplicates/contacts/exact-match-merge', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': key.trim() },
-                    body: JSON.stringify({ limit: 1000 }),
+                live = await _runBatchedMerge('/api/duplicates/contacts/exact-match-merge', {
+                    key: key.trim(), batchLimit: 50, progressKeys: ['mergedGroups'],
+                    onTick: function (t) { prog.textContent = 'Applying… merged ' + (t.mergedGroups || 0).toLocaleString() + ' group(s), tagged ' + (t.taggedRecords || 0).toLocaleString() + ' contact(s)…'; },
                 });
-                live = await res.json();
-                if (!res.ok || !live.success) throw new Error((live && live.error) || ('HTTP ' + res.status));
             } catch (e) {
-                panel.innerHTML += '<div class="text-amber-700">Apply failed: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                prog.innerHTML = '<span class="text-amber-700">Apply paused: ' + escapeHtml(String(e && e.message || e)) + ' — click again to resume the rest.</span>';
                 if (btn) btn.disabled = false;
                 return;
             }
-            panel.innerHTML += '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 mt-1">'
-                + '<strong>Done.</strong> Merged ' + live.mergedGroups.toLocaleString() + ' group(s), tagged ' + live.taggedRecords.toLocaleString() + ' contact(s) Duplicate-Delete.'
-                + (live.remaining > 0 ? ' <strong>' + live.remaining.toLocaleString() + '</strong> group(s) remain — click again to continue.' : ' All exact matches handled.')
-                + (live.errors > 0 ? ' (' + live.errors + ' batch error(s) — re-run to retry.)' : '')
+            prog.outerHTML = '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 mt-1">'
+                + '<strong>Done.</strong> Merged ' + (live.mergedGroups || 0).toLocaleString() + ' group(s), tagged ' + (live.taggedRecords || 0).toLocaleString() + ' contact(s) Duplicate-Delete.'
+                + (live.errors > 0 ? ' (' + live.errors + ' group error(s) — re-run to retry.)' : ' All exact matches handled.')
                 + '</div>';
             try {
                 if (typeof loadRecordTab === 'function') {
@@ -6010,25 +6033,21 @@
             }
             const key = window.prompt('Enter the admin password to apply this bulk merge:');
             if (!key || !key.trim()) { if (btn) btn.disabled = false; return; }
-            panel.innerHTML += '<div class="text-teal-700 mt-1">Applying…</div>';
+            const prog = document.createElement('div'); prog.className = 'text-teal-700 mt-1'; prog.textContent = 'Applying…'; panel.appendChild(prog);
             let live;
             try {
-                const res = await fetch('/api/duplicates/contacts/name-phone-merge', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': key.trim() },
-                    body: JSON.stringify({ limit: 1000 }),
+                live = await _runBatchedMerge('/api/duplicates/contacts/name-phone-merge', {
+                    key: key.trim(), batchLimit: 25, progressKeys: ['mergedGroups'],
+                    onTick: function (t) { prog.textContent = 'Applying… merged ' + (t.mergedGroups || 0).toLocaleString() + ' group(s), tagged ' + (t.taggedRecords || 0).toLocaleString() + ', preserved ' + (t.emailsWritten || 0).toLocaleString() + ' email(s)…'; },
                 });
-                live = await res.json();
-                if (!res.ok || !live.success) throw new Error((live && live.error) || ('HTTP ' + res.status));
             } catch (e) {
-                panel.innerHTML += '<div class="text-amber-700">Apply failed: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                prog.innerHTML = '<span class="text-amber-700">Apply paused: ' + escapeHtml(String(e && e.message || e)) + ' — click again to resume the rest.</span>';
                 if (btn) btn.disabled = false;
                 return;
             }
-            panel.innerHTML += '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-800 mt-1">'
-                + '<strong>Done.</strong> Merged ' + live.mergedGroups.toLocaleString() + ' group(s), tagged ' + live.taggedRecords.toLocaleString() + ' contact(s) Duplicate-Delete, preserved ' + (live.emailsWritten || 0).toLocaleString() + ' email(s).'
-                + (live.remaining > 0 ? ' <strong>' + live.remaining.toLocaleString() + '</strong> group(s) remain — click again to continue.' : ' All name+phone matches handled.')
-                + (live.errors > 0 ? ' (' + live.errors + ' group error(s) — re-run to retry.)' : '')
+            prog.outerHTML = '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-800 mt-1">'
+                + '<strong>Done.</strong> Merged ' + (live.mergedGroups || 0).toLocaleString() + ' group(s), tagged ' + (live.taggedRecords || 0).toLocaleString() + ' contact(s) Duplicate-Delete, preserved ' + (live.emailsWritten || 0).toLocaleString() + ' email(s).'
+                + (live.errors > 0 ? ' (' + live.errors + ' group error(s) — re-run to retry.)' : ' All name+phone matches handled.')
                 + '</div>';
             try {
                 if (typeof loadRecordTab === 'function') {
@@ -6098,21 +6117,17 @@
             panel.appendChild(note);
             let live;
             try {
-                const res = await fetch('/api/duplicates/accounts/domain-name-merge', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': key.trim() },
-                    body: JSON.stringify({ scope: scope, limit: 500 }),
+                live = await _runBatchedMerge('/api/duplicates/accounts/domain-name-merge', {
+                    key: key.trim(), batchLimit: 8, body: { scope: scope }, progressKeys: ['merged'],
+                    onTick: function (t) { note.textContent = 'Applying ' + scope + ' merges… ' + (t.merged || 0).toLocaleString() + ' group(s), re-parented ' + (t.reparentedDeals || 0) + ' deal(s)/' + (t.reparentedContacts || 0) + ' contact(s)…'; },
                 });
-                live = await res.json();
-                if (!res.ok || !live.success) throw new Error((live && live.error) || ('HTTP ' + res.status));
             } catch (e) {
-                note.innerHTML = '<span class="text-amber-700">Apply failed: ' + escapeHtml(String(e && e.message || e)) + '</span>';
+                note.innerHTML = '<span class="text-amber-700">Apply paused: ' + escapeHtml(String(e && e.message || e)) + ' — click Apply again to resume.</span>';
                 return;
             }
             note.outerHTML = '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 mt-1">'
                 + '<strong>Done (' + escapeHtml(scope) + ').</strong> Merged ' + (live.merged || 0).toLocaleString() + ' group(s), tagged ' + (live.accountsTagged || 0).toLocaleString() + ' account(s) Duplicate-Delete, re-parented ' + (live.reparentedDeals || 0) + ' deal(s) + ' + (live.reparentedContacts || 0) + ' contact(s), preserved ' + (live.namesPreserved || 0) + ' alternate name(s).'
-                + (live.remaining > 0 ? ' <strong>' + live.remaining.toLocaleString() + '</strong> group(s) remain — click Apply again.' : ' All ' + scope + ' groups handled.')
-                + (live.errors > 0 ? ' (' + live.errors + ' group error(s) — re-run to retry.)' : '')
+                + (live.errors > 0 ? ' (' + live.errors + ' group error(s) — re-run to retry.)' : ' All ' + scope + ' groups handled.')
                 + '</div>';
             try {
                 if (typeof loadRecordTab === 'function') {
