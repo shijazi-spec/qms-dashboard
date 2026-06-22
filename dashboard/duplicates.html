@@ -3755,7 +3755,14 @@
         //   phone → digits only        ("+966 50 123 4567" == "966501234567")
         //   name  → lowercase + collapse whitespace ("Ali  AL Mikhdam" == "ali al mikhdam")
         function _normEmail(s) { return String(s || '').trim().toLowerCase(); }
-        function _normPhone(s) { return String(s || '').replace(/\D+/g, ''); }
+        // Canonicalize phones the SAME way the backend normalizePhone does, so
+        // a Saudi local format (0535807059) and international (+966 53 580 7059)
+        // compare equal: strip non-digits, drop a leading 00 / 966 country code,
+        // keep the last 9 digits (the national significant number). Without this
+        // the DUP SIGNAL showed "name" only on pairs that actually share a phone.
+        function _normPhone(s) {
+            return String(s || '').replace(/\D+/g, '').replace(/^00/, '').replace(/^966/, '').slice(-9);
+        }
         function _normName(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
 
         // Compact "3d ago" style relative time. Falls back to absolute
