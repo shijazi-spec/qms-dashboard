@@ -619,6 +619,66 @@ export function buildMergePlan(
     }
   }
 
+  // Preserve an alternate email on a CONTACT merge (Ahmad 2026-06-22). The
+  // survivor keeps its primary Email; a duplicate's DIFFERENT email would
+  // otherwise be discarded when that duplicate is tagged for deletion. If the
+  // survivor's Secondary_Email is still empty, capture the freshest distinct
+  // alternate email into it so no email is lost. Gap-fill only — never
+  // overwrites an existing Secondary_Email. Zoho Contacts has a single
+  // Secondary_Email field, so if there are several alternates only one is
+  // preserved and the rest are surfaced as alternatives + a warning.
+  if (module === "Contacts") {
+    const emailRaw = (r: DuplicateRecord): string =>
+      String((rawVal(r, "Email") ?? r.email ?? "") as unknown).trim();
+    const masterSecondary = String(
+      (rawVal(master, "Secondary_Email") ?? "") as unknown,
+    ).trim();
+    if (!masterSecondary) {
+      const dupsByFresh = [...duplicates].sort(
+        (a, b) => modifiedMs(b) - modifiedMs(a),
+      );
+      // Effective primary email after merge: the master's, or — if the master
+      // had none — whichever duplicate email the loop above used to gap-fill it.
+      let primaryKey = emailRaw(master).toLowerCase();
+      if (!primaryKey) {
+        const filler = dupsByFresh.find((d) => emailRaw(d));
+        primaryKey = filler ? emailRaw(filler).toLowerCase() : "";
+      }
+      const seen = new Set<string>();
+      if (primaryKey) seen.add(primaryKey);
+      const alts: { zohoId: string | null; recordName: string; value: string }[] = [];
+      for (const d of dupsByFresh) {
+        const e = emailRaw(d);
+        const k = e.toLowerCase();
+        if (e && !seen.has(k)) {
+          seen.add(k);
+          alts.push({ zohoId: d.zoho_record_id ?? null, recordName: recName(d), value: e });
+        }
+      }
+      if (alts.length > 0) {
+        const chosen = alts[0]!;
+        fieldDecisions.push({
+          field: "Secondary_Email",
+          label: "Secondary Email",
+          action: "fill",
+          chosenValue: chosen.value,
+          fromZohoId: chosen.zohoId,
+          reason: `Survivor's email differs from "${chosen.recordName}" — preserved its email in Secondary_Email so no email is lost on merge.`,
+          alternatives: alts.slice(1),
+        });
+        fillCount++;
+        if (alts.length > 1) {
+          warnings.push(
+            `${alts.length} distinct alternate email(s) found, but Zoho Contacts has a single Secondary_Email field — only "${chosen.value}" is preserved on the survivor. The rest are listed as alternatives; capture them manually if needed: ${alts
+              .slice(1)
+              .map((a) => a.value)
+              .join(", ")}.`,
+          );
+        }
+      }
+    }
+  }
+
   // Structural warnings.
   const untaggable = duplicates.filter((d) => !d.zoho_record_id);
   if (untaggable.length > 0) {
