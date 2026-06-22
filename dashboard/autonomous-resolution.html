@@ -183,22 +183,6 @@
             <div id="gradesCards" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
         </section>
 
-        <!-- Learning curve -->
-        <section class="bg-white rounded-xl border border-gray-200 p-5">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-lg font-semibold text-gray-900">Learning curve</h2>
-                <select id="curveModule" data-on-change="loadGrades" class="text-sm border border-gray-300 rounded-lg px-2 py-1">
-                    <option value="">All modules</option>
-                    <option value="Accounts">Accounts</option>
-                    <option value="Leads">Leads</option>
-                    <option value="Deals">Deals</option>
-                    <option value="Contacts">Contacts</option>
-                </select>
-            </div>
-            <div class="chart-box"><canvas id="curveChart"></canvas></div>
-            <div id="curveEmpty" class="hidden text-sm text-gray-500 mt-2">No grade snapshots yet — they accumulate as the agent runs.</div>
-        </section>
-
         <!-- Hygiene & business rules (read-only reference of what Adam enforces) -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
@@ -280,6 +264,24 @@
                     <tbody id="rulesBody"><tr><td colspan="6" class="py-3 text-gray-500">Loading…</td></tr></tbody>
                 </table>
             </div>
+        </section>
+
+        <!-- Learning curve (below the rules — reflects the rules data: refreshes
+             whenever a rule is added/toggled) -->
+        <section class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-1">
+                <h2 class="text-lg font-semibold text-gray-900">Learning curve</h2>
+                <select id="curveModule" data-on-change="loadGrades" class="text-sm border border-gray-300 rounded-lg px-2 py-1">
+                    <option value="">All modules</option>
+                    <option value="Accounts">Accounts</option>
+                    <option value="Leads">Leads</option>
+                    <option value="Deals">Deals</option>
+                    <option value="Contacts">Contacts</option>
+                </select>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">Adam's grade per module over time. It rises as you teach rules above and his agreement improves — the curve reflects the current rules data and refreshes whenever you add or toggle a rule.</p>
+            <div class="chart-box"><canvas id="curveChart"></canvas></div>
+            <div id="curveEmpty" class="hidden text-sm text-gray-500 mt-2">No grade snapshots yet — they accumulate as the agent runs.</div>
         </section>
 
         <!-- Last run items -->
@@ -572,7 +574,11 @@
                 body: JSON.stringify({ module: module, decision: decision, caseSignature: caseSignature })
             });
             var data = await r.json();
-            if (data && data.ok) { document.getElementById('ruleSignature').value = ''; loadRules(); }
+            if (data && data.ok) {
+                document.getElementById('ruleSignature').value = '';
+                // Reflect the updated rules in the rulebook + learning curve.
+                loadRules(); loadAdamRulebook(); loadGrades();
+            }
             else alert((data && data.error) || 'Could not create rule');
         }
 
@@ -583,7 +589,8 @@
                 body: JSON.stringify({ enabled: enabled })
             });
             await r.json().catch(function () {});
-            loadRules();
+            // Reflect the updated rules in the rulebook + learning curve.
+            loadRules(); loadAdamRulebook(); loadGrades();
         }
 
         async function runNow() {
