@@ -2098,8 +2098,12 @@ export async function applyExactContactMatches(opts: {
   let mergedGroups = 0;
   let errors = 0;
 
-  // Tag in chunks of 100 ids (Zoho add_tags multi-record limit).
+  // Tag in chunks of 100 ids (Zoho add_tags multi-record limit). Track which
+  // ids were ACTUALLY tagged so a failed chunk (e.g. Zoho rate-limited while a
+  // sync is running) doesn't get marked AI-Applied · pending below — those
+  // groups stay Untouched and re-runnable instead of stuck pending forever.
   const CHUNK = 100;
+  const taggedOk = new Set<string>();
   const dupIds = batch.flatMap((g) => g.duplicateZohoIds);
   for (let i = 0; i < dupIds.length; i += CHUNK) {
     const chunk = dupIds.slice(i, i + CHUNK);
@@ -2110,6 +2114,7 @@ export async function applyExactContactMatches(opts: {
         `tag contacts ${i}`,
       );
       taggedRecords += chunk.length;
+      for (const id of chunk) taggedOk.add(id);
     } catch (e) {
       errors++;
       logger.warn("[DuplicateRadar] bulk contact tag chunk failed", {
@@ -2127,6 +2132,9 @@ export async function applyExactContactMatches(opts: {
   // ledger entry, and restoreLedgerResolvedClusterStatus flips it to resolved).
   for (const g of batch) {
     try {
+      // Only mark groups whose duplicates were ACTUALLY tagged in Zoho.
+      const taggedDupZohoIds = g.duplicateZohoIds.filter((id) => taggedOk.has(id));
+      if (taggedDupZohoIds.length === 0) continue; // tag failed → leave Untouched
       const idRes = await pool.query<{
         id: number;
         cluster_id: number | null;
@@ -2135,13 +2143,13 @@ export async function applyExactContactMatches(opts: {
         `SELECT id, cluster_id, zoho_record_id
            FROM duplicate_records
           WHERE zoho_record_id = ANY($1::text[])`,
-        [[g.survivorZohoId, ...g.duplicateZohoIds]],
+        [[g.survivorZohoId, ...taggedDupZohoIds]],
       );
       const rows = idRes.rows;
       const survivorRow = rows.find((r) => r.zoho_record_id === g.survivorZohoId);
       const clusterId = survivorRow?.cluster_id ?? rows[0]?.cluster_id ?? null;
       const dupDbIds = rows
-        .filter((r) => g.duplicateZohoIds.includes(r.zoho_record_id))
+        .filter((r) => taggedDupZohoIds.includes(r.zoho_record_id))
         .map((r) => r.id);
       if (!clusterId || dupDbIds.length === 0) continue;
       await pool.query(
