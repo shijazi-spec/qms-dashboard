@@ -1528,6 +1528,27 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Account auto-merge (same domain + same name, within layout) — READ-ONLY
+    // PREVIEW (Ahmad 2026-06-22). No writes. Corporate↔Corporate and
+    // Partner↔Partner only; the apply (cascade) is a separate, confirmed step.
+    //   GET /api/duplicates/accounts/domain-name-preview
+    path: "/api/duplicates/accounts/domain-name-preview",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const { previewAccountDomainNameMerge } = await import("../../utils/duplicateRadarDatabase");
+          const data = await previewAccountDomainNameMerge();
+          return c.json({ success: true, ...data });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Acceptance-pattern analysis (Sarah 2026-06-20): learn AUTO-APPROVE rules
     // from resolved data (manual merges + agent applies). Recommend-only.
     //   GET /api/duplicates/autonomous/acceptance-patterns?module=Accounts&days=90

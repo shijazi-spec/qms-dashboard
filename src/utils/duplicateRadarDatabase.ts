@@ -2454,6 +2454,137 @@ export async function applyNamePhoneContactMatches(opts: {
   };
 }
 
+// ── Account auto-merge: same DOMAIN + same COMPANY NAME, within layout ───────
+//
+// Ahmad 2026-06-22. Two accounts on the SAME layout that share the same domain
+// AND the same (Arabic/English suffix-stripped) company name are the same
+// company. Corporate accounts merge only with Corporate accounts; Partner
+// (Marketplace) only with Partner — a Corporate and a Partner account for the
+// same company are intentionally separate and are NEVER merged. CR/VAT are
+// ignored (unreliable data). This is the read-only grouping + PREVIEW; the
+// write/cascade (reparent contacts+deals, tag) is applied via the existing
+// agentic Account executor once the preview is confirmed.
+
+/** Layout names per scope (lowercased), tunable via env. */
+export const ACCOUNT_SCOPE_LAYOUTS: Record<"corporate" | "partner", string[]> = {
+  corporate: (process.env.ACCOUNT_CORPORATE_LAYOUTS || "Corporate Accounts")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+  partner: (process.env.ACCOUNT_PARTNER_LAYOUTS || "Marketplace")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+};
+
+export interface AccountDomainNameGroup {
+  domain: string;
+  nameKey: string;
+  survivorZohoId: string;
+  duplicateZohoIds: string[];
+  /** Distinct display names across the group (surfaces EN vs AR variants). */
+  names: string[];
+  label: string;
+}
+
+/** Group accounts on the given layouts by domain + normalized name (>=2). */
+async function getAccountDomainNameGroups(
+  layoutNames: string[],
+): Promise<AccountDomainNameGroup[]> {
+  if (!layoutNames.length) return [];
+  const res = await pool.query<{
+    zoho_record_id: string;
+    record_name: string | null;
+    company_name: string | null;
+    domain: string | null;
+    owner_name: string | null;
+    website: string | null;
+    cr_number: string | null;
+    created_ms: string | null;
+  }>(
+    `SELECT zoho_record_id, record_name, company_name, domain, owner_name, website, cr_number,
+            EXTRACT(EPOCH FROM COALESCE(created_date, modified_date))::bigint AS created_ms
+       FROM duplicate_records
+      WHERE record_type = 'account'
+        AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+        AND domain IS NOT NULL AND btrim(domain) <> ''
+        AND LOWER(COALESCE(layout_name, '')) = ANY($1::text[])`,
+    [layoutNames],
+  );
+
+  const byKey = new Map<string, typeof res.rows>();
+  for (const row of res.rows) {
+    const dom = (row.domain || "").trim().toLowerCase();
+    const nameKey = normalizeCompanyName(row.record_name || row.company_name || "");
+    if (!dom || !nameKey) continue;
+    const key = `${dom}|${nameKey}`;
+    const arr = byKey.get(key) || [];
+    arr.push(row);
+    byKey.set(key, arr);
+  }
+
+  const groups: AccountDomainNameGroup[] = [];
+  for (const [key, rows] of byKey.entries()) {
+    const seen = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) if (!seen.has(r.zoho_record_id)) seen.set(r.zoho_record_id, r);
+    const members = [...seen.values()];
+    if (members.length < 2) continue;
+    // Survivor (preview heuristic): most fields populated, else oldest. The
+    // real merge reuses the agentic executor's survivor selection on apply.
+    const completeness = (r: (typeof rows)[number]) =>
+      (r.website && r.website.trim() ? 1 : 0) +
+      (r.cr_number && r.cr_number.trim() ? 1 : 0) +
+      (r.owner_name && r.owner_name.trim() ? 1 : 0) +
+      (r.record_name && r.record_name.trim() ? 1 : 0);
+    members.sort((a, b) => {
+      const ca = completeness(a),
+        cb = completeness(b);
+      if (cb !== ca) return cb - ca;
+      return (
+        Number(a.created_ms || Number.MAX_SAFE_INTEGER) -
+        Number(b.created_ms || Number.MAX_SAFE_INTEGER)
+      );
+    });
+    const [survivor, ...dups] = members;
+    if (!survivor) continue;
+    const names = [
+      ...new Set(
+        members
+          .map((m) => (m.record_name || m.company_name || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    groups.push({
+      domain: key.split("|")[0]!,
+      nameKey: key.split("|").slice(1).join("|"),
+      survivorZohoId: survivor.zoho_record_id,
+      duplicateZohoIds: dups.map((d) => d.zoho_record_id),
+      names,
+      label: (survivor.record_name || survivor.company_name || "").trim(),
+    });
+  }
+  return groups;
+}
+
+/** Read-only PREVIEW of the account auto-merge for both scopes. No writes. */
+export async function previewAccountDomainNameMerge(): Promise<{
+  corporate: { groups: number; accountsToTag: number; sample: AccountDomainNameGroup[] };
+  partner: { groups: number; accountsToTag: number; sample: AccountDomainNameGroup[] };
+}> {
+  const build = async (layouts: string[]) => {
+    const groups = await getAccountDomainNameGroups(layouts).catch(() => []);
+    return {
+      groups: groups.length,
+      accountsToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
+      sample: groups.slice(0, 15),
+    };
+  };
+  return {
+    corporate: await build(ACCOUNT_SCOPE_LAYOUTS.corporate),
+    partner: await build(ACCOUNT_SCOPE_LAYOUTS.partner),
+  };
+}
+
 /**
  * Resolve auto-merged contact clusters ONCE their tagged duplicates are
  * actually deleted in Zoho (Ahmad 2026-06-21). The bulk auto-merge marks a

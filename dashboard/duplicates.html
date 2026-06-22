@@ -860,7 +860,9 @@
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;accounts&quot;]" id="accountsZohoRefreshBtn" title="Pull live values from Zoho for every account currently shown. Use this when the CRM has been updated but the table still shows old values." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-300 text-orange-900 hover:bg-orange-400">🔃 Refresh from Zoho (live)</button>
                 <button data-on-click="syncNowZohoCRM" title="Re-run the full Zoho scan to rebuild duplicate clusters." class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-200 text-blue-900 hover:bg-blue-300 ms-2">🔍 Run Scan</button>
                 <button data-on-click="openCapaPicker" data-args="[&quot;accounts&quot;]" data-testid="button-open-capa-accounts" title="Open a corrective-action record (CAPA) on one of the account-duplicate groups shown below. Routed to the QMS CAPA inbox." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-pink-200 text-pink-900 hover:bg-pink-300">🚩 Open CAPA</button>
+                <button data-on-click="previewAccountAutoMerge" id="accountAutoMergePreviewBtn" data-testid="button-account-auto-merge-preview" title="DRY-RUN preview (no changes): which accounts would auto-merge by SAME DOMAIN + SAME NAME — Corporate↔Corporate and Partner↔Partner only (never across). Review this before we enable the apply." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-200 text-teal-900 hover:bg-teal-300">🔍 Preview auto-merge (domain+name)</button>
             </div>
+            <div id="accountAutoMergePanel" class="text-xs mb-3"></div>
             <!-- AI-status chips — toggle which slice of clusters is in the list.
                  active            (default) = untouched clusters, no merge_action yet
                  tagged_pending    = already AI-applied, waiting for Zoho admin delete
@@ -6034,6 +6036,48 @@
                     loadRecordTab('contacts', currentPage);
                 }
             } catch (_) { /* non-fatal */ }
+            if (btn) btn.disabled = false;
+        }
+
+        // DRY-RUN preview of the account auto-merge (same domain + same name,
+        // within layout). READ-ONLY — nothing is written. Lets the operator
+        // validate the rule on real data before the apply step is enabled.
+        async function previewAccountAutoMerge() {
+            const panel = document.getElementById('accountAutoMergePanel');
+            const btn = document.getElementById('accountAutoMergePreviewBtn');
+            if (btn) btn.disabled = true;
+            panel.innerHTML = '<div class="text-teal-700">Computing dry-run (no changes)…</div>';
+            let data;
+            try {
+                const res = await fetch('/api/duplicates/accounts/domain-name-preview', { credentials: 'same-origin' });
+                data = await res.json();
+                if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                panel.innerHTML = '<div class="text-red-600">Preview failed: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            const scopeBlock = (title, s) => {
+                if (!s || !s.groups) {
+                    return '<div class="px-3 py-2 rounded bg-gray-50 border border-gray-200 text-gray-600">' + title + ': no same domain+name groups found.</div>';
+                }
+                const rows = (s.sample || []).map(function (g) {
+                    const others = (g.names || []).filter(function (n) { return (n || '').trim() && n !== g.label; });
+                    return '<tr class="border-t">'
+                        + '<td class="px-2 py-1 align-top">' + escapeHtml(g.label || '—') + (others.length ? '<div class="text-[10px] text-gray-500">also: ' + escapeHtml(others.join(' · ')) + '</div>' : '') + '</td>'
+                        + '<td class="px-2 py-1 align-top font-mono text-[11px]">' + escapeHtml(g.domain || '—') + '</td>'
+                        + '<td class="px-2 py-1 align-top text-center">' + ((g.duplicateZohoIds || []).length + 1) + '</td>'
+                        + '</tr>';
+                }).join('');
+                return '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-900 mb-2">'
+                    + '<strong>' + title + ':</strong> ' + s.groups.toLocaleString() + ' group(s) would merge · ' + s.accountsToTag.toLocaleString() + ' account(s) tagged Duplicate-Delete.'
+                    + (rows ? '<table class="mt-1 w-full text-xs bg-white rounded"><thead><tr class="text-gray-500"><th class="px-2 py-1 text-start">Survivor name</th><th class="px-2 py-1 text-start">Domain</th><th class="px-2 py-1">#</th></tr></thead><tbody>' + rows + '</tbody></table>'
+                        + (s.groups > (s.sample || []).length ? '<div class="text-[10px] text-gray-500 mt-1">… showing ' + (s.sample || []).length + ' of ' + s.groups + ' groups.</div>' : '') : '')
+                    + '</div>';
+            };
+            panel.innerHTML = scopeBlock('Corporate ↔ Corporate', data.corporate)
+                + scopeBlock('Partner ↔ Partner (Marketplace)', data.partner)
+                + '<div class="text-[11px] text-gray-500">Dry-run only — nothing changed. Confirm these look right and I\'ll enable the apply (which preserves both EN + AR names, re-parents contacts/deals onto the survivor, and tags the rest Duplicate-Delete).</div>';
             if (btn) btn.disabled = false;
         }
 
