@@ -1565,6 +1565,15 @@ export const duplicateRadarRoutes = [
           const body = await c.req.json().catch(() => ({}));
           const scope = body?.scope === "partner" ? "partner" : "corporate";
           const limit = parseInt(body?.limit, 10);
+          // Per-group survivor overrides { "domain|name": zohoIdToKeep }.
+          const overrides: Record<string, string> = {};
+          if (body?.overrides && typeof body.overrides === "object") {
+            for (const [k, v] of Object.entries(body.overrides)) {
+              if (typeof k === "string" && typeof v === "string" && v.trim()) {
+                overrides[k] = v.trim();
+              }
+            }
+          }
           const performedBy =
             `${(sessionUser as any)?.email || "admin"} (bulk account ${scope} domain+name merge)`;
           const { applyAccountDomainNameMerge } = await import("../../utils/duplicateRadarDatabase");
@@ -1573,6 +1582,7 @@ export const duplicateRadarRoutes = [
             dryRun: false,
             limit: Number.isFinite(limit) && limit > 0 ? limit : 100,
             performedBy,
+            overrides,
           });
           return c.json({ success: true, ...result });
         } catch (e: any) {

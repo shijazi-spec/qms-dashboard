@@ -2485,14 +2485,40 @@ export const ACCOUNT_SCOPE_LAYOUTS: Record<"corporate" | "partner", string[]> = 
     .filter(Boolean),
 };
 
+/** One account in a domain+name group, with its data-completeness score. */
+export interface AccountDomainNameMember {
+  zohoId: string;
+  name: string;
+  domain: string | null;
+  owner: string | null;
+  website: string | null;
+  cr: string | null;
+  vat: string | null;
+  country: string | null;
+  industry: string | null;
+  createdMs: number | null;
+  /** Count of the tracked key fields that are populated, out of fieldsTotal. */
+  fieldsPopulated: number;
+  fieldsTotal: number;
+  /** Completion % = fieldsPopulated / fieldsTotal, rounded. */
+  completionPct: number;
+  /** True for the proposed survivor (highest completion %, tie-break oldest). */
+  isSurvivor: boolean;
+}
+
 export interface AccountDomainNameGroup {
+  /** Stable id = domain|nameKey — used to carry a survivor override on apply. */
+  key: string;
   domain: string;
   nameKey: string;
+  /** Proposed survivor: the member with the highest completion %. Override-able. */
   survivorZohoId: string;
   duplicateZohoIds: string[];
   /** Distinct display names across the group (surfaces EN vs AR variants). */
   names: string[];
   label: string;
+  /** Every account in the group, scored — so the operator can verify / override. */
+  members: AccountDomainNameMember[];
 }
 
 /** Group accounts on the given layouts by domain + normalized name (>=2). */
@@ -2508,9 +2534,13 @@ async function getAccountDomainNameGroups(
     owner_name: string | null;
     website: string | null;
     cr_number: string | null;
+    vat_number: string | null;
+    country: string | null;
+    industry: string | null;
     created_ms: string | null;
   }>(
-    `SELECT zoho_record_id, record_name, company_name, domain, owner_name, website, cr_number,
+    `SELECT zoho_record_id, record_name, company_name, domain, owner_name, website,
+            cr_number, vat_number, country, industry,
             EXTRACT(EPOCH FROM COALESCE(created_date, modified_date))::bigint AS created_ms
        FROM duplicate_records
       WHERE record_type = 'account'
@@ -2531,44 +2561,81 @@ async function getAccountDomainNameGroups(
     byKey.set(key, arr);
   }
 
+  // Data completeness = how many of these key account fields are populated.
+  // This is the transparent score the operator sees in the drill-in, and the
+  // survivor is the member with the highest %. On apply we FORCE this survivor
+  // (or the operator's override) as the merge master, so what's shown is
+  // exactly what's kept — no divergence from a separate engine heuristic.
+  const SCORED_FIELDS: Array<keyof (typeof res.rows)[number]> = [
+    "record_name",
+    "domain",
+    "website",
+    "owner_name",
+    "cr_number",
+    "vat_number",
+    "country",
+    "industry",
+  ];
+  const fieldsPopulated = (r: (typeof res.rows)[number]) =>
+    SCORED_FIELDS.reduce(
+      (n, f) => n + (r[f] != null && String(r[f]).trim() !== "" ? 1 : 0),
+      0,
+    );
+
   const groups: AccountDomainNameGroup[] = [];
   for (const [key, rows] of byKey.entries()) {
     const seen = new Map<string, (typeof rows)[number]>();
     for (const r of rows) if (!seen.has(r.zoho_record_id)) seen.set(r.zoho_record_id, r);
-    const members = [...seen.values()];
-    if (members.length < 2) continue;
-    // Survivor (preview heuristic): most fields populated, else oldest. The
-    // real merge reuses the agentic executor's survivor selection on apply.
-    const completeness = (r: (typeof rows)[number]) =>
-      (r.website && r.website.trim() ? 1 : 0) +
-      (r.cr_number && r.cr_number.trim() ? 1 : 0) +
-      (r.owner_name && r.owner_name.trim() ? 1 : 0) +
-      (r.record_name && r.record_name.trim() ? 1 : 0);
-    members.sort((a, b) => {
-      const ca = completeness(a),
-        cb = completeness(b);
+    const sorted = [...seen.values()];
+    if (sorted.length < 2) continue;
+    // Survivor: highest completion % → oldest (canonical original).
+    sorted.sort((a, b) => {
+      const ca = fieldsPopulated(a),
+        cb = fieldsPopulated(b);
       if (cb !== ca) return cb - ca;
       return (
         Number(a.created_ms || Number.MAX_SAFE_INTEGER) -
         Number(b.created_ms || Number.MAX_SAFE_INTEGER)
       );
     });
-    const [survivor, ...dups] = members;
+    const [survivor, ...dups] = sorted;
     if (!survivor) continue;
+    const total = SCORED_FIELDS.length;
+    const members: AccountDomainNameMember[] = sorted.map((m) => {
+      const pop = fieldsPopulated(m);
+      return {
+        zohoId: m.zoho_record_id,
+        name: (m.record_name || m.company_name || "").trim(),
+        domain: m.domain,
+        owner: m.owner_name,
+        website: m.website,
+        cr: m.cr_number,
+        vat: m.vat_number,
+        country: m.country,
+        industry: m.industry,
+        createdMs: m.created_ms != null ? Number(m.created_ms) : null,
+        fieldsPopulated: pop,
+        fieldsTotal: total,
+        completionPct: Math.round((pop / total) * 100),
+        isSurvivor: m.zoho_record_id === survivor.zoho_record_id,
+      };
+    });
     const names = [
       ...new Set(
-        members
+        sorted
           .map((m) => (m.record_name || m.company_name || "").trim())
           .filter(Boolean),
       ),
     ];
     groups.push({
+      key,
       domain: key.split("|")[0]!,
       nameKey: key.split("|").slice(1).join("|"),
       survivorZohoId: survivor.zoho_record_id,
       duplicateZohoIds: dups.map((d) => d.zoho_record_id),
       names,
       label: (survivor.record_name || survivor.company_name || "").trim(),
+      members,
     });
   }
   return groups;
@@ -2584,7 +2651,9 @@ export async function previewAccountDomainNameMerge(): Promise<{
     return {
       groups: groups.length,
       accountsToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
-      sample: groups.slice(0, 15),
+      // Return up to 200 so the operator can drill into and override the
+      // survivor of every group before applying (was 15 — too few to verify).
+      sample: groups.slice(0, 200),
     };
   };
   return {
@@ -2606,6 +2675,13 @@ export async function applyAccountDomainNameMerge(opts: {
   dryRun: boolean;
   limit?: number;
   performedBy: string;
+  /**
+   * Per-group survivor overrides, keyed by AccountDomainNameGroup.key
+   * (domain|nameKey) → the Zoho id to KEEP. When a group isn't listed we keep
+   * the default survivor (highest completion %). An override pointing at a
+   * record not in the group is ignored by the engine (it falls back safely).
+   */
+  overrides?: Record<string, string>;
 }): Promise<{
   scope: string;
   groups: number;
@@ -2641,11 +2717,18 @@ export async function applyAccountDomainNameMerge(opts: {
       );
       const recs = recRes.rows as DuplicateRecord[];
       if (recs.length < 2) continue;
+      // Honor an operator override (else keep the highest-% survivor). We FORCE
+      // it as the engine's master so the applied survivor == the previewed one.
+      const overrideId = opts.overrides?.[g.key];
+      const chosenSurvivorId =
+        overrideId && zohoIds.includes(overrideId) ? overrideId : g.survivorZohoId;
       const survivorRow =
-        recs.find((r) => (r as any).zoho_record_id === g.survivorZohoId) || recs[0];
+        recs.find((r) => (r as any).zoho_record_id === chosenSurvivorId) || recs[0];
       const clusterId = (survivorRow as any)?.cluster_id ?? (recs[0] as any)?.cluster_id;
       if (!clusterId) continue;
-      const plan = buildMergePlan("Accounts", clusterId, recs, {});
+      const plan = buildMergePlan("Accounts", clusterId, recs, {
+        masterZohoId: chosenSurvivorId,
+      });
       if (plan.fieldDecisions.some((d) => d.field === "Description" && d.action === "fill")) {
         namesPreserved++;
       }

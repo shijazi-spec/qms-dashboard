@@ -6089,22 +6089,51 @@
                 if (btn) btn.disabled = false;
                 return;
             }
+            // Reset the per-session group registry + survivor overrides each
+            // time we recompute the preview (stale ids would be meaningless).
+            window._accountMergeGroups = [];
+            window._accountMergeOverrides = {};
             const scopeBlock = (title, scopeKey, s) => {
                 if (!s || !s.groups) {
                     return '<div class="px-3 py-2 rounded bg-gray-50 border border-gray-200 text-gray-600 mb-2">' + title + ': no same domain+name groups found.</div>';
                 }
                 const rows = (s.sample || []).map(function (g) {
+                    // Register the group by a stable integer index so the click
+                    // handlers never have to embed the (Arabic / spaced) key.
+                    const gi = window._accountMergeGroups.length;
+                    window._accountMergeGroups.push({ scope: scopeKey, key: g.key, label: g.label, survivorZohoId: g.survivorZohoId, members: g.members || [] });
                     const others = (g.names || []).filter(function (n) { return (n || '').trim() && n !== g.label; });
-                    return '<tr class="border-t">'
-                        + '<td class="px-2 py-1 align-top">' + escapeHtml(g.label || '—') + (others.length ? '<div class="text-[10px] text-gray-500">also: ' + escapeHtml(others.join(' · ')) + '</div>' : '') + '</td>'
+                    const survivor = (g.members || []).find(function (m) { return m.isSurvivor; }) || (g.members || [])[0] || {};
+                    const headRow = '<tr class="border-t hover:bg-teal-50 cursor-pointer" data-on-click="toggleAccountGroup" data-args=\'[' + gi + ']\'>'
+                        + '<td class="px-2 py-1 align-top"><span id="acctgrp-caret-' + gi + '" class="text-gray-400 me-1">▸</span><span id="acctgrp-survname-' + gi + '">' + escapeHtml(g.label || '—') + '</span>'
+                        + (others.length ? '<div class="text-[10px] text-gray-500 ms-3">also: ' + escapeHtml(others.join(' · ')) + '</div>' : '') + '</td>'
                         + '<td class="px-2 py-1 align-top font-mono text-[11px]">' + escapeHtml(g.domain || '—') + '</td>'
-                        + '<td class="px-2 py-1 align-top text-center">' + ((g.duplicateZohoIds || []).length + 1) + '</td>'
+                        + '<td class="px-2 py-1 align-top text-center">' + ((g.members || []).length) + '</td>'
+                        + '<td class="px-2 py-1 align-top text-center"><span id="acctgrp-survpct-' + gi + '" class="text-[11px] font-semibold text-emerald-700">' + (survivor.completionPct != null ? survivor.completionPct + '%' : '—') + '</span></td>'
                         + '</tr>';
+                    const memberRows = (g.members || []).map(function (m) {
+                        const created = m.createdMs ? new Date(m.createdMs * 1000).toISOString().slice(0, 10) : '—';
+                        return '<tr class="border-t acctgrp-member-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setAccountSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">'
+                            + '<td class="px-2 py-1"><span class="acctgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
+                            + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="acctgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
+                            + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.owner || '—') + '</td>'
+                            + '<td class="px-2 py-1 font-mono text-[10px] text-gray-600">' + escapeHtml(m.website || '—') + '</td>'
+                            + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.cr || '—') + '</td>'
+                            + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.country || '—') + '</td>'
+                            + '<td class="px-2 py-1 text-gray-500 text-[10px]">' + created + '</td>'
+                            + '<td class="px-2 py-1"><div class="flex items-center gap-1"><div class="w-14 h-1.5 bg-gray-200 rounded"><div class="h-1.5 rounded bg-emerald-500" style="width:' + (m.completionPct || 0) + '%"></div></div><span class="text-[10px] text-gray-600">' + (m.completionPct || 0) + '% (' + (m.fieldsPopulated || 0) + '/' + (m.fieldsTotal || 0) + ')</span></div></td>'
+                            + '</tr>';
+                    }).join('');
+                    const detailRow = '<tr id="acctgrp-detail-' + gi + '" style="display:none"><td colspan="4" class="px-2 pb-2 bg-gray-50">'
+                        + '<div class="text-[10px] text-gray-500 mt-1 mb-1">Click a row to keep that account as the <strong>survivor</strong> (✓ = highest data completeness). The others are tagged Duplicate-Delete; their contacts & deals re-parent onto the survivor.</div>'
+                        + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1"></th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Website</th><th class="px-2 py-1 text-start">CR</th><th class="px-2 py-1 text-start">Country</th><th class="px-2 py-1 text-start">Created</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
+                        + '</td></tr>';
+                    return headRow + detailRow;
                 }).join('');
                 const applyBtn = '<button data-on-click="applyAccountAutoMerge" data-args=\'["' + scopeKey + '"]\' class="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-600 text-white hover:bg-teal-700">⚡ Apply these ' + s.groups.toLocaleString() + ' merge(s) (admin)</button>';
                 return '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-900 mb-2">'
-                    + '<strong>' + title + ':</strong> ' + s.groups.toLocaleString() + ' group(s) would merge · ' + (s.accountsToTag || 0).toLocaleString() + ' account(s) tagged Duplicate-Delete.'
-                    + (rows ? '<table class="mt-1 w-full text-xs bg-white rounded"><thead><tr class="text-gray-500"><th class="px-2 py-1 text-start">Survivor name</th><th class="px-2 py-1 text-start">Domain</th><th class="px-2 py-1">#</th></tr></thead><tbody>' + rows + '</tbody></table>'
+                    + '<strong>' + title + ':</strong> ' + s.groups.toLocaleString() + ' group(s) would merge · ' + (s.accountsToTag || 0).toLocaleString() + ' account(s) tagged Duplicate-Delete. <span class="text-[10px] text-teal-700">Click a group to verify / change its survivor.</span>'
+                    + (rows ? '<table class="mt-1 w-full text-xs bg-white rounded"><thead><tr class="text-gray-500"><th class="px-2 py-1 text-start">Survivor name</th><th class="px-2 py-1 text-start">Domain</th><th class="px-2 py-1"># </th><th class="px-2 py-1">Survivor %</th></tr></thead><tbody>' + rows + '</tbody></table>'
                         + (s.groups > (s.sample || []).length ? '<div class="text-[10px] text-gray-500 mt-1">… showing ' + (s.sample || []).length + ' of ' + s.groups + ' groups.</div>' : '') : '')
                     + '<div>' + applyBtn + '</div>'
                     + '</div>';
@@ -6113,6 +6142,60 @@
                 + scopeBlock('Partner ↔ Partner (Marketplace)', 'partner', data.partner)
                 + '<div class="text-[11px] text-gray-500">Preview is a dry-run. <strong>Apply</strong> preserves both EN + AR names (alternate saved to the account Description), re-parents the duplicates\' contacts/deals onto the survivor, and tags the rest Duplicate-Delete — nothing is deleted by the platform.</div>';
             if (btn) btn.disabled = false;
+        }
+
+        // Expand / collapse one domain+name group to view its members + %.
+        function toggleAccountGroup(gi) {
+            const detail = document.getElementById('acctgrp-detail-' + gi);
+            const caret = document.getElementById('acctgrp-caret-' + gi);
+            if (!detail) return;
+            const open = detail.style.display !== 'none';
+            detail.style.display = open ? 'none' : '';
+            if (caret) caret.textContent = open ? '▸' : '▾';
+        }
+
+        // Operator picks which account in a group is the survivor. Records the
+        // override (keyed by the group's stable key) and updates the UI; the
+        // override travels to the backend on Apply, where it FORCES the merge
+        // master so what you selected is exactly what is kept.
+        function setAccountSurvivor(gi, zohoId) {
+            const g = (window._accountMergeGroups || [])[gi];
+            if (!g) return;
+            window._accountMergeOverrides = window._accountMergeOverrides || {};
+            const def = (g.members.find(function (m) { return m.isSurvivor; }) || {}).zohoId;
+            if (zohoId === def) { delete window._accountMergeOverrides[g.key]; }
+            else { window._accountMergeOverrides[g.key] = zohoId; }
+            // Update radios + SURVIVOR badges within this group.
+            document.querySelectorAll('.acctgrp-radio-' + gi).forEach(function (el) {
+                const on = el.getAttribute('data-mid') === zohoId;
+                el.textContent = on ? '●' : '○';
+                el.className = 'acctgrp-radio-' + gi + ' ' + (on ? 'text-emerald-600' : 'text-gray-300');
+            });
+            document.querySelectorAll('.acctgrp-badge-' + gi).forEach(function (el) {
+                const on = el.getAttribute('data-mid') === zohoId;
+                el.innerHTML = on ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '';
+            });
+            document.querySelectorAll('.acctgrp-member-' + gi).forEach(function (tr) {
+                tr.classList.toggle('bg-emerald-50', tr.getAttribute('data-mid') === zohoId);
+            });
+            // Reflect the choice in the collapsed header (name + completion %).
+            const chosen = g.members.find(function (m) { return m.zohoId === zohoId; });
+            if (chosen) {
+                const nm = document.getElementById('acctgrp-survname-' + gi);
+                if (nm) nm.textContent = chosen.name || '—';
+                const pc = document.getElementById('acctgrp-survpct-' + gi);
+                if (pc) pc.textContent = (chosen.completionPct != null ? chosen.completionPct + '%' : '—');
+            }
+        }
+
+        // Collect the survivor overrides for one scope as { key: zohoId }.
+        function _accountOverridesForScope(scope) {
+            const out = {};
+            const ov = window._accountMergeOverrides || {};
+            (window._accountMergeGroups || []).forEach(function (g) {
+                if (g.scope === scope && ov[g.key]) out[g.key] = ov[g.key];
+            });
+            return out;
         }
 
         // Apply the account auto-merge for one scope (admin-gated). Re-uses the
@@ -6124,14 +6207,16 @@
             if (!window.confirm('Apply the ' + scope + ' account auto-merge (same domain + same name)?\\n\\nFor each group: the survivor keeps both EN + AR names (alternate saved to its Description), the duplicate accounts have their contacts/deals re-parented onto the survivor, and the duplicates are tagged Duplicate-Delete — the admin deletes them later; nothing is deleted now.\\n\\nYou will be asked for the admin password next.')) return;
             const key = window.prompt('Enter the admin password to apply this account merge:');
             if (!key || !key.trim()) return;
+            const overrides = _accountOverridesForScope(scope);
             const note = document.createElement('div');
             note.className = 'text-teal-700 mt-1';
-            note.textContent = 'Applying ' + scope + ' merges… (this re-parents records in Zoho — give it a moment)';
+            const ovCount = Object.keys(overrides).length;
+            note.textContent = 'Applying ' + scope + ' merges…' + (ovCount ? ' (' + ovCount + ' survivor override' + (ovCount === 1 ? '' : 's') + ')' : '') + ' (this re-parents records in Zoho — give it a moment)';
             panel.appendChild(note);
             let live;
             try {
                 live = await _runBatchedMerge('/api/duplicates/accounts/domain-name-merge', {
-                    key: key.trim(), batchLimit: 8, body: { scope: scope }, progressKeys: ['merged'],
+                    key: key.trim(), batchLimit: 8, body: { scope: scope, overrides: overrides }, progressKeys: ['merged'],
                     onTick: function (t) { note.textContent = 'Applying ' + scope + ' merges… ' + (t.merged || 0).toLocaleString() + ' group(s), re-parented ' + (t.reparentedDeals || 0) + ' deal(s)/' + (t.reparentedContacts || 0) + ' contact(s)…'; },
                 });
             } catch (e) {

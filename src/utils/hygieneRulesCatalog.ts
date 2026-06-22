@@ -52,7 +52,7 @@ export const HYGIENE_RULES_CATALOG: HygieneRuleGroup[] = [
     title: "Accounts Duplicates",
     rules: [
       { id: "acc-def", rule: "A duplicate Account = the SAME company — same domain / legal name / close fuzzy name." },
-      { id: "acc-survivor", rule: "Survivor = the most complete record / the one with the Account + most related records; gap-fill its blanks, tag the others Duplicate-Delete." },
+      { id: "acc-survivor", rule: "Survivor = the most complete record (highest data-completion % over the key fields: name, domain, website, owner, CR, VAT, country, industry), tie-break oldest; gap-fill its blanks, tag the others Duplicate-Delete. In the domain+name auto-merge preview the operator can DRILL INTO each group to see every member with its completion %, and OVERRIDE which account is kept — the override is FORCED as the merge master on apply, so what's shown is exactly what's kept (Ahmad 2026-06-22).", ref: "Ahmad 2026-06-22" },
       { id: "acc-automerge", rule: "Auto-merge by SAME domain + SAME company name (Arabic-aware + company-suffix stripped), WITHIN one layout only: Corporate Accounts ↔ Corporate Accounts, and Marketplace ↔ Marketplace. A Corporate account and a Partner/Marketplace account for the SAME company are intentionally two separate records — NEVER merged across layouts. Preserves BOTH the EN + AR names (the alternate-language name is appended to the survivor's Description), re-parents the duplicates' Contacts & Deals onto the survivor, then tags the rest Duplicate-Delete. CR / VAT numbers are IGNORED (unreliable / fake data). Read-only preview first → admin password → batched apply; never deletes.", ref: "Ahmad 2026-06-22" },
     ],
   },
