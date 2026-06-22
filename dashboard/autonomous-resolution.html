@@ -246,6 +246,13 @@
             <h2 class="text-lg font-semibold text-gray-900 mb-1">Learning rules</h2>
             <p class="text-xs text-gray-500 mb-3">Your decisions become durable rules so the agent never re-asks the same kind of case.</p>
 
+            <!-- 📚 Adam's rulebook — read-only consolidation of EVERYTHING Adam
+                 operates by (his learning curve). Display only; doesn't change
+                 what the resolver auto-approves. -->
+            <div id="adamRulebook" class="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-sm">
+                <div class="text-xs text-gray-500">Loading Adam's rulebook…</div>
+            </div>
+
             <div class="grid md:grid-cols-5 gap-2 items-end mb-4 p-3 bg-gray-50 rounded-lg">
                 <label class="text-xs text-gray-600">Module
                     <select id="ruleModule" class="mt-1 w-full text-sm border border-gray-300 rounded-lg px-2 py-1">
@@ -482,6 +489,49 @@
                     plugins: { legend: { position: 'bottom' } }
                 }
             });
+        }
+
+        // 📚 Adam's rulebook — read-only consolidation of his hygiene rules,
+        // bulk auto-merge "skills", and learned case-rules (his learning curve).
+        async function loadAdamRulebook() {
+            var box = document.getElementById('adamRulebook');
+            if (!box) return;
+            try {
+                var hy = await getJSON('/api/duplicates/hygiene-rules');
+                var groups = (hy && hy.groups) || [];
+                var hygieneTotal = (hy && hy.totalRules) || 0;
+                // Auto-merge "skills" = the operational rules Ahmad defined (ids contain 'automerge').
+                var autoMerge = [];
+                groups.forEach(function (g) {
+                    (g.rules || []).forEach(function (r) {
+                        if (/automerge/i.test(r.id || '')) autoMerge.push({ tab: g.title, rule: r.rule });
+                    });
+                });
+                var learned = 0;
+                try {
+                    var lr = await getJSON('/api/duplicates/autonomous/rules?all=1');
+                    learned = ((lr && lr.rules) || []).length;
+                } catch (e) { /* non-fatal */ }
+
+                var skillsHtml = autoMerge.length
+                    ? '<ul class="list-disc ps-6 mt-1 space-y-1">' + autoMerge.map(function (s) {
+                        return '<li class="text-gray-700 leading-relaxed"><span class="font-medium">' + esc(s.tab) + ':</span> ' + esc(s.rule) + '</li>';
+                    }).join('') + '</ul>'
+                    : '<div class="text-xs text-gray-400 mt-1">No auto-merge skills defined yet.</div>';
+
+                box.innerHTML =
+                    '<div class="font-semibold text-gray-900 mb-1">📚 Adam\'s rulebook <span class="text-xs font-normal text-gray-500">(everything he operates by — read-only)</span></div>' +
+                    '<div class="flex flex-wrap gap-2 mb-2">' +
+                    '<span class="pill grade-g3">' + hygieneTotal + ' hygiene &amp; business rules</span>' +
+                    '<span class="pill grade-g3">' + autoMerge.length + ' auto-merge skills</span>' +
+                    '<span class="pill ' + (learned > 0 ? 'grade-g3' : 'mode-shadow') + '">' + learned + ' learned case-rules</span>' +
+                    '</div>' +
+                    '<div class="text-xs text-gray-600">The full hygiene rules (per tab) are in the “🛡️ Hygiene &amp; business rules” panel above. Adam\'s operational <strong>auto-merge skills</strong>:</div>' +
+                    skillsHtml +
+                    '<div class="text-[11px] text-gray-400 mt-2">“Learned case-rules” below are the case-shapes you teach him via the form (auto-approve / never-merge). The hygiene rules + auto-merge skills are always in force; the resolver executes only the case-rules below.</div>';
+            } catch (e) {
+                box.innerHTML = '<div class="text-amber-700 text-xs">Could not load rulebook: ' + esc(String(e && e.message || e)) + '</div>';
+            }
         }
 
         async function loadRules() {
@@ -987,7 +1037,7 @@
             if (sig) { sig.scrollIntoView({ behavior: 'smooth', block: 'center' }); sig.focus(); }
         }
 
-        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadNotificationSchedule(); loadProposalTiers(); loadProgress(); loadHygieneRules(); loadRejectionPatterns(); loadAcceptancePatterns(); }
+        function refreshAll() { loadStatus(); loadGrades(); loadRules(); loadAdamRulebook(); loadNotificationSchedule(); loadProposalTiers(); loadProgress(); loadHygieneRules(); loadRejectionPatterns(); loadAcceptancePatterns(); }
 
         document.addEventListener('DOMContentLoaded', function () {
             refreshAll();
