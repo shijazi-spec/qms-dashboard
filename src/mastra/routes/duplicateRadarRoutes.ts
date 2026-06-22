@@ -1464,12 +1464,19 @@ export const duplicateRadarRoutes = [
           if (!sessionUser) return unauthorized(c);
           const body = await c.req.json().catch(() => ({}));
           const limit = parseInt(body?.limit, 10);
+          const overrides: Record<string, string> = {};
+          if (body?.overrides && typeof body.overrides === "object") {
+            for (const [k, v] of Object.entries(body.overrides)) {
+              if (typeof k === "string" && typeof v === "string" && v.trim()) overrides[k] = v.trim();
+            }
+          }
           const performedBy =
             `${(sessionUser as any)?.email || "admin"} (bulk exact email+phone merge)`;
           const { applyExactContactMatches } = await import("../../utils/duplicateRadarDatabase");
           const result = await applyExactContactMatches({
             limit: Number.isFinite(limit) && limit > 0 ? limit : 300,
             performedBy,
+            overrides,
           });
           return c.json({ success: true, ...result });
         } catch (e: any) {
@@ -1513,12 +1520,19 @@ export const duplicateRadarRoutes = [
           if (!sessionUser) return unauthorized(c);
           const body = await c.req.json().catch(() => ({}));
           const limit = parseInt(body?.limit, 10);
+          const overrides: Record<string, string> = {};
+          if (body?.overrides && typeof body.overrides === "object") {
+            for (const [k, v] of Object.entries(body.overrides)) {
+              if (typeof k === "string" && typeof v === "string" && v.trim()) overrides[k] = v.trim();
+            }
+          }
           const performedBy =
             `${(sessionUser as any)?.email || "admin"} (bulk same name+phone merge)`;
           const { applyNamePhoneContactMatches } = await import("../../utils/duplicateRadarDatabase");
           const result = await applyNamePhoneContactMatches({
             limit: Number.isFinite(limit) && limit > 0 ? limit : 200,
             performedBy,
+            overrides,
           });
           return c.json({ success: true, ...result });
         } catch (e: any) {

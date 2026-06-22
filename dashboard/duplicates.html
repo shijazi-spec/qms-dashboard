@@ -5959,6 +5959,84 @@
         // Bulk auto-merge contacts where Email AND Phone match 100% (Sarah 2026-06-20).
         // Preview count first (read-only), then admin-password apply (tags the
         // duplicates Duplicate-Delete, keeps the most complete survivor).
+        // ── Shared contact-merge drill-in (exact email+phone AND name+phone) ──
+        // Each preview group is expandable: every contact with a completion %,
+        // the most-complete proposed as survivor; click a row to override which
+        // contact is KEPT. The override travels to the backend on Apply.
+        function toggleContactGroup(gi) {
+            const detail = document.getElementById('ctcgrp-detail-' + gi);
+            const caret = document.getElementById('ctcgrp-caret-' + gi);
+            if (!detail) return;
+            const open = detail.style.display !== 'none';
+            detail.style.display = open ? 'none' : '';
+            if (caret) caret.textContent = open ? '▸' : '▾';
+        }
+        function setContactSurvivor(gi, zohoId) {
+            const g = (window._contactMergeGroups || [])[gi];
+            if (!g) return;
+            window._contactMergeOverrides = window._contactMergeOverrides || {};
+            const def = (g.members.find(function (m) { return m.isSurvivor; }) || {}).zohoId;
+            if (zohoId === def) { delete window._contactMergeOverrides[g.key]; }
+            else { window._contactMergeOverrides[g.key] = zohoId; }
+            document.querySelectorAll('.ctcgrp-radio-' + gi).forEach(function (el) {
+                const on = el.getAttribute('data-mid') === zohoId;
+                el.textContent = on ? '●' : '○';
+                el.className = 'ctcgrp-radio-' + gi + ' ' + (on ? 'text-emerald-600' : 'text-gray-300');
+            });
+            document.querySelectorAll('.ctcgrp-badge-' + gi).forEach(function (el) {
+                const on = el.getAttribute('data-mid') === zohoId;
+                el.innerHTML = on ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '';
+            });
+            document.querySelectorAll('.ctcgrp-member-' + gi).forEach(function (tr) {
+                tr.classList.toggle('bg-emerald-50', tr.getAttribute('data-mid') === zohoId);
+            });
+            const chosen = g.members.find(function (m) { return m.zohoId === zohoId; });
+            if (chosen) {
+                const nm = document.getElementById('ctcgrp-survname-' + gi);
+                if (nm) nm.textContent = chosen.name || '—';
+                const pc = document.getElementById('ctcgrp-survpct-' + gi);
+                if (pc) pc.textContent = (chosen.completionPct != null ? chosen.completionPct + '%' : '—');
+            }
+        }
+        function _contactOverridesAll() {
+            const out = {};
+            const ov = window._contactMergeOverrides || {};
+            (window._contactMergeGroups || []).forEach(function (g) { if (ov[g.key]) out[g.key] = ov[g.key]; });
+            return out;
+        }
+        function _renderContactMergeGroups(sample) {
+            return (sample || []).map(function (g) {
+                const gi = window._contactMergeGroups.length;
+                window._contactMergeGroups.push({ key: g.key, survivorZohoId: g.survivorZohoId, members: g.members || [] });
+                const survivor = (g.members || []).find(function (m) { return m.isSurvivor; }) || (g.members || [])[0] || {};
+                const signal = (g.email ? '✉ ' + g.email : '') + (g.email && g.phone ? ' · ' : '') + (g.phone ? '☎ ' + g.phone : '');
+                const headRow = '<tr class="border-t hover:bg-emerald-50 cursor-pointer" data-on-click="toggleContactGroup" data-args=\'[' + gi + ']\'>'
+                    + '<td class="px-2 py-1"><span id="ctcgrp-caret-' + gi + '" class="text-gray-400 me-1">▸</span><span id="ctcgrp-survname-' + gi + '">' + escapeHtml(survivor.name || g.label || '—') + '</span></td>'
+                    + '<td class="px-2 py-1 text-[10px] text-gray-500">' + escapeHtml(signal || '—') + '</td>'
+                    + '<td class="px-2 py-1 text-center">' + ((g.members || []).length) + '</td>'
+                    + '<td class="px-2 py-1 text-center"><span id="ctcgrp-survpct-' + gi + '" class="text-[11px] font-semibold text-emerald-700">' + (survivor.completionPct != null ? survivor.completionPct + '%' : '—') + '</span></td>'
+                    + '</tr>';
+                const memberRows = (g.members || []).map(function (m) {
+                    const created = m.createdMs ? new Date(m.createdMs * 1000).toISOString().slice(0, 10) : '—';
+                    return '<tr class="border-t ctcgrp-member-' + gi + ' ' + (m.isSurvivor ? 'bg-emerald-50' : '') + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setContactSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">'
+                        + '<td class="px-2 py-1"><span class="ctcgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
+                        + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="ctcgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
+                        + '<td class="px-2 py-1 font-mono text-[10px] text-gray-600">' + escapeHtml(m.email || '—') + '</td>'
+                        + '<td class="px-2 py-1 font-mono text-[10px] text-gray-600">' + escapeHtml(m.phone || '—') + '</td>'
+                        + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.account || '—') + '</td>'
+                        + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.owner || '—') + '</td>'
+                        + '<td class="px-2 py-1 text-gray-500 text-[10px]">' + escapeHtml(m.layout || '—') + '</td>'
+                        + '<td class="px-2 py-1"><div class="flex items-center gap-1"><div class="w-14 h-1.5 bg-gray-200 rounded"><div class="h-1.5 rounded bg-emerald-500" style="width:' + (m.completionPct || 0) + '%"></div></div><span class="text-[10px] text-gray-600">' + (m.completionPct || 0) + '% (' + (m.fieldsPopulated || 0) + '/' + (m.fieldsTotal || 0) + ')</span></div></td>'
+                        + '</tr>';
+                }).join('');
+                const detail = '<tr id="ctcgrp-detail-' + gi + '" style="display:none"><td colspan="4" class="px-2 pb-2 bg-gray-50">'
+                    + '<div class="text-[10px] text-gray-500 mt-1 mb-1">Click a row to KEEP that contact as the survivor (● = most complete). The others are tagged Duplicate-Delete; their email(s) are preserved on the survivor.</div>'
+                    + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1"></th><th class="px-2 py-1 text-start">Contact</th><th class="px-2 py-1 text-start">Email</th><th class="px-2 py-1 text-start">Phone</th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Layout</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
+                    + '</td></tr>';
+                return headRow + detail;
+            }).join('');
+        }
+
         async function bulkMergeExactContacts() {
             const panel = document.getElementById('bulkMergeExactPanel');
             const btn = document.getElementById('bulkMergeExactBtn');
@@ -5979,25 +6057,34 @@
                 if (btn) btn.disabled = false;
                 return;
             }
+            window._contactMergeGroups = [];
+            window._contactMergeOverrides = {};
+            const list = _renderContactMergeGroups(preview.sample);
             panel.innerHTML = '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-900">'
                 + '<strong>' + preview.qualifyingGroups.toLocaleString() + '</strong> group(s) match exactly on email + phone · <strong>'
-                + preview.duplicatesToTag.toLocaleString() + '</strong> contact(s) would be tagged Duplicate-Delete (the most complete record in each group is kept).</div>';
-            if (!window.confirm('Auto-merge ' + preview.qualifyingGroups + ' exact email+phone match group(s)?\\n\\nThe most complete contact is kept; the other ' + preview.duplicatesToTag + ' are tagged Duplicate-Delete (the admin deletes — nothing is deleted now).\\n\\nYou will be asked for the admin password next.')) {
-                if (btn) btn.disabled = false;
-                return;
-            }
+                + preview.duplicatesToTag.toLocaleString() + '</strong> contact(s) would be tagged Duplicate-Delete (the most complete is kept). <span class="text-[10px] text-emerald-700">Click a group to verify / change its survivor.</span>'
+                + list
+                + (preview.qualifyingGroups > (preview.sample || []).length ? '<div class="text-[10px] text-gray-500 mt-1">… showing ' + (preview.sample || []).length + ' of ' + preview.qualifyingGroups + ' groups.</div>' : '')
+                + '<div><button data-on-click="applyExactContactsNow" class="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">⚡ Apply these ' + preview.qualifyingGroups.toLocaleString() + ' merge(s) (admin)</button></div></div>';
+            if (btn) btn.disabled = false;
+        }
+
+        async function applyExactContactsNow() {
+            const panel = document.getElementById('bulkMergeExactPanel');
             const key = window.prompt('Enter the admin password to apply this bulk merge:');
-            if (!key || !key.trim()) { if (btn) btn.disabled = false; return; }
-            const prog = document.createElement('div'); prog.className = 'text-emerald-700 mt-1'; prog.textContent = 'Applying…'; panel.appendChild(prog);
+            if (!key || !key.trim()) return;
+            const overrides = _contactOverridesAll();
+            const ovN = Object.keys(overrides).length;
+            const prog = document.createElement('div'); prog.className = 'text-emerald-700 mt-1';
+            prog.textContent = 'Applying…' + (ovN ? ' (' + ovN + ' survivor override' + (ovN === 1 ? '' : 's') + ')' : ''); panel.appendChild(prog);
             let live;
             try {
                 live = await _runBatchedMerge('/api/duplicates/contacts/exact-match-merge', {
-                    key: key.trim(), batchLimit: 50, progressKeys: ['mergedGroups'],
+                    key: key.trim(), batchLimit: 50, body: { overrides: overrides }, progressKeys: ['mergedGroups'],
                     onTick: function (t) { prog.textContent = 'Applying… merged ' + (t.mergedGroups || 0).toLocaleString() + ' group(s), tagged ' + (t.taggedRecords || 0).toLocaleString() + ' contact(s)…'; },
                 });
             } catch (e) {
-                prog.innerHTML = '<span class="text-amber-700">Apply paused: ' + escapeHtml(String(e && e.message || e)) + ' — click again to resume the rest.</span>';
-                if (btn) btn.disabled = false;
+                prog.innerHTML = '<span class="text-amber-700">Apply paused: ' + escapeHtml(String(e && e.message || e)) + ' — click Apply again to resume.</span>';
                 return;
             }
             prog.outerHTML = '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 mt-1">'
@@ -6010,7 +6097,6 @@
                     loadRecordTab('contacts', currentPage);
                 }
             } catch (_) { /* non-fatal */ }
-            if (btn) btn.disabled = false;
         }
 
         // Auto-merge contacts that share the SAME NAME + SAME PHONE (Ahmad
@@ -6037,26 +6123,35 @@
                 if (btn) btn.disabled = false;
                 return;
             }
+            window._contactMergeGroups = [];
+            window._contactMergeOverrides = {};
+            const list = _renderContactMergeGroups(preview.sample);
             panel.innerHTML = '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-900">'
                 + '<strong>' + preview.qualifyingGroups.toLocaleString() + '</strong> group(s) match on name + phone · <strong>'
                 + preview.duplicatesToTag.toLocaleString() + '</strong> contact(s) would be tagged Duplicate-Delete · <strong>'
-                + (preview.emailsPreserved || 0).toLocaleString() + '</strong> survivor(s) keep an extra email.</div>';
-            if (!window.confirm('Auto-merge ' + preview.qualifyingGroups + ' same-name+phone group(s)?\\n\\nThe most complete contact is kept and its email(s) preserved (a different email is saved as Secondary Email; a lone email becomes the primary). The other ' + preview.duplicatesToTag + ' are tagged Duplicate-Delete (the admin deletes — nothing is deleted now).\\n\\nYou will be asked for the admin password next.')) {
-                if (btn) btn.disabled = false;
-                return;
-            }
+                + (preview.emailsPreserved || 0).toLocaleString() + '</strong> survivor(s) keep an extra email. <span class="text-[10px] text-teal-700">Click a group to verify / change its survivor.</span>'
+                + list
+                + (preview.qualifyingGroups > (preview.sample || []).length ? '<div class="text-[10px] text-gray-500 mt-1">… showing ' + (preview.sample || []).length + ' of ' + preview.qualifyingGroups + ' groups.</div>' : '')
+                + '<div><button data-on-click="applyNamePhoneContactsNow" class="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-600 text-white hover:bg-teal-700">⚡ Apply these ' + preview.qualifyingGroups.toLocaleString() + ' merge(s) (admin)</button></div></div>';
+            if (btn) btn.disabled = false;
+        }
+
+        async function applyNamePhoneContactsNow() {
+            const panel = document.getElementById('bulkMergeNamePhonePanel');
             const key = window.prompt('Enter the admin password to apply this bulk merge:');
-            if (!key || !key.trim()) { if (btn) btn.disabled = false; return; }
-            const prog = document.createElement('div'); prog.className = 'text-teal-700 mt-1'; prog.textContent = 'Applying…'; panel.appendChild(prog);
+            if (!key || !key.trim()) return;
+            const overrides = _contactOverridesAll();
+            const ovN = Object.keys(overrides).length;
+            const prog = document.createElement('div'); prog.className = 'text-teal-700 mt-1';
+            prog.textContent = 'Applying…' + (ovN ? ' (' + ovN + ' survivor override' + (ovN === 1 ? '' : 's') + ')' : ''); panel.appendChild(prog);
             let live;
             try {
                 live = await _runBatchedMerge('/api/duplicates/contacts/name-phone-merge', {
-                    key: key.trim(), batchLimit: 25, progressKeys: ['mergedGroups'],
+                    key: key.trim(), batchLimit: 25, body: { overrides: overrides }, progressKeys: ['mergedGroups'],
                     onTick: function (t) { prog.textContent = 'Applying… merged ' + (t.mergedGroups || 0).toLocaleString() + ' group(s), tagged ' + (t.taggedRecords || 0).toLocaleString() + ', preserved ' + (t.emailsWritten || 0).toLocaleString() + ' email(s)…'; },
                 });
             } catch (e) {
-                prog.innerHTML = '<span class="text-amber-700">Apply paused: ' + escapeHtml(String(e && e.message || e)) + ' — click again to resume the rest.</span>';
-                if (btn) btn.disabled = false;
+                prog.innerHTML = '<span class="text-amber-700">Apply paused: ' + escapeHtml(String(e && e.message || e)) + ' — click Apply again to resume.</span>';
                 return;
             }
             prog.outerHTML = '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-800 mt-1">'
@@ -6069,7 +6164,6 @@
                     loadRecordTab('contacts', currentPage);
                 }
             } catch (_) { /* non-fatal */ }
-            if (btn) btn.disabled = false;
         }
 
         // DRY-RUN preview of the account auto-merge (same domain + same name,

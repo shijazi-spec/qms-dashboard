@@ -2033,11 +2033,49 @@ async function getResolvedDuplicateZohoIds(
   return out;
 }
 
+/** One contact in a merge group, with its data-completeness score (drill-in). */
+export interface ContactMergeMember {
+  zohoId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  account: string | null;
+  owner: string | null;
+  layout: string | null;
+  createdMs: number | null;
+  /** Populated tracked fields out of fieldsTotal (name, email, phone, account, title, owner). */
+  fieldsPopulated: number;
+  fieldsTotal: number;
+  completionPct: number;
+  /** True for the proposed survivor (kept on merge). Override-able by the operator. */
+  isSurvivor: boolean;
+}
+
+/** Tracked fields for the contact completion % (drill-in display). */
+const CONTACT_SCORE_FIELDS = 6; // name, email, phone, account, title, owner
+function _contactCompletion(v: {
+  name?: unknown;
+  email?: unknown;
+  phone?: unknown;
+  account?: unknown;
+  title?: unknown;
+  owner?: unknown;
+}): number {
+  return [v.name, v.email, v.phone, v.account, v.title, v.owner].reduce<number>(
+    (n, x) => n + (x != null && String(x).trim() !== "" ? 1 : 0),
+    0,
+  );
+}
+
 interface ExactContactGroup {
+  /** Stable id = email|phone — carries a survivor override on apply. */
+  key: string;
   email: string;
   phone: string;
   survivorZohoId: string;
   duplicateZohoIds: string[];
+  /** Every contact in the group, scored — so the operator can verify / override. */
+  members: ContactMergeMember[];
 }
 
 /** Find contact groups where email AND phone match exactly (guarded). */
@@ -2046,13 +2084,18 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
     k_email: string;
     k_phone: string;
     zoho_record_id: string;
+    record_name: string | null;
+    account_name: string | null;
+    owner_name: string | null;
+    title: string | null;
+    layout_name: string | null;
     has_account: boolean;
     completeness: number;
     created_ms: string | null;
   }>(
     `SELECT lower(trim(email)) AS k_email,
             phone_normalized    AS k_phone,
-            zoho_record_id,
+            zoho_record_id, record_name, account_name, owner_name, title, layout_name,
             (account_name IS NOT NULL AND btrim(account_name) <> '') AS has_account,
             ( (CASE WHEN account_name IS NOT NULL AND btrim(account_name)<>'' THEN 1 ELSE 0 END)
             + (CASE WHEN title       IS NOT NULL AND btrim(title)<>''        THEN 1 ELSE 0 END)
@@ -2106,11 +2149,37 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
     });
     const [survivor, ...dups] = members;
     const [email, phone] = key.split("|");
+    const memberRows: ContactMergeMember[] = members.map((m) => {
+      const pop = _contactCompletion({
+        name: m.record_name,
+        email: email,
+        phone: phone,
+        account: m.account_name,
+        title: m.title,
+        owner: m.owner_name,
+      });
+      return {
+        zohoId: m.zoho_record_id,
+        name: (m.record_name || "").trim(),
+        email: email || null,
+        phone: phone || null,
+        account: m.account_name,
+        owner: m.owner_name,
+        layout: m.layout_name,
+        createdMs: m.created_ms != null ? Number(m.created_ms) : null,
+        fieldsPopulated: pop,
+        fieldsTotal: CONTACT_SCORE_FIELDS,
+        completionPct: Math.round((pop / CONTACT_SCORE_FIELDS) * 100),
+        isSurvivor: m.zoho_record_id === survivor.zoho_record_id,
+      };
+    });
     groups.push({
+      key,
       email,
       phone,
       survivorZohoId: survivor.zoho_record_id,
       duplicateZohoIds: dups.map((d) => d.zoho_record_id),
+      members: memberRows,
     });
   }
   return groups;
@@ -2120,18 +2189,22 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
 export async function previewExactContactMatches(): Promise<{
   qualifyingGroups: number;
   duplicatesToTag: number;
+  sample: ExactContactGroup[];
 }> {
   try {
     const groups = await getExactContactMatchGroups();
     return {
       qualifyingGroups: groups.length,
       duplicatesToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
+      // Up to 200 groups (with scored members) so the operator can drill into
+      // and override the survivor of each before applying.
+      sample: groups.slice(0, 200),
     };
   } catch (e) {
     logger.warn("[DuplicateRadar] previewExactContactMatches failed (non-fatal)", {
       error: e instanceof Error ? e.message : String(e),
     });
-    return { qualifyingGroups: 0, duplicatesToTag: 0 };
+    return { qualifyingGroups: 0, duplicatesToTag: 0, sample: [] };
   }
 }
 
@@ -2144,6 +2217,8 @@ export async function previewExactContactMatches(): Promise<{
 export async function applyExactContactMatches(opts: {
   limit?: number;
   performedBy: string;
+  /** Per-group survivor overrides { "email|phone": zohoIdToKeep }. */
+  overrides?: Record<string, string>;
 }): Promise<{ mergedGroups: number; taggedRecords: number; remaining: number; errors: number }> {
   const { addZohoTags, zohoWritesAllowedInEnv } = await import("./zohoCRM");
   const { withTimeout } = await import("./promiseTimeout");
@@ -2157,13 +2232,22 @@ export async function applyExactContactMatches(opts: {
   let mergedGroups = 0;
   let errors = 0;
 
+  // Honor an operator override (else keep the highest-completeness survivor);
+  // the duplicates are everyone else in the group.
+  const resolved = batch.map((g) => {
+    const ov = opts.overrides?.[g.key];
+    const chosen = ov && g.members.some((m) => m.zohoId === ov) ? ov : g.survivorZohoId;
+    const dupIds = g.members.map((m) => m.zohoId).filter((id) => id !== chosen);
+    return { g, chosen, dupIds };
+  });
+
   // Tag in chunks of 100 ids (Zoho add_tags multi-record limit). Track which
   // ids were ACTUALLY tagged so a failed chunk (e.g. Zoho rate-limited while a
   // sync is running) doesn't get marked AI-Applied · pending below — those
   // groups stay Untouched and re-runnable instead of stuck pending forever.
   const CHUNK = 100;
   const taggedOk = new Set<string>();
-  const dupIds = batch.flatMap((g) => g.duplicateZohoIds);
+  const dupIds = resolved.flatMap((r) => r.dupIds);
   for (let i = 0; i < dupIds.length; i += CHUNK) {
     const chunk = dupIds.slice(i, i + CHUNK);
     try {
@@ -2189,10 +2273,10 @@ export async function applyExactContactMatches(opts: {
   // admin actually deletes the tagged duplicates in Zoho, which the next sync's
   // reconcileAutoMergedContactDeletions() detects (it then writes the durable
   // ledger entry, and restoreLedgerResolvedClusterStatus flips it to resolved).
-  for (const g of batch) {
+  for (const { g, chosen, dupIds: groupDups } of resolved) {
     try {
       // Only mark groups whose duplicates were ACTUALLY tagged in Zoho.
-      const taggedDupZohoIds = g.duplicateZohoIds.filter((id) => taggedOk.has(id));
+      const taggedDupZohoIds = groupDups.filter((id) => taggedOk.has(id));
       if (taggedDupZohoIds.length === 0) continue; // tag failed → leave Untouched
       const idRes = await pool.query<{
         id: number;
@@ -2202,10 +2286,10 @@ export async function applyExactContactMatches(opts: {
         `SELECT id, cluster_id, zoho_record_id
            FROM duplicate_records
           WHERE zoho_record_id = ANY($1::text[])`,
-        [[g.survivorZohoId, ...taggedDupZohoIds]],
+        [[chosen, ...taggedDupZohoIds]],
       );
       const rows = idRes.rows;
-      const survivorRow = rows.find((r) => r.zoho_record_id === g.survivorZohoId);
+      const survivorRow = rows.find((r) => r.zoho_record_id === chosen);
       const clusterId = survivorRow?.cluster_id ?? rows[0]?.cluster_id ?? null;
       const dupDbIds = rows
         .filter((r) => taggedDupZohoIds.includes(r.zoho_record_id))
@@ -2285,11 +2369,14 @@ export function planMergedContactEmails(input: {
 }
 
 interface NamePhoneContactGroup {
+  /** Stable id = normalizedName|phone — carries a survivor override on apply. */
+  key: string;
   survivorZohoId: string;
   duplicateZohoIds: string[];
   emailUpdates: { Email?: string; Secondary_Email?: string };
   extraEmails: string[];
   label: string;
+  members: ContactMergeMember[];
 }
 
 /** Find contact groups sharing the same Arabic-normalized name + same phone. */
@@ -2304,11 +2391,13 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
     title: string | null;
     website: string | null;
     company_name: string | null;
+    owner_name: string | null;
+    layout_name: string | null;
     created_ms: string | null;
   }>(
     `SELECT zoho_record_id, record_name, email,
             phone_normalized, mobile_normalized,
-            account_name, title, website, company_name,
+            account_name, title, website, company_name, owner_name, layout_name,
             EXTRACT(EPOCH FROM COALESCE(created_date, modified_date))::bigint AS created_ms
        FROM duplicate_records
       WHERE record_type = 'contact'
@@ -2341,7 +2430,7 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
   }
 
   const groups: NamePhoneContactGroup[] = [];
-  for (const [, rows] of byKey.entries()) {
+  for (const [key, rows] of byKey.entries()) {
     const seenIds = new Map<string, (typeof rows)[number]>();
     for (const r of rows) if (!seenIds.has(r.zoho_record_id)) seenIds.set(r.zoho_record_id, r);
     const members = [...seenIds.values()];
@@ -2381,12 +2470,40 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
       survivorEmail: survivor.email,
       otherEmails: dupEmails,
     });
+    const phoneKey = key.split("|").slice(1).join("|");
+    const memberRows: ContactMergeMember[] = members.map((m) => {
+      const ph = (m.phone_normalized || m.mobile_normalized || "").trim() || phoneKey;
+      const pop = _contactCompletion({
+        name: m.record_name,
+        email: m.email,
+        phone: ph,
+        account: m.account_name,
+        title: m.title,
+        owner: m.owner_name,
+      });
+      return {
+        zohoId: m.zoho_record_id,
+        name: (m.record_name || "").trim(),
+        email: (m.email || "").trim() || null,
+        phone: ph || null,
+        account: m.account_name,
+        owner: m.owner_name,
+        layout: m.layout_name,
+        createdMs: m.created_ms != null ? Number(m.created_ms) : null,
+        fieldsPopulated: pop,
+        fieldsTotal: CONTACT_SCORE_FIELDS,
+        completionPct: Math.round((pop / CONTACT_SCORE_FIELDS) * 100),
+        isSurvivor: m.zoho_record_id === survivor.zoho_record_id,
+      };
+    });
     groups.push({
+      key,
       survivorZohoId: survivor.zoho_record_id,
       duplicateZohoIds: dups.map((d) => d.zoho_record_id),
       emailUpdates: updates,
       extraEmails: extra,
       label: (survivor.record_name || "").trim(),
+      members: memberRows,
     });
   }
   return groups;
@@ -2397,6 +2514,7 @@ export async function previewNamePhoneContactMatches(): Promise<{
   qualifyingGroups: number;
   duplicatesToTag: number;
   emailsPreserved: number;
+  sample: NamePhoneContactGroup[];
 }> {
   try {
     const groups = await getNamePhoneContactGroups();
@@ -2406,12 +2524,13 @@ export async function previewNamePhoneContactMatches(): Promise<{
       emailsPreserved: groups.filter(
         (g) => g.emailUpdates.Email || g.emailUpdates.Secondary_Email,
       ).length,
+      sample: groups.slice(0, 200),
     };
   } catch (e) {
     logger.warn("[DuplicateRadar] previewNamePhoneContactMatches failed (non-fatal)", {
       error: e instanceof Error ? e.message : String(e),
     });
-    return { qualifyingGroups: 0, duplicatesToTag: 0, emailsPreserved: 0 };
+    return { qualifyingGroups: 0, duplicatesToTag: 0, emailsPreserved: 0, sample: [] };
   }
 }
 
@@ -2424,6 +2543,8 @@ export async function previewNamePhoneContactMatches(): Promise<{
 export async function applyNamePhoneContactMatches(opts: {
   limit?: number;
   performedBy: string;
+  /** Per-group survivor overrides { "name|phone": zohoIdToKeep }. */
+  overrides?: Record<string, string>;
 }): Promise<{
   mergedGroups: number;
   taggedRecords: number;
@@ -2446,37 +2567,58 @@ export async function applyNamePhoneContactMatches(opts: {
 
   for (const g of batch) {
     try {
+      // Honor an operator override. When the survivor changes we recompute the
+      // duplicates AND the email plan from the chosen survivor (a record WITH
+      // an email should survive — the email plan keeps the survivor's email
+      // primary and routes a different duplicate email to Secondary_Email).
+      const ov = opts.overrides?.[g.key];
+      const chosen =
+        ov && g.members.some((m) => m.zohoId === ov) ? ov : g.survivorZohoId;
+      let dupZohoIds = g.duplicateZohoIds;
+      let updates = g.emailUpdates;
+      if (chosen !== g.survivorZohoId) {
+        dupZohoIds = g.members.map((m) => m.zohoId).filter((id) => id !== chosen);
+        const chosenMember = g.members.find((m) => m.zohoId === chosen);
+        const dupEmails = g.members
+          .filter((m) => m.zohoId !== chosen)
+          .sort((a, b) => Number(b.createdMs || 0) - Number(a.createdMs || 0))
+          .map((m) => (m.email || "").trim())
+          .filter(Boolean);
+        updates = planMergedContactEmails({
+          survivorEmail: chosenMember?.email ?? null,
+          otherEmails: dupEmails,
+        }).updates;
+      }
       // 1) Preserve the email(s) on the survivor BEFORE tagging the dups.
-      const updates = g.emailUpdates;
       if (updates.Email || updates.Secondary_Email) {
         await withTimeout(
-          updateZohoRecord("Contacts", g.survivorZohoId, updates as Record<string, unknown>),
+          updateZohoRecord("Contacts", chosen, updates as Record<string, unknown>),
           20_000,
-          `email-migrate ${g.survivorZohoId}`,
+          `email-migrate ${chosen}`,
         );
         emailsWritten++;
       }
       // 2) Tag the duplicates Duplicate-Delete.
       const taggedOk = new Set<string>();
-      for (let i = 0; i < g.duplicateZohoIds.length; i += 100) {
-        const chunk = g.duplicateZohoIds.slice(i, i + 100);
+      for (let i = 0; i < dupZohoIds.length; i += 100) {
+        const chunk = dupZohoIds.slice(i, i + 100);
         await withTimeout(
           addZohoTags("Contacts", chunk, ["Duplicate-Delete"]),
           20_000,
-          `tag ${g.survivorZohoId} ${i}`,
+          `tag ${chosen} ${i}`,
         );
         taggedRecords += chunk.length;
         for (const id of chunk) taggedOk.add(id);
       }
       // 3) Mark the cluster AI-Applied · pending (only for the tagged dups).
-      const taggedDupZohoIds = g.duplicateZohoIds.filter((id) => taggedOk.has(id));
+      const taggedDupZohoIds = dupZohoIds.filter((id) => taggedOk.has(id));
       if (taggedDupZohoIds.length > 0) {
         const idRes = await pool.query<{ id: number; cluster_id: number | null; zoho_record_id: string }>(
           `SELECT id, cluster_id, zoho_record_id FROM duplicate_records WHERE zoho_record_id = ANY($1::text[])`,
-          [[g.survivorZohoId, ...taggedDupZohoIds]],
+          [[chosen, ...taggedDupZohoIds]],
         );
         const rows = idRes.rows;
-        const survivorRow = rows.find((r) => r.zoho_record_id === g.survivorZohoId);
+        const survivorRow = rows.find((r) => r.zoho_record_id === chosen);
         const clusterId = survivorRow?.cluster_id ?? rows[0]?.cluster_id ?? null;
         const dupDbIds = rows
           .filter((r) => taggedDupZohoIds.includes(r.zoho_record_id))
