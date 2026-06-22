@@ -1642,9 +1642,10 @@ async function runPreflightBasic(input: {
       domainByRow.set(i, d);
       domainSet.add(d);
     }
-    // RULE 2 v2 — normalise the inbound company name the SAME way the sync
-    // stored duplicate_records.company_name_normalized, so a strict match is
-    // an exact string compare and the fuzzy tier shares one trigram space.
+    // RULE 2 v2 — normalise the inbound company name with the SAME normaliser
+    // the sync uses for duplicate_clusters.company_name_normalized, so a strict
+    // match is an exact string compare and the fuzzy tier shares one trigram
+    // space with the indexed cluster names.
     // Only match by NAME when it's a real, substantial name: skip placeholders
     // (N/A, Test, Confidential, Unknown…) and short/generic fragments (< 4
     // normalised chars) so we never fuse unrelated companies that merely share
@@ -1691,11 +1692,16 @@ async function runPreflightBasic(input: {
     }
   }
 
-  // ── RULE 2 v2 — existing-CLIENT check (Ahmad 2026-06-22).
-  // Match the inbound company against duplicate_RECORDS (not just clusters,
-  // so a single-deal client with no duplicate group is still caught) by
-  // domain → strict company name → fuzzy company name, then aggregate each
-  // match with buildClusterFromRecords to read its cs_overlap_verdict.
+  // ── RULE 2 v2 — existing-CLIENT check (Ahmad 2026-06-22; matcher reworked
+  // 2026-06-23). Match the inbound company to its CRM **cluster(s)** —
+  // duplicate_clusters carries a populated + trigram-indexed
+  // company_name_normalized (same normaliser as the input) and the company
+  // domain — by domain → strict name → fuzzy name, then pull THOSE clusters'
+  // records (which include the customer DEAL) and aggregate with
+  // buildClusterFromRecords to read cs_overlap_verdict. (The previous matcher
+  // queried duplicate_records.company_name_normalized, which is never populated
+  // — that column lives only on duplicate_clusters — so every name match
+  // silently returned nothing and real clients passed.)
   const todayMs = Date.now();
   const PF_REC_COLS = `cluster_id, LOWER(domain) AS domain, record_type,
               raw_data->>'Stage' AS stage, status,
@@ -1703,135 +1709,134 @@ async function runPreflightBasic(input: {
               NULLIF(raw_data->>'Churn_Date','') AS churn_date,
               COALESCE(raw_data->>'Phase', raw_data->>'CS_Phase', raw_data->>'Customer_Phase') AS cs_phase,
               gov_type, owner_name, record_name, company_name, zoho_record_id,
-              layout_name, account_type, lead_type, company_name_normalized`;
-  const recsByDomain = new Map<string, PreflightRecordRow[]>();
-  const recsByName = new Map<string, PreflightRecordRow[]>();
-  const pushRec = (
-    m: Map<string, PreflightRecordRow[]>,
-    k: string,
-    v: PreflightRecordRow,
-  ) => {
+              layout_name, account_type, lead_type`;
+  const clusterIdsByDomain = new Map<string, number[]>();
+  const clusterIdsByName = new Map<string, number[]>();
+  const addClusterId = (m: Map<string, number[]>, k: string, id: number) => {
     const a = m.get(k);
-    if (a) a.push(v);
-    else m.set(k, [v]);
+    if (a) {
+      if (!a.includes(id)) a.push(id);
+    } else m.set(k, [id]);
   };
 
-  // Tier 1 — exact domain.
-  if (domainSet.size > 0) {
+  // Tier 1 + 2 — clusters matching an input DOMAIN or exact normalized NAME.
+  if (domainSet.size > 0 || nameSet.size > 0) {
     const q = await queryWithTimeout<any>(
-      `SELECT ${PF_REC_COLS}
-         FROM duplicate_records
-        WHERE record_type IN ('deal','lead','account')
-          AND domain IS NOT NULL AND LOWER(domain) = ANY($1::text[])
-          AND ${CORPORATE_SQL}
-        LIMIT 50000`,
-      [Array.from(domainSet)],
+      `SELECT id, LOWER(domain) AS domain, company_name_normalized
+         FROM duplicate_clusters
+        WHERE status IN ('active','resolved')
+          AND ( (domain IS NOT NULL AND LOWER(domain) = ANY($1::text[]))
+                OR (company_name_normalized = ANY($2::text[])) )`,
+      [Array.from(domainSet), Array.from(nameSet)],
     );
-    for (const r of (q?.rows ?? [])) {
-      const dom = (r.domain || "").trim().toLowerCase();
-      if (dom) pushRec(recsByDomain, dom, r);
+    for (const c of (q?.rows ?? [])) {
+      const id = Number(c.id);
+      if (!Number.isFinite(id)) continue;
+      const dom = (c.domain || "").trim().toLowerCase();
+      if (dom && domainSet.has(dom)) addClusterId(clusterIdsByDomain, dom, id);
+      const nm = (c.company_name_normalized || "").trim();
+      if (nm && nameSet.has(nm)) addClusterId(clusterIdsByName, nm, id);
     }
   }
 
-  // Tier 2 — strict (exact) normalized company name.
-  if (nameSet.size > 0) {
-    const q = await queryWithTimeout<any>(
-      `SELECT ${PF_REC_COLS}
-         FROM duplicate_records
-        WHERE record_type IN ('deal','lead','account')
-          AND company_name_normalized = ANY($1::text[])
-          AND ${CORPORATE_SQL}
-        LIMIT 50000`,
-      [Array.from(nameSet)],
-    );
-    for (const r of (q?.rows ?? [])) {
-      const nm = (r.company_name_normalized || "").trim();
-      if (nm) pushRec(recsByName, nm, r);
-    }
-  }
-
-  // Tier 3 — fuzzy company name (only rows still unmatched by domain & strict).
-  // ONE batched LATERAL finds the best-matching stored company name per input
-  // name (pg_trgm similarity ≥ 0.6); a follow-up query pulls those companies'
-  // records. fuzzyNameByRow maps a row → the matched stored name key.
-  const fuzzyNameByRow = new Map<number, string>();
-  const fuzzyInputToMatched = new Map<string, string>();
+  // Tier 3 — fuzzy name → cluster (only rows unmatched by domain & exact name).
+  // ONE batched LATERAL picks the best-matching cluster per input name
+  // (pg_trgm similarity ≥ 0.6, served by idx_clusters_company_trgm).
+  const fuzzyClusterByRow = new Map<number, number[]>();
   const fuzzyNeeded: string[] = [];
   const fuzzySeen = new Set<string>();
   for (let i = 0; i < examineCount; i++) {
     const dom = domainByRow.get(i);
-    if (dom && recsByDomain.has(dom)) continue;
+    if (dom && clusterIdsByDomain.has(dom)) continue;
     const nm = nameByRow.get(i);
-    if (!nm || recsByName.has(nm)) continue;
+    if (!nm || clusterIdsByName.has(nm)) continue;
     if (!fuzzySeen.has(nm)) {
       fuzzySeen.add(nm);
       fuzzyNeeded.push(nm);
     }
   }
+  const fuzzyNameToClusters = new Map<string, number[]>();
   if (fuzzyNeeded.length > 0) {
     const q = await queryWithTimeout<any>(
-      `SELECT v.ord AS _ord, m.company_name_normalized AS matched_name
+      `SELECT v.ord AS _ord, m.id AS cluster_id
          FROM unnest($1::text[]) WITH ORDINALITY AS v(nm, ord)
          LEFT JOIN LATERAL (
-           SELECT company_name_normalized
-             FROM duplicate_records
-            WHERE record_type IN ('deal','lead','account')
+           SELECT id
+             FROM duplicate_clusters
+            WHERE status IN ('active','resolved')
               AND company_name_normalized IS NOT NULL
               AND company_name_normalized <> ''
               AND company_name_normalized % v.nm
             ORDER BY similarity(company_name_normalized, v.nm) DESC
             LIMIT 1
          ) m ON true
-        WHERE m.company_name_normalized IS NOT NULL`,
+        WHERE m.id IS NOT NULL`,
       [fuzzyNeeded],
       [`SELECT set_limit(0.6)`],
     );
-    const matchedNames = new Set<string>();
     for (const row of (q?.rows ?? [])) {
       const ord = Number(row._ord) - 1;
       const inputName = fuzzyNeeded[ord];
-      const matched = (row.matched_name || "").trim();
-      if (!inputName || !matched) continue;
-      fuzzyInputToMatched.set(inputName, matched);
-      matchedNames.add(matched);
-    }
-    const toFetch = Array.from(matchedNames).filter((n) => !recsByName.has(n));
-    if (toFetch.length > 0) {
-      const q2 = await queryWithTimeout<any>(
-        `SELECT ${PF_REC_COLS}
-           FROM duplicate_records
-          WHERE record_type IN ('deal','lead','account')
-            AND company_name_normalized = ANY($1::text[])
-            AND ${CORPORATE_SQL}
-          LIMIT 50000`,
-        [toFetch],
-      );
-      for (const r of (q2?.rows ?? [])) {
-        const nm = (r.company_name_normalized || "").trim();
-        if (nm) pushRec(recsByName, nm, r);
-      }
+      const cid = Number(row.cluster_id);
+      if (!inputName || !Number.isFinite(cid)) continue;
+      addClusterId(fuzzyNameToClusters, inputName, cid);
     }
     for (let i = 0; i < examineCount; i++) {
       const dom = domainByRow.get(i);
-      if (dom && recsByDomain.has(dom)) continue;
+      if (dom && clusterIdsByDomain.has(dom)) continue;
       const nm = nameByRow.get(i);
-      if (!nm || recsByName.has(nm)) continue;
-      const matched = fuzzyInputToMatched.get(nm);
-      if (matched && recsByName.has(matched)) fuzzyNameByRow.set(i, matched);
+      if (!nm || clusterIdsByName.has(nm)) continue;
+      const ids = fuzzyNameToClusters.get(nm);
+      if (ids && ids.length) fuzzyClusterByRow.set(i, ids);
     }
   }
 
-  // Memoize the cluster aggregation per match key (one company → one verdict).
-  const clusterCache = new Map<string, PreflightClusterRow | null>();
-  const clusterForKey = (
-    key: string,
-    domainKey: string,
-    recs: PreflightRecordRow[],
-  ): PreflightClusterRow | null => {
-    if (clusterCache.has(key)) return clusterCache.get(key) ?? null;
-    const c = buildClusterFromRecords(domainKey, recs, todayMs);
-    clusterCache.set(key, c);
-    return c;
+  // Pull every matched cluster's corporate Lead/Deal/Account records in ONE
+  // batch (idx_duplicate_records_cluster), grouped by cluster.
+  const allClusterIds = new Set<number>();
+  for (const ids of clusterIdsByDomain.values()) for (const id of ids) allClusterIds.add(id);
+  for (const ids of clusterIdsByName.values()) for (const id of ids) allClusterIds.add(id);
+  for (const ids of fuzzyClusterByRow.values()) for (const id of ids) allClusterIds.add(id);
+  const recsByCluster = new Map<number, PreflightRecordRow[]>();
+  if (allClusterIds.size > 0) {
+    const q = await queryWithTimeout<any>(
+      `SELECT ${PF_REC_COLS}
+         FROM duplicate_records
+        WHERE cluster_id = ANY($1::int[])
+          AND record_type IN ('deal','lead','account')
+          AND ${CORPORATE_SQL}
+        LIMIT 100000`,
+      [Array.from(allClusterIds)],
+    );
+    for (const r of (q?.rows ?? [])) {
+      const cid = Number(r.cluster_id);
+      if (!Number.isFinite(cid)) continue;
+      const a = recsByCluster.get(cid);
+      if (a) a.push(r);
+      else recsByCluster.set(cid, [r]);
+    }
+  }
+
+  // Aggregate the union of a row's matched clusters into one verdict (memoized).
+  const clusterCache = new Map<
+    string,
+    { cluster: PreflightClusterRow | null; recs: PreflightRecordRow[] }
+  >();
+  const buildForClusterIds = (
+    ids: number[],
+  ): { cluster: PreflightClusterRow | null; recs: PreflightRecordRow[] } => {
+    const key = ids.slice().sort((a, b) => a - b).join(",");
+    const cached = clusterCache.get(key);
+    if (cached) return cached;
+    const recs: PreflightRecordRow[] = [];
+    for (const id of ids) {
+      const rs = recsByCluster.get(id);
+      if (rs) recs.push(...rs);
+    }
+    const cluster = recs.length ? buildClusterFromRecords(key, recs, todayMs) : null;
+    const out = { cluster, recs };
+    clusterCache.set(key, out);
+    return out;
   };
 
   const moduleOf = (rt: string | null | undefined): "Leads" | "Deals" | "Contacts" | "Accounts" => {
@@ -1879,24 +1884,24 @@ async function runPreflightBasic(input: {
     if (contactVia) {
       v = basicPreflightVerdict({ contactVia, isCustomerDomain: false });
     } else {
-      if (domain && recsByDomain.has(domain)) {
-        csRecords = recsByDomain.get(domain)!;
-        csCluster = clusterForKey("d:" + domain, domain, csRecords);
+      let matchedIds: number[] | null = null;
+      if (domain && clusterIdsByDomain.has(domain)) {
+        matchedIds = clusterIdsByDomain.get(domain)!;
         csMatchVia = "domain";
       } else {
         const nm = nameByRow.get(i);
-        if (nm && recsByName.has(nm)) {
-          csRecords = recsByName.get(nm)!;
-          csCluster = clusterForKey("n:" + nm, nm, csRecords);
+        if (nm && clusterIdsByName.has(nm)) {
+          matchedIds = clusterIdsByName.get(nm)!;
           csMatchVia = "strict_name";
-        } else {
-          const fz = fuzzyNameByRow.get(i);
-          if (fz && recsByName.has(fz)) {
-            csRecords = recsByName.get(fz)!;
-            csCluster = clusterForKey("n:" + fz, fz, csRecords);
-            csMatchVia = "fuzzy_name";
-          }
+        } else if (fuzzyClusterByRow.has(i)) {
+          matchedIds = fuzzyClusterByRow.get(i)!;
+          csMatchVia = "fuzzy_name";
         }
+      }
+      if (matchedIds && matchedIds.length) {
+        const built = buildForClusterIds(matchedIds);
+        csCluster = built.cluster;
+        csRecords = built.recs;
       }
       if (csCluster && csCluster.cs_overlap_verdict && csMatchVia) {
         const cAny = csCluster as any;

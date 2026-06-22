@@ -1251,14 +1251,6 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_clusters_company_trgm ON duplicate_clusters USING GIN (company_name_normalized gin_trgm_ops)`,
     );
-    // Preflight Rule 2 v2 (Ahmad 2026-06-22): the existing-client check matches
-    // an inbound company against duplicate_RECORDS (not just clusters, so a
-    // single-deal client with no duplicate group is still caught) by fuzzy
-    // company name. This GIN index keeps the per-batch LATERAL similarity
-    // lookup in milliseconds instead of a seq scan per name.
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_records_company_trgm ON duplicate_records USING GIN (company_name_normalized gin_trgm_ops)`,
-    );
   } catch (e) {
     logger.info(
       "⚠️ [DuplicateRadar] pg_trgm not available, falling back to Levenshtein matching",
