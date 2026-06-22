@@ -1989,6 +1989,58 @@ export async function getDuplicateProgressSeries(days = 30): Promise<{
 // "Duplicate-Delete" (migrate-then-tag; the admin deletes). Guards exclude
 // placeholder emails / junk phones so a placeholder collision can't trigger it.
 
+/**
+ * Zoho ids of records already MERGED AWAY for a module (tagged Duplicate-Delete
+ * but not yet deleted by the admin). Until the admin deletes them they still
+ * sit in duplicate_records, so the bulk auto-merge matchers must EXCLUDE them —
+ * otherwise the BATCHED apply re-derives + re-merges the same groups every batch
+ * and never converges (re-hitting Zoho with redundant re-tags). Two sources,
+ * unioned: the durable resolution ledger (agentic / account merges via
+ * executeMergePlan) and pending merge actions (contact auto-merges record an
+ * 'auto_merge_pending' action carrying the duplicates' DB ids). Best-effort —
+ * a missing table just yields an empty set (no exclusion, no regression).
+ */
+async function getResolvedDuplicateZohoIds(
+  module: "Accounts" | "Contacts" | "Leads" | "Deals",
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  try {
+    const led = await pool.query<{ duplicate_zoho_ids: unknown }>(
+      `SELECT duplicate_zoho_ids FROM duplicate_resolution_ledger WHERE module = $1`,
+      [module],
+    );
+    for (const r of led.rows) {
+      const a = Array.isArray(r.duplicate_zoho_ids) ? r.duplicate_zoho_ids : [];
+      for (const id of a) if (id != null) out.add(String(id));
+    }
+  } catch {
+    /* ledger absent/empty */
+  }
+  try {
+    const recordType =
+      module === "Accounts"
+        ? "account"
+        : module === "Contacts"
+          ? "contact"
+          : module === "Leads"
+            ? "lead"
+            : "deal";
+    const res = await pool.query<{ zoho_record_id: string }>(
+      `SELECT DISTINCT dr.zoho_record_id
+         FROM duplicate_merge_actions ma
+         CROSS JOIN LATERAL jsonb_array_elements_text(ma.merged_record_ids) AS e(db_id)
+         JOIN duplicate_records dr ON dr.id = e.db_id::int
+        WHERE ma.action_type IN ('auto_merge_pending','resolve','module_resolved')
+          AND dr.record_type = $1`,
+      [recordType],
+    );
+    for (const r of res.rows) if (r.zoho_record_id) out.add(String(r.zoho_record_id));
+  } catch {
+    /* merge-actions table absent/empty */
+  }
+  return out;
+}
+
 interface ExactContactGroup {
   email: string;
   phone: string;
@@ -2032,8 +2084,12 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
         AND phone_normalized !~ '^(.)\\1+$'`,
   );
 
+  // Skip contacts already merged away (tagged Duplicate-Delete, pending admin
+  // delete) so the batched apply converges instead of re-merging them forever.
+  const resolvedContactIds = await getResolvedDuplicateZohoIds("Contacts");
   const byKey = new Map<string, typeof res.rows>();
   for (const row of res.rows) {
+    if (resolvedContactIds.has(row.zoho_record_id)) continue;
     if (!row.k_email || !row.k_phone) continue;
     const key = `${row.k_email}|${row.k_phone}`;
     const arr = byKey.get(key) || [];
@@ -2273,8 +2329,12 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
         AND LOWER(COALESCE(layout_name, '')) NOT IN ('marketplace', 'partner accounts')`,
   );
 
+  // Skip contacts already merged away (pending admin delete) so the batched
+  // apply converges instead of re-merging the same name+phone groups forever.
+  const resolvedContactIds = await getResolvedDuplicateZohoIds("Contacts");
   const byKey = new Map<string, typeof res.rows>();
   for (const row of res.rows) {
+    if (resolvedContactIds.has(row.zoho_record_id)) continue;
     const nameKey = normalizePersonName(row.record_name);
     if (!nameKey) continue;
     // "Best phone" = the Phone field, else Mobile. (Cross-field Phone-vs-Mobile
@@ -2550,8 +2610,16 @@ async function getAccountDomainNameGroups(
     [layoutNames],
   );
 
+  // Exclude accounts already merged away (see getResolvedDuplicateZohoIds):
+  // tagged duplicates aren't deleted until the admin acts, so without this they
+  // keep re-grouping and the BATCHED apply re-merges the same groups every batch
+  // (never converges, re-hammering Zoho). Excluding them collapses a merged
+  // group to a singleton, which drops out — so the work set shrinks each batch.
+  const resolvedDupIds = await getResolvedDuplicateZohoIds("Accounts");
+
   const byKey = new Map<string, typeof res.rows>();
   for (const row of res.rows) {
+    if (resolvedDupIds.has(row.zoho_record_id)) continue; // already merged away
     const dom = (row.domain || "").trim().toLowerCase();
     const nameKey = normalizeCompanyName(row.record_name || row.company_name || "");
     if (!dom || !nameKey) continue;
