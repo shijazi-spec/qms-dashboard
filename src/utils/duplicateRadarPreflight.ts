@@ -1554,6 +1554,48 @@ export function csClientPreflightVerdict(input: {
   };
 }
 
+/** Map a raw Zoho Phase value onto the CS lifecycle vocabulary. */
+function _csPhaseToActiveState(
+  phase: string | null | undefined,
+): "onboarding" | "adoption" | "renewal" | null {
+  const p = (phase || "").toLowerCase();
+  if (!p) return null;
+  if (p.includes("onboard")) return "onboarding";
+  if (p.includes("adopt")) return "adoption";
+  if (p.includes("renew")) return "renewal";
+  return null;
+}
+
+/**
+ * RULE 2 v2 — resolve the precise CS lifecycle phase for the matched client so
+ * the export's "CS Phase" column reads the real phase, and termination rows
+ * carry the churn date. A churn date wins (the deal has terminated regardless
+ * of a stale Phase field); otherwise we read the actual Phase field off the
+ * company's customer-stage deals.
+ */
+function deriveCsLifecycleState(
+  records: PreflightRecordRow[],
+  churnDate: string | null,
+  churnDays: number | null,
+  coolOff: number,
+): PreflightResultRow["lifecycle_state"] {
+  if (churnDate) {
+    return churnDays != null && churnDays <= coolOff
+      ? "termination_recent"
+      : "termination_old";
+  }
+  const customerDeals = records.filter(
+    (r) =>
+      (r.record_type || "").toLowerCase() === "deal" &&
+      PF_CUSTOMER_STAGES.has((r.stage || "").toLowerCase().trim()),
+  );
+  for (const d of customerDeals) {
+    const st = _csPhaseToActiveState((d as any).cs_phase);
+    if (st) return st;
+  }
+  return null;
+}
+
 /**
  * BASIC mode runner (Ahmad 2026-06-18) — see PREFLIGHT_RULE_MODE. Two SQL
  * passes over duplicate_records (corporate-scope only, marketplace excluded):
@@ -1652,6 +1694,7 @@ async function runPreflightBasic(input: {
               raw_data->>'Stage' AS stage, status,
               raw_data->>'Lead_Status' AS lead_status,
               NULLIF(raw_data->>'Churn_Date','') AS churn_date,
+              COALESCE(raw_data->>'Phase', raw_data->>'CS_Phase', raw_data->>'Customer_Phase') AS cs_phase,
               gov_type, owner_name, record_name, company_name, zoho_record_id,
               layout_name, account_type, lead_type, company_name_normalized`;
   const recsByDomain = new Map<string, PreflightRecordRow[]>();
@@ -1825,21 +1868,25 @@ async function runPreflightBasic(input: {
     };
     let csCluster: PreflightClusterRow | null = null;
     let csMatchVia: "domain" | "strict_name" | "fuzzy_name" | null = null;
+    let csRecords: PreflightRecordRow[] | null = null;
     if (contactVia) {
       v = basicPreflightVerdict({ contactVia, isCustomerDomain: false });
     } else {
       if (domain && recsByDomain.has(domain)) {
-        csCluster = clusterForKey("d:" + domain, domain, recsByDomain.get(domain)!);
+        csRecords = recsByDomain.get(domain)!;
+        csCluster = clusterForKey("d:" + domain, domain, csRecords);
         csMatchVia = "domain";
       } else {
         const nm = nameByRow.get(i);
         if (nm && recsByName.has(nm)) {
-          csCluster = clusterForKey("n:" + nm, nm, recsByName.get(nm)!);
+          csRecords = recsByName.get(nm)!;
+          csCluster = clusterForKey("n:" + nm, nm, csRecords);
           csMatchVia = "strict_name";
         } else {
           const fz = fuzzyNameByRow.get(i);
           if (fz && recsByName.has(fz)) {
-            csCluster = clusterForKey("n:" + fz, fz, recsByName.get(fz)!);
+            csRecords = recsByName.get(fz)!;
+            csCluster = clusterForKey("n:" + fz, fz, csRecords);
             csMatchVia = "fuzzy_name";
           }
         }
@@ -1864,6 +1911,7 @@ async function runPreflightBasic(input: {
         v = basicPreflightVerdict({ contactVia: null, isCustomerDomain: false });
         csCluster = null;
         csMatchVia = null;
+        csRecords = null;
       }
     }
     summary[v.verdict]++;
@@ -1877,6 +1925,7 @@ async function runPreflightBasic(input: {
     let churnDateOut: string | null = null;
     let churnDaysOut: number | null = null;
     let moduleCountsOut: PreflightResultRow["module_counts"] = null;
+    let lifecycleOut: PreflightResultRow["lifecycle_state"] = v.lifecycle_state ?? null;
 
     if (contactVia && contactRec) {
       // RULE 1 duplicate — surface the existing owner + a CRM link.
@@ -1910,6 +1959,18 @@ async function runPreflightBasic(input: {
       churnDateOut = cAny.churn_date ?? null;
       churnDaysOut = cAny.churn_days ?? null;
       crmLinks = _buildCrmLinks(cAny);
+      // Precise CS phase for the export's "CS Phase" column — the real
+      // onboarding / adoption / renewal for an active client, or
+      // termination (recent / past cool-off) with the churn date attached.
+      if (csRecords) {
+        const derived = deriveCsLifecycleState(
+          csRecords,
+          churnDateOut,
+          churnDaysOut,
+          sectorOut === "government" ? 365 : 180,
+        );
+        if (derived) lifecycleOut = derived;
+      }
       const _c = (n: unknown) => (typeof n === "number" ? n : 0);
       moduleCountsOut = {
         leads: _c(csCluster.total_leads),
@@ -1930,7 +1991,7 @@ async function runPreflightBasic(input: {
       input: { domain, company_name: r.company_name ?? null },
       verdict: v.verdict,
       cluster_id: clusterIdOut,
-      lifecycle_state: v.lifecycle_state ?? null,
+      lifecycle_state: lifecycleOut,
       sector: sectorOut,
       arr_exposure: null,
       owners,

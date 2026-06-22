@@ -8304,6 +8304,19 @@ export const duplicateRadarRoutes = [
             lk && lk.url
               ? { text: lk.label || "Open in Zoho", hyperlink: lk.url, tooltip: lk.url }
               : "";
+          // CS Phase column — render the lifecycle_state enum as a human label
+          // for the Head of Sales. Termination rows additionally carry the
+          // Churn Date in its own column (Ahmad 2026-06-22).
+          const phaseLabel = (s: any): string => {
+            switch (s) {
+              case "onboarding": return "Onboarding";
+              case "adoption": return "Adoption";
+              case "renewal": return "Renewal";
+              case "termination_recent": return "Termination (within cool-off)";
+              case "termination_old": return "Termination (past cool-off)";
+              default: return "";
+            }
+          };
           for (const r of rowsToEmit) {
             const ct = contacts
               ? contacts[r.row_index] || contacts[String(r.row_index)] || {}
@@ -8321,7 +8334,7 @@ export const duplicateRadarRoutes = [
               owners: Array.isArray(r.owners) ? r.owners.join(", ") : "",
               cs_owner: r.cs_owner || "",
               modules: fmtModules(r.module_counts),
-              phase: r.lifecycle_state || "",
+              phase: phaseLabel(r.lifecycle_state),
               arr: r.arr_exposure || 0,
               churn_date: r.churn_date || "",
               churn_days: r.churn_days != null ? r.churn_days : "",
