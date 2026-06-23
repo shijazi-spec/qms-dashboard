@@ -1606,6 +1606,40 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Dismiss an account auto-merge group as "NOT duplicates" (Ahmad 2026-06-23).
+    // Records the group's accounts as mutually separated (durable) so the group
+    // is excluded from this AND future previews/merges — no Zoho write.
+    //   POST /api/duplicates/accounts/dismiss-merge-group  { zohoIds: string[] }
+    path: "/api/duplicates/accounts/dismiss-merge-group",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const zohoIds: string[] = Array.isArray(body?.zohoIds)
+            ? body.zohoIds.map((z: any) => String(z || "").trim()).filter(Boolean)
+            : [];
+          if (zohoIds.length < 2) {
+            return c.json({ error: "Need at least 2 account ids to dismiss." }, 400);
+          }
+          const performedBy = `${(user as any)?.email || "user"} (dismiss account merge group)`;
+          const { recordSeparations } = await import("../../utils/duplicateRadarDatabase");
+          // Each account is its own group → recordSeparations separates all pairs.
+          const pairs = await recordSeparations(
+            zohoIds.map((z) => [z]),
+            "dismiss",
+            performedBy,
+          );
+          return c.json({ success: true, separatedPairs: pairs, accounts: zohoIds.length });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Looser DOMAIN-ONLY account auto-merge — PREVIEW (Sarah 2026-06-23).
     // "Same domain, any name" with the shared-domain guard. No writes.
     //   GET /api/duplicates/accounts/domain-only-preview

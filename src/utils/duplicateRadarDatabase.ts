@@ -2763,6 +2763,9 @@ async function getAccountDomainNameGroups(
   // (never converges, re-hammering Zoho). Excluding them collapses a merged
   // group to a singleton, which drops out — so the work set shrinks each batch.
   const resolvedDupIds = await getResolvedDuplicateZohoIds("Accounts");
+  // Groups the operator DISMISSED ("not duplicates") — their accounts are
+  // recorded as mutually separated, so the group must never reappear or merge.
+  const sepPairs = await getSeparationPairKeySet();
 
   const byKey = new Map<string, typeof res.rows>();
   for (const row of res.rows) {
@@ -2805,6 +2808,23 @@ async function getAccountDomainNameGroups(
     for (const r of rows) if (!seen.has(r.zoho_record_id)) seen.set(r.zoho_record_id, r);
     const sorted = [...seen.values()];
     if (sorted.length < 2) continue;
+    // Skip a DISMISSED group: if any member pair was recorded as separated
+    // ("not duplicates"), drop the whole group so it never auto-merges.
+    if (sepPairs.size > 0) {
+      const ids = sorted.map((r) => r.zoho_record_id);
+      let separated = false;
+      for (let a = 0; a < ids.length && !separated; a++) {
+        for (let b = a + 1; b < ids.length; b++) {
+          const lo = ids[a]! < ids[b]! ? ids[a]! : ids[b]!;
+          const hi = ids[a]! < ids[b]! ? ids[b]! : ids[a]!;
+          if (sepPairs.has(lo + "|" + hi)) {
+            separated = true;
+            break;
+          }
+        }
+      }
+      if (separated) continue;
+    }
     // Survivor: highest completion % → oldest (canonical original).
     sorted.sort((a, b) => {
       const ca = fieldsPopulated(a),
@@ -5119,6 +5139,29 @@ export async function recordSeparations(
   }
   _sepParticipants = null; // invalidate the participant cache after a write
   return written;
+}
+
+/**
+ * All separated pairs as a Set of "low|high" keys — so a grouping pass can
+ * exclude a group the operator DISMISSED as "not duplicates" (its members were
+ * recorded as mutually separated) in one in-memory lookup. Separation is rare,
+ * so the set is small. Best-effort (missing table → empty set).
+ */
+export async function getSeparationPairKeySet(): Promise<Set<string>> {
+  const out = new Set<string>();
+  try {
+    const r = await pool.query<{ zoho_id_low: string; zoho_id_high: string }>(
+      `SELECT zoho_id_low, zoho_id_high FROM duplicate_separation_ledger`,
+    );
+    for (const row of r.rows) {
+      if (row.zoho_id_low && row.zoho_id_high) {
+        out.add(row.zoho_id_low + "|" + row.zoho_id_high);
+      }
+    }
+  } catch {
+    /* ledger absent/empty → nothing separated */
+  }
+  return out;
 }
 
 /** All Zoho ids this record has been separated from (empty for the 99% case). */

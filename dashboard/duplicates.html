@@ -6206,7 +6206,7 @@
                     window._accountMergeGroups.push({ scope: scopeKey, key: g.key, label: g.label, survivorZohoId: g.survivorZohoId, members: g.members || [] });
                     const others = (g.names || []).filter(function (n) { return (n || '').trim() && n !== g.label; });
                     const survivor = (g.members || []).find(function (m) { return m.isSurvivor; }) || (g.members || [])[0] || {};
-                    const headRow = '<tr class="border-t hover:bg-teal-50 cursor-pointer" data-on-click="toggleAccountGroup" data-args=\'[' + gi + ']\'>'
+                    const headRow = '<tr id="acctgrp-head-' + gi + '" class="border-t hover:bg-teal-50 cursor-pointer" data-on-click="toggleAccountGroup" data-args=\'[' + gi + ']\'>'
                         + '<td class="px-2 py-1 align-top"><span id="acctgrp-caret-' + gi + '" class="text-gray-400 me-1">▸</span><span id="acctgrp-survname-' + gi + '">' + escapeHtml(g.label || '—') + '</span>'
                         + (others.length ? '<div class="text-[10px] text-gray-500 ms-3">also: ' + escapeHtml(others.join(' · ')) + '</div>' : '') + '</td>'
                         + '<td class="px-2 py-1 align-top font-mono text-[11px]">' + escapeHtml(g.domain || '—') + '</td>'
@@ -6229,6 +6229,7 @@
                     const detailRow = '<tr id="acctgrp-detail-' + gi + '" style="display:none"><td colspan="4" class="px-2 pb-2 bg-gray-50">'
                         + '<div class="text-[10px] text-gray-500 mt-1 mb-1">Click a row to keep that account as the <strong>survivor</strong> (✓ = highest data completeness). The others are tagged Duplicate-Delete; their contacts & deals re-parent onto the survivor.</div>'
                         + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1"></th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Website</th><th class="px-2 py-1 text-start">CR</th><th class="px-2 py-1 text-start">Country</th><th class="px-2 py-1 text-start">Created</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
+                        + '<div class="mt-1"><button data-on-click="dismissAccountGroup" data-args=\'[' + gi + ']\' class="px-2 py-1 text-[11px] font-semibold rounded bg-rose-100 text-rose-700 hover:bg-rose-200" title="These accounts are NOT the same company — exclude this group from this and all future auto-merges.">✕ Not duplicates — dismiss (don\'t merge)</button></div>'
                         + '</td></tr>';
                     return headRow + detailRow;
                 }).join('');
@@ -6295,9 +6296,42 @@
             const out = {};
             const ov = window._accountMergeOverrides || {};
             (window._accountMergeGroups || []).forEach(function (g) {
-                if (g.scope === scope && ov[g.key]) out[g.key] = ov[g.key];
+                if (g.scope === scope && !g._dismissed && ov[g.key]) out[g.key] = ov[g.key];
             });
             return out;
+        }
+
+        // Dismiss a group as "NOT duplicates" — records the accounts as mutually
+        // separated (durable) so the group is excluded from this AND every future
+        // auto-merge. No Zoho write. The apply re-derives groups server-side, so a
+        // dismissed group is skipped automatically; here we just clear it from view.
+        async function dismissAccountGroup(gi) {
+            const g = (window._accountMergeGroups || [])[gi];
+            if (!g) return;
+            const ids = (g.members || []).map(function (m) { return m.zohoId; });
+            if (ids.length < 2) return;
+            if (!window.confirm('Mark these ' + ids.length + ' account(s) as NOT duplicates of each other?\n\nThey will be excluded from this and all FUTURE auto-merges (recorded in the separation ledger). Nothing is written to Zoho.')) return;
+            try {
+                const res = await fetch('/api/duplicates/accounts/dismiss-merge-group', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ zohoIds: ids }),
+                });
+                const d = await res.json().catch(function () { return {}; });
+                if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                alert('Dismiss failed: ' + (e && e.message || e));
+                return;
+            }
+            g._dismissed = true;
+            if (window._accountMergeOverrides) delete window._accountMergeOverrides[g.key];
+            const head = document.getElementById('acctgrp-head-' + gi);
+            const detail = document.getElementById('acctgrp-detail-' + gi);
+            if (detail) detail.remove();
+            if (head) {
+                head.style.display = 'none';
+                head.removeAttribute('data-on-click');
+            }
         }
 
         // Apply the account auto-merge for one scope (admin-gated). Re-uses the
