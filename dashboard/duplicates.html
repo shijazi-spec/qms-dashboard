@@ -6108,7 +6108,8 @@
             const list = _renderContactMergeGroups(preview.sample);
             panel.innerHTML = '<div class="px-3 py-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-900">'
                 + '<strong>' + preview.qualifyingGroups.toLocaleString() + '</strong> group(s) match exactly on email + phone · <strong>'
-                + preview.duplicatesToTag.toLocaleString() + '</strong> contact(s) would be tagged Duplicate-Delete (the most complete is kept). <span class="text-[10px] text-emerald-700">Click a group to verify / change its survivor.</span>'
+                + preview.duplicatesToTag.toLocaleString() + '</strong> contact(s) would be tagged Duplicate-Delete (the most complete is kept) · <strong>'
+                + (preview.numbersPreserved || 0).toLocaleString() + '</strong> survivor(s) keep an extra number. <span class="text-[10px] text-emerald-700">Click a group to verify / change its survivor.</span>'
                 + list
                 + (preview.qualifyingGroups > (preview.sample || []).length ? '<div class="text-[10px] text-gray-500 mt-1">… showing ' + (preview.sample || []).length + ' of ' + preview.qualifyingGroups + ' groups.</div>' : '')
                 + '<div><button data-on-click="applyExactContactsNow" class="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">⚡ Apply these ' + preview.qualifyingGroups.toLocaleString() + ' merge(s) (admin)</button></div></div>';

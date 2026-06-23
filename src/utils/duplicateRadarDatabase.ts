@@ -2078,6 +2078,10 @@ interface ExactContactGroup {
   phone: string;
   survivorZohoId: string;
   duplicateZohoIds: string[];
+  /** Second number to preserve on the survivor (Mobile gap-fill) — both members
+   *  share the same primary email+phone, so only a differing Mobile can be lost. */
+  phoneUpdates: { Phone?: string; Mobile?: string };
+  extraPhones: string[];
   /** Every contact in the group, scored — so the operator can verify / override. */
   members: ContactMergeMember[];
 }
@@ -2093,6 +2097,8 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
     owner_name: string | null;
     title: string | null;
     layout_name: string | null;
+    phone: string | null;
+    mobile: string | null;
     has_account: boolean;
     completeness: number;
     created_ms: string | null;
@@ -2100,6 +2106,7 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
     `SELECT lower(trim(email)) AS k_email,
             phone_normalized    AS k_phone,
             zoho_record_id, record_name, account_name, owner_name, title, layout_name,
+            phone, mobile,
             (account_name IS NOT NULL AND btrim(account_name) <> '') AS has_account,
             ( (CASE WHEN account_name IS NOT NULL AND btrim(account_name)<>'' THEN 1 ELSE 0 END)
             + (CASE WHEN title       IS NOT NULL AND btrim(title)<>''        THEN 1 ELSE 0 END)
@@ -2168,6 +2175,8 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
         name: (m.record_name || "").trim(),
         email: email || null,
         phone: phone || null,
+        phoneRaw: (m.phone || "").trim() || null,
+        mobileRaw: (m.mobile || "").trim() || null,
         account: m.account_name,
         owner: m.owner_name,
         layout: m.layout_name,
@@ -2178,12 +2187,26 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
         isSurvivor: m.zoho_record_id === survivor.zoho_record_id,
       };
     });
+    // Both members share the same primary email + phone (that's the match key),
+    // so the only second number that can be lost is a duplicate's Mobile —
+    // preserve it onto the survivor (gap-fill) exactly like the name+phone path.
+    const dupNumbers = [...dups]
+      .sort((a, b) => Number(b.created_ms || 0) - Number(a.created_ms || 0))
+      .flatMap((d) => [String(d.phone || "").trim(), String(d.mobile || "").trim()])
+      .filter(Boolean);
+    const { updates: phoneUpdates, extra: extraPhones } = planMergedContactPhones({
+      survivorPhone: survivor.phone,
+      survivorMobile: survivor.mobile,
+      otherNumbers: dupNumbers,
+    });
     groups.push({
       key,
       email,
       phone,
       survivorZohoId: survivor.zoho_record_id,
       duplicateZohoIds: dups.map((d) => d.zoho_record_id),
+      phoneUpdates,
+      extraPhones,
       members: memberRows,
     });
   }
@@ -2194,6 +2217,7 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
 export async function previewExactContactMatches(): Promise<{
   qualifyingGroups: number;
   duplicatesToTag: number;
+  numbersPreserved: number;
   sample: ExactContactGroup[];
 }> {
   try {
@@ -2201,6 +2225,9 @@ export async function previewExactContactMatches(): Promise<{
     return {
       qualifyingGroups: groups.length,
       duplicatesToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
+      numbersPreserved: groups.filter(
+        (g) => g.phoneUpdates.Phone || g.phoneUpdates.Mobile,
+      ).length,
       // Up to 200 groups (with scored members) so the operator can drill into
       // and override the survivor of each before applying.
       sample: groups.slice(0, 200),
@@ -2209,7 +2236,7 @@ export async function previewExactContactMatches(): Promise<{
     logger.warn("[DuplicateRadar] previewExactContactMatches failed (non-fatal)", {
       error: e instanceof Error ? e.message : String(e),
     });
-    return { qualifyingGroups: 0, duplicatesToTag: 0, sample: [] };
+    return { qualifyingGroups: 0, duplicatesToTag: 0, numbersPreserved: 0, sample: [] };
   }
 }
 
@@ -2227,7 +2254,7 @@ export async function applyExactContactMatches(opts: {
   /** Per-group EXCLUDED contact ids — left untouched (not survivor, not tagged). */
   excludes?: Record<string, string[]>;
 }): Promise<{ mergedGroups: number; taggedRecords: number; remaining: number; errors: number }> {
-  const { addZohoTags, zohoWritesAllowedInEnv } = await import("./zohoCRM");
+  const { addZohoTags, updateZohoRecord, zohoWritesAllowedInEnv } = await import("./zohoCRM");
   const { withTimeout } = await import("./promiseTimeout");
   if (!zohoWritesAllowedInEnv()) {
     throw new Error("Live Zoho writes are disabled outside production.");
@@ -2256,6 +2283,41 @@ export async function applyExactContactMatches(opts: {
       return { g, chosen, dupIds };
     })
     .filter((r): r is { g: ExactContactGroup; chosen: string; dupIds: string[] } => r !== null);
+
+  // MIGRATE-THEN-TAG: preserve a second number onto each survivor BEFORE tagging
+  // its duplicates, so the admin can never delete the only record holding a
+  // number. Recompute for the chosen survivor (it may be an override). A group
+  // whose preservation write fails is DROPPED from this run (its dups are not
+  // tagged) and stays re-runnable — never tag away an un-preserved number.
+  const writeOk: typeof resolved = [];
+  for (const r of resolved) {
+    try {
+      const chosenMember = r.g.members.find((m) => m.zohoId === r.chosen);
+      const dupMembers = r.g.members.filter((m) => r.dupIds.includes(m.zohoId));
+      const phoneUpd = planMergedContactPhones({
+        survivorPhone: chosenMember?.phoneRaw ?? null,
+        survivorMobile: chosenMember?.mobileRaw ?? null,
+        otherNumbers: dupMembers
+          .flatMap((m) => [(m.phoneRaw || "").trim(), (m.mobileRaw || "").trim()])
+          .filter(Boolean),
+      }).updates;
+      if (phoneUpd.Phone || phoneUpd.Mobile) {
+        await withTimeout(
+          updateZohoRecord("Contacts", r.chosen, phoneUpd as Record<string, unknown>),
+          20_000,
+          `field-migrate ${r.chosen}`,
+        );
+      }
+      writeOk.push(r);
+    } catch (e) {
+      errors++;
+      logger.warn("[DuplicateRadar] exact-merge survivor number preserve failed — group skipped", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+  resolved.length = 0;
+  resolved.push(...writeOk);
 
   // Tag in chunks of 100 ids (Zoho add_tags multi-record limit). Track which
   // ids were ACTUALLY tagged so a failed chunk (e.g. Zoho rate-limited while a
