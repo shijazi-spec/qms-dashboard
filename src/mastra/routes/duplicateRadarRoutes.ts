@@ -816,7 +816,9 @@ async function scanZohoCRMForDuplicates(
       const n = parseInt(process.env.DUPLICATE_MODULE_CONCURRENCY || "", 10);
       return Number.isFinite(n) && n >= 1 && n <= 4 ? n : 1;
     })();
-    const [leadsResult, dealsResult, contactsResult, accountsResult] =
+    // Destructure in the SAME order as the task array below (Deals, Contacts,
+    // Accounts, Leads) — runModulesWithConcurrency preserves input order.
+    const [dealsResult, contactsResult, accountsResult, leadsResult] =
       await runModulesWithConcurrency([
         () => processModule("Deals", "deal", clustersUpdated, (record) => {
           const d = record.data;
@@ -933,6 +935,17 @@ async function scanZohoCRMForDuplicates(
           };
         }, sinceFor("Leads"), (frac) => reportFetch("Leads", frac)),
       ], MODULE_CONCURRENCY);
+
+    // All-modules-failed guard (Ahmad 2026-06-23): the per-module resilience
+    // above intentionally lets a PARTIAL sync complete (some modules synced) —
+    // but if EVERY module failed (Zoho outage / OAuth cooldown / connectivity),
+    // don't let the scan report a green "done" with 0 records (which reads as
+    // "data is fresh"). Fail loudly so the operator knows it did NOT complete.
+    if (SCAN_MODULES.every((m) => scanState.moduleStatuses[m] === "error")) {
+      throw new Error(
+        "Zoho sync failed for every module (rate-limit / OAuth cooldown or connectivity) — no data was fetched. The scan did not complete; please retry.",
+      );
+    }
 
     // Tasks pagination removed per platform-wide Tasks data removal.
     // `totalRecords` was previously the count fetched from Zoho — that
