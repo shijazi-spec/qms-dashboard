@@ -22,7 +22,6 @@ import {
   normalizeCompanyName,
   isPlaceholderName,
 } from "./duplicateRadarDatabase";
-import { extractCsFieldsFromRawData } from "./duplicateRadarCsOverlap";
 import { logger } from "./logger";
 
 /**
@@ -1752,64 +1751,79 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
     accountById.set(zid, { domain: dom, norm: norm || null });
   }
 
-  // 1) Every CLIENT deal — identified EXACTLY like the CS Lifecycle tab so the
-  //    preflight can never disagree with it: read all Deals (zoho_module =
-  //    'Deals') and run the SAME extractor (extractCsFieldsFromRawData — which
-  //    resolves the phase via env-override + fuzzy field names, not a hardcoded
-  //    'Phase' key). A deal is a client deal if it has a CS phase OR sits in a
-  //    customer Stage. (The old hardcoded SQL phase lookup missed clients whose
-  //    phase field has a custom Zoho API name, e.g. Riyad Bank in "New Deal".)
+  // 1) Every CLIENT deal — a deal with a CS phase OR a customer Stage. Extract
+  //    everything in SQL (FAST — filtered set, no full raw_data per row, which
+  //    timed out and collapsed the directory). The phase / company-domain
+  //    COALESCE includes the env-override field name(s) so a custom Zoho API
+  //    name (e.g. the one the CS Lifecycle resolves for Riyad Bank) is caught.
   const customerStages = new Set(Array.from(PF_CUSTOMER_STAGES));
+  const _ident = (s: string) => (/^[A-Za-z0-9_ ]+$/.test(s) ? s.trim() : null);
+  const _envFields = (envVar: string, defaults: string[]) =>
+    Array.from(
+      new Set(
+        [...defaults, ...((process.env[envVar] || "").split(","))]
+          .map((s) => _ident(s))
+          .filter((s): s is string => !!s),
+      ),
+    );
+  const phaseCoalesce = _envFields("DUPLICATE_RADAR_FIELD_PHASE", [
+    "Phase",
+    "CS_Phase",
+    "Customer_Phase",
+  ])
+    .map((f) => `NULLIF(raw_data->>'${f}','')`)
+    .join(", ");
+  const domainCoalesce = _envFields("DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN", [
+    "Company_Domain",
+  ])
+    .map((f) => `NULLIF(raw_data->>'${f}','')`)
+    .join(", ");
+  const churnCoalesce = _envFields("DUPLICATE_RADAR_FIELD_CHURN_DATE", [
+    "Churn_Date",
+    "ChurnDate",
+  ])
+    .map((f) => `NULLIF(raw_data->>'${f}','')`)
+    .join(", ");
   const dealsQ = await queryWithTimeout<any>(
     `SELECT account_name, company_name, LOWER(domain) AS domain, gov_type, owner_name,
-            LOWER(COALESCE(raw_data->>'Stage','')) AS stage, raw_data
+            COALESCE(${phaseCoalesce}) AS phase,
+            LOWER(COALESCE(${domainCoalesce})) AS cs_domain,
+            COALESCE(${churnCoalesce}) AS churn_date,
+            raw_data->'Account_Name'->>'id' AS account_id,
+            LOWER(COALESCE(raw_data->>'Stage','')) AS stage
        FROM duplicate_records
-      WHERE zoho_module = 'Deals'
+      WHERE record_type = 'deal'
+        AND (
+          COALESCE(${phaseCoalesce}) IS NOT NULL
+          OR LOWER(COALESCE(raw_data->>'Stage','')) = ANY($1::text[])
+        )
       LIMIT 200000`,
-    [],
+    [Array.from(PF_CUSTOMER_STAGES)],
   );
   for (const d of (dealsQ?.rows ?? [])) {
-    const f = extractCsFieldsFromRawData(d.raw_data, { domain: d.domain });
-    const phase = (f.phase || "").trim();
+    const phase = (d.phase || "").toString().trim();
     const isClient = phase !== "" || customerStages.has((d.stage || "").trim());
     if (!isClient) continue;
-    const churnDate = f.churn_date
-      ? typeof f.churn_date === "string"
-        ? f.churn_date
-        : new Date(f.churn_date).toISOString()
-      : null;
     const status = _csStatusFromDeal({
       phase: phase || null,
-      churnDate,
-      govType: (f.gov_type || d.gov_type || "").toString().trim() || null,
-      owner: (f.cs_owner_name || d.owner_name || "").toString().trim() || null,
-      companyName: ((f as any).cs_company || d.account_name || d.company_name || "")
-        .toString()
-        .trim(),
+      churnDate: (d.churn_date || "").toString().trim() || null,
+      govType: (d.gov_type || "").toString().trim() || null,
+      owner: (d.owner_name || "").toString().trim() || null,
+      companyName: (d.account_name || d.company_name || "").toString().trim(),
       todayMs,
     });
-    // Index by EVERY company-name variant the deal exposes (the CS "Company"
-    // field, the Zoho Account_Name, the Deal's company) so the inbound matches
-    // whichever the CRM stored.
-    for (const raw of [(f as any).cs_company, d.account_name, d.company_name]) {
+    // Index by the deal's company-name variants (Account_Name, Deal company).
+    for (const raw of [d.account_name, d.company_name]) {
       const rawName = (raw || "").toString().trim();
       if (!rawName || isPlaceholderName(rawName)) continue;
       addClient(normalizeCompanyName(rawName), null, status);
     }
-    // Index by domain — the Deal's own domain + the CS company_domain field.
-    for (const dm of [d.domain, (f as any).company_domain]) addClient("", dm, status);
+    // Index by domain — the Deal's own domain + the CS Company_Domain field.
+    for (const dm of [d.domain, d.cs_domain]) addClient("", dm, status);
     // Inherit the linked ACCOUNT's domain + (English) name by Zoho id — closes
     // the gap when the deal has an Arabic-only name and no Company_Domain but
     // its Account has riyadbank.com / "Riyad Bank".
-    const rd = d.raw_data || {};
-    const an = rd.Account_Name;
-    const acctId = (
-      (an && typeof an === "object" ? an.id : null) ||
-      rd.Account_Name_id ||
-      ""
-    )
-      .toString()
-      .trim();
+    const acctId = (d.account_id || "").toString().trim();
     if (acctId && accountById.has(acctId)) {
       const acc = accountById.get(acctId)!;
       addClient(acc.norm || "", acc.domain, status);
