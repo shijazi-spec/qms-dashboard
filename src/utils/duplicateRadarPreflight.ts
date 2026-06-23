@@ -1852,14 +1852,29 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
     }
   }
 
-  // Also link any ACCOUNT whose name matches a known client → its domain
-  // (covers accounts not directly referenced by a deal's Account_Name id).
+  // Account cross-linking, BOTH directions (covers accounts not referenced by a
+  // deal's Account_Name id):
+  //   (1) name → domain: an account whose NAME is a known client adds its domain.
   for (const a of acctRows) {
     const dom = (a.domain || "").toString().trim().toLowerCase();
     if (!dom || byDomain.has(dom)) continue;
     const norm = normalizeCompanyName(a.record_name || a.company_name || "");
     const status = norm ? byName.get(norm) : undefined;
     if (status) byDomain.set(dom, status);
+  }
+  //   (2) domain → name: an account sitting on a KNOWN-CLIENT domain IS that
+  //   client, even under a different name variant (e.g. the English "Riyad Bank"
+  //   account on riyadbank.com when the active CS deal carries the Arabic name
+  //   بنك الرياض). Without this, an inbound English company name leaked to PASS
+  //   while the Arabic one blocked. Runs after (1) so byDomain is fully built.
+  for (const a of acctRows) {
+    const dom = (a.domain || "").toString().trim().toLowerCase();
+    if (!dom || !byDomain.has(dom)) continue;
+    const norm = normalizeCompanyName(a.record_name || a.company_name || "");
+    if (norm && norm.length >= 3 && !byName.has(norm)) {
+      byName.set(norm, byDomain.get(dom)!);
+      indexName(norm);
+    }
   }
 
   _csDirCache = { byName, byDomain, tokenIndex, builtAt: todayMs };
