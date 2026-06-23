@@ -7056,7 +7056,7 @@
                 const included = r.included !== false;
                 const isCascadeOnly = !!(r.zohoId && cascadeIds.has(r.zohoId));
                 const makeSurvivorBtn = (included && !r.isMaster && r.zohoId)
-                    ? ' <button data-on-click="setMergeSurvivor" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '"]\' class="ms-1 text-[11px] text-indigo-600 hover:underline cursor-pointer" title="Make this the surviving record">★ make survivor</button>'
+                    ? ' <button data-on-click="setMergeSurvivor" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '"]\' class="ms-1 text-[11px] text-indigo-600 hover:underline cursor-pointer" title="' + (linkOnlyMode ? 'Make this the contact that is KEPT' : 'Make this the surviving record') + '">' + (linkOnlyMode ? '★ make KEEP' : '★ make survivor') + '</button>'
                     : '';
                 // Outcome label — three branches:
                 //   1) cascadeOnly (Contacts soft-excluded by ≥2-attribute rule)
@@ -7069,7 +7069,12 @@
                 //   4) Real duplicate → "Duplicate-Delete" (unchanged)
                 let outcome;
                 if (isCascadeOnly) {
-                    outcome = '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-xs font-semibold" title="The ≥2-attribute rule says this contact is NOT a duplicate of the survivor. On Apply, its Account_Name is updated to the surviving Account — but it is NOT tagged Duplicate-Delete.">→ Link to Account</span>';
+                    // The make-survivor button is appended here too so the operator
+                    // can choose WHICH contact is the KEEP/survivor in a link-only
+                    // plan — previously only genuine-duplicate rows let you pick,
+                    // so the KEEP looked locked. Clicking re-previews with the new
+                    // master (setMergeSurvivor), unifying both views.
+                    outcome = '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-xs font-semibold" title="The ≥2-attribute rule says this contact is NOT a duplicate of the survivor. On Apply, its Account_Name is updated to the surviving Account — but it is NOT tagged Duplicate-Delete.">→ Link to Account</span>' + makeSurvivorBtn;
                 } else if (!included) {
                     outcome = '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-500 text-xs font-medium">Excluded</span>';
                 } else if (r.isMaster) {

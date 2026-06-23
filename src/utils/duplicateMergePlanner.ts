@@ -695,6 +695,76 @@ export function buildMergePlan(
     }
   }
 
+  // Preserve an alternate PHONE on a CONTACT merge (Ahmad 2026-06-24). Mirrors
+  // the Secondary_Email logic above: the survivor keeps its primary Phone; a
+  // duplicate's DIFFERENT number would otherwise be lost (it only surfaces as a
+  // Phone CONFLICT alternative and is discarded when the duplicate is deleted).
+  // If the survivor's Mobile slot is still empty (no Mobile decision was already
+  // produced by the field loop), capture the freshest distinct alternate number
+  // — from any duplicate's Phone OR Mobile — into Mobile so both numbers survive.
+  // Saudi-normalised comparison (drop +966 / leading 0, last 9 digits) so the
+  // same number in different formats isn't double-stored. Extras → warning.
+  if (module === "Contacts") {
+    const normPhone = (s: string): string =>
+      String(s || "")
+        .replace(/\D/g, "")
+        .replace(/^966/, "")
+        .replace(/^0+/, "")
+        .slice(-9);
+    const phoneRaw = (r: DuplicateRecord, field: "Phone" | "Mobile"): string =>
+      String(
+        (rawVal(r, field) ?? (field === "Phone" ? r.phone : r.mobile) ?? "") as unknown,
+      ).trim();
+    const masterMobile = phoneRaw(master, "Mobile");
+    const hasMobileDecision = fieldDecisions.some((d) => d.field === "Mobile");
+    if (!masterMobile && !hasMobileDecision) {
+      const dupsByFresh = [...duplicates].sort(
+        (a, b) => modifiedMs(b) - modifiedMs(a),
+      );
+      // Effective primary number after merge: master's Phone, or — if the master
+      // had none — whichever duplicate Phone the field loop used to gap-fill it.
+      let primaryKey = normPhone(phoneRaw(master, "Phone"));
+      if (!primaryKey) {
+        const filler = dupsByFresh.find((d) => phoneRaw(d, "Phone"));
+        primaryKey = filler ? normPhone(phoneRaw(filler, "Phone")) : "";
+      }
+      const seen = new Set<string>();
+      if (primaryKey) seen.add(primaryKey);
+      const alts: { zohoId: string | null; recordName: string; value: string }[] = [];
+      for (const d of dupsByFresh) {
+        for (const field of ["Phone", "Mobile"] as const) {
+          const p = phoneRaw(d, field);
+          const k = normPhone(p);
+          if (p && k && !seen.has(k)) {
+            seen.add(k);
+            alts.push({ zohoId: d.zoho_record_id ?? null, recordName: recName(d), value: p });
+          }
+        }
+      }
+      if (alts.length > 0) {
+        const chosen = alts[0]!;
+        fieldDecisions.push({
+          field: "Mobile",
+          label: "Mobile",
+          action: "fill",
+          chosenValue: chosen.value,
+          fromZohoId: chosen.zohoId,
+          reason: `Survivor's phone differs from "${chosen.recordName}" — preserved its number in Mobile so no number is lost on merge.`,
+          alternatives: alts.slice(1),
+        });
+        fillCount++;
+        if (alts.length > 1) {
+          warnings.push(
+            `${alts.length} distinct alternate number(s) found, but Zoho Contacts holds one in Mobile — only "${chosen.value}" is preserved on the survivor. The rest are listed as alternatives; capture them manually if needed: ${alts
+              .slice(1)
+              .map((a) => a.value)
+              .join(", ")}.`,
+          );
+        }
+      }
+    }
+  }
+
   // Preserve alternate (EN/AR) names on an ACCOUNT merge (Ahmad 2026-06-22).
   // The Account Name field is bilingual — one record may hold the English name,
   // another the Arabic — so a straight merge keeps the survivor's name and the
