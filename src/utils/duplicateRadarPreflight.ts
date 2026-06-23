@@ -1845,6 +1845,39 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
 }
 
 /**
+ * Observability hook — returns the current size of the CS-client directory so
+ * silent degradation (an empty/stale Deals sync collapsing the directory) is
+ * VISIBLE without anyone re-running an export. `active` / `churned` count how
+ * many indexed names resolve to a live vs. terminated client. Forces a fresh
+ * build (bypasses the 60s cache) so the numbers reflect the database right now.
+ */
+export async function getCsClientDirectoryStats(): Promise<{
+  names: number;
+  domains: number;
+  tokens: number;
+  active: number;
+  churned: number;
+  built_at_iso: string;
+}> {
+  _csDirCache = null; // force a fresh build so stats reflect the DB right now
+  const dir = await getCsClientDirectory(Date.now());
+  let active = 0;
+  let churned = 0;
+  for (const st of dir.byName.values()) {
+    if (st?.active) active++;
+    else churned++;
+  }
+  return {
+    names: dir.byName.size,
+    domains: dir.byDomain.size,
+    tokens: dir.tokenIndex.size,
+    active,
+    churned,
+    built_at_iso: new Date(dir.builtAt).toISOString(),
+  };
+}
+
+/**
  * Match an inbound normalized company name to a client by NAME CONTAINMENT —
  * every token of a client's name appears in the inbound name (e.g. client
  * "samref" ⊆ inbound "samref saudi aramco mobil refinery"). Returns the matched
