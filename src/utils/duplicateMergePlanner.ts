@@ -379,6 +379,15 @@ export interface BuildPlanOptions {
    * "Schlumberger (SLB)" survivor.
    */
   taggedAccountDbIds?: number[];
+  /**
+   * Operator FORCE-MERGE override (Contacts): bypass the ≥2-attribute
+   * soft-exclusion and tag the selected non-survivor contacts as duplicates
+   * even when they share fewer than 2 of {email, phone, name}. For verified
+   * edge cases (e.g. the same person entered twice with different name
+   * spellings, sharing only a phone). Migrate-then-tag still applies — nothing
+   * is deleted. Use with an explicit operator confirmation + audit note.
+   */
+  forceMergeContacts?: boolean;
 }
 
 /**
@@ -467,7 +476,10 @@ export function buildMergePlan(
   // genuinely different people who happened to sit in the same cluster.
   // See feedback-contact-merge-rule.md.
   const contactSoftExcluded: typeof duplicates = [];
-  if (module === "Contacts" && duplicates.length > 0) {
+  // Operator FORCE-MERGE bypasses the ≥2-attribute soft-exclusion: every
+  // selected non-survivor contact is tagged as a duplicate (verified by a
+  // human). Default behaviour (no force) keeps the safe rule.
+  if (module === "Contacts" && duplicates.length > 0 && !opts.forceMergeContacts) {
     const masterEmail = (master.email || "").trim().toLowerCase();
     const masterPhone = (master.phone_normalized || "").trim();
     // Arabic-aware name normalization so visually-identical names (differing
@@ -508,6 +520,10 @@ export function buildMergePlan(
         `Cascade-only plan — no genuine contact duplicates of "${recName(master)}" in this cluster. Apply will set Account_Name on every contact but tag none.`,
       );
     }
+  } else if (module === "Contacts" && opts.forceMergeContacts && duplicates.length > 0) {
+    warnings.push(
+      `⚠ FORCE-MERGE — the operator confirmed the ${duplicates.length} selected contact(s) are the SAME person as "${recName(master)}" and overrode the ≥2-attribute rule. They will be tagged Duplicate-Delete (migrate-then-tag; nothing is deleted).`,
+    );
     // Pull soft-excluded contacts out of mergeSet so the UI renders them
     // as "Excluded" (untouched) instead of "Duplicate-Delete". The
     // Account_Name cascade still covers them via plan.cascadeOnlyZohoIds

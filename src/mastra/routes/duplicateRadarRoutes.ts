@@ -3380,6 +3380,7 @@ export const duplicateRadarRoutes = [
                 ? body.link_account_zoho_id
                 : ""
               : undefined;
+          const forceMergeContacts = body?.force_merge === true;
 
           const generatedBy =
             (user as any)?.email || (user as any)?.role || "duplicate-radar";
@@ -3403,6 +3404,7 @@ export const duplicateRadarRoutes = [
               masterZohoId,
               linkAccountZohoId,
               taggedAccountDbIds,
+              forceMergeContacts,
             });
           } catch (e: any) {
             return c.json({ error: e?.message || "Could not build plan" }, 400);
@@ -3455,6 +3457,7 @@ export const duplicateRadarRoutes = [
                 ? body.link_account_zoho_id
                 : ""
               : undefined;
+          const forceMergeContacts = body?.force_merge === true;
 
           const cluster = await getClusterById(id);
           if (!cluster) return c.json({ error: "Cluster not found" }, 404);
@@ -3503,6 +3506,7 @@ export const duplicateRadarRoutes = [
               includeZohoIds,
               linkAccountZohoId,
               taggedAccountDbIds: taggedAccountDbIdsExec,
+              forceMergeContacts,
             });
           } catch (e: any) {
             return c.json({ error: e?.message || "Could not build plan" }, 400);

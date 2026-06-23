@@ -6861,6 +6861,28 @@
             const st = _planSt(module);
             await _runMergeExec(module, clusterId, { module: module, confirm: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined, link_account_zoho_id: st.linkAccount }, true);
         }
+        // Force-merge override — tag the TICKED contacts as the same person even
+        // when they share fewer than 2 of {email, phone, name}. Verified by the
+        // operator; migrate-then-tag (nothing deleted); logged in the timeline.
+        async function forceMergePlan(module, clusterId) {
+            const st = _planSt(module);
+            const sel = (st.selected || []);
+            if (sel.length < 2) {
+                alert('Tick the contacts that are the SAME person — at least 2 (the survivor + the one(s) to merge into it) — then click Force-merge.');
+                return;
+            }
+            const ok = window.confirm(
+                '⚠ FORCE-MERGE override\n\n' +
+                'These contacts do NOT meet the automatic ≥2-signal rule (email/phone/name). ' +
+                'Only proceed if you have VERIFIED they are the SAME person.\n\n' +
+                '• ' + sel.length + ' selected contact(s): the survivor keeps its data; the rest are tagged "Duplicate-Delete".\n' +
+                '• Migrate-then-tag — nothing is deleted by the platform.\n' +
+                '• Logged in the action timeline as an operator-forced merge.\n\n' +
+                'Proceed with the force-merge in Zoho?'
+            );
+            if (!ok) return;
+            await _runMergeExec(module, clusterId, { module: module, confirm: true, force_merge: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined, link_account_zoho_id: st.linkAccount }, true);
+        }
         async function _runMergeExec(module, clusterId, body, isApply) {
             const panel = document.getElementById('mergeExecPanel-' + module);
             if (!panel) return;
@@ -7108,6 +7130,13 @@
             const trailingNote = linkOnlyMode
                 ? '<span class="text-xs text-gray-500">Apply only writes <code class="bg-gray-100 px-1 rounded">Account_Name</code> on each contact. No tagging, no deletion.</span>'
                 : '<span class="text-xs text-gray-400">Apply migrates fields, reparents Deals/Contacts/Notes, and tags duplicates <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code>. No deletions.</span>';
+            // FORCE-MERGE override — only for Contacts where the ≥2-attribute rule
+            // soft-excluded some (link-only or cascade-only). Lets the operator
+            // tag verified same-person contacts that share only 1 signal.
+            const hasSoftExcluded = isContacts && (linkOnlyMode || (Array.isArray(plan.cascadeOnlyZohoIds) && plan.cascadeOnlyZohoIds.length > 0));
+            const forceBtn = hasSoftExcluded
+                ? '<button data-on-click="forceMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Override the ≥2-attribute rule: MERGE the TICKED contacts as the same person (for verified cases — e.g. the same person entered twice sharing only a phone). Migrate-then-tag; nothing deleted. Logged in the action timeline." class="px-3 py-2 bg-rose-600 text-white hover:bg-rose-700 rounded-lg text-sm font-semibold">⚠ Force-merge (same person)</button>'
+                : '';
             return '' +
                 headerBanner +
                 '<div class="mb-3"><span class="text-xs uppercase tracking-wide text-gray-500">' + (linkOnlyMode ? 'Surviving contact' : 'Survivor') + '</span><div class="font-semibold">' + esc(plan.masterName) + survivorIdLink + ' <span class="font-normal text-gray-500 text-xs">' + esc(plan.masterReason) + '</span></div></div>' +
@@ -7134,6 +7163,7 @@
                 '<div class="flex flex-wrap items-center gap-2 border-t pt-3">' +
                     '<button data-on-click="dryRunMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-dryrun-merge-' + plan.module + '-' + plan.clusterId + '" class="px-3 py-2 bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-lg text-sm font-medium">Dry-run (no writes)</button>' +
                     applyBtn +
+                    forceBtn +
                     '<button data-on-click="splitMergeSelection" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Move the TICKED records into a brand-new cluster — for name-collision false positives (two real companies sharing a word, e.g. Andalusia Group vs Andalusia Hospital). No Zoho changes; they just become a separate cluster to resolve." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">✂️ Split ticked → new cluster</button>' +
                     '<button data-on-click="splitClusterByName" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Auto-detect the distinct company-name groups and split each into its own cluster (largest stays here). One click for name-collision clusters like Andalusia Group vs Andalusia Hospital. No Zoho changes." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">🪪 Split by company name</button>' +
                     '<button data-on-click="dismissCluster" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Dismiss this whole cluster as a false positive — intentionally separate records (e.g. a Corporate-Accounts account vs a Marketplace account). Moves it to the Dismissed filter; no merge, no Zoho changes." class="px-3 py-2 bg-white border border-gray-400 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium">🚫 Dismiss (false positive)</button>' +
