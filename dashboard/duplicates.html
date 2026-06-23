@@ -6218,6 +6218,7 @@
                         return '<tr class="border-t acctgrp-member-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setAccountSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">'
                             + '<td class="px-2 py-1"><span class="acctgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
                             + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="acctgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
+                            + '<td class="px-2 py-1 text-[10px] text-gray-500">' + escapeHtml(m.layout || '—') + '</td>'
                             + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.owner || '—') + '</td>'
                             + '<td class="px-2 py-1 font-mono text-[10px] text-gray-600">' + escapeHtml(m.website || '—') + '</td>'
                             + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.cr || '—') + '</td>'
@@ -6228,7 +6229,7 @@
                     }).join('');
                     const detailRow = '<tr id="acctgrp-detail-' + gi + '" style="display:none"><td colspan="4" class="px-2 pb-2 bg-gray-50">'
                         + '<div class="text-[10px] text-gray-500 mt-1 mb-1">Click a row to keep that account as the <strong>survivor</strong> (✓ = highest data completeness). The others are tagged Duplicate-Delete; their contacts & deals re-parent onto the survivor.</div>'
-                        + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1"></th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Website</th><th class="px-2 py-1 text-start">CR</th><th class="px-2 py-1 text-start">Country</th><th class="px-2 py-1 text-start">Created</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
+                        + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1"></th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Layout</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Website</th><th class="px-2 py-1 text-start">CR</th><th class="px-2 py-1 text-start">Country</th><th class="px-2 py-1 text-start">Created</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
                         + '<div class="mt-1"><button data-on-click="dismissAccountGroup" data-args=\'[' + gi + ']\' class="px-2 py-1 text-[11px] font-semibold rounded bg-rose-100 text-rose-700 hover:bg-rose-200" title="These accounts are NOT the same company — exclude this group from this and all future auto-merges.">✕ Not duplicates — dismiss (don\'t merge)</button></div>'
                         + '</td></tr>';
                     return headRow + detailRow;

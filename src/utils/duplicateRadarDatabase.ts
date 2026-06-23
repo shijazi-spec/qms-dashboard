@@ -2690,6 +2690,7 @@ export interface AccountDomainNameMember {
   vat: string | null;
   country: string | null;
   industry: string | null;
+  layout: string | null;
   createdMs: number | null;
   /** Count of the tracked key fields that are populated, out of fieldsTotal. */
   fieldsPopulated: number;
@@ -2744,10 +2745,13 @@ async function getAccountDomainNameGroups(
     vat_number: string | null;
     country: string | null;
     industry: string | null;
+    layout_name: string | null;
+    layout_norm: string | null;
     created_ms: string | null;
   }>(
     `SELECT zoho_record_id, record_name, company_name, domain, owner_name, website,
-            cr_number, vat_number, country, industry,
+            cr_number, vat_number, country, industry, layout_name,
+            LOWER(COALESCE(layout_name, '')) AS layout_norm,
             EXTRACT(EPOCH FROM COALESCE(created_date, modified_date))::bigint AS created_ms
        FROM duplicate_records
       WHERE record_type = 'account'
@@ -2772,10 +2776,20 @@ async function getAccountDomainNameGroups(
     if (resolvedDupIds.has(row.zoho_record_id)) continue; // already merged away
     const dom = (row.domain || "").trim().toLowerCase();
     const nameKey = normalizeCompanyName(row.record_name || row.company_name || "");
+    // Merge WITHIN the exact same layout only (Ahmad 2026-06-23). The scope
+    // allowlist can carry more than one layout (e.g. ACCOUNT_CORPORATE_LAYOUTS
+    // = "Corporate,Partnership"); without this a Corporate account and a
+    // Partnership/marketplace account that share a domain would fuse. Putting
+    // the exact layout in the grouping key guarantees Corporate ↔ Corporate,
+    // Marketplace ↔ Marketplace — never across.
+    const layoutNorm = (row.layout_norm || "").trim();
     // Domain-only mode groups by domain alone (any name); strict mode needs both.
     if (!dom) continue;
     if (groupBy === "domain_name" && !nameKey) continue;
-    const key = groupBy === "domain" ? dom : `${dom}|${nameKey}`;
+    const key =
+      groupBy === "domain"
+        ? `${dom}|@${layoutNorm}`
+        : `${dom}|${nameKey}|@${layoutNorm}`;
     const arr = byKey.get(key) || [];
     arr.push(row);
     byKey.set(key, arr);
@@ -2850,6 +2864,7 @@ async function getAccountDomainNameGroups(
         vat: m.vat_number,
         country: m.country,
         industry: m.industry,
+        layout: m.layout_name,
         createdMs: m.created_ms != null ? Number(m.created_ms) : null,
         fieldsPopulated: pop,
         fieldsTotal: total,
@@ -2870,8 +2885,10 @@ async function getAccountDomainNameGroups(
     if (groupBy === "domain" && names.length > maxDistinctNames) continue;
     groups.push({
       key,
-      domain: key.split("|")[0]!,
-      nameKey: key.split("|").slice(1).join("|"),
+      domain: (sorted[0]!.domain || "").trim().toLowerCase(),
+      nameKey: normalizeCompanyName(
+        sorted[0]!.record_name || sorted[0]!.company_name || "",
+      ),
       survivorZohoId: survivor.zoho_record_id,
       duplicateZohoIds: dups.map((d) => d.zoho_record_id),
       names,
