@@ -1323,6 +1323,18 @@ const CLUSTER_SELECT_COLS = `id, domain,
  * (concurrency 4) so even pathological data can't reach this cap.
  */
 const PREFLIGHT_QUERY_TIMEOUT_MS = 12000;
+/**
+ * The CS-client directory build scans the full Deal corpus (~30k rows, each a
+ * ~150-field raw_data JSONB). Warm it runs in <2s, but on a COLD buffer cache
+ * the first scan can exceed the 12s per-query cap — which silently returned
+ * null and COLLAPSED the directory to empty (every real client then leaked
+ * into PASS). The build is cached 60s and off the per-row hot path, so it gets
+ * a much larger ceiling. Override with PREFLIGHT_DIR_TIMEOUT_MS.
+ */
+const PREFLIGHT_DIR_TIMEOUT_MS = Number.parseInt(
+  process.env.PREFLIGHT_DIR_TIMEOUT_MS ?? "60000",
+  10,
+);
 
 /**
  * Run a single SQL on a dedicated client with `SET LOCAL statement_timeout`
@@ -1335,12 +1347,13 @@ async function queryWithTimeout<T = any>(
   sql: string,
   params: any[],
   setup?: string[],
+  timeoutMs?: number,
 ): Promise<{ rows: T[] } | null> {
   const client = await (pool as any).connect();
   try {
     await client.query("BEGIN");
     await client.query(
-      `SET LOCAL statement_timeout = ${PREFLIGHT_QUERY_TIMEOUT_MS}`,
+      `SET LOCAL statement_timeout = ${Math.max(1000, timeoutMs ?? PREFLIGHT_QUERY_TIMEOUT_MS)}`,
     );
     if (Array.isArray(setup)) {
       for (const s of setup) await client.query(s);
@@ -1741,6 +1754,8 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
           WHERE record_type = 'account'
           LIMIT 200000`,
         [],
+        undefined,
+        PREFLIGHT_DIR_TIMEOUT_MS,
       )
     )?.rows ?? [];
   for (const a of acctRows) {
@@ -1784,21 +1799,28 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
   ])
     .map((f) => `NULLIF(raw_data->>'${f}','')`)
     .join(", ");
+  // Use the dedicated, indexed `stage` COLUMN for the stage filter (the giant
+  // raw_data JSONB only needs parsing for the phase/domain/churn fields, and
+  // only for the matched rows). ~2.3x faster than parsing raw_data->>'Stage'
+  // across all 30k rows. Falls back to raw_data->>'Stage' when the column is
+  // blank so legacy rows synced before the column was populated still match.
   const dealsQ = await queryWithTimeout<any>(
     `SELECT account_name, company_name, LOWER(domain) AS domain, gov_type, owner_name,
             COALESCE(${phaseCoalesce}) AS phase,
             LOWER(COALESCE(${domainCoalesce})) AS cs_domain,
             COALESCE(${churnCoalesce}) AS churn_date,
             raw_data->'Account_Name'->>'id' AS account_id,
-            LOWER(COALESCE(raw_data->>'Stage','')) AS stage
+            LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) AS stage
        FROM duplicate_records
       WHERE record_type = 'deal'
         AND (
           COALESCE(${phaseCoalesce}) IS NOT NULL
-          OR LOWER(COALESCE(raw_data->>'Stage','')) = ANY($1::text[])
+          OR LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) = ANY($1::text[])
         )
       LIMIT 200000`,
     [Array.from(PF_CUSTOMER_STAGES)],
+    undefined,
+    PREFLIGHT_DIR_TIMEOUT_MS,
   );
   for (const d of (dealsQ?.rows ?? [])) {
     const phase = (d.phase || "").toString().trim();
