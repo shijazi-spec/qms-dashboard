@@ -1470,6 +1470,15 @@ export const duplicateRadarRoutes = [
               if (typeof k === "string" && typeof v === "string" && v.trim()) overrides[k] = v.trim();
             }
           }
+          const excludes: Record<string, string[]> = {};
+          if (body?.excludes && typeof body.excludes === "object") {
+            for (const [k, v] of Object.entries(body.excludes)) {
+              if (typeof k === "string" && Array.isArray(v)) {
+                const ids = v.map((x: any) => String(x || "").trim()).filter(Boolean);
+                if (ids.length) excludes[k] = ids;
+              }
+            }
+          }
           const performedBy =
             `${(sessionUser as any)?.email || "admin"} (bulk exact email+phone merge)`;
           const { applyExactContactMatches } = await import("../../utils/duplicateRadarDatabase");
@@ -1477,6 +1486,7 @@ export const duplicateRadarRoutes = [
             limit: Number.isFinite(limit) && limit > 0 ? limit : 300,
             performedBy,
             overrides,
+            excludes,
           });
           return c.json({ success: true, ...result });
         } catch (e: any) {
@@ -1526,12 +1536,22 @@ export const duplicateRadarRoutes = [
               if (typeof k === "string" && typeof v === "string" && v.trim()) overrides[k] = v.trim();
             }
           }
+          const excludes: Record<string, string[]> = {};
+          if (body?.excludes && typeof body.excludes === "object") {
+            for (const [k, v] of Object.entries(body.excludes)) {
+              if (typeof k === "string" && Array.isArray(v)) {
+                const ids = v.map((x: any) => String(x || "").trim()).filter(Boolean);
+                if (ids.length) excludes[k] = ids;
+              }
+            }
+          }
           const performedBy =
             `${(sessionUser as any)?.email || "admin"} (bulk same name+phone merge)`;
           const { applyNamePhoneContactMatches } = await import("../../utils/duplicateRadarDatabase");
           const result = await applyNamePhoneContactMatches({
             limit: Number.isFinite(limit) && limit > 0 ? limit : 200,
             performedBy,
+            excludes,
             overrides,
           });
           return c.json({ success: true, ...result });
@@ -1588,6 +1608,15 @@ export const duplicateRadarRoutes = [
               }
             }
           }
+          const excludes: Record<string, string[]> = {};
+          if (body?.excludes && typeof body.excludes === "object") {
+            for (const [k, v] of Object.entries(body.excludes)) {
+              if (typeof k === "string" && Array.isArray(v)) {
+                const ids = v.map((x: any) => String(x || "").trim()).filter(Boolean);
+                if (ids.length) excludes[k] = ids;
+              }
+            }
+          }
           const performedBy =
             `${(sessionUser as any)?.email || "admin"} (bulk account ${scope} domain+name merge)`;
           const { applyAccountDomainNameMerge } = await import("../../utils/duplicateRadarDatabase");
@@ -1597,6 +1626,7 @@ export const duplicateRadarRoutes = [
             limit: Number.isFinite(limit) && limit > 0 ? limit : 100,
             performedBy,
             overrides,
+            excludes,
           });
           return c.json({ success: true, ...result });
         } catch (e: any) {
@@ -1682,6 +1712,15 @@ export const duplicateRadarRoutes = [
               }
             }
           }
+          const excludes: Record<string, string[]> = {};
+          if (body?.excludes && typeof body.excludes === "object") {
+            for (const [k, v] of Object.entries(body.excludes)) {
+              if (typeof k === "string" && Array.isArray(v)) {
+                const ids = v.map((x: any) => String(x || "").trim()).filter(Boolean);
+                if (ids.length) excludes[k] = ids;
+              }
+            }
+          }
           const performedBy =
             `${(sessionUser as any)?.email || "admin"} (bulk account ${scope} domain-only merge)`;
           const { applyAccountDomainNameMerge } = await import("../../utils/duplicateRadarDatabase");
@@ -1691,6 +1730,7 @@ export const duplicateRadarRoutes = [
             limit: Number.isFinite(limit) && limit > 0 ? limit : 100,
             performedBy,
             overrides,
+            excludes,
             groupBy: "domain",
           });
           return c.json({ success: true, ...result });

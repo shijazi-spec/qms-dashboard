@@ -5974,6 +5974,7 @@
         function setContactSurvivor(gi, zohoId) {
             const g = (window._contactMergeGroups || [])[gi];
             if (!g) return;
+            if (g._excluded && g._excluded[zohoId]) return; // an excluded contact can't be the survivor
             window._contactMergeOverrides = window._contactMergeOverrides || {};
             const def = (g.members.find(function (m) { return m.isSurvivor; }) || {}).zohoId;
             if (zohoId === def) { delete window._contactMergeOverrides[g.key]; }
@@ -6001,7 +6002,43 @@
         function _contactOverridesAll() {
             const out = {};
             const ov = window._contactMergeOverrides || {};
-            (window._contactMergeGroups || []).forEach(function (g) { if (ov[g.key]) out[g.key] = ov[g.key]; });
+            (window._contactMergeGroups || []).forEach(function (g) { if (!g._excluded || !g._excluded[ov[g.key]]) { if (ov[g.key]) out[g.key] = ov[g.key]; } });
+            return out;
+        }
+        // Toggle a single contact in/out of its group's merge. An EXCLUDED contact
+        // is left completely untouched; the rest still merge. If the excluded one
+        // was the survivor, the survivor moves to the next included (most-complete).
+        function toggleContactMemberInclude(gi, zohoId) {
+            const g = (window._contactMergeGroups || [])[gi];
+            if (!g) return;
+            g._excluded = g._excluded || {};
+            const nowExcluded = !g._excluded[zohoId];
+            if (nowExcluded) g._excluded[zohoId] = true; else delete g._excluded[zohoId];
+            document.querySelectorAll('.ctcgrp-incl-' + gi).forEach(function (el) {
+                if (el.getAttribute('data-mid') !== zohoId) return;
+                el.textContent = nowExcluded ? '☐' : '☑';
+                el.className = 'ctcgrp-incl-' + gi + ' cursor-pointer ' + (nowExcluded ? 'text-gray-300' : 'text-emerald-600');
+            });
+            document.querySelectorAll('.ctcgrp-member-' + gi).forEach(function (tr) {
+                if (tr.getAttribute('data-mid') === zohoId) {
+                    tr.classList.toggle('opacity-40', nowExcluded);
+                    tr.classList.toggle('line-through', nowExcluded);
+                }
+            });
+            const cur = (window._contactMergeOverrides && window._contactMergeOverrides[g.key]) || (g.members.find(function (m) { return m.isSurvivor; }) || {}).zohoId;
+            if (nowExcluded && zohoId === cur) {
+                const next = g.members.find(function (m) { return !g._excluded[m.zohoId]; });
+                if (next) setContactSurvivor(gi, next.zohoId);
+            }
+        }
+        function _contactExcludesAll() {
+            const out = {};
+            (window._contactMergeGroups || []).forEach(function (g) {
+                if (g._excluded) {
+                    const ids = Object.keys(g._excluded);
+                    if (ids.length) out[g.key] = ids;
+                }
+            });
             return out;
         }
         function _renderContactMergeGroups(sample) {
@@ -6019,6 +6056,7 @@
                 const memberRows = (g.members || []).map(function (m) {
                     const created = m.createdMs ? new Date(m.createdMs * 1000).toISOString().slice(0, 10) : '—';
                     return '<tr class="border-t ctcgrp-member-' + gi + ' ' + (m.isSurvivor ? 'bg-emerald-50' : '') + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setContactSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">'
+                        + '<td class="px-2 py-1 text-center"><span class="ctcgrp-incl-' + gi + ' text-emerald-600 cursor-pointer" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="toggleContactMemberInclude" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' title="Included in the merge — click to EXCLUDE (leave this contact untouched)">☑</span></td>'
                         + '<td class="px-2 py-1"><span class="ctcgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
                         + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="ctcgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
                         + '<td class="px-2 py-1 font-mono text-[10px] text-gray-600">' + escapeHtml(m.email || '—') + '</td>'
@@ -6030,8 +6068,8 @@
                         + '</tr>';
                 }).join('');
                 const detail = '<tr id="ctcgrp-detail-' + gi + '" style="display:none"><td colspan="4" class="px-2 pb-2 bg-gray-50">'
-                    + '<div class="text-[10px] text-gray-500 mt-1 mb-1">Click a row to KEEP that contact as the survivor (● = most complete). The others are tagged Duplicate-Delete; their email(s) are preserved on the survivor.</div>'
-                    + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1"></th><th class="px-2 py-1 text-start">Contact</th><th class="px-2 py-1 text-start">Email</th><th class="px-2 py-1 text-start">Phone</th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Layout</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
+                    + '<div class="text-[10px] text-gray-500 mt-1 mb-1">Click a row to KEEP that contact as the survivor (● = most complete). Untick <strong>Merge?</strong> to EXCLUDE a contact (e.g. a Partner) — it stays untouched and the rest still merge. The non-survivor included contacts are tagged Duplicate-Delete; their email(s) are preserved on the survivor.</div>'
+                    + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1 text-start">Merge?</th><th class="px-2 py-1 text-start">Keep</th><th class="px-2 py-1 text-start">Contact</th><th class="px-2 py-1 text-start">Email</th><th class="px-2 py-1 text-start">Phone</th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Layout</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
                     + '</td></tr>';
                 return headRow + detail;
             }).join('');
@@ -6074,13 +6112,15 @@
             const key = window.prompt('Enter the admin password to apply this bulk merge:');
             if (!key || !key.trim()) return;
             const overrides = _contactOverridesAll();
+            const excludes = _contactExcludesAll();
             const ovN = Object.keys(overrides).length;
+            const exN = Object.keys(excludes).reduce(function (n, k) { return n + excludes[k].length; }, 0);
             const prog = document.createElement('div'); prog.className = 'text-emerald-700 mt-1';
-            prog.textContent = 'Applying…' + (ovN ? ' (' + ovN + ' survivor override' + (ovN === 1 ? '' : 's') + ')' : ''); panel.appendChild(prog);
+            prog.textContent = 'Applying…' + (ovN ? ' (' + ovN + ' survivor override' + (ovN === 1 ? '' : 's') + ')' : '') + (exN ? ' (' + exN + ' excluded)' : ''); panel.appendChild(prog);
             let live;
             try {
                 live = await _runBatchedMerge('/api/duplicates/contacts/exact-match-merge', {
-                    key: key.trim(), batchLimit: 50, body: { overrides: overrides }, progressKeys: ['mergedGroups'],
+                    key: key.trim(), batchLimit: 50, body: { overrides: overrides, excludes: excludes }, progressKeys: ['mergedGroups'],
                     onTick: function (t) { prog.textContent = 'Applying… merged ' + (t.mergedGroups || 0).toLocaleString() + ' group(s), tagged ' + (t.taggedRecords || 0).toLocaleString() + ' contact(s)…'; },
                 });
             } catch (e) {
@@ -6141,13 +6181,15 @@
             const key = window.prompt('Enter the admin password to apply this bulk merge:');
             if (!key || !key.trim()) return;
             const overrides = _contactOverridesAll();
+            const excludes = _contactExcludesAll();
             const ovN = Object.keys(overrides).length;
+            const exN = Object.keys(excludes).reduce(function (n, k) { return n + excludes[k].length; }, 0);
             const prog = document.createElement('div'); prog.className = 'text-teal-700 mt-1';
-            prog.textContent = 'Applying…' + (ovN ? ' (' + ovN + ' survivor override' + (ovN === 1 ? '' : 's') + ')' : ''); panel.appendChild(prog);
+            prog.textContent = 'Applying…' + (ovN ? ' (' + ovN + ' survivor override' + (ovN === 1 ? '' : 's') + ')' : '') + (exN ? ' (' + exN + ' excluded)' : ''); panel.appendChild(prog);
             let live;
             try {
                 live = await _runBatchedMerge('/api/duplicates/contacts/name-phone-merge', {
-                    key: key.trim(), batchLimit: 25, body: { overrides: overrides }, progressKeys: ['mergedGroups'],
+                    key: key.trim(), batchLimit: 25, body: { overrides: overrides, excludes: excludes }, progressKeys: ['mergedGroups'],
                     onTick: function (t) { prog.textContent = 'Applying… merged ' + (t.mergedGroups || 0).toLocaleString() + ' group(s), tagged ' + (t.taggedRecords || 0).toLocaleString() + ', preserved ' + (t.emailsWritten || 0).toLocaleString() + ' email(s)…'; },
                 });
             } catch (e) {
@@ -6216,6 +6258,7 @@
                     const memberRows = (g.members || []).map(function (m) {
                         const created = m.createdMs ? new Date(m.createdMs * 1000).toISOString().slice(0, 10) : '—';
                         return '<tr class="border-t acctgrp-member-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setAccountSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">'
+                            + '<td class="px-2 py-1 text-center"><span class="acctgrp-incl-' + gi + ' text-emerald-600 cursor-pointer" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="toggleAccountMemberInclude" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' title="Included in the merge — click to EXCLUDE (leave this account untouched)">☑</span></td>'
                             + '<td class="px-2 py-1"><span class="acctgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
                             + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="acctgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
                             + '<td class="px-2 py-1 text-[10px] text-gray-500">' + escapeHtml(m.layout || '—') + '</td>'
@@ -6228,8 +6271,8 @@
                             + '</tr>';
                     }).join('');
                     const detailRow = '<tr id="acctgrp-detail-' + gi + '" style="display:none"><td colspan="4" class="px-2 pb-2 bg-gray-50">'
-                        + '<div class="text-[10px] text-gray-500 mt-1 mb-1">Click a row to keep that account as the <strong>survivor</strong> (✓ = highest data completeness). The others are tagged Duplicate-Delete; their contacts & deals re-parent onto the survivor.</div>'
-                        + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1"></th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Layout</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Website</th><th class="px-2 py-1 text-start">CR</th><th class="px-2 py-1 text-start">Country</th><th class="px-2 py-1 text-start">Created</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
+                        + '<div class="text-[10px] text-gray-500 mt-1 mb-1">Click a row to keep that account as the <strong>survivor</strong> (● = highest data completeness). Untick <strong>Merge?</strong> to EXCLUDE an account (e.g. a Partner) — it stays untouched and the rest still merge. The non-survivor included accounts are tagged Duplicate-Delete; their contacts & deals re-parent onto the survivor.</div>'
+                        + '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="px-2 py-1 text-start">Merge?</th><th class="px-2 py-1 text-start">Keep</th><th class="px-2 py-1 text-start">Account</th><th class="px-2 py-1 text-start">Layout</th><th class="px-2 py-1 text-start">Owner</th><th class="px-2 py-1 text-start">Website</th><th class="px-2 py-1 text-start">CR</th><th class="px-2 py-1 text-start">Country</th><th class="px-2 py-1 text-start">Created</th><th class="px-2 py-1 text-start">Completion</th></tr></thead><tbody>' + memberRows + '</tbody></table>'
                         + '<div class="mt-1"><button data-on-click="dismissAccountGroup" data-args=\'[' + gi + ']\' class="px-2 py-1 text-[11px] font-semibold rounded bg-rose-100 text-rose-700 hover:bg-rose-200" title="These accounts are NOT the same company — exclude this group from this and all future auto-merges.">✕ Not duplicates — dismiss (don\'t merge)</button></div>'
                         + '</td></tr>';
                     return headRow + detailRow;
@@ -6265,6 +6308,7 @@
         function setAccountSurvivor(gi, zohoId) {
             const g = (window._accountMergeGroups || [])[gi];
             if (!g) return;
+            if (g._excluded && g._excluded[zohoId]) return; // an excluded account can't be the survivor
             window._accountMergeOverrides = window._accountMergeOverrides || {};
             const def = (g.members.find(function (m) { return m.isSurvivor; }) || {}).zohoId;
             if (zohoId === def) { delete window._accountMergeOverrides[g.key]; }
@@ -6298,6 +6342,46 @@
             const ov = window._accountMergeOverrides || {};
             (window._accountMergeGroups || []).forEach(function (g) {
                 if (g.scope === scope && !g._dismissed && ov[g.key]) out[g.key] = ov[g.key];
+            });
+            return out;
+        }
+
+        // Toggle a single account in/out of its group's merge. An EXCLUDED account
+        // is left completely untouched (not survivor, not tagged); the rest still
+        // merge. If the excluded one was the survivor, the survivor moves to the
+        // next included (highest-%) account.
+        function toggleAccountMemberInclude(gi, zohoId) {
+            const g = (window._accountMergeGroups || [])[gi];
+            if (!g) return;
+            g._excluded = g._excluded || {};
+            const nowExcluded = !g._excluded[zohoId];
+            if (nowExcluded) g._excluded[zohoId] = true; else delete g._excluded[zohoId];
+            document.querySelectorAll('.acctgrp-incl-' + gi).forEach(function (el) {
+                if (el.getAttribute('data-mid') !== zohoId) return;
+                el.textContent = nowExcluded ? '☐' : '☑';
+                el.className = 'acctgrp-incl-' + gi + ' cursor-pointer ' + (nowExcluded ? 'text-gray-300' : 'text-emerald-600');
+            });
+            document.querySelectorAll('.acctgrp-member-' + gi).forEach(function (tr) {
+                if (tr.getAttribute('data-mid') === zohoId) {
+                    tr.classList.toggle('opacity-40', nowExcluded);
+                    tr.classList.toggle('line-through', nowExcluded);
+                }
+            });
+            // If we just excluded the current survivor, promote the first included.
+            const cur = (window._accountMergeOverrides && window._accountMergeOverrides[g.key]) || (g.members.find(function (m) { return m.isSurvivor; }) || {}).zohoId;
+            if (nowExcluded && zohoId === cur) {
+                const next = g.members.find(function (m) { return !g._excluded[m.zohoId]; });
+                if (next) setAccountSurvivor(gi, next.zohoId);
+            }
+        }
+
+        function _accountExcludesForScope(scope) {
+            const out = {};
+            (window._accountMergeGroups || []).forEach(function (g) {
+                if (g.scope === scope && !g._dismissed && g._excluded) {
+                    const ids = Object.keys(g._excluded);
+                    if (ids.length) out[g.key] = ids;
+                }
             });
             return out;
         }
@@ -6347,18 +6431,20 @@
             const key = window.prompt('Enter the admin password to apply this account merge:');
             if (!key || !key.trim()) return;
             const overrides = _accountOverridesForScope(scope);
+            const excludes = _accountExcludesForScope(scope);
             const applyUrl = amMode === 'domain'
                 ? '/api/duplicates/accounts/domain-only-merge'
                 : '/api/duplicates/accounts/domain-name-merge';
             const note = document.createElement('div');
             note.className = 'text-teal-700 mt-1';
             const ovCount = Object.keys(overrides).length;
-            note.textContent = 'Applying ' + scope + ' merges…' + (ovCount ? ' (' + ovCount + ' survivor override' + (ovCount === 1 ? '' : 's') + ')' : '') + ' (this re-parents records in Zoho — give it a moment)';
+            const exCount = Object.keys(excludes).reduce(function (n, k) { return n + excludes[k].length; }, 0);
+            note.textContent = 'Applying ' + scope + ' merges…' + (ovCount ? ' (' + ovCount + ' survivor override' + (ovCount === 1 ? '' : 's') + ')' : '') + (exCount ? ' (' + exCount + ' excluded)' : '') + ' (this re-parents records in Zoho — give it a moment)';
             panel.appendChild(note);
             let live;
             try {
                 live = await _runBatchedMerge(applyUrl, {
-                    key: key.trim(), batchLimit: 8, body: { scope: scope, overrides: overrides }, progressKeys: ['merged'],
+                    key: key.trim(), batchLimit: 8, body: { scope: scope, overrides: overrides, excludes: excludes }, progressKeys: ['merged'],
                     onTick: function (t) { note.textContent = 'Applying ' + scope + ' merges… ' + (t.merged || 0).toLocaleString() + ' group(s), re-parented ' + (t.reparentedDeals || 0) + ' deal(s)/' + (t.reparentedContacts || 0) + ' contact(s)…'; },
                 });
             } catch (e) {

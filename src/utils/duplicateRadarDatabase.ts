@@ -2116,7 +2116,8 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
         AND lower(btrim(email)) NOT IN ('n/a','na','none','null','-')
         AND phone_normalized IS NOT NULL
         AND length(phone_normalized) >= 7
-        AND phone_normalized !~ '^(.)\\1+$'`,
+        AND phone_normalized !~ '^(.)\\1+$'
+        AND LOWER(COALESCE(layout_name, '')) NOT IN ('marketplace', 'partner accounts')`,
   );
 
   // Skip contacts already merged away (tagged Duplicate-Delete, pending admin
@@ -2219,6 +2220,8 @@ export async function applyExactContactMatches(opts: {
   performedBy: string;
   /** Per-group survivor overrides { "email|phone": zohoIdToKeep }. */
   overrides?: Record<string, string>;
+  /** Per-group EXCLUDED contact ids — left untouched (not survivor, not tagged). */
+  excludes?: Record<string, string[]>;
 }): Promise<{ mergedGroups: number; taggedRecords: number; remaining: number; errors: number }> {
   const { addZohoTags, zohoWritesAllowedInEnv } = await import("./zohoCRM");
   const { withTimeout } = await import("./promiseTimeout");
@@ -2232,14 +2235,23 @@ export async function applyExactContactMatches(opts: {
   let mergedGroups = 0;
   let errors = 0;
 
-  // Honor an operator override (else keep the highest-completeness survivor);
-  // the duplicates are everyone else in the group.
-  const resolved = batch.map((g) => {
-    const ov = opts.overrides?.[g.key];
-    const chosen = ov && g.members.some((m) => m.zohoId === ov) ? ov : g.survivorZohoId;
-    const dupIds = g.members.map((m) => m.zohoId).filter((id) => id !== chosen);
-    return { g, chosen, dupIds };
-  });
+  // Honor operator EXCLUDES (members left untouched) + override (else keep the
+  // highest-completeness survivor); the duplicates are the other INCLUDED ones.
+  const resolved = batch
+    .map((g) => {
+      const ex = new Set(opts.excludes?.[g.key] ?? []);
+      const included = g.members.map((m) => m.zohoId).filter((id) => !ex.has(id));
+      if (included.length < 2) return null; // nothing to merge after exclusions
+      const ov = opts.overrides?.[g.key];
+      const chosen = ov && included.includes(ov)
+        ? ov
+        : included.includes(g.survivorZohoId)
+          ? g.survivorZohoId
+          : included[0]!;
+      const dupIds = included.filter((id) => id !== chosen);
+      return { g, chosen, dupIds };
+    })
+    .filter((r): r is { g: ExactContactGroup; chosen: string; dupIds: string[] } => r !== null);
 
   // Tag in chunks of 100 ids (Zoho add_tags multi-record limit). Track which
   // ids were ACTUALLY tagged so a failed chunk (e.g. Zoho rate-limited while a
@@ -2545,6 +2557,8 @@ export async function applyNamePhoneContactMatches(opts: {
   performedBy: string;
   /** Per-group survivor overrides { "name|phone": zohoIdToKeep }. */
   overrides?: Record<string, string>;
+  /** Per-group EXCLUDED contact ids — left untouched (not survivor, not tagged). */
+  excludes?: Record<string, string[]>;
 }): Promise<{
   mergedGroups: number;
   taggedRecords: number;
@@ -2567,20 +2581,27 @@ export async function applyNamePhoneContactMatches(opts: {
 
   for (const g of batch) {
     try {
-      // Honor an operator override. When the survivor changes we recompute the
-      // duplicates AND the email plan from the chosen survivor (a record WITH
-      // an email should survive — the email plan keeps the survivor's email
-      // primary and routes a different duplicate email to Secondary_Email).
+      // Honor operator EXCLUDES + override. When the survivor or the member set
+      // changes we recompute the duplicates AND the email plan from the chosen
+      // survivor (a record WITH an email should survive — the email plan keeps
+      // the survivor's email primary and routes a different dup email to
+      // Secondary_Email). Excluded members are left completely untouched.
+      const ex = new Set(opts.excludes?.[g.key] ?? []);
+      const included = g.members.map((m) => m.zohoId).filter((id) => !ex.has(id));
+      if (included.length < 2) continue; // nothing to merge after exclusions
       const ov = opts.overrides?.[g.key];
-      const chosen =
-        ov && g.members.some((m) => m.zohoId === ov) ? ov : g.survivorZohoId;
+      const chosen = ov && included.includes(ov)
+        ? ov
+        : included.includes(g.survivorZohoId)
+          ? g.survivorZohoId
+          : included[0]!;
       let dupZohoIds = g.duplicateZohoIds;
       let updates = g.emailUpdates;
-      if (chosen !== g.survivorZohoId) {
-        dupZohoIds = g.members.map((m) => m.zohoId).filter((id) => id !== chosen);
+      if (chosen !== g.survivorZohoId || ex.size > 0) {
+        dupZohoIds = included.filter((id) => id !== chosen);
         const chosenMember = g.members.find((m) => m.zohoId === chosen);
         const dupEmails = g.members
-          .filter((m) => m.zohoId !== chosen)
+          .filter((m) => included.includes(m.zohoId) && m.zohoId !== chosen)
           .sort((a, b) => Number(b.createdMs || 0) - Number(a.createdMs || 0))
           .map((m) => (m.email || "").trim())
           .filter(Boolean);
@@ -2964,6 +2985,13 @@ export async function applyAccountDomainNameMerge(opts: {
    * record not in the group is ignored by the engine (it falls back safely).
    */
   overrides?: Record<string, string>;
+  /**
+   * Per-group EXCLUDED account ids, keyed by group key → zoho ids to leave OUT
+   * of the merge entirely (not survivor, not tagged — untouched). Lets the
+   * operator drop a wrong member (e.g. a Partner account) from a 3+ group and
+   * still merge the rest.
+   */
+  excludes?: Record<string, string[]>;
   /** 'domain_name' (strict, default) or 'domain' (looser same-domain-any-name). */
   groupBy?: "domain_name" | "domain";
 }): Promise<{
@@ -2994,18 +3022,29 @@ export async function applyAccountDomainNameMerge(opts: {
     errors = 0;
   for (const g of batch) {
     try {
-      const zohoIds = [g.survivorZohoId, ...g.duplicateZohoIds];
+      // Drop operator-EXCLUDED members (e.g. a Partner account in a 3-group) so
+      // only the chosen set merges; the excluded ones are left untouched.
+      const excludedSet = new Set(opts.excludes?.[g.key] ?? []);
+      const zohoIds = [g.survivorZohoId, ...g.duplicateZohoIds].filter(
+        (id) => !excludedSet.has(id),
+      );
+      if (zohoIds.length < 2) continue; // nothing left to merge after exclusions
       const recRes = await pool.query(
         `SELECT * FROM duplicate_records WHERE record_type = 'account' AND zoho_record_id = ANY($1::text[])`,
         [zohoIds],
       );
       const recs = recRes.rows as DuplicateRecord[];
       if (recs.length < 2) continue;
-      // Honor an operator override (else keep the highest-% survivor). We FORCE
-      // it as the engine's master so the applied survivor == the previewed one.
+      // Honor an operator override (else keep the highest-% survivor) — but only
+      // among INCLUDED members. We FORCE it as the engine's master so the
+      // applied survivor == the previewed one.
       const overrideId = opts.overrides?.[g.key];
       const chosenSurvivorId =
-        overrideId && zohoIds.includes(overrideId) ? overrideId : g.survivorZohoId;
+        overrideId && zohoIds.includes(overrideId)
+          ? overrideId
+          : zohoIds.includes(g.survivorZohoId)
+            ? g.survivorZohoId
+            : (g.members.find((m) => zohoIds.includes(m.zohoId))?.zohoId ?? zohoIds[0]!);
       const survivorRow =
         recs.find((r) => (r as any).zoho_record_id === chosenSurvivorId) || recs[0];
       const clusterId = (survivorRow as any)?.cluster_id ?? (recs[0] as any)?.cluster_id;
