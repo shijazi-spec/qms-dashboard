@@ -5821,12 +5821,18 @@ export async function resolveCluster(
 
 export async function bulkResolve(
   clusterIds: number[],
-  action: "resolve" | "ignore",
+  action: "resolve" | "ignore" | "reopen",
   performedBy: string,
 ): Promise<number> {
   let count = 0;
   for (const id of clusterIds) {
-    await resolveCluster(id, action, performedBy);
+    if (action === "reopen") {
+      // Re-open = set the cluster back to 'active' (recover a mistaken dismiss /
+      // resolve). No Zoho changes — same as the per-cluster Re-open.
+      await updateClusterStatus(id, "active");
+    } else {
+      await resolveCluster(id, action, performedBy);
+    }
     count++;
   }
   return count;

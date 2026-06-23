@@ -5712,12 +5712,12 @@ export const duplicateRadarRoutes = [
           const { cluster_ids, action } = await c.req.json();
           if (
             !Array.isArray(cluster_ids) ||
-            !["resolve", "ignore"].includes(action)
+            !["resolve", "ignore", "reopen"].includes(action)
           ) {
             return c.json(
               {
                 error:
-                  "cluster_ids (array) and action (resolve/ignore) required",
+                  "cluster_ids (array) and action (resolve/ignore/reopen) required",
               },
               400,
             );
