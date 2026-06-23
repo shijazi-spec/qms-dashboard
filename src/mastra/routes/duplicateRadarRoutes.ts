@@ -141,6 +141,7 @@ import {
 } from "../../utils/duplicateRadarDatabase";
 
 import type { DuplicateFilters } from "../../utils/duplicateRadarDatabase";
+import { extractCsFieldsFromRawData } from "../../utils/duplicateRadarCsOverlap";
 
 import {
   fetchAllZohoRecords,
@@ -822,12 +823,18 @@ async function scanZohoCRMForDuplicates(
       await runModulesWithConcurrency([
         () => processModule("Deals", "deal", clustersUpdated, (record) => {
           const d = record.data;
+          // Reflect the CS "Company Domain" field (e.g. riyadbank.com) into the
+          // deal's domain column — it's the customer's real domain, whereas the
+          // Contact_Email is often empty/personal. Same extractor the CS
+          // Lifecycle uses (env-override + fuzzy field name), so a client deal's
+          // domain is recognised platform-wide (radar, clustering, preflight).
+          const csDomain = extractCsFieldsFromRawData(d, {}).company_domain;
           return {
             companyName: d.Account_Name?.name || d.Deal_Name || "Unknown",
             email: d.Contact_Email || "",
             phone: d.Contact_Phone || "",
             recordName: d.Deal_Name || "Unknown Deal",
-            domain: extractDomain(d.Contact_Email || ""),
+            domain: csDomain || extractDomain(d.Contact_Email || ""),
             ownerName: d.Owner?.name || "Unknown",
             ownerEmail: d.Owner?.email || "",
             status: "",
