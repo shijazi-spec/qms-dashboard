@@ -1719,6 +1719,38 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
   const indexName = (norm: string) => {
     for (const t of _csTokens(norm)) if (!CS_DIR_STOP.has(t)) addToken(t, norm);
   };
+  // Register a client under a normalized name and/or domain.
+  const addClient = (norm: string, dom: string | null, status: CsClientStatus) => {
+    if (norm && norm.length >= 3) {
+      byName.set(norm, _csMergeStatus(byName.get(norm), status));
+      indexName(norm);
+    }
+    const d = (dom || "").toString().trim().toLowerCase();
+    if (d) byDomain.set(d, _csMergeStatus(byDomain.get(d), status));
+  };
+
+  // Accounts indexed by Zoho id (+ kept for name-based linkage). A CS deal can
+  // then inherit its Account's DOMAIN and (often English) NAME even when the
+  // deal itself carries an Arabic-only company name and no Company_Domain — the
+  // exact Riyad Bank / Bank Albilad case the CS Lifecycle tab warns about.
+  const accountById = new Map<string, { domain: string | null; norm: string | null }>();
+  const acctRows =
+    (
+      await queryWithTimeout<any>(
+        `SELECT zoho_record_id, LOWER(domain) AS domain, record_name, company_name
+           FROM duplicate_records
+          WHERE record_type = 'account'
+          LIMIT 200000`,
+        [],
+      )
+    )?.rows ?? [];
+  for (const a of acctRows) {
+    const zid = (a.zoho_record_id || "").toString().trim();
+    if (!zid) continue;
+    const norm = normalizeCompanyName(a.record_name || a.company_name || "");
+    const dom = (a.domain || "").toString().trim().toLowerCase() || null;
+    accountById.set(zid, { domain: dom, norm: norm || null });
+  }
 
   // 1) Every CLIENT deal — identified EXACTLY like the CS Lifecycle tab so the
   //    preflight can never disagree with it: read all Deals (zoho_module =
@@ -1762,35 +1794,36 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
     for (const raw of [(f as any).cs_company, d.account_name, d.company_name]) {
       const rawName = (raw || "").toString().trim();
       if (!rawName || isPlaceholderName(rawName)) continue;
-      const norm = normalizeCompanyName(rawName);
-      if (!norm || norm.length < 3) continue;
-      byName.set(norm, _csMergeStatus(byName.get(norm), status));
-      indexName(norm);
+      addClient(normalizeCompanyName(rawName), null, status);
     }
     // Index by domain — the Deal's own domain + the CS company_domain field.
-    for (const dm of [d.domain, (f as any).company_domain]) {
-      const dom = (dm || "").toString().trim().toLowerCase();
-      if (dom) byDomain.set(dom, _csMergeStatus(byDomain.get(dom), status));
+    for (const dm of [d.domain, (f as any).company_domain]) addClient("", dm, status);
+    // Inherit the linked ACCOUNT's domain + (English) name by Zoho id — closes
+    // the gap when the deal has an Arabic-only name and no Company_Domain but
+    // its Account has riyadbank.com / "Riyad Bank".
+    const rd = d.raw_data || {};
+    const an = rd.Account_Name;
+    const acctId = (
+      (an && typeof an === "object" ? an.id : null) ||
+      rd.Account_Name_id ||
+      ""
+    )
+      .toString()
+      .trim();
+    if (acctId && accountById.has(acctId)) {
+      const acc = accountById.get(acctId)!;
+      addClient(acc.norm || "", acc.domain, status);
     }
   }
 
-  // 2) Accounts — map domain → client status when the account's company is a
-  //    known client (the deal that proves it may carry no domain of its own).
-  const acctQ = await queryWithTimeout<any>(
-    `SELECT LOWER(domain) AS domain, record_name, company_name
-       FROM duplicate_records
-      WHERE record_type = 'account'
-        AND domain IS NOT NULL AND btrim(domain) <> ''
-      LIMIT 200000`,
-    [],
-  );
-  for (const a of (acctQ?.rows ?? [])) {
-    const dom = (a.domain || "").trim().toLowerCase();
-    if (!dom) continue;
+  // Also link any ACCOUNT whose name matches a known client → its domain
+  // (covers accounts not directly referenced by a deal's Account_Name id).
+  for (const a of acctRows) {
+    const dom = (a.domain || "").toString().trim().toLowerCase();
+    if (!dom || byDomain.has(dom)) continue;
     const norm = normalizeCompanyName(a.record_name || a.company_name || "");
-    if (!norm) continue;
-    const status = byName.get(norm);
-    if (status && !byDomain.has(dom)) byDomain.set(dom, status);
+    const status = norm ? byName.get(norm) : undefined;
+    if (status) byDomain.set(dom, status);
   }
 
   _csDirCache = { byName, byDomain, tokenIndex, builtAt: todayMs };
