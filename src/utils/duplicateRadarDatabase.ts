@@ -2039,6 +2039,10 @@ export interface ContactMergeMember {
   name: string;
   email: string | null;
   phone: string | null;
+  /** Raw Phone / Mobile (original formatting) — used to preserve both numbers
+   *  on merge and to recompute when the operator overrides the survivor. */
+  phoneRaw?: string | null;
+  mobileRaw?: string | null;
   account: string | null;
   owner: string | null;
   layout: string | null;
@@ -2380,6 +2384,59 @@ export function planMergedContactEmails(input: {
   return { updates, extra: distinct.slice(2) };
 }
 
+/**
+ * Decide the survivor's phone fields for a same-name+phone contact merge.
+ * Mirrors planMergedContactEmails but for Zoho's two phone slots (Phone +
+ * Mobile). Saudi-normalised dedupe (drop +966 / leading 0, last 9 digits) so the
+ * same number in different formats isn't double-stored. NEVER overwrites a number
+ * the survivor already holds — only GAP-FILLS an empty slot — so a good number
+ * can't be clobbered. A 3rd+ distinct number is returned in `extra` (Zoho keeps
+ * only two). Pure + exported for unit/simulation testing.
+ *   • survivor keeps its Phone (or, if it had none, the freshest distinct number
+ *     becomes Phone);
+ *   • the next distinct number fills Mobile only when the survivor's Mobile is empty.
+ */
+export function planMergedContactPhones(input: {
+  survivorPhone: string | null;
+  survivorMobile: string | null;
+  otherNumbers: string[]; // duplicates' Phone+Mobile, freshest-first, original casing
+}): { updates: { Phone?: string; Mobile?: string }; extra: string[] } {
+  const trimOf = (s: string) => (s || "").trim();
+  const normOf = (s: string) =>
+    trimOf(s).replace(/\D/g, "").replace(/^966/, "").replace(/^0+/, "").slice(-9);
+  const updates: { Phone?: string; Mobile?: string } = {};
+  const sPhone = trimOf(input.survivorPhone || "");
+  const sMobile = trimOf(input.survivorMobile || "");
+  const seen = new Set<string>();
+  const distinct: string[] = [];
+  const add = (raw: string) => {
+    const v = trimOf(raw);
+    if (!v) return;
+    const k = normOf(v);
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    distinct.push(v);
+  };
+  add(sPhone);
+  add(sMobile);
+  for (const o of input.otherNumbers || []) add(o);
+  if (distinct.length === 0) return { updates, extra: [] };
+  // Survivor's primary number: keep its Phone; if it had none, promote freshest.
+  const effPhone = sPhone || distinct[0]!;
+  if (!sPhone) updates.Phone = effPhone;
+  // Second slot → Mobile, GAP-FILL only (never overwrite a populated Mobile).
+  if (!sMobile) {
+    const second = distinct.find((v) => normOf(v) !== normOf(effPhone));
+    if (second) updates.Mobile = second;
+  }
+  // Extras = distinct numbers beyond the two kept slots.
+  const keptKeys = new Set<string>([normOf(effPhone)]);
+  const effMobile = sMobile || updates.Mobile || "";
+  if (effMobile) keptKeys.add(normOf(effMobile));
+  const extra = distinct.filter((v) => !keptKeys.has(normOf(v)));
+  return { updates, extra };
+}
+
 interface NamePhoneContactGroup {
   /** Stable id = normalizedName|phone — carries a survivor override on apply. */
   key: string;
@@ -2387,6 +2444,8 @@ interface NamePhoneContactGroup {
   duplicateZohoIds: string[];
   emailUpdates: { Email?: string; Secondary_Email?: string };
   extraEmails: string[];
+  phoneUpdates: { Phone?: string; Mobile?: string };
+  extraPhones: string[];
   label: string;
   members: ContactMergeMember[];
 }
@@ -2399,6 +2458,8 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
     email: string | null;
     phone_normalized: string | null;
     mobile_normalized: string | null;
+    phone: string | null;
+    mobile: string | null;
     account_name: string | null;
     title: string | null;
     website: string | null;
@@ -2408,7 +2469,7 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
     created_ms: string | null;
   }>(
     `SELECT zoho_record_id, record_name, email,
-            phone_normalized, mobile_normalized,
+            phone_normalized, mobile_normalized, phone, mobile,
             account_name, title, website, company_name, owner_name, layout_name,
             EXTRACT(EPOCH FROM COALESCE(created_date, modified_date))::bigint AS created_ms
        FROM duplicate_records
@@ -2482,6 +2543,18 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
       survivorEmail: survivor.email,
       otherEmails: dupEmails,
     });
+    // Keep BOTH numbers — survivor's Phone stays; the freshest distinct dup
+    // number gap-fills Mobile (same person, same name+phone group, so a second
+    // number is a real alternate, not a different person).
+    const dupNumbers = [...dups]
+      .sort((a, b) => Number(b.created_ms || 0) - Number(a.created_ms || 0))
+      .flatMap((d) => [String(d.phone || "").trim(), String(d.mobile || "").trim()])
+      .filter(Boolean);
+    const { updates: phoneUpdates, extra: extraPhones } = planMergedContactPhones({
+      survivorPhone: survivor.phone,
+      survivorMobile: survivor.mobile,
+      otherNumbers: dupNumbers,
+    });
     const phoneKey = key.split("|").slice(1).join("|");
     const memberRows: ContactMergeMember[] = members.map((m) => {
       const ph = (m.phone_normalized || m.mobile_normalized || "").trim() || phoneKey;
@@ -2498,6 +2571,8 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
         name: (m.record_name || "").trim(),
         email: (m.email || "").trim() || null,
         phone: ph || null,
+        phoneRaw: (m.phone || "").trim() || null,
+        mobileRaw: (m.mobile || "").trim() || null,
         account: m.account_name,
         owner: m.owner_name,
         layout: m.layout_name,
@@ -2514,6 +2589,8 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
       duplicateZohoIds: dups.map((d) => d.zoho_record_id),
       emailUpdates: updates,
       extraEmails: extra,
+      phoneUpdates,
+      extraPhones,
       label: (survivor.record_name || "").trim(),
       members: memberRows,
     });
@@ -2526,6 +2603,7 @@ export async function previewNamePhoneContactMatches(): Promise<{
   qualifyingGroups: number;
   duplicatesToTag: number;
   emailsPreserved: number;
+  numbersPreserved: number;
   sample: NamePhoneContactGroup[];
 }> {
   try {
@@ -2536,13 +2614,16 @@ export async function previewNamePhoneContactMatches(): Promise<{
       emailsPreserved: groups.filter(
         (g) => g.emailUpdates.Email || g.emailUpdates.Secondary_Email,
       ).length,
+      numbersPreserved: groups.filter(
+        (g) => g.phoneUpdates.Phone || g.phoneUpdates.Mobile,
+      ).length,
       sample: groups.slice(0, 200),
     };
   } catch (e) {
     logger.warn("[DuplicateRadar] previewNamePhoneContactMatches failed (non-fatal)", {
       error: e instanceof Error ? e.message : String(e),
     });
-    return { qualifyingGroups: 0, duplicatesToTag: 0, emailsPreserved: 0, sample: [] };
+    return { qualifyingGroups: 0, duplicatesToTag: 0, emailsPreserved: 0, numbersPreserved: 0, sample: [] };
   }
 }
 
@@ -2596,26 +2677,37 @@ export async function applyNamePhoneContactMatches(opts: {
           ? g.survivorZohoId
           : included[0]!;
       let dupZohoIds = g.duplicateZohoIds;
-      let updates = g.emailUpdates;
+      let updates: {
+        Email?: string;
+        Secondary_Email?: string;
+        Phone?: string;
+        Mobile?: string;
+      } = { ...g.emailUpdates, ...g.phoneUpdates };
       if (chosen !== g.survivorZohoId || ex.size > 0) {
         dupZohoIds = included.filter((id) => id !== chosen);
         const chosenMember = g.members.find((m) => m.zohoId === chosen);
-        const dupEmails = g.members
+        const includedDups = g.members
           .filter((m) => included.includes(m.zohoId) && m.zohoId !== chosen)
-          .sort((a, b) => Number(b.createdMs || 0) - Number(a.createdMs || 0))
-          .map((m) => (m.email || "").trim())
-          .filter(Boolean);
-        updates = planMergedContactEmails({
+          .sort((a, b) => Number(b.createdMs || 0) - Number(a.createdMs || 0));
+        const emailUpd = planMergedContactEmails({
           survivorEmail: chosenMember?.email ?? null,
-          otherEmails: dupEmails,
+          otherEmails: includedDups.map((m) => (m.email || "").trim()).filter(Boolean),
         }).updates;
+        const phoneUpd = planMergedContactPhones({
+          survivorPhone: chosenMember?.phoneRaw ?? null,
+          survivorMobile: chosenMember?.mobileRaw ?? null,
+          otherNumbers: includedDups
+            .flatMap((m) => [(m.phoneRaw || "").trim(), (m.mobileRaw || "").trim()])
+            .filter(Boolean),
+        }).updates;
+        updates = { ...emailUpd, ...phoneUpd };
       }
-      // 1) Preserve the email(s) on the survivor BEFORE tagging the dups.
-      if (updates.Email || updates.Secondary_Email) {
+      // 1) Preserve the email(s) AND number(s) on the survivor BEFORE tagging.
+      if (updates.Email || updates.Secondary_Email || updates.Phone || updates.Mobile) {
         await withTimeout(
           updateZohoRecord("Contacts", chosen, updates as Record<string, unknown>),
           20_000,
-          `email-migrate ${chosen}`,
+          `field-migrate ${chosen}`,
         );
         emailsWritten++;
       }

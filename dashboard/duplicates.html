@@ -6177,7 +6177,8 @@
             panel.innerHTML = '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-900">'
                 + '<strong>' + preview.qualifyingGroups.toLocaleString() + '</strong> group(s) match on name + phone · <strong>'
                 + preview.duplicatesToTag.toLocaleString() + '</strong> contact(s) would be tagged Duplicate-Delete · <strong>'
-                + (preview.emailsPreserved || 0).toLocaleString() + '</strong> survivor(s) keep an extra email. <span class="text-[10px] text-teal-700">Click a group to verify / change its survivor.</span>'
+                + (preview.emailsPreserved || 0).toLocaleString() + '</strong> survivor(s) keep an extra email · <strong>'
+                + (preview.numbersPreserved || 0).toLocaleString() + '</strong> survivor(s) keep an extra number. <span class="text-[10px] text-teal-700">Click a group to verify / change its survivor.</span>'
                 + list
                 + (preview.qualifyingGroups > (preview.sample || []).length ? '<div class="text-[10px] text-gray-500 mt-1">… showing ' + (preview.sample || []).length + ' of ' + preview.qualifyingGroups + ' groups.</div>' : '')
                 + '<div><button data-on-click="applyNamePhoneContactsNow" class="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-600 text-white hover:bg-teal-700">⚡ Apply these ' + preview.qualifyingGroups.toLocaleString() + ' merge(s) (admin)</button></div></div>';
