@@ -22,6 +22,7 @@ import {
   normalizeCompanyName,
   isPlaceholderName,
 } from "./duplicateRadarDatabase";
+import { extractCsFieldsFromRawData } from "./duplicateRadarCsOverlap";
 import { logger } from "./logger";
 
 /**
@@ -1719,38 +1720,58 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
     for (const t of _csTokens(norm)) if (!CS_DIR_STOP.has(t)) addToken(t, norm);
   };
 
-  // 1) Every CLIENT deal — a deal that is CS-tracked (has a Phase) OR sits in a
-  //    customer Stage (Paid / Agreement Signed / …). This is the client truth.
+  // 1) Every CLIENT deal — identified EXACTLY like the CS Lifecycle tab so the
+  //    preflight can never disagree with it: read all Deals (zoho_module =
+  //    'Deals') and run the SAME extractor (extractCsFieldsFromRawData — which
+  //    resolves the phase via env-override + fuzzy field names, not a hardcoded
+  //    'Phase' key). A deal is a client deal if it has a CS phase OR sits in a
+  //    customer Stage. (The old hardcoded SQL phase lookup missed clients whose
+  //    phase field has a custom Zoho API name, e.g. Riyad Bank in "New Deal".)
+  const customerStages = new Set(Array.from(PF_CUSTOMER_STAGES));
   const dealsQ = await queryWithTimeout<any>(
-    `SELECT account_name, company_name, LOWER(domain) AS domain,
-            COALESCE(raw_data->>'Phase', raw_data->>'CS_Phase', raw_data->>'Customer_Phase') AS phase,
-            NULLIF(raw_data->>'Churn_Date','') AS churn_date,
-            gov_type, owner_name
+    `SELECT account_name, company_name, LOWER(domain) AS domain, gov_type, owner_name,
+            LOWER(COALESCE(raw_data->>'Stage','')) AS stage, raw_data
        FROM duplicate_records
-      WHERE record_type = 'deal'
-        AND (
-          COALESCE(NULLIF(raw_data->>'Phase',''), NULLIF(raw_data->>'CS_Phase',''), NULLIF(raw_data->>'Customer_Phase','')) IS NOT NULL
-          OR LOWER(COALESCE(raw_data->>'Stage','')) = ANY($1::text[])
-        )
+      WHERE zoho_module = 'Deals'
       LIMIT 200000`,
-    [Array.from(PF_CUSTOMER_STAGES)],
+    [],
   );
   for (const d of (dealsQ?.rows ?? [])) {
-    const rawName = (d.account_name || d.company_name || "").trim();
-    const norm = normalizeCompanyName(rawName);
-    if (!norm || norm.length < 3 || isPlaceholderName(rawName)) continue;
+    const f = extractCsFieldsFromRawData(d.raw_data, { domain: d.domain });
+    const phase = (f.phase || "").trim();
+    const isClient = phase !== "" || customerStages.has((d.stage || "").trim());
+    if (!isClient) continue;
+    const churnDate = f.churn_date
+      ? typeof f.churn_date === "string"
+        ? f.churn_date
+        : new Date(f.churn_date).toISOString()
+      : null;
     const status = _csStatusFromDeal({
-      phase: d.phase,
-      churnDate: d.churn_date,
-      govType: d.gov_type,
-      owner: d.owner_name,
-      companyName: rawName,
+      phase: phase || null,
+      churnDate,
+      govType: (f.gov_type || d.gov_type || "").toString().trim() || null,
+      owner: (f.cs_owner_name || d.owner_name || "").toString().trim() || null,
+      companyName: ((f as any).cs_company || d.account_name || d.company_name || "")
+        .toString()
+        .trim(),
       todayMs,
     });
-    byName.set(norm, _csMergeStatus(byName.get(norm), status));
-    indexName(norm);
-    const dom = (d.domain || "").trim().toLowerCase();
-    if (dom) byDomain.set(dom, _csMergeStatus(byDomain.get(dom), status));
+    // Index by EVERY company-name variant the deal exposes (the CS "Company"
+    // field, the Zoho Account_Name, the Deal's company) so the inbound matches
+    // whichever the CRM stored.
+    for (const raw of [(f as any).cs_company, d.account_name, d.company_name]) {
+      const rawName = (raw || "").toString().trim();
+      if (!rawName || isPlaceholderName(rawName)) continue;
+      const norm = normalizeCompanyName(rawName);
+      if (!norm || norm.length < 3) continue;
+      byName.set(norm, _csMergeStatus(byName.get(norm), status));
+      indexName(norm);
+    }
+    // Index by domain — the Deal's own domain + the CS company_domain field.
+    for (const dm of [d.domain, (f as any).company_domain]) {
+      const dom = (dm || "").toString().trim().toLowerCase();
+      if (dom) byDomain.set(dom, _csMergeStatus(byDomain.get(dom), status));
+    }
   }
 
   // 2) Accounts — map domain → client status when the account's company is a
