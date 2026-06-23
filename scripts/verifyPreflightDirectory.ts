@@ -19,12 +19,16 @@
 import { runPreflight, getCsClientDirectoryStats } from "../src/utils/duplicateRadarPreflight";
 
 // Clients confirmed to be in the CRM as live/recent customers — the exact set
-// that was wrongly landing in the PASS file. company_name only (no email/phone)
-// so Rule 1 can't fire and we test the directory (Rule 2) in isolation. Add the
-// real red/orange names from the latest export here as they come up.
+// that was wrongly landing in the PASS file. Each probe carries a THROWAWAY
+// email (a non-client domain not in CRM) so the row is actually EXAMINED and
+// Rule 1 clears — exactly like a real Mawsool contact whose personal/free email
+// doesn't reveal the company. That forces the Rule-2 directory NAME match
+// (exact -> containment -> fuzzy), which is the path we must verify. A known
+// client must come back block (active) or review (churned-in-cool-off); a
+// `pass` OR a skip ("no result") is a LEAK/failure. Add real names as they come.
 const PROBES: Array<{ company_name?: string; domain?: string; note?: string }> = [
-  { company_name: "Riyad Bank", note: "New Deal phase — must BLOCK" },
-  { company_name: "بنك الرياض", note: "Riyad Bank (Arabic) — must BLOCK via account-id link" },
+  { company_name: "Riyad Bank", note: "must BLOCK by name" },
+  { company_name: "بنك الرياض", note: "Riyad Bank (Arabic) — must BLOCK by name" },
   { domain: "riyadbank.com", note: "Riyad Bank by domain — must BLOCK" },
   { company_name: "SATORP" },
   { company_name: "Saudi Aramco" },
@@ -68,6 +72,10 @@ async function main() {
     rows: PROBES.map((p, i) => ({
       company_name: p.company_name ?? null,
       domain: p.domain ?? null,
+      // Throwaway non-client email so the row is EXAMINED (not skipped) and
+      // Rule 1 clears — mirrors a real contact with a personal email, forcing
+      // the Rule-2 directory name match we need to verify.
+      email: p.domain ? null : `pf-probe-${i}@example.com`,
       ref: String(i),
     })),
   });
@@ -84,15 +92,17 @@ async function main() {
   for (let i = 0; i < PROBES.length; i++) {
     const p = PROBES[i]!;
     const r = resp.rows.find((x) => x.ref === String(i));
-    const verdict = r?.verdict ?? "(no result)";
+    const verdict = r ? r.verdict : "(no result)";
     const via = r?.matched_via ?? "-";
     const phase = r?.cs_phase ?? r?.lifecycle_state ?? "-";
     const label = p.company_name ?? p.domain ?? "?";
-    const leaked = verdict === "pass";
-    if (leaked) leaks++;
+    // A known client is CAUGHT only if it returns block (active) or review
+    // (churned-in-cool-off). pass / warn / duplicate / no-result = LEAK.
+    const caught = verdict === "block" || verdict === "review";
+    if (!caught) leaks++;
     console.log(
       "  " +
-        (leaked ? "✗ " : "✓ ") +
+        (caught ? "✓ " : "✗ ") +
         pad(label, 44) +
         pad(verdict, 10) +
         pad(String(via), 14) +
@@ -104,7 +114,7 @@ async function main() {
   console.log("\n=== SUMMARY ===");
   console.log(
     `  directory: ${collapsed ? "COLLAPSED" : "ok"} (${stats.names} names) · ` +
-      `probe leaks: ${leaks}/${PROBES.length}`,
+      `clients NOT caught: ${leaks}/${PROBES.length}`,
   );
   const ok = !collapsed && leaks === 0;
   console.log(ok ? "  ✓ PASS — safe to trust the existing-client guard.\n" : "  ✗ FAIL — do not send a PASS file to Sales yet.\n");
