@@ -55,7 +55,7 @@ const PROBES: Array<{
   { company_name: "YASREF", expect: "pass", note: "only Contacted/Closed Lost" },
   { company_name: "Mozn", expect: "pass", note: "account-only" },
   { company_name: "Diriyah", expect: "pass", note: "account-only" },
-  { company_name: "HungerStation", expect: "pass", note: "account-only" },
+  { company_name: "HungerStation", expect: "block", note: "active Adoption client (deal beyond the 12-row inspector sample)" },
   { company_name: "CMA", expect: "pass", note: "CMA CGM shipping (lost); 3-char name" },
 ];
 
