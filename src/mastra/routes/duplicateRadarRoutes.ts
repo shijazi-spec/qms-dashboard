@@ -8493,7 +8493,7 @@ export const duplicateRadarRoutes = [
               owners: Array.isArray(r.owners) ? r.owners.join(", ") : "",
               cs_owner: r.cs_owner || "",
               modules: fmtModules(r.module_counts),
-              phase: phaseLabel(r.lifecycle_state),
+              phase: (r.cs_phase && String(r.cs_phase).trim()) || phaseLabel(r.lifecycle_state),
               arr: r.arr_exposure || 0,
               churn_date: r.churn_date || "",
               churn_days: r.churn_days != null ? r.churn_days : "",

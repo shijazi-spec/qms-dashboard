@@ -176,6 +176,9 @@ export interface PreflightResultRow {
    * owner X" instead of guessing from the generic owner list.
    */
   cs_owner?: string | null;
+  /** Raw CS Lifecycle phase verbatim (New Deal / Onboarding / Adoption /
+   *  Renewal / Termination) for the export's CS Phase column. */
+  cs_phase?: string | null;
   /**
    * Sarah 2026-06-17 — clickable Zoho links for the EXISTING records
    * the rejection points at. The Excel report exposes each one in its
@@ -1561,7 +1564,7 @@ function _csPhaseToActiveState(
 ): "onboarding" | "adoption" | "renewal" | null {
   const p = (phase || "").toLowerCase();
   if (!p) return null;
-  if (p.includes("onboard")) return "onboarding";
+  if (p.includes("onboard") || p.includes("new")) return "onboarding"; // "New Deal" = start of the client lifecycle
   if (p.includes("adopt")) return "adoption";
   if (p.includes("renew")) return "renewal";
   return null;
@@ -2049,6 +2052,7 @@ async function runPreflightBasic(input: {
     let csOwnerOut: string | null = null;
     let churnDateOut: string | null = null;
     let churnDaysOut: number | null = null;
+    let csPhaseOut: string | null = null;
     let moduleCountsOut: PreflightResultRow["module_counts"] = null;
     let lifecycleOut: PreflightResultRow["lifecycle_state"] = v.lifecycle_state ?? null;
 
@@ -2078,6 +2082,7 @@ async function runPreflightBasic(input: {
       csOwnerOut = csStatus.csOwner;
       churnDateOut = csStatus.churnDate;
       churnDaysOut = csStatus.churnDays;
+      csPhaseOut = csStatus.phase;
       if (csStatus.lifecycleState) lifecycleOut = csStatus.lifecycleState;
     }
 
@@ -2100,6 +2105,7 @@ async function runPreflightBasic(input: {
       churn_date: churnDateOut,
       churn_days: churnDaysOut,
       cs_owner: csOwnerOut,
+      cs_phase: csPhaseOut,
       crm_links: crmLinks,
     });
   }
