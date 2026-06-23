@@ -3086,6 +3086,150 @@ export async function applyAccountDomainNameMerge(opts: {
   };
 }
 
+// ── Bulk link contacts → Account (Ahmad 2026-06-23) ──────────────────────────
+// The remaining contact clusters are "chained matches": colleagues at the same
+// company who are NOT duplicates of each other (they don't pairwise share ≥2 of
+// {email, phone, name}). The productive action is to LINK them to the company's
+// Account (set Account_Name) so they roll up under one customer — not merge.
+// This bulk job does that link cascade for every cluster that has contacts and
+// exactly ONE account (an unambiguous link target) AND no genuine duplicates.
+
+export interface ContactLinkCandidate {
+  clusterId: number;
+  accountZohoId: string;
+  accountName: string;
+  contacts: number;
+}
+
+/** Active clusters with ≥1 contact and EXACTLY 1 account → unambiguous link. */
+export async function getContactLinkCandidates(
+  limit = 5000,
+): Promise<ContactLinkCandidate[]> {
+  const res = await pool.query<{
+    cluster_id: number;
+    contacts: string;
+    account_zoho_id: string | null;
+    account_name: string | null;
+  }>(
+    `SELECT dr.cluster_id,
+            COUNT(*) FILTER (WHERE dr.record_type = 'contact') AS contacts,
+            (ARRAY_AGG(dr.zoho_record_id) FILTER (WHERE dr.record_type = 'account'))[1] AS account_zoho_id,
+            (ARRAY_AGG(COALESCE(NULLIF(btrim(dr.record_name),''), dr.company_name))
+               FILTER (WHERE dr.record_type = 'account'))[1] AS account_name
+       FROM duplicate_records dr
+       JOIN duplicate_clusters dc ON dc.id = dr.cluster_id
+      WHERE dc.status = 'active'
+        AND dr.cluster_id IS NOT NULL
+      GROUP BY dr.cluster_id
+     HAVING COUNT(*) FILTER (WHERE dr.record_type = 'contact') >= 1
+        AND COUNT(DISTINCT dr.zoho_record_id) FILTER (WHERE dr.record_type = 'account') = 1
+        AND COUNT(*) FILTER (WHERE dr.record_type IN ('lead','deal')) = 0
+      LIMIT $1`,
+    [limit],
+  );
+  return res.rows
+    .map((r) => ({
+      clusterId: Number(r.cluster_id),
+      accountZohoId: (r.account_zoho_id || "").trim(),
+      accountName: (r.account_name || "").trim(),
+      contacts: Number(r.contacts) || 0,
+    }))
+    .filter((c) => c.accountZohoId && Number.isFinite(c.clusterId));
+}
+
+/** Read-only preview: how many clusters / contacts the bulk link would touch. */
+export async function previewContactLinkToAccount(): Promise<{
+  clusters: number;
+  contacts: number;
+  sample: ContactLinkCandidate[];
+}> {
+  try {
+    const cands = await getContactLinkCandidates();
+    return {
+      clusters: cands.length,
+      contacts: cands.reduce((n, c) => n + c.contacts, 0),
+      sample: cands.slice(0, 200),
+    };
+  } catch (e) {
+    logger.warn("[DuplicateRadar] previewContactLinkToAccount failed (non-fatal)", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return { clusters: 0, contacts: 0, sample: [] };
+  }
+}
+
+/**
+ * Apply the bulk link: for each candidate cluster, set every contact's
+ * Account_Name to the cluster's sole account (the Account_Name cascade). Skips
+ * any cluster that actually has genuine contact duplicates (those belong in the
+ * merge flow, not a blind link). Reuses buildMergePlan/executeMergePlan — no
+ * tagging happens in link-only mode. Bounded by `limit`, re-runnable.
+ */
+export async function applyContactLinkToAccount(opts: {
+  dryRun: boolean;
+  limit?: number;
+  performedBy: string;
+}): Promise<{
+  clusters: number;
+  linked: number;
+  contactsLinked: number;
+  skippedHadDuplicates: number;
+  remaining: number;
+  errors: number;
+}> {
+  const all = await getContactLinkCandidates();
+  const limit = Math.max(1, Math.min(Math.floor(opts.limit || 50), 200));
+  const batch = all.slice(0, limit);
+  const { buildMergePlan } = await import("./duplicateMergePlanner");
+  const { executeMergePlan, zohoWritesAllowedInEnv } = await import("./duplicateMergeExecutor");
+  if (!opts.dryRun && !zohoWritesAllowedInEnv()) {
+    throw new Error("Live Zoho writes are disabled outside production.");
+  }
+  let linked = 0,
+    contactsLinked = 0,
+    skippedHadDuplicates = 0,
+    errors = 0;
+  for (const cand of batch) {
+    try {
+      const recs = await getRecordsByClusterId(cand.clusterId);
+      const plan = buildMergePlan("Contacts", cand.clusterId, recs, {
+        linkAccountZohoId: cand.accountZohoId,
+      });
+      // Only link clusters that are link-only — if there are genuine duplicates,
+      // leave the cluster for the merge flow (don't blindly link + risk hiding a
+      // real dup).
+      if (plan.duplicateZohoIds.length > 0) {
+        skippedHadDuplicates++;
+        continue;
+      }
+      const report = await executeMergePlan(plan, {
+        performedBy: opts.performedBy,
+        dryRun: opts.dryRun,
+        // Contacts-only cluster (no leads/deals) — once the colleagues are
+        // linked to their Account the cluster's job is done, so resolve it.
+        // This also makes the batched apply CONVERGE: a resolved cluster drops
+        // out of getContactLinkCandidates (active only), so the work set shrinks.
+        closeCluster: true,
+      });
+      contactsLinked += report.reparented?.contacts ?? 0;
+      linked++;
+    } catch (e) {
+      errors++;
+      logger.warn("[DuplicateRadar] bulk contact link group failed (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+  return {
+    clusters: batch.length,
+    linked,
+    contactsLinked,
+    skippedHadDuplicates,
+    remaining: Math.max(0, all.length - batch.length),
+    errors,
+  };
+}
+
 /**
  * Resolve auto-merged contact clusters ONCE their tagged duplicates are
  * actually deleted in Zoho (Ahmad 2026-06-21). The bulk auto-merge marks a

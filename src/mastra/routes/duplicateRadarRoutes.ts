@@ -1562,6 +1562,55 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // Bulk link colleagues → Account — PREVIEW (Ahmad 2026-06-23).
+    //   GET /api/duplicates/contacts/link-account-preview
+    path: "/api/duplicates/contacts/link-account-preview",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const { previewContactLinkToAccount } = await import("../../utils/duplicateRadarDatabase");
+          const data = await previewContactLinkToAccount();
+          return c.json({ success: true, ...data });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Bulk link colleagues → Account — APPLY (admin-gated, Ahmad 2026-06-23).
+    // Sets Account_Name on the contacts of each link-only cluster (no tagging).
+    //   POST /api/duplicates/contacts/link-account-apply  { limit? }
+    path: "/api/duplicates/contacts/link-account-apply",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireAdminOrKey, unauthorizedResponse: unauthorized } =
+            await import("../../utils/rbacMiddleware");
+          const sessionUser = await requireAdminOrKey(c);
+          if (!sessionUser) return unauthorized(c);
+          const body = await c.req.json().catch(() => ({}));
+          const limit = parseInt(body?.limit, 10);
+          const performedBy =
+            `${(sessionUser as any)?.email || "admin"} (bulk link contacts → account)`;
+          const { applyContactLinkToAccount } = await import("../../utils/duplicateRadarDatabase");
+          const result = await applyContactLinkToAccount({
+            dryRun: false,
+            limit: Number.isFinite(limit) && limit > 0 ? limit : 50,
+            performedBy,
+          });
+          return c.json({ success: true, ...result });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // Account auto-merge (same domain + same name, within layout) — READ-ONLY
     // PREVIEW (Ahmad 2026-06-22). No writes. Corporate↔Corporate and
     // Partner↔Partner only; the apply (cascade) is a separate, confirmed step.

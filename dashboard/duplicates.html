@@ -820,7 +820,9 @@
                 <button data-on-click="bulkSplitContacts" id="bulkSplitContactsBtn" data-testid="button-bulk-split-contacts" title="One-shot cleanup of historical false-positive Contact clusters (e.g. the 7 SLB employees that were lumped together). Applies the ≥2-attribute rule retroactively. Dry-run first, then confirm." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-violet-200 text-violet-900 hover:bg-violet-300">🧹 Bulk-split bad clusters</button>
                 <button data-on-click="bulkMergeExactContacts" id="bulkMergeExactBtn" data-testid="button-bulk-merge-exact-contacts" title="Bulk-merge contacts where Email AND Phone match 100% — these are the same person. Keeps the most complete record, tags the rest Duplicate-Delete. Shows a preview count first, then asks for the admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-200 text-emerald-900 hover:bg-emerald-300">✅ Auto-merge exact email+phone</button>
                 <button data-on-click="bulkMergeNamePhoneContacts" id="bulkMergeNamePhoneBtn" data-testid="button-bulk-merge-name-phone-contacts" title="Bulk-merge contacts that share the SAME NAME + SAME PHONE — the same person even when emails differ or one is missing. Keeps both emails on the survivor (primary + Secondary_Email); a lone email becomes the primary. Tags the rest Duplicate-Delete. Preview first, then admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-200 text-teal-900 hover:bg-teal-300">✅ Auto-merge same name+phone</button>
+                <button data-on-click="bulkLinkContactsToAccount" id="bulkLinkContactsBtn" data-testid="button-bulk-link-contacts" title="Bulk-LINK the remaining 'chained match' clusters — colleagues at the same company who are NOT duplicates — to their company Account (sets Account_Name). For clusters with one clear account and no genuine duplicates. No tagging, no deletion. Preview first, then admin password." class="px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-200 text-indigo-900 hover:bg-indigo-300">🔗 Bulk-link colleagues → Account</button>
             </div>
+            <div id="bulkLinkContactsPanel" class="text-xs mb-2"></div>
             <div id="bulkSplitContactsPanel" class="text-xs mb-2"></div>
             <div id="bulkMergeExactPanel" class="text-xs mb-2"></div>
             <div id="bulkMergeNamePhonePanel" class="text-xs mb-2"></div>
@@ -6212,6 +6214,61 @@
                     loadRecordTab('contacts', currentPage);
                 }
             } catch (_) { /* non-fatal */ }
+        }
+
+        // Bulk-link the remaining "chained match" colleague clusters to their
+        // company Account (Account_Name cascade). Link-only — no tagging, no
+        // deletion; clusters with genuine duplicates are skipped server-side.
+        async function bulkLinkContactsToAccount() {
+            const panel = document.getElementById('bulkLinkContactsPanel');
+            const btn = document.getElementById('bulkLinkContactsBtn');
+            if (btn) btn.disabled = true;
+            panel.innerHTML = '<div class="text-indigo-700">Finding colleagues to link to their Account…</div>';
+            let preview;
+            try {
+                const res = await fetch('/api/duplicates/contacts/link-account-preview', { credentials: 'same-origin' });
+                preview = await res.json();
+                if (!res.ok || !preview.success) throw new Error((preview && preview.error) || ('HTTP ' + res.status));
+            } catch (e) {
+                panel.innerHTML = '<div class="text-red-600">Preview failed: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            if (!preview.clusters) {
+                panel.innerHTML = '<div class="px-3 py-2 rounded bg-indigo-50 border border-indigo-200 text-indigo-800">No link candidates — no contacts-only clusters with a single clear Account.</div>';
+                if (btn) btn.disabled = false;
+                return;
+            }
+            panel.innerHTML = '<div class="px-3 py-2 rounded bg-indigo-50 border border-indigo-200 text-indigo-900">'
+                + '<strong>' + preview.clusters.toLocaleString() + '</strong> cluster(s) · <strong>' + preview.contacts.toLocaleString() + '</strong> contact(s) would be linked to their company Account (Account_Name set; no tagging, no deletion). Clusters with genuine duplicates are skipped — use the merge buttons for those.</div>';
+            if (!window.confirm('Bulk-link ' + preview.clusters + ' cluster(s) (' + preview.contacts + ' contact(s)) to their Account?\n\nSets Account_Name on each contact so colleagues roll up under one customer, then resolves the cluster. No tagging, no deletion.\n\nYou will be asked for the admin password next.')) {
+                if (btn) btn.disabled = false; return;
+            }
+            const key = window.prompt('Enter the admin password to apply the bulk link:');
+            if (!key || !key.trim()) { if (btn) btn.disabled = false; return; }
+            const prog = document.createElement('div'); prog.className = 'text-indigo-700 mt-1'; prog.textContent = 'Linking…'; panel.appendChild(prog);
+            let live;
+            try {
+                live = await _runBatchedMerge('/api/duplicates/contacts/link-account-apply', {
+                    key: key.trim(), batchLimit: 25, progressKeys: ['linked'],
+                    onTick: function (t) { prog.textContent = 'Linking… ' + (t.linked || 0).toLocaleString() + ' cluster(s), ' + (t.contactsLinked || 0).toLocaleString() + ' contact(s)…'; },
+                });
+            } catch (e) {
+                prog.innerHTML = '<span class="text-amber-700">Link paused: ' + escapeHtml(String(e && e.message || e)) + ' — click again to resume the rest.</span>';
+                if (btn) btn.disabled = false; return;
+            }
+            prog.outerHTML = '<div class="px-3 py-2 rounded bg-indigo-50 border border-indigo-200 text-indigo-800 mt-1">'
+                + '<strong>Done.</strong> Linked ' + (live.linked || 0).toLocaleString() + ' cluster(s), ' + (live.contactsLinked || 0).toLocaleString() + ' contact(s) to their Account'
+                + (live.skippedHadDuplicates ? '; skipped ' + (live.skippedHadDuplicates).toLocaleString() + ' with genuine duplicates' : '')
+                + (live.errors > 0 ? ' (' + live.errors + ' error(s) — re-run to retry.)' : '.')
+                + '</div>';
+            try {
+                if (typeof loadRecordTab === 'function') {
+                    const currentPage = (typeof recordPages !== 'undefined' && recordPages.contacts) || 0;
+                    loadRecordTab('contacts', currentPage);
+                }
+            } catch (_) { /* non-fatal */ }
+            if (btn) btn.disabled = false;
         }
 
         // DRY-RUN preview of the account auto-merge (same domain + same name,
