@@ -1564,9 +1564,11 @@ function _csPhaseToActiveState(
 ): "onboarding" | "adoption" | "renewal" | null {
   const p = (phase || "").toLowerCase();
   if (!p) return null;
-  if (p.includes("onboard") || p.includes("new")) return "onboarding"; // "New Deal" = start of the client lifecycle
-  if (p.includes("adopt")) return "adoption";
+  // Order matters: "renewal" CONTAINS "new", so match renew first, and match
+  // "new deal" as the exact phrase (not the bare substring "new").
   if (p.includes("renew")) return "renewal";
+  if (p.includes("adopt")) return "adoption";
+  if (p.includes("onboard") || p.includes("new deal")) return "onboarding";
   return null;
 }
 
