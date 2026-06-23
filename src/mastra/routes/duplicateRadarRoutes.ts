@@ -401,15 +401,14 @@ async function processModule(
     scanState.moduleStatuses[moduleName] = "error";
     broadcastSSE("module", { module: moduleName, status: "error" });
     await upsertSyncState(moduleName, 0, "failed");
-    // If Zoho's OAuth endpoint is in its per-account "too many requests"
-    // cooldown, every module will fail for the same reason. Bubble the
-    // error so the outer scan catch can fail the whole run with a clear
-    // message instead of silently "completing" with 0 records / 0 clusters
-    // (which is what was making the dashboard tabs look empty while the
-    // header progress bar appeared to finish successfully).
-    if (e?.isZohoRateLimited || /too many requests/i.test(String(e?.message || ""))) {
-      throw e;
-    }
+    // Resilience (Ahmad 2026-06-23): a module that rate-limits / errors is
+    // already marked "failed" above (its chip shows "0 (failed)"), so DON'T
+    // abort the whole scan — let the OTHER modules finish and ADVANCE THEIR
+    // cursors. This breaks the stuck-sync cycle: when one huge module (e.g.
+    // Leads) can't complete in one window, the smaller modules still sync, and
+    // the next run only retries the failed one against a fresh cursor instead
+    // of re-pulling everything from scratch every time. (Previously a single
+    // rate-limit threw and failed the entire run, so nothing ever advanced.)
     return { count: 0, written: 0, skipped: 0 };
   }
 
@@ -719,7 +718,11 @@ async function scanZohoCRMForDuplicates(
     // completes → no baseline → always full → freezes again" trap. The
     // first-ever sync (no baseline anywhere) or an explicit "Rebuild all"
     // (forceFull / DUPLICATE_SCAN_MODE=full) does a clean full rebuild.
-    const SCAN_MODULES = ["Leads", "Deals", "Contacts", "Accounts"] as const;
+    // Order = fetch order (Ahmad 2026-06-23): the preflight client directory +
+    // duplicate detection lean on Deals/Accounts, so fetch those FIRST and the
+    // giant Leads module LAST — if Leads exhausts the window, the critical
+    // modules already synced (paired with the per-module resilience above).
+    const SCAN_MODULES = ["Deals", "Contacts", "Accounts", "Leads"] as const;
     const envFull = (process.env.DUPLICATE_SCAN_MODE || "incremental") === "full";
     const baselines: Record<string, string | undefined> = {};
     for (const m of SCAN_MODULES) {
@@ -815,33 +818,6 @@ async function scanZohoCRMForDuplicates(
     })();
     const [leadsResult, dealsResult, contactsResult, accountsResult] =
       await runModulesWithConcurrency([
-        () => processModule("Leads", "lead", clustersUpdated, (record) => {
-          const d = record.data;
-          return {
-            companyName: d.Company || d.Last_Name || "Unknown",
-            email: d.Email || "",
-            phone: d.Phone || "",
-            mobile: d.Mobile || "",
-            recordName:
-              d.Full_Name ||
-              `${d.First_Name || ""} ${d.Last_Name || ""}`.trim(),
-            domain: extractDomain(d.Email || ""),
-            ownerName: d.Owner?.name || "Unknown",
-            ownerEmail: d.Owner?.email || "",
-            status: d.Lead_Status || "",
-            source: d.Lead_Source || "",
-            createdTime: d.Created_Time || "",
-            modifiedTime: d.Modified_Time || "",
-            layoutName: d.Layout?.name || d.$layout?.name || "",
-            layoutId: d.Layout?.id || d.$layout?.id || "",
-            zohoModule: "Leads",
-            title: d.Designation || d.Title || "",
-            leadType: d.Lead_Type || "",
-            country: d.Country || "",
-            industry: d.Industry || "",
-            website: d.Website || "",
-          };
-        }, sinceFor("Leads"), (frac) => reportFetch("Leads", frac)),
         () => processModule("Deals", "deal", clustersUpdated, (record) => {
           const d = record.data;
           return {
@@ -929,6 +905,33 @@ async function scanZohoCRMForDuplicates(
             accountType: d.Account_Type || "",
           };
         }, sinceFor("Accounts"), (frac) => reportFetch("Accounts", frac)),
+        () => processModule("Leads", "lead", clustersUpdated, (record) => {
+          const d = record.data;
+          return {
+            companyName: d.Company || d.Last_Name || "Unknown",
+            email: d.Email || "",
+            phone: d.Phone || "",
+            mobile: d.Mobile || "",
+            recordName:
+              d.Full_Name ||
+              `${d.First_Name || ""} ${d.Last_Name || ""}`.trim(),
+            domain: extractDomain(d.Email || ""),
+            ownerName: d.Owner?.name || "Unknown",
+            ownerEmail: d.Owner?.email || "",
+            status: d.Lead_Status || "",
+            source: d.Lead_Source || "",
+            createdTime: d.Created_Time || "",
+            modifiedTime: d.Modified_Time || "",
+            layoutName: d.Layout?.name || d.$layout?.name || "",
+            layoutId: d.Layout?.id || d.$layout?.id || "",
+            zohoModule: "Leads",
+            title: d.Designation || d.Title || "",
+            leadType: d.Lead_Type || "",
+            country: d.Country || "",
+            industry: d.Industry || "",
+            website: d.Website || "",
+          };
+        }, sinceFor("Leads"), (frac) => reportFetch("Leads", frac)),
       ], MODULE_CONCURRENCY);
 
     // Tasks pagination removed per platform-wide Tasks data removal.
