@@ -6237,6 +6237,7 @@
             // time we recompute the preview (stale ids would be meaningless).
             window._accountMergeGroups = [];
             window._accountMergeOverrides = {};
+            window._accountMergeScopeCount = {};
             const scopeBlock = (title, scopeKey, s) => {
                 if (!s || !s.groups) {
                     return '<div class="px-3 py-2 rounded bg-gray-50 border border-gray-200 text-gray-600 mb-2">' + title + ': no ' + (amMode === 'domain' ? 'same-domain' : 'same domain+name') + ' groups found.</div>';
@@ -6277,9 +6278,10 @@
                         + '</td></tr>';
                     return headRow + detailRow;
                 }).join('');
-                const applyBtn = '<button data-on-click="applyAccountAutoMerge" data-args=\'["' + scopeKey + '"]\' class="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-600 text-white hover:bg-teal-700">⚡ Apply these ' + s.groups.toLocaleString() + ' merge(s) (admin)</button>';
+                window._accountMergeScopeCount[scopeKey] = s.groups;
+                const applyBtn = '<button data-on-click="applyAccountAutoMerge" data-args=\'["' + scopeKey + '"]\' class="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-600 text-white hover:bg-teal-700">⚡ Apply these <span id="acctmerge-applycount-' + scopeKey + '">' + s.groups.toLocaleString() + '</span> merge(s) (admin)</button>';
                 return '<div class="px-3 py-2 rounded bg-teal-50 border border-teal-200 text-teal-900 mb-2">'
-                    + '<strong>' + title + ':</strong> ' + s.groups.toLocaleString() + ' group(s) would merge · ' + (s.accountsToTag || 0).toLocaleString() + ' account(s) tagged Duplicate-Delete. <span class="text-[10px] text-teal-700">Click a group to verify / change its survivor.</span>'
+                    + '<strong>' + title + ':</strong> <span id="acctmerge-count-' + scopeKey + '">' + s.groups.toLocaleString() + '</span> group(s) would merge · ' + (s.accountsToTag || 0).toLocaleString() + ' account(s) tagged Duplicate-Delete. <span class="text-[10px] text-teal-700">Click a group to verify / change its survivor.</span>'
                     + (rows ? '<table class="mt-1 w-full text-xs bg-white rounded"><thead><tr class="text-gray-500"><th class="px-2 py-1 text-start">Survivor name</th><th class="px-2 py-1 text-start">Domain</th><th class="px-2 py-1"># </th><th class="px-2 py-1">Survivor %</th></tr></thead><tbody>' + rows + '</tbody></table>'
                         + (s.groups > (s.sample || []).length ? '<div class="text-[10px] text-gray-500 mt-1">… showing ' + (s.sample || []).length + ' of ' + s.groups + ' groups.</div>' : '') : '')
                     + '<div>' + applyBtn + '</div>'
@@ -6417,6 +6419,15 @@
                 head.style.display = 'none';
                 head.removeAttribute('data-on-click');
             }
+            // Decrement the scope's "N group(s) would merge" header + Apply button.
+            window._accountMergeScopeCount = window._accountMergeScopeCount || {};
+            const sc = g.scope;
+            const left = Math.max(0, (window._accountMergeScopeCount[sc] != null ? window._accountMergeScopeCount[sc] : 1) - 1);
+            window._accountMergeScopeCount[sc] = left;
+            const cEl = document.getElementById('acctmerge-count-' + sc);
+            if (cEl) cEl.textContent = left.toLocaleString();
+            const bEl = document.getElementById('acctmerge-applycount-' + sc);
+            if (bEl) bEl.textContent = left.toLocaleString();
         }
 
         // Apply the account auto-merge for one scope (admin-gated). Re-uses the
