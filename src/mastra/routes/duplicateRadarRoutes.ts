@@ -8513,7 +8513,19 @@ export const duplicateRadarRoutes = [
                 cell.font = { color: { argb: "FF1D4ED8" }, underline: true };
               }
             }
-            const fill = severityFill[r.executive_severity] || null;
+            // Existing-client highlighting (Ahmad 2026-06-23) — colour CS clients
+            // the way the operator hand-marked them so the sales lead can't miss
+            // them: RED = existing ACTIVE client (do not contact), ORANGE =
+            // churned client (recent / cool-off), AMBER = possible client (verify).
+            let fill = severityFill[r.executive_severity] || null;
+            const reasonStr = String(r.reason || "");
+            if (r.verdict === "block") {
+              fill = "FFFFC7CE"; // red — existing active client
+            } else if (r.verdict === "review" && reasonStr.startsWith("recently_churned")) {
+              fill = "FFFFD27F"; // orange — churned within cool-off
+            } else if (r.verdict === "review") {
+              fill = "FFFFE699"; // amber — possible client, verify
+            }
             if (fill) {
               row.fill = {
                 type: "pattern",

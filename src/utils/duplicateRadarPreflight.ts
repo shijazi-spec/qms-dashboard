@@ -1597,16 +1597,267 @@ function deriveCsLifecycleState(
   return null;
 }
 
+// ── RULE 2 v3 — CS-CLIENT DIRECTORY (Ahmad 2026-06-23) ───────────────────────
+// The cluster-based matcher (v2) only found clients that happened to have a
+// DUPLICATE cluster — clean, non-duplicated clients (SATORP, Aramco, Mozn,
+// SAMREF, Diriyah, SIDF…) have no cluster, so they slipped through to PASS and
+// the sales team would have cold-called live customers. v3 builds a directory
+// of EVERY CS-tracked / customer deal straight from duplicate_records (the
+// source of truth for "who is a client"), keyed by normalized company name AND
+// domain, and matches the inbound company against it by domain → exact name →
+// name-containment → fuzzy. It is independent of clustering, so it catches
+// every client regardless of whether their records were duplicated.
+
+/** The CS standing of one client company, for the verdict + export columns. */
+interface CsClientStatus {
+  active: boolean; // current client (block) vs churned
+  churnDate: string | null;
+  churnDays: number | null;
+  sector: "private" | "government" | null;
+  csOwner: string | null;
+  companyName: string | null;
+  phase: string | null;
+  lifecycleState: PreflightResultRow["lifecycle_state"];
+}
+
+interface CsClientDirectory {
+  byName: Map<string, CsClientStatus>;
+  byDomain: Map<string, CsClientStatus>;
+  /** token → set of client normalized-names that contain it (for containment). */
+  tokenIndex: Map<string, Set<string>>;
+  builtAt: number;
+}
+
+// Generic tokens that don't make a company name distinctive — never used alone
+// to gather containment candidates (full-token-subset is still verified after).
+const CS_DIR_STOP = new Set([
+  "saudi", "arabia", "arabian", "ksa", "uae", "company", "co", "ltd", "inc",
+  "corp", "corporation", "group", "holding", "holdings", "est", "for", "and",
+  "the", "of", "al", "general", "national", "international", "intl", "services",
+  "service", "trading", "development", "company", "est", "sa",
+]);
+
+const _csTokens = (norm: string): string[] =>
+  norm.split(/\s+/).map((t) => t.trim()).filter((t) => t.length >= 2);
+
+/** Derive a client's CS standing from a deal's phase + churn date. */
+function _csStatusFromDeal(input: {
+  phase: string | null;
+  churnDate: string | null;
+  govType: string | null;
+  owner: string | null;
+  companyName: string | null;
+  todayMs: number;
+}): CsClientStatus {
+  const isGov = (input.govType || "").trim() !== "";
+  const coolOff = isGov ? 365 : 180;
+  const p = (input.phase || "").toLowerCase();
+  const churned = !!input.churnDate || p.includes("terminat") || p.includes("churn");
+  let churnDays: number | null = null;
+  if (input.churnDate) {
+    const t = Date.parse(input.churnDate);
+    if (Number.isFinite(t)) churnDays = Math.max(0, Math.floor((input.todayMs - t) / 86400000));
+  }
+  let lifecycleState: PreflightResultRow["lifecycle_state"] = null;
+  if (churned) {
+    lifecycleState = churnDays != null && churnDays <= coolOff ? "termination_recent" : "termination_old";
+  } else {
+    lifecycleState = _csPhaseToActiveState(input.phase);
+  }
+  return {
+    active: !churned,
+    churnDate: input.churnDate || null,
+    churnDays,
+    sector: isGov ? "government" : "private",
+    csOwner: (input.owner || "").trim() || null,
+    companyName: (input.companyName || "").trim() || null,
+    phase: (input.phase || "").trim() || null,
+    lifecycleState,
+  };
+}
+
+/** Merge a newly-seen client status for a company — ACTIVE always wins; among
+ *  churned keep the most recent (smallest churnDays). */
+function _csMergeStatus(prev: CsClientStatus | undefined, next: CsClientStatus): CsClientStatus {
+  if (!prev) return next;
+  if (prev.active && !next.active) return prev;
+  if (!prev.active && next.active) return next;
+  if (!prev.active && !next.active) {
+    const a = prev.churnDays ?? Number.MAX_SAFE_INTEGER;
+    const b = next.churnDays ?? Number.MAX_SAFE_INTEGER;
+    return b < a ? next : prev;
+  }
+  // both active — keep whichever has more info (owner/phase)
+  return prev.csOwner || prev.phase ? prev : next;
+}
+
+let _csDirCache: CsClientDirectory | null = null;
+const CS_DIR_TTL_MS = 60_000;
+
+/**
+ * Build (and briefly cache) the CS-client directory from ALL CS-tracked /
+ * customer-stage deals + accounts in duplicate_records. Cached for 60s so the
+ * frontend's chunked 250-row batches of one upload share a single build.
+ */
+async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory> {
+  if (_csDirCache && todayMs - _csDirCache.builtAt < CS_DIR_TTL_MS) return _csDirCache;
+
+  const byName = new Map<string, CsClientStatus>();
+  const byDomain = new Map<string, CsClientStatus>();
+  const tokenIndex = new Map<string, Set<string>>();
+  const addToken = (tok: string, name: string) => {
+    let s = tokenIndex.get(tok);
+    if (!s) tokenIndex.set(tok, (s = new Set()));
+    s.add(name);
+  };
+  const indexName = (norm: string) => {
+    for (const t of _csTokens(norm)) if (!CS_DIR_STOP.has(t)) addToken(t, norm);
+  };
+
+  // 1) Every CLIENT deal — a deal that is CS-tracked (has a Phase) OR sits in a
+  //    customer Stage (Paid / Agreement Signed / …). This is the client truth.
+  const dealsQ = await queryWithTimeout<any>(
+    `SELECT account_name, company_name, LOWER(domain) AS domain,
+            COALESCE(raw_data->>'Phase', raw_data->>'CS_Phase', raw_data->>'Customer_Phase') AS phase,
+            NULLIF(raw_data->>'Churn_Date','') AS churn_date,
+            gov_type, owner_name
+       FROM duplicate_records
+      WHERE record_type = 'deal'
+        AND (
+          COALESCE(NULLIF(raw_data->>'Phase',''), NULLIF(raw_data->>'CS_Phase',''), NULLIF(raw_data->>'Customer_Phase','')) IS NOT NULL
+          OR LOWER(COALESCE(raw_data->>'Stage','')) = ANY($1::text[])
+        )
+      LIMIT 200000`,
+    [Array.from(PF_CUSTOMER_STAGES)],
+  );
+  for (const d of (dealsQ?.rows ?? [])) {
+    const rawName = (d.account_name || d.company_name || "").trim();
+    const norm = normalizeCompanyName(rawName);
+    if (!norm || norm.length < 3 || isPlaceholderName(rawName)) continue;
+    const status = _csStatusFromDeal({
+      phase: d.phase,
+      churnDate: d.churn_date,
+      govType: d.gov_type,
+      owner: d.owner_name,
+      companyName: rawName,
+      todayMs,
+    });
+    byName.set(norm, _csMergeStatus(byName.get(norm), status));
+    indexName(norm);
+    const dom = (d.domain || "").trim().toLowerCase();
+    if (dom) byDomain.set(dom, _csMergeStatus(byDomain.get(dom), status));
+  }
+
+  // 2) Accounts — map domain → client status when the account's company is a
+  //    known client (the deal that proves it may carry no domain of its own).
+  const acctQ = await queryWithTimeout<any>(
+    `SELECT LOWER(domain) AS domain, record_name, company_name
+       FROM duplicate_records
+      WHERE record_type = 'account'
+        AND domain IS NOT NULL AND btrim(domain) <> ''
+      LIMIT 200000`,
+    [],
+  );
+  for (const a of (acctQ?.rows ?? [])) {
+    const dom = (a.domain || "").trim().toLowerCase();
+    if (!dom) continue;
+    const norm = normalizeCompanyName(a.record_name || a.company_name || "");
+    if (!norm) continue;
+    const status = byName.get(norm);
+    if (status && !byDomain.has(dom)) byDomain.set(dom, status);
+  }
+
+  _csDirCache = { byName, byDomain, tokenIndex, builtAt: todayMs };
+  return _csDirCache;
+}
+
+/**
+ * Match an inbound normalized company name to a client by NAME CONTAINMENT —
+ * every token of a client's name appears in the inbound name (e.g. client
+ * "samref" ⊆ inbound "samref saudi aramco mobil refinery"). Returns the matched
+ * client normalized-name, or null. Errs toward catching clients (the cost of a
+ * false PASS — cold-calling a live customer — is far higher than a false flag).
+ */
+function _csContainmentMatch(inboundNorm: string, dir: CsClientDirectory): string | null {
+  const inboundToks = new Set(_csTokens(inboundNorm));
+  if (inboundToks.size === 0) return null;
+  const candidates = new Set<string>();
+  for (const t of inboundToks) {
+    if (CS_DIR_STOP.has(t)) continue;
+    const names = dir.tokenIndex.get(t);
+    if (names) for (const n of names) candidates.add(n);
+  }
+  let best: string | null = null;
+  let bestLen = 0;
+  for (const cand of candidates) {
+    const candToks = _csTokens(cand);
+    if (candToks.length === 0) continue;
+    // Require ≥1 distinctive (non-stop) token and ALL client tokens present.
+    if (!candToks.some((t) => !CS_DIR_STOP.has(t) && t.length >= 3)) continue;
+    if (candToks.every((t) => inboundToks.has(t))) {
+      const len = cand.length;
+      if (len > bestLen) {
+        bestLen = len;
+        best = cand;
+      }
+    }
+  }
+  return best;
+}
+
+/** Dice bigram similarity (0..1) for the last-resort fuzzy tier. */
+function _diceSim(a: string, b: string): number {
+  const bigrams = (s: string) => {
+    const out = new Map<string, number>();
+    for (let i = 0; i < s.length - 1; i++) {
+      const g = s.slice(i, i + 2);
+      out.set(g, (out.get(g) || 0) + 1);
+    }
+    return out;
+  };
+  if (a.length < 2 || b.length < 2) return a === b ? 1 : 0;
+  const A = bigrams(a);
+  const B = bigrams(b);
+  let inter = 0;
+  let total = 0;
+  for (const v of A.values()) total += v;
+  for (const [g, v] of B) {
+    total += v;
+    inter += Math.min(v, A.get(g) || 0);
+  }
+  return total === 0 ? 0 : (2 * inter) / total;
+}
+
+/** Fuzzy name match (Dice ≥ 0.78) against client names sharing a token. */
+function _csFuzzyMatch(inboundNorm: string, dir: CsClientDirectory): string | null {
+  const inboundToks = _csTokens(inboundNorm);
+  const candidates = new Set<string>();
+  for (const t of inboundToks) {
+    if (CS_DIR_STOP.has(t)) continue;
+    const names = dir.tokenIndex.get(t);
+    if (names) for (const n of names) candidates.add(n);
+  }
+  let best: string | null = null;
+  let bestSim = 0.78;
+  for (const cand of candidates) {
+    const sim = _diceSim(inboundNorm, cand);
+    if (sim >= bestSim) {
+      bestSim = sim;
+      best = cand;
+    }
+  }
+  return best;
+}
+
 /**
  * BASIC mode runner (Ahmad 2026-06-18) — see PREFLIGHT_RULE_MODE. Two SQL
  * passes over duplicate_records (corporate-scope only, marketplace excluded):
  *   1) contact-identity match by email OR phone (any record type) → duplicate;
- *   2) RULE 2 v2 (Ahmad 2026-06-22) — existing-CLIENT match: only for rows
- *      Rule 1 cleared, find the company in the CRM by domain → strict company
- *      name → fuzzy company name, aggregate its records with
- *      buildClusterFromRecords, and apply csClientPreflightVerdict (active
- *      client → BLOCK / fuzzy-name-only → REVIEW; churned-in-cool-off →
- *      REVIEW; past cool-off / not a client → PASS).
+ *   2) RULE 2 v3 (Ahmad 2026-06-23) — existing-CLIENT match against the
+ *      CS-client DIRECTORY built from every CS-tracked / customer deal (not
+ *      clusters), by domain → exact name → name-containment → fuzzy. Active
+ *      client → BLOCK; fuzzy-only → REVIEW; churned-in-cool-off → REVIEW;
+ *      past cool-off / not a client → PASS.
  * The archived "full" ladder is left untouched below.
  */
 async function runPreflightBasic(input: {
@@ -1692,152 +1943,13 @@ async function runPreflightBasic(input: {
     }
   }
 
-  // ── RULE 2 v2 — existing-CLIENT check (Ahmad 2026-06-22; matcher reworked
-  // 2026-06-23). Match the inbound company to its CRM **cluster(s)** —
-  // duplicate_clusters carries a populated + trigram-indexed
-  // company_name_normalized (same normaliser as the input) and the company
-  // domain — by domain → strict name → fuzzy name, then pull THOSE clusters'
-  // records (which include the customer DEAL) and aggregate with
-  // buildClusterFromRecords to read cs_overlap_verdict. (The previous matcher
-  // queried duplicate_records.company_name_normalized, which is never populated
-  // — that column lives only on duplicate_clusters — so every name match
-  // silently returned nothing and real clients passed.)
+  // ── RULE 2 v3 — existing-CLIENT directory match (Ahmad 2026-06-23). Build
+  // the CS-client directory ONCE (cached 60s) from every CS-tracked / customer
+  // deal — NOT clusters — so clean, non-duplicated clients are caught too. The
+  // per-row match below looks the inbound company up by domain → exact name →
+  // name-containment → fuzzy (see the CsClientDirectory helpers above).
   const todayMs = Date.now();
-  const PF_REC_COLS = `cluster_id, LOWER(domain) AS domain, record_type,
-              raw_data->>'Stage' AS stage, status,
-              raw_data->>'Lead_Status' AS lead_status,
-              NULLIF(raw_data->>'Churn_Date','') AS churn_date,
-              COALESCE(raw_data->>'Phase', raw_data->>'CS_Phase', raw_data->>'Customer_Phase') AS cs_phase,
-              gov_type, owner_name, record_name, company_name, zoho_record_id,
-              layout_name, account_type, lead_type`;
-  const clusterIdsByDomain = new Map<string, number[]>();
-  const clusterIdsByName = new Map<string, number[]>();
-  const addClusterId = (m: Map<string, number[]>, k: string, id: number) => {
-    const a = m.get(k);
-    if (a) {
-      if (!a.includes(id)) a.push(id);
-    } else m.set(k, [id]);
-  };
-
-  // Tier 1 + 2 — clusters matching an input DOMAIN or exact normalized NAME.
-  if (domainSet.size > 0 || nameSet.size > 0) {
-    const q = await queryWithTimeout<any>(
-      `SELECT id, LOWER(domain) AS domain, company_name_normalized
-         FROM duplicate_clusters
-        WHERE status IN ('active','resolved')
-          AND ( (domain IS NOT NULL AND LOWER(domain) = ANY($1::text[]))
-                OR (company_name_normalized = ANY($2::text[])) )`,
-      [Array.from(domainSet), Array.from(nameSet)],
-    );
-    for (const c of (q?.rows ?? [])) {
-      const id = Number(c.id);
-      if (!Number.isFinite(id)) continue;
-      const dom = (c.domain || "").trim().toLowerCase();
-      if (dom && domainSet.has(dom)) addClusterId(clusterIdsByDomain, dom, id);
-      const nm = (c.company_name_normalized || "").trim();
-      if (nm && nameSet.has(nm)) addClusterId(clusterIdsByName, nm, id);
-    }
-  }
-
-  // Tier 3 — fuzzy name → cluster (only rows unmatched by domain & exact name).
-  // ONE batched LATERAL picks the best-matching cluster per input name
-  // (pg_trgm similarity ≥ 0.6, served by idx_clusters_company_trgm).
-  const fuzzyClusterByRow = new Map<number, number[]>();
-  const fuzzyNeeded: string[] = [];
-  const fuzzySeen = new Set<string>();
-  for (let i = 0; i < examineCount; i++) {
-    const dom = domainByRow.get(i);
-    if (dom && clusterIdsByDomain.has(dom)) continue;
-    const nm = nameByRow.get(i);
-    if (!nm || clusterIdsByName.has(nm)) continue;
-    if (!fuzzySeen.has(nm)) {
-      fuzzySeen.add(nm);
-      fuzzyNeeded.push(nm);
-    }
-  }
-  const fuzzyNameToClusters = new Map<string, number[]>();
-  if (fuzzyNeeded.length > 0) {
-    const q = await queryWithTimeout<any>(
-      `SELECT v.ord AS _ord, m.id AS cluster_id
-         FROM unnest($1::text[]) WITH ORDINALITY AS v(nm, ord)
-         LEFT JOIN LATERAL (
-           SELECT id
-             FROM duplicate_clusters
-            WHERE status IN ('active','resolved')
-              AND company_name_normalized IS NOT NULL
-              AND company_name_normalized <> ''
-              AND company_name_normalized % v.nm
-            ORDER BY similarity(company_name_normalized, v.nm) DESC
-            LIMIT 1
-         ) m ON true
-        WHERE m.id IS NOT NULL`,
-      [fuzzyNeeded],
-      [`SELECT set_limit(0.6)`],
-    );
-    for (const row of (q?.rows ?? [])) {
-      const ord = Number(row._ord) - 1;
-      const inputName = fuzzyNeeded[ord];
-      const cid = Number(row.cluster_id);
-      if (!inputName || !Number.isFinite(cid)) continue;
-      addClusterId(fuzzyNameToClusters, inputName, cid);
-    }
-    for (let i = 0; i < examineCount; i++) {
-      const dom = domainByRow.get(i);
-      if (dom && clusterIdsByDomain.has(dom)) continue;
-      const nm = nameByRow.get(i);
-      if (!nm || clusterIdsByName.has(nm)) continue;
-      const ids = fuzzyNameToClusters.get(nm);
-      if (ids && ids.length) fuzzyClusterByRow.set(i, ids);
-    }
-  }
-
-  // Pull every matched cluster's corporate Lead/Deal/Account records in ONE
-  // batch (idx_duplicate_records_cluster), grouped by cluster.
-  const allClusterIds = new Set<number>();
-  for (const ids of clusterIdsByDomain.values()) for (const id of ids) allClusterIds.add(id);
-  for (const ids of clusterIdsByName.values()) for (const id of ids) allClusterIds.add(id);
-  for (const ids of fuzzyClusterByRow.values()) for (const id of ids) allClusterIds.add(id);
-  const recsByCluster = new Map<number, PreflightRecordRow[]>();
-  if (allClusterIds.size > 0) {
-    const q = await queryWithTimeout<any>(
-      `SELECT ${PF_REC_COLS}
-         FROM duplicate_records
-        WHERE cluster_id = ANY($1::int[])
-          AND record_type IN ('deal','lead','account')
-          AND ${CORPORATE_SQL}
-        LIMIT 100000`,
-      [Array.from(allClusterIds)],
-    );
-    for (const r of (q?.rows ?? [])) {
-      const cid = Number(r.cluster_id);
-      if (!Number.isFinite(cid)) continue;
-      const a = recsByCluster.get(cid);
-      if (a) a.push(r);
-      else recsByCluster.set(cid, [r]);
-    }
-  }
-
-  // Aggregate the union of a row's matched clusters into one verdict (memoized).
-  const clusterCache = new Map<
-    string,
-    { cluster: PreflightClusterRow | null; recs: PreflightRecordRow[] }
-  >();
-  const buildForClusterIds = (
-    ids: number[],
-  ): { cluster: PreflightClusterRow | null; recs: PreflightRecordRow[] } => {
-    const key = ids.slice().sort((a, b) => a - b).join(",");
-    const cached = clusterCache.get(key);
-    if (cached) return cached;
-    const recs: PreflightRecordRow[] = [];
-    for (const id of ids) {
-      const rs = recsByCluster.get(id);
-      if (rs) recs.push(...rs);
-    }
-    const cluster = recs.length ? buildClusterFromRecords(key, recs, todayMs) : null;
-    const out = { cluster, recs };
-    clusterCache.set(key, out);
-    return out;
-  };
+  const csDir = await getCsClientDirectory(todayMs);
 
   const moduleOf = (rt: string | null | undefined): "Leads" | "Deals" | "Contacts" | "Accounts" => {
     const t = (rt || "").toLowerCase();
@@ -1878,52 +1990,53 @@ async function runPreflightBasic(input: {
     let v: ReturnType<typeof basicPreflightVerdict> & {
       lifecycle_state?: PreflightResultRow["lifecycle_state"];
     };
-    let csCluster: PreflightClusterRow | null = null;
+    let csStatus: CsClientStatus | null = null;
     let csMatchVia: "domain" | "strict_name" | "fuzzy_name" | null = null;
-    let csRecords: PreflightRecordRow[] | null = null;
     if (contactVia) {
       v = basicPreflightVerdict({ contactVia, isCustomerDomain: false });
     } else {
-      let matchedIds: number[] | null = null;
-      if (domain && clusterIdsByDomain.has(domain)) {
-        matchedIds = clusterIdsByDomain.get(domain)!;
+      const nm = nameByRow.get(i);
+      // CS-client directory match: domain → exact name → containment → fuzzy.
+      if (domain && csDir.byDomain.has(domain)) {
+        csStatus = csDir.byDomain.get(domain)!;
         csMatchVia = "domain";
-      } else {
-        const nm = nameByRow.get(i);
-        if (nm && clusterIdsByName.has(nm)) {
-          matchedIds = clusterIdsByName.get(nm)!;
+      } else if (nm && csDir.byName.has(nm)) {
+        csStatus = csDir.byName.get(nm)!;
+        csMatchVia = "strict_name";
+      } else if (nm) {
+        const contained = _csContainmentMatch(nm, csDir);
+        if (contained) {
+          csStatus = csDir.byName.get(contained)!;
+          // Containment of a full client name inside the inbound name is strong.
           csMatchVia = "strict_name";
-        } else if (fuzzyClusterByRow.has(i)) {
-          matchedIds = fuzzyClusterByRow.get(i)!;
-          csMatchVia = "fuzzy_name";
+        } else {
+          const fz = _csFuzzyMatch(nm, csDir);
+          if (fz) {
+            csStatus = csDir.byName.get(fz)!;
+            csMatchVia = "fuzzy_name";
+          }
         }
       }
-      if (matchedIds && matchedIds.length) {
-        const built = buildForClusterIds(matchedIds);
-        csCluster = built.cluster;
-        csRecords = built.recs;
-      }
-      if (csCluster && csCluster.cs_overlap_verdict && csMatchVia) {
-        const cAny = csCluster as any;
+      if (csStatus && csMatchVia) {
+        const coolOff = csStatus.sector === "government" ? 365 : 180;
+        const cs: "block" | "review" | "warn" = csStatus.active
+          ? "block"
+          : csStatus.churnDays != null && csStatus.churnDays <= coolOff
+            ? "review"
+            : "warn";
         v = csClientPreflightVerdict({
-          cs: csCluster.cs_overlap_verdict as "block" | "review" | "warn",
+          cs,
           matchVia: csMatchVia,
-          churnDays: cAny.churn_days ?? null,
-          coolOff: csCluster.client_sector === "government" ? 365 : 180,
-          sector: (csCluster.client_sector as PreflightResultRow["sector"]) ?? null,
-          csOwner:
-            cAny.cs_owner ??
-            (Array.isArray(cAny.owners_involved) && cAny.owners_involved.length
-              ? cAny.owners_involved[0]
-              : null),
-          companyName: csCluster.company_name ?? null,
+          churnDays: csStatus.churnDays,
+          coolOff,
+          sector: csStatus.sector,
+          csOwner: csStatus.csOwner,
+          companyName: csStatus.companyName,
         });
       } else {
-        // Matched no client (or matched non-client records) → safe to import.
         v = basicPreflightVerdict({ contactVia: null, isCustomerDomain: false });
-        csCluster = null;
+        csStatus = null;
         csMatchVia = null;
-        csRecords = null;
       }
     }
     summary[v.verdict]++;
@@ -1956,45 +2069,16 @@ async function runPreflightBasic(input: {
           account: mod === "Accounts" ? link : null,
         };
       }
-    } else if (csCluster && csMatchVia) {
-      // RULE 2 v2 — surface the existing client's owner, account/deal links,
-      // sector + churn so the export's CS columns are populated.
-      const cAny = csCluster as any;
-      const ownerList: string[] = Array.isArray(cAny.owners_involved)
-        ? cAny.owners_involved
-        : [];
-      for (const o of ownerList) if (o) owners.push(o);
+    } else if (csStatus && csMatchVia) {
+      // RULE 2 v3 — surface the matched client's CS owner, sector, churn date +
+      // precise lifecycle phase so the export's CS columns are populated.
+      if (csStatus.csOwner) owners.push(csStatus.csOwner);
       matchedViaOut = csMatchVia === "domain" ? "domain" : "company_name";
-      clusterIdOut = csCluster.id || null;
-      sectorOut = (csCluster.client_sector as PreflightResultRow["sector"]) ?? null;
-      csOwnerOut = cAny.cs_owner ?? (owners.length ? owners[0]! : null);
-      churnDateOut = cAny.churn_date ?? null;
-      churnDaysOut = cAny.churn_days ?? null;
-      crmLinks = _buildCrmLinks(cAny);
-      // Precise CS phase for the export's "CS Phase" column — the real
-      // onboarding / adoption / renewal for an active client, or
-      // termination (recent / past cool-off) with the churn date attached.
-      if (csRecords) {
-        const derived = deriveCsLifecycleState(
-          csRecords,
-          churnDateOut,
-          churnDaysOut,
-          sectorOut === "government" ? 365 : 180,
-        );
-        if (derived) lifecycleOut = derived;
-      }
-      const _c = (n: unknown) => (typeof n === "number" ? n : 0);
-      moduleCountsOut = {
-        leads: _c(csCluster.total_leads),
-        deals: _c(csCluster.total_deals),
-        contacts: _c(csCluster.total_contacts),
-        accounts: _c(csCluster.total_accounts),
-        total:
-          _c(csCluster.total_leads) +
-          _c(csCluster.total_deals) +
-          _c(csCluster.total_contacts) +
-          _c(csCluster.total_accounts),
-      };
+      sectorOut = csStatus.sector;
+      csOwnerOut = csStatus.csOwner;
+      churnDateOut = csStatus.churnDate;
+      churnDaysOut = csStatus.churnDays;
+      if (csStatus.lifecycleState) lifecycleOut = csStatus.lifecycleState;
     }
 
     out.push({
