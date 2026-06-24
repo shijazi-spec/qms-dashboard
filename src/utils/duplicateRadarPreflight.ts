@@ -1657,15 +1657,61 @@ interface CsClientDirectory {
 
 // Generic tokens that don't make a company name distinctive — never used alone
 // to gather containment candidates (full-token-subset is still verified after).
+// A NAME match must rest on a DISTINCTIVE (brand) token, never a shared industry
+// / sector / legal word. Two companies that merely share "Pharmaceuticals",
+// "Energy", "Construction", "Motors" or "Holding" are NOT the same client
+// (Sarah 2026-06-24: SAJA≠Hekma, Kasab≠Tarsheed, Rawabi Offshore≠Rawabi Holding,
+// Alesayi Motors≠Yanbu Cement, "Confidential …" is no company at all).
 const CS_DIR_STOP = new Set([
-  "saudi", "arabia", "arabian", "ksa", "uae", "company", "co", "ltd", "inc",
-  "corp", "corporation", "group", "holding", "holdings", "est", "for", "and",
-  "the", "of", "al", "general", "national", "international", "intl", "services",
-  "service", "trading", "development", "company", "est", "sa",
+  // ── geography / legal form / connectors
+  "saudi", "arabia", "arabian", "ksa", "uae", "emirates", "qatar", "kuwait",
+  "bahrain", "oman", "egypt", "gulf", "middle", "east", "mena", "global",
+  "world", "worldwide", "company", "co", "ltd", "inc", "corp", "corporation",
+  "group", "holding", "holdings", "est", "establishment", "enterprise",
+  "enterprises", "for", "and", "the", "of", "al", "general", "national",
+  "international", "intl", "united", "sa",
+  // ── sector / industry words (EN) — generic, never identity-bearing alone
+  "services", "service", "trading", "trade", "development", "developments",
+  "pharmaceuticals", "pharmaceutical", "pharma", "energy", "power", "utilities",
+  "motors", "motor", "automotive", "cement", "construction", "constructions",
+  "contracting", "contractors", "contractor", "industrial", "industries",
+  "industry", "factory", "factories", "manufacturing", "technologies",
+  "technology", "tech", "systems", "system", "solutions", "solution",
+  "consulting", "consultancy", "insurance", "logistics", "transport",
+  "transportation", "food", "foods", "catering", "agriculture", "agricultural",
+  "estate", "properties", "property", "projects", "project", "university",
+  "college", "school", "schools", "academy", "institute", "education",
+  "educational", "hospital", "hospitals", "medical", "clinic", "clinics",
+  "pharmacy", "healthcare", "health", "financial", "finance", "investment",
+  "investments", "capital", "offshore", "marine", "oil", "gas", "petroleum",
+  "petrochemical", "chemicals", "chemical", "steel", "metals", "plastics",
+  "electric", "electrical", "electronics", "telecom", "telecommunications",
+  "communications", "communication", "digital", "media", "advertising",
+  "marketing", "retail", "commercial", "engineering", "consultants",
+  "confidential", "centre", "center",
+  // ── sector words (AR) that survive normalizeCompanyName's boilerplate strip
+  "الدوائية", "الدوائيه", "للأدوية", "الادوية", "الأدوية", "الطاقة", "للطاقة",
+  "السيارات", "للسيارات", "الاسمنت", "الإسمنت", "للأسمنت", "الإنشاءات",
+  "للإنشاءات", "الانشاءات", "الصناعية", "الصناعات", "للصناعة", "الصناعة",
+  "التقنية", "للتقنية", "العقارية", "للعقارات", "العقاري", "الطبية", "الطبي",
+  "للتأمين", "التأمين", "النفط", "للنفط", "الكيميائية", "الرقمية", "الوطنية",
+  "العالمية", "كفاءة", "خدمات", "للخدمات", "الخدمات", "التعليمية", "للتعليم",
 ]);
 
 const _csTokens = (norm: string): string[] =>
   norm.split(/\s+/).map((t) => t.trim()).filter((t) => t.length >= 2);
+
+// A token is DISTINCTIVE (brand-bearing) when it's not a generic stop word and
+// long enough to carry identity. Arabic tokens count at length ≥ 2 (Arabic
+// words pack more meaning per character); Latin tokens at length ≥ 3.
+const _isDistinctiveTok = (t: string): boolean => {
+  if (CS_DIR_STOP.has(t)) return false;
+  const isArabic = /[؀-ۿ]/.test(t);
+  return t.length >= (isArabic ? 2 : 3);
+};
+
+const _csDistinctiveTokens = (norm: string): string[] =>
+  _csTokens(norm).filter(_isDistinctiveTok);
 
 /** Derive a client's CS standing from a deal's phase + churn date. */
 function _csStatusFromDeal(input: {
@@ -2147,13 +2193,24 @@ export async function auditDirectoryCoverage(): Promise<{
  * byDomain keys that look related, so we can see WHY a known client isn't
  * resolving. Forces a fresh build.
  */
-export async function debugDirectoryMatch(companyName: string): Promise<{
+export async function debugDirectoryMatch(
+  companyName: string,
+  domain?: string,
+): Promise<{
   inbound: string;
+  inboundDomain: string | null;
   normalized: string;
+  distinctiveTokens: string[];
   byNameSize: number;
+  domainHit: { key: string; client: string | null } | null;
   exact: boolean;
   contained: string | null;
   fuzzy: string | null;
+  // The verdict the live cascade (domain → exact → contained → fuzzy) would
+  // reach, and the client it resolves to — so a mismatch shows its exact path.
+  resolvedVia: "domain" | "strict_name" | "fuzzy_name" | null;
+  resolvedClient: string | null;
+  resolvedActive: boolean | null;
   relatedNameKeys: string[];
   relatedDomainKeys: string[];
 }> {
@@ -2161,19 +2218,56 @@ export async function debugDirectoryMatch(companyName: string): Promise<{
   const dir = await getCsClientDirectory(Date.now());
   const nm = normalizeCompanyName(companyName);
   const toks = nm.split(/\s+/).filter(Boolean);
+  const dom = (domain || "").toString().trim().toLowerCase() || null;
+
+  const domStatus = dom ? dir.byDomain.get(dom) : undefined;
+  const domainHit = dom && domStatus
+    ? { key: dom, client: domStatus.companyName ?? null }
+    : null;
+
+  const contained = _csContainmentMatch(nm, dir);
+  const fuzzy = _csFuzzyMatch(nm, dir);
+  const exact = dir.byName.has(nm);
+
+  // Mirror the runPreflightBasic cascade so the resolved client is exact.
+  let resolvedVia: "domain" | "strict_name" | "fuzzy_name" | null = null;
+  let resolved: CsClientStatus | null = null;
+  if (dom && domStatus) {
+    resolvedVia = "domain";
+    resolved = domStatus;
+  } else if (exact) {
+    resolvedVia = "strict_name";
+    resolved = dir.byName.get(nm)!;
+  } else if (contained) {
+    resolvedVia = "strict_name";
+    resolved = dir.byName.get(contained)!;
+  } else if (fuzzy) {
+    resolvedVia = "fuzzy_name";
+    resolved = dir.byName.get(fuzzy)!;
+  }
+
   const related = Array.from(dir.byName.keys()).filter((k) =>
     toks.some((t) => t.length >= 4 && k.includes(t)),
   );
-  const relDom = Array.from(dir.byDomain.keys()).filter(
-    (d) => d.includes("aljfs") || d.includes("alj"),
-  );
+  const relDom = dom
+    ? Array.from(dir.byDomain.keys()).filter((d) => {
+        const root = dom.split(".")[0];
+        return root.length >= 3 && d.includes(root);
+      })
+    : [];
   return {
     inbound: companyName,
+    inboundDomain: dom,
     normalized: nm,
+    distinctiveTokens: _csDistinctiveTokens(nm),
     byNameSize: dir.byName.size,
-    exact: dir.byName.has(nm),
-    contained: _csContainmentMatch(nm, dir),
-    fuzzy: _csFuzzyMatch(nm, dir),
+    domainHit,
+    exact,
+    contained,
+    fuzzy,
+    resolvedVia,
+    resolvedClient: resolved?.companyName ?? (resolvedVia ? "(matched)" : null),
+    resolvedActive: resolved ? resolved.active : null,
     relatedNameKeys: related.slice(0, 40),
     relatedDomainKeys: relDom.slice(0, 20),
   };
@@ -2215,6 +2309,10 @@ export async function getCsClientDirectoryStats(): Promise<{
 function _csContainmentMatch(inboundNorm: string, dir: CsClientDirectory): string | null {
   const inboundToks = new Set(_csTokens(inboundNorm));
   if (inboundToks.size === 0) return null;
+  const inboundDistinct = _csDistinctiveTokens(inboundNorm);
+  // Inbound with no distinctive token (e.g. "Confidential Construction" — both
+  // are generic) can't anchor a name match.
+  if (inboundDistinct.length === 0) return null;
   const candidates = new Set<string>();
   for (const t of inboundToks) {
     if (CS_DIR_STOP.has(t)) continue;
@@ -2226,14 +2324,25 @@ function _csContainmentMatch(inboundNorm: string, dir: CsClientDirectory): strin
   for (const cand of candidates) {
     const candToks = _csTokens(cand);
     if (candToks.length === 0) continue;
+    const candDistinct = candToks.filter(_isDistinctiveTok);
     // Require ≥1 distinctive (non-stop) token and ALL client tokens present.
-    if (!candToks.some((t) => !CS_DIR_STOP.has(t) && t.length >= 3)) continue;
-    if (candToks.every((t) => inboundToks.has(t))) {
-      const len = cand.length;
-      if (len > bestLen) {
-        bestLen = len;
-        best = cand;
-      }
+    if (candDistinct.length === 0) continue;
+    if (!candToks.every((t) => inboundToks.has(t))) continue;
+    // A SINGLE shared distinctive token (e.g. "Rawabi") is only a containment
+    // when the inbound is essentially that same name — i.e. it brings NO other
+    // brand word of its own. "Rawabi Holding" must NOT swallow "Rawabi Vallianz
+    // Offshore Services" (vallianz/offshore are extra brands → different
+    // company). Multi-distinctive-token clients are specific enough to keep the
+    // looser rule.
+    if (candDistinct.length < 2) {
+      const onlyTok = candDistinct[0];
+      const extra = inboundDistinct.filter((t) => t !== onlyTok);
+      if (extra.length > 0) continue;
+    }
+    const len = cand.length;
+    if (len > bestLen) {
+      bestLen = len;
+      best = cand;
     }
   }
   return best;
@@ -2262,18 +2371,30 @@ function _diceSim(a: string, b: string): number {
   return total === 0 ? 0 : (2 * inter) / total;
 }
 
-/** Fuzzy name match (Dice ≥ 0.78) against client names sharing a token. */
+/**
+ * Fuzzy name match (Dice ≥ 0.82) against client names that share a DISTINCTIVE
+ * token. Candidates are gathered only via brand tokens (generic industry words
+ * are stop-listed), so "SAJA Pharmaceuticals" no longer reaches "Hekma
+ * Pharmaceuticals" — they share only the generic "pharmaceuticals". The shared
+ * brand token must also be present on BOTH sides, so a high Dice driven purely
+ * by a long shared generic word can't sneak a match through.
+ */
 function _csFuzzyMatch(inboundNorm: string, dir: CsClientDirectory): string | null {
-  const inboundToks = _csTokens(inboundNorm);
+  const inboundDistinct = _csDistinctiveTokens(inboundNorm);
+  if (inboundDistinct.length === 0) return null;
+  const inboundDistinctSet = new Set(inboundDistinct);
   const candidates = new Set<string>();
-  for (const t of inboundToks) {
-    if (CS_DIR_STOP.has(t)) continue;
+  for (const t of inboundDistinct) {
     const names = dir.tokenIndex.get(t);
     if (names) for (const n of names) candidates.add(n);
   }
   let best: string | null = null;
-  let bestSim = 0.78;
+  let bestSim = 0.82;
   for (const cand of candidates) {
+    // The match must rest on a shared BRAND token, not just overall string
+    // similarity inflated by a common generic word.
+    const candDistinct = _csDistinctiveTokens(cand);
+    if (!candDistinct.some((t) => inboundDistinctSet.has(t))) continue;
     const sim = _diceSim(inboundNorm, cand);
     if (sim >= bestSim) {
       bestSim = sim;
@@ -2338,7 +2459,16 @@ async function runPreflightBasic(input: {
     // short-named client that has a website is still caught there.
     const rawCompany = r.company_name || "";
     const nm = normalizeCompanyName(rawCompany);
-    if (nm && nm.length >= 4 && !isPlaceholderName(rawCompany)) {
+    // Only match by NAME when a DISTINCTIVE (brand) token survives — a name made
+    // up entirely of generic / sector words ("Confidential Construction",
+    // "National Trading Services") carries no identity and must never fuse onto
+    // an unrelated client. The DOMAIN tier is unaffected.
+    if (
+      nm &&
+      nm.length >= 4 &&
+      !isPlaceholderName(rawCompany) &&
+      _csDistinctiveTokens(nm).length > 0
+    ) {
       nameByRow.set(i, nm);
       nameSet.add(nm);
     }
