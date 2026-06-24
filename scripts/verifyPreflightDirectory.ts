@@ -50,10 +50,10 @@ const PROBES: Array<{
   // per the chosen policy (Sales may re-engage). If you consider any of these a
   // real client, CS must set its phase in Zoho — it's a data gap, not preflight.
   { company_name: "SATORP", expect: "pass", note: "only Meeting/Closed-Lost deals" },
-  { company_name: "SIDF", expect: "pass", note: "only Closed Lost" },
+  { company_name: "SIDF", expect: "block", note: "Renewal client (sidf.gov.sa)" },
   { company_name: "JHAH", expect: "pass", note: "only Closed Lost" },
   { company_name: "YASREF", expect: "pass", note: "only Contacted/Closed Lost" },
-  { company_name: "Mozn", expect: "pass", note: "account-only" },
+  { company_name: "Mozn", expect: "block", note: "Adoption client" },
   { company_name: "Diriyah", expect: "pass", note: "account-only" },
   { company_name: "HungerStation", expect: "block", note: "active Adoption client (deal beyond the 12-row inspector sample)" },
   { company_name: "Abdul Latif Jameel United Finance", expect: "block", note: "WalaPlus Adoption deal, aljfs.com — leaked into PASS__905" },
