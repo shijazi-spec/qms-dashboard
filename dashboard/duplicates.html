@@ -9892,6 +9892,52 @@
                     }
                 }
             }
+            // CROSS-CHUNK propagation. Chunks are screened in independent
+            // requests, so the SAME company can be BLOCKED in one chunk (a
+            // work-email contact, caught by domain) and PASS in another (a
+            // personal/blank-email contact, only a name). The backend applies
+            // this rule WITHIN a chunk; here we apply it ACROSS chunks after the
+            // merge. Match is the EXACT (lower/trim/collapsed) company string in
+            // the SAME upload — a strong, safe signal even for short acronyms
+            // (e.g. "SRC"), so the >=4 directory floor doesn't apply.
+            const _pfNormCo = (s) => (s == null ? '' : String(s)).trim().toLowerCase().replace(/\s+/g, ' ');
+            const _pfClientByCo = new Map();
+            for (const r of rowsOut) {
+                if (r.verdict !== 'block' && r.verdict !== 'review') continue;
+                const co = _pfNormCo(r.input && r.input.company_name);
+                if (co.length < 3) continue;
+                const prev = _pfClientByCo.get(co);
+                if (!prev || (r.verdict === 'block' && prev.verdict !== 'block')) _pfClientByCo.set(co, r);
+            }
+            if (_pfClientByCo.size > 0) {
+                for (const r of rowsOut) {
+                    if (r.verdict !== 'pass') continue;
+                    const co = _pfNormCo(r.input && r.input.company_name);
+                    if (co.length < 3) continue;
+                    const t = _pfClientByCo.get(co);
+                    if (!t) continue;
+                    summary.pass--;
+                    summary[t.verdict] = (summary[t.verdict] || 0) + 1;
+                    r.verdict = t.verdict;
+                    r.reason = (t.reason || '') + '_same_company_in_upload';
+                    r.suggested_action = (t.suggested_action || '') + ' (Another contact for this company in the same upload is an existing client.)';
+                    r.executive_action = t.executive_action;
+                    r.executive_severity = t.executive_severity;
+                    r.matched_via = 'company_name';
+                    r.sector = t.sector;
+                    r.cs_owner = t.cs_owner;
+                    r.owners = Array.isArray(t.owners) ? t.owners.slice() : r.owners;
+                    r.churn_date = t.churn_date;
+                    r.churn_days = t.churn_days;
+                    r.cs_phase = t.cs_phase;
+                    r.lifecycle_state = t.lifecycle_state;
+                    const lbl = t.verdict === 'block'
+                        ? 'Existing active client — do not cold-contact, route to owner'
+                        : 'Recently churned client — CS sign-off before re-engaging';
+                    reasonCounts.set(lbl, (reasonCounts.get(lbl) || 0) + 1);
+                }
+            }
+
             // Re-index globally so downstream consumers (push-to-Zoho,
             // Excel export) can address rows uniquely.
             for (let i = 0; i < rowsOut.length; i++) rowsOut[i].row_index = i;
