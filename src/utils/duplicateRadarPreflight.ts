@@ -2280,6 +2280,94 @@ export async function debugDirectoryMatch(
   };
 }
 
+/**
+ * RECALL audit (independent of the strict matcher). For each inbound name, find
+ * the closest CLIENT name in the directory that shares a DISTINCTIVE token, even
+ * when it sits BELOW the block/fuzzy threshold — so a human can eyeball whether
+ * a PASS company is actually a client the strict cascade missed (a name-variant
+ * recall gap). This deliberately over-surfaces borderline pairs; the operator
+ * confirms. Returns only names with a non-trivial resemblance, sorted worst
+ * (most client-like) first. One directory build for the whole batch.
+ */
+export async function auditPassNamesLoose(
+  names: string[],
+  opts?: { minDice?: number },
+): Promise<
+  Array<{
+    name: string;
+    clientLabel: string;
+    active: boolean;
+    churnDays: number | null;
+    dice: number;
+    sharedTokens: string[];
+    band: "would_block" | "strong_review" | "weak_review";
+  }>
+> {
+  const minDice = opts?.minDice ?? 0.62;
+  const dir = await getCsClientDirectory(Date.now());
+  const out: Array<{
+    name: string;
+    clientLabel: string;
+    active: boolean;
+    churnDays: number | null;
+    dice: number;
+    sharedTokens: string[];
+    band: "would_block" | "strong_review" | "weak_review";
+    _score: number;
+  }> = [];
+
+  for (const raw of names) {
+    const nm = normalizeCompanyName(raw);
+    const distinct = _csDistinctiveTokens(nm);
+    if (distinct.length === 0) continue;
+    const distinctSet = new Set(distinct);
+
+    const cands = new Set<string>();
+    for (const t of distinct) {
+      const s = dir.tokenIndex.get(t);
+      if (s) for (const n of s) cands.add(n);
+    }
+
+    let best:
+      | (typeof out)[number]
+      | null = null;
+    for (const cand of cands) {
+      const candDistinct = _csDistinctiveTokens(cand);
+      const shared = candDistinct.filter((t) => distinctSet.has(t));
+      if (shared.length === 0) continue;
+      const dice = _diceSim(nm, cand);
+      // Report band: a name the strict matcher WOULD block (sanity check — should
+      // be empty after a real preflight), or a borderline resemblance worth a
+      // human look (≥2 shared brand tokens, or a single shared brand token with
+      // meaningful overall similarity).
+      let band: "would_block" | "strong_review" | "weak_review" | null = null;
+      if (dice >= 0.82) band = "would_block";
+      else if (shared.length >= 2) band = "strong_review";
+      else if (dice >= minDice) band = "weak_review";
+      if (!band) continue;
+
+      const st = dir.byName.get(cand);
+      const score = dice + shared.length * 0.15;
+      if (!best || score > best._score) {
+        best = {
+          name: raw,
+          clientLabel: st?.companyName ?? cand,
+          active: !!st?.active,
+          churnDays: st?.churnDays ?? null,
+          dice: Math.round(dice * 100) / 100,
+          sharedTokens: shared,
+          band,
+          _score: score,
+        };
+      }
+    }
+    if (best) out.push(best);
+  }
+
+  out.sort((a, b) => b._score - a._score);
+  return out.map(({ _score, ...rest }) => rest);
+}
+
 export async function getCsClientDirectoryStats(): Promise<{
   names: number;
   domains: number;
