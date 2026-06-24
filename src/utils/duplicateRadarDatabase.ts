@@ -2867,6 +2867,9 @@ export interface AccountDomainNameMember {
   industry: string | null;
   layout: string | null;
   createdMs: number | null;
+  /** Number of Deals linked to this Account (Account_Name.id) — shown in place
+   *  of the unreliable CR number; a bigger Deals book = a stronger survivor. */
+  dealCount: number;
   /** Count of the tracked key fields that are populated, out of fieldsTotal. */
   fieldsPopulated: number;
   fieldsTotal: number;
@@ -2935,6 +2938,26 @@ async function getAccountDomainNameGroups(
         AND LOWER(COALESCE(layout_name, '')) = ANY($1::text[])`,
     [layoutNames],
   );
+
+  // Deal count per Account (local DB — deals whose Account_Name.id points at the
+  // account). Shown in the preview in place of the unreliable CR number; a bigger
+  // Deals book is a stronger survivor signal. No Zoho call — counted from the
+  // already-synced deal records.
+  const dealCountByAccount = new Map<string, number>();
+  const acctIds = res.rows.map((r) => r.zoho_record_id).filter(Boolean);
+  if (acctIds.length > 0) {
+    const dcRes = await pool.query<{ account_id: string; n: string }>(
+      `SELECT raw_data->'Account_Name'->>'id' AS account_id, COUNT(*) AS n
+         FROM duplicate_records
+        WHERE record_type = 'deal'
+          AND raw_data->'Account_Name'->>'id' = ANY($1::text[])
+        GROUP BY 1`,
+      [acctIds],
+    );
+    for (const r of dcRes.rows) {
+      if (r.account_id) dealCountByAccount.set(r.account_id, Number(r.n) || 0);
+    }
+  }
 
   // Exclude accounts already merged away (see getResolvedDuplicateZohoIds):
   // tagged duplicates aren't deleted until the admin acts, so without this they
@@ -3041,6 +3064,7 @@ async function getAccountDomainNameGroups(
         industry: m.industry,
         layout: m.layout_name,
         createdMs: m.created_ms != null ? Number(m.created_ms) : null,
+        dealCount: dealCountByAccount.get(m.zoho_record_id) ?? 0,
         fieldsPopulated: pop,
         fieldsTotal: total,
         completionPct: Math.round((pop / total) * 100),
