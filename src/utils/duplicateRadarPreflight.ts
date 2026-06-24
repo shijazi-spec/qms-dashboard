@@ -1830,6 +1830,12 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
             LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) AS stage
        FROM duplicate_records
       WHERE record_type = 'deal'
+        -- SCOPE (Sarah 2026-06-24): Marketplace / merchant deals are NOT corporate
+        -- clients — WalaPlus Sales MAY contact them. Only WalaPlus (corporate)
+        -- layout deals make a company a CS client, so exclude the merchant layouts
+        -- here (e.g. "ATOM" on the Marketplace layout must NOT block). A company
+        -- that ALSO has a corporate deal still blocks via that corporate deal.
+        AND LOWER(COALESCE(layout_name, raw_data->'Layout'->>'name', '')) NOT IN (${MERCHANT_LAYOUTS_SQL})
         AND (
           COALESCE(${phaseCoalesce}) IS NOT NULL
           OR LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) = ANY($1::text[])
