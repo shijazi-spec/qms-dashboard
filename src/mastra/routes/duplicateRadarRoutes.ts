@@ -8411,8 +8411,8 @@ export const duplicateRadarRoutes = [
     // Formatted Excel export for the Preflight Check tab. Takes either a
     // PreflightResponse the client already rendered (preferred — no
     // re-run) or `rows` to re-run server-side. Returns an .xlsx with:
-    //   - "Summary" cover sheet (totals, % blocked/duplicate, SAR exposure,
-    //     top reasons, generated-at)
+    //   - "Summary" cover sheet (totals, % blocked/duplicate, top reasons,
+    //     generated-at)
     //   - "Findings" sheet (color-coded severity rows, frozen header,
     //     business-language "Recommended Action" column, owner column,
     //     module counts, reason code)
@@ -8532,14 +8532,6 @@ export const duplicateRadarRoutes = [
             (result.summary as any)?.no_contact || 0,
           );
           add("✓ PASS — safe to import", result.summary?.pass || 0);
-          summary.addRow({});
-          add(
-            "Pipeline SAR exposure of BLOCK rows (if imported)",
-            "SAR " +
-              new Intl.NumberFormat("en-US").format(
-                Math.round(result.total_arr_exposure_blocked || 0),
-              ),
-          );
 
           if (Array.isArray(result.top_reasons) && result.top_reasons.length > 0) {
             summary.addRow({});
@@ -8600,12 +8592,6 @@ export const duplicateRadarRoutes = [
             { header: "CS Owner", key: "cs_owner", width: 22 },
             { header: "CRM Modules (L·D·C·A)", key: "modules", width: 22 },
             { header: "CS Phase", key: "phase", width: 16 },
-            {
-              header: "ARR Exposure (SAR)",
-              key: "arr",
-              width: 18,
-              style: { numFmt: "#,##0" },
-            },
             { header: "Churn Date", key: "churn_date", width: 14 },
             { header: "Days Since Churn", key: "churn_days", width: 14 },
             // Sarah 2026-06-17 — clickable Zoho links per rejected row.
@@ -8692,7 +8678,6 @@ export const duplicateRadarRoutes = [
               cs_owner: r.cs_owner || "",
               modules: fmtModules(r.module_counts),
               phase: (r.cs_phase && String(r.cs_phase).trim()) || phaseLabel(r.lifecycle_state),
-              arr: r.arr_exposure || 0,
               churn_date: r.churn_date || "",
               churn_days: r.churn_days != null ? r.churn_days : "",
               link_active_lead:  mkLink(r.crm_links?.active_lead),
