@@ -7375,38 +7375,40 @@ export async function getDuplicateRecordsByType(
   // 'all' = no filter.
   const aiStatus = ((options as any)?.ai_status as string) || "active";
   // The four AI-status tabs are MUTUALLY EXCLUSIVE — every cluster lands in
-  // exactly one, by this lifecycle precedence (Sarah 2026-06-24):
-  //   Resolved    > AI-Applied(pending) > Dismissed > Untouched
-  // "The AI acted on this cluster" = it carries an auto-merge tag-pending or a
-  // ledger resolve action. This applies to ALL module tabs (shared function).
-  const HAS_AI_ACTION =
-    "EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved','auto_merge_pending'))";
+  // exactly one, by lifecycle precedence (Sarah 2026-06-24):
+  //   Resolved > AI-Applied(pending) > Dismissed > Untouched
+  // CRITICAL DISTINCTION: an `auto_merge_pending` action means the AI tagged the
+  // duplicates and is WAITING for the Zoho admin to delete them (→ AI-Applied).
+  // A `resolve` / `module_resolved` action means the cluster was ALREADY resolved
+  // / merged (→ Resolved). The old filter lumped all three as "AI-Applied", so
+  // past-resolved clusters whose status hadn't flipped to 'resolved' (records
+  // reappeared on a later sync) showed in AI-Applied instead of Resolved — the
+  // "124 in AI-Applied but only 7 truly pending" bug.
+  const HAS_PENDING =
+    "EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type = 'auto_merge_pending')";
+  const HAS_RESOLVED_ACTION =
+    "EXISTS (SELECT 1 FROM duplicate_merge_actions ma WHERE ma.cluster_id = dc.id AND ma.action_type IN ('resolve','module_resolved'))";
   let statusFilter = "AND dc.status = 'active'";
   let mergeActionFilter = "";
   if (aiStatus === "tagged_pending") {
-    // AI-APPLIED · pending Zoho admin delete — the AI tagged / updated records and
-    // the admin hasn't deleted them yet. Anything NOT yet resolved that carries an
-    // AI action belongs here — even a cluster that was ALSO dismissed (the AI work
-    // still stands in Zoho), which is why this is keyed on the action, not just
-    // status='active'. (Fixes AI-Applied clusters leaking into the Dismissed tab.)
+    // AI-APPLIED · pending Zoho admin delete — ONLY a genuinely-pending tag, not
+    // yet resolved. Excludes anything already resolved (status or resolve action).
     statusFilter = "AND dc.status <> 'resolved'";
-    mergeActionFilter = " AND " + HAS_AI_ACTION;
+    mergeActionFilter = ` AND NOT ${HAS_RESOLVED_ACTION} AND ${HAS_PENDING}`;
   } else if (aiStatus === "resolved") {
-    // Resolved = the Zoho admin actually deleted the tagged duplicates (a sync
-    // reconcile flips status → 'resolved').
-    statusFilter = "AND dc.status = 'resolved'";
+    // Resolved = status flipped to 'resolved' OR a ledger resolve/module_resolved
+    // action exists (it was applied/merged — it belongs here, not in AI-Applied).
+    statusFilter = `AND (dc.status = 'resolved' OR ${HAS_RESOLVED_ACTION})`;
   } else if (aiStatus === "dismissed") {
-    // Dismissed = the operator marked the cluster a false positive (status
-    // 'ignored') with NO AI change applied. A cluster the AI also acted on
-    // belongs in AI-Applied, not here — so exclude any with an AI action.
+    // Dismissed = operator false-positive (status 'ignored') with NO AI action.
     statusFilter = "AND dc.status = 'ignored'";
-    mergeActionFilter = " AND NOT " + HAS_AI_ACTION;
+    mergeActionFilter = ` AND NOT ${HAS_PENDING} AND NOT ${HAS_RESOLVED_ACTION}`;
   } else if (aiStatus === "all") {
     statusFilter = "";
   } else if (aiStatus === "active") {
     // Untouched = active, nothing done by AI or operator.
     statusFilter = "AND dc.status = 'active'";
-    mergeActionFilter = " AND NOT " + HAS_AI_ACTION;
+    mergeActionFilter = ` AND NOT ${HAS_PENDING} AND NOT ${HAS_RESOLVED_ACTION}`;
   }
 
   // GENUINE-DUPLICATE gate for DEALS (Ahmad 2026-06-21). Deal clusters are
