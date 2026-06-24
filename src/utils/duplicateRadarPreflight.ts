@@ -1722,6 +1722,36 @@ let _csDirCache: CsClientDirectory | null = null;
 const CS_DIR_TTL_MS = 60_000;
 
 /**
+ * Split a raw company name into the variants worth indexing separately. Saudi
+ * CRM names are routinely BILINGUAL — "Abdul Latif Jameel United Finance | عبد
+ * اللطيف جميل للتمويل" — so the normalized blob holds BOTH languages and an
+ * inbound that carries only the English (or only the Arabic) never matches.
+ * Split on the bilingual separators (| / \ – —) and pull parenthetical
+ * abbreviations out ("Saudi Kuwaiti Finance House (SKFH)" → the long name + the
+ * short code), then index each part on its own. Returns the whole name too.
+ */
+function _nameSegments(raw: string): string[] {
+  const whole = (raw || "").replace(/\s+/g, " ").trim();
+  if (!whole) return [];
+  const out = new Set<string>([whole]);
+  for (const part of whole.split(/[|/\\–—]/)) {
+    const p = part.trim();
+    if (p.length >= 3) out.add(p);
+  }
+  // Parenthetical abbreviation/alias: keep BOTH the inside and the outside.
+  const parens = whole.match(/\(([^)]+)\)/g);
+  if (parens) {
+    for (const m of parens) {
+      const inner = m.replace(/[()]/g, "").trim();
+      if (inner.length >= 2) out.add(inner);
+    }
+    const outside = whole.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+    if (outside.length >= 3) out.add(outside);
+  }
+  return Array.from(out);
+}
+
+/**
  * Build (and briefly cache) the CS-client directory from ALL CS-tracked /
  * customer-stage deals + accounts in duplicate_records. Cached for 60s so the
  * frontend's chunked 250-row batches of one upload share a single build.
@@ -1896,11 +1926,14 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
       companyName: (d.account_name || d.company_name || "").toString().trim(),
       todayMs,
     });
-    // Index by the deal's company-name variants (Account_Name, Deal company).
+    // Index by the deal's company-name variants (Account_Name, Deal company),
+    // splitting bilingual "English | Arabic" names so each language matches.
     for (const raw of [d.account_name, d.company_name]) {
       const rawName = (raw || "").toString().trim();
       if (!rawName || isPlaceholderName(rawName)) continue;
-      addClient(normalizeCompanyName(rawName), null, status);
+      for (const seg of _nameSegments(rawName)) {
+        if (!isPlaceholderName(seg)) addClient(normalizeCompanyName(seg), null, status);
+      }
     }
     // Index by domain — the Deal's own domain + the CS Company_Domain field.
     for (const dm of [d.domain, d.cs_domain]) addClient("", dm, status);
@@ -1932,10 +1965,13 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
   for (const a of acctRows) {
     const dom = (a.domain || "").toString().trim().toLowerCase();
     if (!dom || !byDomain.has(dom)) continue;
-    const norm = normalizeCompanyName(a.record_name || a.company_name || "");
-    if (norm && norm.length >= 3 && !byName.has(norm)) {
-      byName.set(norm, byDomain.get(dom)!);
-      indexName(norm);
+    const status = byDomain.get(dom)!;
+    for (const seg of _nameSegments(a.record_name || a.company_name || "")) {
+      const norm = normalizeCompanyName(seg);
+      if (norm && norm.length >= 3 && !byName.has(norm)) {
+        byName.set(norm, status);
+        indexName(norm);
+      }
     }
   }
 
@@ -1971,10 +2007,13 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
       for (const raw of [nr.company_name, nr.account_name]) {
         const rawName = (raw || "").toString().trim();
         if (!rawName || isPlaceholderName(rawName)) continue;
-        const nm = normalizeCompanyName(rawName);
-        if (nm && nm.length >= 3 && !byName.has(nm)) {
-          byName.set(nm, status);
-          indexName(nm);
+        for (const seg of _nameSegments(rawName)) {
+          if (isPlaceholderName(seg)) continue;
+          const nm = normalizeCompanyName(seg);
+          if (nm && nm.length >= 3 && !byName.has(nm)) {
+            byName.set(nm, status);
+            indexName(nm);
+          }
         }
       }
     }
