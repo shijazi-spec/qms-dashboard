@@ -10006,7 +10006,7 @@
             // Re-index globally so downstream consumers (push-to-Zoho,
             // Excel export) can address rows uniquely.
             for (let i = 0; i < rowsOut.length; i++) rowsOut[i].row_index = i;
-            const totalActionable = summary.block + summary.review + summary.warn + summary.duplicate;
+            const totalActionable = summary.block + summary.review + summary.warn + summary.duplicate + (summary.no_contact || 0);
             // Match backend precision (.1 decimal, e.g. 78.5%) so chunked
             // and non-chunked runs produce visually identical numbers.
             const pctActionable = examined > 0
@@ -10108,7 +10108,10 @@
                 const flaggedBtn = document.getElementById('preflightExportFlaggedBtn');
                 if (flaggedBtn) {
                     const s = (data && data.summary) || {};
-                    const flaggedCount = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0);
+                    // Match the flagged FILE exactly = every non-pass row, incl.
+                    // no_contact (REJECTED: no email & no phone). Without no_contact
+                    // the button under-counted (file said 761, button said 758).
+                    const flaggedCount = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0) + (s.no_contact || 0);
                     if (flaggedCount > 0) {
                         flaggedBtn.classList.remove('hidden');
                         flaggedBtn.textContent = '⚑ Download ' + flaggedCount.toLocaleString() + ' Rejected Data';
@@ -11558,7 +11561,7 @@
             const headline = document.getElementById('preflightExecHeadline');
             const meta = document.getElementById('preflightExecMeta');
             const reasonsHost = document.getElementById('preflightExecTopReasons');
-            const actionable = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0);
+            const actionable = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0) + (s.no_contact || 0);
             const examined = data.examined || 0;
             const pctAct = data.pct_actionable != null ? data.pct_actionable : (examined > 0 ? Math.round(actionable / examined * 1000) / 10 : 0);
             const arrBlocked = Math.round(data.total_arr_exposure_blocked || 0);
@@ -11798,7 +11801,7 @@
             const data = window._preflightLastResult;
             if (!data) { alert('Run a Preflight check first.'); return; }
             const s = data.summary || {};
-            const actionable = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0);
+            const actionable = (s.block || 0) + (s.review || 0) + (s.warn || 0) + (s.duplicate || 0) + (s.no_contact || 0);
             const examined = data.examined || 0;
             // Use the result's own pct_actionable when present (.1 precision
             // from the backend), else recompute the same way.
