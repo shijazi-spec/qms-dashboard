@@ -1991,6 +1991,44 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
  * many indexed names resolve to a live vs. terminated client. Forces a fresh
  * build (bypasses the 60s cache) so the numbers reflect the database right now.
  */
+/**
+ * Debug a single inbound company name against the live directory — shows the
+ * normalized form, whether it hits exact / containment / fuzzy, and the byName +
+ * byDomain keys that look related, so we can see WHY a known client isn't
+ * resolving. Forces a fresh build.
+ */
+export async function debugDirectoryMatch(companyName: string): Promise<{
+  inbound: string;
+  normalized: string;
+  byNameSize: number;
+  exact: boolean;
+  contained: string | null;
+  fuzzy: string | null;
+  relatedNameKeys: string[];
+  relatedDomainKeys: string[];
+}> {
+  _csDirCache = null;
+  const dir = await getCsClientDirectory(Date.now());
+  const nm = normalizeCompanyName(companyName);
+  const toks = nm.split(/\s+/).filter(Boolean);
+  const related = Array.from(dir.byName.keys()).filter((k) =>
+    toks.some((t) => t.length >= 4 && k.includes(t)),
+  );
+  const relDom = Array.from(dir.byDomain.keys()).filter(
+    (d) => d.includes("aljfs") || d.includes("alj"),
+  );
+  return {
+    inbound: companyName,
+    normalized: nm,
+    byNameSize: dir.byName.size,
+    exact: dir.byName.has(nm),
+    contained: _csContainmentMatch(nm, dir),
+    fuzzy: _csFuzzyMatch(nm, dir),
+    relatedNameKeys: related.slice(0, 40),
+    relatedDomainKeys: relDom.slice(0, 20),
+  };
+}
+
 export async function getCsClientDirectoryStats(): Promise<{
   names: number;
   domains: number;
