@@ -8471,8 +8471,17 @@ export const duplicateRadarRoutes = [
             body?.originals && typeof body.originals === "object"
               ? body.originals
               : null;
+          // Columns from the uploaded file we never want in the hand-off export
+          // (enrichment-vendor noise the Sales team doesn't need). Sarah
+          // 2026-06-25: drop "Keywords" and "Technologies". Filtering the header
+          // list here removes them from BOTH the column defs and the per-row
+          // values (which are keyed by header name) with no index drift.
+          const PREFLIGHT_EXPORT_EXCLUDE_COLS = new Set(["keywords", "technologies"]);
           const originalHeaders: string[] = Array.isArray(body?.original_headers)
-            ? body.original_headers.map((h: any) => String(h)).filter(Boolean)
+            ? body.original_headers
+                .map((h: any) => String(h))
+                .filter(Boolean)
+                .filter((h: string) => !PREFLIGHT_EXPORT_EXCLUDE_COLS.has(h.trim().toLowerCase()))
             : [];
           const rowsToEmit = (Array.isArray(result.rows) ? result.rows : []).filter(
             (r: any) => {
