@@ -1815,6 +1815,29 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
       `NULLIF(raw_data->>'${f}','')`,
     ])
     .join(", ");
+  // NON-CORPORATE layouts whose deals must NOT make a company a CS client —
+  // WalaPlus Sales MAY contact merchant / app accounts (Sarah 2026-06-24).
+  // Comparison is space/punctuation-insensitive (lowercased, non-alphanumerics
+  // stripped) so "Wala One" / "WalaOne" / "wala-one" all match — but "WalaPlus"
+  // (the corporate layout) never does. Extend with DUPLICATE_RADAR_CS_EXCLUDE_LAYOUTS.
+  const _normLayout = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const csExcludeLayouts = Array.from(
+    new Set(
+      [
+        "Marketplace",
+        "Partner Accounts",
+        "WalaOne",
+        ...((process.env.DUPLICATE_RADAR_CS_EXCLUDE_LAYOUTS || "").split(",")),
+      ]
+        .map((s) => _normLayout(s.trim()))
+        .filter(Boolean),
+    ),
+  );
+  const csExcludeSql = csExcludeLayouts
+    .map((s) => `'${s.replace(/'/g, "''")}'`)
+    .join(", ");
+  const layoutNormExpr =
+    "LOWER(REGEXP_REPLACE(COALESCE(layout_name, raw_data->'Layout'->>'name', ''), '[^a-zA-Z0-9]', '', 'g'))";
   // Use the dedicated, indexed `stage` COLUMN for the stage filter (the giant
   // raw_data JSONB only needs parsing for the phase/domain/churn fields, and
   // only for the matched rows). ~2.3x faster than parsing raw_data->>'Stage'
@@ -1830,12 +1853,13 @@ async function getCsClientDirectory(todayMs: number): Promise<CsClientDirectory>
             LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) AS stage
        FROM duplicate_records
       WHERE record_type = 'deal'
-        -- SCOPE (Sarah 2026-06-24): Marketplace / merchant deals are NOT corporate
-        -- clients — WalaPlus Sales MAY contact them. Only WalaPlus (corporate)
-        -- layout deals make a company a CS client, so exclude the merchant layouts
-        -- here (e.g. "ATOM" on the Marketplace layout must NOT block). A company
-        -- that ALSO has a corporate deal still blocks via that corporate deal.
-        AND LOWER(COALESCE(layout_name, raw_data->'Layout'->>'name', '')) NOT IN (${MERCHANT_LAYOUTS_SQL})
+        -- SCOPE (Sarah 2026-06-24): Marketplace / WalaOne / merchant deals are NOT
+        -- corporate clients — WalaPlus Sales MAY contact them. Exclude those
+        -- layouts here (e.g. "ATOM", "ToYou", "Chalhoub", "Tree" must NOT block).
+        -- Space/punctuation-insensitive so name variants are caught; "WalaPlus"
+        -- (corporate) is kept. A company that ALSO has a corporate deal still
+        -- blocks via that corporate deal.
+        AND ${layoutNormExpr} NOT IN (${csExcludeSql})
         AND (
           COALESCE(${phaseCoalesce}) IS NOT NULL
           OR LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) = ANY($1::text[])
