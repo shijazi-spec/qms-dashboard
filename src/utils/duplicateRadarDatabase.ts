@@ -7633,15 +7633,19 @@ export async function getDuplicateRecordsByType(
       `SELECT dc.id, dc.status,
               COALESCE(ma.action_count, 0)        AS merge_action_count,
               COALESCE(ma.tagged_records, 0)      AS tagged_records,
+              COALESCE(ma.has_pending, false)     AS has_pending,
+              COALESCE(ma.has_resolved, false)    AS has_resolved,
               ma.last_merge_at
          FROM duplicate_clusters dc
          LEFT JOIN (
            SELECT cluster_id,
                   COUNT(*) AS action_count,
-                  SUM(jsonb_array_length(merged_record_ids)) AS tagged_records,
+                  BOOL_OR(action_type = 'auto_merge_pending')               AS has_pending,
+                  BOOL_OR(action_type IN ('resolve','module_resolved'))     AS has_resolved,
+                  SUM(jsonb_array_length(merged_record_ids))                AS tagged_records,
                   MAX(created_at) AS last_merge_at
              FROM duplicate_merge_actions
-            WHERE action_type IN ('resolve','module_resolved')
+            WHERE action_type IN ('resolve','module_resolved','auto_merge_pending')
             GROUP BY cluster_id
          ) ma ON ma.cluster_id = dc.id
         WHERE dc.id = ANY($1::int[])`,
@@ -7656,10 +7660,14 @@ export async function getDuplicateRecordsByType(
       if (!meta || !grouped[cid]) continue;
       const taggedCount = Number(meta.tagged_records || 0);
       const actionCount = Number(meta.merge_action_count || 0);
+      // SAME lifecycle as the tab filter (getDuplicateRecordsByType): an
+      // auto_merge_pending action = genuinely pending Zoho delete; a resolve /
+      // module_resolved action (or status 'resolved') = already resolved. Keep
+      // these in sync so the per-row badge never disagrees with its tab.
       const aiState =
-        meta.status === "resolved"
+        meta.status === "resolved" || meta.has_resolved
           ? "resolved"
-          : actionCount > 0
+          : meta.has_pending
             ? "tagged_pending_delete"
             : "untouched";
       grouped[cid].cluster.ai_state = aiState;
